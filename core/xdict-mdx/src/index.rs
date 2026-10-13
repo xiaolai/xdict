@@ -361,6 +361,26 @@ fn header(
 /// The most of a section read at once to check it: through a source, a read is an allocation of its size.
 const CHECK_CHUNK: u64 = 1 << 20;
 
+/// The least a record block takes in its file: its framing, a 4-byte type and a 4-byte checksum (the 8 bytes
+/// of version 3.0's unit sizes are framing too, with more after them).
+const BLOCK_FRAMING: u64 = 8;
+
+/// The most record blocks a file the reader opens can list: a record index of [`limits::BLOCK_BYTES`] at the
+/// narrowest, version 1.2's 8 bytes a block.
+const MOST_BLOCKS: u64 = limits::BLOCK_BYTES / 8;
+
+/// One 32-byte entry of the record-block table.
+fn record_block(entry: &[u8; 32]) -> Option<RecordBlock> {
+    let words = entry.as_chunks::<8>().0;
+    let word = |i: usize| words.get(i).map(|w| u64::from_le_bytes(*w));
+    Some(RecordBlock {
+        file_offset: word(0)?,
+        stored_len: usize::try_from(word(1)?).ok()?,
+        records_offset: word(2)?,
+        len: usize::try_from(word(3)?).ok()?,
+    })
+}
+
 /// A section's checksum, read a piece at a time.
 fn checksum(region: &dyn Region, span: Span) -> Result<u64, Error> {
     let mut hasher = Xxh3::new();
@@ -446,6 +466,12 @@ impl Index {
         if keys as u64 > limits::KEYS {
             return Err(damaged("the key count"));
         }
+        // A block the reader made takes at least its framing in the file, and the reader lists no more blocks
+        // than a record index it accepts can hold; a count past either was never written by `build`. Checked
+        // before the table is read, which through a source is an allocation of its declared size.
+        if block_count as u64 > MOST_BLOCKS || (block_count as u64).saturating_mul(BLOCK_FRAMING) > binding.source_len {
+            return Err(damaged("the block count"));
+        }
 
         // Every section's bounds and size are checked before any of it is read.
         let mut spans = [Span { at: 0, len: 0 }; SECTIONS];
@@ -464,6 +490,7 @@ impl Index {
             || !sized(ends, 8, keys)
             || !sized(order, 4, keys)
             || !sized(blocks, 32, block_count)
+            || text.len > u64::from(u32::MAX)
             || public.len != keys.div_ceil(8) as u64
             || !tier2.len.is_multiple_of(4)
             || tier2.len > 4 * keys as u64
@@ -493,7 +520,7 @@ impl Index {
             rules,
         };
         index.check_structure()?;
-        let blocks = index.read_blocks(blocks, block_count)?;
+        let blocks = index.read_blocks(blocks)?;
         Ok(Self { blocks, ..index })
     }
 
@@ -543,30 +570,29 @@ impl Index {
         })
     }
 
-    fn read_blocks(&self, span: Span, count: usize) -> Result<Vec<RecordBlock>, Stale> {
+    /// The record-block table, read a piece at a time like a checksum, so no read is larger than
+    /// [`CHECK_CHUNK`] whatever the table's size.
+    fn read_blocks(&self, span: Span) -> Result<Vec<RecordBlock>, Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
-        let bytes = self.region.bytes(span.at, span.len as usize).map_err(|_| damaged("the record blocks"))?;
-        let mut blocks = Vec::with_capacity(count);
+        let mut blocks = Vec::new();
         let mut expected = 0u64;
-        for b in bytes.as_chunks::<32>().0 {
-            let words = b.as_chunks::<8>().0;
-            let word = |i: usize| -> Result<u64, Stale> {
-                words.get(i).map(|w| u64::from_le_bytes(*w)).ok_or_else(|| damaged("the record blocks"))
-            };
-            let block = RecordBlock {
-                file_offset: word(0)?,
-                stored_len: usize::try_from(word(1)?).map_err(|_| damaged("a record block"))?,
-                records_offset: word(2)?,
-                len: usize::try_from(word(3)?).map_err(|_| damaged("a record block"))?,
-            };
-            if block.records_offset != expected
-                || block.len as u64 > limits::BLOCK_BYTES
-                || block.stored_len as u64 > limits::BLOCK_BYTES
-            {
-                return Err(damaged("the record blocks"));
+        let mut at = 0u64;
+        while at < span.len {
+            let len = usize::try_from((span.len - at).min(CHECK_CHUNK)).map_err(|_| damaged("the record blocks"))?;
+            let bytes = self.region.bytes(span.at + at, len).map_err(|_| damaged("the record blocks"))?;
+            at += len as u64;
+            for b in bytes.as_chunks::<32>().0 {
+                let block = record_block(b).ok_or_else(|| damaged("a record block"))?;
+                if block.records_offset != expected
+                    || block.len as u64 > limits::BLOCK_BYTES
+                    || (block.stored_len as u64) < BLOCK_FRAMING
+                    || block.stored_len as u64 > limits::BLOCK_BYTES
+                {
+                    return Err(damaged("the record blocks"));
+                }
+                expected = expected.checked_add(block.len as u64).ok_or_else(|| damaged("the record blocks"))?;
+                blocks.push(block);
             }
-            expected = expected.checked_add(block.len as u64).ok_or_else(|| damaged("the record blocks"))?;
-            blocks.push(block);
         }
         if expected != self.total_records {
             return Err(damaged("the record blocks"));
