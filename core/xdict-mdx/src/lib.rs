@@ -147,7 +147,7 @@ impl Source for Vec<u8> {
 /// A file on disk, read with positioned reads so lookups need no shared cursor.
 #[cfg(any(unix, windows))]
 pub struct DiskFile {
-    file: std::fs::File,
+    file: std::sync::Arc<std::fs::File>,
     len: u64,
 }
 
@@ -156,7 +156,12 @@ impl DiskFile {
     pub fn open(path: &Path) -> io::Result<Self> {
         let file = std::fs::File::open(path)?;
         let len = file.metadata()?.len();
-        Ok(Self { file, len })
+        Ok(Self { file: std::sync::Arc::new(file), len })
+    }
+
+    /// A file already open, read through that same descriptor, as `len` bytes long.
+    pub fn shared(file: std::sync::Arc<std::fs::File>, len: u64) -> Self {
+        Self { file, len }
     }
 }
 
@@ -167,12 +172,12 @@ impl Source for DiskFile {
     }
     #[cfg(unix)]
     fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        std::os::unix::fs::FileExt::read_exact_at(&self.file, buf, offset)
+        std::os::unix::fs::FileExt::read_exact_at(&*self.file, buf, offset)
     }
     #[cfg(windows)]
     fn read_exact_at(&self, mut offset: u64, mut buf: &mut [u8]) -> io::Result<()> {
         while !buf.is_empty() {
-            let n = std::os::windows::fs::FileExt::seek_read(&self.file, buf, offset)?;
+            let n = std::os::windows::fs::FileExt::seek_read(&*self.file, buf, offset)?;
             if n == 0 {
                 return Err(io::ErrorKind::UnexpectedEof.into());
             }
