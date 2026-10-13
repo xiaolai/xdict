@@ -81,6 +81,20 @@ impl Out {
         self.text.exceeded |= other.exceeded;
     }
 
+    /// The bytes still free under the ceiling: what a value rewritten on the way may grow to before it is
+    /// written here, so that it is refused as soon as it could not fit rather than once it is whole.
+    fn room(&self) -> usize {
+        self.text.max.saturating_sub(self.text.text.len())
+    }
+
+    /// `value`, or nothing and this text exceeded when it would not fit.
+    fn fitting(&mut self, value: Option<String>) -> String {
+        value.unwrap_or_else(|| {
+            self.text.exceeded = true;
+            String::new()
+        })
+    }
+
     fn collects(&self) -> bool {
         self.links.is_some()
     }
@@ -240,9 +254,11 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out
         let (body, after) = rest.split_at(end_tag(rest, &name));
         rest = after;
         if script {
-            out.text.push_str(&self::script(body, base).text);
+            let text = script_out(body, base, out.room()).ok();
+            let text = out.fitting(text);
+            out.text.push_str(&text);
         } else {
-            let sheet = css_out(body, base, dir, out.collects(), max);
+            let sheet = css_out(body, base, dir, out.collects(), out.room());
             out.append(sheet);
         }
     }
@@ -340,7 +356,8 @@ fn attribute(
     {
         let decoded = unescape(value);
         let rewritten = srcset(&decoded, base, dir, out);
-        return if rewritten == decoded { value.to_owned() } else { escaped(&rewritten, quote.unwrap_or('"')) };
+        let rewritten = out.fitting(rewritten);
+        return if rewritten == decoded { value.to_owned() } else { escaped_in(&rewritten, quote, out) };
     }
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
     if href || URL_ATTRIBUTES.contains(&lower.as_str()) {
@@ -354,34 +371,46 @@ fn attribute(
     match lower.as_str() {
         "style" => {
             let decoded = unescape(value);
-            let Out { text, links } = css_out(&decoded, base, dir, out.collects(), out.text.max);
+            let Out { text, links } = css_out(&decoded, base, dir, out.collects(), out.room());
             out.exceeded_with(&text);
             if let (Some(all), Some(more)) = (&mut out.links, links) {
                 all.extend(more);
             }
-            if text.as_str() == decoded { value.to_owned() } else { escaped(text.as_str(), quote.unwrap_or('"')) }
+            if text.as_str() == decoded { value.to_owned() } else { escaped_in(text.as_str(), quote, out) }
         }
         // A handler runs as its value decodes; written back escaped for its quote, as a style is.
         _ if lower.starts_with("on") => {
             let decoded = unescape(value);
-            let text = script(&decoded, base).text;
-            if text == decoded { value.to_owned() } else { escaped(&text, quote.unwrap_or('"')) }
+            let text = script_out(&decoded, base, out.room()).ok();
+            let text = out.fitting(text);
+            if text == decoded { value.to_owned() } else { escaped_in(&text, quote, out) }
         }
         _ => value.to_owned(),
     }
 }
 
-/// `text` as an attribute value delimited by `quote`: `&` and the quote escaped.
-fn escaped(text: &str, quote: char) -> String {
+/// `text` as an attribute value delimited by `quote` (`"` for an unquoted value, which is quoted when it
+/// changes), within the room `out` has left; nothing, and `out` exceeded, when it would not fit.
+fn escaped_in(text: &str, quote: Option<char>, out: &mut Out) -> String {
+    let escaped = escaped(text, quote.unwrap_or('"'), out.room());
+    out.fitting(escaped)
+}
+
+/// `text` as an attribute value delimited by `quote`: `&` and the quote escaped; `None` when that is longer than
+/// `max`, found by counting before anything is written.
+fn escaped(text: &str, quote: char, max: usize) -> Option<String> {
     let as_reference = if quote == '"' { "&quot;" } else { "&#39;" };
-    text.replace('&', "&amp;").replace(quote, as_reference)
+    let grows = |c: char, by: usize| text.matches(c).count().saturating_mul(by);
+    let len = text.len().saturating_add(grows('&', 4)).saturating_add(grows(quote, as_reference.len() - 1));
+    (len <= max).then(|| text.replace('&', "&amp;").replace(quote, as_reference))
 }
 
 /// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of anything but ASCII whitespace,
 /// trailing commas end it; a descriptor runs to the next comma), each URL rewritten, written back
 /// `url descriptor, …`.
-fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> String {
-    let mut candidates = Vec::new();
+fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> Option<String> {
+    let max = out.room();
+    let mut written = String::new();
     let mut rest = value;
     loop {
         rest = rest.trim_start_matches(|c: char| c.is_ascii_whitespace() || c == ',');
@@ -403,10 +432,18 @@ fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> String {
         if let Some(link) = link {
             out.link(url, link);
         }
-        let url = to.unwrap_or_else(|| url.to_owned());
-        candidates.push(if descriptor.is_empty() { url } else { format!("{url} {descriptor}") });
+        let url = to.as_deref().unwrap_or(url);
+        let separator = if written.is_empty() { "" } else { ", " };
+        let space = if descriptor.is_empty() { "" } else { " " };
+        let grows = separator.len() + url.len() + space.len() + descriptor.len();
+        if written.len().saturating_add(grows) > max {
+            return None;
+        }
+        for part in [separator, url, space, descriptor] {
+            written.push_str(part);
+        }
     }
-    candidates.join(", ")
+    Some(written)
 }
 
 /// An attribute value's character references decoded as HTML's tokeniser decodes them in an attribute (HTML
@@ -1179,6 +1216,31 @@ mod tests {
         let whole = script("a='entry://b'", BASE).text;
         assert_eq!(script_text_within("a='entry://b'", BASE, whole.len()).as_deref(), Ok(whole.as_str()));
         assert_eq!(script_text_within("a='entry://b'", BASE, whole.len() - 1), Err(crate::Exceeded));
+    }
+
+    /// What a page's rewrite builds on the way, an inline script, a handler, a `srcset` or a `style` value, is
+    /// held to the room left under the ceiling, not rewritten whole first: a large one is refused as soon as it
+    /// would not fit. Under the ceiling, each is written exactly as without one.
+    #[test]
+    fn a_value_rewritten_on_the_way_is_held_to_the_room_left() {
+        let n = 4 << 20;
+        let handler = format!("<a onclick=\"{}\">x</a>", "gdau://".repeat(n));
+        let srcset = format!("<img srcset=\"{}\">", "a.png 1x, ".repeat(n / 2));
+        for (what, page) in [("handler", &handler), ("srcset", &srcset)] {
+            let started = std::time::Instant::now();
+            assert_eq!(html_text_within(page, BASE, "", 1 << 10), Err(crate::Exceeded), "{what}");
+            assert!(started.elapsed() < std::time::Duration::from_millis(500), "{what} took {:?}", started.elapsed());
+        }
+        for page in [
+            "<script>a='gdau://x';b='entry://y'</script><p>after</p>",
+            r#"<a onclick="go('entry://b')&amp;x">b</a>"#,
+            r#"<img srcset="a.png 1x, https://example.com/b.png 2x">"#,
+            r#"<p style="background:url(c.png);content:'&amp;'">c</p>"#,
+        ] {
+            let whole = html_text(page, BASE, "d");
+            assert_eq!(html_text_within(page, BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()), "{page}");
+            assert_eq!(html_text_within(page, BASE, "d", whole.len() - 1), Err(crate::Exceeded), "{page}");
+        }
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
