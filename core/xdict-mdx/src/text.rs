@@ -40,6 +40,33 @@ impl Codec {
         }
     }
 
+    /// [`Self::decode`], and how many bytes could not be read (`core-api.md` §5.6: lossy decoding was silent).
+    pub(crate) fn decode_counted(self, bytes: &[u8]) -> (String, u64) {
+        let encoding = match self {
+            Self::Utf8 => {
+                let lossy = bytes.utf8_chunks().map(|c| c.invalid().len() as u64).sum();
+                return (String::from_utf8_lossy(bytes).into_owned(), lossy);
+            }
+            Self::Utf16Le => encoding_rs::UTF_16LE,
+            Self::Legacy(encoding) => encoding,
+        };
+        let mut decoder = encoding.new_decoder_without_bom_handling();
+        let mut out = String::with_capacity(bytes.len().saturating_mul(2));
+        let (mut rest, mut lossy) = (bytes, 0u64);
+        loop {
+            let (result, read) = decoder.decode_to_string_without_replacement(rest, &mut out, true);
+            rest = rest.get(read..).unwrap_or(&[]);
+            match result {
+                encoding_rs::DecoderResult::InputEmpty => return (out, lossy),
+                encoding_rs::DecoderResult::OutputFull => out.reserve(rest.len().saturating_mul(3) + 16),
+                encoding_rs::DecoderResult::Malformed(bad, _) => {
+                    lossy += u64::from(bad);
+                    out.push('\u{FFFD}');
+                }
+            }
+        }
+    }
+
     /// Decodes text. Invalid sequences become U+FFFD rather than failing the entry: one bad byte in a
     /// 600 KB entry should not hide the other 599,999.
     pub(crate) fn decode(self, bytes: &[u8]) -> String {
@@ -109,6 +136,32 @@ fn case_fold(key: &str) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    /// The counting decoder gives the plain decoder's text, and counts every byte it replaced.
+    #[test]
+    fn lossy_bytes_are_counted() {
+        let utf8 = Codec::Utf8;
+        assert_eq!(utf8.decode_counted(b"caf\xC3\xA9"), ("café".into(), 0));
+        assert_eq!(utf8.decode_counted(b"a\xFF\xFEb\xC3"), ("a\u{FFFD}\u{FFFD}b\u{FFFD}".into(), 3));
+        let gbk = Codec::Legacy(encoding_rs::GB18030);
+        assert_eq!(gbk.decode_counted(&[0xD6, 0xD0, 0xFF]).1, 1);
+        let utf16 = Codec::Utf16Le;
+        assert_eq!(utf16.decode_counted(&[0x41, 0x00, 0x00, 0xD8, 0x42, 0x00]).1, 2, "a lone surrogate");
+        let mut seed = 7u32;
+        for codec in [utf8, gbk, utf16, Codec::Legacy(encoding_rs::BIG5)] {
+            for len in 0..300 {
+                let bytes: Vec<u8> = (0..len)
+                    .map(|_| {
+                        seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                        (seed >> 16) as u8
+                    })
+                    .collect();
+                let (text, lossy) = codec.decode_counted(&bytes);
+                assert_eq!(text, codec.decode(&bytes));
+                assert_eq!(lossy == 0, !text.contains('\u{FFFD}'));
+            }
+        }
+    }
 
     /// 12 of freemdict's 3,394 MDX files declare Latin-1 (census, 2026-10-13).
     #[test]
