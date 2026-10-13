@@ -15,7 +15,9 @@
 //! - **JavaScript never runs while a table is borrowed**: a handle is cloned out first, so a callback may call
 //!   back into the binding (register a source, open or import another package).
 //! - **Every call into JavaScript catches**: an exception from a callback becomes a typed error, never an
-//!   unwind through Rust frames that skips their cleanup.
+//!   unwind through Rust frames that skips their cleanup. `size()` and `identity()` cannot return an error to
+//!   the core, so their exceptions are recorded, and the call they happened in fails with the first ([`watched`]),
+//!   leaving nothing behind: an `open` that stored a dictionary closes it again.
 //! - **Every entry has owners and goes when the last one does**: a source is owned by the shell's registration
 //!   (until `releaseSource`) and by each location the core holds; index storage by its core; a progress
 //!   callback by its import.
@@ -104,6 +106,10 @@ thread_local! {
     static PROGRESS: RefCell<Table<JsProgress>> = RefCell::new(Table::new());
     /// Sources whose `size()` or `identity()` threw: every later read of them fails with this.
     static FAILED: RefCell<HashMap<u32, String>> = RefCell::new(HashMap::new());
+    /// The exceptions of `size()` and `identity()` during the outermost call now running, in order ([`watched`]).
+    static THROWN: RefCell<Vec<String>> = const { RefCell::new(Vec::new()) };
+    /// How many [`watched`] calls are running: a callback may call back into the binding.
+    static DEPTH: Cell<u32> = const { Cell::new(0) };
     /// Resource replies not yet freed.
     static REPLIES: Cell<u32> = const { Cell::new(0) };
 }
@@ -177,8 +183,36 @@ impl Source {
     }
 
     fn fail(&self, what: &str, e: &JsValue) {
-        FAILED.with(|failed| failed.borrow_mut().insert(self.0, format!("the source's {what}() threw: {e:?}")));
+        let why = format!("the source's {what}() threw: {e:?}");
+        THROWN.with(|thrown| thrown.borrow_mut().push(why.clone()));
+        FAILED.with(|failed| failed.borrow_mut().insert(self.0, why));
     }
+}
+
+/// Runs a call into the core, and fails it if a source's `size()` or `identity()` threw while it ran: the core
+/// saw only what the binding could give in its place (no size, no identity), so whatever it concluded, this is
+/// why. A nested call (from a callback) fails with what threw inside it; the outer one sees that too.
+fn watched<T>(call: impl FnOnce() -> T) -> (T, Result<(), String>) {
+    let mark = THROWN.with(|thrown| thrown.borrow().len());
+    DEPTH.with(|depth| depth.set(depth.get() + 1));
+    let out = call();
+    let depth = DEPTH.with(|depth| {
+        depth.set(depth.get().saturating_sub(1));
+        depth.get()
+    });
+    let first = THROWN.with(|thrown| {
+        let mut thrown = thrown.borrow_mut();
+        let first = thrown.get(mark).cloned();
+        if depth == 0 {
+            thrown.clear();
+        }
+        first
+    });
+    let checked = match first {
+        Some(why) => Err(to_json(&CoreError::Io { kind: core::IoKind::Other, detail: why })),
+        None => Ok(()),
+    };
+    (out, checked)
 }
 
 impl Drop for Source {
@@ -373,18 +407,23 @@ impl Core {
     }
 
     pub fn import(&self, package: &str, progress: Option<JsProgress>) -> Reply {
-        let value = from_json::<Value>(package)?;
-        let package = package_from(&value)?;
+        let package = package_from(&from_json::<Value>(package)?)?;
         let progress = Progress(progress.map(|p| PROGRESS.with(|table| table.borrow_mut().insert(p))));
-        let result = self.0.import(package, &progress);
-        failed_during(&value)?;
+        let (result, checked) = watched(|| self.0.import(package, &progress));
+        checked?;
         reply(result)
     }
 
+    /// All or nothing: a dictionary opened while one of its sources threw is closed again before the error.
     pub fn open(&self, package: &str) -> Reply {
-        let value = from_json::<Value>(package)?;
-        let result = self.0.open(package_from(&value)?);
-        failed_during(&value)?;
+        let package = package_from(&from_json::<Value>(package)?)?;
+        let (result, checked) = watched(|| self.0.open(package));
+        if let Err(why) = checked {
+            if let Ok(core::Opened::Ready { dict, .. }) = result {
+                let _ = self.0.close(dict);
+            }
+            return Err(why);
+        }
         reply(result)
     }
 
@@ -457,19 +496,6 @@ fn location_from(value: &Value) -> Result<core::Location, String> {
             Ok(core::Location::Source { name, source: Arc::new(source) })
         }
         _ => Err(bad("no type")),
-    }
-}
-
-/// The failure of a package's source that threw from `size()` or `identity()`, if one did: the core saw only
-/// what the binding could give it in its place (no size, no identity), so whatever it concluded, this is why.
-fn failed_during(package: &Value) -> Result<(), String> {
-    let locations = std::iter::once(&package["mdx"])
-        .chain(package["mdd"].as_array().into_iter().flatten())
-        .chain(package["sidecars"].as_array().into_iter().flatten());
-    let ids = locations.filter_map(|l| l["sourceId"].as_u64().and_then(|n| u32::try_from(n).ok()));
-    match FAILED.with(|failed| ids.into_iter().find_map(|id| failed.borrow().get(&id).cloned())) {
-        Some(why) => Err(to_json(&CoreError::Io { kind: core::IoKind::Other, detail: why })),
-        None => Ok(()),
     }
 }
 
