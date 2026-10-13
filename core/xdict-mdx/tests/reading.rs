@@ -35,7 +35,7 @@ fn text(record: &xdict_mdx::Record) -> &str {
 fn every_version_compression_and_encoding_reads_back_every_entry() {
     let entries = words();
     for version in [Version::V1_2, Version::V2_0, Version::V3_0] {
-        for compression in [Compression::None, Compression::Zlib] {
+        for compression in [Compression::None, Compression::Lzo, Compression::Zlib] {
             for encoding in [TextEncoding::Utf8, TextEncoding::Utf16] {
                 for obfuscate in [false, true] {
                     if obfuscate && version == Version::V1_2 {
@@ -43,6 +43,9 @@ fn every_version_compression_and_encoding_reads_back_every_entry() {
                     }
                     if version == Version::V3_0 && (encoding == TextEncoding::Utf16 || obfuscate) {
                         continue; // 3.0 is UTF-8 and encrypts every block, whatever the spec says
+                    }
+                    if version == Version::V3_0 && compression == Compression::Lzo {
+                        continue; // no real 3.0 file has shown LZO, so neither side writes or reads it
                     }
                     let spec = Spec {
                         version,
@@ -222,8 +225,9 @@ fn registration_code_encryption_is_refused_by_name() {
 }
 
 #[test]
-fn an_lzo_block_is_refused_by_name() {
-    assert!(matches!(refusal(Defect::LzoRecordBlock), Error::Unsupported(Unsupported::Lzo)));
+fn a_block_marked_lzo_that_is_not_lzo_is_malformed() {
+    let refused = refusal(Defect::LzoRecordBlock);
+    assert!(matches!(&refused, Error::Malformed(_)), "{refused}");
 }
 
 #[test]

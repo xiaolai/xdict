@@ -32,7 +32,7 @@ pub(crate) fn decompress(kind: u32, payload: &[u8], expected: usize, what: &str)
             )));
         }
         0 => payload.to_vec(),
-        1 => return Err(Error::Unsupported(Unsupported::Lzo)),
+        1 => crate::lzo::decompress(payload, expected, what)?,
         2 => {
             let mut out = Vec::with_capacity(expected);
             // One byte past the expected size, so an oversized stream is caught rather than truncated.

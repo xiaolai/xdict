@@ -24,6 +24,7 @@ mod classic;
 mod header;
 mod keys;
 pub mod limits;
+mod lzo;
 mod text;
 mod v3;
 
@@ -55,7 +56,7 @@ pub enum Unsupported {
     RegistrationCode,
     #[error("the encryption flags {0}")]
     EncryptionFlags(u8),
-    #[error("LZO-compressed blocks")]
+    #[error("LZO compression in a format 3.0 file, which no real file has shown")]
     Lzo,
     #[error("compression type {0}")]
     CompressionType(u32),
