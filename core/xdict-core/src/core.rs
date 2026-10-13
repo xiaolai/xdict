@@ -311,7 +311,10 @@ impl Core {
     pub fn close(&self, dict: String) -> Result<(), CoreError> {
         guard(|| {
             let handle = self.parse_handle(&dict)?;
-            self.lock()?.open.remove(&handle);
+            // Dropped once the lock is released: the last reference drops the shell's sources, whose destructors
+            // may call the core.
+            let removed = self.lock()?.open.remove(&handle);
+            drop(removed);
             Ok(())
         })
     }
@@ -834,6 +837,51 @@ mod tests {
 
     fn view() -> View {
         View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
+    }
+
+    /// A source that calls back into the core when it is dropped, as a shell's source may (a JavaScript object's
+    /// finaliser, a Swift `deinit`).
+    struct Reentrant(Vec<u8>, Arc<std::sync::OnceLock<std::sync::Weak<Core>>>);
+
+    impl crate::ByteSource for Reentrant {
+        fn size(&self) -> u64 {
+            self.0.len() as u64
+        }
+        fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+            Ok(self.0[offset as usize..offset as usize + len as usize].to_vec())
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            Some(FileIdentity { device: 1, inode: 3, size: self.0.len() as u64, mtime_ns: 0, ctime_ns: 0 })
+        }
+    }
+
+    impl Drop for Reentrant {
+        fn drop(&mut self) {
+            if let Some(core) = self.1.get().and_then(std::sync::Weak::upgrade) {
+                let options = LookupOptions { limit: 1, offset: 0, mode: MatchMode::Reader, generation: None };
+                let _ = core.lookup("run".into(), vec![], options);
+            }
+        }
+    }
+
+    /// Closing the last reference to a dictionary drops the shell's sources after the core's lock is released, so
+    /// a source that calls the core from its destructor does not deadlock it.
+    #[test]
+    fn a_source_may_call_the_core_as_it_is_dropped() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let core = Arc::new(Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap());
+        let back = Arc::new(std::sync::OnceLock::new());
+        let bytes = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Reentrant(bytes, back.clone())) };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        back.set(Arc::downgrade(&core)).unwrap();
+        let (done, finished) = std::sync::mpsc::channel();
+        let closing = core.clone();
+        std::thread::spawn(move || done.send(closing.close(dict)).unwrap());
+        let closed = finished.recv_timeout(std::time::Duration::from_secs(10));
+        assert!(matches!(closed, Ok(Ok(()))), "close deadlocked or failed: {closed:?}");
     }
 
     /// The limit is checked against the size the source declares, before anything is read or allocated.
