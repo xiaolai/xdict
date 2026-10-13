@@ -530,44 +530,67 @@ impl Index {
     /// the tier-2 order names keys, none twice.
     fn check_structure(&self) -> Result<(), Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
-        let words = |span: Span| self.region.bytes(span.at, span.len as usize).map_err(|_| damaged("a section"));
-        let offsets = words(self.offsets)?;
         let mut previous = 0u32;
-        for (i, chunk) in offsets.as_chunks::<4>().0.iter().enumerate() {
-            let value = u32::from_le_bytes(*chunk);
-            if (i == 0 && value != 0)
-                || value < previous
-                || u64::from(value) > self.text.len
-                || u64::from(value - previous) > limits::BLOCK_BYTES
-            {
-                return Err(damaged("the text offsets"));
-            }
-            previous = value;
-        }
-        if u64::from(previous) != self.text.len {
+        let mut first = true;
+        let offsets_rise = self.each_word::<4>(self.offsets, |word| {
+            let value = u32::from_le_bytes(word);
+            let ok = (!first || value == 0)
+                && value >= previous
+                && u64::from(value) <= self.text.len
+                && u64::from(value - previous) <= limits::BLOCK_BYTES;
+            (first, previous) = (false, value);
+            ok
+        })?;
+        if !offsets_rise || u64::from(previous) != self.text.len {
             return Err(damaged("the text offsets"));
         }
-        let (starts, ends) = (words(self.starts)?, words(self.ends)?);
-        for (s, e) in starts.as_chunks::<8>().0.iter().zip(ends.as_chunks::<8>().0) {
-            let (s, e) = (u64::from_le_bytes(*s), u64::from_le_bytes(*e));
-            if s > e || e > self.total_records {
-                return Err(damaged("a record's bounds"));
+        // Each start against its end, a piece of each table at a time: the two tables have a word per key.
+        let mut at = 0u64;
+        while at < self.starts.len {
+            let len = (self.starts.len - at).min(CHECK_CHUNK);
+            let (starts, ends) = (self.piece(self.starts, at, len)?, self.piece(self.ends, at, len)?);
+            for (s, e) in starts.as_chunks::<8>().0.iter().zip(ends.as_chunks::<8>().0) {
+                let (s, e) = (u64::from_le_bytes(*s), u64::from_le_bytes(*e));
+                if s > e || e > self.total_records {
+                    return Err(damaged("a record's bounds"));
+                }
             }
+            at += len;
         }
         // The order has a word per key (its size is checked), so naming each key once makes it a permutation.
-        if !self.names_keys_once(&words(self.order)?) {
+        if !self.names_keys_once(self.order)? {
             return Err(damaged("the order is not a permutation"));
         }
-        if !self.names_keys_once(&words(self.tier2)?) {
+        if !self.names_keys_once(self.tier2)? {
             return Err(damaged("the tier-2 order names a key twice, or none"));
         }
         Ok(())
     }
 
+    /// `len` bytes of `span` from `at` within it.
+    fn piece(&self, span: Span, at: u64, len: u64) -> Result<Cow<'_, [u8]>, Stale> {
+        let len = usize::try_from(len).map_err(|_| Stale::Damaged("a section".into()))?;
+        self.region.bytes(span.at + at, len).map_err(|_| Stale::Damaged("a section".into()))
+    }
+
+    /// Every `N`-byte word of `span`, read [`CHECK_CHUNK`] bytes at a time (a multiple of `N`), until `each`
+    /// returns `false`: whether it never did.
+    fn each_word<const N: usize>(&self, span: Span, mut each: impl FnMut([u8; N]) -> bool) -> Result<bool, Stale> {
+        let mut at = 0u64;
+        while at < span.len {
+            let len = (span.len - at).min(CHECK_CHUNK);
+            if !self.piece(span, at, len)?.as_chunks::<N>().0.iter().all(|w| each(*w)) {
+                return Ok(false);
+            }
+            at += len;
+        }
+        Ok(true)
+    }
+
     /// Whether a table of little-endian `u32` key numbers names only keys, none twice.
-    fn names_keys_once(&self, table: &[u8]) -> bool {
+    fn names_keys_once(&self, table: Span) -> Result<bool, Stale> {
         let mut seen = vec![false; self.keys];
-        table.as_chunks::<4>().0.iter().all(|chunk| match seen.get_mut(u32::from_le_bytes(*chunk) as usize) {
+        self.each_word::<4>(table, |word| match seen.get_mut(u32::from_le_bytes(word) as usize) {
             Some(slot @ false) => {
                 *slot = true;
                 true
