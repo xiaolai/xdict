@@ -1,8 +1,8 @@
 //! Every URL of an entry, and of the stylesheets and scripts it loads, rewritten under the view's base (ADR-0007
 //! decisions 6, 8 and 14), so that each shell serves one space of URLs and nothing else loads.
 //!
-//! An entry is not parsed into a tree: a tag scanner finds attributes, `<script>` and `<style>`, and copies
-//! everything else unchanged. Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort
+//! An entry is not parsed into a tree: a tag scanner finds attributes and the elements whose text is raw
+//! (`<script>`, `<style>`, `<textarea>`, `<noscript>` and the rest), and copies everything else unchanged. Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort
 //! by construction: a URL a script builds from pieces (`'entry' + '://'`) is not seen, so each shell still
 //! intercepts navigations.
 
@@ -44,6 +44,13 @@ impl Out {
     fn link(&mut self, url: impl Into<String>, link: Link) {
         if let Some(links) = &mut self.links {
             links.push(Written { url: url.into(), link });
+        }
+    }
+
+    /// The URLs `other` met, without its text.
+    fn links_of(&mut self, other: Option<Out>) {
+        if let (Some(links), Some(Out { links: Some(more), .. })) = (&mut self.links, other) {
+            links.extend(more);
         }
     }
 
@@ -137,13 +144,62 @@ pub fn html_text(text: &str, base: &str, dir: &str) -> String {
     html_out(text, base, dir, false).text
 }
 
+/// What a start tag makes of the text after it, until its end tag (HTML's tokeniser states).
+enum Raw {
+    /// Script data: rewritten as a script.
+    Script,
+    /// RAWTEXT that is a stylesheet.
+    Style,
+    /// RCDATA (`textarea`, `title`) and RAWTEXT that is not loaded (`xmp`, `iframe`, `noembed`, `noframes`):
+    /// shown or ignored as written, so copied as it is.
+    Text,
+    /// RAWTEXT where scripts run, markup where they do not: rewritten as markup, ending where the raw text ends.
+    Noscript,
+    /// The rest of the document, as text.
+    Plaintext,
+}
+
+/// The raw text kind the element `name` starts; `None` for one whose content is markup.
+fn raw(name: &str) -> Option<Raw> {
+    Some(match name.to_ascii_lowercase().as_str() {
+        "script" => Raw::Script,
+        "style" => Raw::Style,
+        "textarea" | "title" | "xmp" | "iframe" | "noembed" | "noframes" => Raw::Text,
+        "noscript" => Raw::Noscript,
+        "plaintext" => Raw::Plaintext,
+        _ => return None,
+    })
+}
+
+/// How a pass reads markup: the document's own reading, or a second reading of an element's text as markup, in
+/// which nothing is raw (so passes never nest) and a comment hides nothing.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Pass {
+    Document,
+    AsMarkup,
+}
+
 fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
+    html_in(text, base, dir, collect, Pass::Document)
+}
+
+/// `text` rewritten. A browser reads the text of `title`, `style`, `script` and the rest as markup inside `svg` or
+/// `math`, and only a tree builder knows which it is in; so once either has started, the document is taken as
+/// possibly foreign: such text is rewritten as markup as well, and a comment hides nothing, since a
+/// `<![CDATA[` there makes `<!--` text. What that costs is text rewritten that needed not be, never the reverse.
+fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out {
     let mut out = Out::new(text.len() + text.len() / 8, collect);
+    let mut foreign = false;
     let mut rest = text;
     while let Some(at) = rest.find('<') {
         let (before, from) = rest.split_at(at);
         out.text.push_str(before);
         if let Some(comment) = from.strip_prefix("<!--") {
+            out.text.push_str("<!--");
+            if pass == Pass::AsMarkup || foreign {
+                rest = comment;
+                continue;
+            }
             // `<!-->` and `<!--->` close at once, as a browser reads them, and `--!>` closes as `-->` does
             // (HTML's comment end bang state).
             let end = if comment.starts_with('>') {
@@ -154,32 +210,44 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 first_of(comment, &["-->", "--!>"])
                     .map_or(comment.len(), |(e, which)| e + if which == 0 { 3 } else { 4 })
             };
-            out.text.push_str("<!--");
             out.text.push_str(comment.get(..end).unwrap_or(comment));
             rest = comment.get(end..).unwrap_or("");
             continue;
         }
-        match tag(from, base, dir, &mut out) {
-            Some((name, after)) => {
-                rest = after;
-                for (raw, script) in [("script", true), ("style", false)] {
-                    if name.eq_ignore_ascii_case(raw) {
-                        let close = end_tag(rest, raw);
-                        let (body, after) = rest.split_at(close);
-                        if script {
-                            out.text.push_str(&self::script(body, base).text);
-                        } else {
-                            let sheet = css_out(body, base, dir, out.collects());
-                            out.append(sheet);
-                        }
-                        rest = after;
-                    }
-                }
+        let Some((name, after)) = tag(from, base, dir, &mut out) else {
+            out.text.push('<');
+            rest = from.get(1..).unwrap_or("");
+            continue;
+        };
+        rest = after;
+        if pass == Pass::AsMarkup {
+            continue;
+        }
+        foreign |= name.eq_ignore_ascii_case("svg") || name.eq_ignore_ascii_case("math");
+        let Some(kind) = raw(&name) else { continue };
+        let (body, after) = match kind {
+            Raw::Plaintext => (rest, ""),
+            _ => rest.split_at(end_tag(rest, &name)),
+        };
+        rest = after;
+        // The text read as markup, where a browser may read it so.
+        let markup = (foreign || matches!(kind, Raw::Noscript))
+            .then(|| html_in(body, base, dir, out.collects(), Pass::AsMarkup));
+        match (kind, markup) {
+            (Raw::Script, markup) => {
+                let source = markup.as_ref().map_or(body, |m| m.text.as_str());
+                let text = script(source, base).text;
+                out.links_of(markup);
+                out.text.push_str(&text);
             }
-            None => {
-                out.text.push('<');
-                rest = from.get(1..).unwrap_or("");
+            (Raw::Style, markup) => {
+                let source = markup.as_ref().map_or(body, |m| m.text.as_str());
+                let sheet = css_out(source, base, dir, out.collects());
+                out.links_of(markup);
+                out.append(sheet);
             }
+            (_, Some(markup)) => out.append(markup),
+            (_, None) => out.text.push_str(body),
         }
     }
     out.text.push_str(rest);
@@ -970,6 +1038,63 @@ mod tests {
         // Without its delimiter at the very end, `</script` is the script's text, as it is to a browser.
         let r = html("<script>location='entry://a'</script", BASE);
         assert!(r.text.contains("xdict://d/entry/a"), "{}", r.text);
+    }
+
+    /// The text of `textarea`, `title` (RCDATA), `xmp`, `iframe`, `noembed`, `noframes` (RAWTEXT) and everything
+    /// after `plaintext` is text to a browser: it is shown as written, and a `<!--` in it opens no comment, so the
+    /// markup after its end tag is markup.
+    #[test]
+    fn raw_text_is_text() {
+        for name in ["textarea", "title", "xmp", "iframe", "noembed", "noframes", "TEXTAREA"] {
+            let kept = format!(r#"<{name}><img src=a.png><a href="entry://x">x</a></{name}>"#);
+            assert_eq!(html(&kept, BASE).text, kept, "{name}");
+            let r = html(&format!("<{name}><!--</{name}><img src=https://example.com/a>-->"), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{name}: {}", r.text);
+        }
+        let kept = "<plaintext><img src=a.png></plaintext><img src=https://example.com/a>";
+        assert_eq!(html(kept, BASE).text, kept);
+    }
+
+    /// Inside `svg` or `math` a browser reads `title`, `textarea`, `style`, `script` and `plaintext` as markup, and
+    /// an `img` there leaves foreign content: whatever such an element holds is rewritten as markup too, and a
+    /// comment hides nothing, since `<![CDATA[` can make a `<!--` text there.
+    #[test]
+    fn foreign_content_is_rewritten_as_markup() {
+        for (open, close) in [
+            ("<svg><title>", "</title>"),
+            ("<svg><textarea>", "</textarea>"),
+            ("<math><style>", "</style>"),
+            ("<svg><script>", "</script>"),
+            ("<SVG><xmp>", "</xmp>"),
+            ("<svg><plaintext>", ""),
+            ("<svg><![CDATA[<!--]]>", "-->"),
+        ] {
+            let r = html(&format!("{open}<img src=https://example.com/a>{close}</svg>"), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{open}: {}", r.text);
+        }
+        let r = html("<svg><style>a{background:url(https://example.com/b)}</style></svg>", BASE);
+        assert!(r.text.contains("xdict://d/blocked/"), "a foreign style is still a stylesheet: {}", r.text);
+        let r = html("<svg><script>location='entry://run'</script></svg>", BASE);
+        assert!(r.text.contains("xdict://d/entry/run"), "a foreign script is still a script: {}", r.text);
+        // An `svg` in a title's text is text: the document is no more foreign for it.
+        let kept = "<title><svg></title><textarea><img src=a.png></textarea>";
+        assert_eq!(html(kept, BASE).text, kept);
+        // Nested, each element's text is read at most twice.
+        let deep = format!("<svg>{}", "<style>".repeat(200_000));
+        assert_eq!(html(&deep, BASE).text, deep);
+    }
+
+    /// `noscript` is raw text where scripts run and markup where they do not, so its text is rewritten as markup
+    /// and ends where the raw text ends: what a browser loads either way is rewritten.
+    #[test]
+    fn noscript_is_rewritten_both_ways() {
+        let r = html("<noscript><!--</noscript><img src=https://example.com/a>-->", BASE);
+        assert!(r.text.contains("xdict://d/blocked/"), "{}", r.text);
+        let r = html("<noscript><img src=https://example.com/b></noscript>", BASE);
+        assert!(r.text.contains("xdict://d/blocked/"), "{}", r.text);
+        // Nested, it is read once more, not once per level.
+        let deep = "<noscript>".repeat(200_000);
+        assert_eq!(html(&deep, BASE).text, deep);
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
