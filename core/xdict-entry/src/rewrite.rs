@@ -214,13 +214,24 @@ fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out 
             rest = comment.get(end..).unwrap_or("");
             continue;
         }
-        let Some((name, after)) = tag(from, base, dir, &mut out) else {
+        // `<?`, `<!` that opens no comment (a doctype among them) and `</` before anything but a letter are bogus
+        // comments to a browser, which end at the first `>`.
+        let bogus = from.strip_prefix("<?").or_else(|| from.strip_prefix("<!")).or_else(|| {
+            from.strip_prefix("</").filter(|a| !a.is_empty() && !a.starts_with(|c: char| c.is_ascii_alphabetic()))
+        });
+        if let Some(body) = bogus {
+            let whole = 2 + body.find('>').map_or(body.len(), |e| e + 1);
+            out.text.push_str(from.get(..whole).unwrap_or(from));
+            rest = from.get(whole..).unwrap_or("");
+            continue;
+        }
+        let Some((name, after, end)) = tag(from, base, dir, &mut out) else {
             out.text.push('<');
             rest = from.get(1..).unwrap_or("");
             continue;
         };
         rest = after;
-        if pass == Pass::AsMarkup {
+        if pass == Pass::AsMarkup || end {
             continue;
         }
         foreign |= name.eq_ignore_ascii_case("svg") || name.eq_ignore_ascii_case("math");
@@ -254,13 +265,15 @@ fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out 
     out
 }
 
-/// One start tag at the start of `from`, written to `out` with its attributes rewritten: the tag's name and
-/// what follows it. `None` if `from` does not start a tag (`a < b`, an end tag is copied as text).
-fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(String, &'a str)> {
+/// One tag at the start of `from`, written to `out`: the tag's name, what follows it, and whether it is an end
+/// tag. A start tag's attributes are rewritten; an end tag's, which a browser ignores, are read only to find
+/// where it ends. `None` if `from` does not start a tag (`a < b`).
+fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(String, &'a str, bool)> {
     let inner = from.strip_prefix('<')?;
-    if inner.starts_with('/') {
-        return None;
-    }
+    let (end, inner) = match inner.strip_prefix('/') {
+        Some(inner) => (true, inner),
+        None => (false, inner),
+    };
     // A name starts with a letter and runs to whitespace, `/` or `>` (HTML's tag open and tag name states):
     // `<script.foo>` names no script.
     let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
@@ -268,7 +281,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
         return None;
     }
     let name = inner.get(..name_len)?.to_owned();
-    out.text.push('<');
+    out.text.push_str(if end { "</" } else { "<" });
     out.text.push_str(&name);
     let mut rest = inner.get(name_len..)?;
     loop {
@@ -276,11 +289,11 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
         out.text.push_str(rest.get(..spaces)?);
         rest = rest.get(spaces..)?;
         if rest.is_empty() {
-            return Some((name, rest));
+            return Some((name, rest, end));
         }
         if let Some(after) = rest.strip_prefix('>') {
             out.text.push('>');
-            return Some((name, after));
+            return Some((name, after, end));
         }
         if let Some(after) = rest.strip_prefix('/') {
             out.text.push('/');
@@ -299,7 +312,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
         let value_from = after_eq.trim_ascii_start();
         out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
         let (quote, value, after) = attribute_value(value_from)?;
-        let new = attribute(&name, attr, value, quote, base, dir, out);
+        let new = if end { value.to_owned() } else { attribute(&name, attr, value, quote, base, dir, out) };
         // Written as found unless it changed; a changed value is quoted.
         let q = if new == value { quote } else { Some(quote.unwrap_or('"')) };
         out.text.extend(q);
@@ -1095,6 +1108,19 @@ mod tests {
         // Nested, it is read once more, not once per level.
         let deep = "<noscript>".repeat(200_000);
         assert_eq!(html(&deep, BASE).text, deep);
+    }
+
+    /// `<?`, `<!` other than `<!--`, and `</` before anything but a letter open bogus comments, which end at the first
+    /// `>`, and an end tag's attributes are read as a start tag's: a `<!--` inside any of them opens no comment, so
+    /// what follows them is markup.
+    #[test]
+    fn only_a_real_comment_opens_one() {
+        for open in ["<?x <!-- ?>", "<!x <!-- >", "</ <!-- >", "</a title=\"<!--\">", "<!DOCTYPE <!-- >"] {
+            let r = html(&format!("{open}<img src=https://example.com/a>-->"), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{open}: {}", r.text);
+        }
+        let kept = r#"<!DOCTYPE html><?xml version="1.0"?></p ><!-- <a href="https://example.com/x"> -->"#;
+        assert_eq!(html(kept, BASE).text, kept);
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
