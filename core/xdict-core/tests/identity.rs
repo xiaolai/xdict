@@ -151,7 +151,7 @@ fn volume(dir: &Scratch, name: &str, css: &str, extra: &str) -> PathBuf {
 }
 
 fn resource_text(core: &Core, dict: &str, path: &str) -> String {
-    let view = View { base_url: "xdict://d/".into(), skin: None, max_body_bytes: 1 << 20 };
+    let view = View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 };
     match core.resource(dict.into(), path.into(), view).unwrap() {
         Resource::Found { bytes, .. } => String::from_utf8(bytes).unwrap(),
         Resource::Missing { .. } => "missing".into(),

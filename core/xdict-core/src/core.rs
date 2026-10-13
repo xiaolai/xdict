@@ -826,7 +826,7 @@ mod tests {
     }
 
     fn view() -> View {
-        View { base_url: "xdict://d/".into(), skin: None, max_body_bytes: 1 << 20 }
+        View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
     }
 
     /// The limit is checked against the size the source declares, before anything is read or allocated.
@@ -914,7 +914,7 @@ mod tests {
         let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![] };
         core.import(package.clone(), &NoProgress).unwrap();
         let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
-        let view = View { base_url: "xdict://d/".into(), skin: None, max_body_bytes: 2000 };
+        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
         let css = core.resource(dict.clone(), "big.css".into(), view.clone());
         assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
         let png = core.resource(dict, "big.png".into(), view);

@@ -2,7 +2,6 @@
   "comment": "What every binding must answer for tiny/. Matching is by subset: every field written here must be present and equal; fields not written here (handles, lineage ids, the core's version string) are not compared. Lists must have the same length. A resource's bytes are compared as UTF-8 text in `text`. The scenario each suite runs is in conformance/README.md.",
   "view": {
     "baseUrl": "xdict://d/",
-    "skin": null,
     "maxBodyBytes": 1048576
   },
   "versions": {

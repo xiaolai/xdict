@@ -21,7 +21,7 @@ const BASE: &str = "xdict://d/";
 const SAMPLE: usize = 400;
 
 fn view() -> View {
-    View { base_url: BASE.into(), skin: None, max_body_bytes: 64 << 20 }
+    View { base_url: BASE.into(), max_body_bytes: 64 << 20 }
 }
 
 /// A folder's package: `X.mdd` before `X.1.mdd` before `X.2.mdd`, every other file a sidecar.

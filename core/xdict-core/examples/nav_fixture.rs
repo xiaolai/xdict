@@ -89,7 +89,7 @@ impl ByteSource for Bytes {
 }
 
 fn view() -> View {
-    View { base_url: BASE.into(), skin: None, max_body_bytes: 1 << 20 }
+    View { base_url: BASE.into(), max_body_bytes: 1 << 20 }
 }
 
 /// A core with the harness's dictionary open, and the entry.

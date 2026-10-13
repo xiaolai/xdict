@@ -83,7 +83,6 @@ fn the_tiny_dictionary_conforms() {
     let config = |client_protocol| Config { client_protocol, ..Config::default() };
     let view = |max: Option<u64>| View {
         base_url: x["view"]["baseUrl"].as_str().unwrap().into(),
-        skin: None,
         max_body_bytes: max.unwrap_or(x["view"]["maxBodyBytes"].as_u64().unwrap()),
     };
     let mut failures = Vec::new();

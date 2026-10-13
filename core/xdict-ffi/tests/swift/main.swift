@@ -251,7 +251,7 @@ func check(_ name: String, _ expected: Any?, _ actual: Any) {
 func at(_ name: String) -> Location { .path(path: dir.appendingPathComponent(name).path) }
 let viewSpec = x["view"] as! [String: Any]
 func view(_ max: UInt64? = nil) -> View {
-    View(baseUrl: viewSpec["baseUrl"] as! String, skin: nil,
+    View(baseUrl: viewSpec["baseUrl"] as! String,
          maxBodyBytes: max ?? (viewSpec["maxBodyBytes"] as! NSNumber).uint64Value)
 }
 func config(_ client: UInt32) -> Config { Config(dataDir: nil, cacheDir: nil, clientProtocol: client, entropy: Data()) }
@@ -345,7 +345,7 @@ let matrixDir = URL(fileURLWithPath: args[3])
 let template = try String(contentsOf: URL(fileURLWithPath: args[4]), encoding: .utf8)
 let variants = try JSONSerialization.jsonObject(with: Data(contentsOf: matrixDir.appendingPathComponent("variants.json"))) as! [[String: Any]]
 check("matrix.variants", 32, variants.count)
-let matrixView = View(baseUrl: "xdict://d/", skin: nil, maxBodyBytes: 1 << 20)
+let matrixView = View(baseUrl: "xdict://d/", maxBodyBytes: 1 << 20)
 for v in variants {
     let name = v["name"] as! String
     let text = template.replacingOccurrences(of: "$word", with: v["word"] as! String)
