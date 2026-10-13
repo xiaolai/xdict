@@ -514,12 +514,10 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 i = text.get(i + 2..).and_then(|r| r.find("*/")).map_or(text.len(), |e| i + 2 + e + 2);
             }
             b'"' | b'\'' => {
-                let body = text.get(i + 1..).unwrap_or("");
-                let end = string_end(body, char::from(b));
-                let next = (i + 1 + end + 1).min(text.len());
+                let (body, next) = quoted(text, i, char::from(b));
                 if importing || parens.last() == Some(&true) {
                     out.text.push_str(text.get(copied..i).unwrap_or(""));
-                    write_url(&mut out, body.get(..end).unwrap_or(""), char::from(b), base, dir);
+                    write_url(&mut out, body, char::from(b), base, dir);
                     copied = next;
                 }
                 importing = false;
@@ -561,10 +559,9 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 out.text.push_str(text.get(copied..start).unwrap_or(""));
                 match value_from.chars().next() {
                     Some(q @ ('"' | '\'')) => {
-                        let body = value_from.get(1..).unwrap_or("");
-                        let end = string_end(body, q);
-                        write_url(&mut out, body.get(..end).unwrap_or(""), q, base, dir);
-                        copied = (start + 1 + end + 1).min(text.len());
+                        let (body, next) = quoted(text, start, q);
+                        write_url(&mut out, body, q, base, dir);
+                        copied = next;
                     }
                     _ => {
                         // Unquoted, it runs to `)`; the spaces before it are dropped with the quotes added.
@@ -583,6 +580,14 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
     }
     out.text.push_str(text.get(copied..).unwrap_or(""));
     out
+}
+
+/// The CSS string whose opening `quote` is at `at` in `text`: its body as written, and where what follows it
+/// starts (past its closing quote, or the end of `text` for a string left open).
+fn quoted(text: &str, at: usize, quote: char) -> (&str, usize) {
+    let body = text.get(at + 1..).unwrap_or("");
+    let end = string_end(body, quote);
+    (body.get(..end).unwrap_or(""), (at + 1 + end + 1).min(text.len()))
 }
 
 /// The functions whose string arguments a browser fetches as images (css-images-4).
