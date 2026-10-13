@@ -428,3 +428,64 @@ fn a_block_shorter_than_its_framing_is_stale() {
     reseal(&mut index, 5);
     assert!(matches!(open_with(&file, index).err(), Some(Stale::Damaged(_))));
 }
+
+/// The xxh3 of `len` zero bytes, as a sparse region reads them.
+fn zeros_sum(len: u64) -> u64 {
+    let mut zeros = xxhash_rust::xxh3::Xxh3::new();
+    let chunk = vec![0u8; 1 << 20];
+    let mut left = len;
+    while left > 0 {
+        let n = left.min(chunk.len() as u64) as usize;
+        zeros.update(&chunk[..n]);
+        left -= n as u64;
+    }
+    zeros.digest()
+}
+
+/// A key longer than any block the reader decompresses was never written by the reader's build, and through a
+/// source reading it is an allocation of its length: the index is stale before any key is read (audit
+/// 2026-10-14 round 2, row 24). The key text here is one key of 64 MiB and a byte, in a sparse region.
+#[test]
+fn a_key_longer_than_a_block_is_stale() {
+    let file = mdx();
+    let mut index = build(&file);
+    let long = xdict_mdx::limits::BLOCK_BYTES + 1;
+    let at = index.len() as u64;
+    let slot = 96;
+    index[slot..slot + 8].copy_from_slice(&at.to_le_bytes());
+    index[slot + 8..slot + 16].copy_from_slice(&long.to_le_bytes());
+    index[slot + 16..slot + 24].copy_from_slice(&zeros_sum(long).to_le_bytes());
+    let (start, len) = section(&index, 1);
+    for word in index[start + 4..start + len].as_chunks_mut::<4>().0 {
+        *word = (long as u32).to_le_bytes();
+    }
+    reseal(&mut index, 1);
+    let region = Box::new(Sparse(index, long, Arc::new(AtomicUsize::new(0))));
+    let opened = File::with_index(Box::new(file), Some(Kind::Mdx), region, EDITION, Arc::new(Marks(9))).unwrap();
+    let stale = opened.err();
+    assert!(matches!(stale, Some(Stale::Damaged(_))), "{stale:?}");
+}
+
+/// Keys each within a block but together past what a build keeps within [`xdict_mdx::limits::INDEX_BYTES`]:
+/// no index the reader wrote, so stale (row 24). Four keys of 64 MiB and one byte, in a sparse region.
+#[test]
+fn key_text_past_the_index_budget_is_stale() {
+    let file = mdx();
+    let mut index = build(&file);
+    let block = xdict_mdx::limits::BLOCK_BYTES;
+    let long = 4 * block + 1;
+    let at = index.len() as u64;
+    let slot = 96;
+    index[slot..slot + 8].copy_from_slice(&at.to_le_bytes());
+    index[slot + 8..slot + 16].copy_from_slice(&long.to_le_bytes());
+    index[slot + 16..slot + 24].copy_from_slice(&zeros_sum(long).to_le_bytes());
+    let (start, len) = section(&index, 1);
+    for (k, word) in index[start..start + len].as_chunks_mut::<4>().0.iter_mut().enumerate() {
+        *word = ((k as u64 * block).min(long) as u32).to_le_bytes();
+    }
+    reseal(&mut index, 1);
+    let region = Box::new(Sparse(index, long, Arc::new(AtomicUsize::new(0))));
+    let opened = File::with_index(Box::new(file), Some(Kind::Mdx), region, EDITION, Arc::new(Marks(9))).unwrap();
+    let stale = opened.err();
+    assert!(matches!(stale, Some(Stale::Damaged(_))), "{stale:?}");
+}
