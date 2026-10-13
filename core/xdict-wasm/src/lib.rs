@@ -473,13 +473,14 @@ fn failed_during(package: &Value) -> Result<(), String> {
     }
 }
 
-/// A package; `mdd` and `sidecars` may be left out, but when present each must be a list.
+/// A package; `mdd` and `sidecars` may be left out, but when present each must be a list (`null` is not one: the
+/// wrapper always sends a list, so a null is a mistake, not "none").
 fn package_from(value: &Value) -> Result<core::Package, String> {
     let list = |key: &str| -> Result<Vec<core::Location>, String> {
-        match &value[key] {
-            Value::Null => Ok(Vec::new()),
-            Value::Array(items) => items.iter().map(location_from).collect(),
-            other => Err(malformed("a package", &format!("{key} is {other}, not a list"))),
+        match value.get(key) {
+            None => Ok(Vec::new()),
+            Some(Value::Array(items)) => items.iter().map(location_from).collect(),
+            Some(other) => Err(malformed("a package", &format!("{key} is {other}, not a list"))),
         }
     };
     Ok(core::Package { mdx: location_from(&value["mdx"])?, mdd: list("mdd")?, sidecars: list("sidecars")? })
@@ -492,7 +493,13 @@ mod tests {
     #[test]
     fn a_package_list_that_is_not_a_list_is_refused() {
         let mdx = serde_json::json!({ "type": "path", "path": "a.mdx" });
-        for bad in [serde_json::json!(5), serde_json::json!("a.mdd"), serde_json::json!({ "type": "path" })] {
+        // `null` too: the wrapper always sends a list, so a null is a shell's mistake, not "none".
+        for bad in [
+            serde_json::json!(5),
+            serde_json::json!("a.mdd"),
+            serde_json::json!({ "type": "path" }),
+            serde_json::json!(null),
+        ] {
             for key in ["mdd", "sidecars"] {
                 let mut fields = serde_json::Map::new();
                 fields.insert("mdx".into(), mdx.clone());
