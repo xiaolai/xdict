@@ -878,6 +878,21 @@ mod tests {
         }
     }
 
+    /// A core with `run` open in a one-entry dictionary, its volume holding `mdd` (none when empty) and its
+    /// sidecars `sidecars`: the setup the resource tests share.
+    fn opened(mdd: &[xdict_mdx_writer::Entry], sidecars: Vec<Location>) -> (Core, String) {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let source =
+            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        let mdx = source("a.mdx", write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap());
+        let mdd = if mdd.is_empty() { vec![] } else { vec![source("a.mdd", write(&Spec::mdd(), mdd).unwrap())] };
+        let package = Package { mdx, mdd, sidecars };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        (core, dict)
+    }
+
     fn view() -> View {
         View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
     }
@@ -930,16 +945,8 @@ mod tests {
     /// The limit is checked against the size the source declares, before anything is read or allocated.
     #[test]
     fn a_resource_over_the_limit_is_refused_before_it_is_read() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
-        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
-        let mdx = Location::Source {
-            name: "a.mdx".into(),
-            source: Arc::new(Fixed(write(&Spec::mdx(), &[W::text("a", "b")]).unwrap())),
-        };
         let huge = Location::Source { name: "huge.css".into(), source: Arc::new(Huge) };
-        let package = Package { mdx, mdd: vec![], sidecars: vec![huge] };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let (core, dict) = opened(&[], vec![huge]);
         let refused = core.resource(dict, "huge.css".into(), view());
         assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{refused:?}");
     }
@@ -1001,17 +1008,9 @@ mod tests {
     /// image or a recording is not, and is served whole.
     #[test]
     fn a_rewritten_resource_is_held_to_the_views_ceiling() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
+        use xdict_mdx_writer::Entry as W;
         let css = "b { background: url(a.png) }\n".repeat(100);
-        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
-        let mdd =
-            write(&Spec::mdd(), &[W::bytes("\\big.css", css.as_bytes()), W::bytes("\\big.png", &[7; 4000])]).unwrap();
-        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
-        let source =
-            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
-        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![] };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let (core, dict) = opened(&[W::bytes("\\big.css", css.as_bytes()), W::bytes("\\big.png", &[7; 4000])], vec![]);
         let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
         let css = core.resource(dict.clone(), "big.css".into(), view.clone());
         assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
@@ -1023,20 +1022,13 @@ mod tests {
     /// ceiling holds for it, and is checked from the declared size, before the read.
     #[test]
     fn a_text_resource_is_held_to_the_views_ceiling_before_it_is_read_whatever_its_encoding() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
-        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
-        let mdd = write(&Spec::mdd(), &[W::bytes("\\gbk.css", &[0xB0; 3000])]).unwrap();
+        use xdict_mdx_writer::Entry as W;
         let read = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
-        let source =
-            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
         let sidecar = Location::Source {
             name: "side.css".into(),
             source: Arc::new(Counting("b { color: red }\n".repeat(200).into_bytes(), read.clone())),
         };
-        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![sidecar] };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let (core, dict) = opened(&[W::bytes("\\gbk.css", &[0xB0; 3000])], vec![sidecar]);
         let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
         let gbk = core.resource(dict.clone(), "gbk.css".into(), view.clone());
         assert!(matches!(gbk, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", gbk.map(|_| "found"));
@@ -1066,16 +1058,10 @@ mod tests {
     /// `SourceChanged`, not read to whatever it claims next.
     #[test]
     fn a_sidecar_that_grows_after_its_size_is_checked_is_not_read_past_it() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
-        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
         let read = Arc::new(std::sync::atomic::AtomicU64::new(0));
-        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
-        let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Fixed(mdx)) };
         let growing = Arc::new(Growing(std::sync::atomic::AtomicU64::new(0), read.clone()));
         let sidecar = Location::Source { name: "grow.png".into(), source: growing.clone() };
-        let package = Package { mdx, mdd: vec![], sidecars: vec![sidecar] };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let (core, dict) = opened(&[], vec![sidecar]);
         growing.0.store(0, std::sync::atomic::Ordering::SeqCst);
         read.store(0, std::sync::atomic::Ordering::SeqCst);
         let got = core.resource(dict, "grow.png".into(), View { max_body_bytes: 2000, ..view() });
@@ -1086,15 +1072,8 @@ mod tests {
     /// A page served from a folder resolves its links against that folder, as a stylesheet does.
     #[test]
     fn a_page_resolves_against_its_own_folder() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
-        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
-        let mdd = write(&Spec::mdd(), &[W::bytes("\\help\\page.html", br#"<img src="image.png">"#)]).unwrap();
-        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
-        let source =
-            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
-        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![] };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        use xdict_mdx_writer::Entry as W;
+        let (core, dict) = opened(&[W::bytes("\\help\\page.html", br#"<img src="image.png">"#)], vec![]);
         let Ok(Resource::Found { bytes, .. }) = core.resource(dict, "help/page.html".into(), view()) else {
             panic!("not found")
         };
@@ -1105,20 +1084,10 @@ mod tests {
     /// A sidecar that cannot be opened is reported when it is asked for, not passed over for a volume's copy.
     #[test]
     fn an_unreadable_sidecar_is_reported_when_asked_for() {
-        use xdict_mdx_writer::{Entry as W, Spec, write};
-        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
-        let mdd = write(&Spec::mdd(), &[W::bytes("\\a.css", b"b { color: red }")]).unwrap();
-        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
-        let source =
-            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        use xdict_mdx_writer::Entry as W;
         let gone = std::env::temp_dir().join(format!("xdict-no-such-{}", std::process::id())).join("a.css");
-        let package = Package {
-            mdx: source("a.mdx", mdx),
-            mdd: vec![source("a.mdd", mdd)],
-            sidecars: vec![Location::Path { path: gone.to_string_lossy().into_owned() }],
-        };
-        core.import(package.clone(), &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let sidecar = Location::Path { path: gone.to_string_lossy().into_owned() };
+        let (core, dict) = opened(&[W::bytes("\\a.css", b"b { color: red }")], vec![sidecar]);
         let css = core.resource(dict, "a.css".into(), view());
         assert!(matches!(css, Err(CoreError::NotFound { what: Missing::File, .. })), "{:?}", css.map(|_| "found"));
         // An MDX that is not there is the same: a file the package names, missing.
