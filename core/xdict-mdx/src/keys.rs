@@ -34,20 +34,30 @@ pub(crate) fn check_blocks(blocks: &[KeyBlock], key_count: u64, stored_total: u6
     Ok(())
 }
 
-/// Memory one key costs while its index is built, estimated on the high side: its text offset (4), record
-/// start and end (8 each), place in the order (4), and its folded text's offset (4); its text, and its
-/// folded copy, which full case folding can make three times longer in UTF-8 (ΐ, 2 bytes, folds to 6; the
-/// most any character grows, measured over every code point on 2026-10-13); and the sorted copy of the
-/// record starts made while finding ends (8). The finished index keeps 24 bytes and the text.
+/// Memory one key costs while its index is built, estimated on the high side: [`cost_of`] for one key.
 pub(crate) fn index_cost(text: &str) -> u64 {
     cost_of(1, text.len() as u64)
 }
 
-/// [`index_cost`] of `keys` keys whose text is `text` bytes together: what a loaded index may declare, since
-/// no build that kept within [`limits::INDEX_BYTES`] wrote more.
+/// The most building the index of `keys` keys whose text is `text` bytes (t) holds at once, block tables aside
+/// ([`BLOCK_COST`]): 65 bytes a key and five times its text. What a loaded index may declare, too, since no
+/// build that kept within [`limits::INDEX_BYTES`] wrote more. Phase by phase (`index::build`), per key:
+///
+/// - read from the blocks: text, offset (4) and record start (8), in vectors that grow by doubling, so up to
+///   twice that held after reading: 2t + 24;
+/// - tier 2: the tier-2 forms in one text, which folding can make three times longer in UTF-8 (ΐ, 2 bytes, folds
+///   to 6, the most any character grows, measured over every code point on 2026-10-13), 12 bytes of entry and
+///   6 of stable sorting: 2t + 24 + 3t + 18 = 5t + 42, its result then 4;
+/// - tier 1: the folded text (3t at most) and its offsets (4), the order (4) and its sorting (2): 5t + 38;
+/// - written out: the record ends (8, and 8 of sorted starts while they are found), the public bitmap, and the
+///   index itself, reserved whole: the text and 28 bytes of tables a key: 3t + 64.
 pub(crate) fn cost_of(keys: u64, text: u64) -> u64 {
-    keys.saturating_mul(4 + 8 + 8 + 4 + 4 + 8).saturating_add(text.saturating_mul(4))
+    keys.saturating_mul(65).saturating_add(text.saturating_mul(5))
 }
+
+/// What one record block adds to building an index: its entry as read (32) in a vector that may have doubled,
+/// and in the index written (32).
+pub(crate) const BLOCK_COST: u64 = 96;
 
 /// The keys of a file, as its blocks are decoded.
 pub(crate) struct Keys {
