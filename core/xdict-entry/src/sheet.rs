@@ -11,7 +11,8 @@ pub struct StyleSheet(HashMap<u32, (String, String)>);
 
 impl StyleSheet {
     pub fn parse(text: &str) -> Self {
-        let lines: Vec<&str> = text.lines().map(|l| l.trim_end_matches('\r')).collect();
+        // Split on every newline, keeping a last empty line: `lines()` drops it, and with it an empty closing text.
+        let lines: Vec<&str> = text.split('\n').map(|l| l.trim_end_matches('\r')).collect();
         let mut styles = HashMap::new();
         for group in lines.chunks(3) {
             if let [number, open, close] = group
@@ -91,6 +92,15 @@ mod tests {
         assert_eq!(sheet.apply("`9`x and `a` b"), "`9`x and `a` b", "unknown markers stay");
         assert!(matches!(sheet.apply("no markers"), Cow::Borrowed(_)));
         assert!(StyleSheet::parse("").is_empty());
+    }
+
+    /// A style whose closing text is empty is a style: the last line, empty, is its closing text.
+    #[test]
+    fn an_empty_closing_line_at_the_end_is_kept() {
+        let sheet = StyleSheet::parse("1\n<b>\n");
+        assert_eq!(sheet.apply("`1`x"), "<b>x");
+        let sheet = StyleSheet::parse("1\r\n<b>\r\n\r\n2\r\n<i>\r\n</i>\r\n");
+        assert_eq!(sheet.apply("`1`a`2`b"), "<b>a<i>b</i>");
     }
 
     /// An unknown numeric marker is kept whole: its closing backtick opens nothing.
