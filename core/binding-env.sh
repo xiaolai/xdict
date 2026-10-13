@@ -13,11 +13,17 @@ absolute() {
 }
 
 # The workspace's target directory as Cargo resolves it (CARGO_TARGET_DIR, a config's build.target-dir, or
-# core/target), so that a build and the step reading its output agree.
+# core/target), so that a build and the step reading its output agree. Read from Cargo's JSON without a JSON
+# parser: a path JSON had to escape (a quote, a backslash, a control character) holds a backslash as written
+# there, and is refused rather than misread.
 target_dir() {
     dir=$(cd "$core" && cargo metadata --format-version 1 --no-deps |
         sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
     [ -n "$dir" ] || { echo "cargo metadata named no target directory" >&2; return 1; }
+    case $dir in
+    *\\*) echo "the target directory's name needs escaping in JSON, which this script does not read: $dir" >&2
+        return 1 ;;
+    esac
     printf '%s\n' "$dir"
 }
 
