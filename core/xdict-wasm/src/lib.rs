@@ -235,7 +235,12 @@ impl Source {
     }
 
     fn fail(&self, what: &str, e: &JsValue) {
-        let why = format!("the source's {what}() threw: {e:?}");
+        self.failed(format!("the source's {what}() threw: {e:?}"));
+    }
+
+    /// Records why this source failed: the call running now fails with it ([`watched`]), and so does every
+    /// later read of the source.
+    fn failed(&self, why: String) {
         THROWN.with(|thrown| thrown.borrow_mut().push(why.clone()));
         FAILED.with(|failed| failed.borrow_mut().insert(self.0, why));
     }
@@ -322,8 +327,12 @@ impl core::ByteSource for Source {
         if let Some(identity) = self.pinned().and_then(|a| a.identity) {
             return identity;
         }
-        let identity = match self.handle()?.identity() {
-            Ok(value) => identity_from(&value),
+        let identity = match self.handle()?.identity().map(|value| identity_from(&value)) {
+            Ok(Ok(identity)) => identity,
+            Ok(Err(why)) => {
+                self.failed(format!("the source's identity() gave no identity a file can have: {why}"));
+                None
+            }
             Err(e) => {
                 self.fail("identity", &e);
                 None
@@ -334,27 +343,31 @@ impl core::ByteSource for Source {
     }
 }
 
-/// An identity as the wrapper sends it: each field a decimal string (exact) or a number. `None` for null, or
-/// for anything else that is not a whole identity.
-fn identity_from(value: &JsValue) -> Option<FileIdentity> {
+/// An identity as the wrapper sends it: each field a decimal string (exact) or a number. `None` for null or
+/// undefined, a file without one; anything else that is not a whole identity is the shell's mistake, and why.
+fn identity_from(value: &JsValue) -> Result<Option<FileIdentity>, String> {
     if value.is_null() || value.is_undefined() {
-        return None;
+        return Ok(None);
     }
-    let json: Value = serde_json::from_str(&stringify(value).ok()?.as_string()?).ok()?;
-    let field = |name: &str| -> Option<i128> {
-        match json.get(name)? {
-            Value::String(text) => text.parse().ok(),
-            Value::Number(n) => n.as_i64().map(i128::from).or_else(|| n.as_u64().map(i128::from)),
-            _ => None,
+    let text = stringify(value).map_err(|e| format!("it cannot be read: {e:?}"))?;
+    let text = text.as_string().ok_or("it is not an object")?;
+    let json: Value = serde_json::from_str(&text).map_err(|e| e.to_string())?;
+    let field = |name: &str| -> Result<i128, String> {
+        let bad = || format!("{name} is not a whole number");
+        match json.get(name) {
+            Some(Value::String(text)) => text.parse().map_err(|_| bad()),
+            Some(Value::Number(n)) => n.as_i64().map(i128::from).or_else(|| n.as_u64().map(i128::from)).ok_or_else(bad),
+            _ => Err(bad()),
         }
     };
-    Some(FileIdentity {
-        device: u64::try_from(field("device")?).ok()?,
-        inode: u64::try_from(field("inode")?).ok()?,
-        size: u64::try_from(field("size")?).ok()?,
-        mtime_ns: i64::try_from(field("mtimeNs")?).ok()?,
-        ctime_ns: i64::try_from(field("ctimeNs")?).ok()?,
-    })
+    let range = |name: &str| format!("{name} is out of range");
+    Ok(Some(FileIdentity {
+        device: u64::try_from(field("device")?).map_err(|_| range("device"))?,
+        inode: u64::try_from(field("inode")?).map_err(|_| range("inode"))?,
+        size: u64::try_from(field("size")?).map_err(|_| range("size"))?,
+        mtime_ns: i64::try_from(field("mtimeNs")?).map_err(|_| range("mtimeNs"))?,
+        ctime_ns: i64::try_from(field("ctimeNs")?).map_err(|_| range("ctimeNs"))?,
+    }))
 }
 
 #[wasm_bindgen]
