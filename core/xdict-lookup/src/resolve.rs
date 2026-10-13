@@ -281,12 +281,12 @@ pub fn redirect_targets(text: &str) -> Vec<String> {
 
 /// Each key of `keys`' occurrence: its place among the keys spelt exactly as it is, in file order.
 pub fn occurrences(file: &File, keys: &[usize]) -> Result<HashMap<usize, u32>, Error> {
-    let mut texts: HashMap<String, Vec<usize>> = HashMap::new();
+    let mut texts: HashSet<String> = HashSet::new();
     for &i in keys {
-        texts.entry(file.key(i)?.into_owned()).or_default().push(i);
+        texts.insert(file.key(i)?.into_owned());
     }
     let mut out = HashMap::with_capacity(keys.len());
-    for text in texts.keys() {
+    for text in &texts {
         let mut n = 0u32;
         for i in file.find(text)? {
             if file.key(i)? == text.as_str() {
