@@ -10,7 +10,9 @@
 /.cc-suite.md
 /.mcp.json
 
-# Swift build output, and Xcode's per-user state except the shared schemes.
+# Build output: Rust's target directory wherever a workspace sits, Swift's .build, and Xcode's per-user
+# state except the shared schemes.
+target/
 /.build
 /.swiftpm/*
 !/.swiftpm/xcode
