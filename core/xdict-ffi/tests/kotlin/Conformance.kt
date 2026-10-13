@@ -164,10 +164,11 @@ fun main(args: Array<String>) {
     check("newWrongProtocol", wrong["error"], (outcome { Core(config(uint(wrong["client"])!!)); "made" } as? Map<*, *>)?.get("error") ?: "made")
 
     val core = Core(config(protocolVersion()))
-    check("openBeforeImport", x["openBeforeImport"], outcome { j(core.open(at("tiny.mdx"))) })
-    val imported = core.`import`(Package(at("tiny.mdx"), listOf(at("tiny.mdd")), listOf(at("tiny.css"))), null)
+    val pkg = Package(at("tiny.mdx"), listOf(at("tiny.mdd")), listOf(at("tiny.css")))
+    check("openBeforeImport", x["openBeforeImport"], outcome { j(core.open(pkg)) })
+    val imported = core.`import`(pkg, null)
     check("import", x["import"], j(imported))
-    val opened = core.open(at("tiny.mdx"))
+    val opened = core.open(pkg)
     check("open", x["open"], j(opened))
     val dict = (opened as Opened.Ready).dict
 
@@ -200,8 +201,9 @@ fun main(args: Array<String>) {
     val copy = Location.Source(b["name"] as String, Bytes(mdx, ident))
     val sidecarSpec = obj(b["sidecar"])
     val sidecar = Location.Source(sidecarSpec["name"] as String, Bytes((sidecarSpec["text"] as String).toByteArray(), null))
-    check("byteSource.import", b["import"], outcome { j(core.`import`(Package(copy, listOf(), listOf(sidecar)), null)) })
-    val second = core.open(copy)
+    val copyPkg = Package(copy, listOf(), listOf(sidecar))
+    check("byteSource.import", b["import"], outcome { j(core.`import`(copyPkg, null)) })
+    val second = core.open(copyPkg)
     check("byteSource.open", b["open"], j(second))
     val secondDict = (second as Opened.Ready).dict
     check("byteSource.resourceFromPath", b["resourceFromPath"], outcome { j(core.resource(dict, "tiny.css", view())) })

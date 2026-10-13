@@ -94,11 +94,11 @@ const storage = {
   },
 };
 const core = xd.core(config(xd.protocolVersion()), storage);
-const mdx = file('tiny.mdx');
-check('openBeforeImport', x.openBeforeImport, outcome(() => core.open(mdx)));
-const imported = core.import({ mdx, mdd: [file('tiny.mdd')], sidecars: [file('tiny.css')] });
+const tiny = { mdx: file('tiny.mdx'), mdd: [file('tiny.mdd')], sidecars: [file('tiny.css')] };
+check('openBeforeImport', x.openBeforeImport, outcome(() => core.open(tiny)));
+const imported = core.import(tiny);
 check('import', x.import, imported);
-const opened = core.open(mdx);
+const opened = core.open(tiny);
 check('open', x.open, opened);
 if (opened.type !== 'ready') throw new Error('not open');
 const dict = opened.dict;
@@ -122,8 +122,9 @@ const b = x.byteSource;
 const bytes = readFileSync(join(fixtures, 'tiny.mdx'));
 const copy: Location = { type: 'source', name: b.name, source: new Bytes(bytes, b.identity) };
 const sidecar: Location = { type: 'source', name: b.sidecar.name, source: new Bytes(new TextEncoder().encode(b.sidecar.text), null) };
-check('byteSource.import', b.import, outcome(() => core.import({ mdx: copy, mdd: [], sidecars: [sidecar] })));
-const second = core.open(copy);
+const copyPkg = { mdx: copy, mdd: [], sidecars: [sidecar] };
+check('byteSource.import', b.import, outcome(() => core.import(copyPkg)));
+const second = core.open(copyPkg);
 check('byteSource.open', b.open, second);
 if (second.type !== 'ready') throw new Error('not open');
 check('byteSource.resourceFromPath', b.resourceFromPath, outcome(() => core.resource(dict, 'tiny.css', view())));

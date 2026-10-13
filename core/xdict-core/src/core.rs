@@ -5,9 +5,9 @@
 
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use sha2::{Digest, Sha256};
 use xdict_mdx::{File, Kind};
 
 use crate::error::{CoreError, Limit, Missing};
@@ -16,6 +16,7 @@ use crate::source::{Changed, Opened as OpenedSource, Verified, read_all};
 use crate::store::Directory;
 use crate::store::{IndexStorage, IndexStore, Memory, Shell};
 use crate::types::*;
+use xdict_identity::{CHUNK, FileRegistry, LocationRecord, MemoryRegistry, Registry, VolumeRecord};
 use xdict_mdx::index::Stale;
 
 /// The protocol between shell and core (ADR-0007 decision 11). Raised by any change a shell must be rebuilt for.
@@ -27,41 +28,26 @@ pub const NORMALIZATION: u32 = 0;
 /// The most hits one page holds.
 pub const MAX_PAGE: u32 = 1_000;
 /// The scheme version an edition is written with (ADR-0002 decision 1).
-pub const EDITION_SCHEME: &str = "mdx-sha256-v1:";
+pub use xdict_identity::EDITION_SCHEME;
 
 /// The largest resource the core serves: one block of the reader's, the most an MDD record can be.
 pub const MAX_RESOURCE_BYTES: u64 = xdict_mdx::limits::BLOCK_BYTES;
 
 /// How much of a file one read takes during import.
-const IMPORT_CHUNK: u64 = 4 << 20;
+const IMPORT_CHUNK: u64 = CHUNK;
 
 pub struct Core {
     nonce: u32,
     state: Mutex<State>,
     indexes: Box<dyn IndexStore>,
+    registry: Box<dyn Registry>,
 }
 
 struct State {
     random: SplitMix,
     next_handle: u32,
     generation: u32,
-    editions: HashMap<String, Edition>,
-    locations: HashMap<String, Row>,
     open: HashMap<u32, Arc<Dict>>,
-}
-
-struct Edition {
-    lineage: String,
-}
-
-/// What the registry knows of one location.
-struct Row {
-    edition: String,
-    digest: [u8; 32],
-    identity: Option<FileIdentity>,
-    package: Package,
-    /// Each volume's validation token (ADR-0002 decision 5, as amended), `None` where it could not be read.
-    tokens: Vec<Option<[u8; 32]>>,
 }
 
 /// One opened package.
@@ -95,21 +81,18 @@ impl Core {
             }
             let mut random = SplitMix::seeded(&config.entropy)?;
             let nonce = (random.next() >> 32) as u32;
-            let state = State {
-                random,
-                next_handle: 1,
-                generation: 1,
-                editions: HashMap::new(),
-                locations: HashMap::new(),
-                open: HashMap::new(),
-            };
+            let state = State { random, next_handle: 1, generation: 1, open: HashMap::new() };
             let indexes: Box<dyn IndexStore> = match (storage, &config.cache_dir) {
                 (Some(storage), _) => Box::new(Shell(storage)),
                 #[cfg(not(target_family = "wasm"))]
                 (None, Some(dir)) => Box::new(Directory(dir.into())),
                 _ => Box::new(Memory::default()),
             };
-            Ok(Self { nonce, state: Mutex::new(state), indexes })
+            let registry: Box<dyn Registry> = match &config.data_dir {
+                Some(dir) => Box::new(FileRegistry::open(dir).map_err(registry_error)?),
+                None => Box::new(MemoryRegistry::default()),
+            };
+            Ok(Self { nonce, state: Mutex::new(state), indexes, registry })
         })
     }
 
@@ -122,120 +105,167 @@ impl Core {
         }
     }
 
-    /// Hashes, indexes and registers a package: the slow call, run in the background, once per edition.
+    /// Hashes, indexes and registers a package: the slow call, run in the background. A known edition whose
+    /// index still loads is not indexed again.
     pub fn import(&self, package: Package, progress: &dyn Progress) -> Result<Imported, CoreError> {
         guard(|| {
             let opened = OpenedSource::open(&package.mdx)?;
             let volumes: Vec<Result<OpenedSource, CoreError>> = package.mdd.iter().map(OpenedSource::open).collect();
             let total = opened.source.len() + volumes.iter().flatten().map(|v| v.source.len()).sum::<u64>();
-            let mut done = 0u64;
-            let mut report = |n: u64| {
-                done += n;
-                if progress.progress(done, total) {
+            let (done, stopped) = (AtomicU64::new(0), AtomicBool::new(false));
+            // Called from every thread of the import; one `false` stops them all at their next report.
+            let report = |n: u64| -> Result<(), CoreError> {
+                let cancelled = || CoreError::Cancelled { detail: "the import was cancelled".into() };
+                if stopped.load(Ordering::SeqCst) {
+                    return Err(cancelled());
+                }
+                if progress.progress(done.fetch_add(n, Ordering::SeqCst) + n, total) {
                     Ok(())
                 } else {
-                    Err(CoreError::Cancelled { detail: "the import was cancelled".into() })
+                    stopped.store(true, Ordering::SeqCst);
+                    Err(cancelled())
                 }
             };
 
-            // One pass hashes the edition and records each chunk's xxh3; the index is then built through a
-            // source that checks every chunk it reads against them.
-            let mut hasher = Sha256::new();
-            let mut sums = Vec::new();
-            read_all(&*opened.source, IMPORT_CHUNK, |chunk, _, _| {
-                hasher.update(chunk);
-                sums.push(xxhash_rust::xxh3::xxh3_64(chunk));
-                report(chunk.len() as u64)
-            })?;
-            let digest: [u8; 32] = hasher.finalize().into();
-            let edition = format!("{EDITION_SCHEME}{}", hex(&digest));
-            let verified =
-                Verified { source: &*opened.source, chunk: IMPORT_CHUNK, sums: &sums, last: Mutex::new(None) };
-            let index = File::build_index(&verified, Some(Kind::Mdx), digest).map_err(changed_or)?;
-            opened.unchanged()?;
-            self.indexes.put(&index_name(&digest, Kind::Mdx), &index)?;
-            let info = {
-                let region = Box::new(index);
-                let file = File::with_index(opened.source, Some(Kind::Mdx), region, digest)?
-                    .map_err(|stale| CoreError::internal(format!("an index just built does not load: {stale:?}")))?;
-                info(&file)
+            // The volumes need nothing of the MDX's: natively each is indexed on a thread of its own while the
+            // MDX is hashed and indexed.
+            let jobs: Vec<_> = volumes.into_iter().zip(&package.mdd).collect();
+            #[cfg(not(target_family = "wasm"))]
+            let (mdx, indexed) = std::thread::scope(|scope| {
+                let threads: Vec<_> = jobs
+                    .into_iter()
+                    .map(|(volume, location)| {
+                        scope.spawn(|| volume.and_then(|v| self.import_volume(location, &v, &report)))
+                    })
+                    .collect();
+                let mdx = self.import_mdx(&package.mdx, &opened, &report);
+                let indexed: Vec<Result<[u8; 32], CoreError>> = threads
+                    .into_iter()
+                    .map(|t| t.join().unwrap_or_else(|_| Err(CoreError::internal("a volume's import panicked"))))
+                    .collect();
+                (mdx, indexed)
+            });
+            #[cfg(target_family = "wasm")]
+            let (mdx, indexed) = {
+                let indexed: Vec<_> = jobs
+                    .into_iter()
+                    .map(|(volume, location)| volume.and_then(|v| self.import_volume(location, &v, &report)))
+                    .collect();
+                (self.import_mdx(&package.mdx, &opened, &report), indexed)
             };
+            let (edition, info) = mdx?;
 
             let mut problems = Vec::new();
-            let mut tokens = Vec::new();
-            for (volume, location) in volumes.into_iter().zip(&package.mdd) {
-                let indexed = volume.and_then(|v| {
-                    let size = v.source.len();
-                    let token = volume_token(&v, size)?;
-                    let index = File::build_index(&*v.source, Some(Kind::Mdd), token)?;
-                    v.unchanged()?;
-                    self.indexes.put(&index_name(&token, Kind::Mdd), &index)?;
-                    report(size)?;
-                    Ok(token)
-                });
-                match indexed {
-                    Ok(token) => tokens.push(Some(token)),
+            let mut records = Vec::new();
+            for (result, location) in indexed.into_iter().zip(&package.mdd) {
+                let token = match result {
+                    Ok(token) => Some(xdict_identity::hex(&token)),
                     Err(error @ CoreError::Cancelled { .. }) => return Err(error),
                     Err(error) => {
-                        tokens.push(None);
                         problems.push(Problem::VolumeUnreadable { name: location.name().into(), error });
+                        None
                     }
-                }
+                };
+                records.push(VolumeRecord { location: location_key(location), token });
             }
-
-            let mut state = self.lock()?;
-            let lineage = match state.editions.get(&edition) {
-                Some(known) => known.lineage.clone(),
-                None => {
-                    let lineage = state.random.uuid();
-                    state.editions.insert(edition.clone(), Edition { lineage: lineage.clone() });
-                    lineage
-                }
+            let record = LocationRecord {
+                location: location_key(&package.mdx),
+                edition: edition.clone(),
+                identity: opened.identity,
+                volumes: records,
+                sidecars: package.sidecars.iter().map(location_key).collect(),
             };
-            let row =
-                Row { edition: edition.clone(), digest, identity: opened.identity, package: package.clone(), tokens };
-            state.locations.insert(location_key(&package.mdx), row);
+            // A lineage is minted before the registry is asked, so that no lock of the core is held inside it.
+            let candidate = self.lock()?.random.uuid();
+            let lineage = self.registry.register(record, &mut || candidate.clone()).map_err(registry_error)?;
             Ok(Imported { edition, lineage, info, problems })
         })
     }
 
-    /// Opens a location already imported: checks its identity and maps its indexes, reading nothing of the
-    /// files but their headers. Anything that would need more is `NeedsImport` (ADR-0007 decision 3).
-    pub fn open(&self, location: Location) -> Result<Opened, CoreError> {
+    /// Hashes an MDX in one pass, summing each chunk, and indexes it through a source that checks every chunk it
+    /// reads against those sums, unless an index of that edition still loads. Returns the edition and its info.
+    fn import_mdx(
+        &self,
+        location: &Location,
+        opened: &OpenedSource,
+        report: &(dyn Fn(u64) -> Result<(), CoreError> + Sync),
+    ) -> Result<(String, DictInfo), CoreError> {
+        let hashed = xdict_identity::hash(&*opened.source, report)?;
+        let digest = hashed.digest;
+        let info = match self.with_index(OpenedSource::open(location)?.source, Kind::Mdx, digest)? {
+            Ok(file) => info(&file),
+            Err(_) => {
+                let verified =
+                    Verified { source: &*opened.source, chunk: CHUNK, sums: &hashed.sums, last: Mutex::new(None) };
+                let index = File::build_index(&verified, Some(Kind::Mdx), digest).map_err(changed_or)?;
+                self.indexes.put(&index_name(&digest, Kind::Mdx), &index)?;
+                let file =
+                    File::with_index(OpenedSource::open(location)?.source, Some(Kind::Mdx), Box::new(index), digest)?
+                        .map_err(|stale| CoreError::internal(format!("an index just built does not load: {stale:?}")))?;
+                info(&file)
+            }
+        };
+        opened.unchanged()?;
+        Ok((hashed.edition(), info))
+    }
+
+    /// A resource volume's validation token, and its index, unless one for that token still loads.
+    fn import_volume(
+        &self,
+        location: &Location,
+        volume: &OpenedSource,
+        report: &(dyn Fn(u64) -> Result<(), CoreError> + Sync),
+    ) -> Result<[u8; 32], CoreError> {
+        let token = xdict_identity::volume_token(volume.identity, &*volume.source, report)?;
+        if self.with_index(OpenedSource::open(location)?.source, Kind::Mdd, token)?.is_err() {
+            let index = File::build_index(&*volume.source, Some(Kind::Mdd), token)?;
+            self.indexes.put(&index_name(&token, Kind::Mdd), &index)?;
+        }
+        volume.unchanged()?;
+        if volume.identity.is_some() {
+            report(volume.source.len())?;
+        }
+        Ok(token)
+    }
+
+    /// Opens a package already imported: checks every file's identity against the registry and maps the
+    /// indexes, reading nothing of the files but their headers. Anything that would need more is
+    /// `NeedsImport` (ADR-0007 decision 3).
+    pub fn open(&self, package: Package) -> Result<Opened, CoreError> {
         guard(|| {
-            let (edition, digest, recorded, package, tokens) = {
-                let state = self.lock()?;
-                match state.locations.get(&location_key(&location)) {
-                    None => return Ok(Opened::NeedsImport { reason: ImportReason::New }),
-                    Some(row) => {
-                        (row.edition.clone(), row.digest, row.identity, row.package.clone(), row.tokens.clone())
-                    }
-                }
+            let Some(record) = self.registry.location(&location_key(&package.mdx)).map_err(registry_error)? else {
+                return Ok(Opened::NeedsImport { reason: ImportReason::New });
             };
-            let mdx_source = OpenedSource::open(&location)?;
-            match (recorded, mdx_source.identity) {
+            let mdx_source = OpenedSource::open(&package.mdx)?;
+            match (record.identity, mdx_source.identity) {
                 (Some(then), Some(now)) if then == now => {}
                 (Some(_), Some(_)) => return Ok(Opened::NeedsImport { reason: ImportReason::Changed }),
                 _ => return Ok(Opened::NeedsImport { reason: ImportReason::NoIdentity }),
             }
-            let reader = OpenedSource::open(&location)?;
-            let mdx = match self.with_index(reader.source, Kind::Mdx, digest)? {
+            // The volumes are the ones imported, in the order imported: another set or order is another package.
+            let same_volumes = record.volumes.len() == package.mdd.len()
+                && record.volumes.iter().zip(&package.mdd).all(|(r, l)| r.location == location_key(l));
+            if !same_volumes {
+                return Ok(Opened::NeedsImport { reason: ImportReason::Changed });
+            }
+            let digest = unhex(record.edition.strip_prefix(EDITION_SCHEME).unwrap_or(""))?;
+            let mdx = match self.with_index(OpenedSource::open(&package.mdx)?.source, Kind::Mdx, digest)? {
                 Ok(file) => file,
                 Err(reason) => return Ok(Opened::NeedsImport { reason }),
             };
             let mut mdd = Vec::new();
-            for (volume, token) in package.mdd.iter().zip(tokens) {
-                // A volume that could not be read was reported at import; its resources are missing.
-                let Some(token) = token else { continue };
+            for (volume, recorded) in package.mdd.iter().zip(&record.volumes) {
+                // A volume that could not be read at import was reported then; its resources are missing.
+                let Some(token) = &recorded.token else { continue };
+                let token = unhex(token)?;
                 let check = OpenedSource::open(volume)?;
                 if check.identity.is_none() {
                     return Ok(Opened::NeedsImport { reason: ImportReason::NoIdentity });
                 }
-                if volume_token(&check, check.source.len())? != token {
+                if xdict_identity::volume_token::<CoreError>(check.identity, &*check.source, |_| Ok(()))? != token {
                     return Ok(Opened::NeedsImport { reason: ImportReason::Changed });
                 }
-                let reader = OpenedSource::open(volume)?;
-                match self.with_index(reader.source, Kind::Mdd, token)? {
+                match self.with_index(OpenedSource::open(volume)?.source, Kind::Mdd, token)? {
                     Ok(file) => mdd.push((check, file)),
                     Err(reason) => return Ok(Opened::NeedsImport { reason }),
                 }
@@ -247,12 +277,12 @@ impl Core {
                 }
             }
             let info = info(&mdx);
-            let dict = Dict { edition: edition.clone(), mdx_source, mdx, mdd, sidecars };
+            let dict = Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars };
             let mut state = self.lock()?;
             let handle = state.next_handle;
             state.next_handle = handle.checked_add(1).ok_or_else(|| CoreError::internal("handles exhausted"))?;
             state.open.insert(handle, Arc::new(dict));
-            Ok(Opened::Ready { dict: self.handle(handle), edition, info })
+            Ok(Opened::Ready { dict: self.handle(handle), edition: record.edition, info })
         })
     }
 
@@ -503,34 +533,21 @@ fn index_name(identity: &[u8; 32], kind: Kind) -> String {
     format!("{}.{kind}.xdidx", hex(identity))
 }
 
-/// A resource volume's validation token (ADR-0002 decision 5, as amended): its identity where the platform
-/// has one, its whole content's xxh3-128 where it has none. Local only, never an identity, never synced.
-fn volume_token(volume: &OpenedSource, size: u64) -> Result<[u8; 32], CoreError> {
-    let mut token = [0u8; 32];
-    match volume.identity {
-        Some(id) => {
-            let mut h = Sha256::new();
-            h.update(b"xdict-volume-identity-v1");
-            for n in [id.device, id.inode, id.size] {
-                h.update(n.to_le_bytes());
-            }
-            for n in [id.mtime_ns, id.ctime_ns] {
-                h.update(n.to_le_bytes());
-            }
-            token = h.finalize().into();
-        }
-        None => {
-            let mut h = xxhash_rust::xxh3::Xxh3::new();
-            read_all(&*volume.source, IMPORT_CHUNK, |chunk, _, _| {
-                h.update(chunk);
-                Ok(())
-            })?;
-            token[0] = 1;
-            token[16..].copy_from_slice(&h.digest128().to_le_bytes());
-            token[8..16].copy_from_slice(&size.to_le_bytes());
-        }
+fn registry_error(error: xdict_identity::RegistryError) -> CoreError {
+    CoreError::Io { kind: crate::IoKind::Other, detail: format!("the registry: {error}") }
+}
+
+/// Bytes from their hex, as the registry stores them.
+fn unhex(text: &str) -> Result<[u8; 32], CoreError> {
+    let bad = || CoreError::internal(format!("the registry holds {text:?} where a digest belongs"));
+    let mut out = [0u8; 32];
+    if text.len() != 64 {
+        return Err(bad());
     }
-    Ok(token)
+    for (i, byte) in out.iter_mut().enumerate() {
+        *byte = text.get(2 * i..2 * i + 2).and_then(|h| u8::from_str_radix(h, 16).ok()).ok_or_else(bad)?;
+    }
+    Ok(out)
 }
 
 /// A reader error from a verified read: the file changed under the import, or the file's own error.
@@ -789,8 +806,9 @@ mod tests {
             source: Arc::new(Fixed(write(&Spec::mdx(), &[W::text("a", "b")]).unwrap())),
         };
         let huge = Location::Source { name: "huge.css".into(), source: Arc::new(Huge) };
-        core.import(Package { mdx: mdx.clone(), mdd: vec![], sidecars: vec![huge] }, &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(mdx).unwrap() else { panic!("not open") };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![huge] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
         let refused = core.resource(dict, "huge.css".into(), view());
         assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{refused:?}");
     }
@@ -819,8 +837,9 @@ mod tests {
         let read = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let bytes = write(&Spec::mdx(), &[W::text("big", &"x".repeat(5000))]).unwrap();
         let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Counting(bytes, read.clone())) };
-        let imported = core.import(Package { mdx: mdx.clone(), mdd: vec![], sidecars: vec![] }, &NoProgress).unwrap();
-        let Opened::Ready { dict, .. } = core.open(mdx).unwrap() else { panic!("not open") };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+        let imported = core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
         read.store(0, std::sync::atomic::Ordering::SeqCst);
         let entry = EntryRef { edition: imported.edition, key: "big".into(), occurrence: 0 };
         let small = View { max_body_bytes: 100, ..view() };
@@ -878,18 +897,18 @@ mod tests {
             .map(|e| e.unwrap().path())
             .find(|p| p.extension().is_some_and(|e| e == "xdidx"))
             .unwrap();
-        assert!(matches!(core.open(mdx.clone()).unwrap(), Opened::Ready { .. }));
+        assert!(matches!(core.open(package.clone()).unwrap(), Opened::Ready { .. }));
 
         std::fs::remove_file(&index).unwrap();
-        assert_eq!(core.open(mdx.clone()).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
+        assert_eq!(core.open(package.clone()).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
         core.import(package.clone(), &NoProgress).unwrap();
-        assert!(matches!(core.open(mdx.clone()).unwrap(), Opened::Ready { .. }));
+        assert!(matches!(core.open(package.clone()).unwrap(), Opened::Ready { .. }));
 
         let mut damaged = std::fs::read(&index).unwrap();
         let last = damaged.len() - 1;
         damaged[last] ^= 1;
         std::fs::write(&index, damaged).unwrap();
-        assert_eq!(core.open(mdx).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
+        assert_eq!(core.open(package).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -13,7 +13,7 @@ serde = ["dep:serde"]
 
 [dependencies]
 serde = { workspace = true, optional = true }
-sha2.workspace = true
+xdict-identity = { path = "../xdict-identity" }
 xdict-mdx = { path = "../xdict-mdx" }
 xxhash-rust.workspace = true
 
