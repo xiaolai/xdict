@@ -43,11 +43,14 @@ impl StyleSheet {
         while let Some(at) = rest.find('`') {
             out.push_str(rest.get(..at).unwrap_or(""));
             let after = rest.get(at + 1..).unwrap_or("");
-            // A marker is digits between backticks; one naming no style is kept whole, both backticks.
+            // A marker is digits between backticks; one naming no style, a number too large for any among them, is
+            // kept whole, both backticks.
             let marker = after.find('`').and_then(|end| {
                 let digits = after.get(..end)?;
-                let n: u32 = digits.parse().ok().filter(|_| digits.bytes().all(|b| b.is_ascii_digit()))?;
-                Some((self.0.get(&n), end))
+                if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+                    return None;
+                }
+                Some((digits.parse::<u32>().ok().and_then(|n| self.0.get(&n)), end))
             });
             match marker {
                 Some((Some((begin, end_text)), end)) => {
@@ -96,5 +99,8 @@ mod tests {
         let sheet = StyleSheet::parse("1\n<b>\n</b>\n");
         assert_eq!(sheet.apply("`9`1`x"), "`9`1`x");
         assert_eq!(sheet.apply("`9``1`x"), "`9`<b>x</b>");
+        // A number too large for any style is as unknown as `9`, not a lone backtick.
+        assert_eq!(sheet.apply("`99999999999`1`x"), "`99999999999`1`x");
+        assert_eq!(sheet.apply("`99999999999``1`x"), "`99999999999`<b>x</b>");
     }
 }
