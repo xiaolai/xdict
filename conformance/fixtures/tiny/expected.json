@@ -473,6 +473,10 @@
       "file": "tiny-badheader.mdx",
       "error": { "type": "malformed" }
     },
+    "notFound": {
+      "file": "tiny-absent.mdx",
+      "error": { "type": "notFound", "what": "file" }
+    },
     "cancelled": {
       "error": { "type": "cancelled" }
     },

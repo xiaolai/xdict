@@ -44,7 +44,12 @@ impl Opened {
         match location {
             #[cfg(any(unix, windows))]
             Location::Path { path } => {
-                let file = Arc::new(std::fs::File::open(path).map_err(|e| CoreError::io(&e))?);
+                let file = Arc::new(std::fs::File::open(path).map_err(|e| match e.kind() {
+                    io::ErrorKind::NotFound => {
+                        CoreError::NotFound { what: crate::Missing::File, detail: format!("{path}: {e}") }
+                    }
+                    _ => CoreError::io(&e),
+                })?);
                 let metadata = file.metadata().map_err(|e| CoreError::io(&e))?;
                 let identity = identity_of(&metadata);
                 let source = xdict_mdx::DiskFile::shared(file.clone(), metadata.len());

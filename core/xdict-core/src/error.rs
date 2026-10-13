@@ -90,7 +90,9 @@ pub enum Limit {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 pub enum Missing {
+    /// A file the package names is not at its path.
     File,
+    /// An entry reference names no record.
     Entry,
 }
 
