@@ -116,6 +116,70 @@ fn fold_ascii(key: &str, case_sensitive: bool, strip: bool) -> Cow<'_, str> {
     }
 }
 
+/// [`fold`]'s text, appended to `out` with no other allocation: measured first, then reserved fallibly and
+/// written, so that building an index asks for a key's folding once, as an error it can return. One long key
+/// can fold to three times its size (ΐ), which is too much to ask for without being able to say no.
+pub(crate) fn fold_into(
+    key: &str,
+    case_sensitive: bool,
+    strip: bool,
+    out: &mut Vec<u8>,
+) -> Result<(), std::collections::TryReserveError> {
+    let (all, kept) = measure(key, case_sensitive);
+    let filter = strip && kept > 0;
+    out.try_reserve_exact(if filter { kept } else { all })?;
+    if key.is_ascii() {
+        let cased = |b: u8| if case_sensitive { b } else { b.to_ascii_lowercase() };
+        out.extend(key.bytes().filter(|b| !filter || b.is_ascii_alphanumeric()).map(cased));
+        return Ok(());
+    }
+    let mut buf = [0u8; 4];
+    cased_chars(key, case_sensitive, |c| {
+        if !filter || c.is_alphanumeric() {
+            out.extend_from_slice(c.encode_utf8(&mut buf).as_bytes());
+        }
+    });
+    Ok(())
+}
+
+/// The length of [`fold`]'s text, found without writing it.
+pub(crate) fn fold_len(key: &str, case_sensitive: bool, strip: bool) -> usize {
+    let (all, kept) = measure(key, case_sensitive);
+    if strip && kept > 0 { kept } else { all }
+}
+
+/// The length of `key` case-folded, and of the letters and digits in it: what folding writes unstripped and
+/// stripped.
+fn measure(key: &str, case_sensitive: bool) -> (usize, usize) {
+    if key.is_ascii() {
+        return (key.len(), key.bytes().filter(u8::is_ascii_alphanumeric).count());
+    }
+    let (mut all, mut kept) = (0usize, 0usize);
+    cased_chars(key, case_sensitive, |c| {
+        all += c.len_utf8();
+        if c.is_alphanumeric() {
+            kept += c.len_utf8();
+        }
+    });
+    (all, kept)
+}
+
+/// The characters of `key` as [`fold`] cases them, one at a time: as they are when the file is case-sensitive,
+/// else [`case_fold`]'s, without the string.
+fn cased_chars(key: &str, case_sensitive: bool, mut each: impl FnMut(char)) {
+    for c in key.chars() {
+        if case_sensitive || c == 'ı' {
+            each(c);
+            continue;
+        }
+        for lower in c.to_lowercase() {
+            for upper in lower.to_uppercase() {
+                upper.to_lowercase().for_each(&mut each);
+            }
+        }
+    }
+}
+
 fn case_fold(key: &str) -> String {
     let mut out = String::with_capacity(key.len());
     for c in key.chars() {
@@ -136,6 +200,28 @@ fn case_fold(key: &str) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    /// Folding into a buffer writes exactly what [`fold`] returns, and measures it exactly: every scalar value
+    /// alone and the cases folding treats apart (dotless ı, ΐ's growth, ß, final sigma, punctuation-only keys
+    /// that keep their case-folded form, the empty key), under all four rules.
+    #[test]
+    fn folding_into_a_buffer_writes_what_fold_returns() {
+        let mut keys: Vec<String> = (0..=0x10FFFFu32).filter_map(char::from_u32).map(String::from).collect();
+        for k in ["", "Run", "RUN-up", "ıI", "ΐΐ", "Straße ẞ", "ΣΑΣ σας", "--!", "¿?", "Ꭰꭰ", "a\u{301}", "長 Word"]
+        {
+            keys.push(k.into());
+        }
+        let mut buf = Vec::new();
+        for (case_sensitive, strip) in [(false, false), (false, true), (true, false), (true, true)] {
+            for key in &keys {
+                let want = fold(key, case_sensitive, strip);
+                buf.clear();
+                fold_into(key, case_sensitive, strip, &mut buf).unwrap();
+                assert_eq!(buf, want.as_bytes(), "{key:?} {case_sensitive} {strip}");
+                assert_eq!(fold_len(key, case_sensitive, strip), want.len(), "{key:?} {case_sensitive} {strip}");
+            }
+        }
+    }
 
     /// The counting decoder gives the plain decoder's text, and counts every byte it replaced.
     #[test]

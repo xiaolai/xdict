@@ -56,6 +56,12 @@ pub(crate) fn cost_of(keys: u64, text: u64) -> u64 {
     keys.saturating_mul(65).saturating_add(text.saturating_mul(5))
 }
 
+/// What ordering tier 2 adds beside [`cost_of`]: two buffers it folds each key into, used again for every key,
+/// so as large as the longest key folded, three times its text at most.
+pub(crate) fn scratch_cost(longest: u64) -> u64 {
+    longest.saturating_mul(6)
+}
+
 /// What one record block adds to building an index: its entry as read (32) in a vector that may have doubled,
 /// and in the index written (32).
 pub(crate) const BLOCK_COST: u64 = 96;
@@ -70,13 +76,15 @@ pub(crate) struct Keys {
     /// What the index may cost, and what it costs so far, by `index_cost`.
     budget: u64,
     cost: u64,
+    /// The longest key's text so far, for [`scratch_cost`].
+    longest: u64,
 }
 
 impl Keys {
     pub(crate) fn new(declared: u64, codec: Codec, wide: bool, budget: u64) -> Self {
         let mut keys = crate::index::Keys::default();
         keys.offsets.push(0);
-        Self { keys, declared, codec, wide, budget, cost: 0 }
+        Self { keys, declared, codec, wide, budget, cost: 0, longest: 0 }
     }
 
     fn count(&self) -> u64 {
@@ -94,7 +102,8 @@ impl Keys {
             let offset = c.number(self.wide)?;
             let text = self.codec.decode(c.until_null(self.codec.unit())?);
             self.cost = self.cost.saturating_add(index_cost(&text));
-            if self.cost > self.budget {
+            self.longest = self.longest.max(text.len() as u64);
+            if self.cost.saturating_add(scratch_cost(self.longest)) > self.budget {
                 return Err(Error::TooLarge(format!("the key index would take more than {} bytes", self.budget)));
             }
             let keys = &mut self.keys;
@@ -131,12 +140,16 @@ mod tests {
         keys.iter().flat_map(|k| [0u64.to_be_bytes().as_slice(), k.as_bytes(), &[0]].concat()).collect()
     }
 
-    /// Keys a file really holds are bounded by memory, not only by their count.
+    /// Keys a file really holds are bounded by memory, not only by their count, and the budget holds the
+    /// scratch tier 2 folds the longest key into as well as the keys.
     #[test]
     fn the_index_stops_at_its_memory_budget() {
         let data = block(&["alpha", "beta", "gamma"]);
-        let mut roomy = Keys::new(3, Codec::Utf8, true, 3 * index_cost("gamma"));
+        let keys_alone = 3 * index_cost("gamma");
+        let mut roomy = Keys::new(3, Codec::Utf8, true, keys_alone + scratch_cost(5));
         assert!(roomy.add_block(&data, 3).is_ok());
+        let mut no_scratch = Keys::new(3, Codec::Utf8, true, keys_alone);
+        assert!(matches!(no_scratch.add_block(&data, 3), Err(Error::TooLarge(_))));
         let mut tight = Keys::new(3, Codec::Utf8, true, 2 * index_cost("gamma"));
         assert!(matches!(tight.add_block(&data, 3), Err(Error::TooLarge(_))));
     }
