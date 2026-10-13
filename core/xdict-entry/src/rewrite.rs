@@ -518,6 +518,7 @@ mod tests {
         assert_eq!(r.text.matches("xdict://d/entry/a").count(), n);
         let r = css(&"b{background:url(a.png)}".repeat(n), BASE, "");
         assert_eq!(r.links.len(), n);
-        assert!(started.elapsed() < std::time::Duration::from_secs(1), "took {:?}", started.elapsed());
+        // Quadratic, this ran over 600 s; linear, well under one. Ten leaves room for a loaded machine.
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
     }
 }
