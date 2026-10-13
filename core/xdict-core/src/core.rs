@@ -461,13 +461,14 @@ impl Core {
                 tries.push(cut.to_owned());
             }
             for name in &tries {
-                if let Some(bytes) = self.find_resource(&opened, name)? {
-                    let mime = mime(name);
-                    let (bytes, rewritten) = served(bytes, mime, &view.base_url, travelled.dir());
-                    // Served rewritten, it is a body the view renders, held to the view's ceiling; and nothing
-                    // leaves larger than the core's own.
-                    let ceiling =
-                        if rewritten { view.max_body_bytes.min(MAX_RESOURCE_BYTES) } else { MAX_RESOURCE_BYTES };
+                let mime = mime(name);
+                // A stylesheet, script or page is a body the view renders, held to the view's ceiling whether or
+                // not it could be rewritten (text that is not UTF-8 is served as stored); nothing leaves larger
+                // than the core's own. Checked from the declared size before the read, and again as served.
+                let ceiling =
+                    if renders(mime) { view.max_body_bytes.min(MAX_RESOURCE_BYTES) } else { MAX_RESOURCE_BYTES };
+                if let Some(bytes) = self.find_resource(&opened, name, ceiling)? {
+                    let bytes = served(bytes, mime, &view.base_url, travelled.dir());
                     if bytes.len() as u64 > ceiling {
                         return Err(CoreError::TooLarge {
                             limit: Limit::Body,
@@ -482,16 +483,17 @@ impl Core {
     }
 
     /// A resource's bytes by its resolved path: a sidecar of that name, else the first volume that holds it.
-    fn find_resource(&self, opened: &Dict, path: &str) -> Result<Option<Vec<u8>>, CoreError> {
+    /// One larger than `ceiling` is refused from its declared size, before it is read.
+    fn find_resource(&self, opened: &Dict, path: &str, ceiling: u64) -> Result<Option<Vec<u8>>, CoreError> {
         for (name, sidecar) in &opened.sidecars {
             if name.eq_ignore_ascii_case(path) {
                 let sidecar = sidecar.as_ref().map_err(Clone::clone)?;
                 sidecar.unchanged()?;
                 let size = sidecar.source.len();
-                if size > MAX_RESOURCE_BYTES {
+                if size > ceiling {
                     return Err(CoreError::TooLarge {
                         limit: Limit::Body,
-                        detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
+                        detail: format!("{path} is {size} bytes, more than {ceiling}"),
                     });
                 }
                 let mut bytes = Vec::new();
@@ -509,10 +511,10 @@ impl Core {
             // The record's size is checked before it is read, as a sidecar's is.
             let Some(&i) = volume.find(&key)?.first() else { continue };
             let size = volume.record_size(i)?;
-            if size > MAX_RESOURCE_BYTES {
+            if size > ceiling {
                 return Err(CoreError::TooLarge {
                     limit: Limit::Body,
-                    detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
+                    detail: format!("{path} is {size} bytes, more than {ceiling}"),
                 });
             }
             let record = volume.record(i)?;
@@ -688,17 +690,22 @@ fn volume_records(
     Ok((records, problems))
 }
 
-/// A resource as the view gets it, and whether it was rewritten: a stylesheet, script or page rewritten for the
-/// view, resolving against the resource's own directory; anything else, and text that is not UTF-8, as stored.
-fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> (Vec<u8>, bool) {
-    let Ok(text) = std::str::from_utf8(&bytes) else { return (bytes, false) };
+/// Whether a resource of this type is a body the view renders: a stylesheet, script or page.
+fn renders(mime: &str) -> bool {
+    matches!(mime, "text/css" | "text/javascript" | "text/html")
+}
+
+/// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
+/// resource's own directory; anything else, and text that is not UTF-8, as stored.
+fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
+    let Ok(text) = std::str::from_utf8(&bytes) else { return bytes };
     let rewritten = match mime {
         "text/css" => xdict_entry::css_text(text, base, dir),
         "text/javascript" => xdict_entry::script(text, base).text,
         "text/html" => xdict_entry::html_text(text, base, dir),
-        _ => return (bytes, false),
+        _ => return bytes,
     };
-    (rewritten.into_bytes(), true)
+    rewritten.into_bytes()
 }
 
 fn mime(path: &str) -> &'static str {
@@ -919,6 +926,33 @@ mod tests {
         assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
         let png = core.resource(dict, "big.png".into(), view);
         assert!(matches!(&png, Ok(Resource::Found { bytes, .. }) if bytes.len() == 4000), "{:?}", png.map(|_| "found"));
+    }
+
+    /// A stylesheet that is not UTF-8 is served as stored, but it is still a body the view renders: the view's
+    /// ceiling holds for it, and is checked from the declared size, before the read.
+    #[test]
+    fn a_text_resource_is_held_to_the_views_ceiling_before_it_is_read_whatever_its_encoding() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let mdd = write(&Spec::mdd(), &[W::bytes("\\gbk.css", &[0xB0; 3000])]).unwrap();
+        let read = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let source =
+            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        let sidecar = Location::Source {
+            name: "side.css".into(),
+            source: Arc::new(Counting("b { color: red }\n".repeat(200).into_bytes(), read.clone())),
+        };
+        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![sidecar] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
+        let gbk = core.resource(dict.clone(), "gbk.css".into(), view.clone());
+        assert!(matches!(gbk, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", gbk.map(|_| "found"));
+        read.store(0, std::sync::atomic::Ordering::SeqCst);
+        let side = core.resource(dict, "side.css".into(), view);
+        assert!(matches!(side, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", side.map(|_| "found"));
+        assert_eq!(read.load(std::sync::atomic::Ordering::SeqCst), 0, "the stylesheet was read before it was refused");
     }
 
     /// A page served from a folder resolves its links against that folder, as a stylesheet does.
