@@ -505,3 +505,40 @@ fn the_tables_are_checked_in_pieces() {
     let largest = largest.load(Ordering::SeqCst);
     assert!(largest <= 1 << 20, "a read of {largest} bytes");
 }
+
+/// A kept index gives every key the definitions the writer wrote for it, checked against the writer's own list
+/// rather than against another read through the same builder: duplicate keys, keys folding together, Unicode
+/// keys, and records long enough to cross blocks. A bug in the build that sealed a key to another's record
+/// would show here, since the index's own checks cannot catch what the build wrote wrongly (audit 2026-10-14
+/// round 2, rows 23 and 28: a resealed index is outside the threat model, a builder's mistake is not).
+#[test]
+fn a_kept_index_gives_every_key_what_the_writer_wrote() {
+    let long = "a long definition ".repeat(40);
+    let mut written: Vec<(String, String)> = vec![
+        ("run".into(), "to move fast".into()),
+        ("run".into(), "a score in cricket".into()),
+        ("RUN".into(), "an abbreviation".into()),
+        ("café".into(), "a coffee shop".into()),
+        ("cafe\u{301}".into(), "the same, decomposed".into()),
+        ("ΐ".into(), "folds to three characters".into()),
+        ("日本".into(), "Japan".into()),
+        ("long".into(), long.clone()),
+        ("long".into(), format!("{long}, again")),
+    ];
+    written.extend((0..300).map(|i| (format!("key{i:03}"), format!("definition {i} {}", "x".repeat(i % 50)))));
+    let entries: Vec<Entry> = written.iter().map(|(k, v)| Entry::text(k, v)).collect();
+    let file = writer::write(&Spec { block_size: 64, ..Spec::mdx() }, &entries).unwrap();
+    let kept = open_with(&file, build(&file)).unwrap();
+    let mut keys: Vec<&str> = written.iter().map(|(k, _)| k.as_str()).collect();
+    keys.sort_unstable();
+    keys.dedup();
+    for key in keys {
+        let mut wanted: Vec<&str> = written.iter().filter(|(k, _)| k == key).map(|(_, v)| v.as_str()).collect();
+        let found = kept.lookup(key).unwrap();
+        let mut got: Vec<String> =
+            found.iter().filter(|r| r.key == key).map(|r| String::from_utf8_lossy(&r.data).into_owned()).collect();
+        wanted.sort_unstable();
+        got.sort_unstable();
+        assert_eq!(got, wanted, "{key:?}");
+    }
+}
