@@ -232,6 +232,12 @@ fn a_corrupt_block_is_malformed() {
 }
 
 #[test]
+fn a_wrong_keyword_checksum_is_malformed() {
+    let refused = refusal(Defect::KeywordChecksum);
+    assert!(matches!(&refused, Error::Malformed(m) if m.contains("keyword section")), "{refused}");
+}
+
+#[test]
 fn a_wrong_header_checksum_is_malformed() {
     assert!(matches!(refusal(Defect::HeaderChecksum), Error::Malformed(_)));
 }
