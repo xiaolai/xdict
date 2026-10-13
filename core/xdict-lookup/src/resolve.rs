@@ -98,8 +98,10 @@ pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>
 pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Result<Resolved, Error> {
     let matched = matches(file, query, mode)?;
     let keys: Vec<usize> = matched.iter().map(|(i, _)| *i).collect();
-    let targets = redirects(file, &keys, budget)?;
-    let entries: HashSet<usize> = keys.iter().copied().filter(|i| targets.get(i).is_none_or(Vec::is_empty)).collect();
+    // Every record read in this lookup, by key: each is read, and taken from `budget`, once.
+    let mut read = HashMap::new();
+    redirects(file, &keys, budget, &mut read)?;
+    let entries: HashSet<usize> = keys.iter().copied().filter(|i| read.get(i).is_none_or(Vec::is_empty)).collect();
     let mut resolved = Resolved::default();
     let mut placed: HashMap<usize, usize> = HashMap::new();
     // The matched key each redirect hit came by (its chain's first), and each such key's problems: a hit carries
@@ -108,14 +110,14 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let mut ways: Vec<(usize, Vec<Problem>)> = Vec::new();
     let mut steps = 0usize;
     for (i, how) in matched {
-        let Some(named) = targets.get(&i).filter(|t| !t.is_empty()) else {
+        let Some(named) = read.get(&i).filter(|t| !t.is_empty()).cloned() else {
             if let Entry::Vacant(slot) = placed.entry(i) {
                 slot.insert(resolved.hits.len());
                 resolved.hits.push(Hit { key: i, how, problems: vec![] });
             }
             continue;
         };
-        let Followed { reached, problems } = follow(file, i, named, budget, &mut steps)?;
+        let Followed { reached, problems } = follow(file, i, &named, budget, &mut read, &mut steps)?;
         for (j, chain) in reached {
             if entries.contains(&j) {
                 continue;
@@ -164,12 +166,14 @@ struct Followed {
 
 /// The entries key `from`'s redirects (`named`) reach, breadth first. A loop is caught along each chain, not
 /// across them: two ways to one key are not a loop. At most [`FAN_OUT`] targets are tried, each counted in
-/// `steps`; the queue never holds more than could still be tried.
+/// `steps`; the queue never holds more than could still be tried. Records come from `read`, the lookup's, and
+/// a key already on the chain is a loop before it is read.
 fn follow(
     file: &File,
     from: usize,
     named: &[String],
     budget: &mut Budget,
+    read: &mut HashMap<usize, Vec<String>>,
     steps: &mut usize,
 ) -> Result<Followed, Error> {
     let mut queue: VecDeque<(String, Vec<usize>)> =
@@ -201,7 +205,8 @@ fn follow(
             problems.push(Problem::Limit { chain });
             break;
         }
-        let onward = redirects(file, &landed, budget)?;
+        let fresh: Vec<usize> = landed.iter().copied().filter(|j| !chain.contains(j)).collect();
+        redirects(file, &fresh, budget, read)?;
         for j in landed {
             let mut next = chain.clone();
             next.push(j);
@@ -209,7 +214,7 @@ fn follow(
                 problems.push(Problem::Loop { chain: next });
                 continue;
             }
-            match onward.get(&j).filter(|t| !t.is_empty()) {
+            match read.get(&j).filter(|t| !t.is_empty()) {
                 Some(targets) => {
                     let room = (FAN_OUT + 1).saturating_sub(tried + queue.len());
                     queue.extend(targets.iter().take(room).map(|t| (t.clone(), next.clone())));
@@ -242,14 +247,21 @@ fn land(file: &File, target: &str) -> Result<Vec<usize>, Error> {
     Ok(found)
 }
 
-/// For each of `keys`, the targets its record names if it is a redirect, or none: every block read once.
-fn redirects(file: &File, keys: &[usize], budget: &mut Budget) -> Result<HashMap<usize, Vec<String>>, Error> {
-    let mut targets = HashMap::with_capacity(keys.len());
-    file.for_each_record(keys, budget, |i, record| {
-        targets.insert(i, redirect_targets(&String::from_utf8_lossy(&record.data)));
+/// Adds to `read`, for each of `keys` not already in it, the targets its record names if it is a redirect, or
+/// none: every block read once, every record taken from `budget` once.
+fn redirects(
+    file: &File,
+    keys: &[usize],
+    budget: &mut Budget,
+    read: &mut HashMap<usize, Vec<String>>,
+) -> Result<(), Error> {
+    let mut unread: Vec<usize> = keys.iter().copied().filter(|i| !read.contains_key(i)).collect();
+    unread.sort_unstable();
+    unread.dedup();
+    file.for_each_record(&unread, budget, |i, record| {
+        read.insert(i, redirect_targets(&String::from_utf8_lossy(&record.data)));
         Ok(())
-    })?;
-    Ok(targets)
+    })
 }
 
 /// The targets of an `@@@LINK=` record, one per line that names one, at most one more than [`FAN_OUT`] (no more
