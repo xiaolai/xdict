@@ -1,6 +1,7 @@
 //! `memory-fixture <out-dir>`: the dictionary ADR-0007's refutation 24 is measured with. `big.mdx` holds one
 //! entry `big` of about 50 MiB of links (each rewritten by `entry()`) and `small`; `big.mdd` holds `\big.css`,
-//! about 47 MiB of `url()`s (each rewritten by `resource()`). Never shipped.
+//! about 44 MiB of `url()`s (each rewritten by `resource()`), which rewrites to 60.8 MiB: near the most the
+//! core serves (`MAX_RESOURCE_BYTES`, 64 MiB; at 48 MiB it rewrote to 66.4 and was refused). Never shipped.
 
 use std::process::ExitCode;
 
@@ -14,7 +15,7 @@ fn main() -> ExitCode {
         return ExitCode::FAILURE;
     };
     let body = r#"<a href="entry://word">word</a> <img src="img/a.png"> "#.repeat(48 * MIB / 51);
-    let css = "b { background: url(img/a.png) }\n".repeat(48 * MIB / 34);
+    let css = "b { background: url(img/a.png) }\n".repeat(44 * MIB / 34);
     let spec = Spec { block_size: 64 * MIB, ..Spec::mdx() };
     let mdd = Spec { block_size: 64 * MIB, ..Spec::mdd() };
     let written = std::fs::create_dir_all(&out)
