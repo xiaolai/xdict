@@ -141,6 +141,11 @@ impl xdict_mdx::Source for PathSource {
     }
 }
 
+/// A shell's source as the reader's.
+pub(crate) fn adapt(source: Arc<dyn ByteSource>) -> Box<dyn xdict_mdx::Source> {
+    Box::new(Adapter(source))
+}
+
 /// A shell's source as the reader's: reads split into transfers of at most [`MAX_TRANSFER`], each checked
 /// for length.
 struct Adapter(Arc<dyn ByteSource>);
@@ -196,3 +201,68 @@ pub(crate) fn read_all(
     }
     Ok(())
 }
+
+/// The bytes an import hashed, and nothing else: reads go through whole chunks of the file, each checked
+/// against the xxh3 recorded when the edition was hashed. An index built through it therefore comes from the
+/// same bytes as the edition, whatever the file's layout (Codex objection 4), or the import fails with
+/// `SourceChanged`.
+pub(crate) struct Verified<'a> {
+    pub(crate) source: &'a dyn xdict_mdx::Source,
+    pub(crate) chunk: u64,
+    pub(crate) sums: &'a [u64],
+    /// The chunk read last, by number: key blocks are read in order, so this saves most re-reads.
+    pub(crate) last: std::sync::Mutex<Option<(u64, Vec<u8>)>>,
+}
+
+impl xdict_mdx::Source for Verified<'_> {
+    fn len(&self) -> u64 {
+        self.source.len()
+    }
+
+    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
+        let mut at = offset;
+        let mut filled = 0usize;
+        while filled < buf.len() {
+            let number = at / self.chunk;
+            let start = number * self.chunk;
+            let mut last = self.last.lock().map_err(|_| io::Error::other("a verified read was poisoned"))?;
+            if last.as_ref().is_none_or(|(n, _)| *n != number) {
+                let len = usize::try_from((self.source.len().saturating_sub(start)).min(self.chunk))
+                    .map_err(|_| io::ErrorKind::InvalidInput)?;
+                let mut bytes = vec![0u8; len];
+                self.source.read_exact_at(start, &mut bytes)?;
+                let expected = self.sums.get(number as usize).copied();
+                if expected != Some(xxhash_rust::xxh3::xxh3_64(&bytes)) {
+                    return Err(io::Error::other(Changed));
+                }
+                *last = Some((number, bytes));
+            }
+            let chunk = last.as_ref().map(|(_, b)| b.as_slice()).unwrap_or(&[]);
+            let from = usize::try_from(at - start).map_err(|_| io::ErrorKind::InvalidInput)?;
+            let take = (chunk.len().saturating_sub(from)).min(buf.len() - filled);
+            if take == 0 {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            }
+            let (Some(dst), Some(src)) = (buf.get_mut(filled..filled + take), chunk.get(from..from + take)) else {
+                return Err(io::ErrorKind::UnexpectedEof.into());
+            };
+            dst.copy_from_slice(src);
+            filled += take;
+            at += take as u64;
+        }
+        Ok(())
+    }
+}
+
+/// What a verified read fails with when the file is not the one hashed: a type, so the failure is recognised
+/// by what it is, not by its words.
+#[derive(Debug)]
+pub(crate) struct Changed;
+
+impl std::fmt::Display for Changed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("the file changed while it was being imported")
+    }
+}
+
+impl std::error::Error for Changed {}

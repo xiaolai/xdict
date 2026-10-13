@@ -18,7 +18,9 @@ pub const LOOKUP_BYTES: u64 = 4 * BLOCK_BYTES;
 /// of results. Real files do reach it: a sentence library on freemdict ("6万多个句子飞跃6.0句库导出") files all
 /// 66,355 of its records under the one key "EC", so going past it is [`crate::Error::TooLarge`], not damage.
 pub const LOOKUP_RECORDS: usize = 10_000;
-/// Memory the key index may take, as `keys::index_cost` estimates it (232 bytes and five times the text a
-/// key): about 3.8 million keys of 10 bytes, five times OED's 706,524. Bounds what a small, highly
-/// compressed file can make the reader hold.
+/// Memory building the key index may take, as `keys::index_cost` estimates it (36 bytes and four times the
+/// text a key): about 13 million keys of 10 bytes. TLD, the largest file measured (4,362,467 keys, 73 MB of
+/// key text), estimates at 0.45 GiB and builds in under 0.75 GB of resident memory (2026-10-13); the old
+/// hash-map index estimated it at 1.6 GiB and refused it. Bounds what a small, highly compressed file can make
+/// the reader hold.
 pub const INDEX_BYTES: u64 = 1 << 30;

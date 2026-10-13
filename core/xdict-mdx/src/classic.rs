@@ -4,16 +4,21 @@
 use crate::bytes::{self, Cursor, length};
 use crate::keys::{self, KeyBlock, Keys};
 use crate::text::Codec;
-use crate::{Error, FormatVersion, Header, Parts, RecordBlock, Scheme, Source, block, limits, read, read_array};
+use crate::{Error, FormatVersion, Header, Parts, RecordBlock, Source, block, limits, read, read_array};
 
-pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result<Parts, Error> {
+/// The text encoding a 1.2 or 2.0 header declares.
+pub(crate) fn codec(header: &Header) -> Result<Codec, Error> {
     let encoding = header
         .attributes
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case("Encoding"))
         .map(|(_, v)| v.as_str())
         .unwrap_or("");
-    let codec = Codec::for_file(header.kind, encoding)?;
+    Codec::for_file(header.kind, encoding)
+}
+
+pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result<Parts, Error> {
+    let codec = codec(header)?;
     let wide = header.version == FormatVersion::V2_0;
 
     let (key_count, key_blocks) = keyword_section(source, &mut at, header, codec, wide)?;
@@ -26,7 +31,7 @@ pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result
     }
     let keys = keys.finish()?;
     let blocks = record_section(source, &mut at, key_count, wide)?;
-    Ok(Parts { codec, keys, blocks, scheme: Scheme::Classic })
+    Ok(Parts { keys, blocks })
 }
 
 /// The keyword section's preamble and key index: the declared key count, and what each key block holds.

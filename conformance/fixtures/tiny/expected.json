@@ -7,7 +7,7 @@
   },
   "versions": {
     "protocol": 1,
-    "indexFormat": 0,
+    "indexFormat": 1,
     "normalization": 0
   },
   "newWrongProtocol": {

@@ -6,7 +6,7 @@
 
 use crate::bytes::Cursor;
 use crate::text::Codec;
-use crate::{Error, Key, limits};
+use crate::{Error, limits};
 
 /// What an index says about one key block.
 pub(crate) struct KeyBlock {
@@ -34,19 +34,18 @@ pub(crate) fn check_blocks(blocks: &[KeyBlock], key_count: u64, stored_total: u6
     Ok(())
 }
 
-/// Memory one key costs once indexed, estimated on the high side: the `Key` (32 bytes, doubled for the
-/// spare capacity a growing vector keeps), its end offset (8) and the sorted copy of the offsets made
-/// while finding ends (8), an entry in each of the two lookup maps (a `String` and a `Vec` header, 48
-/// bytes, plus a slot and the hash table's spare capacity, call it 76), and the text: twice as it is (the
-/// key, the exact map's copy) and once folded, which full case folding can make three times longer in UTF-8
-/// (ΐ, 2 bytes, folds to 6; the most any character grows, measured over every code point on 2026-10-13).
+/// Memory one key costs while its index is built, estimated on the high side: its text offset (4), record
+/// start and end (8 each), place in the order (4), and its folded text's offset (4); its text, and its
+/// folded copy, which full case folding can make three times longer in UTF-8 (ΐ, 2 bytes, folds to 6; the
+/// most any character grows, measured over every code point on 2026-10-13); and the sorted copy of the
+/// record starts made while finding ends (8). The finished index keeps 24 bytes and the text.
 pub(crate) fn index_cost(text: &str) -> u64 {
-    2 * 32 + 8 + 8 + 2 * 76 + 5 * text.len() as u64
+    4 + 8 + 8 + 4 + 4 + 8 + 4 * text.len() as u64
 }
 
 /// The keys of a file, as its blocks are decoded.
 pub(crate) struct Keys {
-    keys: Vec<Key>,
+    keys: crate::index::Keys,
     declared: u64,
     codec: Codec,
     /// Record offsets are 8 bytes wide from 2.0, 4 before.
@@ -58,7 +57,13 @@ pub(crate) struct Keys {
 
 impl Keys {
     pub(crate) fn new(declared: u64, codec: Codec, wide: bool, budget: u64) -> Self {
-        Self { keys: Vec::new(), declared, codec, wide, budget, cost: 0 }
+        let mut keys = crate::index::Keys::default();
+        keys.offsets.push(0);
+        Self { keys, declared, codec, wide, budget, cost: 0 }
+    }
+
+    fn count(&self) -> u64 {
+        self.keys.starts.len() as u64
     }
 
     /// Adds one decompressed key block: per key, its record's offset and the key, null-terminated.
@@ -66,7 +71,7 @@ impl Keys {
         let mut c = Cursor::new(data, "key block");
         let mut found = 0u64;
         while !c.is_at_end() {
-            if found == entries || self.keys.len() as u64 == self.declared {
+            if found == entries || self.count() == self.declared {
                 return Err(Error::Malformed(format!("a key block holds more than the {entries} keys it declares")));
             }
             let offset = c.number(self.wide)?;
@@ -75,8 +80,15 @@ impl Keys {
             if self.cost > self.budget {
                 return Err(Error::TooLarge(format!("the key index would take more than {} bytes", self.budget)));
             }
-            self.keys.try_reserve(1).map_err(crate::out_of_memory)?;
-            self.keys.push(Key { text, offset });
+            let keys = &mut self.keys;
+            keys.text.try_reserve(text.len()).map_err(crate::out_of_memory)?;
+            keys.offsets.try_reserve(1).map_err(crate::out_of_memory)?;
+            keys.starts.try_reserve(1).map_err(crate::out_of_memory)?;
+            keys.text.extend_from_slice(text.as_bytes());
+            let end = u32::try_from(keys.text.len())
+                .map_err(|_| Error::TooLarge("the keys' text would pass 4 GiB".into()))?;
+            keys.offsets.push(end);
+            keys.starts.push(offset);
             found += 1;
         }
         if found != entries {
@@ -85,8 +97,8 @@ impl Keys {
         Ok(())
     }
 
-    pub(crate) fn finish(self) -> Result<Vec<Key>, Error> {
-        if self.keys.len() as u64 != self.declared {
+    pub(crate) fn finish(self) -> Result<crate::index::Keys, Error> {
+        if self.count() != self.declared {
             return Err(Error::Malformed("the key blocks hold a different number of keys than declared".into()));
         }
         Ok(self.keys)
@@ -112,12 +124,13 @@ mod tests {
         assert!(matches!(tight.add_block(&data, 3), Err(Error::TooLarge(_))));
     }
 
-    /// Case folding can triple a key's UTF-8 length (ΐ, 2 bytes, folds to 6), and the folded copy is kept.
+    /// Case folding can triple a key's UTF-8 length (ΐ, 2 bytes, folds to 6), and the folded copy is kept
+    /// beside the key while the order is sorted.
     #[test]
     fn the_index_cost_allows_for_folding_growth() {
         let key = "ΐ".repeat(100);
         let folded = crate::text::fold(&key, false, false);
         assert_eq!(folded.len(), 3 * key.len());
-        assert!(index_cost(&key) >= 2 * key.len() as u64 + folded.len() as u64);
+        assert!(index_cost(&key) >= key.len() as u64 + folded.len() as u64);
     }
 }

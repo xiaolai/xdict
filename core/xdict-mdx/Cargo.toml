@@ -15,7 +15,7 @@ thiserror.workspace = true
 xxhash-rust.workspace = true
 
 [dev-dependencies]
-serde_json = "=1.0.154"
+serde_json.workspace = true
 xdict-mdx-writer = { path = "../xdict-mdx-writer" }
 
 [lints]

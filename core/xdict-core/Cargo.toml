@@ -15,6 +15,10 @@ serde = ["dep:serde"]
 serde = { workspace = true, optional = true }
 sha2.workspace = true
 xdict-mdx = { path = "../xdict-mdx" }
+xxhash-rust.workspace = true
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+xdict-mmap = { path = "../xdict-mmap" }
 
 [dev-dependencies]
 xdict-mdx-writer = { path = "../xdict-mdx-writer" }
