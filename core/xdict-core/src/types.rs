@@ -15,15 +15,7 @@ macro_rules! message {
     )*};
 }
 
-/// A unit-only enum: a plain camel-case string.
-macro_rules! unit {
-    ($($item:item)*) => {$(
-        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-        #[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
-        $item
-    )*};
-}
-
+/// A record, with camel-case fields; or a unit-only enum, as a plain camel-case string.
 macro_rules! record {
     ($($item:item)*) => {$(
         #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -265,7 +257,7 @@ impl Progress for NoProgress {
     }
 }
 
-unit! {
+record! {
     /// Which matching a lookup uses (ADR-0007 decision 7).
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum MatchMode {
