@@ -331,3 +331,25 @@ fn truncated_and_corrupted_files_never_panic() {
         );
     }
 }
+
+/// Blocks kept between reads belong to the file that read them: a `Kept` handed to another file is emptied, not
+/// trusted, since a block's number alone does not say which file it came from.
+#[test]
+fn blocks_kept_for_one_file_are_not_read_as_another_files() {
+    let (_a, a) = open(&Spec::mdx(), &[Entry::text("word", "the first file's")]);
+    let (_b, b) = open(&Spec::mdx(), &[Entry::text("word", "the second file's")]);
+    let (a, b) = (a.unwrap(), b.unwrap());
+    let mut kept = xdict_mdx::Kept::default();
+    let read = |file: &File, kept: &mut xdict_mdx::Kept| {
+        let mut out = Vec::new();
+        file.for_each_record_kept(&[0], &mut xdict_mdx::Budget::lookup(), kept, |_, r| {
+            out.push(String::from_utf8(r.data).unwrap());
+            Ok(())
+        })
+        .unwrap();
+        out
+    };
+    assert_eq!(read(&a, &mut kept), ["the first file's"]);
+    assert_eq!(read(&b, &mut kept), ["the second file's"]);
+    assert_eq!(read(&a, &mut kept), ["the first file's"]);
+}

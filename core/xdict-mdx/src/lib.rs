@@ -263,6 +263,8 @@ pub struct File {
     codec: Codec,
     scheme: Scheme,
     index: Index,
+    /// Unique among the files of this process: what a [`Kept`] names its blocks' file by.
+    id: u64,
 }
 
 /// A file's header as read: the header, where the rest of the file starts, and the xxh3 of its bytes, which
@@ -359,7 +361,9 @@ impl File {
         if past_end {
             return Ok(Err(Stale::Damaged("a record block lies past the end of the file".into())));
         }
-        Ok(Ok(Self { source, header, codec, scheme, index }))
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        Ok(Ok(Self { source, header, codec, scheme, index, id }))
     }
 
     pub fn header(&self) -> &Header {
@@ -443,7 +447,8 @@ impl File {
 
     /// [`Self::for_each_record`], keeping decompressed blocks in `kept` from one call to the next, so that a
     /// caller reading a few records at a time (a redirect's targets, one by one) decompresses a block once
-    /// while `kept` still holds it.
+    /// while `kept` still holds it. A `kept` that holds another file's blocks is emptied first: a block's number
+    /// alone does not say which file it came from.
     pub fn for_each_record_kept(
         &self,
         keys: &[usize],
@@ -451,6 +456,9 @@ impl File {
         kept: &mut Kept,
         mut each: impl FnMut(usize, Record) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        if kept.owner != Some(self.id) {
+            *kept = Kept { owner: Some(self.id), blocks: Vec::new() };
+        }
         budget.take_records(keys.len())?;
         let mut by_offset: Vec<(u64, usize)> = Vec::with_capacity(keys.len());
         for &i in keys {
@@ -550,6 +558,8 @@ impl File {
 /// of one record's blocks, which reading it needs anyway, and that bound.
 #[derive(Default)]
 pub struct Kept {
+    /// The file whose blocks these are, by [`File`]'s id; none until a file reads through it.
+    owner: Option<u64>,
     blocks: Vec<(usize, Vec<u8>)>,
 }
 
