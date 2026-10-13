@@ -78,9 +78,17 @@ export interface Glue {
   versions(): string;
   protocolVersion(): number;
   selfTestTrap(): void;
+  selfTestTables(): string;
+}
+
+interface ResourceReply {
+  readonly json: string;
+  takeBytes(): Uint8Array;
+  free(): void;
 }
 
 interface GlueCore {
+  free(): void;
   import(pkg: string, progress?: { progress(done: number, total: number): boolean }): string;
   open(pkg: string): string;
   close(dict: string): string;
@@ -88,7 +96,7 @@ interface GlueCore {
   suggest(prefix: string, dicts: string, limit: number): string;
   entry(dict: string, entry: string, view: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
-  resource(dict: string, path: string, view: string): { json: string; bytes: Uint8Array };
+  resource(dict: string, path: string, view: string): ResourceReply;
   selfTestPanic(): string;
 }
 
@@ -103,7 +111,6 @@ export class XDictError extends Error {
 /** One loaded copy of the core's module. */
 export class XDict {
   private readonly glue: Glue;
-  private readonly sources = new Map<ByteSource, number>();
   private poisoned = false;
 
   private constructor(glue: Glue) {
@@ -135,10 +142,14 @@ export class XDict {
     this.guard(() => this.glue.selfTestTrap());
   }
 
-  /** @internal */
-  location(location: Location): unknown {
+  /**
+   * @internal Registers a package's sources for one call: `registered` collects their numbers, which the caller
+   * releases when the call returns. The core keeps what it still needs (an opened dictionary's files) until the
+   * dictionary closes, so nothing is retained by the wrapper.
+   */
+  location(location: Location, registered: Map<ByteSource, number>): unknown {
     if (location.type === 'path') return location;
-    let id = this.sources.get(location.source);
+    let id = registered.get(location.source);
     if (id === undefined) {
       const source = location.source;
       const wire: WireSource = {
@@ -150,9 +161,14 @@ export class XDict {
         },
       };
       id = this.glue.registerSource(wire);
-      this.sources.set(source, id);
+      registered.set(source, id);
     }
     return { type: 'source', name: location.name, sourceId: id };
+  }
+
+  /** @internal */
+  release(registered: Map<ByteSource, number>): void {
+    for (const id of registered.values()) this.glue.releaseSource(id);
   }
 
   /** @internal Runs a call; a thrown string is a CoreError, a trap poisons this instance. */
@@ -182,17 +198,31 @@ export class XDictCore {
 
   import(pkg: Package, progress?: (done: number, total: number) => boolean): Imported {
     const watcher = progress ? { progress } : undefined;
-    return this.call(() => this.inner.import(this.wire(pkg), watcher));
+    return this.withPackage(pkg, (wire) => this.inner.import(wire, watcher));
   }
 
   /** Opens a package imported before, passing every file of it again: the core checks each one's identity. */
   open(pkg: Package): Opened {
-    return this.call(() => this.inner.open(this.wire(pkg)));
+    return this.withPackage(pkg, (wire) => this.inner.open(wire));
   }
 
-  private wire(pkg: Package): string {
+  /** Releases this core now rather than when JavaScript collects it, with the index storage it holds. */
+  free(): void {
+    this.inner.free();
+  }
+
+  /** A call given the package as JSON, its sources registered for the call alone. */
+  private withPackage<T>(pkg: Package, call: (wire: string) => string): T {
     const x = this.x;
-    return JSON.stringify({ mdx: x.location(pkg.mdx), mdd: pkg.mdd.map((l) => x.location(l)), sidecars: pkg.sidecars.map((l) => x.location(l)) });
+    const registered = new Map<ByteSource, number>();
+    try {
+      return this.call(() => {
+        const at = (l: Location) => x.location(l, registered);
+        return call(JSON.stringify({ mdx: at(pkg.mdx), mdd: pkg.mdd.map(at), sidecars: pkg.sidecars.map(at) }));
+      });
+    } finally {
+      x.release(registered);
+    }
   }
 
   close(dict: string): void {
@@ -218,8 +248,12 @@ export class XDictCore {
   resource(dict: string, path: string, view: View): Resource {
     return this.x.guard(() => {
       const reply = this.inner.resource(dict, path, JSON.stringify(view));
-      const head = JSON.parse(reply.json);
-      return head.type === 'found' ? { ...head, bytes: reply.bytes } : head;
+      try {
+        const head = JSON.parse(reply.json);
+        return head.type === 'found' ? { ...head, bytes: reply.takeBytes() } : head;
+      } finally {
+        reply.free();
+      }
     });
   }
 

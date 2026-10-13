@@ -208,4 +208,97 @@ for (const v of variants) {
   });
 }
 
+// The binding's own contract, on a third instance (audit-fix 2026-10-14): a throwing callback is a typed error
+// and leaves the instance working; callbacks may re-enter the binding; nothing a call registers outlives its use;
+// identities are carried exactly.
+const g3 = await import(`${glueUrl}?instance=3`);
+const third = XDict.load(g3, wasm);
+const tables = () => JSON.parse(g3.selfTestTables()) as { sources: number; storage: number; progress: number; replies: number };
+const attempt = (name: string, call: () => void) => {
+  try {
+    call();
+  } catch (e) {
+    failures.push(`${name}: threw ${String(e)}`);
+  }
+};
+const tinyBytes = readFileSync(join(fixtures, 'tiny.mdx'));
+const at = (mtimeNs: bigint): FileIdentity => ({ device: 9n, inode: 9n, size: BigInt(tinyBytes.length), mtimeNs, ctimeNs: mtimeNs });
+const src = (ident: FileIdentity | null, overrides: Partial<ByteSource> = {}): ByteSource =>
+  Object.assign(new Bytes(tinyBytes, ident), overrides);
+const only = (source: ByteSource): Package => ({ mdx: { type: 'source', name: 'tiny.mdx', source }, mdd: [], sidecars: [] });
+const c3 = third.core(config(third.protocolVersion()));
+const baseline = tables();
+
+attempt('web.throwingSize', () => {
+  const thrower = src(at(1n), { size: () => { throw new Error('size failed'); } });
+  check('web.throwingSize', { error: { type: 'io' } }, outcome(() => c3.import(only(thrower))));
+});
+attempt('web.throwingIdentity', () => {
+  const thrower = src(null, { identity: () => { throw new Error('identity failed'); } });
+  check('web.throwingIdentity', { error: { type: 'io' } }, outcome(() => c3.import(only(thrower))));
+});
+attempt('web.throwingProgress', () => {
+  const got = outcome(() => c3.import(only(src(at(2n))), () => { throw new Error('progress failed'); }));
+  check('web.throwingProgress', { error: { type: 'cancelled' } }, got);
+});
+attempt('web.afterThrows', () => check('web.afterThrows', 'string', typeof c3.import(only(src(at(3n)))).edition));
+
+attempt('web.reentrantRead', () => {
+  let inner: unknown = null;
+  const reader = src(at(4n), {
+    readAt(offset: number, len: number) {
+      if (inner === null) inner = outcome(() => c3.open(only(src(at(3n)))));
+      return tinyBytes.subarray(offset, Math.min(offset + len, tinyBytes.length));
+    },
+  });
+  check('web.reentrantRead', 'string', typeof (outcome(() => c3.import(only(reader))) as any)?.edition);
+  check('web.reentrantRead.inner', 'ready', (inner as any)?.type);
+});
+attempt('web.reentrantProgress', () => {
+  let nested: unknown = null;
+  let after = 0;
+  // With a volume, which reports before the MDX on the Web, so the outer import reports again after the nested one.
+  const withVolume = { ...only(src(at(6n))), mdd: [file('tiny.mdd')] };
+  const outer = outcome(() =>
+    c3.import(withVolume, () => {
+      if (nested === null) nested = outcome(() => c3.import(only(src(at(7n))), () => true));
+      else after++;
+      return true;
+    }),
+  );
+  check('web.reentrantProgress', 'string', typeof (outer as any)?.edition);
+  check('web.reentrantProgress.nested', 'string', typeof (nested as any)?.edition);
+  check('web.reentrantProgress.outerStillWatched', true, after > 0);
+});
+
+// Counted from here: dictionaries the checks above left open hold their sources, as they should.
+attempt('web.sourcesReleased', () => {
+  const before = tables().sources;
+  c3.import(only(src(at(8n))));
+  check('web.sourcesReleasedAfterImport', before, tables().sources);
+  const opened = c3.open(only(src(at(8n))));
+  if (opened.type !== 'ready') throw new Error(`not open: ${JSON.stringify(opened)}`);
+  check('web.sourcesHeldWhileOpen', before + 1, tables().sources);
+  c3.close(opened.dict);
+  check('web.sourcesReleased', before, tables().sources);
+});
+attempt('web.storageReleased', () => {
+  const kept3 = { get: () => null, put: () => {} };
+  const made = third.core(config(third.protocolVersion()), kept3);
+  check('web.storageHeldWhileAlive', baseline.storage + 1, tables().storage);
+  made.free();
+  outcome(() => third.core(config(999), kept3));
+  check('web.storageReleased', baseline.storage, tables().storage);
+});
+attempt('web.repliesFreed', () => {
+  const p = { mdx: file('tiny.mdx'), mdd: [file('tiny.mdd')], sidecars: [file('tiny.css')] };
+  c3.import(p);
+  const o = c3.open(p);
+  if (o.type !== 'ready') throw new Error('not open');
+  for (let i = 0; i < 3; i++) c3.resource(o.dict, 'tiny.css', view());
+  check('web.repliesFreed', 0, tables().replies);
+  check('web.progressReleased', 0, tables().progress);
+  c3.close(o.dict);
+});
+
 parentPort!.postMessage(failures);
