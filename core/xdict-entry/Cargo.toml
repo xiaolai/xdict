@@ -1,0 +1,11 @@
+[package]
+name = "xdict-entry"
+description = "Turns a record into an entry a view can show: its links classified and rewritten, its stylesheet applied"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true

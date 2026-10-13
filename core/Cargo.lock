@@ -960,6 +960,8 @@ name = "xdict-core"
 version = "0.0.1"
 dependencies = [
  "serde",
+ "serde_json",
+ "xdict-entry",
  "xdict-identity",
  "xdict-lookup",
  "xdict-mdx",
@@ -967,6 +969,10 @@ dependencies = [
  "xdict-mmap",
  "xxhash-rust",
 ]
+
+[[package]]
+name = "xdict-entry"
+version = "0.0.1"
 
 [[package]]
 name = "xdict-ffi"
