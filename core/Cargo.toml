@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["xdict-mdx", "xdict-mdx-writer"]
+members = ["xdict-mdx", "xdict-mdx-writer", "xdict-core", "xdict-conformance", "xdict-ffi", "xdict-wasm"]
 
 [workspace.package]
 version = "0.0.1"
@@ -13,7 +13,12 @@ rust-version = "1.99"
 encoding_rs = "=0.8.42"
 flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
 ripemd = "=0.2.0"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+sha2 = "=0.11.1"
 thiserror = "=2.0.21"
+uniffi = "=0.32.2"
+wasm-bindgen = "=0.2.129"
 xxhash-rust = { version = "=0.8.19", default-features = false, features = ["xxh64"] }
 
 [workspace.lints.rust]

@@ -1,0 +1,399 @@
+{
+  "comment": "What every binding must answer for tiny/. Matching is by subset: every field written here must be present and equal; fields not written here (handles, lineage ids, the core's version string) are not compared. Lists must have the same length. A resource's bytes are compared as UTF-8 text in `text`. The scenario each suite runs is in conformance/README.md.",
+  "view": {
+    "baseUrl": "xdict://d/",
+    "skin": null,
+    "maxBodyBytes": 1048576
+  },
+  "versions": {
+    "protocol": 1,
+    "indexFormat": 0,
+    "normalization": 0
+  },
+  "newWrongProtocol": {
+    "client": 999,
+    "error": {
+      "type": "incompatible",
+      "core": 1,
+      "client": 999
+    }
+  },
+  "openBeforeImport": {
+    "type": "needsImport",
+    "reason": "new"
+  },
+  "import": {
+    "edition": "mdx-sha256-v1:c425b0ffa2084c082d4d0f3b432615bf9a4647d3530ab27303ca1c701d42192d",
+    "info": {
+      "title": "Tiny",
+      "description": "Written by xdict-mdx-writer",
+      "formatVersion": "2.0",
+      "keys": 8
+    },
+    "problems": []
+  },
+  "open": {
+    "type": "ready",
+    "edition": "mdx-sha256-v1:c425b0ffa2084c082d4d0f3b432615bf9a4647d3530ab27303ca1c701d42192d"
+  },
+  "lookups": [
+    {
+      "query": "run",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 3,
+        "generation": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "run",
+              "occurrence": 0
+            },
+            "headword": "run",
+            "how": {
+              "type": "exact"
+            },
+            "problems": []
+          },
+          {
+            "entry": {
+              "key": "run",
+              "occurrence": 1
+            },
+            "headword": "run",
+            "how": {
+              "type": "exact"
+            },
+            "problems": []
+          },
+          {
+            "entry": {
+              "key": "Run",
+              "occurrence": 0
+            },
+            "headword": "Run",
+            "how": {
+              "type": "folded"
+            },
+            "problems": []
+          }
+        ]
+      }
+    },
+    {
+      "query": "run",
+      "limit": 1,
+      "offset": 1,
+      "generation": 1,
+      "page": {
+        "total": 3,
+        "generation": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "run",
+              "occurrence": 1
+            },
+            "headword": "run",
+            "how": {
+              "type": "exact"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "query": "colour",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "color",
+              "occurrence": 0
+            },
+            "headword": "color",
+            "how": {
+              "type": "redirect",
+              "chain": [
+                "colour",
+                "color"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "query": "lost",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 0,
+        "hits": [],
+        "problems": [
+          {
+            "type": "danglingRedirect",
+            "from": "lost",
+            "target": "nowhere"
+          }
+        ]
+      }
+    },
+    {
+      "query": "zebra",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 0,
+        "hits": [],
+        "problems": []
+      }
+    },
+    {
+      "query": "run",
+      "limit": 1001,
+      "offset": 0,
+      "error": {
+        "type": "tooLarge",
+        "limit": "page"
+      }
+    },
+    {
+      "query": "run",
+      "limit": 10,
+      "offset": 0,
+      "generation": 7,
+      "error": {
+        "type": "staleHandle"
+      }
+    }
+  ],
+  "suggestions": [
+    {
+      "prefix": "ca",
+      "limit": 10,
+      "keys": [
+        "café"
+      ]
+    },
+    {
+      "prefix": "r",
+      "limit": 10,
+      "keys": [
+        "Run",
+        "run"
+      ]
+    },
+    {
+      "prefix": "",
+      "limit": 2,
+      "keys": [
+        "Run",
+        "café"
+      ]
+    }
+  ],
+  "entries": [
+    {
+      "entry": {
+        "key": "run",
+        "occurrence": 1
+      },
+      "result": {
+        "entry": {
+          "key": "run",
+          "occurrence": 1
+        },
+        "html": "<b>run</b> (noun) an act of running",
+        "lossyBytes": 0
+      },
+      "cspContains": "connect-src 'none'"
+    },
+    {
+      "entry": {
+        "key": "run",
+        "occurrence": 5
+      },
+      "error": {
+        "type": "notFound",
+        "what": "entry"
+      }
+    },
+    {
+      "entry": {
+        "key": "run",
+        "occurrence": 0
+      },
+      "maxBodyBytes": 5,
+      "error": {
+        "type": "tooLarge",
+        "limit": "body"
+      }
+    },
+    {
+      "entry": {
+        "key": "run",
+        "occurrence": 0
+      },
+      "edition": "mdx-sha256-v1:0000",
+      "error": {
+        "type": "editionMismatch"
+      }
+    }
+  ],
+  "links": [
+    {
+      "url": "entry://hue#sense1",
+      "link": {
+        "type": "lookup",
+        "query": "hue",
+        "anchor": "sense1"
+      }
+    },
+    {
+      "url": "bword://hue",
+      "link": {
+        "type": "lookup",
+        "query": "hue",
+        "anchor": null
+      }
+    },
+    {
+      "url": "sound://run.mp3",
+      "link": {
+        "type": "sound",
+        "path": "run.mp3"
+      }
+    },
+    {
+      "url": "sound://hello world.tts",
+      "link": {
+        "type": "speak",
+        "text": "hello world"
+      }
+    },
+    {
+      "url": "https://example.com/a.mp3",
+      "link": {
+        "type": "blocked",
+        "why": {
+          "type": "remote",
+          "url": "https://example.com/a.mp3"
+        }
+      }
+    },
+    {
+      "url": "javascript:void(0)",
+      "link": {
+        "type": "blocked",
+        "why": {
+          "type": "script"
+        }
+      }
+    },
+    {
+      "url": "#top",
+      "link": {
+        "type": "anchor",
+        "name": "top"
+      }
+    },
+    {
+      "url": "tiny.css",
+      "link": {
+        "type": "resource",
+        "path": "tiny.css"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "path": "tiny.css",
+      "resource": {
+        "type": "found",
+        "path": "tiny.css",
+        "mime": "text/css",
+        "text": "body { color: black }"
+      }
+    },
+    {
+      "path": "run.mp3",
+      "resource": {
+        "type": "found",
+        "path": "run.mp3",
+        "mime": "audio/mpeg",
+        "text": "ID3 not really audio"
+      }
+    },
+    {
+      "path": "nope.png",
+      "resource": {
+        "type": "missing",
+        "path": "nope.png"
+      }
+    }
+  ],
+  "byteSource": {
+    "comment": "The same MDX bytes through a ByteSource the suite implements, named copy/tiny.mdx, reporting the identity below, with a sidecar of its own (also a ByteSource): one edition at two locations, both open at once, each handle serving its own package's sidecar (Codex objection 1). Then a source that returns one byte too few.",
+    "name": "copy/tiny.mdx",
+    "identity": {
+      "device": 1,
+      "inode": 2,
+      "size": 1314,
+      "mtimeNs": 3,
+      "ctimeNs": 4
+    },
+    "sidecar": {
+      "name": "tiny.css",
+      "text": "body { color: red }"
+    },
+    "import": {
+      "edition": "mdx-sha256-v1:c425b0ffa2084c082d4d0f3b432615bf9a4647d3530ab27303ca1c701d42192d"
+    },
+    "open": {
+      "type": "ready",
+      "edition": "mdx-sha256-v1:c425b0ffa2084c082d4d0f3b432615bf9a4647d3530ab27303ca1c701d42192d"
+    },
+    "resourceFromPath": {
+      "type": "found",
+      "path": "tiny.css",
+      "text": "body { color: black }"
+    },
+    "resourceFromSource": {
+      "type": "found",
+      "path": "tiny.css",
+      "text": "body { color: red }"
+    },
+    "shortRead": {
+      "error": {
+        "type": "io",
+        "kind": "shortRead"
+      }
+    }
+  },
+  "lifecycle": {
+    "afterClose": {
+      "error": {
+        "type": "staleHandle"
+      }
+    },
+    "closeTwice": "ok",
+    "foreignHandle": {
+      "error": {
+        "type": "staleHandle"
+      }
+    },
+    "panic": {
+      "error": {
+        "type": "internal"
+      }
+    }
+  }
+}
