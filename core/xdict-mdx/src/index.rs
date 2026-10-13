@@ -316,22 +316,37 @@ impl Folded {
 
 /// The tier-2 order, over the keys tier 2 changes: few (under 2 % of the 25's, `core-api.md` §1a). Made before
 /// the tier-1 folding is held, comparing with each such key's tier-1 form folded again; their tier-2 forms are
-/// kept in one text, not a string each, sorted stably so ties stay in file order.
+/// kept in one text, not a string each, sorted stably so ties stay in file order. The text and its entries are
+/// measured in a first pass and reserved exactly, so neither grows by doubling past what `keys::cost_of` counts.
 fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32>, Error> {
     let count = u32::try_from(keys.starts.len()).map_err(|_| too_large())?;
-    let mut text: Vec<u8> = Vec::new();
-    let mut changed: Vec<(u32, u32, u32)> = Vec::new();
-    for i in 0..count {
+    // Key `i`'s tier-2 form, where tier 2 changes it.
+    let tier2_of = |i: u32| -> Result<Option<String>, Error> {
         let k = keys.key(i as usize)?;
         let plain = derive.unmark(k);
         if plain.as_ref() == k {
-            continue;
+            return Ok(None);
         }
         let tier2 = rules.fold(&plain);
-        if tier2 != rules.fold(k) {
+        Ok((tier2 != rules.fold(k)).then(|| tier2.into_owned()))
+    };
+    let (mut entries, mut bytes) = (0usize, 0usize);
+    for i in 0..count {
+        if let Some(tier2) = tier2_of(i)? {
+            entries += 1;
+            bytes = bytes.checked_add(tier2.len()).ok_or_else(too_large)?;
+        }
+    }
+    let mut text: Vec<u8> = Vec::new();
+    let mut changed: Vec<(u32, u32, u32)> = Vec::new();
+    text.try_reserve_exact(bytes).map_err(crate::out_of_memory)?;
+    changed.try_reserve_exact(entries).map_err(crate::out_of_memory)?;
+    for i in 0..count {
+        if let Some(tier2) = tier2_of(i)? {
+            if changed.len() == entries || text.len() + tier2.len() > bytes {
+                return Err(Error::Malformed("a key's tier-2 form changed between two readings".into()));
+            }
             let from = u32::try_from(text.len()).map_err(|_| too_large())?;
-            text.try_reserve(tier2.len()).map_err(crate::out_of_memory)?;
-            changed.try_reserve(1).map_err(crate::out_of_memory)?;
             text.extend_from_slice(tier2.as_bytes());
             changed.push((from, u32::try_from(text.len()).map_err(|_| too_large())?, i));
         }
