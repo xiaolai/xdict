@@ -1,0 +1,289 @@
+{
+  "comment": "One dictionary written in every version, compression and encoding the reader reads (LZO in 1.2 and 2.0 only; 3.0 is UTF-8 only, as MdxBuilder writes it). `$word` and `$gloss` are each variant's own non-ASCII text, one its encoding can hold. conformance-fixtures writes <name>.mdx for each, and variants.json for the suites.",
+  "mdx": {
+    "name": "matrix.mdx",
+    "title": "Matrix",
+    "entries": [
+      [
+        "run",
+        "<b>run</b> to move"
+      ],
+      [
+        "Run",
+        "<b>Run</b> a name"
+      ],
+      [
+        "colour",
+        "@@@LINK=color"
+      ],
+      [
+        "color",
+        "<b>color</b> a hue"
+      ],
+      [
+        "$word",
+        "$gloss"
+      ]
+    ]
+  },
+  "variants": [
+    {
+      "name": "v1.2-none-utf8",
+      "version": "1.2",
+      "compression": "none",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v1.2-none-utf16",
+      "version": "1.2",
+      "compression": "none",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-none-gbk",
+      "version": "1.2",
+      "compression": "none",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-none-big5",
+      "version": "1.2",
+      "compression": "none",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v1.2-none-latin1",
+      "version": "1.2",
+      "compression": "none",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v1.2-zlib-utf8",
+      "version": "1.2",
+      "compression": "zlib",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v1.2-zlib-utf16",
+      "version": "1.2",
+      "compression": "zlib",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-zlib-gbk",
+      "version": "1.2",
+      "compression": "zlib",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-zlib-big5",
+      "version": "1.2",
+      "compression": "zlib",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v1.2-zlib-latin1",
+      "version": "1.2",
+      "compression": "zlib",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v1.2-lzo-utf8",
+      "version": "1.2",
+      "compression": "lzo",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v1.2-lzo-utf16",
+      "version": "1.2",
+      "compression": "lzo",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-lzo-gbk",
+      "version": "1.2",
+      "compression": "lzo",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v1.2-lzo-big5",
+      "version": "1.2",
+      "compression": "lzo",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v1.2-lzo-latin1",
+      "version": "1.2",
+      "compression": "lzo",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v2.0-none-utf8",
+      "version": "2.0",
+      "compression": "none",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v2.0-none-utf16",
+      "version": "2.0",
+      "compression": "none",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-none-gbk",
+      "version": "2.0",
+      "compression": "none",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-none-big5",
+      "version": "2.0",
+      "compression": "none",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v2.0-none-latin1",
+      "version": "2.0",
+      "compression": "none",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v2.0-zlib-utf8",
+      "version": "2.0",
+      "compression": "zlib",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v2.0-zlib-utf16",
+      "version": "2.0",
+      "compression": "zlib",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-zlib-gbk",
+      "version": "2.0",
+      "compression": "zlib",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-zlib-big5",
+      "version": "2.0",
+      "compression": "zlib",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v2.0-zlib-latin1",
+      "version": "2.0",
+      "compression": "zlib",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v2.0-lzo-utf8",
+      "version": "2.0",
+      "compression": "lzo",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v2.0-lzo-utf16",
+      "version": "2.0",
+      "compression": "lzo",
+      "encoding": "utf16",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-lzo-gbk",
+      "version": "2.0",
+      "compression": "lzo",
+      "encoding": "gbk",
+      "word": "词典",
+      "gloss": "a dictionary — 词典"
+    },
+    {
+      "name": "v2.0-lzo-big5",
+      "version": "2.0",
+      "compression": "lzo",
+      "encoding": "big5",
+      "word": "詞典",
+      "gloss": "a dictionary — 詞典"
+    },
+    {
+      "name": "v2.0-lzo-latin1",
+      "version": "2.0",
+      "compression": "lzo",
+      "encoding": "latin1",
+      "word": "café",
+      "gloss": "un café — crème"
+    },
+    {
+      "name": "v3.0-none-utf8",
+      "version": "3.0",
+      "compression": "none",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    },
+    {
+      "name": "v3.0-zlib-utf8",
+      "version": "3.0",
+      "compression": "zlib",
+      "encoding": "utf8",
+      "word": "café",
+      "gloss": "un café — 咖啡馆"
+    }
+  ],
+  "mdd": [],
+  "sidecars": []
+}

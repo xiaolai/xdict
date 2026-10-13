@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { XDict, XDictError, type ByteSource, type FileIdentity, type Location, type View } from '../../ts/xdict.ts';
 
-const { pkg, fixtures, expected } = workerData as { pkg: string; fixtures: string; expected: string };
+const { pkg, fixtures, expected, matrix, matrixExpected } =
+  workerData as { pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string };
 const x = JSON.parse(readFileSync(expected, 'utf8'));
 const failures: string[] = [];
 
@@ -64,10 +65,10 @@ class Bytes implements ByteSource {
 }
 
 // The Web has no paths: the package is read through sources, each with the identity its file has here.
-const file = (name: string): Location => {
-  const s = statSync(join(fixtures, name), { bigint: true });
+const file = (name: string, dir = fixtures): Location => {
+  const s = statSync(join(dir, name), { bigint: true });
   const ident = { device: Number(s.dev), inode: Number(s.ino), size: Number(s.size), mtimeNs: Number(s.mtimeNs), ctimeNs: Number(s.ctimeNs) };
-  return { type: 'source', name, source: new Bytes(readFileSync(join(fixtures, name)), ident) };
+  return { type: 'source', name, source: new Bytes(readFileSync(join(dir, name)), ident) };
 };
 const glueUrl = pathToFileURL(join(pkg, 'xdict_wasm.js')).href;
 const wasm = readFileSync(join(pkg, 'xdict_wasm_bg.wasm'));
@@ -149,5 +150,30 @@ check('lifecycle.panic', l.panic, outcome(() => core.selfTestPanic()));
 check('web.afterTrap', { error: { type: 'internal' } }, outcome(() => core.lookup('run', [dict], page)));
 const fresh = XDict.load(await import(`${glueUrl}?instance=2`), wasm);
 check('web.freshInstance', x.versions, fresh.versions());
+
+// The matrix, on the fresh instance: every variant imported, opened and asked the same questions.
+const template = readFileSync(matrixExpected, 'utf8');
+const variants = JSON.parse(readFileSync(join(matrix, 'variants.json'), 'utf8'));
+check('matrix.variants', 32, variants.length);
+const matrixView: View = { baseUrl: 'xdict://d/', skin: null, maxBodyBytes: 1 << 20 };
+for (const v of variants) {
+  const m = JSON.parse(template.replaceAll('$word', v.word).replaceAll('$gloss', v.gloss).replaceAll('$version', v.version));
+  const c = fresh.core(config(fresh.protocolVersion()));
+  const p = { mdx: file(`${v.name}.mdx`, matrix), mdd: [], sidecars: [] };
+  const imp = outcome(() => c.import(p)) as any;
+  check(`${v.name}.import`, m.import, imp);
+  if (typeof imp?.edition !== 'string') continue;
+  const opn = outcome(() => c.open(p)) as any;
+  check(`${v.name}.open`, m.open, opn);
+  if (opn?.type !== 'ready') continue;
+  m.lookups.forEach((q: any, i: number) => {
+    const options = { limit: q.limit, offset: q.offset, mode: 'reader' as const, generation: null };
+    check(`${v.name}.lookups[${i}]`, q.page, outcome(() => c.lookup(q.query, [opn.dict], options)));
+  });
+  m.entries.forEach((e: any, i: number) => {
+    const ref = { edition: imp.edition, key: e.entry.key, occurrence: e.entry.occurrence };
+    check(`${v.name}.entries[${i}]`, e.result, outcome(() => c.entry(opn.dict, ref, matrixView)));
+  });
+}
 
 parentPort!.postMessage(failures);

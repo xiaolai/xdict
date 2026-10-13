@@ -36,6 +36,19 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
 
 The Web has no paths, so its suite reads every file of step 3 through sources too, each with its file's identity.
 
+## The matrix (`matrix/`)
+
+One small dictionary written in every version, compression and encoding the reader reads: 1.2 and 2.0 ×
+none/zlib/LZO × UTF-8/UTF-16/GBK/Big5/Latin-1, and 3.0 × none/zlib × UTF-8 (MdxBuilder writes 3.0 only in
+UTF-8, and never LZO): 32 variants. Each variant has its own non-ASCII word and gloss, one its encoding can
+hold, so every encoding is exercised by text it alone stores differently.
+
+`dictionary.json` lists the variants; the generator writes `<variant>.mdx` for each and `variants.json` (each
+variant's `name`, `word`, `gloss`, `version`). For each variant, every suite replaces `$word`, `$gloss` and
+`$version` in the text of `matrix/expected.json`, then, against a fresh `Core`: `import` of the package
+(`<variant>.mdx`, no volumes, no sidecars) [`import`], `open` [`open`], each of [`lookups`] in `reader` mode,
+each of [`entries`] (edition the imported one) in the view `xdict://d/`, 1 MiB.
+
 ## Suites
 
 | Binding | Command | Runs on |
@@ -45,6 +58,8 @@ The Web has no paths, so its suite reads every file of step 3 through sources to
 | Kotlin on the JVM (UniFFI) | `core/xdict-ffi/test-kotlin.sh` (needs `kotlinc`, a JDK, `JNA_JAR`) | macOS, Linux |
 | TypeScript in a Worker (`wasm-bindgen`) | `core/xdict-wasm/test-worker.sh` (needs `wasm-bindgen` 0.2.129, `tsc`, Node 24) | everywhere |
 
-Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `expected.json`, so a deliberately wrong
-expectation can be shown to fail (2026-10-13: the first lookup's total changed from 3 to 4 failed all four,
-each naming `lookups[0].total`).
+Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json` and
+`XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json`, so a deliberately wrong
+expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
+naming `lookups[0].total`. 2026-10-14: the matrix's `formatVersion` and both entries' `lossyBytes` altered failed
+all four, 96 failures each (32 variants × 3).

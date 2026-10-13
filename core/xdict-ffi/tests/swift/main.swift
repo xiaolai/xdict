@@ -1,5 +1,6 @@
 // The conformance scenario (conformance/README.md) through the UniFFI Swift binding.
-// Usage: conformance <fixture dir written by conformance-fixtures> <expected.json>
+// Usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>, the dirs as
+// conformance-fixtures writes them.
 // Exits 1 with every mismatch printed, 0 when all agree.
 
 import Foundation
@@ -217,8 +218,8 @@ final class Bytes: ByteSource, @unchecked Sendable {
 // MARK: - The scenario
 
 let args = CommandLine.arguments
-guard args.count == 3 else {
-    print("usage: conformance <fixture dir> <expected.json>")
+guard args.count == 5 else {
+    print("usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>")
     exit(2)
 }
 let dir = URL(fileURLWithPath: args[1])
@@ -301,6 +302,38 @@ check("lifecycle.closeTwice", l["closeTwice"], outcome { try core.close(dict: se
 let other = try Core(config: config(protocolVersion()))
 check("lifecycle.foreignHandle", l["foreignHandle"], outcome { j(try other.lookup(query: "run", dicts: [dict], options: page)) })
 check("lifecycle.panic", l["panic"], outcome { try core.selfTestPanic(); return "returned" })
+
+// MARK: - The matrix: every variant imported, opened and asked the same questions
+
+let matrixDir = URL(fileURLWithPath: args[3])
+let template = try String(contentsOf: URL(fileURLWithPath: args[4]), encoding: .utf8)
+let variants = try JSONSerialization.jsonObject(with: Data(contentsOf: matrixDir.appendingPathComponent("variants.json"))) as! [[String: Any]]
+check("matrix.variants", 32, variants.count)
+let matrixView = View(baseUrl: "xdict://d/", skin: nil, maxBodyBytes: 1 << 20)
+for v in variants {
+    let name = v["name"] as! String
+    let text = template.replacingOccurrences(of: "$word", with: v["word"] as! String)
+        .replacingOccurrences(of: "$gloss", with: v["gloss"] as! String)
+        .replacingOccurrences(of: "$version", with: v["version"] as! String)
+    let m = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String: Any]
+    let core = try Core(config: config(protocolVersion()))
+    let package = Package(mdx: .path(path: matrixDir.appendingPathComponent("\(name).mdx").path), mdd: [], sidecars: [])
+    let imported = outcome { j(try core.import(package: package, progress: nil)) }
+    check("\(name).import", m["import"], imported)
+    guard let edition = (imported as? [String: Any])?["edition"] as? String else { continue }
+    let opened = outcome { j(try core.open(package: package)) }
+    check("\(name).open", m["open"], opened)
+    guard let dict = (opened as? [String: Any])?["dict"] as? String else { continue }
+    for (i, c) in (m["lookups"] as! [[String: Any]]).enumerated() {
+        let options = LookupOptions(limit: int(c["limit"])!, offset: int(c["offset"])!, mode: .reader, generation: nil)
+        check("\(name).lookups[\(i)]", c["page"], outcome { j(try core.lookup(query: c["query"] as! String, dicts: [dict], options: options)) })
+    }
+    for (i, c) in (m["entries"] as! [[String: Any]]).enumerated() {
+        let e = c["entry"] as! [String: Any]
+        let ref = EntryRef(edition: edition, key: e["key"] as! String, occurrence: int(e["occurrence"])!)
+        check("\(name).entries[\(i)]", c["result"], outcome { j(try core.entry(dict: dict, entry: ref, view: matrixView)) })
+    }
+}
 
 if failures.isEmpty {
     print("swift conformance: all agree")

@@ -11,52 +11,14 @@ use std::sync::Arc;
 use serde_json::{Value, json};
 use xdict_core::*;
 
+mod common;
+use common::{outcome, subset};
+
 fn expected() -> Value {
     let path = std::env::var_os("XDICT_CONFORMANCE_EXPECTED")
         .map(PathBuf::from)
         .unwrap_or_else(|| xdict_conformance::fixtures().join("tiny/expected.json"));
     serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap()
-}
-
-/// Every field of `expected` is in `actual` and equal; lists have equal lengths.
-fn subset(expected: &Value, actual: &Value, at: &str) -> Result<(), String> {
-    match (expected, actual) {
-        (Value::Object(e), Value::Object(a)) => {
-            for (key, value) in e {
-                if key == "comment" {
-                    continue;
-                }
-                let found = a.get(key).ok_or_else(|| format!("{at}.{key}: missing in {actual}"))?;
-                subset(value, found, &format!("{at}.{key}"))?;
-            }
-            Ok(())
-        }
-        (Value::Array(e), Value::Array(a)) => {
-            if e.len() != a.len() {
-                return Err(format!("{at}: {} items expected, {} found: {actual}", e.len(), a.len()));
-            }
-            e.iter().zip(a).enumerate().try_for_each(|(i, (e, a))| subset(e, a, &format!("{at}[{i}]")))
-        }
-        _ if expected == actual => Ok(()),
-        _ => Err(format!("{at}: expected {expected}, found {actual}")),
-    }
-}
-
-/// A result as the suites compare it: the value, or `{"error": …}`; a resource's bytes as text.
-fn outcome<T: serde::Serialize>(result: Result<T, CoreError>) -> Value {
-    match result {
-        Ok(value) => {
-            let mut value = serde_json::to_value(value).unwrap();
-            if value["type"] == "found"
-                && let Some(bytes) = value.get("bytes").cloned()
-            {
-                let bytes: Vec<u8> = serde_json::from_value(bytes).unwrap();
-                value["text"] = json!(String::from_utf8(bytes).unwrap());
-            }
-            value
-        }
-        Err(error) => json!({ "error": serde_json::to_value(error).unwrap() }),
-    }
 }
 
 /// A file's bytes, served as a shell would serve them.

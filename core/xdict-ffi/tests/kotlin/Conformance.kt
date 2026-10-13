@@ -146,7 +146,7 @@ class Bytes(val bytes: ByteArray, val ident: FileIdentity?, val short: Boolean =
 
 @Suppress("UNCHECKED_CAST")
 fun main(args: Array<String>) {
-    if (args.size != 2) { println("usage: Conformance <fixture dir> <expected.json>"); exitProcess(2) }
+    if (args.size != 4) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>"); exitProcess(2) }
     val dir = File(args[0])
     val x = Json(File(args[1]).readText()).parse() as Map<String, Any?>
     val failures = ArrayList<String>()
@@ -222,6 +222,36 @@ fun main(args: Array<String>) {
     val other = Core(config(protocolVersion()))
     check("lifecycle.foreignHandle", l["foreignHandle"], outcome { j(other.lookup("run", listOf(dict), page)) })
     check("lifecycle.panic", l["panic"], outcome { core.selfTestPanic(); "returned" })
+
+    // The matrix: every variant imported, opened and asked the same questions.
+    val matrixDir = File(args[2])
+    val template = File(args[3]).readText()
+    val variants = list(Json(File(matrixDir, "variants.json").readText()).parse())
+    check("matrix.variants", java.math.BigDecimal(32), java.math.BigDecimal(variants.size))
+    val matrixView = View("xdict://d/", null, (1uL shl 20))
+    for (v in variants) {
+        val name = v["name"] as String
+        val text = template.replace("\$word", v["word"] as String).replace("\$gloss", v["gloss"] as String)
+            .replace("\$version", v["version"] as String)
+        val m = Json(text).parse() as Map<String, Any?>
+        val c0 = Core(config(protocolVersion()))
+        val p = Package(Location.Path(File(matrixDir, "$name.mdx").path), listOf(), listOf())
+        val imp = outcome { j(c0.`import`(p, null)) }
+        check("$name.import", m["import"], imp)
+        val edition = (imp as? Map<*, *>)?.get("edition") as String? ?: continue
+        val opn = outcome { j(c0.open(p)) }
+        check("$name.open", m["open"], opn)
+        val d = (opn as? Map<*, *>)?.get("dict") as String? ?: continue
+        list(m["lookups"]).forEachIndexed { n, c ->
+            val options = LookupOptions(uint(c["limit"])!!, uint(c["offset"])!!, MatchMode.READER, null)
+            check("$name.lookups[$n]", c["page"], outcome { j(c0.lookup(c["query"] as String, listOf(d), options)) })
+        }
+        list(m["entries"]).forEachIndexed { n, c ->
+            val e = obj(c["entry"])
+            val ref = EntryRef(edition, e["key"] as String, uint(e["occurrence"])!!)
+            check("$name.entries[$n]", c["result"], outcome { j(c0.entry(d, ref, matrixView)) })
+        }
+    }
 
     if (failures.isEmpty()) { println("kotlin conformance: all agree"); return }
     println("kotlin conformance: ${failures.size} failures")

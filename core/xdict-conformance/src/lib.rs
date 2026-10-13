@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use xdict_mdx_writer::{self as writer, Entry, Spec};
+use xdict_mdx_writer::{self as writer, Compression, Entry, Kind, Spec, TextEncoding, Version};
 
 /// The repository's `conformance/fixtures`.
 pub fn fixtures() -> PathBuf {
@@ -51,6 +51,9 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
 
     let mdx = field(&description, "mdx")?;
     let spec = Spec { title: string(field(mdx, "title")?)?.into(), ..Spec::mdx() };
+    if let Some(variants) = description.get("variants") {
+        return write_variants(&spec, field(mdx, "entries")?, array(variants)?, out);
+    }
     write_file(&spec, field(mdx, "entries")?, &out.join(string(field(mdx, "name")?)?))?;
     for volume in array(field(&description, "mdd")?)? {
         write_file(&Spec::mdd(), field(volume, "entries")?, &out.join(string(field(volume, "name")?)?))?;
@@ -60,6 +63,53 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
         std::fs::write(out.join(name), string(field(sidecar, "text")?)?).map_err(bad)?;
     }
     Ok(())
+}
+
+/// A fixture written once per variant (`<name>.mdx`), each with its own `$word` and `$gloss`, and
+/// `variants.json`, which the suites read: each variant's name, word, gloss and format version.
+fn write_variants(base: &Spec, entries: &Value, variants: &[Value], out: &Path) -> Result<(), Error> {
+    let mut written = Vec::new();
+    for variant in variants {
+        let name = string(field(variant, "name")?)?;
+        let version = match string(field(variant, "version")?)? {
+            "1.2" => Version::V1_2,
+            "2.0" => Version::V2_0,
+            "3.0" => Version::V3_0,
+            other => return Err(bad(format!("{name}: no version {other}"))),
+        };
+        let compression = match string(field(variant, "compression")?)? {
+            "none" => Compression::None,
+            "zlib" => Compression::Zlib,
+            "lzo" => Compression::Lzo,
+            other => return Err(bad(format!("{name}: no compression {other}"))),
+        };
+        let encoding = match string(field(variant, "encoding")?)? {
+            "utf8" => TextEncoding::Utf8,
+            "utf16" => TextEncoding::Utf16,
+            "gbk" => TextEncoding::Gbk,
+            "big5" => TextEncoding::Big5,
+            "latin1" => TextEncoding::Latin1,
+            other => return Err(bad(format!("{name}: no encoding {other}"))),
+        };
+        let (word, gloss) = (string(field(variant, "word")?)?, string(field(variant, "gloss")?)?);
+        // The suites substitute these into expected.json's text, so they must need no escaping in JSON.
+        if [word, gloss].iter().any(|t| t.chars().any(|c| c == '"' || c == '\\' || c.is_control())) {
+            return Err(bad(format!("{name}: a word or gloss needs escaping in JSON")));
+        }
+        let text = entries.to_string().replace("$word", word).replace("$gloss", gloss);
+        let spec = Spec {
+            version,
+            compression,
+            kind: Kind::Mdx(encoding),
+            obfuscate_key_index: version == Version::V2_0,
+            ..base.clone()
+        };
+        write_file(&spec, &serde_json::from_str(&text).map_err(bad)?, &out.join(format!("{name}.mdx")))?;
+        written.push(
+            serde_json::json!({ "name": name, "word": word, "gloss": gloss, "version": field(variant, "version")? }),
+        );
+    }
+    std::fs::write(out.join("variants.json"), Value::Array(written).to_string()).map_err(bad)
 }
 
 fn write_file(spec: &Spec, entries: &Value, path: &Path) -> Result<(), Error> {
