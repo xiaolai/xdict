@@ -258,8 +258,8 @@ impl FileRegistry {
         Ok(cached)
     }
 
-    /// Writes the document whole, under the caller's lock.
-    fn write(&self, contents: &Contents) -> Result<(), RegistryError> {
+    /// Writes the document whole, under the caller's lock, and makes the rename durable.
+    fn write(&self, dir: &std::path::Path, contents: &Contents) -> Result<(), RegistryError> {
         use std::io::Write;
         let fail = |e: io::Error| RegistryError(format!("{} cannot be written: {e}", self.path.display()));
         // Unique within the process as well, so two registries of one process never share a temporary file.
@@ -276,7 +276,12 @@ impl FileRegistry {
         if written.is_err() {
             let _ = std::fs::remove_file(&temporary);
         }
-        written.map_err(fail)
+        written.map_err(fail)?;
+        // The rename is durable only once the directory is: without this, a power failure can bring back the
+        // old document after the registration was reported.
+        #[cfg(unix)]
+        std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(fail)?;
+        Ok(())
     }
 }
 
@@ -318,7 +323,7 @@ impl Registry for FileRegistry {
         lock.lock().map_err(fail)?;
         let mut next = load(&self.path)?;
         let lineage = next.contents.register(record, mint);
-        self.write(&next.contents)?;
+        self.write(dir, &next.contents)?;
         next.stamp = std::fs::metadata(&self.path).ok().map(|m| Stamp::of(&m));
         *cached = next;
         Ok(lineage)
