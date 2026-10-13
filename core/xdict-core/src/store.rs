@@ -27,7 +27,9 @@ impl IndexStore for Shell {
         Ok(self.0.get(name)?.map(|source| Box::new(SourceRegion(crate::source::adapt(source))) as Box<dyn Region>))
     }
     fn put(&self, name: &str, bytes: &[u8]) -> Result<(), CoreError> {
-        self.0.put(name, bytes.to_vec())
+        let mut copy = crate::source::buffer(bytes.len() as u64, "an index")?;
+        copy.extend_from_slice(bytes);
+        self.0.put(name, copy)
     }
 }
 
@@ -57,8 +59,10 @@ impl IndexStore for Memory {
         Ok(map.get(name).map(|bytes| Box::new(Slice(Shared(bytes.clone()))) as Box<dyn Region>))
     }
     fn put(&self, name: &str, bytes: &[u8]) -> Result<(), CoreError> {
+        let mut copy = crate::source::buffer(bytes.len() as u64, "an index")?;
+        copy.extend_from_slice(bytes);
         let mut map = self.0.lock().map_err(|_| CoreError::internal("the index store was poisoned"))?;
-        map.insert(name.to_owned(), Arc::new(bytes.to_vec()));
+        map.insert(name.to_owned(), Arc::new(copy));
         Ok(())
     }
 }
