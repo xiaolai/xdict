@@ -142,16 +142,13 @@ impl Core {
 
             // The volumes need nothing of the MDX's: natively each is indexed on a thread of its own while the
             // MDX is hashed and indexed.
-            let jobs: Vec<_> = volumes.into_iter().zip(&package.mdd).collect();
             #[cfg(not(target_family = "wasm"))]
             let (mdx, indexed) = std::thread::scope(|scope| {
-                let threads: Vec<_> = jobs
+                let threads: Vec<_> = volumes
                     .into_iter()
-                    .map(|(volume, location)| {
-                        scope.spawn(|| volume.and_then(|v| self.import_volume(location, &v, &report)))
-                    })
+                    .map(|volume| scope.spawn(|| volume.and_then(|v| self.import_volume(&v, &report))))
                     .collect();
-                let mdx = self.import_mdx(&package.mdx, &opened, &report);
+                let mdx = self.import_mdx(&opened, &report);
                 let indexed: Vec<Result<[u8; 32], CoreError>> = threads
                     .into_iter()
                     .map(|t| t.join().unwrap_or_else(|_| Err(CoreError::internal("a volume's import panicked"))))
@@ -160,11 +157,9 @@ impl Core {
             });
             #[cfg(target_family = "wasm")]
             let (mdx, indexed) = {
-                let indexed: Vec<_> = jobs
-                    .into_iter()
-                    .map(|(volume, location)| volume.and_then(|v| self.import_volume(location, &v, &report)))
-                    .collect();
-                (self.import_mdx(&package.mdx, &opened, &report), indexed)
+                let indexed: Vec<_> =
+                    volumes.into_iter().map(|volume| volume.and_then(|v| self.import_volume(&v, &report))).collect();
+                (self.import_mdx(&opened, &report), indexed)
             };
             let (edition, info) = mdx?;
 
@@ -199,22 +194,23 @@ impl Core {
     /// reads against those sums, unless an index of that edition still loads. Returns the edition and its info.
     fn import_mdx(
         &self,
-        location: &Location,
         opened: &OpenedSource,
         report: &(dyn Fn(u64) -> Result<(), CoreError> + Sync),
     ) -> Result<(String, DictInfo), CoreError> {
         let hashed = xdict_identity::hash(&*opened.source, report)?;
         let digest = hashed.digest;
-        let info = match self.with_index(OpenedSource::open(location)?.source, Kind::Mdx, digest)? {
+        let info = match self.with_index(opened.reader(), Kind::Mdx, digest)? {
             Ok(file) => info(&file),
             Err(_) => {
                 let verified =
                     Verified { source: &*opened.source, chunk: CHUNK, sums: &hashed.sums, last: Mutex::new(None) };
                 let index = File::build_index(&verified, Some(Kind::Mdx), digest, &Policy).map_err(changed_or)?;
                 self.indexes.put(&index_name(&digest, Kind::Mdx), &index)?;
-                let source = OpenedSource::open(location)?.source;
-                let file = File::with_index(source, Some(Kind::Mdx), Box::new(index), digest, derive(Kind::Mdx))?
-                    .map_err(|stale| CoreError::internal(format!("an index just built does not load: {stale:?}")))?;
+                let file =
+                    File::with_index(opened.reader(), Some(Kind::Mdx), Box::new(index), digest, derive(Kind::Mdx))?
+                        .map_err(|stale| {
+                            CoreError::internal(format!("an index just built does not load: {stale:?}"))
+                        })?;
                 info(&file)
             }
         };
@@ -225,12 +221,11 @@ impl Core {
     /// A resource volume's validation token, and its index, unless one for that token still loads.
     fn import_volume(
         &self,
-        location: &Location,
         volume: &OpenedSource,
         report: &(dyn Fn(u64) -> Result<(), CoreError> + Sync),
     ) -> Result<[u8; 32], CoreError> {
         let token = xdict_identity::volume_token(volume.identity, &*volume.source, report)?;
-        if self.with_index(OpenedSource::open(location)?.source, Kind::Mdd, token)?.is_err() {
+        if self.with_index(volume.reader(), Kind::Mdd, token)?.is_err() {
             let index = File::build_index(&*volume.source, Some(Kind::Mdd), token, &Plain)?;
             self.indexes.put(&index_name(&token, Kind::Mdd), &index)?;
         }
@@ -262,7 +257,8 @@ impl Core {
                 return Ok(Opened::NeedsImport { reason: ImportReason::Changed });
             }
             let digest = unhex(record.edition.strip_prefix(EDITION_SCHEME).unwrap_or(""))?;
-            let mdx = match self.with_index(OpenedSource::open(&package.mdx)?.source, Kind::Mdx, digest)? {
+            // Read through the very descriptor whose identity was checked: a second open could find another file.
+            let mdx = match self.with_index(mdx_source.reader(), Kind::Mdx, digest)? {
                 Ok(file) => file,
                 Err(reason) => return Ok(Opened::NeedsImport { reason }),
             };
@@ -278,7 +274,7 @@ impl Core {
                 if xdict_identity::volume_token::<CoreError>(check.identity, &*check.source, |_| Ok(()))? != token {
                     return Ok(Opened::NeedsImport { reason: ImportReason::Changed });
                 }
-                match self.with_index(OpenedSource::open(volume)?.source, Kind::Mdd, token)? {
+                match self.with_index(check.reader(), Kind::Mdd, token)? {
                     Ok(file) => mdd.push((check, file)),
                     Err(reason) => return Ok(Opened::NeedsImport { reason }),
                 }

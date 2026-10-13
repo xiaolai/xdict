@@ -63,6 +63,15 @@ impl Opened {
         }
     }
 
+    /// Another reader of the same opened file: the same descriptor, or the same source, never the path again.
+    pub(crate) fn reader(&self) -> Box<dyn xdict_mdx::Source> {
+        match &self.check {
+            #[cfg(any(unix, windows))]
+            Check::Path { file, .. } => Box::new(PathSource { file: file.clone(), len: self.source.len() }),
+            Check::Source(source) => Box::new(Adapter(source.clone())),
+        }
+    }
+
     /// `SourceChanged` when the file is no longer the one that was opened (ADR-0007 decision 13): a path whose
     /// file was replaced or rewritten, or a source whose identity moved. A source without an identity cannot
     /// tell, and is trusted.
