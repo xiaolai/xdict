@@ -16,9 +16,12 @@
 //! What code cannot rule out is a process of the same user first making one of these files writable and then
 //! writing into it in place, as it could write into XDict's memory: the residual risk, the one `pread` into the
 //! heap would avoid at the cost of the memory. Making [`OwnDirectory::new`] `unsafe` would name it but not
-//! remove it, and the core, which forbids `unsafe`, could no longer call it. On Windows the mode is not set, so
-//! files there are written writable and this residual includes an ordinary write. A map of a file under 1 byte is refused, since a zero-length map is an error on some
-//! systems.
+//! remove it, and the core, which forbids `unsafe`, could no longer call it.
+//!
+//! On Windows the mode is not set, but a map holds its file open sharing reading and deletion only, so Windows
+//! refuses every open for writing while the map lives, its owner's included, and a rename over the name still
+//! replaces it. A file some other process holds open for writing is refused as foreign. A map of a file under
+//! 1 byte is refused, since a zero-length map is an error on some systems.
 
 use std::fs::File;
 use std::io;
@@ -27,6 +30,8 @@ use std::path::{Path, PathBuf};
 /// A file mapped read-only, for as long as this value lives.
 pub struct Mapped {
     map: memmap2::Mmap,
+    /// Held for as long as the map: on Windows, its sharing mode is what keeps writers out.
+    _file: File,
 }
 
 impl AsRef<[u8]> for Mapped {
@@ -53,7 +58,7 @@ impl OwnDirectory {
         if !meta.file_type().is_file() || writable(&meta) {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "not a file XDict wrote"));
         }
-        let file = File::open(&path)?;
+        let file = open_read_only(&path)?;
         // The file opened is the one checked: a rename in between would leave a file of another identity.
         if !same_file(&meta, &file.metadata()?) {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "the file changed as it was opened"));
@@ -65,7 +70,7 @@ impl OwnDirectory {
         // written by `replace` and replaced only by rename, so the mapped bytes do not change while the map lives.
         #[allow(unsafe_code)]
         let map = unsafe { memmap2::Mmap::map(&file)? };
-        Ok(Mapped { map })
+        Ok(Mapped { map, _file: file })
     }
 
     /// Writes `bytes` as the file `name`, whole: a temporary file, read-only, renamed over the name, so a map
@@ -114,6 +119,28 @@ fn writable(meta: &std::fs::Metadata) -> bool {
 #[cfg(not(unix))]
 fn writable(_: &std::fs::Metadata) -> bool {
     false
+}
+
+#[cfg(not(windows))]
+fn open_read_only(path: &Path) -> io::Result<File> {
+    File::open(path)
+}
+
+/// Opens `path` to read, sharing it for reading and deletion but not writing: until the handle closes, Windows
+/// refuses anyone an open for writing, and a file already open for writing elsewhere is refused here.
+#[cfg(windows)]
+fn open_read_only(path: &Path) -> io::Result<File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_SHARE_READ: u32 = 0x1;
+    const FILE_SHARE_DELETE: u32 = 0x4;
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    std::fs::OpenOptions::new().read(true).share_mode(FILE_SHARE_READ | FILE_SHARE_DELETE).open(path).map_err(|e| {
+        if e.raw_os_error() == Some(ERROR_SHARING_VIOLATION) {
+            io::Error::new(io::ErrorKind::InvalidData, "another process has the file open for writing")
+        } else {
+            e
+        }
+    })
 }
 
 #[cfg(unix)]
@@ -184,6 +211,21 @@ mod tests {
         assert_eq!(own.map("index").unwrap().as_ref(), b"ours");
         std::fs::remove_dir_all(&own.dir).unwrap();
         std::fs::remove_file(&outside).unwrap();
+    }
+
+    /// While a map lives, Windows refuses anyone an open for writing, and a rename still replaces the name.
+    #[cfg(windows)]
+    #[test]
+    fn a_mapped_file_cannot_be_opened_for_writing() {
+        let own = scratch("sharing");
+        own.replace("index", b"ours").unwrap();
+        let mapped = own.map("index").unwrap();
+        assert!(std::fs::OpenOptions::new().write(true).open(own.dir.join("index")).is_err());
+        own.replace("index", b"theirs").unwrap();
+        assert_eq!(mapped.as_ref(), b"ours");
+        drop(mapped);
+        assert_eq!(own.map("index").unwrap().as_ref(), b"theirs");
+        std::fs::remove_dir_all(&own.dir).unwrap();
     }
 
     /// What `replace` writes nobody may write, its owner included, so an ordinary write into a mapped index fails
