@@ -40,6 +40,23 @@ pub enum Compression {
 pub enum TextEncoding {
     Utf8,
     Utf16,
+    /// GB18030, declared `GBK` as real files declare it (474 of the 2,703 censused files are GB18030 or GBK).
+    Gbk,
+    Big5,
+    /// Declared `ISO-8859-1`; written as windows-1252, its superset, which is how the reader reads the label.
+    Latin1,
+}
+
+impl TextEncoding {
+    /// The encoder for a single-byte or multi-byte legacy encoding; `None` for UTF-8 and UTF-16.
+    fn legacy(self) -> Option<&'static encoding_rs::Encoding> {
+        match self {
+            Self::Utf8 | Self::Utf16 => None,
+            Self::Gbk => Some(encoding_rs::GB18030),
+            Self::Big5 => Some(encoding_rs::BIG5),
+            Self::Latin1 => Some(encoding_rs::WINDOWS_1252),
+        }
+    }
 }
 
 /// What the file is.
@@ -140,6 +157,8 @@ pub enum WriteError {
     RecordNotUtf8(String),
     #[error("the spec asks for what the format cannot hold: {0}")]
     Incompatible(&'static str),
+    #[error("{0:?} cannot be written in the file's encoding")]
+    Unencodable(String),
     #[error("compression failed: {0}")]
     Compression(#[from] std::io::Error),
 }
@@ -174,7 +193,7 @@ pub fn write(spec: &Spec, entries: &[Entry]) -> Result<Vec<u8>, WriteError> {
     if spec.version == Version::V3_0 && spec.compression == Compression::Lzo {
         return Err(WriteError::Incompatible("no real 3.0 file has shown LZO"));
     }
-    if spec.version == Version::V3_0 && spec.kind == Kind::Mdx(TextEncoding::Utf16) {
+    if spec.version == Version::V3_0 && matches!(spec.kind, Kind::Mdx(e) if e != TextEncoding::Utf8) {
         return Err(WriteError::Incompatible("a 3.0 file is UTF-8"));
     }
     let mut sorted: Vec<&Entry> = entries.iter().collect();
@@ -211,7 +230,10 @@ impl Widths {
 }
 
 fn classic(spec: &Spec, sorted: &[&Entry]) -> Result<Vec<u8>, WriteError> {
-    let unit = if spec.kind == Kind::Mdx(TextEncoding::Utf8) { 1 } else { 2 };
+    let unit = match spec.kind {
+        Kind::Mdx(TextEncoding::Utf16) | Kind::Mdd => 2,
+        Kind::Mdx(_) => 1,
+    };
     let w = Widths { unit, v2: spec.version == Version::V2_0 };
     let rows = rows(spec, sorted, w)?;
     let (key_index, key_blocks) = key_blocks(spec, &rows, w)?;
@@ -262,6 +284,7 @@ fn rows(spec: &Spec, sorted: &[&Entry], w: Widths) -> Result<Vec<Row>, WriteErro
         let key = match spec.kind {
             Kind::Mdx(TextEncoding::Utf8) => entry.key.as_bytes().to_vec(),
             Kind::Mdx(TextEncoding::Utf16) | Kind::Mdd => utf16le(&entry.key),
+            Kind::Mdx(legacy) => encode(legacy, &entry.key)?,
         };
         let record = match spec.kind {
             Kind::Mdd => entry.record.clone(),
@@ -271,6 +294,11 @@ fn rows(spec: &Spec, sorted: &[&Entry], w: Widths) -> Result<Vec<Row>, WriteErro
                     std::str::from_utf8(&entry.record).map_err(|_| WriteError::RecordNotUtf8(entry.key.clone()))?;
                 [utf16le(text), w.null()].concat()
             }
+            Kind::Mdx(legacy) => {
+                let text =
+                    std::str::from_utf8(&entry.record).map_err(|_| WriteError::RecordNotUtf8(entry.key.clone()))?;
+                [encode(legacy, text)?, w.null()].concat()
+            }
         };
         let key_units = (key.len() / w.unit) as u64;
         let len = record.len() as u64;
@@ -278,6 +306,17 @@ fn rows(spec: &Spec, sorted: &[&Entry], w: Widths) -> Result<Vec<Row>, WriteErro
         offset += len;
     }
     Ok(rows)
+}
+
+/// `text` in a legacy encoding, refused rather than written with a replacement: a fixture that silently differs
+/// from its spec tests nothing.
+fn encode(encoding: TextEncoding, text: &str) -> Result<Vec<u8>, WriteError> {
+    let encoder = encoding.legacy().ok_or(WriteError::Incompatible("not a legacy encoding"))?;
+    let (bytes, _, unmappable) = encoder.encode(text);
+    if unmappable {
+        return Err(WriteError::Unencodable(text.to_owned()));
+    }
+    Ok(bytes.into_owned())
 }
 
 /// Splits rows into blocks by size, as writemdict does: a block closes before the row that would take it
@@ -389,6 +428,9 @@ fn header(spec: &Spec) -> Result<Vec<u8>, WriteError> {
             match encoding {
                 TextEncoding::Utf8 => "UTF-8",
                 TextEncoding::Utf16 => "UTF-16",
+                TextEncoding::Gbk => "GBK",
+                TextEncoding::Big5 => "BIG5",
+                TextEncoding::Latin1 => "ISO-8859-1",
             },
             yes(spec.key_case_sensitive),
             escape(&spec.description),

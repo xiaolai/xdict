@@ -27,21 +27,36 @@ fn words() -> Vec<Entry> {
     ]
 }
 
+/// Words each encoding can hold: [`words`] where it can, else its own (Big5 has no `é` and no simplified `长`;
+/// Latin-1 has no CJK).
+fn words_in(encoding: TextEncoding) -> Vec<Entry> {
+    let ascii = || words().into_iter().filter(|e| e.key.is_ascii() && e.record.is_ascii());
+    match encoding {
+        TextEncoding::Utf8 | TextEncoding::Utf16 | TextEncoding::Gbk => words(),
+        TextEncoding::Big5 => ascii().chain([Entry::text("詞典", "字典 — 長"), Entry::text("長", "long")]).collect(),
+        TextEncoding::Latin1 => {
+            ascii().chain([Entry::text("café", "un café — crème"), Entry::text("Straße", "ß")]).collect()
+        }
+    }
+}
+
 fn text(record: &xdict_mdx::Record) -> &str {
     std::str::from_utf8(&record.data).expect("an MDX record is returned as UTF-8")
 }
 
 #[test]
 fn every_version_compression_and_encoding_reads_back_every_entry() {
-    let entries = words();
+    let encodings =
+        [TextEncoding::Utf8, TextEncoding::Utf16, TextEncoding::Gbk, TextEncoding::Big5, TextEncoding::Latin1];
     for version in [Version::V1_2, Version::V2_0, Version::V3_0] {
         for compression in [Compression::None, Compression::Lzo, Compression::Zlib] {
-            for encoding in [TextEncoding::Utf8, TextEncoding::Utf16] {
+            for encoding in encodings {
+                let entries = words_in(encoding);
                 for obfuscate in [false, true] {
                     if obfuscate && version == Version::V1_2 {
                         continue; // the format has no key-index obfuscation before 2.0
                     }
-                    if version == Version::V3_0 && (encoding == TextEncoding::Utf16 || obfuscate) {
+                    if version == Version::V3_0 && (encoding != TextEncoding::Utf8 || obfuscate) {
                         continue; // 3.0 is UTF-8 and encrypts every block, whatever the spec says
                     }
                     if version == Version::V3_0 && compression == Compression::Lzo {
@@ -58,6 +73,9 @@ fn every_version_compression_and_encoding_reads_back_every_entry() {
                     let (_scratch, file) = open(&spec, &entries);
                     let file = file.unwrap_or_else(|e| panic!("{label}: {e}"));
                     assert_eq!(file.len(), entries.len(), "{label}");
+                    for i in 0..file.len() {
+                        assert_eq!(file.record(i).unwrap().lossy, 0, "{label}: key {i} decoded with losses");
+                    }
                     assert_eq!(file.header().kind, Kind::Mdx, "{label}");
                     let expected_version = match version {
                         Version::V1_2 => FormatVersion::V1_2,
@@ -79,6 +97,13 @@ fn every_version_compression_and_encoding_reads_back_every_entry() {
             }
         }
     }
+}
+
+/// The writer refuses text an encoding cannot hold rather than write a replacement.
+#[test]
+fn text_an_encoding_cannot_hold_is_refused() {
+    let spec = Spec { kind: writer::Kind::Mdx(TextEncoding::Latin1), ..Spec::mdx() };
+    assert!(matches!(writer::write(&spec, &[Entry::text("长", "long")]), Err(writer::WriteError::Unencodable(_))));
 }
 
 #[test]
