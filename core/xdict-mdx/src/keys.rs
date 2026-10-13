@@ -47,7 +47,8 @@ pub(crate) fn index_cost(text: &str) -> u64 {
 ///   twice that held after reading: 2t + 24;
 /// - tier 2: the tier-2 forms in one text, which folding can make three times longer in UTF-8 (ΐ, 2 bytes, folds
 ///   to 6, the most any character grows, measured over every code point on 2026-10-13), 12 bytes of entry and
-///   6 of stable sorting: 2t + 24 + 3t + 18 = 5t + 42, its result then 4;
+///   6 of stable sorting: 2t + 24 + 3t + 18 = 5t + 42, its result then 4 (the text and entries are measured
+///   first and reserved exactly, so they never hold the doubling a growing vector would);
 /// - tier 1: the folded text (3t at most) and its offsets (4), the order (4) and its sorting (2): 5t + 38;
 /// - written out: the record ends (8, and 8 of sorted starts while they are found), the public bitmap, and the
 ///   index itself, reserved whole: the text and 28 bytes of tables a key: 3t + 64.
