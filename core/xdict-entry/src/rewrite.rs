@@ -498,88 +498,125 @@ pub fn css_text(text: &str, base: &str, dir: &str) -> String {
 }
 
 fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
-    let mut out = Out::new(text.len(), collect);
-    let bytes = text.as_bytes();
     // Read as CSS's tokeniser reads it (css-syntax §4), so that what is a URL here is what a browser fetches:
     // comments and strings are text, an escaped character is part of a name, `url(` is a function whose name
-    // decodes to `url`, and an image function's strings are images. `copied` is how much of `text` is written.
-    let (mut i, mut copied) = (0, 0);
-    // For each open parenthesis, whether its function fetches its strings.
-    let mut parens: Vec<bool> = Vec::new();
-    // Since `@import`, until its next token: a string there is the imported sheet.
+    // decodes to `url`, and an image function's strings are images.
+    let mut css = Css { text, base, dir, out: Out::new(text.len(), collect), i: 0, copied: 0, parens: Vec::new() };
     let mut importing = false;
-    while let Some(&b) = bytes.get(i) {
-        match b {
-            b'/' if bytes.get(i + 1) == Some(&b'*') => {
-                i = text.get(i + 2..).and_then(|r| r.find("*/")).map_or(text.len(), |e| i + 2 + e + 2);
+    while let Some(&b) = text.as_bytes().get(css.i) {
+        importing = match b {
+            b'/' if text.as_bytes().get(css.i + 1) == Some(&b'*') => {
+                css.comment();
+                importing
             }
             b'"' | b'\'' => {
-                let (body, next) = quoted(text, i, char::from(b));
-                if importing || parens.last() == Some(&true) {
-                    out.text.push_str(text.get(copied..i).unwrap_or(""));
-                    write_url(&mut out, body, char::from(b), base, dir);
-                    copied = next;
-                }
-                importing = false;
-                i = next;
+                css.string(char::from(b), importing);
+                false
             }
-            b'(' => {
-                parens.push(false);
-                importing = false;
-                i += 1;
+            b'(' | b')' => {
+                css.paren(b == b'(');
+                false
             }
-            b')' => {
-                parens.pop();
-                importing = false;
-                i += 1;
-            }
-            b'@' => {
-                let (name, len) = name_at(text, i + 1);
-                importing = name.eq_ignore_ascii_case("import");
-                i += 1 + len;
-            }
-            _ if b.is_ascii_digit() || starts_name(text, i) => {
-                importing = false;
-                let (name, len) = name_at(text, i);
-                let open = i + len.max(1);
-                i = open;
-                if b.is_ascii_digit() || bytes.get(open) != Some(&b'(') {
-                    continue;
-                }
-                if !name.eq_ignore_ascii_case("url") {
-                    parens.push(IMAGE_FUNCTIONS.iter().any(|f| name.eq_ignore_ascii_case(f)));
-                    i = open + 1;
-                    continue;
-                }
-                // `url(`: whitespace, then a string or an unquoted URL; its `)` is met as any other.
-                parens.push(false);
-                let inner = text.get(open + 1..).unwrap_or("");
-                let value_from = inner.trim_ascii_start();
-                let start = open + 1 + (inner.len() - value_from.len());
-                out.text.push_str(text.get(copied..start).unwrap_or(""));
-                match value_from.chars().next() {
-                    Some(q @ ('"' | '\'')) => {
-                        let (body, next) = quoted(text, start, q);
-                        write_url(&mut out, body, q, base, dir);
-                        copied = next;
-                    }
-                    _ => {
-                        // Unquoted, it runs to `)`; the spaces before it are dropped with the quotes added.
-                        let end = string_end(value_from, ')');
-                        write_url(&mut out, value_from.get(..end).unwrap_or("").trim_ascii_end(), '"', base, dir);
-                        copied = start + end;
-                    }
-                }
-                i = copied;
+            b'@' => css.at_keyword(),
+            _ if b.is_ascii_digit() || starts_name(text, css.i) => {
+                css.name(b.is_ascii_digit());
+                false
             }
             _ => {
-                importing &= b.is_ascii_whitespace();
-                i += 1;
+                css.i += 1;
+                importing && b.is_ascii_whitespace()
             }
+        };
+    }
+    css.out.text.push_str(text.get(css.copied..).unwrap_or(""));
+    css.out
+}
+
+/// A stylesheet being rewritten: where it is read (`i`), how much of `text` is written to `out` (`copied`), and
+/// for each open parenthesis whether its function fetches its strings.
+struct Css<'a> {
+    text: &'a str,
+    base: &'a str,
+    dir: &'a str,
+    out: Out,
+    i: usize,
+    copied: usize,
+    parens: Vec<bool>,
+}
+
+impl Css<'_> {
+    /// A comment: text, read past its `*/`.
+    fn comment(&mut self) {
+        self.i = self.text.get(self.i + 2..).and_then(|r| r.find("*/")).map_or(self.text.len(), |e| self.i + 2 + e + 2);
+    }
+
+    /// A string: a URL just after `@import` (`importing`) or in an image function, text anywhere else.
+    fn string(&mut self, quote: char, importing: bool) {
+        let (body, next) = quoted(self.text, self.i, quote);
+        if importing || self.parens.last() == Some(&true) {
+            self.out.text.push_str(self.text.get(self.copied..self.i).unwrap_or(""));
+            write_url(&mut self.out, body, quote, self.base, self.dir);
+            self.copied = next;
+        }
+        self.i = next;
+    }
+
+    /// An opening parenthesis that is no function's, or a closing one.
+    fn paren(&mut self, open: bool) {
+        if open {
+            self.parens.push(false);
+        } else {
+            self.parens.pop();
+        }
+        self.i += 1;
+    }
+
+    /// An at-keyword; whether it is `@import`, whose next token, if a string, is the imported sheet.
+    fn at_keyword(&mut self) -> bool {
+        let (name, len) = name_at(self.text, self.i + 1);
+        self.i += 1 + len;
+        name.eq_ignore_ascii_case("import")
+    }
+
+    /// A name, or a number: a name before `(` opens a function, and `url(` one whose argument is a URL.
+    fn name(&mut self, number: bool) {
+        let (name, len) = name_at(self.text, self.i);
+        let open = self.i + len.max(1);
+        self.i = open;
+        if number || self.text.as_bytes().get(open) != Some(&b'(') {
+            return;
+        }
+        if name.eq_ignore_ascii_case("url") {
+            self.url(open);
+        } else {
+            self.parens.push(IMAGE_FUNCTIONS.iter().any(|f| name.eq_ignore_ascii_case(f)));
+            self.i = open + 1;
         }
     }
-    out.text.push_str(text.get(copied..).unwrap_or(""));
-    out
+
+    /// `url(`, its `(` at `open`: whitespace, then a string or an unquoted URL; its `)` is met as any other.
+    fn url(&mut self, open: usize) {
+        self.parens.push(false);
+        let inner = self.text.get(open + 1..).unwrap_or("");
+        let value_from = inner.trim_ascii_start();
+        let start = open + 1 + (inner.len() - value_from.len());
+        self.out.text.push_str(self.text.get(self.copied..start).unwrap_or(""));
+        match value_from.chars().next() {
+            Some(q @ ('"' | '\'')) => {
+                let (body, next) = quoted(self.text, start, q);
+                write_url(&mut self.out, body, q, self.base, self.dir);
+                self.copied = next;
+            }
+            _ => {
+                // Unquoted, it runs to `)`; the spaces before it are dropped with the quotes added.
+                let end = string_end(value_from, ')');
+                let written = value_from.get(..end).unwrap_or("").trim_ascii_end();
+                write_url(&mut self.out, written, '"', self.base, self.dir);
+                self.copied = start + end;
+            }
+        }
+        self.i = self.copied;
+    }
 }
 
 /// The CSS string whose opening `quote` is at `at` in `text`: its body as written, and where what follows it
