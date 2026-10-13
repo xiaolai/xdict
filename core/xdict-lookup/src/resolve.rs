@@ -43,7 +43,8 @@ pub enum Problem {
 pub struct Hit {
     pub key: usize,
     pub how: How,
-    /// Problems met on the way to this hit's key from the key that matched.
+    /// Problems met by the walk from the matched key that reached this hit, given once: with the first hit
+    /// the walk reaches, and empty on its others.
     pub problems: Vec<Problem>,
 }
 
@@ -141,16 +142,15 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
         }
         ways.push((i, problems));
     }
-    let owners: HashSet<usize> = owner.values().copied().collect();
-    let problems_of: HashMap<usize, &Vec<Problem>> = ways.iter().map(|(i, p)| (*i, p)).collect();
-    for (at, hit) in resolved.hits.iter_mut().enumerate() {
-        if let Some(problems) = owner.get(&at).and_then(|from| problems_of.get(from)) {
-            hit.problems.clone_from(problems);
-        }
+    // Each walk's problems, moved once: to the first hit it finally owns, or, owning none, to the lookup's.
+    let mut first: HashMap<usize, usize> = HashMap::new();
+    for (&at, &from) in &owner {
+        first.entry(from).and_modify(|kept| *kept = (*kept).min(at)).or_insert(at);
     }
-    for (i, problems) in &ways {
-        if !owners.contains(i) {
-            resolved.problems.extend(problems.iter().cloned());
+    for (i, problems) in ways {
+        match first.get(&i).and_then(|&at| resolved.hits.get_mut(at)) {
+            Some(hit) => hit.problems = problems,
+            None => resolved.problems.extend(problems),
         }
     }
     Ok(resolved)

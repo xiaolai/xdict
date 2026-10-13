@@ -199,6 +199,24 @@ fn a_record_is_read_once_per_lookup() {
     assert_eq!(r.hits.len(), 1, "{r:?}");
 }
 
+/// A walk's problems are given once, with the first hit it reaches, not copied into every hit: one target landing
+/// on 32 records beside 31 dangling targets is 31 problems, not 32 × 31.
+#[test]
+fn a_walks_problems_are_given_once() {
+    let mut record = "@@@LINK=dest".to_owned();
+    for i in 0..31 {
+        record.push_str(&format!("\r\n@@@LINK=missing{i}"));
+    }
+    let mut entries = vec![("A".to_owned(), record)];
+    entries.extend((0..32).map(|i| ("dest".to_owned(), format!("destination {i}"))));
+    let pairs: Vec<(&str, &str)> = entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let f = file(&pairs);
+    let r = hits(&f, "A");
+    assert_eq!(r.hits.len(), 32, "{r:?}");
+    assert_eq!(r.hits[0].problems.len(), 31, "{:?}", r.hits[0]);
+    assert_eq!(r.hits.iter().map(|h| h.problems.len()).sum::<usize>() + r.problems.len(), 31);
+}
+
 /// A record that is a redirect naming nothing is a dangling redirect, not an entry: matched directly, or landed
 /// on along a chain. An empty line beside a named target is passed over.
 #[test]
