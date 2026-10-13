@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use serde_json::{Value, json};
 use xdict_core::*;
@@ -39,6 +39,34 @@ impl ByteSource for Bytes {
     }
     fn identity(&self) -> Option<FileIdentity> {
         self.identity
+    }
+}
+
+/// A progress that cancels at once.
+struct Stop;
+
+impl Progress for Stop {
+    fn progress(&self, _: u64, _: u64) -> bool {
+        false
+    }
+}
+
+/// A sidecar whose identity the suite changes after it is opened, as a moved or rewritten file's would.
+struct Moving {
+    text: Vec<u8>,
+    identity: Mutex<FileIdentity>,
+}
+
+impl ByteSource for Moving {
+    fn size(&self) -> u64 {
+        self.text.len() as u64
+    }
+    fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+        let start = offset as usize;
+        Ok(self.text[start..(start + len as usize).min(self.text.len())].to_vec())
+    }
+    fn identity(&self) -> Option<FileIdentity> {
+        Some(*self.identity.lock().unwrap())
     }
 }
 
@@ -149,6 +177,30 @@ fn the_tiny_dictionary_conforms() {
     );
     let short = Package { mdx: source("short.mdx", mdx, None, true), mdd: vec![], sidecars: vec![] };
     check("byteSource.shortRead", &b["shortRead"], outcome(core.import(short, &NoProgress)));
+
+    let e = &x["errors"];
+    for name in ["unsupported", "malformed"] {
+        let package = Package { mdx: at(e[name]["file"].as_str().unwrap()), mdd: vec![], sidecars: vec![] };
+        let got = outcome(core.import(package, &NoProgress));
+        check(&format!("errors.{name}"), &json!({ "error": e[name]["error"] }), got);
+    }
+    let alone = Package { mdx: at("tiny.mdx"), mdd: vec![], sidecars: vec![] };
+    check("errors.cancelled", &json!({ "error": e["cancelled"]["error"] }), outcome(core.import(alone, &Stop)));
+    let moving =
+        Arc::new(Moving { text: b["sidecar"]["text"].as_str().unwrap().into(), identity: Mutex::new(identity) });
+    let package = Package {
+        mdx: source(name, std::fs::read(dir.join("tiny.mdx")).unwrap(), Some(identity), false),
+        mdd: vec![],
+        sidecars: vec![Location::Source { name: "tiny.css".into(), source: moving.clone() }],
+    };
+    core.import(package.clone(), &NoProgress).unwrap();
+    let Opened::Ready { dict: watched, .. } = core.open(package).unwrap() else { panic!("not open") };
+    moving.identity.lock().unwrap().inode += 1;
+    check(
+        "errors.sourceChanged",
+        &json!({ "error": e["sourceChanged"]["error"] }),
+        outcome(core.resource(watched, "tiny.css".into(), view(None))),
+    );
 
     let l = &x["lifecycle"];
     core.close(second.clone()).unwrap();

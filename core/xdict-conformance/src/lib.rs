@@ -5,7 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use xdict_mdx_writer::{self as writer, Compression, Entry, Kind, Spec, TextEncoding, Version};
+use xdict_mdx_writer::{self as writer, Compression, Defect, Entry, Kind, Spec, TextEncoding, Version};
 
 /// The repository's `conformance/fixtures`.
 pub fn fixtures() -> PathBuf {
@@ -61,6 +61,16 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
     for sidecar in array(field(&description, "sidecars")?)? {
         let name = string(field(sidecar, "name")?)?;
         std::fs::write(out.join(name), string(field(sidecar, "text")?)?).map_err(bad)?;
+    }
+    // The MDX again with a deliberate fault each, for the errors a binding must carry.
+    for file in description.get("defective").map(array).transpose()?.into_iter().flatten() {
+        let defect = match string(field(file, "defect")?)? {
+            "unknownFormatVersion" => Defect::UnknownFormatVersion,
+            "headerChecksum" => Defect::HeaderChecksum,
+            other => return Err(bad(format!("no defect {other}"))),
+        };
+        let faulty = Spec { defect: Some(defect), ..spec.clone() };
+        write_file(&faulty, field(mdx, "entries")?, &out.join(string(field(file, "name")?)?))?;
     }
     Ok(())
 }

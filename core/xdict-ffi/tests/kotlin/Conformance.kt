@@ -145,6 +145,19 @@ class Bytes(val bytes: ByteArray, val ident: FileIdentity?, val short: Boolean =
 }
 
 @Suppress("UNCHECKED_CAST")
+/** A progress that cancels at once. */
+class Stop : Progress {
+    override fun progress(done: ULong, total: ULong): Boolean = false
+}
+
+/** A sidecar whose identity the suite changes after it is opened, as a moved or rewritten file's would. */
+class Moving(val bytes: ByteArray, @Volatile var ident: FileIdentity) : ByteSource {
+    override fun size(): ULong = bytes.size.toULong()
+    override fun readAt(offset: ULong, len: UInt): ByteArray =
+        bytes.copyOfRange(offset.toInt(), minOf(offset.toInt() + len.toInt(), bytes.size))
+    override fun identity(): FileIdentity? = ident
+}
+
 fun main(args: Array<String>) {
     if (args.size != 4) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>"); exitProcess(2) }
     val dir = File(args[0])
@@ -213,6 +226,21 @@ fun main(args: Array<String>) {
     check("byteSource.resourceFromSource", b["resourceFromSource"], outcome { j(core.resource(secondDict, "tiny.css", view())) })
     val short = Package(Location.Source("short.mdx", Bytes(mdx, null, true)), listOf(), listOf())
     check("byteSource.shortRead", b["shortRead"], outcome { j(core.`import`(short, null)) })
+
+    val errs = obj(x["errors"])
+    for (name in listOf("unsupported", "malformed")) {
+        val c = obj(errs[name])
+        val faulty = Package(at(c["file"] as String), listOf(), listOf())
+        check("errors.$name", mapOf("error" to c["error"]), outcome { j(core.`import`(faulty, null)) })
+    }
+    val alone = Package(at("tiny.mdx"), listOf(), listOf())
+    check("errors.cancelled", mapOf("error" to obj(errs["cancelled"])["error"]), outcome { j(core.`import`(alone, Stop())) })
+    val moving = Moving((sidecarSpec["text"] as String).toByteArray(), ident)
+    val watchedPkg = Package(Location.Source(b["name"] as String, Bytes(mdx, ident)), listOf(), listOf(Location.Source("tiny.css", moving)))
+    core.`import`(watchedPkg, null)
+    val watched = (core.open(watchedPkg) as Opened.Ready).dict
+    moving.ident = ident.copy(inode = ident.inode + 1u)
+    check("errors.sourceChanged", mapOf("error" to obj(errs["sourceChanged"])["error"]), outcome { j(core.resource(watched, "tiny.css", view())) })
 
     val l = obj(x["lifecycle"])
     val page = LookupOptions(10u, 0u, MatchMode.READER, null)

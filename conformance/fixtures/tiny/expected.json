@@ -463,6 +463,23 @@
       }
     }
   },
+  "errors": {
+    "comment": "The errors no other step provokes, so every CoreError variant crosses every binding (ADR-0007 refutation 10).",
+    "unsupported": {
+      "file": "tiny-v4.mdx",
+      "error": { "type": "unsupported", "feature": { "type": "formatVersion", "version": "4.0" } }
+    },
+    "malformed": {
+      "file": "tiny-badheader.mdx",
+      "error": { "type": "malformed" }
+    },
+    "cancelled": {
+      "error": { "type": "cancelled" }
+    },
+    "sourceChanged": {
+      "error": { "type": "sourceChanged" }
+    }
+  },
   "lifecycle": {
     "afterClose": {
       "error": {
