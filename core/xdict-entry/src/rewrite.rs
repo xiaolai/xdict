@@ -256,6 +256,11 @@ fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
 fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: &str, out: &mut Out) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
+    if lower == "srcset" && matches!(local.as_str(), "img" | "source") {
+        let decoded = unescape(value);
+        let rewritten = srcset(&decoded, base, out);
+        return if rewritten == decoded { value.to_owned() } else { escaped(&rewritten, quote.unwrap_or('"')) };
+    }
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
     if href || URL_ATTRIBUTES.contains(&lower.as_str()) {
         let url = unescape(value);
@@ -283,6 +288,37 @@ fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: 
 fn escaped(text: &str, quote: char) -> String {
     let as_reference = if quote == '"' { "&quot;" } else { "&#39;" };
     text.replace('&', "&amp;").replace(quote, as_reference)
+}
+
+/// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of non-space, trailing commas end
+/// it; a descriptor runs to the next comma), each URL rewritten, written back `url descriptor, …`.
+fn srcset(value: &str, base: &str, out: &mut Out) -> String {
+    let mut candidates = Vec::new();
+    let mut rest = value;
+    loop {
+        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ',');
+        if rest.is_empty() {
+            break;
+        }
+        let url_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let (url, after) = rest.split_at(url_end);
+        let (url, descriptor, after) = match url.strip_suffix(',') {
+            Some(url) => (url.trim_end_matches(','), "", after),
+            None => {
+                let end = after.find(',').unwrap_or(after.len());
+                let (descriptor, after) = after.split_at(end);
+                (url, descriptor.trim(), after)
+            }
+        };
+        rest = after;
+        let (to, link) = literal(url, base, "");
+        if let Some(link) = link {
+            out.link(url, link);
+        }
+        let url = to.unwrap_or_else(|| url.to_owned());
+        candidates.push(if descriptor.is_empty() { url } else { format!("{url} {descriptor}") });
+    }
+    candidates.join(", ")
 }
 
 /// The character references a URL in an attribute is likely to hold.
@@ -502,6 +538,19 @@ mod tests {
         assert!(r.text.contains(r#"style="background:url(&quot;xdict://d/r/a.png&quot;)""#), "{}", r.text);
         assert!(r.text.contains(r#"style='background:url("xdict://d/r/b.png")'"#), "{}", r.text);
         assert_eq!(r.links.len(), 2, "{:?}", r.links);
+    }
+
+    /// Every candidate of a `srcset` is a URL, its descriptor kept.
+    #[test]
+    fn srcset_candidates_are_rewritten() {
+        let r = html(r#"<img srcset="a.png 1x, img/b.png 2x,c.png"><source srcset="d.png 480w">"#, BASE);
+        assert!(
+            r.text.contains(r#"srcset="xdict://d/r/a.png 1x, xdict://d/r/img/b.png 2x, xdict://d/r/c.png""#),
+            "{}",
+            r.text
+        );
+        assert!(r.text.contains(r#"srcset="xdict://d/r/d.png 480w""#), "{}", r.text);
+        assert_eq!(r.links.len(), 4, "{:?}", r.links);
     }
 
     /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
