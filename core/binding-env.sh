@@ -1,0 +1,45 @@
+# shellcheck shell=sh
+# What the binding scripts share (xdict-ffi/{test-swift,test-kotlin,measure-memory}.sh,
+# xdict-wasm/{test-worker,measure-memory}.sh): sourced, never run. POSIX sh; the caller sets `set -eu` and `$core`,
+# and works from `$core` once it has made its paths absolute.
+: "${core:?binding-env.sh is sourced after the caller sets core}"
+
+# $1 as an absolute path, read against the directory the script was started in: call it before any `cd`.
+absolute() {
+    case $1 in
+    /*) printf '%s\n' "$1" ;;
+    *) printf '%s/%s\n' "$PWD" "$1" ;;
+    esac
+}
+
+# The workspace's target directory as Cargo resolves it (CARGO_TARGET_DIR, a config's build.target-dir, or
+# core/target), so that a build and the step reading its output agree.
+target_dir() {
+    dir=$(cd "$core" && cargo metadata --format-version 1 --no-deps |
+        sed -n 's/.*"target_directory":"\([^"]*\)".*/\1/p')
+    [ -n "$dir" ] || { echo "cargo metadata named no target directory" >&2; return 1; }
+    printf '%s\n' "$dir"
+}
+
+# The core built as a native library (release), and its UniFFI binding for $1 (swift, kotlin) generated into $2.
+# Sets $release, the directory that holds the library.
+native_binding() {
+    case $(uname) in Darwin) native_lib=libxdict_ffi.dylib ;; *) native_lib=libxdict_ffi.so ;; esac
+    release=$(target_dir)/release
+    cargo build -q --release -p xdict-ffi
+    cargo run -q --release -p xdict-ffi --features bindgen --bin uniffi-bindgen -- \
+        generate --no-format --library "$release/$native_lib" --language "$1" --out-dir "$2" >/dev/null
+}
+
+# A Swift program: the Swift binding in $1 (from native_binding) and the main file $2, compiled into $3, whose
+# file name is also the module's name.
+swift_program() {
+    swiftc -O -module-name "$(basename "$3")" -I "$1" -Xcc -fmodule-map-file="$1/xdictFFI.modulemap" \
+        "$1/xdict.swift" "$2" -L "$release" -lxdict_ffi -o "$3"
+}
+
+# The core built for wasm32 (release), and its wasm-bindgen package (--target web) written into $1.
+web_binding() {
+    cargo build -q --release -p xdict-wasm --target wasm32-unknown-unknown
+    wasm-bindgen --target web --out-dir "$1" "$(target_dir)/wasm32-unknown-unknown/release/xdict_wasm.wasm"
+}

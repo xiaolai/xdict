@@ -64,10 +64,11 @@ each of [`entries`] (edition the imported one) in the view `xdict://d/`, 1 MiB.
 | TypeScript in a Worker (`wasm-bindgen`) | `core/xdict-wasm/test-worker.sh` (needs `wasm-bindgen` 0.2.129, `tsc`, Node 24) | everywhere |
 
 CI runs all four, with the core's gate, on every push (`.github/workflows/conformance.yml`): Swift on macOS,
-the others on Linux.
+the others on Linux. The three binding scripts share `core/binding-env.sh`, and find their build output where Cargo
+put it (`CARGO_TARGET_DIR` or a configured `build.target-dir` included).
 
 Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json` and
-`XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json`, so a deliberately wrong
-expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
+`XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json` (a relative path is read from where
+the script is started), so a deliberately wrong expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
 naming `lookups[0].total`. 2026-10-14: the matrix's `formatVersion` and both entries' `lossyBytes` altered failed
 all four, 96 failures each (32 variants × 3).
