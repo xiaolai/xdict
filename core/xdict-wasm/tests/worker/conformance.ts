@@ -286,6 +286,15 @@ const withSidecar = (n: bigint, breaks: 'size' | 'identity') => {
   const pkg: Package = { ...only(src(at(n))), sidecars: [{ type: 'source', name: 'tiny.css', source: sidecar }] };
   return { pkg, state };
 };
+attempt('web.throwingSidecarSize', () => {
+  const { pkg, state } = withSidecar(11n, 'size');
+  c3.import(pkg);
+  const o = c3.open(pkg);
+  if (o.type !== 'ready') throw new Error(`not open: ${JSON.stringify(o)}`);
+  state.broken = true;
+  check('web.throwingSidecarSize', { error: { type: 'io' } }, outcome(() => c3.resource(o.dict, 'tiny.css', view())));
+  c3.close(o.dict);
+});
 attempt('web.throwingIdentityOnOpen', () => {
   const { pkg, state } = withSidecar(12n, 'identity');
   c3.import(pkg);
