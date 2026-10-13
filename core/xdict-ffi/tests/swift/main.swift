@@ -270,9 +270,13 @@ let opened = try core.open(package: package)
 check("open", x["open"], j(opened))
 guard case let .ready(dict, _, _) = opened else { fatalError("not open") }
 
+// The generation each lookup returned, for the cases that continue it (`{ "of": n }`).
+var generations: [UInt32?] = []
 for (i, c) in (x["lookups"] as! [[String: Any]]).enumerated() {
-    let options = LookupOptions(limit: int(c["limit"])!, offset: int(c["offset"])!, mode: c["mode"] as? String == "link" ? .link : .reader, generation: int(c["generation"]))
+    let generation = (c["generation"] as? [String: Any]).map { generations[Int(int($0["of"])!)]! }
+    let options = LookupOptions(limit: int(c["limit"])!, offset: int(c["offset"])!, mode: c["mode"] as? String == "link" ? .link : .reader, generation: generation)
     let got = outcome { j(try core.lookup(query: c["query"] as! String, dicts: [dict], options: options)) }
+    generations.append((got as? [String: Any])?["generation"] as? UInt32)
     check("lookups[\(i)]", c["error"].map { ["error": $0] } ?? c["page"], got)
 }
 for (i, c) in (x["suggestions"] as! [[String: Any]]).enumerated() {

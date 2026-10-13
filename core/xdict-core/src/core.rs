@@ -57,7 +57,6 @@ pub struct Core {
 struct State {
     random: SplitMix,
     next_handle: u32,
-    generation: u32,
     open: HashMap<u32, Arc<Dict>>,
 }
 
@@ -96,7 +95,7 @@ impl Core {
             }
             let mut random = SplitMix::seeded(&config.entropy)?;
             let nonce = (random.next() >> 32) as u32;
-            let state = State { random, next_handle: 1, generation: 1, open: HashMap::new() };
+            let state = State { random, next_handle: 1, open: HashMap::new() };
             let indexes: Box<dyn IndexStore> = match (storage, &config.cache_dir) {
                 (Some(storage), _) => Box::new(Shell(storage)),
                 #[cfg(not(target_family = "wasm"))]
@@ -338,9 +337,9 @@ impl Core {
                 detail: format!("a page holds at most {MAX_PAGE} hits, {} were asked", options.limit),
             });
         }
-        let generation = self.lock()?.generation;
+        let generation = self.generation(query, dicts, options.mode);
         if options.generation.is_some_and(|g| g != generation) {
-            return Err(CoreError::stale("the page belongs to another generation"));
+            return Err(CoreError::stale("the page continues another lookup: other dictionaries, query or mode"));
         }
         let mode = match options.mode {
             MatchMode::Reader => Mode::Reader,
@@ -535,6 +534,25 @@ impl Core {
                 panic!("the deliberate panic of self_test_panic")
             }
         })
+    }
+
+    /// The generation of a lookup: a digest of this core, the dictionaries in their order, the query and the mode,
+    /// so a page continues only the lookup it came from (ADR-0007 decision 9). Offsets and limits may change
+    /// between pages and are not in it. 32 bits make it a guard against a continuation passed to the wrong
+    /// lookup, not a proof: two lookups' generations agree by chance one time in 2^32.
+    fn generation(&self, query: &str, dicts: &[String], mode: MatchMode) -> u32 {
+        let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+        let mut field = |bytes: &[u8]| {
+            hasher.update(&(bytes.len() as u64).to_le_bytes());
+            hasher.update(bytes);
+        };
+        field(&self.nonce.to_le_bytes());
+        field(query.as_bytes());
+        field(&[matches!(mode, MatchMode::Link) as u8]);
+        for dict in dicts {
+            field(dict.as_bytes());
+        }
+        hasher.digest() as u32
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, State>, CoreError> {
@@ -1233,13 +1251,16 @@ mod tests {
         let n: u32 = std::env::var("XDICT_PAGING_RECORDS").map_or(12_000, |v| v.parse().unwrap());
         let entries: Vec<W> = (0..n).map(|i| W::text("EC", &format!("{i}"))).collect();
         let pages = |core: &Core, dict: &str| -> Vec<u32> {
-            let generation = Some(core.lock().unwrap().generation);
+            let mut generation = None;
             let mut all = Vec::new();
             loop {
                 let options =
                     LookupOptions { limit: 1000, offset: all.len() as u32, mode: MatchMode::Reader, generation };
                 let page = core.lookup("EC".into(), vec![dict.to_owned()], options).unwrap();
                 assert_eq!(page.total, u64::from(n));
+                // Each page continues with the generation the first one gave.
+                assert!(generation.is_none_or(|g| g == page.generation));
+                generation = Some(page.generation);
                 if page.hits.is_empty() {
                     return all;
                 }
@@ -1251,6 +1272,34 @@ mod tests {
         assert_eq!(first, (0..n).collect::<Vec<u32>>());
         let (again, dict, _) = counted(&entries);
         assert_eq!(pages(&again, &dict), first, "a rebuilt index pages alike");
+    }
+
+    /// A page's generation continues only the lookup it came from: the same dictionaries in the same order, the
+    /// same query and mode. Opening another dictionary does not disturb it; changing any of those does.
+    #[test]
+    fn a_continuation_belongs_to_its_own_lookup() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let open = |name: &str, entries: &[W]| {
+            let bytes = write(&Spec::mdx(), entries).unwrap();
+            let mdx = Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+            let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+            core.import(package.clone(), &NoProgress).unwrap();
+            let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+            dict
+        };
+        let a = open("a.mdx", &[W::text("run", "a")]);
+        let b = open("b.mdx", &[W::text("run", "b"), W::text("run", "bb")]);
+        let options = |offset, mode, generation| LookupOptions { limit: 1, offset, mode, generation };
+        let first = core.lookup("run".into(), vec![a.clone(), b.clone()], options(0, MatchMode::Reader, None)).unwrap();
+        let g = Some(first.generation);
+        let _c = open("c.mdx", &[W::text("run", "c")]);
+        assert!(core.lookup("run".into(), vec![a.clone(), b.clone()], options(1, MatchMode::Reader, g)).is_ok());
+        let stale = |r: Result<Page, CoreError>| matches!(r, Err(CoreError::StaleHandle { .. }));
+        assert!(stale(core.lookup("run".into(), vec![b.clone(), a.clone()], options(1, MatchMode::Reader, g))));
+        assert!(stale(core.lookup("run".into(), vec![a.clone()], options(1, MatchMode::Reader, g))));
+        assert!(stale(core.lookup("ran".into(), vec![a.clone(), b.clone()], options(1, MatchMode::Reader, g))));
+        assert!(stale(core.lookup("run".into(), vec![a, b], options(1, MatchMode::Link, g))));
     }
 
     /// More candidates than the budget allows are refused before any record is read.

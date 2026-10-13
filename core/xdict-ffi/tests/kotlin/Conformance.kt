@@ -186,11 +186,16 @@ fun main(args: Array<String>) {
     check("open", x["open"], j(opened))
     val dict = (opened as Opened.Ready).dict
 
+    // The generation each lookup returned, for the cases that continue it (`{ "of": n }`).
+    val generations = mutableListOf<UInt?>()
     list(x["lookups"]).forEachIndexed { n, c ->
+        val generation = (c["generation"] as Map<*, *>?)?.let { generations[uint(it["of"])!!.toInt()]!! }
         val options = LookupOptions(
             uint(c["limit"])!!, uint(c["offset"])!!,
-            if (c["mode"] == "link") MatchMode.LINK else MatchMode.READER, uint(c["generation"]))
-        check("lookups[$n]", errorOr(c, "page"), outcome { j(core.lookup(c["query"] as String, listOf(dict), options)) })
+            if (c["mode"] == "link") MatchMode.LINK else MatchMode.READER, generation)
+        val got = outcome { j(core.lookup(c["query"] as String, listOf(dict), options)) }
+        generations.add((got as? Map<*, *>)?.get("generation") as UInt?)
+        check("lookups[$n]", errorOr(c, "page"), got)
     }
     list(x["suggestions"]).forEachIndexed { n, c ->
         check("suggestions[$n]", c["keys"], outcome { core.suggest(c["prefix"] as String, listOf(dict), uint(c["limit"])!!) })
