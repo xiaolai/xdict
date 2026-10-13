@@ -59,6 +59,8 @@ pub enum Defect {
     CorruptRecordBlock,
     /// Writes a wrong header checksum.
     HeaderChecksum,
+    /// Writes a wrong keyword-section checksum (version 2.0 only: 1.2 and 3.0 have none).
+    KeywordChecksum,
     /// Declares one key fewer than the first key block holds, and one fewer in the file, so every count
     /// adds up and only the block itself shows the lie.
     OverfullKeyBlock,
@@ -161,6 +163,9 @@ pub fn write(spec: &Spec, entries: &[Entry]) -> Result<Vec<u8>, WriteError> {
         Some(defect @ Defect::RegistrationCodeBit) if spec.version == Version::V3_0 => {
             return Err(WriteError::DefectNotApplicable { defect, why: "a 3.0 header has no Encrypted attribute" });
         }
+        Some(defect @ Defect::KeywordChecksum) if spec.version != Version::V2_0 => {
+            return Err(WriteError::DefectNotApplicable { defect, why: "only a 2.0 keyword section has a checksum" });
+        }
         _ => {}
     }
     if spec.version == Version::V3_0 && spec.kind == Kind::Mdx(TextEncoding::Utf16) {
@@ -229,7 +234,8 @@ fn classic(spec: &Spec, sorted: &[&Entry]) -> Result<Vec<u8>, WriteError> {
     let mut out = header(spec)?;
     out.extend(&preamble);
     if w.v2 {
-        out.extend(adler32(&preamble).to_be_bytes());
+        let checksum = adler32(&preamble);
+        out.extend(if spec.defect == Some(Defect::KeywordChecksum) { checksum ^ 1 } else { checksum }.to_be_bytes());
     }
     out.extend(&key_index_stored);
     out.extend(key_blocks.concat());
@@ -481,6 +487,11 @@ mod tests {
         assert!(matches!(refused(&corrupt, &[]), WriteError::DefectNotApplicable { .. }));
         let v3_code = Spec { version: Version::V3_0, defect: Some(Defect::RegistrationCodeBit), ..Spec::mdx() };
         assert!(matches!(refused(&v3_code, &[Entry::text("a", "r")]), WriteError::DefectNotApplicable { .. }));
+        for version in [Version::V1_2, Version::V3_0] {
+            let spec =
+                Spec { version, obfuscate_key_index: false, defect: Some(Defect::KeywordChecksum), ..Spec::mdx() };
+            assert!(matches!(refused(&spec, &[Entry::text("a", "r")]), WriteError::DefectNotApplicable { .. }));
+        }
     }
 
     #[test]
