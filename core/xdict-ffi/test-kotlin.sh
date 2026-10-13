@@ -14,11 +14,13 @@ jna=${JNA_JAR:-$HOME/.m2/repository/net/java/dev/jna/jna/5.12.1/jna-5.12.1.jar}
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
+case $(uname) in Darwin) lib=libxdict_ffi.dylib ;; *) lib=libxdict_ffi.so ;; esac
+
 cd "$core"
 cargo run -q -p xdict-conformance --bin conformance-fixtures -- "$work/fixtures"
 cargo build -q --release -p xdict-ffi
 cargo run -q --release -p xdict-ffi --features bindgen --bin uniffi-bindgen -- \
-    generate --no-format --library target/release/libxdict_ffi.dylib --language kotlin --out-dir "$work/kotlin" >/dev/null
+    generate --no-format --library "target/release/$lib" --language kotlin --out-dir "$work/kotlin" >/dev/null
 kotlinc -nowarn -include-runtime -cp "$jna" -d "$work/conformance.jar" \
     "$work/kotlin/uniffi/xdict/xdict.kt" "$here/tests/kotlin/Conformance.kt" 2>&1 | grep -v '^warning:' || true
 [ -f "$work/conformance.jar" ] || { echo "kotlinc produced nothing" >&2; exit 1; }
