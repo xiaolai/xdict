@@ -278,13 +278,10 @@ impl FileRegistry {
     fn write(&self, dir: &std::path::Path, contents: &Contents) -> Result<(), RegistryError> {
         use std::io::Write;
         let fail = |e: io::Error| RegistryError(format!("{} cannot be written: {e}", self.path.display()));
-        // Unique within the process as well, so two registries of one process never share a temporary file.
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let temporary = self.path.with_extension(format!("json.{}.{n}.tmp", std::process::id()));
         let bytes = serde_json::to_vec_pretty(contents).map_err(|e| RegistryError(e.to_string()))?;
+        let (temporary, mut file) = create_temporary(&self.path).map_err(fail)?;
+        // Only a file this write created is removed on failure.
         let written = (|| {
-            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
             file.write_all(&bytes)?;
             file.sync_all()?;
             std::fs::rename(&temporary, &self.path)?;
@@ -332,6 +329,32 @@ fn confirm(file: std::fs::File, dir: &std::path::Path) -> io::Result<()> {
         let _ = (file, dir);
         Ok(())
     }
+}
+
+/// The number of the next temporary file: unique within the process as well, so two registries of one process
+/// never share one.
+static NEXT_TEMPORARY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Temporary file `n` of this process beside the document at `path`.
+fn temporary_path(path: &std::path::Path, n: u64) -> PathBuf {
+    path.with_extension(format!("json.{}.{n}.tmp", std::process::id()))
+}
+
+/// How many taken temporary names a write passes over before it gives up.
+const TEMPORARY_ATTEMPTS: u32 = 64;
+
+/// Creates a new temporary file beside the document at `path`, passing over a name that is taken (left by a
+/// crashed process of the same number, say) rather than removing what it did not create.
+fn create_temporary(path: &std::path::Path) -> io::Result<(PathBuf, std::fs::File)> {
+    for _ in 0..TEMPORARY_ATTEMPTS {
+        let temporary = temporary_path(path, NEXT_TEMPORARY.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
+        match std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary) {
+            Ok(file) => return Ok((temporary, file)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    }
+    Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{TEMPORARY_ATTEMPTS} temporary names were all taken")))
 }
 
 /// Reads the document, and the stamp of the very file read; an absent document is an empty registry.
@@ -593,6 +616,26 @@ mod tests {
         std::fs::rename(&temporary, &path).unwrap();
         assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), before);
         assert_eq!(reader.lineage("e1").unwrap().as_deref(), Some("lost"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A temporary file this write did not create is neither deleted nor a reason to fail: the write takes the
+    /// next name.
+    #[test]
+    fn a_temporary_name_already_taken_is_skipped_not_deleted() {
+        let dir = scratch("taken");
+        let registry = FileRegistry::open(&dir).unwrap();
+        registry.register(record("/a/x.mdx", "e1"), &mut || "first".into()).unwrap();
+        let n = NEXT_TEMPORARY.load(std::sync::atomic::Ordering::Relaxed);
+        let taken: Vec<PathBuf> = (n..n + 4).map(|n| temporary_path(&dir.join("registry.json"), n)).collect();
+        for path in &taken {
+            std::fs::write(path, b"not ours").unwrap();
+        }
+        registry.register(record("/a/y.mdx", "e2"), &mut || "second".into()).unwrap();
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("second"));
+        for path in &taken {
+            assert_eq!(std::fs::read(path).unwrap(), b"not ours");
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }
