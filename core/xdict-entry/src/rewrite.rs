@@ -492,7 +492,7 @@ fn write_url(out: &mut Out, written: &str, quote: char, base: &str, dir: &str) {
 fn starts_name(text: &str, at: usize) -> bool {
     let bytes = text.as_bytes();
     match bytes.get(at) {
-        Some(b'\\') => bytes.get(at + 1).is_some_and(|&b| b != b'\n'),
+        Some(b'\\') => bytes.get(at + 1).is_some_and(|&b| !css_newline(char::from(b))),
         Some(&b) => b.is_ascii_alphabetic() || b == b'_' || b == b'-' || b >= 0x80,
         None => false,
     }
@@ -507,7 +507,8 @@ fn name_at(text: &str, at: usize) -> (String, usize) {
     while let Some((i, c)) = chars.next() {
         if c == '\\' {
             match chars.next() {
-                Some((_, '\n')) | None => break,
+                Some((_, n)) if css_newline(n) => break,
+                None => break,
                 Some((j, e)) if e.is_ascii_hexdigit() => {
                     let mut end = j + 1;
                     let mut digits = 1;
@@ -516,9 +517,11 @@ fn name_at(text: &str, at: usize) -> (String, usize) {
                         digits += 1;
                         chars.next();
                     }
-                    if chars.peek().is_some_and(|(_, w)| w.is_ascii_whitespace()) {
+                    if let Some((_, w)) = chars.next_if(|(_, w)| w.is_ascii_whitespace()) {
                         end += 1;
-                        chars.next();
+                        if w == '\r' && chars.next_if(|(_, l)| *l == '\n').is_some() {
+                            end += 1;
+                        }
                     }
                     len = end;
                 }
@@ -534,15 +537,18 @@ fn name_at(text: &str, at: usize) -> (String, usize) {
     (css_unescape(rest.get(..len).unwrap_or("")), len)
 }
 
-/// Where `close` ends `body`, a backslash escaping the character after it; the end of `body` if nothing does. A
-/// quoted string also ends at an unescaped newline, as CSS tokenises a string left open.
+/// Where `close` ends `body`, a backslash escaping the character after it (both of an escaped CRLF); the end of
+/// `body` if nothing does. A quoted string also ends at an unescaped newline, as CSS tokenises a string left open.
 fn string_end(body: &str, close: char) -> usize {
-    let mut escaped = false;
-    for (i, c) in body.char_indices() {
+    let mut chars = body.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
         match c {
-            _ if escaped => escaped = false,
-            '\\' => escaped = true,
-            '\n' if close != ')' => return i,
+            '\\' => {
+                if chars.next().is_some_and(|(_, e)| e == '\r') {
+                    chars.next_if(|(_, l)| *l == '\n');
+                }
+            }
+            _ if css_newline(c) && close != ')' => return i,
             _ if c == close => return i,
             _ => {}
         }
@@ -550,8 +556,13 @@ fn string_end(body: &str, close: char) -> usize {
     body.len()
 }
 
-/// CSS's escapes decoded: `\` and one to six hex digits (and one space after them) is that code point, `\`
-/// before a newline is nothing, `\` before anything else is that character.
+/// A newline as CSS reads one: LF, and the CR, CRLF and FF its preprocessing turns into LF (css-syntax §3.3).
+fn css_newline(c: char) -> bool {
+    matches!(c, '\n' | '\r' | '\x0c')
+}
+
+/// CSS's escapes decoded: `\` and one to six hex digits (and one space after them, a CRLF being one) is that
+/// code point, `\` before a newline (LF, CR, CRLF or FF) is nothing, `\` before anything else is that character.
 fn css_unescape(written: &str) -> String {
     if !written.contains('\\') {
         return written.to_owned();
@@ -569,13 +580,17 @@ fn css_unescape(written: &str) -> String {
         }
         if hex.is_empty() {
             match chars.next() {
-                Some('\n') | None => {}
+                Some('\r') => {
+                    chars.next_if_eq(&'\n');
+                }
+                Some(n) if css_newline(n) => {}
+                None => {}
                 Some(other) => out.push(other),
             }
             continue;
         }
-        if chars.peek().is_some_and(|c| c.is_ascii_whitespace()) {
-            chars.next();
+        if chars.next_if(char::is_ascii_whitespace) == Some('\r') {
+            chars.next_if_eq(&'\n');
         }
         let code = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).unwrap_or('\u{fffd}');
         out.push(if code == '\0' { '\u{fffd}' } else { code });
@@ -764,6 +779,12 @@ mod tests {
             format!(r#"b{{background-image:-webkit-image-set('{remote}' 1x)}}"#),
             format!(r#"@import "{remote}";"#),
             format!(r#"@im\70 ort '{remote}';"#),
+            // CSS reads CR, FF and CRLF as newlines (css-syntax §3.3): each ends a string left open, an escaped
+            // one continues it, and a CRLF after a hex escape is the one space the escape takes.
+            format!("a{{b:\"x\r}} c{{background:url({remote})}}"),
+            format!("a{{b:'x\x0c}} c{{background:url({remote})}}"),
+            format!("a{{b:\"x\\\r\n\"}} c{{background:url({remote})}}"),
+            format!("b{{background:u\\72\r\nl({remote})}}"),
         ] {
             let r = css(&sheet, BASE, "");
             assert!(!r.text.contains(remote), "{sheet} → {}", r.text);
@@ -798,6 +819,12 @@ mod tests {
             "{}",
             r.text
         );
+        // An escaped newline is nothing, whichever of LF, CR, CRLF or FF it is.
+        for newline in ["\n", "\r", "\r\n", "\x0c"] {
+            let r = css(&format!("a {{ background: url(\"a\\{newline}b.png\") }}"), BASE, "");
+            let paths: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+            assert_eq!(paths, [Link::Resource { path: Path::resolve("", "ab.png").travel() }], "{newline:?}");
+        }
     }
 
     /// A preload's `imagesrcset` is a `srcset`.
