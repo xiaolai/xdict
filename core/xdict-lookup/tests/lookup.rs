@@ -163,3 +163,25 @@ fn a_redirect_lands_on_its_exact_spelling() {
     let r = resolve(&f, "x", Mode::Link, &mut Budget::lookup()).unwrap();
     assert_eq!(r.hits.len(), 1, "with no exact spelling, folded keys are landed on: {r:?}");
 }
+
+/// A hit reached again by a shorter way takes that way's chain and that way's problems together: a chain from
+/// one matched key never carries the problems of another's. The longer way's problem, left with no hit, is the
+/// page's.
+#[test]
+fn a_shorter_way_brings_its_own_problems() {
+    let f = file(&[
+        ("run", "@@@LINK=mid\r\n@@@LINK=nowhere"),
+        ("RUN", "@@@LINK=end"),
+        ("mid", "@@@LINK=end"),
+        ("end", "the end"),
+    ]);
+    let r = hits(&f, "run");
+    assert_eq!(r.hits.len(), 1, "{r:?}");
+    let How::Redirect { chain } = &r.hits[0].how else { panic!("{r:?}") };
+    assert_eq!(names(&f, chain), ["RUN", "end"]);
+    assert!(r.hits[0].problems.is_empty(), "the shorter way met no problem: {r:?}");
+    assert!(
+        matches!(&r.problems[..], [Problem::Dangling { target, .. }] if target == "nowhere"),
+        "the longer way's problem is kept, on the page: {r:?}"
+    );
+}

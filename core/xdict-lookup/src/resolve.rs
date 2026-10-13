@@ -102,6 +102,10 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let entries: HashSet<usize> = keys.iter().copied().filter(|i| targets.get(i).is_none_or(Vec::is_empty)).collect();
     let mut resolved = Resolved::default();
     let mut placed: HashMap<usize, usize> = HashMap::new();
+    // The matched key each redirect hit came by (its chain's first), and each such key's problems: a hit carries
+    // its own way's, decided once every way is known, since a later, shorter way replaces an earlier one.
+    let mut owner: HashMap<usize, usize> = HashMap::new();
+    let mut ways: Vec<(usize, Vec<Problem>)> = Vec::new();
     let mut steps = 0usize;
     for (i, how) in matched {
         let Some(named) = targets.get(&i).filter(|t| !t.is_empty()) else {
@@ -112,34 +116,39 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
             continue;
         };
         let Followed { reached, problems } = follow(file, i, named, budget, &mut steps)?;
-        let mut gave = Vec::new();
         for (j, chain) in reached {
             if entries.contains(&j) {
                 continue;
             }
-            match placed.get(&j).and_then(|&at| resolved.hits.get_mut(at)) {
-                Some(hit) => {
-                    if let How::Redirect { chain: kept } = &hit.how
+            match placed.get(&j).copied() {
+                Some(at) => {
+                    if let Some(hit) = resolved.hits.get_mut(at)
+                        && let How::Redirect { chain: kept } = &hit.how
                         && chain.len() < kept.len()
                     {
                         hit.how = How::Redirect { chain };
+                        owner.insert(at, i);
                     }
                 }
                 None => {
                     placed.insert(j, resolved.hits.len());
-                    gave.push(resolved.hits.len());
+                    owner.insert(resolved.hits.len(), i);
                     resolved.hits.push(Hit { key: j, how: How::Redirect { chain }, problems: vec![] });
                 }
             }
         }
-        if gave.is_empty() {
-            resolved.problems.extend(problems);
-        } else {
-            for at in gave {
-                if let Some(hit) = resolved.hits.get_mut(at) {
-                    hit.problems.clone_from(&problems);
-                }
-            }
+        ways.push((i, problems));
+    }
+    let owners: HashSet<usize> = owner.values().copied().collect();
+    let problems_of: HashMap<usize, &Vec<Problem>> = ways.iter().map(|(i, p)| (*i, p)).collect();
+    for (at, hit) in resolved.hits.iter_mut().enumerate() {
+        if let Some(problems) = owner.get(&at).and_then(|from| problems_of.get(from)) {
+            hit.problems.clone_from(problems);
+        }
+    }
+    for (i, problems) in &ways {
+        if !owners.contains(i) {
+            resolved.problems.extend(problems.iter().cloned());
         }
     }
     Ok(resolved)
