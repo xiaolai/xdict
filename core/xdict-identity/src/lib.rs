@@ -200,46 +200,75 @@ fn poisoned<T>(_: T) -> RegistryError {
 
 const VERSION: u32 = 1;
 
+/// What tells whether the document on disk is the one read last: a write renames a new file into place, so the
+/// file's identity changes with every write, this registry's or another's.
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Stamp {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    file: u64,
+}
+
+impl Stamp {
+    fn of(meta: &std::fs::Metadata) -> Self {
+        #[cfg(unix)]
+        let file = std::os::unix::fs::MetadataExt::ino(meta);
+        #[cfg(not(unix))]
+        let file = 0;
+        Self { len: meta.len(), modified: meta.modified().ok(), file }
+    }
+}
+
+/// The document as last read, and the stamp of the file it was read from (`None`: there was none).
+struct Cached {
+    contents: Contents,
+    stamp: Option<Stamp>,
+}
+
 /// A registry in one JSON document, `registry.json` in a directory of the reader's data: written whole to a
 /// temporary file and renamed, so a crash leaves the old document or the new one. A document that cannot be
 /// read is an error, never an empty registry: it holds the reader's lineages.
+///
+/// Several registries may share the directory (two cores, two processes): a write holds an exclusive lock on
+/// `registry.lock` and reads the document again under it, so no write is built on a stale copy; a read reloads
+/// the document whenever the file on disk is not the one it read last.
 pub struct FileRegistry {
     path: PathBuf,
-    contents: Mutex<Contents>,
+    cached: Mutex<Cached>,
 }
 
 impl FileRegistry {
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, RegistryError> {
-        let dir = dir.into();
-        let path = dir.join("registry.json");
-        let contents = match std::fs::read(&path) {
-            Ok(bytes) => {
-                let contents: Contents = serde_json::from_slice(&bytes)
-                    .map_err(|e| RegistryError(format!("{} cannot be read: {e}", path.display())))?;
-                if contents.version != VERSION {
-                    return Err(RegistryError(format!(
-                        "{} is version {}, not {VERSION}",
-                        path.display(),
-                        contents.version
-                    )));
-                }
-                contents
-            }
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Contents { version: VERSION, ..Contents::default() },
-            Err(e) => return Err(RegistryError(format!("{} cannot be read: {e}", path.display()))),
-        };
-        Ok(Self { path, contents: Mutex::new(contents) })
+        let path = dir.into().join("registry.json");
+        let cached = load(&path)?;
+        Ok(Self { path, cached: Mutex::new(cached) })
     }
 
+    /// The document, read again if the file changed since it was last read.
+    fn current(&self) -> Result<std::sync::MutexGuard<'_, Cached>, RegistryError> {
+        let mut cached = self.cached.lock().map_err(poisoned)?;
+        let now = match std::fs::metadata(&self.path) {
+            Ok(meta) => Some(Stamp::of(&meta)),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => return Err(RegistryError(format!("{} cannot be read: {e}", self.path.display()))),
+        };
+        if now != cached.stamp {
+            *cached = load(&self.path)?;
+        }
+        Ok(cached)
+    }
+
+    /// Writes the document whole, under the caller's lock.
     fn write(&self, contents: &Contents) -> Result<(), RegistryError> {
         use std::io::Write;
         let fail = |e: io::Error| RegistryError(format!("{} cannot be written: {e}", self.path.display()));
-        let dir = self.path.parent().ok_or_else(|| RegistryError("the registry has no directory".into()))?;
-        std::fs::create_dir_all(dir).map_err(fail)?;
-        let temporary = self.path.with_extension(format!("json.{}.tmp", std::process::id()));
+        // Unique within the process as well, so two registries of one process never share a temporary file.
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let temporary = self.path.with_extension(format!("json.{}.{n}.tmp", std::process::id()));
         let bytes = serde_json::to_vec_pretty(contents).map_err(|e| RegistryError(e.to_string()))?;
         let written = (|| {
-            let mut file = std::fs::File::create(&temporary)?;
+            let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
             file.write_all(&bytes)?;
             file.sync_all()?;
             std::fs::rename(&temporary, &self.path)
@@ -251,20 +280,54 @@ impl FileRegistry {
     }
 }
 
+/// Reads the document, and the stamp of the very file read; an absent document is an empty registry.
+fn load(path: &std::path::Path) -> Result<Cached, RegistryError> {
+    use std::io::Read;
+    let unreadable = |e: &dyn std::fmt::Display| RegistryError(format!("{} cannot be read: {e}", path.display()));
+    let mut file = match std::fs::File::open(path) {
+        Ok(file) => file,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => {
+            return Ok(Cached { contents: Contents { version: VERSION, ..Contents::default() }, stamp: None });
+        }
+        Err(e) => return Err(unreadable(&e)),
+    };
+    let stamp = Stamp::of(&file.metadata().map_err(|e| unreadable(&e))?);
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes).map_err(|e| unreadable(&e))?;
+    let contents: Contents = serde_json::from_slice(&bytes).map_err(|e| unreadable(&e))?;
+    if contents.version != VERSION {
+        return Err(RegistryError(format!("{} is version {}, not {VERSION}", path.display(), contents.version)));
+    }
+    Ok(Cached { contents, stamp: Some(stamp) })
+}
+
 impl Registry for FileRegistry {
     fn register(&self, record: LocationRecord, mint: &mut dyn FnMut() -> String) -> Result<String, RegistryError> {
-        let mut contents = self.contents.lock().map_err(poisoned)?;
-        let mut next = contents.clone();
-        let lineage = next.register(record, mint);
-        self.write(&next)?;
-        *contents = next;
+        let mut cached = self.cached.lock().map_err(poisoned)?;
+        let dir = self.path.parent().ok_or_else(|| RegistryError("the registry has no directory".into()))?;
+        let fail = |e: io::Error| RegistryError(format!("{} cannot be locked: {e}", dir.display()));
+        std::fs::create_dir_all(dir).map_err(fail)?;
+        // Another registry's write, in this process or another, waits here; the lock belongs to the open file
+        // and is released when `lock` is dropped at the end of the call.
+        let lock = std::fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(dir.join("registry.lock"))
+            .map_err(fail)?;
+        lock.lock().map_err(fail)?;
+        let mut next = load(&self.path)?;
+        let lineage = next.contents.register(record, mint);
+        self.write(&next.contents)?;
+        next.stamp = std::fs::metadata(&self.path).ok().map(|m| Stamp::of(&m));
+        *cached = next;
         Ok(lineage)
     }
     fn location(&self, location: &str) -> Result<Option<LocationRecord>, RegistryError> {
-        Ok(self.contents.lock().map_err(poisoned)?.locations.get(location).cloned())
+        Ok(self.current()?.contents.locations.get(location).cloned())
     }
     fn lineage(&self, edition: &str) -> Result<Option<String>, RegistryError> {
-        Ok(self.contents.lock().map_err(poisoned)?.lineages.get(edition).cloned())
+        Ok(self.current()?.contents.lineages.get(edition).cloned())
     }
 }
 
@@ -343,6 +406,51 @@ mod tests {
             .map(|t| t.join().unwrap())
             .collect();
         assert!(lineages.iter().all(|l| *l == lineages[0]), "{lineages:?}");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Two registries opened on one directory (a second core, another process) see each other's writes: neither
+    /// erases what the other registered, and an edition the other registered keeps its lineage.
+    #[test]
+    fn two_registries_on_one_directory_keep_each_others_registrations() {
+        let dir = scratch("two");
+        let (a, b) = (FileRegistry::open(&dir).unwrap(), FileRegistry::open(&dir).unwrap());
+        assert_eq!(a.register(record("/a/x.mdx", "e1"), &mut || "by-a".into()).unwrap(), "by-a");
+        assert_eq!(b.register(record("/b/y.mdx", "e2"), &mut || "by-b".into()).unwrap(), "by-b");
+        assert_eq!(b.register(record("/b/x.mdx", "e1"), &mut || "minted-again".into()).unwrap(), "by-a");
+        assert_eq!(a.location("/b/y.mdx").unwrap().map(|r| r.edition).as_deref(), Some("e2"));
+        let again = FileRegistry::open(&dir).unwrap();
+        for location in ["/a/x.mdx", "/b/y.mdx", "/b/x.mdx"] {
+            assert!(again.location(location).unwrap().is_some(), "{location} was lost");
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Several registries on one directory, each written from several threads at once: every registration is
+    /// kept, and the edition has one lineage.
+    #[test]
+    fn concurrent_writers_through_several_registries_lose_nothing() {
+        let dir = scratch("writers");
+        let registries: Vec<_> = (0..3).map(|_| std::sync::Arc::new(FileRegistry::open(&dir).unwrap())).collect();
+        let threads: Vec<_> = (0..24)
+            .map(|n| {
+                let registry = registries[n % 3].clone();
+                std::thread::spawn(move || {
+                    registry.register(record(&format!("/{n}/x.mdx"), "same"), &mut || format!("minted-by-{n}")).unwrap()
+                })
+            })
+            .collect();
+        let lineages: Vec<String> = threads.into_iter().map(|t| t.join().unwrap()).collect();
+        assert!(lineages.iter().all(|l| *l == lineages[0]), "{lineages:?}");
+        let again = FileRegistry::open(&dir).unwrap();
+        let kept = (0..24).filter(|n| again.location(&format!("/{n}/x.mdx")).unwrap().is_some()).count();
+        assert_eq!(kept, 24);
+        let leftovers: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "{leftovers:?}");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
