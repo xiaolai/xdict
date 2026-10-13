@@ -500,7 +500,12 @@ mod tests {
     /// B. A lookup for "b" returns b, b, then B: blocks 0+1, 1, then 0 again, unless it reads in file order.
     #[test]
     fn a_lookup_reads_each_block_once() {
-        let spec = Spec { version: writer::Version::V3_0, compression: writer::Compression::None, block_size: 8, ..Spec::mdx() };
+        let spec = Spec {
+            version: writer::Version::V3_0,
+            compression: writer::Compression::None,
+            block_size: 8,
+            ..Spec::mdx()
+        };
         let entries = [Entry::text("B", "xxxx"), Entry::text("b", "yyyy"), Entry::text("b", "zzzz")];
         let reads = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let source = Counting(writer::write(&spec, &entries).unwrap(), reads.clone());

@@ -168,11 +168,7 @@ pub fn write(spec: &Spec, entries: &[Entry]) -> Result<Vec<u8>, WriteError> {
     }
     let mut sorted: Vec<&Entry> = entries.iter().collect();
     sorted.sort_by(|a, b| a.key.cmp(&b.key));
-    if spec.version == Version::V3_0 {
-        v3::write(spec, &sorted)
-    } else {
-        classic(spec, &sorted)
-    }
+    if spec.version == Version::V3_0 { v3::write(spec, &sorted) } else { classic(spec, &sorted) }
 }
 
 /// One entry as stored: its key in the file's encoding, and where its record starts in the concatenated
@@ -259,7 +255,8 @@ fn rows(spec: &Spec, sorted: &[&Entry], w: Widths) -> Result<Vec<Row>, WriteErro
             Kind::Mdd => entry.record.clone(),
             Kind::Mdx(TextEncoding::Utf8) => [entry.record.as_slice(), &w.null()].concat(),
             Kind::Mdx(TextEncoding::Utf16) => {
-                let text = std::str::from_utf8(&entry.record).map_err(|_| WriteError::RecordNotUtf8(entry.key.clone()))?;
+                let text =
+                    std::str::from_utf8(&entry.record).map_err(|_| WriteError::RecordNotUtf8(entry.key.clone()))?;
                 [utf16le(text), w.null()].concat()
             }
         };
@@ -377,7 +374,10 @@ fn header(spec: &Spec) -> Result<Vec<u8>, WriteError> {
     let text = match spec.kind {
         Kind::Mdx(encoding) => format!(
             r#"<Dictionary GeneratedByEngineVersion="{version}" RequiredEngineVersion="{version}" Encrypted="{encrypted}" Encoding="{}" Format="Html" CreationDate="2026-10-13" Compact="No" Compat="No" KeyCaseSensitive="{}" {strip}Description="{}" Title="{}" DataSourceFormat="106" StyleSheet="" RegisterBy="" RegCode=""/>"#,
-            match encoding { TextEncoding::Utf8 => "UTF-8", TextEncoding::Utf16 => "UTF-16" },
+            match encoding {
+                TextEncoding::Utf8 => "UTF-8",
+                TextEncoding::Utf16 => "UTF-16",
+            },
             yes(spec.key_case_sensitive),
             escape(&spec.description),
             escape(&spec.title),

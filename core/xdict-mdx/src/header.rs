@@ -106,7 +106,8 @@ pub(crate) fn attributes(mut rest: &str) -> Result<Vec<(String, String)>, Error>
             return Err(Error::Malformed("two header attributes run together".into()));
         }
         // An XML name: a letter, `_` or `:` first, then letters, digits, `_`, `-`, `.` or `:`.
-        let name_len = rest.find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'))).unwrap_or(rest.len());
+        let name_len =
+            rest.find(|c: char| !(c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | ':'))).unwrap_or(rest.len());
         let (name, after) = rest.split_at(name_len);
         if !name.starts_with(|c: char| c.is_alphabetic() || matches!(c, '_' | ':')) {
             return Err(Error::Malformed("a header attribute's name does not start with a letter".into()));

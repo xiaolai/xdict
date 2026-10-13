@@ -110,7 +110,8 @@ fn record_section(source: &dyn Source, at: &mut u64, key_count: u64, wide: bool)
     let record_index_len = length(record_index_len, limits::BLOCK_BYTES, "record index")?;
     let record_index = read(source, at, record_index_len, "record index")?;
     let mut ri = Cursor::new(&record_index, "record index");
-    let pairs = (0..record_block_count).map(|_| Ok((ri.number(wide)?, ri.number(wide)?))).collect::<Result<Vec<_>, Error>>()?;
+    let pairs =
+        (0..record_block_count).map(|_| Ok((ri.number(wide)?, ri.number(wide)?))).collect::<Result<Vec<_>, Error>>()?;
     // A stored block opens with its 4-byte type and 4-byte checksum.
     let (blocks, file_offset) = block::layout(pairs, *at, 8)?;
     if file_offset.checked_sub(*at) != Some(record_blocks_len) {

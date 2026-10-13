@@ -5,7 +5,9 @@
 use crate::bytes::{Cursor, adler32, length};
 use crate::keys::{self, KeyBlock, Keys};
 use crate::text::Codec;
-use crate::{Error, Header, Parts, RecordBlock, Scheme, Source, Unsupported, block, cipher, header, limits, malformed, read};
+use crate::{
+    Error, Header, Parts, RecordBlock, Scheme, Source, Unsupported, block, cipher, header, limits, malformed, read,
+};
 
 /// The four section types in file order, with the element name of each one's descriptor.
 const SECTIONS: [(u32, &str); 4] = [
@@ -81,7 +83,11 @@ fn sections(source: &dyn Source, mut at: u64, key: &[u8; 16]) -> Result<[Section
         }
         let descriptor_len = length(payload_end - descriptor_at, limits::HEADER_BYTES, "section descriptor")?;
         let unit = read(source, &mut descriptor_at, descriptor_len, "section descriptor")?;
-        let expected = length(u64::from(Cursor::new(&unit, "section descriptor").u32()?), limits::HEADER_BYTES, "section descriptor")?;
+        let expected = length(
+            u64::from(Cursor::new(&unit, "section descriptor").u32()?),
+            limits::HEADER_BYTES,
+            "section descriptor",
+        )?;
         let attributes = parse_descriptor(&decode_unit(&unit, expected, key, "section descriptor")?, name)?;
         let slot = found.get_mut(slot).ok_or_else(|| malformed("section"))?;
         if slot.replace(Section { units_at, count, units_len, attributes }).is_some() {
@@ -229,7 +235,10 @@ fn section_data(source: &dyn Source, section: &Section, key: &[u8; 16], what: &'
             return Err(Error::Malformed(format!("the {what}'s blocks run past its section")));
         }
         if (out.len() as u64).saturating_add(decompressed) > limits::BLOCK_BYTES {
-            return Err(Error::Malformed(format!("the {what} is larger than the {} bytes allowed", limits::BLOCK_BYTES)));
+            return Err(Error::Malformed(format!(
+                "the {what} is larger than the {} bytes allowed",
+                limits::BLOCK_BYTES
+            )));
         }
         let unit = read(source, &mut at, length(unit_len, limits::BLOCK_BYTES, what)?, what)?;
         out.extend(decode_unit(&unit, length(decompressed, limits::BLOCK_BYTES, what)?, key, what)?);

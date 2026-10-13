@@ -167,7 +167,13 @@ fn header(spec: &Spec) -> Result<Vec<u8>, WriteError> {
 }
 
 /// A section: type, payload length, block count, the units' length, the units, then the descriptor unit.
-fn section(kind: u32, units: &[Vec<u8>], descriptor: &str, cipher: Cipher, key: &[u8; 16]) -> Result<Vec<u8>, WriteError> {
+fn section(
+    kind: u32,
+    units: &[Vec<u8>],
+    descriptor: &str,
+    cipher: Cipher,
+    key: &[u8; 16],
+) -> Result<Vec<u8>, WriteError> {
     let units_len: usize = units.iter().map(Vec::len).sum();
     let mut payload = fit::<u32>(units.len() as u64, "section block count")?.to_be_bytes().to_vec();
     payload.extend((units_len as u64).to_be_bytes());

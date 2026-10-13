@@ -9,11 +9,8 @@ pub struct Scratch(PathBuf);
 
 impl Scratch {
     pub fn with(bytes: &[u8], extension: &str) -> Self {
-        let name = format!(
-            "xdict-mdx-test-{}-{}.{extension}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        );
+        let name =
+            format!("xdict-mdx-test-{}-{}.{extension}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed));
         let path = std::env::temp_dir().join(name);
         std::fs::write(&path, bytes).unwrap_or_else(|e| panic!("cannot write {}: {e}", path.display()));
         Self(path)
