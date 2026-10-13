@@ -140,42 +140,9 @@ impl Core {
                 }
             };
 
-            // The volumes need nothing of the MDX's: natively each is indexed on a thread of its own while the
-            // MDX is hashed and indexed.
-            #[cfg(not(target_family = "wasm"))]
-            let (mdx, indexed) = std::thread::scope(|scope| {
-                let threads: Vec<_> = volumes
-                    .into_iter()
-                    .map(|volume| scope.spawn(|| volume.and_then(|v| self.import_volume(&v, &report))))
-                    .collect();
-                let mdx = self.import_mdx(&opened, &report);
-                let indexed: Vec<Result<[u8; 32], CoreError>> = threads
-                    .into_iter()
-                    .map(|t| t.join().unwrap_or_else(|_| Err(CoreError::internal("a volume's import panicked"))))
-                    .collect();
-                (mdx, indexed)
-            });
-            #[cfg(target_family = "wasm")]
-            let (mdx, indexed) = {
-                let indexed: Vec<_> =
-                    volumes.into_iter().map(|volume| volume.and_then(|v| self.import_volume(&v, &report))).collect();
-                (self.import_mdx(&opened, &report), indexed)
-            };
-            let (edition, info) = mdx?;
-
-            let mut problems = Vec::new();
-            let mut records = Vec::new();
-            for (result, location) in indexed.into_iter().zip(&package.mdd) {
-                let token = match result {
-                    Ok(token) => Some(xdict_identity::hex(&token)),
-                    Err(error @ CoreError::Cancelled { .. }) => return Err(error),
-                    Err(error) => {
-                        problems.push(Problem::VolumeUnreadable { name: location.name().into(), error });
-                        None
-                    }
-                };
-                records.push(VolumeRecord { location: location_key(location), token });
-            }
+            let indexed = self.index_all(&opened, volumes, &report);
+            let (edition, info) = indexed.mdx?;
+            let (records, problems) = volume_records(indexed.volumes, &package.mdd)?;
             let record = LocationRecord {
                 location: location_key(&package.mdx),
                 edition: edition.clone(),
@@ -188,6 +155,35 @@ impl Core {
             let lineage = self.registry.register(record, &mut || candidate.clone()).map_err(registry_error)?;
             Ok(Imported { edition, lineage, info, problems })
         })
+    }
+
+    /// Hashes and indexes the MDX and every volume. The volumes need nothing of the MDX's: natively each is
+    /// indexed on a thread of its own while the MDX is hashed and indexed.
+    fn index_all(
+        &self,
+        mdx: &OpenedSource,
+        volumes: Vec<Result<OpenedSource, CoreError>>,
+        report: &(dyn Fn(u64) -> Result<(), CoreError> + Sync),
+    ) -> Indexed {
+        #[cfg(not(target_family = "wasm"))]
+        return std::thread::scope(|scope| {
+            let threads: Vec<_> = volumes
+                .into_iter()
+                .map(|volume| scope.spawn(|| volume.and_then(|v| self.import_volume(&v, report))))
+                .collect();
+            let indexed_mdx = self.import_mdx(mdx, report);
+            let indexed = threads
+                .into_iter()
+                .map(|t| t.join().unwrap_or_else(|_| Err(CoreError::internal("a volume's import panicked"))))
+                .collect();
+            Indexed { mdx: indexed_mdx, volumes: indexed }
+        });
+        #[cfg(target_family = "wasm")]
+        {
+            let indexed =
+                volumes.into_iter().map(|volume| volume.and_then(|v| self.import_volume(&v, report))).collect();
+            Indexed { mdx: self.import_mdx(mdx, report), volumes: indexed }
+        }
     }
 
     /// Hashes an MDX in one pass, summing each chunk, and indexes it through a source that checks every chunk it
@@ -639,6 +635,36 @@ fn link(link: xdict_entry::Link) -> Link {
     }
 }
 
+/// A volume's validation token, or an MDX's digest.
+type Token = [u8; 32];
+
+/// What indexing a package gave: the MDX's edition and info, and each volume's token or why it failed.
+struct Indexed {
+    mdx: Result<(String, DictInfo), CoreError>,
+    volumes: Vec<Result<Token, CoreError>>,
+}
+
+/// Each volume's registry record, and a problem for each that could not be read; a cancellation is the import's.
+fn volume_records(
+    indexed: Vec<Result<Token, CoreError>>,
+    locations: &[Location],
+) -> Result<(Vec<VolumeRecord>, Vec<Problem>), CoreError> {
+    let mut problems = Vec::new();
+    let mut records = Vec::new();
+    for (result, location) in indexed.into_iter().zip(locations) {
+        let token = match result {
+            Ok(token) => Some(xdict_identity::hex(&token)),
+            Err(error @ CoreError::Cancelled { .. }) => return Err(error),
+            Err(error) => {
+                problems.push(Problem::VolumeUnreadable { name: location.name().into(), error });
+                None
+            }
+        };
+        records.push(VolumeRecord { location: location_key(location), token });
+    }
+    Ok((records, problems))
+}
+
 /// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
 /// resource's own directory; anything else, and text that is not UTF-8, as stored.
 fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
@@ -848,7 +874,6 @@ mod tests {
         }
     }
 
-    /// Codex objection 4: the edition and the index come from the same bytes, or the import fails.
     #[test]
     fn a_file_that_changes_during_import_is_caught() {
         use xdict_mdx_writer::{Entry as W, Spec, write};
