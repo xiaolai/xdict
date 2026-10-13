@@ -78,7 +78,22 @@ const config = (clientProtocol: number) => ({ dataDir: null, cacheDir: null, cli
 check('versions', x.versions, xd.versions());
 check('newWrongProtocol', x.newWrongProtocol.error, (outcome(() => { xd.core(config(x.newWrongProtocol.client)); return { made: true }; }) as { error?: unknown }).error);
 
-const core = xd.core(config(xd.protocolVersion()));
+// Indexes kept by the shell, as the origin-private file system would keep them, and read back piece by piece.
+const kept = new Map<string, Uint8Array>();
+const calls = { get: 0, put: 0, reads: 0 };
+const storage = {
+  get(name: string) {
+    calls.get++;
+    const bytes = kept.get(name);
+    if (!bytes) return null;
+    return { size: () => bytes.length, readAt: (o: number, l: number) => { calls.reads++; return bytes.slice(o, o + l); }, identity: () => null };
+  },
+  put(name: string, bytes: Uint8Array) {
+    calls.put++;
+    kept.set(name, bytes.slice());
+  },
+};
+const core = xd.core(config(xd.protocolVersion()), storage);
 const mdx = file('tiny.mdx');
 check('openBeforeImport', x.openBeforeImport, outcome(() => core.open(mdx)));
 const imported = core.import({ mdx, mdd: [file('tiny.mdd')], sidecars: [file('tiny.css')] });
@@ -123,6 +138,9 @@ check('lifecycle.afterClose', l.afterClose, outcome(() => core.lookup('run', [se
 check('lifecycle.closeTwice', l.closeTwice, outcome(() => core.close(second.dict)));
 const other = xd.core(config(xd.protocolVersion()));
 check('lifecycle.foreignHandle', l.foreignHandle, outcome(() => other.lookup('run', [dict], page)));
+// Two imports stored three indexes (the MDX, its volume, the copy's MDX under the same edition); opening read them
+// in pieces, not whole.
+check('web.indexStorage', true, calls.put >= 2 && calls.get >= 2 && calls.reads > 2);
 // The core's guard does not catch a panic on the Web: it traps, and the wrapper reports `internal`.
 check('lifecycle.panic', l.panic, outcome(() => core.selfTestPanic()));
 // The trapped instance refuses further calls; a freshly loaded one works (ADR-0007 decision 12).

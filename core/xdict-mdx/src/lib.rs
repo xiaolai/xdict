@@ -8,10 +8,12 @@
 //! real size and against [`limits`] before anything is allocated, every checksum is verified, and nothing
 //! here panics on bad input: each failure is an [`Error`] that names what was wrong.
 //!
-//! **The key index is built here, at open**, rather than searched in the file's own order: the order
-//! MdxBuilder sorts keys in is not documented, and a binary search under a guessed collation would miss
-//! keys silently. Opening reads every key block once; records are read only when looked up.
+//! **XDict sorts its own index** rather than searching the file's key order: only 79 of 276 real files are
+//! sorted under the reader's folding (`core-api.md` §2.2), and a binary search under a guessed collation
+//! would miss keys silently. The index ([`index`]) is built from every key block once, kept, and read at
+//! every later open; records are read only when looked up.
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::io;
 #[cfg(any(unix, windows))]
@@ -22,6 +24,7 @@ mod bytes;
 mod cipher;
 mod classic;
 mod header;
+pub mod index;
 mod keys;
 pub mod limits;
 mod lzo;
@@ -29,7 +32,9 @@ mod text;
 mod v3;
 
 use bytes::length;
-use text::{Codec, fold};
+use index::{Binding, Index, Region, Rules, Stale};
+use text::Codec;
+use xxhash_rust::xxh3::xxh3_64;
 
 /// Why a file could not be read. The `Display` text is a sentence a reader can be shown.
 #[derive(Debug, thiserror::Error)]
@@ -176,12 +181,6 @@ impl Source for DiskFile {
     }
 }
 
-/// One key: how the file spells it, and where its record starts in the concatenated records.
-pub(crate) struct Key {
-    text: String,
-    offset: u64,
-}
-
 /// Where one record block sits in the file, and in the concatenated records.
 pub(crate) struct RecordBlock {
     file_offset: u64,
@@ -208,83 +207,107 @@ pub(crate) enum Scheme {
 
 /// What a layout's reader hands back for the lookup code, which is the same for every version.
 pub(crate) struct Parts {
-    codec: Codec,
-    keys: Vec<Key>,
+    keys: index::Keys,
     blocks: Vec<RecordBlock>,
-    scheme: Scheme,
 }
 
-/// An open MDX or MDD file.
+/// An open MDX or MDD file: its header, and its index.
 pub struct File {
     source: Box<dyn Source>,
     header: Header,
     codec: Codec,
-    keys: Vec<Key>,
-    /// For each key, where its record ends: the next larger offset, or the end of all records.
-    ends: Vec<u64>,
-    exact: HashMap<String, Vec<usize>>,
-    folded: HashMap<String, Vec<usize>>,
-    blocks: Vec<RecordBlock>,
     scheme: Scheme,
+    index: Index,
+}
+
+/// A file's header as read: the header, where the rest of the file starts, and the xxh3 of its bytes, which
+/// binds an index to the file it was built from.
+struct Opening {
+    header: Header,
+    at: u64,
+    digest: u64,
+}
+
+fn read_header(source: &dyn Source, declared: Option<Kind>) -> Result<Opening, Error> {
+    let mut at = 0u64;
+    let header_len = read_u32(source, &mut at, "header length")?;
+    let header_len = length(u64::from(header_len), limits::HEADER_BYTES, "header")?;
+    let header_bytes = read(source, &mut at, header_len, "header")?;
+    let header_checksum = u32::from_le_bytes(read_array(source, &mut at, "header checksum")?);
+    let header = header::parse(&header_bytes, header_checksum)?;
+    // A 3.0 header does not say whether it is a dictionary or a resource library.
+    if header.version == FormatVersion::V3_0 && declared == Some(Kind::Mdd) {
+        return Err(Error::Unsupported(Unsupported::ResourceLibraryV3));
+    }
+    Ok(Opening { digest: xxh3_64(&header_bytes), header, at })
+}
+
+/// How a file's keys compare: an MDX by its own `KeyCaseSensitive` and `StripKey`; an MDD's paths
+/// case-insensitively and never stripped (`core-api.md` finding 24).
+fn rules(header: &Header) -> Rules {
+    match header.kind {
+        Kind::Mdd => Rules { case_sensitive: false, strip: false },
+        Kind::Mdx => Rules { case_sensitive: header.key_case_sensitive, strip: header.strip_key != Some(false) },
+    }
 }
 
 impl File {
-    /// Opens a file on disk and reads its header and key index.
+    /// Opens a file on disk and builds its index in memory.
     #[cfg(any(unix, windows))]
     pub fn open(path: &Path) -> Result<Self, Error> {
         let mdd = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("mdd"));
         Self::from_source(Box::new(DiskFile::open(path)?), mdd.then_some(Kind::Mdd))
     }
 
-    /// Opens any source of bytes. `declared` is what the file's name says it is, where there is a name: a
-    /// 3.0 header does not say, so a 3.0 file declared [`Kind::Mdd`] is refused, and one declared nothing
-    /// is read as a dictionary.
+    /// Opens any source of bytes, building its index in memory. `declared` is what the file's name says it
+    /// is, where there is a name: a 3.0 header does not say, so a 3.0 file declared [`Kind::Mdd`] is refused,
+    /// and one declared nothing is read as a dictionary.
     pub fn from_source(source: Box<dyn Source>, declared: Option<Kind>) -> Result<Self, Error> {
-        let mut at = 0u64;
-        let header_len = read_u32(&*source, &mut at, "header length")?;
-        let header_len = length(u64::from(header_len), limits::HEADER_BYTES, "header")?;
-        let header_bytes = read(&*source, &mut at, header_len, "header")?;
-        let header_checksum = u32::from_le_bytes(read_array(&*source, &mut at, "header checksum")?);
-        let header = header::parse(&header_bytes, header_checksum)?;
+        let index = Self::build_index(&*source, declared, [0; 32])?;
+        Self::with_index(source, declared, Box::new(index), [0; 32])?
+            .map_err(|stale| Error::Malformed(format!("an index just built does not load ({stale:?})")))
+    }
+
+    /// Reads every key block of a file and writes its index, bound to `identity` (an edition, or an MDD's
+    /// validation token): the slow step, done once per edition.
+    pub fn build_index(source: &dyn Source, declared: Option<Kind>, identity: [u8; 32]) -> Result<Vec<u8>, Error> {
+        let opening = read_header(source, declared)?;
+        let header = &opening.header;
         let parts = match header.version {
-            FormatVersion::V3_0 => {
-                if declared == Some(Kind::Mdd) {
-                    return Err(Error::Unsupported(Unsupported::ResourceLibraryV3));
-                }
-                v3::parts(&*source, at, &header)?
-            }
-            FormatVersion::V1_2 | FormatVersion::V2_0 => classic::parts(&*source, at, &header)?,
+            FormatVersion::V3_0 => v3::parts(source, opening.at, header)?,
+            FormatVersion::V1_2 | FormatVersion::V2_0 => classic::parts(source, opening.at, header)?,
         };
-        let Parts { codec, keys, blocks, scheme } = parts;
-        let total_records = blocks.last().map_or(0, |b| b.records_offset + b.len as u64);
+        let binding = Binding { identity, header: opening.digest, source_len: source.len(), kind: header.kind };
+        index::build(parts.keys, &parts.blocks, rules(header), binding)
+    }
 
-        // Where each record ends: the next larger start, or the end of all records.
-        let mut starts: Vec<u64> = Vec::new();
-        starts.try_reserve_exact(keys.len()).map_err(out_of_memory)?;
-        starts.extend(keys.iter().map(|k| k.offset));
-        starts.sort_unstable();
-        starts.dedup();
-        let mut ends = Vec::new();
-        ends.try_reserve_exact(keys.len()).map_err(out_of_memory)?;
-        for key in &keys {
-            if key.offset > total_records {
-                return Err(Error::Malformed("a key points past the end of the records".into()));
-            }
-            let next = starts.partition_point(|&s| s <= key.offset);
-            ends.push(starts.get(next).copied().unwrap_or(total_records));
+    /// Opens a file through an index built for it: reads the file's header and nothing else of it. The
+    /// outer error is the file's; the inner [`Stale`] says the index cannot be used and must be built again.
+    pub fn with_index(
+        source: Box<dyn Source>,
+        declared: Option<Kind>,
+        region: Box<dyn Region>,
+        identity: [u8; 32],
+    ) -> Result<Result<Self, Stale>, Error> {
+        let opening = read_header(&*source, declared)?;
+        let header = opening.header;
+        let (codec, scheme) = match header.version {
+            FormatVersion::V3_0 => (Codec::Utf8, Scheme::V3(v3::block_key(&header)?)),
+            FormatVersion::V1_2 | FormatVersion::V2_0 => (classic::codec(&header)?, Scheme::Classic),
+        };
+        let binding = Binding { identity, header: opening.digest, source_len: source.len(), kind: header.kind };
+        let index = match Index::load(region, &binding) {
+            Ok(index) => index,
+            Err(stale) => return Ok(Err(stale)),
+        };
+        if index.rules != rules(&header) {
+            return Ok(Err(Stale::Damaged("its folding rules are not the file's".into())));
         }
-
-        let strip = header.strip_key != Some(false);
-        let mut exact: HashMap<String, Vec<usize>> = HashMap::new();
-        let mut folded: HashMap<String, Vec<usize>> = HashMap::new();
-        exact.try_reserve(keys.len()).map_err(out_of_memory)?;
-        folded.try_reserve(keys.len()).map_err(out_of_memory)?;
-        for (i, key) in keys.iter().enumerate() {
-            exact.entry(key.text.clone()).or_default().push(i);
-            folded.entry(fold(&key.text, header.key_case_sensitive, strip)).or_default().push(i);
+        let past_end = index.blocks.iter().any(|b| b.file_offset.saturating_add(b.stored_len as u64) > source.len());
+        if past_end {
+            return Ok(Err(Stale::Damaged("a record block lies past the end of the file".into())));
         }
-
-        Ok(Self { source, header, codec, keys, ends, exact, folded, blocks, scheme })
+        Ok(Ok(Self { source, header, codec, scheme, index }))
     }
 
     pub fn header(&self) -> &Header {
@@ -293,35 +316,72 @@ impl File {
 
     /// How many keys the file holds.
     pub fn len(&self) -> usize {
-        self.keys.len()
+        self.index.len()
     }
 
     pub fn is_empty(&self) -> bool {
-        self.keys.is_empty()
+        self.len() == 0
+    }
+
+    /// Key `i`, in file order, as the file spells it.
+    pub fn key(&self, i: usize) -> Result<Cow<'_, str>, Error> {
+        self.index.key(i)
     }
 
     /// Every key, in file order.
-    pub fn keys(&self) -> impl Iterator<Item = &str> {
-        self.keys.iter().map(|k| k.text.as_str())
+    pub fn keys(&self) -> impl Iterator<Item = Result<Cow<'_, str>, Error>> {
+        (0..self.len()).map(|i| self.key(i))
     }
 
-    /// Every record whose key matches `key` under the file's own rules: case-insensitive unless
-    /// `KeyCaseSensitive="Yes"`, and ignoring everything but letters and digits unless `StripKey="No"`.
-    /// Exact matches come first, then folded ones, each in file order. Empty when nothing matches; an
-    /// error when a matching record could not be read, or when the matches together exceed
-    /// [`limits::LOOKUP_BYTES`].
+    /// The numbers of every key matching `key` under the file's own rules: case-insensitive unless
+    /// `KeyCaseSensitive="Yes"`, and ignoring everything but letters and digits unless `StripKey="No"` (an
+    /// MDD's paths: case-insensitive, never stripped). Exact matches first, then folded ones, each in file
+    /// order. Cheap: no record is read, so a caller can count and page what [`Self::lookup`] would refuse.
+    pub fn find(&self, key: &str) -> Result<Vec<usize>, Error> {
+        self.index.find(key)
+    }
+
+    /// The size of key `i`'s record as stored, before any decoding: what reading it will take.
+    pub fn record_size(&self, i: usize) -> Result<u64, Error> {
+        let (start, end) = self.span(i)?;
+        Ok(end.saturating_sub(start))
+    }
+
+    /// Key `i`'s record.
+    pub fn record(&self, i: usize) -> Result<Record, Error> {
+        self.read_record(i, &mut Vec::new())
+    }
+
+    /// Reads the records of `keys` (key numbers), in the order they lie in the file, so that each block is
+    /// decompressed once however many of them share it; `each` gets every key number and its record. Each
+    /// record is bounded by [`limits::BLOCK_BYTES`]; how many are read is the caller's to bound.
+    pub fn for_each_record(
+        &self,
+        keys: &[usize],
+        mut each: impl FnMut(usize, Record) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        let mut by_offset: Vec<(u64, usize)> = Vec::with_capacity(keys.len());
+        for &i in keys {
+            by_offset.push((self.span(i)?.0, i));
+        }
+        by_offset.sort_unstable();
+        let mut cache = Vec::new();
+        for (_, i) in by_offset {
+            let record = self.read_record(i, &mut cache)?;
+            each(i, record)?;
+        }
+        Ok(())
+    }
+
+    /// Every record whose key matches `key` under the file's own rules ([`Self::find`]), in that order. Empty
+    /// when nothing matches; an error when a matching record could not be read, or when the matches
+    /// together exceed [`limits::LOOKUP_BYTES`] or [`limits::LOOKUP_RECORDS`].
     pub fn lookup(&self, key: &str) -> Result<Vec<Record>, Error> {
         self.lookup_within(key, Budget { bytes: limits::LOOKUP_BYTES, records: limits::LOOKUP_RECORDS })
     }
 
     fn lookup_within(&self, key: &str, budget: Budget) -> Result<Vec<Record>, Error> {
-        let strip = self.header.strip_key != Some(false);
-        let exact = self.exact.get(key).map(Vec::as_slice).unwrap_or(&[]);
-        let folded_key = fold(key, self.header.key_case_sensitive, strip);
-        let folded = self.folded.get(&folded_key).map(Vec::as_slice).unwrap_or(&[]);
-        // The folded matches include the exact ones, which are exactly those spelled as asked.
-        let rest = folded.iter().filter(|&&i| self.keys.get(i).is_some_and(|k| k.text != key));
-        let order: Vec<usize> = exact.iter().chain(rest).copied().collect();
+        let order = self.find(key)?;
         if order.len() > budget.records {
             return Err(Error::TooLarge(format!("\"{key}\" matches more than {} records", budget.records)));
         }
@@ -343,7 +403,7 @@ impl File {
             if total.saturating_add(end.saturating_sub(start)) > budget.bytes {
                 return Err(over());
             }
-            let record = self.record(i, &mut cache)?;
+            let record = self.read_record(i, &mut cache)?;
             total = total.saturating_add((record.key.len() + record.data.len()) as u64);
             if total > budget.bytes {
                 return Err(over());
@@ -357,19 +417,17 @@ impl File {
 
     /// Where key `i`'s record starts and ends in the concatenated records.
     fn span(&self, i: usize) -> Result<(u64, u64), Error> {
-        let key = self.keys.get(i).ok_or_else(|| malformed("key index"))?;
-        let end = self.ends.get(i).copied().ok_or_else(|| malformed("key index"))?;
-        Ok((key.offset, end))
+        self.index.span(i)
     }
 
-    fn record(&self, i: usize, cache: &mut Vec<(usize, Vec<u8>)>) -> Result<Record, Error> {
-        let key = self.keys.get(i).ok_or_else(|| malformed("key index"))?;
+    fn read_record(&self, i: usize, cache: &mut Vec<(usize, Vec<u8>)>) -> Result<Record, Error> {
+        let key = self.index.key(i)?.into_owned();
         let (start, end) = self.span(i)?;
         let mut data = self.records(start, end, cache)?;
         if self.header.kind == Kind::Mdx {
             data = self.codec.decode(&trim_terminators(data, self.codec.unit())?).into_bytes();
         }
-        Ok(Record { key: key.text.clone(), data })
+        Ok(Record { key, data })
     }
 
     /// The bytes from `start` to `end` of the concatenated records, decompressing every block they touch.
@@ -381,8 +439,9 @@ impl File {
         let mut out = Vec::with_capacity(len);
         let mut previous: HashMap<usize, Vec<u8>> = std::mem::take(cache).into_iter().collect();
         let mut touched = Vec::new();
-        let first = self.blocks.partition_point(|b| b.records_offset + b.len as u64 <= start);
-        for (index, block) in self.blocks.iter().enumerate().skip(first) {
+        let blocks = &self.index.blocks;
+        let first = blocks.partition_point(|b| b.records_offset + b.len as u64 <= start);
+        for (index, block) in blocks.iter().enumerate().skip(first) {
             if block.records_offset >= end {
                 break;
             }

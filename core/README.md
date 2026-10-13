@@ -7,7 +7,8 @@ typed error.
 
 | Crate | What it holds | Status |
 |---|---|---|
-| `xdict-mdx` | Clean-room reader for MDict `.mdx`/`.mdd`, formats 1.2, 2.0 and 3.0 | working |
+| `xdict-mdx` | Clean-room reader for MDict `.mdx`/`.mdd`, formats 1.2, 2.0 and 3.0, and its per-edition index | working |
+| `xdict-mmap` | Read-only maps of XDict's own index files; the one crate allowed `unsafe`, its argument written down | working |
 | `xdict-mdx-writer` | Writes test files, damaged ones included; never shipped | working |
 | `xdict-entry` | Entry processing: `@@@LINK=`, `entry://`, `sound://`, stylesheet substitution, link rewriting | empty |
 | `xdict-identity` | Edition identity (SHA-256 of the whole file) and dictionary lineage | empty |

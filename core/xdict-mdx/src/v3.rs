@@ -5,9 +5,7 @@
 use crate::bytes::{Cursor, adler32, length};
 use crate::keys::{self, KeyBlock, Keys};
 use crate::text::Codec;
-use crate::{
-    Error, Header, Parts, RecordBlock, Scheme, Source, Unsupported, block, cipher, header, limits, malformed, read,
-};
+use crate::{Error, Header, Parts, RecordBlock, Source, Unsupported, block, cipher, header, limits, malformed, read};
 
 /// The four section types in file order, with the element name of each one's descriptor.
 const SECTIONS: [(u32, &str); 4] = [
@@ -31,14 +29,19 @@ struct Section {
     attributes: Vec<(String, String)>,
 }
 
-pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Parts, Error> {
+/// The key a 3.0 file's blocks are encrypted under, from its header's `UUID`.
+pub(crate) fn block_key(header: &Header) -> Result<[u8; 16], Error> {
     let uuid = header
         .attributes
         .iter()
         .find(|(k, _)| k.eq_ignore_ascii_case("UUID"))
         .map(|(_, v)| v.as_str())
         .ok_or_else(|| Error::Malformed("the header has no UUID, which a 3.0 file's blocks are keyed by".into()))?;
-    let key = cipher::v3_key(uuid);
+    Ok(cipher::v3_key(uuid))
+}
+
+pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Parts, Error> {
+    let key = block_key(header)?;
 
     let [record_data, record_index, key_data, key_index] = sections(source, at, &key)?;
     let key_count = check_descriptors(&record_data, &record_index, &key_data, &key_index)?;
@@ -52,7 +55,7 @@ pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Par
         let decompressed = length(b.decompressed, limits::BLOCK_BYTES, "key block")?;
         keys.add_block(&decode_unit(&raw, decompressed, &key, "key block")?, b.entries)?;
     }
-    Ok(Parts { codec: Codec::Utf8, keys: keys.finish()?, blocks, scheme: Scheme::V3(key) })
+    Ok(Parts { keys: keys.finish()?, blocks })
 }
 
 /// Reads every section's framing and descriptor. The sections tile the rest of the file, each type once.

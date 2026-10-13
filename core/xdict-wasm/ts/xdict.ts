@@ -48,13 +48,19 @@ export interface ByteSource {
   identity(): FileIdentity | null;
 }
 
+/** Where indexes are kept: the origin-private file system, read through `FileSystemSyncAccessHandle`. */
+export interface IndexStorage {
+  get(name: string): ByteSource | null;
+  put(name: string, bytes: Uint8Array): void;
+}
+
 export type Location = { type: 'path'; path: string } | { type: 'source'; name: string; source: ByteSource };
 export type Package = { mdx: Location; mdd: Location[]; sidecars: Location[] };
 
 /** What wasm-bindgen generates for xdict-wasm with `--target web`. */
 export interface Glue {
   initSync(options: { module: BufferSource | WebAssembly.Module }): unknown;
-  Core: new (config: string) => GlueCore;
+  Core: new (config: string, storage?: IndexStorage) => GlueCore;
   registerSource(source: ByteSource): number;
   releaseSource(id: number): void;
   versions(): string;
@@ -105,10 +111,10 @@ export class XDict {
     return this.guard(() => this.glue.protocolVersion());
   }
 
-  /** A core. `config.entropy` is filled from `crypto.getRandomValues` when empty. */
-  core(config: Omit<Config, 'entropy'> & { entropy?: number[] }): XDictCore {
+  /** A core. `config.entropy` is filled from `crypto.getRandomValues` when empty; `storage` keeps its indexes. */
+  core(config: Omit<Config, 'entropy'> & { entropy?: number[] }, storage?: IndexStorage): XDictCore {
     const entropy = config.entropy?.length ? config.entropy : Array.from(crypto.getRandomValues(new Uint8Array(16)));
-    const inner = this.guard(() => new this.glue.Core(JSON.stringify({ ...config, entropy })));
+    const inner = this.guard(() => new this.glue.Core(JSON.stringify({ ...config, entropy }), storage));
     return new XDictCore(this, inner);
   }
 

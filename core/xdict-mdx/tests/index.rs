@@ -1,0 +1,223 @@
+//! The per-edition index: built, kept, read back, and never trusted (ADR-0007 decision 17). Whatever is
+//! wrong with an index must make it `Stale` (build it again) or, at worst, make a key unreachable; it must
+//! never give a key another key's record.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
+use xdict_mdx::index::Stale;
+use xdict_mdx::{File, Kind};
+use xdict_mdx_writer::{self as writer, Entry, Spec, Version};
+use xxhash_rust::xxh3::xxh3_64;
+
+const EDITION: [u8; 32] = [7; 32];
+const HEADER_LEN: usize = 96 + 8 * 24 + 8;
+
+fn entries() -> Vec<Entry> {
+    let mut entries: Vec<Entry> =
+        (0..200).map(|i| Entry::text(&format!("word{i:03}"), &format!("meaning {i}"))).collect();
+    entries.extend([Entry::text("Run", "a name"), Entry::text("run", "to move"), Entry::text("run", "a score")]);
+    entries.extend([
+        Entry::text("café", "a place"),
+        Entry::text("a--b--c", "composite"),
+        Entry::text("@x", "internal"),
+    ]);
+    entries
+}
+
+fn mdx() -> Vec<u8> {
+    writer::write(&Spec { block_size: 256, ..Spec::mdx() }, &entries()).unwrap()
+}
+
+fn open_with(file: &[u8], index: Vec<u8>) -> Result<File, Stale> {
+    File::with_index(Box::new(file.to_vec()), Some(Kind::Mdx), Box::new(index), EDITION).unwrap()
+}
+
+/// Every key's answer, as text: what a correct reader returns.
+fn answers(file: &File) -> Vec<(String, Vec<String>)> {
+    let mut keys: Vec<String> = file.keys().map(|k| k.unwrap().into_owned()).collect();
+    keys.dedup();
+    keys.into_iter()
+        .map(|k| {
+            let records = file.lookup(&k).unwrap();
+            (k, records.iter().map(|r| format!("{}={}", r.key, String::from_utf8_lossy(&r.data))).collect())
+        })
+        .collect()
+}
+
+/// Rewrites a section's checksum and the header's, as a careful corrupter (or a bug) would.
+fn reseal(index: &mut [u8], section: usize) {
+    let at = 96 + section * 24;
+    let start = u64::from_le_bytes(index[at..at + 8].try_into().unwrap()) as usize;
+    let len = u64::from_le_bytes(index[at + 8..at + 16].try_into().unwrap()) as usize;
+    let sum = xxh3_64(&index[start..start + len]);
+    index[at + 16..at + 24].copy_from_slice(&sum.to_le_bytes());
+    let head = xxh3_64(&index[..HEADER_LEN - 8]);
+    index[HEADER_LEN - 8..HEADER_LEN].copy_from_slice(&head.to_le_bytes());
+}
+
+fn section(index: &[u8], which: usize) -> (usize, usize) {
+    let at = 96 + which * 24;
+    let start = u64::from_le_bytes(index[at..at + 8].try_into().unwrap()) as usize;
+    let len = u64::from_le_bytes(index[at + 8..at + 16].try_into().unwrap()) as usize;
+    (start, len)
+}
+
+#[test]
+fn a_kept_index_answers_as_the_file_does() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let kept = open_with(&file, index).unwrap();
+    let fresh = File::from_source(Box::new(file), Some(Kind::Mdx)).unwrap();
+    assert_eq!(answers(&kept), answers(&fresh));
+    assert_eq!(kept.lookup("RUN").unwrap().len(), 3, "folding works through a kept index");
+}
+
+/// Versions 1.2, 2.0 and 3.0 and both compressions and encodings index alike.
+#[test]
+fn every_layout_indexes() {
+    for version in [Version::V1_2, Version::V2_0, Version::V3_0] {
+        for compression in [writer::Compression::Zlib, writer::Compression::None, writer::Compression::Lzo] {
+            if version == Version::V3_0 && compression == writer::Compression::Lzo {
+                continue;
+            }
+            let spec = Spec { version, compression, block_size: 256, ..Spec::mdx() };
+            let file = writer::write(&spec, &entries()).unwrap();
+            let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+            let kept = open_with(&file, index).unwrap();
+            assert_eq!(kept.lookup("word123").unwrap()[0].data, b"meaning 123", "{version:?} {compression:?}");
+        }
+    }
+}
+
+/// A flipped byte anywhere is noticed: every byte of the header, and bytes through every section.
+#[test]
+fn a_flipped_byte_makes_the_index_stale() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let mut positions: Vec<usize> = (0..HEADER_LEN).collect();
+    positions.extend((HEADER_LEN..index.len()).step_by(7));
+    for at in positions {
+        let mut damaged = index.clone();
+        damaged[at] ^= 0x40;
+        // Padding between sections is covered by no checksum; changing it changes nothing.
+        let padding = (0..8).all(|s| {
+            let (start, len) = section(&index, s);
+            !(start..start + len).contains(&at)
+        }) && at >= HEADER_LEN;
+        match open_with(&file, damaged) {
+            Err(_) => {}
+            Ok(read) if padding => assert_eq!(answers(&read), answers(&open_with(&file, index.clone()).unwrap())),
+            Ok(_) => panic!("a flipped byte at {at} went unnoticed"),
+        }
+    }
+}
+
+#[test]
+fn a_short_index_is_stale() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    for len in [0, 8, HEADER_LEN - 1, HEADER_LEN, index.len() / 2, index.len() - 1] {
+        assert!(open_with(&file, index[..len].to_vec()).is_err(), "an index cut to {len} bytes loaded");
+    }
+}
+
+#[test]
+fn another_version_is_stale() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let mut format = index.clone();
+    format[8] ^= 1;
+    assert_eq!(open_with(&file, format).err(), Some(Stale::Format));
+    let mut reader = index.clone();
+    reader[12] ^= 1;
+    reseal(&mut reader, 0);
+    assert_eq!(open_with(&file, reader).err(), Some(Stale::Reader));
+}
+
+#[test]
+fn an_index_of_another_file_is_stale() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let other = File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(index.clone()), [8; 32]).unwrap();
+    assert_eq!(other.err(), Some(Stale::OtherFile));
+    let changed = writer::write(&Spec { block_size: 256, ..Spec::mdx() }, &entries()[1..]).unwrap();
+    let wrong = File::with_index(Box::new(changed), Some(Kind::Mdx), Box::new(index), EDITION).unwrap();
+    assert_eq!(wrong.err(), Some(Stale::OtherFile));
+}
+
+/// Codex objection 25: an index whose checksums are right and whose structure is not. A repeated key number
+/// is caught; a reordered order, which is still a permutation, can hide keys but never answer wrongly.
+#[test]
+fn a_consistent_but_wrong_order_never_answers_wrongly() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let truth = answers(&open_with(&file, index.clone()).unwrap());
+    let (order, len) = section(&index, 4);
+
+    let mut repeated = index.clone();
+    let first = repeated[order..order + 4].to_vec();
+    repeated[order + 4..order + 8].copy_from_slice(&first);
+    reseal(&mut repeated, 4);
+    assert!(matches!(open_with(&file, repeated).err(), Some(Stale::Damaged(_))));
+
+    for (a, b) in [(0, len / 4 - 1), (3, 150), (10, 11), (100, 7)] {
+        let mut swapped = index.clone();
+        let (pa, pb) = (order + a * 4, order + b * 4);
+        let (va, vb) = (swapped[pa..pa + 4].to_vec(), swapped[pb..pb + 4].to_vec());
+        swapped[pa..pa + 4].copy_from_slice(&vb);
+        swapped[pb..pb + 4].copy_from_slice(&va);
+        reseal(&mut swapped, 4);
+        let read = open_with(&file, swapped).unwrap();
+        for (key, expected) in &truth {
+            let got: Vec<String> = read
+                .lookup(key)
+                .unwrap()
+                .iter()
+                .map(|r| format!("{}={}", r.key, String::from_utf8_lossy(&r.data)))
+                .collect();
+            assert!(got.iter().all(|g| expected.contains(g)), "{key:?}: {got:?} is not within {expected:?}");
+        }
+    }
+
+    let mut descending = index.clone();
+    let (starts, _) = section(&index, 2);
+    let (ends, _) = section(&index, 3);
+    let end0 = descending[ends..ends + 8].to_vec();
+    let past: u64 = u64::from_le_bytes(end0.try_into().unwrap()) + 1;
+    descending[starts..starts + 8].copy_from_slice(&past.to_le_bytes());
+    reseal(&mut descending, 2);
+    assert!(matches!(open_with(&file, descending).err(), Some(Stale::Damaged(_))), "a record ending before it starts");
+}
+
+/// The index is read through a source as well as from memory: the Web's way.
+#[test]
+fn an_index_reads_through_a_source() {
+    let file = mdx();
+    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let region = xdict_mdx::index::SourceRegion(Box::new(index.clone()));
+    let read = File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(region), EDITION).unwrap().unwrap();
+    assert_eq!(answers(&read), answers(&open_with(&file, index).unwrap()));
+}
+
+/// An MDD's paths are matched case-insensitively and never stripped, whatever its header says.
+#[test]
+fn resource_paths_are_never_stripped() {
+    let spec = Spec { strip_key: Some(true), ..Spec::mdd() };
+    let file = writer::write(&spec, &[Entry::bytes("\\a.mp3", b"one"), Entry::bytes("\\a_mp3", b"two")]).unwrap();
+    let read = File::from_source(Box::new(file), Some(Kind::Mdd)).unwrap();
+    let found = read.lookup("\\A.MP3").unwrap();
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].data, b"one");
+}
+
+/// `find` counts what `lookup` would refuse, so a caller can page it (the sentence library's 66,355 records
+/// under one key).
+#[test]
+fn find_pages_what_lookup_refuses() {
+    let many: Vec<Entry> = (0..10_001).map(|i| Entry::text("EC", &format!("{i}"))).collect();
+    let file = writer::write(&Spec { block_size: 1 << 16, ..Spec::mdx() }, &many).unwrap();
+    let read = File::from_source(Box::new(file), None).unwrap();
+    assert!(read.lookup("EC").is_err());
+    let found = read.find("EC").unwrap();
+    assert_eq!(found.len(), 10_001);
+    assert_eq!(read.record(found[10_000]).unwrap().data, b"10000");
+}

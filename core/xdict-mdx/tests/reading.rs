@@ -156,7 +156,7 @@ fn mdd_resources_come_back_byte_for_byte() {
 #[test]
 fn keys_are_listed_in_file_order() {
     let (_s, file) = open(&Spec::mdx(), &words());
-    let keys: Vec<String> = file.unwrap().keys().map(str::to_owned).collect();
+    let keys: Vec<String> = file.unwrap().keys().map(|k| k.unwrap().into_owned()).collect();
     let mut expected: Vec<String> = words().into_iter().map(|e| e.key).collect();
     expected.sort();
     assert_eq!(keys, expected);
