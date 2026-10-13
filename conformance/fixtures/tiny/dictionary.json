@@ -1,0 +1,23 @@
+{
+  "comment": "A tiny dictionary written by xdict-mdx-writer from this description: our own text, no dictionary content. `cargo run -p xdict-conformance -- <dir>` writes tiny.mdx, tiny.mdd and the sidecar.",
+  "mdx": {
+    "name": "tiny.mdx",
+    "title": "Tiny",
+    "entries": [
+      ["run", "<link rel=\"stylesheet\" href=\"tiny.css\"><b>run</b> to move fast <a href=\"sound://run.mp3\">play</a>"],
+      ["run", "<b>run</b> (noun) an act of running"],
+      ["Run", "<b>Run</b> a proper name"],
+      ["colour", "@@@LINK=color"],
+      ["color", "<b>color</b> see <a href=\"entry://hue#sense1\">hue</a>"],
+      ["hue", "<b>hue</b> a shade"],
+      ["lost", "@@@LINK=nowhere"],
+      ["café", "<b>café</b> a small restaurant"]
+    ]
+  },
+  "mdd": [
+    { "name": "tiny.mdd", "entries": [["\\run.mp3", "ID3 not really audio"]] }
+  ],
+  "sidecars": [
+    { "name": "tiny.css", "text": "body { color: black }" }
+  ]
+}

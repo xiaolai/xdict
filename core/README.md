@@ -13,8 +13,10 @@ typed error.
 | `xdict-identity` | Edition identity (SHA-256 of the whole file) and dictionary lineage | empty |
 | `xdict-lookup` | Key folding and lemma fallback from the dictionary's own inflections | empty |
 | `xdict-study` | Spaced-repetition scheduler, ledger, append-only event log, sync merge | empty |
-| `xdict-core` | The one API the platforms call, composed from the crates above | empty |
-| `xdict-ffi` | UniFFI bindings of `xdict-core` for Swift and Kotlin (and C#, if the spike chooses UniFFI) | empty |
-| `xdict-wasm` | `wasm-bindgen` bindings of `xdict-core` for the Web | empty |
+| `xdict-core` | The one API the platforms call, composed from the crates above (ADR-0007) | interface settled; a thin core behind it |
+| `xdict-ffi` | UniFFI bindings of `xdict-core` for Swift and Kotlin (and C#, if the spike chooses UniFFI) | working; conformance in Swift and Kotlin |
+| `xdict-wasm` | `wasm-bindgen` bindings of `xdict-core` for the Web, and their TypeScript wrapper | working; conformance in a Worker |
+| `xdict-conformance` | Writes `conformance/` fixtures and runs them against the core directly; never shipped | working |
 
-`cd core && cargo test && cargo clippy --all-targets` is the gate.
+`cd core && cargo fmt --check && cargo test && cargo clippy --all-targets` is the gate; the bindings' suites are
+listed in `conformance/README.md`.

@@ -1,0 +1,27 @@
+[package]
+name = "xdict-ffi"
+description = "UniFFI bindings of xdict-core for Swift and Kotlin"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[[bin]]
+# `cargo run -p xdict-ffi --bin uniffi-bindgen -- generate …`: the generator, pinned to the runtime's version.
+name = "uniffi-bindgen"
+path = "uniffi-bindgen.rs"
+required-features = ["bindgen"]
+
+[features]
+bindgen = ["uniffi/cli"]
+
+[dependencies]
+uniffi.workspace = true
+xdict-core = { path = "../xdict-core" }
+
+[lints]
+workspace = true

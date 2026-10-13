@@ -1,0 +1,23 @@
+[package]
+name = "xdict-core"
+description = "The one API every XDict platform calls"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[features]
+# Serialisation for the Web binding, which passes messages as JSON.
+serde = ["dep:serde"]
+
+[dependencies]
+serde = { workspace = true, optional = true }
+sha2.workspace = true
+xdict-mdx = { path = "../xdict-mdx" }
+
+[dev-dependencies]
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
+[lints]
+workspace = true

@@ -1,0 +1,19 @@
+[package]
+name = "xdict-conformance"
+description = "Writes the conformance fixtures, and runs them against the core directly. Never shipped."
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde_json.workspace = true
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
+[dev-dependencies]
+xdict-core = { path = "../xdict-core", features = ["serde"] }
+serde.workspace = true
+
+[lints]
+workspace = true
