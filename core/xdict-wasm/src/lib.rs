@@ -8,11 +8,19 @@
 //! (measured, ADR-0007 decision 12). It reaches JavaScript as a `RuntimeError`; the wrapper reports it as
 //! `internal` and the instance must be replaced.
 //!
-//! **A shell's byte source stays on the JavaScript side.** The core needs `Send + Sync` sources and the
-//! workspace forbids `unsafe`, so a JavaScript object is never held in Rust: it is kept in a table on this
-//! (single) thread and the core holds its number.
+//! **A shell's objects stay on the JavaScript side.** The core needs `Send + Sync` sources and the workspace
+//! forbids `unsafe`, so a JavaScript object is never held in Rust: it is kept in a table on this (single)
+//! thread and the core holds its number. Three rules keep the tables sound:
+//!
+//! - **JavaScript never runs while a table is borrowed**: a handle is cloned out first, so a callback may call
+//!   back into the binding (register a source, open or import another package).
+//! - **Every call into JavaScript catches**: an exception from a callback becomes a typed error, never an
+//!   unwind through Rust frames that skips their cleanup.
+//! - **Every entry has owners and goes when the last one does**: a source is owned by the shell's registration
+//!   (until `releaseSource`) and by each location the core holds; index storage by its core; a progress
+//!   callback by its import.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -26,15 +34,17 @@ use xdict_core::{CoreError, FileIdentity};
 extern "C" {
     /// `{ size(): number, readAt(offset: number, len: number): Uint8Array, identity(): WireIdentity | null }`,
     /// where a wire identity's fields are decimal strings (exact) or numbers (exact below 2^53).
+    #[derive(Clone)]
     pub type JsByteSource;
-    #[wasm_bindgen(method)]
-    fn size(this: &JsByteSource) -> f64;
+    #[wasm_bindgen(method, catch)]
+    fn size(this: &JsByteSource) -> Result<f64, JsValue>;
     #[wasm_bindgen(method, js_name = readAt, catch)]
     fn read_at(this: &JsByteSource, offset: f64, len: u32) -> Result<Vec<u8>, JsValue>;
-    #[wasm_bindgen(method)]
-    fn identity(this: &JsByteSource) -> JsValue;
+    #[wasm_bindgen(method, catch)]
+    fn identity(this: &JsByteSource) -> Result<JsValue, JsValue>;
 
     /// `{ get(name: string): ByteSource | null, put(name: string, bytes: Uint8Array): void }`.
+    #[derive(Clone)]
     pub type JsIndexStorage;
     #[wasm_bindgen(method, catch)]
     fn get(this: &JsIndexStorage, name: &str) -> Result<JsValue, JsValue>;
@@ -42,25 +52,77 @@ extern "C" {
     fn put(this: &JsIndexStorage, name: &str, bytes: Vec<u8>) -> Result<(), JsValue>;
 
     /// `{ progress(done: number, total: number): boolean }`.
+    #[derive(Clone)]
     pub type JsProgress;
-    #[wasm_bindgen(method)]
-    fn progress(this: &JsProgress, done: f64, total: f64) -> bool;
+    #[wasm_bindgen(method, catch)]
+    fn progress(this: &JsProgress, done: f64, total: f64) -> Result<bool, JsValue>;
+}
+
+/// JavaScript handles by number, each with the count of its owners.
+struct Table<T> {
+    next: u32,
+    items: HashMap<u32, (T, u32)>,
+}
+
+impl<T: Clone> Table<T> {
+    fn new() -> Self {
+        Self { next: 0, items: HashMap::new() }
+    }
+
+    /// A new entry with one owner, the caller.
+    fn insert(&mut self, item: T) -> u32 {
+        self.next = self.next.wrapping_add(1);
+        self.items.insert(self.next, (item, 1));
+        self.next
+    }
+
+    /// One more owner of `id`; false if there is no such entry.
+    fn claim(&mut self, id: u32) -> bool {
+        self.items.get_mut(&id).map(|(_, owners)| *owners += 1).is_some()
+    }
+
+    /// One owner fewer; the entry goes with its last. True if it went.
+    fn release(&mut self, id: u32) -> bool {
+        match self.items.get_mut(&id) {
+            Some((_, owners)) if *owners > 1 => {
+                *owners -= 1;
+                false
+            }
+            Some(_) => self.items.remove(&id).is_some(),
+            None => false,
+        }
+    }
+
+    fn get(&self, id: u32) -> Option<T> {
+        self.items.get(&id).map(|(item, _)| item.clone())
+    }
 }
 
 thread_local! {
-    static SOURCES: RefCell<(u32, HashMap<u32, JsByteSource>)> = RefCell::new((0, HashMap::new()));
-    static STORAGE: RefCell<(u32, HashMap<u32, JsIndexStorage>)> = RefCell::new((0, HashMap::new()));
+    static SOURCES: RefCell<Table<JsByteSource>> = RefCell::new(Table::new());
+    static STORAGE: RefCell<Table<JsIndexStorage>> = RefCell::new(Table::new());
+    static PROGRESS: RefCell<Table<JsProgress>> = RefCell::new(Table::new());
+    /// Sources whose `size()` or `identity()` threw: every later read of them fails with this.
+    static FAILED: RefCell<HashMap<u32, String>> = RefCell::new(HashMap::new());
+    /// Resource replies not yet freed.
+    static REPLIES: Cell<u32> = const { Cell::new(0) };
 }
 
-/// A shell's index storage by its number in [`STORAGE`], kept on this thread for the same reason as sources.
+/// A shell's index storage by its number in [`STORAGE`], owned by its core: it goes when the core does.
 struct Storage(u32);
 
 impl Storage {
-    fn with<T>(&self, call: impl FnOnce(&JsIndexStorage) -> T) -> Result<T, CoreError> {
-        STORAGE.with(|table| table.borrow().1.get(&self.0).map(call)).ok_or_else(|| CoreError::Io {
+    fn handle(&self) -> Result<JsIndexStorage, CoreError> {
+        STORAGE.with(|table| table.borrow().get(self.0)).ok_or_else(|| CoreError::Io {
             kind: core::IoKind::NotFound,
             detail: "the index storage was released".into(),
         })
+    }
+}
+
+impl Drop for Storage {
+    fn drop(&mut self) {
+        STORAGE.with(|table| table.borrow_mut().release(self.0));
     }
 }
 
@@ -70,15 +132,14 @@ fn storage_error(what: &str, e: &JsValue) -> CoreError {
 
 impl core::IndexStorage for Storage {
     fn get(&self, name: &str) -> Result<Option<Arc<dyn core::ByteSource>>, CoreError> {
-        let found = self.with(|s| s.get(name))?.map_err(|e| storage_error("read", &e))?;
+        let found = self.handle()?.get(name).map_err(|e| storage_error("read", &e))?;
         if found.is_null() || found.is_undefined() {
             return Ok(None);
         }
-        let id = register_source(found.unchecked_into());
-        Ok(Some(Arc::new(IndexSource(Source(id)))))
+        Ok(Some(Arc::new(IndexSource(Source::adopt(found.unchecked_into())))))
     }
     fn put(&self, name: &str, bytes: Vec<u8>) -> Result<(), CoreError> {
-        self.with(|s| s.put(name, bytes))?.map_err(|e| storage_error("write", &e))
+        self.handle()?.put(name, bytes).map_err(|e| storage_error("write", &e))
     }
 }
 
@@ -97,19 +158,32 @@ impl core::ByteSource for IndexSource {
     }
 }
 
-impl Drop for IndexSource {
-    fn drop(&mut self) {
-        release_source(self.0.0);
-    }
-}
-
-/// A JavaScript source by its number in [`SOURCES`]. It stays in the table until the shell releases it:
-/// several locations, and the registry, may name one source.
+/// One owner of a JavaScript source in [`SOURCES`]; the entry goes when its last owner does.
 struct Source(u32);
 
 impl Source {
-    fn with<T>(&self, call: impl FnOnce(&JsByteSource) -> T) -> Option<T> {
-        SOURCES.with(|table| table.borrow().1.get(&self.0).map(call))
+    /// A source of the shell's registration, if it is still registered.
+    fn claim(id: u32) -> Option<Source> {
+        SOURCES.with(|table| table.borrow_mut().claim(id)).then_some(Source(id))
+    }
+
+    /// A source the binding registers itself, with this as its only owner.
+    fn adopt(handle: JsByteSource) -> Source {
+        Source(SOURCES.with(|table| table.borrow_mut().insert(handle)))
+    }
+
+    fn handle(&self) -> Option<JsByteSource> {
+        SOURCES.with(|table| table.borrow().get(self.0))
+    }
+
+    fn fail(&self, what: &str, e: &JsValue) {
+        FAILED.with(|failed| failed.borrow_mut().insert(self.0, format!("the source's {what}() threw: {e:?}")));
+    }
+}
+
+impl Drop for Source {
+    fn drop(&mut self) {
+        release_source(self.0);
     }
 }
 
@@ -119,15 +193,29 @@ fn gone() -> CoreError {
 
 impl core::ByteSource for Source {
     fn size(&self) -> u64 {
-        self.with(|s| s.size()).unwrap_or(0.0) as u64
+        let Some(handle) = self.handle() else { return 0 };
+        handle.size().unwrap_or_else(|e| {
+            self.fail("size", &e);
+            0.0
+        }) as u64
     }
     fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
-        self.with(|s| s.read_at(offset as f64, len))
+        if let Some(why) = FAILED.with(|failed| failed.borrow().get(&self.0).cloned()) {
+            return Err(CoreError::Io { kind: core::IoKind::Other, detail: why });
+        }
+        self.handle()
             .ok_or_else(gone)?
+            .read_at(offset as f64, len)
             .map_err(|e| CoreError::Io { kind: core::IoKind::Other, detail: format!("the source failed: {e:?}") })
     }
     fn identity(&self) -> Option<FileIdentity> {
-        identity_from(&self.with(|s| s.identity())?)
+        match self.handle()?.identity() {
+            Ok(value) => identity_from(&value),
+            Err(e) => {
+                self.fail("identity", &e);
+                None
+            }
+        }
     }
 }
 
@@ -160,37 +248,41 @@ extern "C" {
     fn stringify(value: &JsValue) -> Result<JsValue, JsValue>;
 }
 
-struct Progress(JsProgress);
+/// The progress callback of one import, by its number in [`PROGRESS`], released when the import ends. A
+/// callback that throws cancels the import.
+struct Progress(Option<u32>);
 
-impl core::Progress for ProgressRef {
+impl core::Progress for Progress {
     fn progress(&self, done: u64, total: u64) -> bool {
-        PROGRESS.with(|slot| slot.borrow().as_ref().is_none_or(|p| p.0.progress(done as f64, total as f64)))
+        let Some(id) = self.0 else { return true };
+        match PROGRESS.with(|table| table.borrow().get(id)) {
+            Some(callback) => callback.progress(done as f64, total as f64).unwrap_or(false),
+            None => true,
+        }
     }
 }
 
-thread_local! {
-    static PROGRESS: RefCell<Option<Progress>> = const { RefCell::new(None) };
+impl Drop for Progress {
+    fn drop(&mut self) {
+        if let Some(id) = self.0 {
+            PROGRESS.with(|table| table.borrow_mut().release(id));
+        }
+    }
 }
 
-/// The progress callback of the import running now, held in [`PROGRESS`] for its duration.
-struct ProgressRef;
-
-/// Forgets a source. A dictionary still reading it gets an I/O error.
+/// Gives up the shell's registration of a source. A dictionary still holding it keeps it until it closes.
 #[wasm_bindgen(js_name = releaseSource)]
 pub fn release_source(id: u32) {
-    SOURCES.with(|table| table.borrow_mut().1.remove(&id));
+    if SOURCES.with(|table| table.borrow_mut().release(id)) {
+        FAILED.with(|failed| failed.borrow_mut().remove(&id));
+    }
 }
 
-/// Registers a source; the number goes into a location's JSON as `sourceId`.
+/// Registers a source; the number goes into a location's JSON as `sourceId`. The shell owns the registration
+/// until it calls `releaseSource`.
 #[wasm_bindgen(js_name = registerSource)]
 pub fn register_source(source: JsByteSource) -> u32 {
-    SOURCES.with(|table| {
-        let mut table = table.borrow_mut();
-        table.0 = table.0.wrapping_add(1);
-        let id = table.0;
-        table.1.insert(id, source);
-        id
-    })
+    SOURCES.with(|table| table.borrow_mut().insert(source))
 }
 
 #[wasm_bindgen(js_name = versions)]
@@ -212,11 +304,37 @@ pub fn self_test_trap() {
     }
 }
 
-/// A resource: its JSON (without the bytes) and its bytes.
+/// How many entries each table holds, and how many resource replies are not yet freed: for the suite, which
+/// checks that nothing a call registers outlives its owners.
+#[wasm_bindgen(js_name = selfTestTables)]
+pub fn self_test_tables() -> String {
+    serde_json::json!({
+        "sources": SOURCES.with(|t| t.borrow().items.len()),
+        "storage": STORAGE.with(|t| t.borrow().items.len()),
+        "progress": PROGRESS.with(|t| t.borrow().items.len()),
+        "replies": REPLIES.with(Cell::get),
+    })
+    .to_string()
+}
+
+/// A resource: its JSON (without the bytes) and its bytes, taken once. Free it when done.
 #[wasm_bindgen]
 pub struct ResourceReply {
     json: String,
     bytes: Vec<u8>,
+}
+
+impl ResourceReply {
+    fn new(json: String, bytes: Vec<u8>) -> Self {
+        REPLIES.with(|n| n.set(n.get() + 1));
+        Self { json, bytes }
+    }
+}
+
+impl Drop for ResourceReply {
+    fn drop(&mut self) {
+        REPLIES.with(|n| n.set(n.get().saturating_sub(1)));
+    }
 }
 
 #[wasm_bindgen]
@@ -225,9 +343,10 @@ impl ResourceReply {
     pub fn json(&self) -> String {
         self.json.clone()
     }
-    #[wasm_bindgen(getter)]
-    pub fn bytes(&self) -> Vec<u8> {
-        self.bytes.clone()
+    /// The bytes, moved out rather than copied; a second call gets none.
+    #[wasm_bindgen(js_name = takeBytes)]
+    pub fn take_bytes(&mut self) -> Vec<u8> {
+        std::mem::take(&mut self.bytes)
     }
 }
 
@@ -245,14 +364,8 @@ impl Core {
         let config: core::Config = from_json(config)?;
         let made = match storage {
             Some(storage) => {
-                let id = STORAGE.with(|table| {
-                    let mut table = table.borrow_mut();
-                    table.0 = table.0.wrapping_add(1);
-                    let id = table.0;
-                    table.1.insert(id, storage);
-                    id
-                });
-                core::Core::with_index_storage(config, Arc::new(Storage(id)))
+                let storage = Storage(STORAGE.with(|table| table.borrow_mut().insert(storage)));
+                core::Core::with_index_storage(config, Arc::new(storage))
             }
             None => core::Core::new(config),
         };
@@ -260,15 +373,19 @@ impl Core {
     }
 
     pub fn import(&self, package: &str, progress: Option<JsProgress>) -> Reply {
-        let package = package_from(&from_json::<Value>(package)?)?;
-        PROGRESS.with(|slot| *slot.borrow_mut() = progress.map(Progress));
-        let result = self.0.import(package, &ProgressRef);
-        PROGRESS.with(|slot| *slot.borrow_mut() = None);
+        let value = from_json::<Value>(package)?;
+        let package = package_from(&value)?;
+        let progress = Progress(progress.map(|p| PROGRESS.with(|table| table.borrow_mut().insert(p))));
+        let result = self.0.import(package, &progress);
+        failed_during(&value)?;
         reply(result)
     }
 
     pub fn open(&self, package: &str) -> Reply {
-        reply(self.0.open(package_from(&from_json::<Value>(package)?)?))
+        let value = from_json::<Value>(package)?;
+        let result = self.0.open(package_from(&value)?);
+        failed_during(&value)?;
+        reply(result)
     }
 
     pub fn close(&self, dict: &str) -> Reply {
@@ -295,9 +412,9 @@ impl Core {
         match self.0.resource(dict.into(), path.into(), from_json(view)?) {
             Ok(core::Resource::Found { path, mime, bytes }) => {
                 let json = serde_json::json!({ "type": "found", "path": path, "mime": mime }).to_string();
-                Ok(ResourceReply { json, bytes })
+                Ok(ResourceReply::new(json, bytes))
             }
-            Ok(missing) => Ok(ResourceReply { json: to_json(&missing), bytes: Vec::new() }),
+            Ok(missing) => Ok(ResourceReply::new(to_json(&missing), Vec::new())),
             Err(e) => Err(to_json(&e)),
         }
     }
@@ -323,26 +440,37 @@ fn from_json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, String> {
     serde_json::from_str(text).map_err(|e| to_json(&CoreError::Malformed { detail: format!("a request: {e}") }))
 }
 
+fn malformed(what: &str, why: &str) -> String {
+    to_json(&CoreError::Malformed { detail: format!("{what}: {why}") })
+}
+
 /// `{"type":"path","path":…}` or `{"type":"source","name":…,"sourceId":…}`.
 fn location_from(value: &Value) -> Result<core::Location, String> {
-    let bad = |why: &str| to_json(&CoreError::Malformed { detail: format!("a location: {why}") });
+    let bad = |why: &str| malformed("a location", why);
     match value["type"].as_str() {
         Some("path") => Ok(core::Location::Path { path: value["path"].as_str().ok_or_else(|| bad("no path"))?.into() }),
         Some("source") => {
             let id =
                 value["sourceId"].as_u64().and_then(|n| u32::try_from(n).ok()).ok_or_else(|| bad("no sourceId"))?;
-            if SOURCES.with(|t| !t.borrow().1.contains_key(&id)) {
-                return Err(bad("an unregistered sourceId"));
-            }
             let name = value["name"].as_str().ok_or_else(|| bad("no name"))?.into();
-            Ok(core::Location::Source { name, source: Arc::new(Source(id)) })
+            let source = Source::claim(id).ok_or_else(|| bad("an unregistered sourceId"))?;
+            Ok(core::Location::Source { name, source: Arc::new(source) })
         }
         _ => Err(bad("no type")),
     }
 }
 
-fn malformed(what: &str, why: &str) -> String {
-    to_json(&CoreError::Malformed { detail: format!("{what}: {why}") })
+/// The failure of a package's source that threw from `size()` or `identity()`, if one did: the core saw only
+/// what the binding could give it in its place (no size, no identity), so whatever it concluded, this is why.
+fn failed_during(package: &Value) -> Result<(), String> {
+    let locations = std::iter::once(&package["mdx"])
+        .chain(package["mdd"].as_array().into_iter().flatten())
+        .chain(package["sidecars"].as_array().into_iter().flatten());
+    let ids = locations.filter_map(|l| l["sourceId"].as_u64().and_then(|n| u32::try_from(n).ok()));
+    match FAILED.with(|failed| ids.into_iter().find_map(|id| failed.borrow().get(&id).cloned())) {
+        Some(why) => Err(to_json(&CoreError::Io { kind: core::IoKind::Other, detail: why })),
+        None => Ok(()),
+    }
 }
 
 /// A package; `mdd` and `sidecars` may be left out, but when present each must be a list.
@@ -376,5 +504,17 @@ mod tests {
         }
         let absent = package_from(&serde_json::json!({ "mdx": mdx })).map(|p| (p.mdd.len(), p.sidecars.len()));
         assert_eq!(absent, Ok((0, 0)));
+    }
+
+    #[test]
+    fn a_table_entry_goes_with_its_last_owner() {
+        let mut table = Table::new();
+        let id = table.insert("source");
+        assert!(table.claim(id));
+        assert!(!table.release(id), "one owner is left");
+        assert_eq!(table.get(id), Some("source"));
+        assert!(table.release(id), "the last owner takes it");
+        assert_eq!(table.get(id), None);
+        assert!(!table.claim(id), "a released entry cannot be claimed");
     }
 }
