@@ -88,9 +88,11 @@ pub fn volume_token<E: From<io::Error>>(
                 h.update(chunk);
                 progress(chunk.len() as u64)
             })?;
-            token[0] = 1;
-            token[8..16].copy_from_slice(&source.len().to_le_bytes());
-            token[16..].copy_from_slice(&h.digest128().to_le_bytes());
+            let (len, sum) = (source.len().to_le_bytes(), h.digest128().to_le_bytes());
+            let tagged = [1u8, 0, 0, 0, 0, 0, 0, 0];
+            for (slot, byte) in token.iter_mut().zip(tagged.iter().chain(&len).chain(&sum)) {
+                *slot = *byte;
+            }
         }
     }
     Ok(token)
@@ -547,5 +549,16 @@ mod tests {
         let by_id = |s: &Vec<u8>, id| volume_token::<io::Error>(Some(id), s, |_| Ok(())).unwrap();
         assert_eq!(by_id(&a, id), by_id(&b, id));
         assert_ne!(by_id(&a, id), by_id(&a, FileIdentity { ctime_ns: 5, ..id }));
+    }
+
+    /// A content token's layout: 1, seven zero bytes, the length, then the xxh3-128 of the content.
+    #[test]
+    fn a_content_token_is_tagged_sized_and_summed() {
+        let content = vec![7u8; 300];
+        let token = volume_token::<io::Error>(None, &content, |_| Ok(())).unwrap();
+        let mut expected = vec![1u8, 0, 0, 0, 0, 0, 0, 0];
+        expected.extend_from_slice(&300u64.to_le_bytes());
+        expected.extend_from_slice(&xxhash_rust::xxh3::xxh3_128(&content).to_le_bytes());
+        assert_eq!(token.to_vec(), expected);
     }
 }
