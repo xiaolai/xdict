@@ -74,7 +74,7 @@ impl Derive for Plain {
         Cow::Borrowed(text)
     }
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
-        Ok(vec![false; keys.len()])
+        filled(keys.len(), false)
     }
 }
 
@@ -121,7 +121,7 @@ impl Region for SourceRegion {
         if end > self.0.len() {
             return Err(Error::Malformed("a read runs past the end of the index".into()));
         }
-        let mut buf = vec![0u8; len];
+        let mut buf = filled(len, 0u8)?;
         self.0.read_exact_at(offset, &mut buf)?;
         Ok(Cow::Owned(buf))
     }
@@ -253,7 +253,9 @@ pub(crate) fn build(
 
 /// Where each record ends: the next larger start, or the end of all records.
 fn record_ends(starts: &[u64], total: u64) -> Result<Vec<u64>, Error> {
-    let mut sorted = starts.to_vec();
+    let mut sorted = Vec::new();
+    sorted.try_reserve_exact(starts.len()).map_err(crate::out_of_memory)?;
+    sorted.extend_from_slice(starts);
     sorted.sort_unstable();
     sorted.dedup();
     let mut ends = Vec::new();
@@ -304,7 +306,9 @@ impl Folded {
     /// The tier-1 order: sorted stably, so keys that fold together stay in file order.
     fn order(&self) -> Result<Vec<u32>, Error> {
         let count = u32::try_from(self.at.len().saturating_sub(1)).map_err(|_| too_large())?;
-        let mut order: Vec<u32> = (0..count).collect();
+        let mut order: Vec<u32> = Vec::new();
+        order.try_reserve_exact(count as usize).map_err(crate::out_of_memory)?;
+        order.extend(0..count);
         order.sort_by(|&a, &b| self.get(a).cmp(self.get(b)));
         Ok(order)
     }
@@ -326,13 +330,18 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32
         let tier2 = rules.fold(&plain);
         if tier2 != rules.fold(k) {
             let from = u32::try_from(text.len()).map_err(|_| too_large())?;
+            text.try_reserve(tier2.len()).map_err(crate::out_of_memory)?;
+            changed.try_reserve(1).map_err(crate::out_of_memory)?;
             text.extend_from_slice(tier2.as_bytes());
             changed.push((from, u32::try_from(text.len()).map_err(|_| too_large())?, i));
         }
     }
     let form = |&(from, to, _): &(u32, u32, u32)| text.get(from as usize..to as usize).unwrap_or(&[]);
     changed.sort_by(|a, b| form(a).cmp(form(b)));
-    Ok(changed.into_iter().map(|(_, _, i)| i).collect())
+    let mut order = Vec::new();
+    order.try_reserve_exact(changed.len()).map_err(crate::out_of_memory)?;
+    order.extend(changed.into_iter().map(|(_, _, i)| i));
+    Ok(order)
 }
 
 /// One bit per key, set for the keys `derive` leaves public.
@@ -342,7 +351,7 @@ fn public_bitmap(keys: &Keys, derive: &dyn Derive) -> Result<Vec<u8>, Error> {
     if internal.len() != n {
         return Err(Error::Malformed("the internal keys were not marked one per key".into()));
     }
-    let mut public = vec![0u8; n.div_ceil(8)];
+    let mut public = filled(n.div_ceil(8), 0u8)?;
     for (i, _) in internal.iter().enumerate().filter(|(_, internal)| !**internal) {
         if let Some(byte) = public.get_mut(i / 8) {
             *byte |= 1 << (i % 8);
@@ -425,6 +434,14 @@ fn offset(offsets: &[u32], i: usize) -> Result<usize, Error> {
 
 fn too_large() -> Error {
     Error::TooLarge("the key index would pass 4 GiB of key text".into())
+}
+
+/// `n` copies of `value`, or an error, not an abort, when there is not the memory.
+fn filled<T: Clone>(n: usize, value: T) -> Result<Vec<T>, Error> {
+    let mut out = Vec::new();
+    out.try_reserve_exact(n).map_err(crate::out_of_memory)?;
+    out.resize(n, value);
+    Ok(out)
 }
 
 /// A section's place in the index.
@@ -611,7 +628,7 @@ impl Index {
 
     /// Whether a table of little-endian `u32` key numbers names only keys, none twice.
     fn names_keys_once(&self, table: Span) -> Result<bool, Stale> {
-        let mut seen = vec![false; self.keys];
+        let mut seen = filled(self.keys, false).map_err(|_| Stale::Damaged("the key count".into()))?;
         self.each_word::<4>(table, |word| match seen.get_mut(u32::from_le_bytes(word) as usize) {
             Some(slot @ false) => {
                 *slot = true;
@@ -642,6 +659,7 @@ impl Index {
                     return Err(damaged("the record blocks"));
                 }
                 expected = expected.checked_add(block.len as u64).ok_or_else(|| damaged("the record blocks"))?;
+                blocks.try_reserve(1).map_err(|_| damaged("the record blocks"))?;
                 blocks.push(block);
             }
         }
