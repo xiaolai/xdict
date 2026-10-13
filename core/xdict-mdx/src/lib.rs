@@ -189,11 +189,48 @@ pub(crate) struct RecordBlock {
     len: usize,
 }
 
-/// What one lookup may return: its records' bytes, keys included, and how many records.
-#[derive(Clone, Copy)]
-struct Budget {
+/// What one lookup may read: its records' bytes, keys included, and how many records. Spent as records are
+/// read, so a caller that reads several sets of records for one answer (a lookup and the targets of its
+/// redirects) passes the same budget to each and is bounded as a whole.
+#[derive(Clone, Copy, Debug)]
+pub struct Budget {
     bytes: u64,
     records: usize,
+}
+
+impl Budget {
+    /// At most `bytes` of records, keys included, and `records` records.
+    pub const fn new(bytes: u64, records: usize) -> Self {
+        Budget { bytes, records }
+    }
+
+    /// The reader's own: [`limits::LOOKUP_BYTES`] and [`limits::LOOKUP_RECORDS`].
+    pub const fn lookup() -> Self {
+        Budget::new(limits::LOOKUP_BYTES, limits::LOOKUP_RECORDS)
+    }
+
+    /// Takes `n` records, all or none.
+    fn take_records(&mut self, n: usize) -> Result<(), Error> {
+        self.records = self.records.checked_sub(n).ok_or_else(|| {
+            Error::TooLarge(format!("{n} records are more than the {} this lookup has left to read", self.records))
+        })?;
+        Ok(())
+    }
+
+    /// Refuses a read of `n` bytes the budget could not return, before it is made.
+    fn afford(&self, n: u64) -> Result<(), Error> {
+        if n > self.bytes {
+            return Err(Error::TooLarge(format!("a {n}-byte record is more than the {} bytes left", self.bytes)));
+        }
+        Ok(())
+    }
+
+    /// Takes `n` bytes.
+    fn take_bytes(&mut self, n: u64) -> Result<(), Error> {
+        self.afford(n)?;
+        self.bytes -= n;
+        Ok(())
+    }
 }
 
 /// How a layout's record blocks are stored.
@@ -353,13 +390,17 @@ impl File {
     }
 
     /// Reads the records of `keys` (key numbers), in the order they lie in the file, so that each block is
-    /// decompressed once however many of them share it; `each` gets every key number and its record. Each
-    /// record is bounded by [`limits::BLOCK_BYTES`]; how many are read is the caller's to bound.
+    /// decompressed once however many of them share it; `each` gets every key number and its record. Spends
+    /// `budget`: the records are refused together, before any is read, when there are more than it has left;
+    /// each record's stored size is checked before it is read, and its returned size (which decoding may
+    /// enlarge) is what is taken.
     pub fn for_each_record(
         &self,
         keys: &[usize],
+        budget: &mut Budget,
         mut each: impl FnMut(usize, Record) -> Result<(), Error>,
     ) -> Result<(), Error> {
+        budget.take_records(keys.len())?;
         let mut by_offset: Vec<(u64, usize)> = Vec::with_capacity(keys.len());
         for &i in keys {
             by_offset.push((self.span(i)?.0, i));
@@ -367,7 +408,9 @@ impl File {
         by_offset.sort_unstable();
         let mut cache = Vec::new();
         for (_, i) in by_offset {
+            budget.afford(self.record_size(i)?)?;
             let record = self.read_record(i, &mut cache)?;
+            budget.take_bytes((record.key.len() + record.data.len()) as u64)?;
             each(i, record)?;
         }
         Ok(())
@@ -377,42 +420,21 @@ impl File {
     /// when nothing matches; an error when a matching record could not be read, or when the matches
     /// together exceed [`limits::LOOKUP_BYTES`] or [`limits::LOOKUP_RECORDS`].
     pub fn lookup(&self, key: &str) -> Result<Vec<Record>, Error> {
-        self.lookup_within(key, Budget { bytes: limits::LOOKUP_BYTES, records: limits::LOOKUP_RECORDS })
+        self.lookup_within(key, Budget::lookup())
     }
 
-    fn lookup_within(&self, key: &str, budget: Budget) -> Result<Vec<Record>, Error> {
+    fn lookup_within(&self, key: &str, mut budget: Budget) -> Result<Vec<Record>, Error> {
         let order = self.find(key)?;
-        if order.len() > budget.records {
-            return Err(Error::TooLarge(format!("\"{key}\" matches more than {} records", budget.records)));
-        }
-        // Read in file order, so the blocks are touched in rising order and each is decompressed once
-        // however the answer is ordered; then answer in the promised order.
-        let mut by_offset: Vec<(u64, usize)> = Vec::with_capacity(order.len());
-        for (slot, &i) in order.iter().enumerate() {
-            by_offset.push((self.span(i)?.0, slot));
-        }
-        by_offset.sort_unstable();
-        let over = || Error::TooLarge(format!("the records for \"{key}\" total more than {} bytes", budget.bytes));
-        let mut answers: Vec<Option<Record>> = order.iter().map(|_| None).collect();
-        let (mut total, mut cache) = (0u64, Vec::new());
-        for (_, slot) in by_offset {
-            let i = order.get(slot).copied().ok_or_else(|| malformed("key index"))?;
-            // The stored size bounds what is read; the returned size, which decoding may enlarge, is what
-            // is kept, so both are counted.
-            let (start, end) = self.span(i)?;
-            if total.saturating_add(end.saturating_sub(start)) > budget.bytes {
-                return Err(over());
-            }
-            let record = self.read_record(i, &mut cache)?;
-            total = total.saturating_add((record.key.len() + record.data.len()) as u64);
-            if total > budget.bytes {
-                return Err(over());
-            }
-            if let Some(answer) = answers.get_mut(slot) {
-                *answer = Some(record);
-            }
-        }
-        answers.into_iter().map(|a| a.ok_or_else(|| malformed("lookup"))).collect()
+        let mut by_key: HashMap<usize, Record> = HashMap::with_capacity(order.len());
+        self.for_each_record(&order, &mut budget, |i, record| {
+            by_key.insert(i, record);
+            Ok(())
+        })
+        .map_err(|e| match e {
+            Error::TooLarge(why) => Error::TooLarge(format!("\"{key}\": {why}")),
+            other => other,
+        })?;
+        order.iter().map(|i| by_key.remove(i).ok_or_else(|| malformed("lookup"))).collect()
     }
 
     /// Where key `i`'s record starts and ends in the concatenated records.
@@ -523,10 +545,30 @@ mod tests {
         let entries: Vec<Entry> = (0..3).map(|_| Entry::text("bank", &record)).collect();
         let file = File::from_source(Box::new(writer::write(&Spec::mdx(), &entries).unwrap()), None).unwrap();
         // Each stored record is its 100 bytes and a terminating null; each returned one, 100 bytes and its key.
-        let bytes = |n| Budget { bytes: n, records: 10 };
+        let bytes = |n| Budget::new(n, 10);
         assert_eq!(file.lookup_within("bank", bytes(312)).unwrap().len(), 3);
         assert!(matches!(file.lookup_within("bank", bytes(311)), Err(Error::TooLarge(_))));
-        assert!(matches!(file.lookup_within("bank", Budget { bytes: 1 << 20, records: 2 }), Err(Error::TooLarge(_))));
+        assert!(matches!(file.lookup_within("bank", Budget::new(1 << 20, 2)), Err(Error::TooLarge(_))));
+    }
+
+    /// One budget passed to several reads bounds them together, and too many records are refused unread.
+    #[test]
+    fn a_budget_is_spent_across_reads() {
+        let entries = [Entry::text("a", &"x".repeat(100)), Entry::text("b", &"y".repeat(100))];
+        let file = File::from_source(Box::new(writer::write(&Spec::mdx(), &entries).unwrap()), None).unwrap();
+        let mut budget = Budget::new(1 << 20, 2);
+        file.for_each_record(&[0], &mut budget, |_, _| Ok(())).unwrap();
+        file.for_each_record(&[1], &mut budget, |_, _| Ok(())).unwrap();
+        let mut read = 0;
+        let third = file.for_each_record(&[0], &mut budget, |_, _| {
+            read += 1;
+            Ok(())
+        });
+        assert!(matches!(third, Err(Error::TooLarge(_))), "{third:?}");
+        assert_eq!(read, 0, "a refused set reads nothing");
+        let mut budget = Budget::new(150, 10);
+        file.for_each_record(&[0], &mut budget, |_, _| Ok(())).unwrap();
+        assert!(matches!(file.for_each_record(&[1], &mut budget, |_, _| Ok(())), Err(Error::TooLarge(_))));
     }
 
     /// The budget counts what a lookup returns, after decoding: an invalid byte becomes a 3-byte U+FFFD.
@@ -534,9 +576,9 @@ mod tests {
     fn the_lookup_budget_counts_decoded_text() {
         let entries = [Entry::bytes("bad", &[0xFF; 100])];
         let file = File::from_source(Box::new(writer::write(&Spec::mdx(), &entries).unwrap()), None).unwrap();
-        let records = file.lookup_within("bad", Budget { bytes: 1 << 20, records: 10 }).unwrap();
+        let records = file.lookup_within("bad", Budget::new(1 << 20, 10)).unwrap();
         assert_eq!(records[0].data.len(), 300);
-        assert!(matches!(file.lookup_within("bad", Budget { bytes: 200, records: 10 }), Err(Error::TooLarge(_))));
+        assert!(matches!(file.lookup_within("bad", Budget::new(200, 10)), Err(Error::TooLarge(_))));
     }
 
     #[test]
