@@ -198,3 +198,20 @@ fn a_record_is_read_once_per_lookup() {
     let r = resolve(&f, "A", Mode::Reader, &mut Budget::new(1 << 20, 4)).unwrap();
     assert_eq!(r.hits.len(), 1, "{r:?}");
 }
+
+/// A record that is a redirect naming nothing is a dangling redirect, not an entry: matched directly, or landed
+/// on along a chain. An empty line beside a named target is passed over.
+#[test]
+fn a_redirect_naming_nothing_is_dangling_not_an_entry() {
+    let f = file(&[("A", "@@@LINK="), ("B", "@@@LINK=A"), ("C", "@@@LINK=\r\n@@@LINK=D"), ("D", "the d")]);
+    let r = hits(&f, "A");
+    assert!(r.hits.is_empty(), "{r:?}");
+    assert!(matches!(&r.problems[..], [Problem::Dangling { target, .. }] if target.is_empty()), "{r:?}");
+    let r = hits(&f, "B");
+    assert!(r.hits.is_empty(), "{r:?}");
+    let [Problem::Dangling { from, target }] = &r.problems[..] else { panic!("{r:?}") };
+    assert!(target.is_empty() && names(&f, &[*from]) == ["A"], "{r:?}");
+    let r = hits(&f, "C");
+    let got: Vec<String> = r.hits.iter().map(|h| f.key(h.key).unwrap().into_owned()).collect();
+    assert_eq!(got, ["D"], "{r:?}");
+}
