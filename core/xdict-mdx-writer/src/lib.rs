@@ -182,6 +182,9 @@ pub fn write(spec: &Spec, entries: &[Entry]) -> Result<Vec<u8>, WriteError> {
         {
             return Err(WriteError::DefectNotApplicable { defect, why: "a file with no entries has no blocks" });
         }
+        Some(defect @ Defect::LzoRecordBlock) if spec.compression == Compression::Lzo => {
+            return Err(WriteError::DefectNotApplicable { defect, why: "an LZO block is already marked LZO" });
+        }
         Some(defect @ Defect::RegistrationCodeBit) if spec.version == Version::V3_0 => {
             return Err(WriteError::DefectNotApplicable { defect, why: "a 3.0 header has no Encrypted attribute" });
         }
@@ -541,6 +544,9 @@ mod tests {
                 Spec { version, obfuscate_key_index: false, defect: Some(Defect::KeywordChecksum), ..Spec::mdx() };
             assert!(matches!(refused(&spec, &[Entry::text("a", "r")]), WriteError::DefectNotApplicable { .. }));
         }
+        // An LZO block marked LZO is no defect: the reader would read it whole.
+        let lzo = Spec { compression: Compression::Lzo, defect: Some(Defect::LzoRecordBlock), ..Spec::mdx() };
+        assert!(matches!(refused(&lzo, &[Entry::text("a", "r")]), WriteError::DefectNotApplicable { .. }));
     }
 
     #[test]
