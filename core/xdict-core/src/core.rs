@@ -98,7 +98,7 @@ impl Core {
             let indexes: Box<dyn IndexStore> = match (storage, &config.cache_dir) {
                 (Some(storage), _) => Box::new(Shell(storage)),
                 #[cfg(not(target_family = "wasm"))]
-                (None, Some(dir)) => Box::new(Directory(dir.into())),
+                (None, Some(dir)) => Box::new(Directory(xdict_mmap::OwnDirectory::new(dir))),
                 _ => Box::new(Memory::default()),
             };
             let registry: Box<dyn Registry> = match &config.data_dir {

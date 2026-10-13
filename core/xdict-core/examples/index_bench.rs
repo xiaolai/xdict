@@ -102,7 +102,7 @@ fn main() {
                 match File::build_index(&source, Some(kind(path)), identity(n), &*derive(kind(path))) {
                     Ok(index) => {
                         bytes += index.len() as u64;
-                        std::fs::write(cache.join(format!("{n}.xdidx")), &index).unwrap();
+                        xdict_mmap::OwnDirectory::new(&cache).replace(&format!("{n}.xdidx"), &index).unwrap();
                         kept.push(format!("{n}\t{}", path.display()));
                     }
                     Err(e) => eprintln!("skipped {}: {e}", path.display()),
@@ -124,7 +124,7 @@ fn main() {
             for line in list.lines() {
                 let (n, path) = line.split_once('\t').unwrap();
                 let path = PathBuf::from(path);
-                let region = Box::new(Slice(xdict_mmap::Mapped::open(&cache.join(format!("{n}.xdidx"))).unwrap()));
+                let region = Box::new(Slice(xdict_mmap::OwnDirectory::new(&cache).map(&format!("{n}.xdidx")).unwrap()));
                 let source = Box::new(DiskFile::open(&path).unwrap());
                 let file = File::with_index(
                     source,

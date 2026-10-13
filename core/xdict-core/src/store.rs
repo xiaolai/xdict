@@ -63,40 +63,28 @@ impl IndexStore for Memory {
     }
 }
 
-/// Indexes as files in a directory the core alone writes.
+/// Indexes as files in a directory the core alone writes and maps (`xdict_mmap::OwnDirectory`).
 #[cfg(not(target_family = "wasm"))]
-pub(crate) struct Directory(pub(crate) std::path::PathBuf);
+pub(crate) struct Directory(pub(crate) xdict_mmap::OwnDirectory);
 
 #[cfg(not(target_family = "wasm"))]
 impl IndexStore for Directory {
     fn get(&self, name: &str) -> Result<Option<Box<dyn Region>>, CoreError> {
-        match xdict_mmap::Mapped::open(&self.0.join(name)) {
+        use std::io::ErrorKind;
+        match self.0.map(name) {
             Ok(mapped) => Ok(Some(Box::new(Slice(mapped)))),
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
-            // An empty or unreadable index is one to build again, as a damaged one is.
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => Ok(None),
+            // An absent, empty or foreign index is one to build again, as a damaged one is; writing it replaces
+            // whatever was under its name.
+            Err(e) if matches!(e.kind(), ErrorKind::NotFound | ErrorKind::UnexpectedEof | ErrorKind::InvalidData) => {
+                Ok(None)
+            }
             Err(e) => Err(CoreError::io(&e)),
         }
     }
 
     fn put(&self, name: &str, bytes: &[u8]) -> Result<(), CoreError> {
-        use std::io::Write;
-        std::fs::create_dir_all(&self.0).map_err(|e| CoreError::io(&e))?;
-        // A unique temporary name in the same directory, so the rename is atomic and two imports of one
-        // edition at once do not write into each other's file.
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let temporary = self.0.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
-        // Not synced before the rename: an index is disposable and checksummed, so one a crash left short
-        // or zeroed is `Stale` when loaded and built again. The registry, the reader's data, is synced.
-        let written = (|| {
-            let mut file = std::fs::File::create(&temporary)?;
-            file.write_all(bytes)?;
-            std::fs::rename(&temporary, self.0.join(name))
-        })();
-        if written.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        written.map_err(|e| CoreError::io(&e))
+        // Not synced: an index is disposable and checksummed, so one a crash left short or zeroed is `Stale`
+        // when loaded and built again. The registry, the reader's data, is synced.
+        self.0.replace(name, bytes).map_err(|e| CoreError::io(&e))
     }
 }
