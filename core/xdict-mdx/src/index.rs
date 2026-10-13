@@ -468,9 +468,20 @@ pub(crate) struct Index {
     pub(crate) rules: Rules,
 }
 
-impl Index {
-    /// Loads and checks an index for the file `binding` describes, built under `derive`.
-    pub(crate) fn load(region: Box<dyn Region>, binding: &Binding, derive: Arc<dyn Derive>) -> Result<Self, Stale> {
+/// What an index's header says, once its checksum, its versions and the file it was built for are checked.
+struct Head {
+    rules: Rules,
+    keys: usize,
+    block_count: usize,
+    total_records: u64,
+    spans: [Span; SECTIONS],
+    sums: [u64; SECTIONS],
+}
+
+impl Head {
+    /// The header of the index in `region`, if it is an index of this format, intact, built by this reader
+    /// under `derive`, for the file `binding` describes, with counts a build could have written.
+    fn read(region: &dyn Region, binding: &Binding, derive: &dyn Derive) -> Result<Self, Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
         let head = region.bytes(0, HEADER_LEN).map_err(|_| Stale::Format)?;
         let field = |at: usize, len: usize| head.get(at..at + len).ok_or(Stale::Format);
@@ -491,7 +502,6 @@ impl Index {
         }
         let kind = if field(20, 1)? == [1] { Kind::Mdd } else { Kind::Mdx };
         let flags = field(21, 1)?.first().copied().unwrap_or(0);
-        let rules = Rules { case_sensitive: flags & 1 != 0, strip: flags & 2 != 0 };
         if kind != binding.kind
             || field(24, 32)? != binding.identity
             || u64_at(56)? != binding.header
@@ -501,7 +511,6 @@ impl Index {
         }
         let keys = usize::try_from(u64_at(72)?).map_err(|_| damaged("the key count"))?;
         let block_count = usize::try_from(u64_at(80)?).map_err(|_| damaged("the block count"))?;
-        let total_records = u64_at(88)?;
         if keys as u64 > limits::KEYS {
             return Err(damaged("the key count"));
         }
@@ -511,24 +520,39 @@ impl Index {
         if block_count as u64 > MOST_BLOCKS || (block_count as u64).saturating_mul(BLOCK_FRAMING) > binding.source_len {
             return Err(damaged("the block count"));
         }
-
-        // Every section's bounds and size are checked before any of it is read.
         let mut spans = [Span { at: 0, len: 0 }; SECTIONS];
-        for (i, span) in spans.iter_mut().enumerate() {
+        let mut sums = [0u64; SECTIONS];
+        for (i, (span, sum)) in spans.iter_mut().zip(&mut sums).enumerate() {
             let at = TABLE_AT + i * 24;
-            *span = Span { at: u64_at(at)?, len: u64_at(at + 8)? };
+            (*span, *sum) = (Span { at: u64_at(at)?, len: u64_at(at + 8)? }, u64_at(at + 16)?);
+        }
+        Ok(Self {
+            rules: Rules { case_sensitive: flags & 1 != 0, strip: flags & 2 != 0 },
+            keys,
+            block_count,
+            total_records: u64_at(88)?,
+            spans,
+            sums,
+        })
+    }
+
+    /// Every section within the index (`len` bytes) and of the size its counts make it, before any is read.
+    fn check_sections(&self, len: u64) -> Result<(), Stale> {
+        let damaged = |what: &str| Stale::Damaged(what.to_owned());
+        for span in &self.spans {
             let end = span.at.checked_add(span.len).ok_or_else(|| damaged("a section's bounds"))?;
-            if span.at < HEADER_LEN as u64 || end > region.len() {
+            if span.at < HEADER_LEN as u64 || end > len {
                 return Err(damaged("a section's bounds"));
             }
         }
-        let [text, offsets, starts, ends, order, blocks, public, tier2] = spans;
+        let [text, offsets, starts, ends, order, blocks, public, tier2] = self.spans;
+        let keys = self.keys;
         let sized = |span: Span, width: u64, count: usize| (count as u64).checked_mul(width) == Some(span.len);
         if !sized(offsets, 4, keys + 1)
             || !sized(starts, 8, keys)
             || !sized(ends, 8, keys)
             || !sized(order, 4, keys)
-            || !sized(blocks, 32, block_count)
+            || !sized(blocks, 32, self.block_count)
             || text.len > u64::from(u32::MAX)
             || crate::keys::cost_of(keys as u64, text.len) > limits::INDEX_BYTES
             || public.len != keys.div_ceil(8) as u64
@@ -537,16 +561,25 @@ impl Index {
         {
             return Err(damaged("a section's size"));
         }
-        for (i, span) in spans.iter().enumerate() {
-            if checksum(&*region, *span).map_err(|_| damaged("a section"))? != u64_at(TABLE_AT + i * 24 + 16)? {
+        Ok(())
+    }
+}
+
+impl Index {
+    /// Loads and checks an index for the file `binding` describes, built under `derive`: its header, every
+    /// section's bounds, size and checksum, then its tables' structure and its record blocks.
+    pub(crate) fn load(region: Box<dyn Region>, binding: &Binding, derive: Arc<dyn Derive>) -> Result<Self, Stale> {
+        let head = Head::read(&*region, binding, &*derive)?;
+        head.check_sections(region.len())?;
+        for (i, (span, sum)) in head.spans.iter().zip(head.sums).enumerate() {
+            if checksum(&*region, *span).map_err(|_| Stale::Damaged("a section".into()))? != sum {
                 return Err(Stale::Damaged(format!("section {i}'s checksum")));
             }
         }
-        drop(head);
-
+        let [text, offsets, starts, ends, order, blocks, public, tier2] = head.spans;
         let index = Self {
             region,
-            keys,
+            keys: head.keys,
             text,
             offsets,
             starts,
@@ -556,8 +589,8 @@ impl Index {
             tier2,
             derive,
             blocks: Vec::new(),
-            total_records,
-            rules,
+            total_records: head.total_records,
+            rules: head.rules,
         };
         index.check_structure()?;
         let blocks = index.read_blocks(blocks)?;
