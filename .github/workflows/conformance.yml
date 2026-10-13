@@ -1,0 +1,83 @@
+# The core's gate, and conformance/ through every binding that has a suite (AGENTS.md, conformance/README.md).
+# C# joins when its spike lands (ADR-0003).
+name: conformance
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: 1.99.0
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: core
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+
+  swift:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - run: swift --version
+      - run: ./xdict-ffi/test-swift.sh
+
+  kotlin:
+    runs-on: ubuntu-latest
+    env:
+      KOTLIN_VERSION: 2.4.21
+      KOTLIN_SHA256: 7cc140e76daf416a0424a5557f99afd7ca89ebd463ea1101261e3e01c33e75cd
+      JNA_SHA256: 91a814ac4f40d60dee91d842e1a8ad874c62197984403d0e3c30d39e55cf53b3
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: 25
+      - name: kotlinc and JNA, checked against their hashes
+        run: |
+          cd "$RUNNER_TEMP"
+          curl -sfLo kotlin.zip "https://github.com/JetBrains/kotlin/releases/download/v$KOTLIN_VERSION/kotlin-compiler-$KOTLIN_VERSION.zip"
+          echo "$KOTLIN_SHA256  kotlin.zip" | sha256sum -c -
+          unzip -q kotlin.zip
+          echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
+          curl -sfLo jna.jar https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.12.1/jna-5.12.1.jar
+          echo "$JNA_SHA256  jna.jar" | sha256sum -c -
+          echo "JNA_JAR=$RUNNER_TEMP/jna.jar" >> "$GITHUB_ENV"
+      - run: ./xdict-ffi/test-kotlin.sh
+
+  worker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - run: cargo install wasm-bindgen-cli --version 0.2.129 --locked
+      - run: npm install --global typescript@5.9.3
+      - run: ./xdict-wasm/test-worker.sh

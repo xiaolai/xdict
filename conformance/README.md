@@ -58,6 +58,9 @@ each of [`entries`] (edition the imported one) in the view `xdict://d/`, 1 MiB.
 | Kotlin on the JVM (UniFFI) | `core/xdict-ffi/test-kotlin.sh` (needs `kotlinc`, a JDK, `JNA_JAR`) | macOS, Linux |
 | TypeScript in a Worker (`wasm-bindgen`) | `core/xdict-wasm/test-worker.sh` (needs `wasm-bindgen` 0.2.129, `tsc`, Node 24) | everywhere |
 
+CI runs all four, with the core's gate, on every push (`.github/workflows/conformance.yml`): Swift on macOS,
+the others on Linux.
+
 Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json` and
 `XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json`, so a deliberately wrong
 expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
