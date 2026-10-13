@@ -82,34 +82,53 @@ impl OwnDirectory {
         let path = self.path(name)?;
         std::fs::create_dir_all(&self.dir)?;
         // A unique temporary name in the same directory, so the rename is atomic and two writers at once do not
-        // write into each other's file.
-        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let temporary = self.dir.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
-        let written = (|| {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            // Created read-only for everyone: the descriptor opened here can still write it, nothing later can.
-            #[cfg(unix)]
-            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o400);
-            let mut file = options.open(&temporary)?;
-            file.write_all(bytes)?;
-            std::fs::rename(&temporary, &path)
-        })();
+        // write into each other's file; only a file this call created is removed on failure.
+        let (temporary, mut file) = self.create_temporary(name)?;
+        let written = file.write_all(bytes).and_then(|()| std::fs::rename(&temporary, &path));
         if written.is_err() {
             let _ = std::fs::remove_file(&temporary);
         }
         written
     }
 
-    /// The path of `name`, which must be a plain file name: nothing here reaches outside the directory.
+    /// Creates a new temporary file for `name`, read-only for everyone (the descriptor opened here can still
+    /// write it, nothing later can), passing over a name that is taken rather than removing what it did not
+    /// create.
+    fn create_temporary(&self, name: &str) -> io::Result<(PathBuf, File)> {
+        const ATTEMPTS: u32 = 64;
+        for _ in 0..ATTEMPTS {
+            let n = NEXT_TEMPORARY.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            let temporary = self.dir.join(temporary_name(name, n));
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o400);
+            match options.open(&temporary) {
+                Ok(file) => return Ok((temporary, file)),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(e),
+            }
+        }
+        Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{ATTEMPTS} temporary names were all taken")))
+    }
+
+    /// The path of `name`, which must be a plain file name without a leading dot: nothing here reaches outside
+    /// the directory, or names one of its temporary files.
     fn path(&self, name: &str) -> io::Result<PathBuf> {
         let mut parts = Path::new(name).components();
         match (parts.next(), parts.next()) {
-            (Some(std::path::Component::Normal(_)), None) => Ok(self.dir.join(name)),
+            (Some(std::path::Component::Normal(_)), None) if !name.starts_with('.') => Ok(self.dir.join(name)),
             _ => Err(io::Error::new(io::ErrorKind::InvalidInput, format!("{name:?} is not a plain file name"))),
         }
     }
+}
+
+/// The number of the next temporary file, unique within the process.
+static NEXT_TEMPORARY: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+/// Temporary file `n` of this process for the file `name`: a leading dot, which no name a caller gives has.
+fn temporary_name(name: &str, n: u64) -> String {
+    format!(".{name}.{}.{n}.tmp", std::process::id())
 }
 
 #[cfg(unix)]
@@ -183,6 +202,35 @@ mod tests {
         assert_eq!(own.map("none").err().unwrap().kind(), io::ErrorKind::NotFound);
         own.replace("empty", b"").unwrap();
         assert_eq!(own.map("empty").err().unwrap().kind(), io::ErrorKind::UnexpectedEof);
+        std::fs::remove_dir_all(&own.dir).unwrap();
+    }
+
+    /// A name with a leading dot is the temporary files' and is refused, so no caller can map or replace one.
+    #[test]
+    fn a_temporary_name_cannot_be_named() {
+        let own = scratch("dotted");
+        for name in [".index", ".index.1.0.tmp"] {
+            assert_eq!(own.map(name).err().unwrap().kind(), io::ErrorKind::InvalidInput, "{name:?}");
+            assert_eq!(own.replace(name, b"x").err().unwrap().kind(), io::ErrorKind::InvalidInput, "{name:?}");
+        }
+    }
+
+    /// A temporary file this write did not create is neither deleted nor a reason to fail: the write takes the
+    /// next name.
+    #[test]
+    fn a_temporary_name_already_taken_is_skipped_not_deleted() {
+        let own = scratch("taken");
+        own.replace("index", b"first").unwrap();
+        let n = NEXT_TEMPORARY.load(std::sync::atomic::Ordering::Relaxed);
+        let taken: Vec<PathBuf> = (n..n + 4).map(|n| own.dir.join(temporary_name("index", n))).collect();
+        for path in &taken {
+            std::fs::write(path, b"not ours").unwrap();
+        }
+        own.replace("index", b"second").unwrap();
+        assert_eq!(own.map("index").unwrap().as_ref(), b"second");
+        for path in &taken {
+            assert_eq!(std::fs::read(path).unwrap(), b"not ours");
+        }
         std::fs::remove_dir_all(&own.dir).unwrap();
     }
 
