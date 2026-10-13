@@ -2,9 +2,9 @@
 //! decisions 6, 8 and 14), so that each shell serves one space of URLs and nothing else loads.
 //!
 //! An entry is not parsed into a tree: a tag scanner finds attributes and the elements whose text is raw
-//! (`<script>`, `<style>`, `<textarea>`, `<noscript>` and the rest), and copies everything else unchanged. Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort
-//! by construction: a URL a script builds from pieces (`'entry' + '://'`) is not seen, so each shell still
-//! intercepts navigations.
+//! (`<script>`, `<style>`, `<textarea>`, `<noscript>` and the rest), and copies everything else unchanged.
+//! Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort by construction: a URL a
+//! script builds from pieces (`'entry' + '://'`) is not seen, so each shell still intercepts navigations.
 
 use crate::url::{
     BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, is_oxford_lookup, is_remote_scheme, names_a_host,
