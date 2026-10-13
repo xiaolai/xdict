@@ -25,6 +25,40 @@ pub struct Rewritten {
     pub links: Vec<Written>,
 }
 
+/// Rewritten text as it is written, and the URLs met, when the caller wants them: a view needs only the text,
+/// and an entry of a million links would otherwise hold a million `Written`s it never reads.
+struct Out {
+    text: String,
+    links: Option<Vec<Written>>,
+}
+
+impl Out {
+    fn new(capacity: usize, collect: bool) -> Self {
+        Self { text: String::with_capacity(capacity), links: collect.then(Vec::new) }
+    }
+
+    fn collects(&self) -> bool {
+        self.links.is_some()
+    }
+
+    fn link(&mut self, url: impl Into<String>, link: Link) {
+        if let Some(links) = &mut self.links {
+            links.push(Written { url: url.into(), link });
+        }
+    }
+
+    fn append(&mut self, other: Out) {
+        self.text.push_str(&other.text);
+        if let (Some(links), Some(more)) = (&mut self.links, other.links) {
+            links.extend(more);
+        }
+    }
+
+    fn done(self) -> Rewritten {
+        Rewritten { text: self.text, links: self.links.unwrap_or_default() }
+    }
+}
+
 /// What a literal URL becomes: its new text (`None`: kept as it is), and its meaning (`None`: not a link, as
 /// `data:` is not).
 fn literal(url: &str, base: &str, dir: &str) -> (Option<String>, Option<Link>) {
@@ -91,9 +125,19 @@ const URL_ATTRIBUTES: [&str; 8] = ["src", "background", "poster", "data", "actio
 /// `<span class="topic" href="l2:people:feelings">`, `<span class="xr-g" href="pg_e">`): not links.
 const HREF_ELEMENTS: [&str; 6] = ["a", "area", "link", "base", "image", "use"];
 
-/// An entry's HTML, its URLs rewritten. Inline styles and scripts are rewritten as stylesheets and scripts are.
+/// An entry's HTML, its URLs rewritten, and the URLs met. Inline styles and scripts are rewritten as stylesheets
+/// and scripts are.
 pub fn html(text: &str, base: &str) -> Rewritten {
-    let mut out = Rewritten { text: String::with_capacity(text.len() + text.len() / 8), links: Vec::new() };
+    html_out(text, base, true).done()
+}
+
+/// An entry's HTML, its URLs rewritten, as a view shows it: [`html`] without the URLs met.
+pub fn html_text(text: &str, base: &str) -> String {
+    html_out(text, base, false).text
+}
+
+fn html_out(text: &str, base: &str, collect: bool) -> Out {
+    let mut out = Out::new(text.len() + text.len() / 8, collect);
     let mut rest = text;
     while let Some(at) = rest.find('<') {
         let (before, from) = rest.split_at(at);
@@ -119,9 +163,12 @@ pub fn html(text: &str, base: &str) -> Rewritten {
                     if name.eq_ignore_ascii_case(raw) {
                         let close = find_ignore_case(rest, &format!("</{raw}")).unwrap_or(rest.len());
                         let (body, after) = rest.split_at(close);
-                        let rewritten = if script { self::script(body, base) } else { css(body, base, "") };
-                        out.text.push_str(&rewritten.text);
-                        out.links.extend(rewritten.links);
+                        if script {
+                            out.text.push_str(&self::script(body, base).text);
+                        } else {
+                            let sheet = css_out(body, base, "", out.collects());
+                            out.append(sheet);
+                        }
                         rest = after;
                     }
                 }
@@ -138,7 +185,7 @@ pub fn html(text: &str, base: &str) -> Rewritten {
 
 /// One start tag at the start of `from`, written to `out` with its attributes rewritten: the tag's name and
 /// what follows it. `None` if `from` does not start a tag (`a < b`, an end tag is copied as text).
-fn tag<'a>(from: &'a str, base: &str, out: &mut Rewritten) -> Option<(String, &'a str)> {
+fn tag<'a>(from: &'a str, base: &str, out: &mut Out) -> Option<(String, &'a str)> {
     let inner = from.strip_prefix('<')?;
     if inner.starts_with('/') {
         return None;
@@ -200,7 +247,7 @@ fn tag<'a>(from: &'a str, base: &str, out: &mut Rewritten) -> Option<(String, &'
 
 /// An attribute's value, rewritten if it holds URLs. The value is written back as it was unless it changes; a
 /// changed URL holds only characters that need no escaping.
-fn attribute(element: &str, name: &str, value: &str, base: &str, out: &mut Rewritten) -> String {
+fn attribute(element: &str, name: &str, value: &str, base: &str, out: &mut Out) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
@@ -208,17 +255,21 @@ fn attribute(element: &str, name: &str, value: &str, base: &str, out: &mut Rewri
         let url = unescape(value);
         let (to, link) = literal(&url, base, "");
         if let Some(link) = link {
-            out.links.push(Written { url, link });
+            out.link(url, link);
         }
         return to.unwrap_or_else(|| value.to_owned());
     }
-    let rewritten = match lower.as_str() {
-        "style" => css(value, base, ""),
-        _ if lower.starts_with("on") => script(value, base),
-        _ => return value.to_owned(),
-    };
-    out.links.extend(rewritten.links);
-    rewritten.text
+    match lower.as_str() {
+        "style" => {
+            let Out { text, links } = css_out(value, base, "", out.collects());
+            if let (Some(all), Some(more)) = (&mut out.links, links) {
+                all.extend(more);
+            }
+            text
+        }
+        _ if lower.starts_with("on") => script(value, base).text,
+        _ => value.to_owned(),
+    }
 }
 
 /// The character references a URL in an attribute is likely to hold.
@@ -266,9 +317,18 @@ fn unescape(value: &str) -> String {
     out
 }
 
-/// A stylesheet's `url(…)` and `@import "…"` rewritten; `dir` is the stylesheet's own directory.
+/// A stylesheet's `url(…)` and `@import "…"` rewritten, and the URLs met; `dir` is the stylesheet's own directory.
 pub fn css(text: &str, base: &str, dir: &str) -> Rewritten {
-    let mut out = Rewritten { text: String::with_capacity(text.len()), links: Vec::new() };
+    css_out(text, base, dir, true).done()
+}
+
+/// A stylesheet rewritten, as a view loads it: [`css`] without the URLs met.
+pub fn css_text(text: &str, base: &str, dir: &str) -> String {
+    css_out(text, base, dir, false).text
+}
+
+fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
+    let mut out = Out::new(text.len(), collect);
     let mut rest = text;
     while let Some((at, which)) = first_of(rest, &["url(", "@import"]) {
         let is_url = which == 0;
@@ -295,7 +355,7 @@ pub fn css(text: &str, base: &str, dir: &str) -> Rewritten {
         };
         let (to, link) = literal(value, base, dir);
         if let Some(link) = link {
-            out.links.push(Written { url: value.to_owned(), link });
+            out.link(value, link);
         }
         let q = quote.unwrap_or('"');
         out.text.push(q);
@@ -419,6 +479,21 @@ mod tests {
     fn a_stylesheet_resolves_against_itself() {
         let r = css("@font-face { src: url(../fonts/a.woff2) }", BASE, "styles");
         assert!(r.text.contains(r#"url("xdict://d/r/fonts/a.woff2")"#), "{}", r.text);
+    }
+
+    /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
+    #[test]
+    fn the_text_alone_is_the_same_text() {
+        let entry = concat!(
+            r#"<link href="a.css"><a href="entry://run">r</a><img src='\img\b.png' style="background:url(c.png)">"#,
+            r#"<style>@import "d.css"; b { background: url(e.png) }</style><span onclick="location='sound://x.mp3'">"#,
+            r#"<a href="https://example.com/x">out</a>"#,
+        );
+        assert_eq!(html_text(entry, BASE), html(entry, BASE).text);
+        assert_eq!(html(entry, BASE).links.len(), 7);
+        let sheet = "@import url(x.css); b { background: url('../f.png') }";
+        assert_eq!(css_text(sheet, BASE, "s"), css(sheet, BASE, "s").text);
+        assert_eq!(css(sheet, BASE, "s").links.len(), 2);
     }
 
     /// `<!-->` and `<!--->` are whole comments to a browser (HTML's abrupt closing), so what follows them is

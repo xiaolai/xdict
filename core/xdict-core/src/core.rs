@@ -427,7 +427,7 @@ impl Core {
             }
             let record = opened.mdx.record(i)?;
             let text = String::from_utf8_lossy(&record.data);
-            let html = xdict_entry::html(&opened.sheet.apply(&text), &view.base_url).text;
+            let html = xdict_entry::html_text(&opened.sheet.apply(&text), &view.base_url);
             if html.len() as u64 > view.max_body_bytes {
                 return Err(CoreError::TooLarge {
                     limit: Limit::Body,
@@ -648,9 +648,9 @@ fn link(link: xdict_entry::Link) -> Link {
 fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
     let Ok(text) = std::str::from_utf8(&bytes) else { return bytes };
     match mime {
-        "text/css" => xdict_entry::css(text, base, dir).text.into_bytes(),
+        "text/css" => xdict_entry::css_text(text, base, dir).into_bytes(),
         "text/javascript" => xdict_entry::script(text, base).text.into_bytes(),
-        "text/html" => xdict_entry::html(text, base).text.into_bytes(),
+        "text/html" => xdict_entry::html_text(text, base).into_bytes(),
         _ => bytes,
     }
 }

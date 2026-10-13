@@ -6,6 +6,6 @@ mod rewrite;
 mod sheet;
 mod url;
 
-pub use rewrite::{Rewritten, Written, css, html, script};
+pub use rewrite::{Rewritten, Written, css, css_text, html, html_text, script};
 pub use sheet::StyleSheet;
 pub use url::{Block, Link, Path, classify, decode, encode, travelled};
