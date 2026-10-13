@@ -410,44 +410,60 @@ fn redirect_target(text: &str) -> Option<&str> {
     (!target.is_empty()).then_some(target)
 }
 
+/// What a URL means, read the way the entry's web view reads it (the WHATWG URL Standard): otherwise the
+/// core could call "local" a URL the view fetches from the network (`/\\host/x`, `ht<TAB>tp://host`).
 fn classify(url: &str) -> Link {
-    let url = url.trim();
-    let lower = url.to_ascii_lowercase();
-    let after = |prefix: &str| url.get(prefix.len()..).unwrap_or("").to_owned();
-    if lower.starts_with("entry://") || lower.starts_with("bword://") {
-        let rest = after("entry://");
-        let (query, anchor) = match rest.split_once('#') {
-            Some((q, a)) => (q.to_owned(), Some(a.to_owned())),
-            None => (rest, None),
+    let url = preprocess(url);
+    if let Some((scheme, rest)) = scheme(&url) {
+        let body = rest.strip_prefix("//").unwrap_or(rest);
+        return match scheme.as_str() {
+            "entry" | "bword" => {
+                let (query, anchor) = match body.split_once('#') {
+                    Some((q, a)) => (q.to_owned(), Some(a.to_owned())),
+                    None => (body.to_owned(), None),
+                };
+                Link::Lookup { query, anchor }
+            }
+            "sound" => match body
+                .len()
+                .checked_sub(4)
+                .filter(|&n| body.get(n..).is_some_and(|t| t.eq_ignore_ascii_case(".tts")))
+            {
+                Some(n) => Link::Speak { text: body.get(..n).unwrap_or("").to_owned() },
+                None => Link::Sound { path: body.to_owned() },
+            },
+            "javascript" => Link::Blocked { why: BlockReason::Script },
+            // The URL Standard's special schemes other than `file`: each reaches the network, with or
+            // without slashes after the colon.
+            "http" | "https" | "ws" | "wss" | "ftp" => Link::Blocked { why: BlockReason::Remote { url } },
+            "file" | "mdd" => Link::Resource { path: normalize_path(body) },
+            _ => Link::Blocked { why: BlockReason::UnknownScheme { scheme } },
         };
-        return Link::Lookup { query, anchor };
-    }
-    if lower.starts_with("sound://") {
-        let path = after("sound://");
-        if lower.ends_with(".tts") {
-            let text = path.get(..path.len() - 4).unwrap_or("").to_owned();
-            return Link::Speak { text };
-        }
-        return Link::Sound { path };
     }
     if let Some(name) = url.strip_prefix('#') {
         return Link::Anchor { name: name.into() };
     }
-    if lower.starts_with("http://") || lower.starts_with("https://") || lower.starts_with("//") {
-        return Link::Blocked { why: BlockReason::Remote { url: url.into() } };
+    // Without a scheme, two leading slashes in either direction name another host.
+    if url.replace('\\', "/").starts_with("//") {
+        return Link::Blocked { why: BlockReason::Remote { url } };
     }
-    if lower.starts_with("javascript:") {
-        return Link::Blocked { why: BlockReason::Script };
-    }
-    for scheme in ["file://", "mdd://"] {
-        if lower.starts_with(scheme) {
-            return Link::Resource { path: normalize_path(&after(scheme)) };
-        }
-    }
-    if let Some((scheme, _)) = url.split_once("://") {
-        return Link::Blocked { why: BlockReason::UnknownScheme { scheme: scheme.into() } };
-    }
-    Link::Resource { path: normalize_path(url) }
+    Link::Resource { path: normalize_path(&url) }
+}
+
+/// A URL as a browser's parser takes it in: leading and trailing C0 controls and spaces trimmed, and every
+/// tab and newline removed, wherever it is.
+fn preprocess(url: &str) -> String {
+    url.trim_matches(|c: char| c <= ' ').chars().filter(|c| !matches!(c, '\t' | '\n' | '\r')).collect()
+}
+
+/// The URL's scheme, lower-cased, and what follows its colon: an ASCII letter, then letters, digits, `+`,
+/// `-` or `.`, then `:`.
+fn scheme(url: &str) -> Option<(String, &str)> {
+    let (head, rest) = url.split_once(':')?;
+    let mut chars = head.chars();
+    let first = chars.next()?;
+    let valid = first.is_ascii_alphabetic() && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
+    valid.then(|| (head.to_ascii_lowercase(), rest))
 }
 
 /// A resource path as the core compares it: forward slashes, no leading separator.
@@ -532,5 +548,52 @@ impl SplitMix {
             b >> 48,
             b & 0xFFFF_FFFF_FFFF
         )
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
+mod tests {
+    use super::*;
+
+    fn remote(url: &str) -> bool {
+        matches!(classify(url), Link::Blocked { why: BlockReason::Remote { .. } })
+    }
+
+    /// A URL is read the way the entry's web view will read it (the WHATWG URL Standard), or the core would
+    /// call "local" what the view fetches from the network.
+    #[test]
+    fn urls_a_browser_reads_as_remote_are_remote() {
+        for url in [
+            "https://example.com/a.mp3",
+            "HTTP://example.com/a.mp3",
+            "//example.com/a.mp3",
+            "/\\example.com/a.mp3",
+            "\\\\example.com/a.mp3",
+            "\\/example.com/a.mp3",
+            " \u{1}https://example.com/a.mp3",
+            "ht\ttps://example.com/a.mp3",
+            "https\n://example.com/a.mp3",
+            "http:example.com/a.mp3",
+            "wss://example.com/socket",
+            "ftp://example.com/a",
+        ] {
+            assert!(remote(url), "{url:?} was classified {:?}", classify(url));
+        }
+    }
+
+    #[test]
+    fn script_urls_are_blocked_however_they_are_spelt() {
+        for url in ["javascript:void(0)", "JavaScript:alert(1)", "java\nscript:alert(1)", " \tjavascript:x"] {
+            assert_eq!(classify(url), Link::Blocked { why: BlockReason::Script }, "{url:?}");
+        }
+    }
+
+    #[test]
+    fn dictionary_links_survive_the_same_reading() {
+        assert_eq!(classify(" entry://run#n1 "), Link::Lookup { query: "run".into(), anchor: Some("n1".into()) });
+        assert_eq!(classify("sound://a\tb.mp3"), Link::Sound { path: "ab.mp3".into() });
+        assert_eq!(classify("styles/main.css"), Link::Resource { path: "styles/main.css".into() });
+        assert_eq!(classify("/x.css"), Link::Resource { path: "x.css".into() });
     }
 }
