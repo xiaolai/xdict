@@ -489,3 +489,19 @@ fn key_text_past_the_index_budget_is_stale() {
     let stale = opened.err();
     assert!(matches!(stale, Some(Stale::Damaged(_))), "{stale:?}");
 }
+
+/// The structural check reads its tables in pieces too, not each whole: 140,000 keys make the record starts
+/// and ends over 1 MiB each, and no read through the region may be larger (row 25).
+#[test]
+fn the_tables_are_checked_in_pieces() {
+    let many: Vec<Entry> = (0..140_000).map(|i| Entry::text(&format!("{i:07}"), "m")).collect();
+    let file = writer::write(&Spec { block_size: 1 << 16, ..Spec::mdx() }, &many).unwrap();
+    let index = build(&file);
+    assert!(section(&index, 2).1 > 1 << 20, "the record starts are over 1 MiB");
+    let largest = Arc::new(AtomicUsize::new(0));
+    let region = Box::new(Recording(index, largest.clone()));
+    let read = File::with_index(Box::new(file), Some(Kind::Mdx), region, EDITION, Arc::new(Marks(9))).unwrap().unwrap();
+    assert_eq!(read.len(), 140_000);
+    let largest = largest.load(Ordering::SeqCst);
+    assert!(largest <= 1 << 20, "a read of {largest} bytes");
+}
