@@ -14,8 +14,9 @@
 //! An ordinary write into a mapped index therefore fails with `PermissionDenied`, whoever chose the directory.
 //!
 //! What code cannot rule out is a process of the same user first making one of these files writable and then
-//! writing into it in place, as it could write into XDict's memory: the residual risk, the one `pread` into the
-//! heap would avoid at the cost of the memory. Making [`OwnDirectory::new`] `unsafe` would name it but not
+//! writing into it in place, as it could write into XDict's memory. The threat model puts that outside: nothing
+//! but XDict writes these files (`dev-docs/core-api.md` §6 decision 3); `pread` into the heap would remove it at
+//! the cost of the memory. Making [`OwnDirectory::new`] `unsafe` would name it but not
 //! remove it, and the core, which forbids `unsafe`, could no longer call it.
 //!
 //! On Windows the mode is not set, but a map holds its file open sharing reading and deletion only, so Windows
