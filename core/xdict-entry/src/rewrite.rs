@@ -331,7 +331,8 @@ fn unescape(value: &str) -> String {
     while let Some(at) = rest.find('&') {
         out.push_str(rest.get(..at).unwrap_or(""));
         let from = rest.get(at..).unwrap_or("");
-        let end = from.find(';').filter(|&e| e <= 10);
+        // The longest reference is ten bytes (`&#x10FFFF;`, `&thetasym;`): no search past it.
+        let end = from.bytes().take(11).position(|b| b == b';');
         let decoded = end.and_then(|e| {
             let name = from.get(1..e)?;
             let c = match name {
@@ -646,6 +647,16 @@ mod tests {
             "{}",
             r.text
         );
+    }
+
+    /// A value of many `&` and no `;` decodes in one pass.
+    #[test]
+    fn many_ampersands_are_decoded_in_one_pass() {
+        let started = std::time::Instant::now();
+        let r = html(&format!(r#"<a href="entry://{}">x</a>"#, "&".repeat(1_000_000)), BASE);
+        assert_eq!(r.links.len(), 1);
+        // Searching each `&`'s whole rest is some 5·10¹¹ bytes here; one bounded pass, well under a second.
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
     }
 
     /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
