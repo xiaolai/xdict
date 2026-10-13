@@ -491,6 +491,7 @@ impl Index {
             || !sized(order, 4, keys)
             || !sized(blocks, 32, block_count)
             || text.len > u64::from(u32::MAX)
+            || crate::keys::cost_of(keys as u64, text.len) > limits::INDEX_BYTES
             || public.len != keys.div_ceil(8) as u64
             || !tier2.len.is_multiple_of(4)
             || tier2.len > 4 * keys as u64
@@ -524,8 +525,9 @@ impl Index {
         Ok(Self { blocks, ..index })
     }
 
-    /// One pass over each table, no folding: text offsets rise within the text, records lie within the
-    /// records, the order names every key once, and the tier-2 order names keys, none twice.
+    /// One pass over each table, no folding: text offsets rise within the text, no key longer than a block
+    /// (where every key was read from), records lie within the records, the order names every key once, and
+    /// the tier-2 order names keys, none twice.
     fn check_structure(&self) -> Result<(), Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
         let words = |span: Span| self.region.bytes(span.at, span.len as usize).map_err(|_| damaged("a section"));
@@ -533,7 +535,11 @@ impl Index {
         let mut previous = 0u32;
         for (i, chunk) in offsets.as_chunks::<4>().0.iter().enumerate() {
             let value = u32::from_le_bytes(*chunk);
-            if (i == 0 && value != 0) || value < previous || u64::from(value) > self.text.len {
+            if (i == 0 && value != 0)
+                || value < previous
+                || u64::from(value) > self.text.len
+                || u64::from(value - previous) > limits::BLOCK_BYTES
+            {
                 return Err(damaged("the text offsets"));
             }
             previous = value;

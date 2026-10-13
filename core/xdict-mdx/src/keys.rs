@@ -40,7 +40,13 @@ pub(crate) fn check_blocks(blocks: &[KeyBlock], key_count: u64, stored_total: u6
 /// most any character grows, measured over every code point on 2026-10-13); and the sorted copy of the
 /// record starts made while finding ends (8). The finished index keeps 24 bytes and the text.
 pub(crate) fn index_cost(text: &str) -> u64 {
-    4 + 8 + 8 + 4 + 4 + 8 + 4 * text.len() as u64
+    cost_of(1, text.len() as u64)
+}
+
+/// [`index_cost`] of `keys` keys whose text is `text` bytes together: what a loaded index may declare, since
+/// no build that kept within [`limits::INDEX_BYTES`] wrote more.
+pub(crate) fn cost_of(keys: u64, text: u64) -> u64 {
+    keys.saturating_mul(4 + 8 + 8 + 4 + 4 + 8).saturating_add(text.saturating_mul(4))
 }
 
 /// The keys of a file, as its blocks are decoded.
