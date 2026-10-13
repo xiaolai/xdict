@@ -19,5 +19,9 @@
   ],
   "sidecars": [
     { "name": "tiny.css", "text": "body { color: black }" }
+  ],
+  "defective": [
+    { "name": "tiny-v4.mdx", "defect": "unknownFormatVersion" },
+    { "name": "tiny-badheader.mdx", "defect": "headerChecksum" }
   ]
 }

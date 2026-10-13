@@ -31,7 +31,12 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
    this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.
-6. [`lifecycle`]: close the second handle, then look up with it; close it again; look up with the first handle
+6. [`errors`], each against the same `Core`: `import` of the faulty `file`s, `tiny-v4.mdx` [`unsupported`] and
+   `tiny-badheader.mdx` [`malformed`] (each the package's MDX alone); `import` of `tiny.mdx` alone with a progress
+   that answers `false` [`cancelled`]; then the byte source's MDX with a sidecar `tiny.css` that is a source
+   with the byte source's `identity`: `import`, `open`, the sidecar's inode raised by one, then `resource` of
+   `tiny.css` [`sourceChanged`].
+7. [`lifecycle`]: close the second handle, then look up with it; close it again; look up with the first handle
    on a second `Core`; `self_test_panic`.
 
 The Web has no paths, so its suite reads every file of step 3 through sources too, each with its file's identity.

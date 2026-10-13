@@ -134,6 +134,20 @@ check('byteSource.resourceFromSource', b.resourceFromSource, outcome(() => core.
 const short: Location = { type: 'source', name: 'short.mdx', source: new Bytes(bytes, null, true) };
 check('byteSource.shortRead', b.shortRead, outcome(() => core.import({ mdx: short, mdd: [], sidecars: [] })));
 
+const errs = x.errors;
+for (const name of ['unsupported', 'malformed']) {
+  check(`errors.${name}`, { error: errs[name].error }, outcome(() => core.import({ mdx: file(errs[name].file), mdd: [], sidecars: [] })));
+}
+check('errors.cancelled', { error: errs.cancelled.error }, outcome(() => core.import({ mdx: file('tiny.mdx'), mdd: [], sidecars: [] }, () => false)));
+// A sidecar whose identity changes after it is opened, as a moved or rewritten file's would.
+const moving = new Bytes(new TextEncoder().encode(b.sidecar.text), { ...b.identity });
+const watchedPkg = { mdx: copy, mdd: [], sidecars: [{ type: 'source' as const, name: 'tiny.css', source: moving }] };
+core.import(watchedPkg);
+const watched = core.open(watchedPkg);
+if (watched.type !== 'ready') throw new Error('not open');
+moving.ident!.inode += 1;
+check('errors.sourceChanged', { error: errs.sourceChanged.error }, outcome(() => core.resource(watched.dict, 'tiny.css', view())));
+
 const l = x.lifecycle;
 const page = { limit: 10, offset: 0, mode: 'reader' as const, generation: null };
 core.close(second.dict);

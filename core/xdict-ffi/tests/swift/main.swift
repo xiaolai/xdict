@@ -215,6 +215,26 @@ final class Bytes: ByteSource, @unchecked Sendable {
     func identity() -> FileIdentity? { ident }
 }
 
+/// A progress that cancels at once.
+final class Stop: Progress, @unchecked Sendable {
+    func progress(done: UInt64, total: UInt64) -> Bool { false }
+}
+
+/// A sidecar whose identity the suite changes after it is opened, as a moved or rewritten file's would.
+final class Moving: ByteSource, @unchecked Sendable {
+    let bytes: Data
+    var ident: FileIdentity
+    init(_ bytes: Data, _ ident: FileIdentity) {
+        self.bytes = bytes
+        self.ident = ident
+    }
+    func size() -> UInt64 { UInt64(bytes.count) }
+    func readAt(offset: UInt64, len: UInt32) throws -> Data {
+        bytes.subdata(in: Int(offset)..<min(Int(offset) + Int(len), bytes.count))
+    }
+    func identity() -> FileIdentity? { ident }
+}
+
 // MARK: - The scenario
 
 let args = CommandLine.arguments
@@ -293,6 +313,22 @@ check("byteSource.resourceFromPath", b["resourceFromPath"], outcome { j(try core
 check("byteSource.resourceFromSource", b["resourceFromSource"], outcome { j(try core.resource(dict: secondDict, path: "tiny.css", view: view())) })
 let short = Package(mdx: .source(name: "short.mdx", source: Bytes(mdx, nil, short: true)), mdd: [], sidecars: [])
 check("byteSource.shortRead", b["shortRead"], outcome { j(try core.import(package: short, progress: nil)) })
+
+let errs = x["errors"] as! [String: Any]
+for name in ["unsupported", "malformed"] {
+    let c = errs[name] as! [String: Any]
+    let faulty = Package(mdx: at(c["file"] as! String), mdd: [], sidecars: [])
+    check("errors.\(name)", ["error": c["error"]!], outcome { j(try core.import(package: faulty, progress: nil)) })
+}
+let alone = Package(mdx: at("tiny.mdx"), mdd: [], sidecars: [])
+check("errors.cancelled", ["error": (errs["cancelled"] as! [String: Any])["error"]!], outcome { j(try core.import(package: alone, progress: Stop())) })
+let moving = Moving(Data((sidecarSpec["text"] as! String).utf8), ident)
+let watchedPackage = Package(mdx: .source(name: b["name"] as! String, source: Bytes(mdx, ident)), mdd: [],
+                             sidecars: [.source(name: "tiny.css", source: moving)])
+_ = try core.import(package: watchedPackage, progress: nil)
+guard case let .ready(watched, _, _) = try core.open(package: watchedPackage) else { fatalError("not open") }
+moving.ident.inode += 1
+check("errors.sourceChanged", ["error": (errs["sourceChanged"] as! [String: Any])["error"]!], outcome { j(try core.resource(dict: watched, path: "tiny.css", view: view())) })
 
 let l = x["lifecycle"] as! [String: Any]
 let page = LookupOptions(limit: 10, offset: 0, mode: .reader, generation: nil)
