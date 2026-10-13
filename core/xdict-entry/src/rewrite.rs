@@ -164,7 +164,7 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 rest = after;
                 for (raw, script) in [("script", true), ("style", false)] {
                     if name.eq_ignore_ascii_case(raw) {
-                        let close = find_ignore_case(rest, &format!("</{raw}")).unwrap_or(rest.len());
+                        let close = end_tag(rest, raw);
                         let (body, after) = rest.split_at(close);
                         if script {
                             out.text.push_str(&self::script(body, base).text);
@@ -642,8 +642,20 @@ pub fn script(text: &str, base: &str) -> Rewritten {
     Rewritten { text: out, links: Vec::new() }
 }
 
-fn find_ignore_case(haystack: &str, needle: &str) -> Option<usize> {
-    first_of(haystack, &[needle]).map(|(at, _)| at)
+/// Where the end tag of the raw text element `name` starts in `body`: `</name`, compared ignoring case, and then
+/// whitespace, `/` or `>` (HTML's script data and RAWTEXT end tag name states); the end of `body` if none does.
+/// `</scriptx>` and a `</script` with nothing after it end nothing.
+fn end_tag(body: &str, name: &str) -> usize {
+    let needle = format!("</{name}");
+    let mut from = 0;
+    while let Some(at) = body.get(from..).and_then(|rest| first_of(rest, &[&needle])).map(|(at, _)| from + at) {
+        let after = body.as_bytes().get(at + needle.len());
+        if after.is_some_and(|&b| b.is_ascii_whitespace() || b == b'/' || b == b'>') {
+            return at;
+        }
+        from = at + needle.len();
+    }
+    body.len()
 }
 
 /// The first place any of `needles` (ASCII, compared ignoring case) starts, and which one. One forward pass that
@@ -941,6 +953,23 @@ mod tests {
         }
         let r = html("<SCRIPT\tsrc=x.js>location='https://example.com/'</SCRIPT>", BASE);
         assert!(r.text.contains("location='https://example.com/'"), "a script body is not HTML: {}", r.text);
+    }
+
+    /// `</scriptx>` ends no script and `</stylex>` no style: an end tag is its name and then whitespace, `/` or `>`
+    /// (HTML's script data and RAWTEXT end tag name states), so the body runs on to the real end.
+    #[test]
+    fn only_the_whole_end_tag_ends_a_script_or_a_style() {
+        let r = html("<script>var a='</scriptx>'; location='entry://run';</script>", BASE);
+        assert!(r.text.contains("location='xdict://d/entry/run'"), "{}", r.text);
+        let r = html("<style>a{}</stylex>b{background:url(https://example.com/a)}</style>", BASE);
+        assert!(r.text.contains("xdict://d/blocked/"), "{}", r.text);
+        for close in ["</script>", "</SCRIPT >", "</script/>", "</script\n>"] {
+            let r = html(&format!("<script>x{close}<img src=https://example.com/a>"), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{close}: {}", r.text);
+        }
+        // Without its delimiter at the very end, `</script` is the script's text, as it is to a browser.
+        let r = html("<script>location='entry://a'</script", BASE);
+        assert!(r.text.contains("xdict://d/entry/a"), "{}", r.text);
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
