@@ -243,6 +243,11 @@ attempt('web.throwingIdentity', () => {
   const thrower = src(null, { identity: () => { throw new Error('identity failed'); } });
   check('web.throwingIdentity', { error: { type: 'io' } }, outcome(() => c3.import(only(thrower))));
 });
+attempt('web.malformedIdentity', () => {
+  // Not an identity a file can have: a failure to report, not a file without one (audit-fix round 2, row 37).
+  const bad = { ...at(1n), inode: 'not a number' } as unknown as FileIdentity;
+  check('web.malformedIdentity', { error: { type: 'io' } }, outcome(() => c3.import(only(src(bad)))));
+});
 attempt('web.throwingProgress', () => {
   const got = outcome(() => c3.import(only(src(at(2n))), () => { throw new Error('progress failed'); }));
   check('web.throwingProgress', { error: { type: 'cancelled' } }, got);
