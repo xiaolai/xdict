@@ -79,7 +79,36 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
 /// `variants.json`, which the suites read: each variant's name, word, gloss and format version.
 fn write_variants(base: &Spec, entries: &Value, variants: &[Value], out: &Path) -> Result<(), Error> {
     let mut written = Vec::new();
-    for variant in variants {
+    for described in variants {
+        let v = Variant::read(described)?;
+        let text = entries.to_string().replace("$word", v.word).replace("$gloss", v.gloss);
+        let spec = Spec {
+            version: v.version,
+            compression: v.compression,
+            kind: Kind::Mdx(v.encoding),
+            obfuscate_key_index: v.version == Version::V2_0,
+            ..base.clone()
+        };
+        write_file(&spec, &serde_json::from_str(&text).map_err(bad)?, &out.join(format!("{}.mdx", v.name)))?;
+        written.push(serde_json::json!({
+            "name": v.name, "word": v.word, "gloss": v.gloss, "version": field(described, "version")?,
+        }));
+    }
+    std::fs::write(out.join("variants.json"), Value::Array(written).to_string()).map_err(bad)
+}
+
+/// One matrix variant as described: its name, how it is written, and the word and gloss it holds.
+struct Variant<'a> {
+    name: &'a str,
+    version: Version,
+    compression: Compression,
+    encoding: TextEncoding,
+    word: &'a str,
+    gloss: &'a str,
+}
+
+impl<'a> Variant<'a> {
+    fn read(variant: &'a Value) -> Result<Self, Error> {
         let name = string(field(variant, "name")?)?;
         let version = match string(field(variant, "version")?)? {
             "1.2" => Version::V1_2,
@@ -112,20 +141,8 @@ fn write_variants(base: &Spec, entries: &Value, variants: &[Value], out: &Path) 
                 "{name}: a word or gloss holds a `$`, which the suites would read as a placeholder"
             )));
         }
-        let text = entries.to_string().replace("$word", word).replace("$gloss", gloss);
-        let spec = Spec {
-            version,
-            compression,
-            kind: Kind::Mdx(encoding),
-            obfuscate_key_index: version == Version::V2_0,
-            ..base.clone()
-        };
-        write_file(&spec, &serde_json::from_str(&text).map_err(bad)?, &out.join(format!("{name}.mdx")))?;
-        written.push(
-            serde_json::json!({ "name": name, "word": word, "gloss": gloss, "version": field(variant, "version")? }),
-        );
+        Ok(Self { name, version, compression, encoding, word, gloss })
     }
-    std::fs::write(out.join("variants.json"), Value::Array(written).to_string()).map_err(bad)
 }
 
 fn write_file(spec: &Spec, entries: &Value, path: &Path) -> Result<(), Error> {
