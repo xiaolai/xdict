@@ -73,7 +73,7 @@ impl Keys {
             let text = self.codec.decode(c.until_null(self.codec.unit())?);
             self.cost = self.cost.saturating_add(index_cost(&text));
             if self.cost > self.budget {
-                return Err(Error::Malformed(format!("the key index would take more than {} bytes", self.budget)));
+                return Err(Error::TooLarge(format!("the key index would take more than {} bytes", self.budget)));
             }
             self.keys.try_reserve(1).map_err(crate::out_of_memory)?;
             self.keys.push(Key { text, offset });
@@ -109,7 +109,7 @@ mod tests {
         let mut roomy = Keys::new(3, Codec::Utf8, true, 3 * index_cost("gamma"));
         assert!(roomy.add_block(&data, 3).is_ok());
         let mut tight = Keys::new(3, Codec::Utf8, true, 2 * index_cost("gamma"));
-        assert!(matches!(tight.add_block(&data, 3), Err(Error::Malformed(_))));
+        assert!(matches!(tight.add_block(&data, 3), Err(Error::TooLarge(_))));
     }
 
     /// Case folding can triple a key's UTF-8 length (ΐ, 2 bytes, folds to 6), and the folded copy is kept.
