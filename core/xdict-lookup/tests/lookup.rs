@@ -185,3 +185,16 @@ fn a_shorter_way_brings_its_own_problems() {
         "the longer way's problem is kept, on the page: {r:?}"
     );
 }
+
+/// Each record is read once per lookup: a loop is caught before its key is read again, and two ways meeting at
+/// one key read it once. A self-loop under a one-record budget is a loop, not a lookup too large.
+#[test]
+fn a_record_is_read_once_per_lookup() {
+    let f = file(&[("A", "@@@LINK=A")]);
+    let r = resolve(&f, "A", Mode::Reader, &mut Budget::new(1 << 20, 1)).unwrap();
+    assert!(matches!(&r.problems[..], [Problem::Loop { chain }] if names(&f, chain) == ["A", "A"]), "{r:?}");
+    // A → B, A → C, B → D, C → D: A, B, C and D are four records, not five.
+    let f = file(&[("A", "@@@LINK=B\r\n@@@LINK=C"), ("B", "@@@LINK=D"), ("C", "@@@LINK=D"), ("D", "the end")]);
+    let r = resolve(&f, "A", Mode::Reader, &mut Budget::new(1 << 20, 4)).unwrap();
+    assert_eq!(r.hits.len(), 1, "{r:?}");
+}
