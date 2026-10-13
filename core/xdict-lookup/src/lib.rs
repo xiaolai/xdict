@@ -16,5 +16,5 @@ mod resolve;
 
 pub use policy::{NORMALIZATION, Policy, internal, unmark};
 pub use resolve::{
-    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, matches, occurrences, redirect_targets, resolve, suggest,
+    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, STEPS, matches, occurrences, redirect_targets, resolve, suggest,
 };

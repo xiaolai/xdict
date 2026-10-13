@@ -56,8 +56,11 @@ pub struct Resolved {
 
 /// Redirects followed from one key: at most this many hops (the 25 need four)…
 pub const HOPS: usize = 8;
-/// …and this many keys landed on in all (a target may name a key many records share).
+/// …and this many keys landed on in all (a target may name a key many records share), and this many targets
+/// tried: each costs a search, and one record may name thousands.
 pub const FAN_OUT: usize = 1024;
+/// Targets one lookup tries in all, over every matched key: past it the lookup is refused, as too large.
+pub const STEPS: usize = 1 << 16;
 
 /// The keys `query` matches, in order: tier 1 (exact spellings, then folded, each in file order), then, for a
 /// reader, tier 2 (in file order). A reader is never given an internal key.
@@ -90,7 +93,8 @@ pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>
 
 /// Every hit `query` leads to in `file`: each matched key that is an entry, and every entry its redirects reach,
 /// breadth first, in the matched key's place. A key reached twice is given once, by its shortest way; a matched
-/// key that is an entry is never given again as a redirect's. Every record read is taken from `budget`.
+/// key that is an entry is never given again as a redirect's. Every record read is taken from `budget`, and
+/// every target tried counts against [`STEPS`].
 pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Result<Resolved, Error> {
     let matched = matches(file, query, mode)?;
     let keys: Vec<usize> = matched.iter().map(|(i, _)| *i).collect();
@@ -98,6 +102,7 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let entries: HashSet<usize> = keys.iter().copied().filter(|i| targets.get(i).is_none_or(Vec::is_empty)).collect();
     let mut resolved = Resolved::default();
     let mut placed: HashMap<usize, usize> = HashMap::new();
+    let mut steps = 0usize;
     for (i, how) in matched {
         let Some(named) = targets.get(&i).filter(|t| !t.is_empty()) else {
             if let Entry::Vacant(slot) = placed.entry(i) {
@@ -106,7 +111,7 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
             }
             continue;
         };
-        let Followed { reached, problems } = follow(file, i, named, budget)?;
+        let Followed { reached, problems } = follow(file, i, named, budget, &mut steps)?;
         let mut gave = Vec::new();
         for (j, chain) in reached {
             if entries.contains(&j) {
@@ -149,12 +154,29 @@ struct Followed {
 }
 
 /// The entries key `from`'s redirects (`named`) reach, breadth first. A loop is caught along each chain, not
-/// across them: two ways to one key are not a loop.
-fn follow(file: &File, from: usize, named: &[String], budget: &mut Budget) -> Result<Followed, Error> {
-    let mut queue: VecDeque<(String, Vec<usize>)> = named.iter().map(|t| (t.clone(), vec![from])).collect();
-    let (mut reached, mut problems, mut landed_in_all) = (Vec::new(), Vec::new(), 0usize);
+/// across them: two ways to one key are not a loop. At most [`FAN_OUT`] targets are tried, each counted in
+/// `steps`; the queue never holds more than could still be tried.
+fn follow(
+    file: &File,
+    from: usize,
+    named: &[String],
+    budget: &mut Budget,
+    steps: &mut usize,
+) -> Result<Followed, Error> {
+    let mut queue: VecDeque<(String, Vec<usize>)> =
+        named.iter().take(FAN_OUT + 1).map(|t| (t.clone(), vec![from])).collect();
+    let (mut reached, mut problems, mut landed_in_all, mut tried) = (Vec::new(), Vec::new(), 0usize, 0usize);
     let mut given = HashSet::new();
     while let Some((target, chain)) = queue.pop_front() {
+        tried += 1;
+        if tried > FAN_OUT {
+            problems.push(Problem::Limit { chain });
+            break;
+        }
+        *steps += 1;
+        if *steps > STEPS {
+            return Err(Error::TooLarge(format!("the redirects of one lookup name more than {STEPS} targets")));
+        }
         if chain.len() > HOPS {
             problems.push(Problem::Limit { chain });
             continue;
@@ -179,7 +201,10 @@ fn follow(file: &File, from: usize, named: &[String], budget: &mut Budget) -> Re
                 continue;
             }
             match onward.get(&j).filter(|t| !t.is_empty()) {
-                Some(targets) => queue.extend(targets.iter().map(|t| (t.clone(), next.clone()))),
+                Some(targets) => {
+                    let room = (FAN_OUT + 1).saturating_sub(tried + queue.len());
+                    queue.extend(targets.iter().take(room).map(|t| (t.clone(), next.clone())));
+                }
                 None => {
                     if given.insert(j) {
                         reached.push((j, next));
@@ -201,7 +226,8 @@ fn redirects(file: &File, keys: &[usize], budget: &mut Budget) -> Result<HashMap
     Ok(targets)
 }
 
-/// The targets of an `@@@LINK=` record, one per line that names one; none for an entry.
+/// The targets of an `@@@LINK=` record, one per line that names one, at most one more than [`FAN_OUT`] (no more
+/// can be followed); none for an entry.
 pub fn redirect_targets(text: &str) -> Vec<String> {
     if !text.trim_start().starts_with("@@@LINK=") {
         return Vec::new();
@@ -210,6 +236,7 @@ pub fn redirect_targets(text: &str) -> Vec<String> {
         .filter_map(|line| line.trim().strip_prefix("@@@LINK="))
         .map(str::trim)
         .filter(|t| !t.is_empty())
+        .take(FAN_OUT + 1)
         .map(str::to_owned)
         .collect()
 }
