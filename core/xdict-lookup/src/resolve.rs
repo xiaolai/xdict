@@ -176,58 +176,115 @@ fn follow(
     read: &mut HashMap<usize, Vec<String>>,
     steps: &mut usize,
 ) -> Result<Followed, Error> {
-    let mut queue: VecDeque<(String, Vec<usize>)> =
-        named.iter().take(FAN_OUT + 1).map(|t| (t.clone(), vec![from])).collect();
-    let (mut reached, mut problems, mut landed_in_all, mut tried) = (Vec::new(), Vec::new(), 0usize, 0usize);
-    let mut given = HashSet::new();
-    while let Some((target, chain)) = queue.pop_front() {
-        tried += 1;
-        if tried > FAN_OUT {
-            problems.push(Problem::Limit { chain });
-            break;
+    let mut walk = Walk::new(from, named);
+    while let Some((target, chain)) = walk.queue.pop_front() {
+        let chain = match walk.admit(chain, steps)? {
+            Flow::Go(chain) => chain,
+            Flow::Skip => continue,
+            Flow::Stop => break,
+        };
+        let landed = land(file, &target)?;
+        let landed = match walk.count(target, &chain, landed) {
+            Flow::Go(landed) => landed,
+            Flow::Skip => continue,
+            Flow::Stop => break,
+        };
+        let fresh: Vec<usize> = landed.iter().copied().filter(|j| !chain.contains(j)).collect();
+        redirects(file, &fresh, budget, read)?;
+        for j in landed {
+            walk.arrive(j, &chain, read);
+        }
+    }
+    Ok(walk.out)
+}
+
+/// What the walk does with a target: go on with it, pass to the next, or stop following the key.
+enum Flow<T> {
+    Go(T),
+    Skip,
+    Stop,
+}
+
+/// One key's redirects being followed: what is still to try, and what has been found.
+struct Walk {
+    from: usize,
+    queue: VecDeque<(String, Vec<usize>)>,
+    /// Targets taken from the queue, and keys landed on, against [`FAN_OUT`].
+    tried: usize,
+    landed: usize,
+    /// Entries already reached, each given once.
+    given: HashSet<usize>,
+    out: Followed,
+}
+
+impl Walk {
+    fn new(from: usize, named: &[String]) -> Self {
+        Self {
+            from,
+            queue: named.iter().take(FAN_OUT + 1).map(|t| (t.clone(), vec![from])).collect(),
+            tried: 0,
+            landed: 0,
+            given: HashSet::new(),
+            out: Followed { reached: Vec::new(), problems: Vec::new() },
+        }
+    }
+
+    /// The limits on trying one more target: this key's [`FAN_OUT`] stops the walk, the lookup's [`STEPS`]
+    /// refuses the lookup, and a chain past [`HOPS`] is given up alone.
+    fn admit(&mut self, chain: Vec<usize>, steps: &mut usize) -> Result<Flow<Vec<usize>>, Error> {
+        self.tried += 1;
+        if self.tried > FAN_OUT {
+            self.out.problems.push(Problem::Limit { chain });
+            return Ok(Flow::Stop);
         }
         *steps += 1;
         if *steps > STEPS {
             return Err(Error::TooLarge(format!("the redirects of one lookup name more than {STEPS} targets")));
         }
         if chain.len() > HOPS {
-            problems.push(Problem::Limit { chain });
-            continue;
+            self.out.problems.push(Problem::Limit { chain });
+            return Ok(Flow::Skip);
         }
-        let landed = land(file, &target)?;
-        let last = chain.last().copied().unwrap_or(from);
+        Ok(Flow::Go(chain))
+    }
+
+    /// The keys `target` landed on, counted: none is a dangling target, and past [`FAN_OUT`] in all the walk
+    /// stops.
+    fn count(&mut self, target: String, chain: &[usize], landed: Vec<usize>) -> Flow<Vec<usize>> {
         if landed.is_empty() {
-            problems.push(Problem::Dangling { from: last, target });
-            continue;
+            let from = chain.last().copied().unwrap_or(self.from);
+            self.out.problems.push(Problem::Dangling { from, target });
+            return Flow::Skip;
         }
-        landed_in_all += landed.len();
-        if landed_in_all > FAN_OUT {
-            problems.push(Problem::Limit { chain });
-            break;
+        self.landed += landed.len();
+        if self.landed > FAN_OUT {
+            self.out.problems.push(Problem::Limit { chain: chain.to_vec() });
+            return Flow::Stop;
         }
-        let fresh: Vec<usize> = landed.iter().copied().filter(|j| !chain.contains(j)).collect();
-        redirects(file, &fresh, budget, read)?;
-        for j in landed {
-            let mut next = chain.clone();
-            next.push(j);
-            if chain.contains(&j) {
-                problems.push(Problem::Loop { chain: next });
-                continue;
+        Flow::Go(landed)
+    }
+
+    /// Key `j`, landed on along `chain`: a loop if the chain has it already, else its targets queued (no more
+    /// than could still be tried) if it is a redirect, else an entry reached, given once.
+    fn arrive(&mut self, j: usize, chain: &[usize], read: &HashMap<usize, Vec<String>>) {
+        let mut next = chain.to_vec();
+        next.push(j);
+        if chain.contains(&j) {
+            self.out.problems.push(Problem::Loop { chain: next });
+            return;
+        }
+        match read.get(&j).filter(|t| !t.is_empty()) {
+            Some(targets) => {
+                let room = (FAN_OUT + 1).saturating_sub(self.tried + self.queue.len());
+                self.queue.extend(targets.iter().take(room).map(|t| (t.clone(), next.clone())));
             }
-            match read.get(&j).filter(|t| !t.is_empty()) {
-                Some(targets) => {
-                    let room = (FAN_OUT + 1).saturating_sub(tried + queue.len());
-                    queue.extend(targets.iter().take(room).map(|t| (t.clone(), next.clone())));
-                }
-                None => {
-                    if given.insert(j) {
-                        reached.push((j, next));
-                    }
+            None => {
+                if self.given.insert(j) {
+                    self.out.reached.push((j, next));
                 }
             }
         }
     }
-    Ok(Followed { reached, problems })
 }
 
 /// The keys a redirect to `target` lands on: those spelt exactly as it is, where there are any (`find` gives
