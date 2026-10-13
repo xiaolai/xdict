@@ -67,7 +67,9 @@ struct Dict {
     mdx_source: OpenedSource,
     mdx: File,
     mdd: Vec<(OpenedSource, File)>,
-    sidecars: Vec<(String, OpenedSource)>,
+    /// Each sidecar by name, or why it could not be opened: reported when it is asked for, so that one unreadable
+    /// stylesheet neither stops the dictionary opening nor is passed over for a volume's copy.
+    sidecars: Vec<(String, Result<OpenedSource, CoreError>)>,
     /// The MDX header's compact styles, applied to every entry.
     sheet: StyleSheet,
 }
@@ -275,12 +277,7 @@ impl Core {
                     Err(reason) => return Ok(Opened::NeedsImport { reason }),
                 }
             }
-            let mut sidecars = Vec::new();
-            for sidecar in &package.sidecars {
-                if let Ok(opened) = OpenedSource::open(sidecar) {
-                    sidecars.push((sidecar.name().to_owned(), opened));
-                }
-            }
+            let sidecars = package.sidecars.iter().map(|s| (s.name().to_owned(), OpenedSource::open(s))).collect();
             let info = info(&mdx);
             let sheet = StyleSheet::parse(&mdx.header().stylesheet);
             let dict = Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars, sheet };
@@ -478,6 +475,7 @@ impl Core {
     fn find_resource(&self, opened: &Dict, path: &str) -> Result<Option<Vec<u8>>, CoreError> {
         for (name, sidecar) in &opened.sidecars {
             if name.eq_ignore_ascii_case(path) {
+                let sidecar = sidecar.as_ref().map_err(Clone::clone)?;
                 sidecar.unchanged()?;
                 let size = sidecar.source.len();
                 if size > MAX_RESOURCE_BYTES {
@@ -880,6 +878,31 @@ mod tests {
         fn identity(&self) -> Option<FileIdentity> {
             None
         }
+    }
+
+    /// A sidecar that cannot be opened is reported when it is asked for, not passed over for a volume's copy.
+    #[test]
+    fn an_unreadable_sidecar_is_reported_when_asked_for() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let mdd = write(&Spec::mdd(), &[W::bytes("\\a.css", b"b { color: red }")]).unwrap();
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let source =
+            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        let gone = std::env::temp_dir().join(format!("xdict-no-such-{}", std::process::id())).join("a.css");
+        let package = Package {
+            mdx: source("a.mdx", mdx),
+            mdd: vec![source("a.mdd", mdd)],
+            sidecars: vec![Location::Path { path: gone.to_string_lossy().into_owned() }],
+        };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let css = core.resource(dict, "a.css".into(), view());
+        assert!(matches!(css, Err(CoreError::NotFound { what: Missing::File, .. })), "{:?}", css.map(|_| "found"));
+        // An MDX that is not there is the same: a file the package names, missing.
+        let gone = Location::Path { path: gone.to_string_lossy().into_owned() };
+        let result = core.import(Package { mdx: gone, mdd: vec![], sidecars: vec![] }, &NoProgress);
+        assert!(matches!(result, Err(CoreError::NotFound { what: Missing::File, .. })), "{result:?}");
     }
 
     /// An error a shell's source returns reaches the shell as itself, through the reader: not as `Io`.

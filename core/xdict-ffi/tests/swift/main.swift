@@ -315,7 +315,7 @@ let short = Package(mdx: .source(name: "short.mdx", source: Bytes(mdx, nil, shor
 check("byteSource.shortRead", b["shortRead"], outcome { j(try core.import(package: short, progress: nil)) })
 
 let errs = x["errors"] as! [String: Any]
-for name in ["unsupported", "malformed"] {
+for name in ["unsupported", "malformed", "notFound"] {
     let c = errs[name] as! [String: Any]
     let faulty = Package(mdx: at(c["file"] as! String), mdd: [], sidecars: [])
     check("errors.\(name)", ["error": c["error"]!], outcome { j(try core.import(package: faulty, progress: nil)) })

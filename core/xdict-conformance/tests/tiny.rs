@@ -179,7 +179,7 @@ fn the_tiny_dictionary_conforms() {
     check("byteSource.shortRead", &b["shortRead"], outcome(core.import(short, &NoProgress)));
 
     let e = &x["errors"];
-    for name in ["unsupported", "malformed"] {
+    for name in ["unsupported", "malformed", "notFound"] {
         let package = Package { mdx: at(e[name]["file"].as_str().unwrap()), mdd: vec![], sidecars: vec![] };
         let got = outcome(core.import(package, &NoProgress));
         check(&format!("errors.{name}"), &json!({ "error": e[name]["error"] }), got);

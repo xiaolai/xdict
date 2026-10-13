@@ -32,7 +32,8 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
    this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.
 6. [`errors`], each against the same `Core`: `import` of the faulty `file`s, `tiny-v4.mdx` [`unsupported`] and
-   `tiny-badheader.mdx` [`malformed`] (each the package's MDX alone); `import` of `tiny.mdx` alone with a progress
+   `tiny-badheader.mdx` [`malformed`] and `tiny-absent.mdx`, which is not written [`notFound`; not on the Web,
+   which has no paths] (each the package's MDX alone); `import` of `tiny.mdx` alone with a progress
    that answers `false` [`cancelled`]; then the byte source's MDX with a sidecar `tiny.css` that is a source
    with the byte source's `identity`: `import`, `open`, the sidecar's inode raised by one, then `resource` of
    `tiny.css` [`sourceChanged`].

@@ -228,7 +228,7 @@ fun main(args: Array<String>) {
     check("byteSource.shortRead", b["shortRead"], outcome { j(core.`import`(short, null)) })
 
     val errs = obj(x["errors"])
-    for (name in listOf("unsupported", "malformed")) {
+    for (name in listOf("unsupported", "malformed", "notFound")) {
         val c = obj(errs[name])
         val faulty = Package(at(c["file"] as String), listOf(), listOf())
         check("errors.$name", mapOf("error" to c["error"]), outcome { j(core.`import`(faulty, null)) })
