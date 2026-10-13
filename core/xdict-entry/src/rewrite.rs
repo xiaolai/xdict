@@ -200,7 +200,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
     out.text.push_str(&name);
     let mut rest = inner.get(name_len..)?;
     loop {
-        let spaces = rest.len() - rest.trim_start().len();
+        let spaces = rest.len() - rest.trim_ascii_start().len();
         out.text.push_str(rest.get(..spaces)?);
         rest = rest.get(spaces..)?;
         if rest.is_empty() {
@@ -215,15 +215,16 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
             rest = after;
             continue;
         }
-        let attr_len = rest.find(|c: char| c.is_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
+        let attr_len =
+            rest.find(|c: char| c.is_ascii_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
         let attr = rest.get(..attr_len)?;
         out.text.push_str(attr);
         rest = rest.get(attr_len..)?;
-        let before_eq = rest.len() - rest.trim_start().len();
-        let Some(after_eq) = rest.trim_start().strip_prefix('=') else { continue };
+        let before_eq = rest.len() - rest.trim_ascii_start().len();
+        let Some(after_eq) = rest.trim_ascii_start().strip_prefix('=') else { continue };
         out.text.push_str(rest.get(..before_eq)?);
         out.text.push('=');
-        let value_from = after_eq.trim_start();
+        let value_from = after_eq.trim_ascii_start();
         out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
         let (quote, value, after) = attribute_value(value_from)?;
         let new = attribute(&name, attr, value, quote, base, dir, out);
@@ -245,7 +246,7 @@ fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
             Some((Some(q), body.get(..end)?, body.get(end + 1..).unwrap_or("")))
         }
         _ => {
-            let end = from.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(from.len());
+            let end = from.find(|c: char| c.is_ascii_whitespace() || c == '>').unwrap_or(from.len());
             Some((None, from.get(..end)?, from.get(end..)?))
         }
     }
@@ -300,24 +301,25 @@ fn escaped(text: &str, quote: char) -> String {
     text.replace('&', "&amp;").replace(quote, as_reference)
 }
 
-/// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of non-space, trailing commas end
-/// it; a descriptor runs to the next comma), each URL rewritten, written back `url descriptor, …`.
+/// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of anything but ASCII whitespace,
+/// trailing commas end it; a descriptor runs to the next comma), each URL rewritten, written back
+/// `url descriptor, …`.
 fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> String {
     let mut candidates = Vec::new();
     let mut rest = value;
     loop {
-        rest = rest.trim_start_matches(|c: char| c.is_whitespace() || c == ',');
+        rest = rest.trim_start_matches(|c: char| c.is_ascii_whitespace() || c == ',');
         if rest.is_empty() {
             break;
         }
-        let url_end = rest.find(char::is_whitespace).unwrap_or(rest.len());
+        let url_end = rest.find(|c: char| c.is_ascii_whitespace()).unwrap_or(rest.len());
         let (url, after) = rest.split_at(url_end);
         let (url, descriptor, after) = match url.strip_suffix(',') {
             Some(url) => (url.trim_end_matches(','), "", after),
             None => {
                 let end = after.find(',').unwrap_or(after.len());
                 let (descriptor, after) = after.split_at(end);
-                (url, descriptor.trim(), after)
+                (url, descriptor.trim_ascii(), after)
             }
         };
         rest = after;
@@ -442,7 +444,7 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 // `url(`: whitespace, then a string or an unquoted URL; its `)` is met as any other.
                 parens.push(false);
                 let inner = text.get(open + 1..).unwrap_or("");
-                let value_from = inner.trim_start();
+                let value_from = inner.trim_ascii_start();
                 let start = open + 1 + (inner.len() - value_from.len());
                 out.text.push_str(text.get(copied..start).unwrap_or(""));
                 match value_from.chars().next() {
@@ -455,7 +457,7 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                     _ => {
                         // Unquoted, it runs to `)`; the spaces before it are dropped with the quotes added.
                         let end = string_end(value_from, ')');
-                        write_url(&mut out, value_from.get(..end).unwrap_or("").trim_end(), '"', base, dir);
+                        write_url(&mut out, value_from.get(..end).unwrap_or("").trim_ascii_end(), '"', base, dir);
                         copied = start + end;
                     }
                 }
@@ -716,6 +718,22 @@ mod tests {
         );
         assert!(r.text.contains(r#"srcset="xdict://d/r/d.png 480w""#), "{}", r.text);
         assert_eq!(r.links.len(), 4, "{:?}", r.links);
+    }
+
+    /// HTML and CSS separate only on ASCII whitespace: a no-break space is part of the URL it stands in, in a
+    /// `srcset`, an unquoted attribute value and an unquoted `url(`.
+    #[test]
+    fn only_ascii_whitespace_separates() {
+        let resource = |p: &str| Link::Resource { path: Path::resolve("", p).travel() };
+        let r = html("<img srcset=\"a\u{a0}b.png 1x, c.png\u{a0}2x\">", BASE);
+        let paths: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+        assert_eq!(paths, [resource("a\u{a0}b.png"), resource("c.png\u{a0}2x")], "{}", r.text);
+        let r = html("<img src=a\u{a0}b.png alt=x>", BASE);
+        let paths: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+        assert_eq!(paths, [resource("a\u{a0}b.png")], "{}", r.text);
+        let r = css("b { background: url(\u{a0}a.png\u{a0}) }", BASE, "");
+        let paths: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+        assert_eq!(paths, [resource("\u{a0}a.png\u{a0}")], "{}", r.text);
     }
 
     /// `url(` and `@import` inside a string or a comment are text, not URLs.
