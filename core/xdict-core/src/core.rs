@@ -1213,7 +1213,7 @@ mod tests {
         let config =
             Config { client_protocol: PROTOCOL, cache_dir: Some(dir.to_string_lossy().into()), ..Config::default() };
         let core = Core::new(config).unwrap();
-        let bytes = write(&Spec::mdx(), &[W::text("run", "to move")]).unwrap();
+        let bytes = write(&Spec::mdx(), &[W::text("runaway", "to move")]).unwrap();
         let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Fixed(bytes)) };
         let package = Package { mdx: mdx.clone(), mdd: vec![], sidecars: vec![] };
         core.import(package.clone(), &NoProgress).unwrap();
@@ -1229,10 +1229,12 @@ mod tests {
         core.import(package.clone(), &NoProgress).unwrap();
         assert!(matches!(core.open(package.clone()).unwrap(), Opened::Ready { .. }));
 
-        // The first byte of the key text, which follows the 296-byte header (padding between sections is in no
-        // checksum, and changing it changes nothing).
+        // The key text, a checksummed section, found by what it holds rather than where today's layout puts it
+        // (padding between sections is in no checksum, and changing it changes nothing).
         let mut damaged = std::fs::read(&index).unwrap();
-        damaged[296] ^= 1;
+        let at: Vec<usize> = damaged.windows(7).enumerate().filter(|(_, w)| *w == b"runaway").map(|(i, _)| i).collect();
+        assert_eq!(at.len(), 1, "the key text, once");
+        damaged[at[0]] ^= 1;
         // An index is written read-only; damage it in place and make it read-only again, so that what refuses it
         // is the checksum, not its mode.
         #[cfg(unix)]
