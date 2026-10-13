@@ -1,7 +1,7 @@
 //! HTML's named character references, every one of the standard's table (WHATWG HTML, "Named character
 //! references", <https://html.spec.whatwg.org/entities.json>, CC BY 4.0), sorted by name for a binary search, and
 //! the windows-1252 characters its numeric references stand for in place of C1 controls. Written by a script
-//! from that file; a name keeps its `;`, and the 106 names a browser still reads without one appear twice.
+//! from that file by `gen_entities.py`; a name keeps its `;`, and the 106 read without one appear twice.
 
 /// The longest name, without its `;`: no reference is searched for past it.
 pub(crate) const LONGEST: usize = 31;
