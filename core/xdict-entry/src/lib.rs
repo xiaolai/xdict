@@ -2,6 +2,7 @@
 //! rewritten under the view's base, its compact styles expanded. Redirects are followed by lookup
 //! (`xdict-lookup`), not here.
 
+mod entities;
 mod rewrite;
 mod sheet;
 mod url;
