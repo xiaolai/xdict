@@ -6,7 +6,8 @@
 // its memory may be inconsistent. Load a fresh copy of the glue module (a new URL) for a new instance.
 
 export type CoreError = { type: string; detail?: string; [field: string]: unknown };
-export type FileIdentity = { device: number; inode: number; size: number; mtimeNs: number; ctimeNs: number };
+/** A file's identity. Bigints, because nanosecond times pass 2^53, where a number would round them. */
+export type FileIdentity = { device: bigint; inode: bigint; size: bigint; mtimeNs: bigint; ctimeNs: bigint };
 export type Config = { dataDir: string | null; cacheDir: string | null; clientProtocol: number; entropy: number[] };
 export type Versions = { protocol: number; core: string; indexFormat: number; normalization: number };
 export type DictInfo = { title: string; description: string; formatVersion: string; keys: number };
@@ -58,11 +59,21 @@ export interface IndexStorage {
 export type Location = { type: 'path'; path: string } | { type: 'source'; name: string; source: ByteSource };
 export type Package = { mdx: Location; mdd: Location[]; sidecars: Location[] };
 
+/** An identity as it crosses into the core: decimal strings, exact at any size. */
+type WireIdentity = { device: string; inode: string; size: string; mtimeNs: string; ctimeNs: string };
+
+/** A source as the core reads it: the shell's own, its identity in wire form. */
+interface WireSource {
+  size(): number;
+  readAt(offset: number, len: number): Uint8Array;
+  identity(): WireIdentity | null;
+}
+
 /** What wasm-bindgen generates for xdict-wasm with `--target web`. */
 export interface Glue {
   initSync(options: { module: BufferSource | WebAssembly.Module }): unknown;
   Core: new (config: string, storage?: IndexStorage) => GlueCore;
-  registerSource(source: ByteSource): number;
+  registerSource(source: WireSource): number;
   releaseSource(id: number): void;
   versions(): string;
   protocolVersion(): number;
@@ -129,8 +140,17 @@ export class XDict {
     if (location.type === 'path') return location;
     let id = this.sources.get(location.source);
     if (id === undefined) {
-      id = this.glue.registerSource(location.source);
-      this.sources.set(location.source, id);
+      const source = location.source;
+      const wire: WireSource = {
+        size: () => source.size(),
+        readAt: (offset, len) => source.readAt(offset, len),
+        identity: () => {
+          const i = source.identity();
+          return i === null ? null : { device: `${i.device}`, inode: `${i.inode}`, size: `${i.size}`, mtimeNs: `${i.mtimeNs}`, ctimeNs: `${i.ctimeNs}` };
+        },
+      };
+      id = this.glue.registerSource(wire);
+      this.sources.set(source, id);
     }
     return { type: 'source', name: location.name, sourceId: id };
   }

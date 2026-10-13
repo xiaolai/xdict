@@ -33,7 +33,7 @@ if (isMainThread) {
   const file = (name: string): Location => {
     const bytes = readFileSync(join(dir, name));
     const s = statSync(join(dir, name), { bigint: true });
-    const ident = { device: Number(s.dev), inode: Number(s.ino), size: Number(s.size), mtimeNs: Number(s.mtimeNs), ctimeNs: Number(s.ctimeNs) };
+    const ident = { device: s.dev, inode: s.ino, size: s.size, mtimeNs: s.mtimeNs, ctimeNs: s.ctimeNs };
     const source = { size: () => bytes.length, readAt: (o: number, l: number) => bytes.subarray(o, o + l), identity: () => ident };
     return { type: 'source', name, source };
   };
