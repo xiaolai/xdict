@@ -35,14 +35,21 @@ impl StyleSheet {
 
     /// `record` with its markers replaced. A marker naming no style is left as it is.
     pub fn apply<'a>(&self, record: &'a str) -> Cow<'a, str> {
+        // No text passes `usize::MAX`, so this is never `Exceeded`.
+        self.apply_within(record, usize::MAX).unwrap_or(Cow::Borrowed(record))
+    }
+
+    /// [`apply`](Self::apply) held to `max` bytes: `Exceeded` as soon as the expansion would pass it, before it
+    /// is all written. A record of many markers can expand far past its own size.
+    pub fn apply_within<'a>(&self, record: &'a str, max: usize) -> Result<Cow<'a, str>, crate::Exceeded> {
         if self.is_empty() || !record.contains('`') {
-            return Cow::Borrowed(record);
+            return if record.len() <= max { Ok(Cow::Borrowed(record)) } else { Err(crate::Exceeded) };
         }
-        let mut out = String::with_capacity(record.len() * 2);
+        let mut out = Within { text: String::with_capacity(record.len().saturating_mul(2).min(max)), max };
         let mut open: Option<&str> = None;
         let mut rest = record;
         while let Some(at) = rest.find('`') {
-            out.push_str(rest.get(..at).unwrap_or(""));
+            out.push_str(rest.get(..at).unwrap_or(""))?;
             let after = rest.get(at + 1..).unwrap_or("");
             // A marker is digits between backticks; one naming no style, a number too large for any among them, is
             // kept whole, both backticks.
@@ -56,27 +63,43 @@ impl StyleSheet {
             match marker {
                 Some((Some((begin, end_text)), end)) => {
                     if let Some(close) = open.take() {
-                        out.push_str(close);
+                        out.push_str(close)?;
                     }
-                    out.push_str(begin);
+                    out.push_str(begin)?;
                     open = Some(end_text);
                     rest = after.get(end + 1..).unwrap_or("");
                 }
                 Some((None, end)) => {
-                    out.push_str(rest.get(at..at + end + 2).unwrap_or(""));
+                    out.push_str(rest.get(at..at + end + 2).unwrap_or(""))?;
                     rest = after.get(end + 1..).unwrap_or("");
                 }
                 None => {
-                    out.push('`');
+                    out.push_str("`")?;
                     rest = after;
                 }
             }
         }
-        out.push_str(rest);
+        out.push_str(rest)?;
         if let Some(close) = open {
-            out.push_str(close);
+            out.push_str(close)?;
         }
-        Cow::Owned(out)
+        Ok(Cow::Owned(out.text))
+    }
+}
+
+/// An expansion held to `max` bytes.
+struct Within {
+    text: String,
+    max: usize,
+}
+
+impl Within {
+    fn push_str(&mut self, s: &str) -> Result<(), crate::Exceeded> {
+        if self.text.len().saturating_add(s.len()) > self.max {
+            return Err(crate::Exceeded);
+        }
+        self.text.push_str(s);
+        Ok(())
     }
 }
 
@@ -92,6 +115,23 @@ mod tests {
         assert_eq!(sheet.apply("`9`x and `a` b"), "`9`x and `a` b", "unknown markers stay");
         assert!(matches!(sheet.apply("no markers"), Cow::Borrowed(_)));
         assert!(StyleSheet::parse("").is_empty());
+    }
+
+    /// A record of many markers expands each into its style's text; held to `max`, the expansion stops as soon as
+    /// it would pass it, so a small record cannot grow without bound. Under `max` it is what `apply` gives.
+    #[test]
+    fn an_expansion_past_its_ceiling_is_refused_early() {
+        let sheet = StyleSheet::parse(&format!("1\n{}\n\n", "x".repeat(1000)));
+        let record = "`1`".repeat(1_000_000);
+        let started = std::time::Instant::now();
+        assert_eq!(sheet.apply_within(&record, 1 << 20), Err(crate::Exceeded));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "took {:?}", started.elapsed());
+        let ordinary = "`1`run and `2`more";
+        let whole = sheet.apply(ordinary);
+        assert_eq!(sheet.apply_within(ordinary, whole.len()).as_deref(), Ok(whole.as_ref()));
+        assert_eq!(sheet.apply_within(ordinary, whole.len() - 1), Err(crate::Exceeded));
+        assert!(matches!(sheet.apply_within("no markers", 0), Err(crate::Exceeded)));
+        assert!(matches!(sheet.apply_within("no markers", 10), Ok(Cow::Borrowed(_))));
     }
 
     /// A style whose closing text is empty is a style: the last line, empty, is its closing text.

@@ -6,6 +6,7 @@
 //! Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort by construction: a URL a
 //! script builds from pieces (`'entry' + '://'`) is not seen, so each shell still intercepts navigations.
 
+use crate::Exceeded;
 use crate::url::{
     BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, is_oxford_lookup, is_remote_scheme, names_a_host,
     preprocess, scheme, tts,
@@ -28,13 +29,57 @@ pub struct Rewritten {
 /// Rewritten text as it is written, and the URLs met, when the caller wants them: a view needs only the text,
 /// and an entry of a million links would otherwise hold a million `Written`s it never reads.
 struct Out {
-    text: String,
+    text: Bounded,
     links: Option<Vec<Written>>,
 }
 
+/// Text written under a ceiling: a write that would pass `max` is not made and marks the text exceeded, so a
+/// rewrite stops growing as soon as its result could not be served.
+struct Bounded {
+    text: String,
+    max: usize,
+    exceeded: bool,
+}
+
+impl Bounded {
+    fn push_str(&mut self, s: &str) {
+        if self.exceeded || self.text.len().saturating_add(s.len()) > self.max {
+            self.exceeded = true;
+        } else {
+            self.text.push_str(s);
+        }
+    }
+
+    fn push(&mut self, c: char) {
+        self.push_str(c.encode_utf8(&mut [0; 4]));
+    }
+
+    fn extend(&mut self, c: Option<char>) {
+        if let Some(c) = c {
+            self.push(c);
+        }
+    }
+
+    fn as_str(&self) -> &str {
+        &self.text
+    }
+}
+
 impl Out {
-    fn new(capacity: usize, collect: bool) -> Self {
-        Self { text: String::with_capacity(capacity), links: collect.then(Vec::new) }
+    /// Room for `capacity` bytes, no more than `max`; nothing is written past `max`.
+    fn new(capacity: usize, collect: bool, max: usize) -> Self {
+        let text = Bounded { text: String::with_capacity(capacity.min(max)), max, exceeded: false };
+        Self { text, links: collect.then(Vec::new) }
+    }
+
+    /// The text, or `Exceeded` if it would have passed its ceiling.
+    fn bounded(self) -> Result<String, Exceeded> {
+        if self.text.exceeded { Err(Exceeded) } else { Ok(self.text.text) }
+    }
+
+    /// Marks this text exceeded when `other`, which it was made from, is.
+    fn exceeded_with(&mut self, other: &Bounded) {
+        self.text.exceeded |= other.exceeded;
     }
 
     fn collects(&self) -> bool {
@@ -49,20 +94,24 @@ impl Out {
 
     /// The URLs `other` met, without its text.
     fn links_of(&mut self, other: Option<Out>) {
+        if let Some(other) = &other {
+            self.exceeded_with(&other.text);
+        }
         if let (Some(links), Some(Out { links: Some(more), .. })) = (&mut self.links, other) {
             links.extend(more);
         }
     }
 
     fn append(&mut self, other: Out) {
-        self.text.push_str(&other.text);
+        self.text.push_str(other.text.as_str());
+        self.exceeded_with(&other.text);
         if let (Some(links), Some(more)) = (&mut self.links, other.links) {
             links.extend(more);
         }
     }
 
     fn done(self) -> Rewritten {
-        Rewritten { text: self.text, links: self.links.unwrap_or_default() }
+        Rewritten { text: self.text.text, links: self.links.unwrap_or_default() }
     }
 }
 
@@ -135,13 +184,18 @@ const HREF_ELEMENTS: [&str; 6] = ["a", "area", "link", "base", "image", "use"];
 /// An entry's HTML, its URLs rewritten, and the URLs met. Inline styles and scripts are rewritten as stylesheets
 /// and scripts are.
 pub fn html(text: &str, base: &str) -> Rewritten {
-    html_out(text, base, "", true).done()
+    html_out(text, base, "", true, usize::MAX).done()
 }
 
 /// HTML as a view shows it: [`html`] without the URLs met. `dir` is the folder relative URLs resolve against: an
 /// entry's is the package's root (`""`), a page served from the package its own folder.
 pub fn html_text(text: &str, base: &str, dir: &str) -> String {
-    html_out(text, base, dir, false).text
+    html_out(text, base, dir, false, usize::MAX).text.text
+}
+
+/// [`html_text`] held to `max` bytes: `Exceeded` as soon as the text would pass it, before it is all written.
+pub fn html_text_within(text: &str, base: &str, dir: &str, max: usize) -> Result<String, Exceeded> {
+    html_out(text, base, dir, false, max).bounded()
 }
 
 /// What a start tag makes of the text after it, until its end tag (HTML's tokeniser states).
@@ -179,19 +233,22 @@ enum Pass {
     AsMarkup,
 }
 
-fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
-    html_in(text, base, dir, collect, Pass::Document)
+fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out {
+    html_in(text, base, dir, collect, Pass::Document, max)
 }
 
 /// `text` rewritten. A browser reads the text of `title`, `style`, `script` and the rest as markup inside `svg` or
 /// `math`, and only a tree builder knows which it is in; so once either has started, the document is taken as
 /// possibly foreign: such text is rewritten as markup as well, and a comment hides nothing, since a
 /// `<![CDATA[` there makes `<!--` text. What that costs is text rewritten that needed not be, never the reverse.
-fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out {
-    let mut out = Out::new(text.len() + text.len() / 8, collect);
+fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass, max: usize) -> Out {
+    let mut out = Out::new(text.len() + text.len() / 8, collect, max);
     let mut foreign = false;
     let mut rest = text;
     while let Some(at) = rest.find('<') {
+        if out.text.exceeded {
+            return out;
+        }
         let (before, from) = rest.split_at(at);
         out.text.push_str(before);
         if let Some(comment) = from.strip_prefix("<!--") {
@@ -243,7 +300,7 @@ fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out 
         rest = after;
         // The text read as markup, where a browser may read it so.
         let markup = (foreign || matches!(kind, Raw::Noscript))
-            .then(|| html_in(body, base, dir, out.collects(), Pass::AsMarkup));
+            .then(|| html_in(body, base, dir, out.collects(), Pass::AsMarkup, max));
         match (kind, markup) {
             (Raw::Script, markup) => {
                 let source = markup.as_ref().map_or(body, |m| m.text.as_str());
@@ -253,7 +310,7 @@ fn html_in(text: &str, base: &str, dir: &str, collect: bool, pass: Pass) -> Out 
             }
             (Raw::Style, markup) => {
                 let source = markup.as_ref().map_or(body, |m| m.text.as_str());
-                let sheet = css_out(source, base, dir, out.collects());
+                let sheet = css_out(source, base, dir, out.collects(), max);
                 out.links_of(markup);
                 out.append(sheet);
             }
@@ -369,11 +426,12 @@ fn attribute(
     match lower.as_str() {
         "style" => {
             let decoded = unescape(value);
-            let Out { text, links } = css_out(&decoded, base, dir, out.collects());
+            let Out { text, links } = css_out(&decoded, base, dir, out.collects(), out.text.max);
+            out.exceeded_with(&text);
             if let (Some(all), Some(more)) = (&mut out.links, links) {
                 all.extend(more);
             }
-            if text == decoded { value.to_owned() } else { escaped(&text, quote.unwrap_or('"')) }
+            if text.as_str() == decoded { value.to_owned() } else { escaped(text.as_str(), quote.unwrap_or('"')) }
         }
         // A handler runs as its value decodes; written back escaped for its quote, as a style is.
         _ if lower.starts_with("on") => {
@@ -489,21 +547,30 @@ fn reference(after: &str, out: &mut String) -> Option<usize> {
 
 /// A stylesheet's `url(…)` and `@import "…"` rewritten, and the URLs met; `dir` is the stylesheet's own directory.
 pub fn css(text: &str, base: &str, dir: &str) -> Rewritten {
-    css_out(text, base, dir, true).done()
+    css_out(text, base, dir, true, usize::MAX).done()
 }
 
 /// A stylesheet rewritten, as a view loads it: [`css`] without the URLs met.
 pub fn css_text(text: &str, base: &str, dir: &str) -> String {
-    css_out(text, base, dir, false).text
+    css_out(text, base, dir, false, usize::MAX).text.text
 }
 
-fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
+/// [`css_text`] held to `max` bytes: `Exceeded` as soon as the text would pass it, before it is all written.
+pub fn css_text_within(text: &str, base: &str, dir: &str, max: usize) -> Result<String, Exceeded> {
+    css_out(text, base, dir, false, max).bounded()
+}
+
+fn css_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out {
     // Read as CSS's tokeniser reads it (css-syntax §4), so that what is a URL here is what a browser fetches:
     // comments and strings are text, an escaped character is part of a name, `url(` is a function whose name
     // decodes to `url`, and an image function's strings are images.
-    let mut css = Css { text, base, dir, out: Out::new(text.len(), collect), i: 0, copied: 0, parens: Vec::new() };
+    let out = Out::new(text.len(), collect, max);
+    let mut css = Css { text, base, dir, out, i: 0, copied: 0, parens: Vec::new() };
     let mut importing = false;
     while let Some(&b) = text.as_bytes().get(css.i) {
+        if css.out.text.exceeded {
+            return css.out;
+        }
         importing = match b {
             b'/' if text.as_bytes().get(css.i + 1) == Some(&b'*') => {
                 css.comment();
@@ -1180,6 +1247,25 @@ mod tests {
         assert!(r.text.contains(r#"onclick='go("xdict://d/entry/a&#39;s")'"#), "{}", r.text);
         let kept = r#"<a onclick="f(&quot;x&quot;)">x</a>"#;
         assert_eq!(html(kept, BASE).text, kept, "an unchanged handler is written as found");
+    }
+
+    /// Held to `max`, the rewrite stops as soon as its text would pass it; under it, it is the unbounded text.
+    #[test]
+    fn a_rewrite_past_its_ceiling_is_refused_early() {
+        let entry = "<img src=a><a href='entry://b'>b</a><style>p{background:url(c.png)}</style>".repeat(200_000);
+        let started = std::time::Instant::now();
+        assert_eq!(html_text_within(&entry, BASE, "", 1 << 20), Err(crate::Exceeded));
+        assert!(started.elapsed() < std::time::Duration::from_secs(2), "took {:?}", started.elapsed());
+        let sheet = "p{background:url(c.png)}".repeat(200_000);
+        assert_eq!(css_text_within(&sheet, BASE, "", 1 << 20), Err(crate::Exceeded));
+        for text in [r#"<img src=a srcset="b 1x"><p style="background:url(c)">x</p><svg><style>a{}</style>"#, "plain"] {
+            let whole = html_text(text, BASE, "d");
+            assert_eq!(html_text_within(text, BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()));
+            assert_eq!(html_text_within(text, BASE, "d", whole.len() - 1), Err(crate::Exceeded));
+        }
+        let whole = css_text("a{background:url(x.png)}", BASE, "d");
+        assert_eq!(css_text_within("a{background:url(x.png)}", BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()));
+        assert_eq!(css_text_within("a{background:url(x.png)}", BASE, "d", whole.len() - 1), Err(crate::Exceeded));
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
