@@ -43,18 +43,23 @@ impl StyleSheet {
         while let Some(at) = rest.find('`') {
             out.push_str(rest.get(..at).unwrap_or(""));
             let after = rest.get(at + 1..).unwrap_or("");
+            // A marker is digits between backticks; one naming no style is kept whole, both backticks.
             let marker = after.find('`').and_then(|end| {
                 let digits = after.get(..end)?;
                 let n: u32 = digits.parse().ok().filter(|_| digits.bytes().all(|b| b.is_ascii_digit()))?;
-                Some((self.0.get(&n)?, end))
+                Some((self.0.get(&n), end))
             });
             match marker {
-                Some(((begin, end_text), end)) => {
+                Some((Some((begin, end_text)), end)) => {
                     if let Some(close) = open.take() {
                         out.push_str(close);
                     }
                     out.push_str(begin);
                     open = Some(end_text);
+                    rest = after.get(end + 1..).unwrap_or("");
+                }
+                Some((None, end)) => {
+                    out.push_str(rest.get(at..at + end + 2).unwrap_or(""));
                     rest = after.get(end + 1..).unwrap_or("");
                 }
                 None => {
@@ -83,5 +88,13 @@ mod tests {
         assert_eq!(sheet.apply("`9`x and `a` b"), "`9`x and `a` b", "unknown markers stay");
         assert!(matches!(sheet.apply("no markers"), Cow::Borrowed(_)));
         assert!(StyleSheet::parse("").is_empty());
+    }
+
+    /// An unknown numeric marker is kept whole: its closing backtick opens nothing.
+    #[test]
+    fn an_unknown_marker_keeps_both_backticks() {
+        let sheet = StyleSheet::parse("1\n<b>\n</b>\n");
+        assert_eq!(sheet.apply("`9`1`x"), "`9`1`x");
+        assert_eq!(sheet.apply("`9``1`x"), "`9`<b>x</b>");
     }
 }
