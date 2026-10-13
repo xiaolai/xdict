@@ -1071,7 +1071,18 @@ mod tests {
         // checksum, and changing it changes nothing).
         let mut damaged = std::fs::read(&index).unwrap();
         damaged[296] ^= 1;
+        // An index is written read-only; damage it in place and make it read-only again, so that what refuses it
+        // is the checksum, not its mode.
+        #[cfg(unix)]
+        let set_mode = |mode| {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&index, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+        #[cfg(unix)]
+        set_mode(0o600);
         std::fs::write(&index, damaged).unwrap();
+        #[cfg(unix)]
+        set_mode(0o400);
         assert_eq!(core.open(package).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
         std::fs::remove_dir_all(&dir).unwrap();
     }
