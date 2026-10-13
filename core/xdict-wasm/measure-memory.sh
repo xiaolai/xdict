@@ -4,13 +4,13 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 core=$(cd "$here/.." && pwd)
+. "$core/binding-env.sh"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
 cd "$core"
 cargo run -q --release -p xdict-conformance --bin memory-fixture -- "$work/fixture"
-cargo build -q --release -p xdict-wasm --target wasm32-unknown-unknown
-wasm-bindgen --target web --out-dir "$work/pkg" target/wasm32-unknown-unknown/release/xdict_wasm.wasm
+web_binding "$work/pkg"
 for step in import entry refused resource; do
     node "$here/tests/memory/memory.ts" "$work/pkg" "$work/fixture" "$step"
 done
