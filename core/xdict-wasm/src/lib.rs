@@ -24,7 +24,8 @@ use xdict_core::{CoreError, FileIdentity};
 
 #[wasm_bindgen]
 extern "C" {
-    /// `{ size(): number, readAt(offset: number, len: number): Uint8Array, identity(): FileIdentity | null }`.
+    /// `{ size(): number, readAt(offset: number, len: number): Uint8Array, identity(): WireIdentity | null }`,
+    /// where a wire identity's fields are decimal strings (exact) or numbers (exact below 2^53).
     pub type JsByteSource;
     #[wasm_bindgen(method)]
     fn size(this: &JsByteSource) -> f64;
@@ -126,18 +127,31 @@ impl core::ByteSource for Source {
             .map_err(|e| CoreError::Io { kind: core::IoKind::Other, detail: format!("the source failed: {e:?}") })
     }
     fn identity(&self) -> Option<FileIdentity> {
-        let value = self.with(|s| s.identity())?;
-        let json = js_sys_json(&value)?;
-        serde_json::from_str(&json).ok()
+        identity_from(&self.with(|s| s.identity())?)
     }
 }
 
-/// A plain object as JSON text, through the host's `JSON.stringify`.
-fn js_sys_json(value: &JsValue) -> Option<String> {
+/// An identity as the wrapper sends it: each field a decimal string (exact) or a number. `None` for null, or
+/// for anything else that is not a whole identity.
+fn identity_from(value: &JsValue) -> Option<FileIdentity> {
     if value.is_null() || value.is_undefined() {
         return None;
     }
-    stringify(value).ok().and_then(|s| s.as_string())
+    let json: Value = serde_json::from_str(&stringify(value).ok()?.as_string()?).ok()?;
+    let field = |name: &str| -> Option<i128> {
+        match json.get(name)? {
+            Value::String(text) => text.parse().ok(),
+            Value::Number(n) => n.as_i64().map(i128::from).or_else(|| n.as_u64().map(i128::from)),
+            _ => None,
+        }
+    };
+    Some(FileIdentity {
+        device: u64::try_from(field("device")?).ok()?,
+        inode: u64::try_from(field("inode")?).ok()?,
+        size: u64::try_from(field("size")?).ok()?,
+        mtime_ns: i64::try_from(field("mtimeNs")?).ok()?,
+        ctime_ns: i64::try_from(field("ctimeNs")?).ok()?,
+    })
 }
 
 #[wasm_bindgen]

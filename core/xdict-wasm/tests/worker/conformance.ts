@@ -4,7 +4,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { XDict, XDictError, type ByteSource, type FileIdentity, type Location, type View } from '../../ts/xdict.ts';
+import { XDict, XDictError, type ByteSource, type FileIdentity, type Location, type Package, type View } from '../../ts/xdict.ts';
 
 const { pkg, fixtures, expected, matrix, matrixExpected } =
   workerData as { pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string };
@@ -67,9 +67,13 @@ class Bytes implements ByteSource {
 // The Web has no paths: the package is read through sources, each with the identity its file has here.
 const file = (name: string, dir = fixtures): Location => {
   const s = statSync(join(dir, name), { bigint: true });
-  const ident = { device: Number(s.dev), inode: Number(s.ino), size: Number(s.size), mtimeNs: Number(s.mtimeNs), ctimeNs: Number(s.ctimeNs) };
+  const ident = { device: s.dev, inode: s.ino, size: s.size, mtimeNs: s.mtimeNs, ctimeNs: s.ctimeNs };
   return { type: 'source', name, source: new Bytes(readFileSync(join(dir, name)), ident) };
 };
+/** An identity written in expected.json (numbers, as JSON has no bigint), as the wrapper takes it. */
+const big = (i: { device: number; inode: number; size: number; mtimeNs: number; ctimeNs: number }): FileIdentity => ({
+  device: BigInt(i.device), inode: BigInt(i.inode), size: BigInt(i.size), mtimeNs: BigInt(i.mtimeNs), ctimeNs: BigInt(i.ctimeNs),
+});
 const glueUrl = pathToFileURL(join(pkg, 'xdict_wasm.js')).href;
 const wasm = readFileSync(join(pkg, 'xdict_wasm_bg.wasm'));
 const xd = XDict.load(await import(glueUrl), wasm);
@@ -122,7 +126,7 @@ x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, 
 
 const b = x.byteSource;
 const bytes = readFileSync(join(fixtures, 'tiny.mdx'));
-const copy: Location = { type: 'source', name: b.name, source: new Bytes(bytes, b.identity) };
+const copy: Location = { type: 'source', name: b.name, source: new Bytes(bytes, big(b.identity)) };
 const sidecar: Location = { type: 'source', name: b.sidecar.name, source: new Bytes(new TextEncoder().encode(b.sidecar.text), null) };
 const copyPkg = { mdx: copy, mdd: [], sidecars: [sidecar] };
 check('byteSource.import', b.import, outcome(() => core.import(copyPkg)));
@@ -140,12 +144,12 @@ for (const name of ['unsupported', 'malformed']) {
 }
 check('errors.cancelled', { error: errs.cancelled.error }, outcome(() => core.import({ mdx: file('tiny.mdx'), mdd: [], sidecars: [] }, () => false)));
 // A sidecar whose identity changes after it is opened, as a moved or rewritten file's would.
-const moving = new Bytes(new TextEncoder().encode(b.sidecar.text), { ...b.identity });
+const moving = new Bytes(new TextEncoder().encode(b.sidecar.text), big(b.identity));
 const watchedPkg = { mdx: copy, mdd: [], sidecars: [{ type: 'source' as const, name: 'tiny.css', source: moving }] };
 core.import(watchedPkg);
 const watched = core.open(watchedPkg);
 if (watched.type !== 'ready') throw new Error('not open');
-moving.ident!.inode += 1;
+moving.ident!.inode += 1n;
 check('errors.sourceChanged', { error: errs.sourceChanged.error }, outcome(() => core.resource(watched.dict, 'tiny.css', view())));
 
 const l = x.lifecycle;
@@ -164,6 +168,20 @@ check('lifecycle.panic', l.panic, outcome(() => core.selfTestPanic()));
 check('web.afterTrap', { error: { type: 'internal' } }, outcome(() => core.lookup('run', [dict], page)));
 const fresh = XDict.load(await import(`${glueUrl}?instance=2`), wasm);
 check('web.freshInstance', x.versions, fresh.versions());
+
+// Identities are carried exactly: two times a nanosecond apart, past 2^53, are two identities.
+{
+  const tinyMdx = readFileSync(join(fixtures, 'tiny.mdx'));
+  const at = (t: bigint): Package => {
+    const ident = { device: 9n, inode: 9n, size: BigInt(tinyMdx.length), mtimeNs: t, ctimeNs: t };
+    return { mdx: { type: 'source', name: 'tiny.mdx', source: new Bytes(tinyMdx, ident) }, mdd: [], sidecars: [] };
+  };
+  const exact = fresh.core(config(fresh.protocolVersion()));
+  const t = 1_760_000_000_000_000_001n;
+  exact.import(at(t));
+  check('web.exactIdentity.same', 'ready', exact.open(at(t)).type);
+  check('web.exactIdentity.oneNanosecondLater', { type: 'needsImport', reason: 'changed' }, exact.open(at(t + 1n)));
+}
 
 // The matrix, on the fresh instance: every variant imported, opened and asked the same questions.
 const template = readFileSync(matrixExpected, 'utf8');
