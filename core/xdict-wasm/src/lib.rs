@@ -327,9 +327,40 @@ fn location_from(value: &Value) -> Result<core::Location, String> {
     }
 }
 
+fn malformed(what: &str, why: &str) -> String {
+    to_json(&CoreError::Malformed { detail: format!("{what}: {why}") })
+}
+
+/// A package; `mdd` and `sidecars` may be left out, but when present each must be a list.
 fn package_from(value: &Value) -> Result<core::Package, String> {
     let list = |key: &str| -> Result<Vec<core::Location>, String> {
-        value[key].as_array().map_or(Ok(Vec::new()), |items| items.iter().map(location_from).collect())
+        match &value[key] {
+            Value::Null => Ok(Vec::new()),
+            Value::Array(items) => items.iter().map(location_from).collect(),
+            other => Err(malformed("a package", &format!("{key} is {other}, not a list"))),
+        }
     };
     Ok(core::Package { mdx: location_from(&value["mdx"])?, mdd: list("mdd")?, sidecars: list("sidecars")? })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_package_list_that_is_not_a_list_is_refused() {
+        let mdx = serde_json::json!({ "type": "path", "path": "a.mdx" });
+        for bad in [serde_json::json!(5), serde_json::json!("a.mdd"), serde_json::json!({ "type": "path" })] {
+            for key in ["mdd", "sidecars"] {
+                let mut fields = serde_json::Map::new();
+                fields.insert("mdx".into(), mdx.clone());
+                fields.insert(key.into(), bad.clone());
+                let package = Value::Object(fields);
+                let error = package_from(&package).err().unwrap_or_default();
+                assert!(error.contains("malformed") && error.contains(key), "{key} = {bad}: {error}");
+            }
+        }
+        let absent = package_from(&serde_json::json!({ "mdx": mdx })).map(|p| (p.mdd.len(), p.sidecars.len()));
+        assert_eq!(absent, Ok((0, 0)));
+    }
 }
