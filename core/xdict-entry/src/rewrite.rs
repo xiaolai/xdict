@@ -750,19 +750,37 @@ fn css_unescape(written: &str) -> String {
 /// A script's dictionary schemes rewritten to the view's routes, by prefix: `entry://` and `bword://` to
 /// lookups, `sound://` and `gdau://` to sounds. What follows the prefix is left as the script builds it.
 pub fn script(text: &str, base: &str) -> Rewritten {
+    let text = script_out(text, base, usize::MAX).unwrap_or_default();
+    Rewritten { text, links: Vec::new() }
+}
+
+/// [`script`]'s text held to `max` bytes: `Exceeded` as soon as it would pass it, before it is all written. A
+/// script grows by the view's route at every scheme it holds, so a small one can become a large one.
+pub fn script_text_within(text: &str, base: &str, max: usize) -> Result<String, Exceeded> {
+    script_out(text, base, max)
+}
+
+fn script_out(text: &str, base: &str, max: usize) -> Result<String, Exceeded> {
     const PREFIXES: [(&str, &str); 4] =
         [("entry://", ENTRY), ("bword://", ENTRY), ("sound://", SOUND), ("gdau://", SOUND)];
-    let mut out = String::with_capacity(text.len());
+    let mut out = String::with_capacity(text.len().min(max));
+    let push = |out: &mut String, part: &str| {
+        if out.len().saturating_add(part.len()) > max {
+            return Err(Exceeded);
+        }
+        out.push_str(part);
+        Ok(())
+    };
     let mut rest = text;
     while let Some((at, which)) = first_of(rest, &PREFIXES.map(|(p, _)| p)) {
         let Some(&(prefix, route)) = PREFIXES.get(which) else { break };
-        out.push_str(rest.get(..at).unwrap_or(""));
-        out.push_str(base);
-        out.push_str(route);
+        push(&mut out, rest.get(..at).unwrap_or(""))?;
+        push(&mut out, base)?;
+        push(&mut out, route)?;
         rest = rest.get(at + prefix.len()..).unwrap_or("");
     }
-    out.push_str(rest);
-    Rewritten { text: out, links: Vec::new() }
+    push(&mut out, rest)?;
+    Ok(out)
 }
 
 /// Where the end tag of the raw text element `name` starts in `body`: `</name`, compared ignoring case, and then
@@ -1155,6 +1173,12 @@ mod tests {
         let whole = css_text("a{background:url(x.png)}", BASE, "d");
         assert_eq!(css_text_within("a{background:url(x.png)}", BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()));
         assert_eq!(css_text_within("a{background:url(x.png)}", BASE, "d", whole.len() - 1), Err(crate::Exceeded));
+        // A script grows by the base at every scheme it holds: 7 bytes of `gdau://` become the whole route.
+        let js = "gdau://".repeat(1 << 20);
+        assert_eq!(script_text_within(&js, BASE, 1 << 20), Err(crate::Exceeded));
+        let whole = script("a='entry://b'", BASE).text;
+        assert_eq!(script_text_within("a='entry://b'", BASE, whole.len()).as_deref(), Ok(whole.as_str()));
+        assert_eq!(script_text_within("a='entry://b'", BASE, whole.len() - 1), Err(crate::Exceeded));
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.

@@ -7,7 +7,9 @@ mod rewrite;
 mod sheet;
 mod url;
 
-pub use rewrite::{Rewritten, Written, css, css_text, css_text_within, html, html_text, html_text_within, script};
+pub use rewrite::{
+    Rewritten, Written, css, css_text, css_text_within, html, html_text, html_text_within, script, script_text_within,
+};
 pub use sheet::StyleSheet;
 pub use url::{Block, Link, Path, classify, decode, encode, travelled};
 
