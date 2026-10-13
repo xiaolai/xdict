@@ -193,6 +193,21 @@ pub(crate) struct Verified<'a> {
     pub(crate) last: std::sync::Mutex<Option<(u64, Vec<u8>)>>,
 }
 
+impl Verified<'_> {
+    /// Chunk `number` of the file, read whole and checked against the sum taken when it was hashed.
+    fn verified_chunk(&self, number: u64) -> io::Result<Vec<u8>> {
+        let start = number * self.chunk;
+        let len = usize::try_from((self.source.len().saturating_sub(start)).min(self.chunk))
+            .map_err(|_| io::ErrorKind::InvalidInput)?;
+        let mut bytes = vec![0u8; len];
+        self.source.read_exact_at(start, &mut bytes)?;
+        if self.sums.get(number as usize).copied() != Some(xxhash_rust::xxh3::xxh3_64(&bytes)) {
+            return Err(io::Error::other(Changed));
+        }
+        Ok(bytes)
+    }
+}
+
 impl xdict_mdx::Source for Verified<'_> {
     fn len(&self) -> u64 {
         self.source.len()
@@ -206,15 +221,7 @@ impl xdict_mdx::Source for Verified<'_> {
             let start = number * self.chunk;
             let mut last = self.last.lock().map_err(|_| io::Error::other("a verified read was poisoned"))?;
             if last.as_ref().is_none_or(|(n, _)| *n != number) {
-                let len = usize::try_from((self.source.len().saturating_sub(start)).min(self.chunk))
-                    .map_err(|_| io::ErrorKind::InvalidInput)?;
-                let mut bytes = vec![0u8; len];
-                self.source.read_exact_at(start, &mut bytes)?;
-                let expected = self.sums.get(number as usize).copied();
-                if expected != Some(xxhash_rust::xxh3::xxh3_64(&bytes)) {
-                    return Err(io::Error::other(Changed));
-                }
-                *last = Some((number, bytes));
+                *last = Some((number, self.verified_chunk(number)?));
             }
             let chunk = last.as_ref().map(|(_, b)| b.as_slice()).unwrap_or(&[]);
             let from = usize::try_from(at - start).map_err(|_| io::ErrorKind::InvalidInput)?;
