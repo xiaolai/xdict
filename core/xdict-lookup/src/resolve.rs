@@ -101,7 +101,7 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     // Every record read in this lookup, by key: each is read, and taken from `budget`, once.
     let mut read = HashMap::new();
     redirects(file, &keys, budget, &mut read)?;
-    let entries: HashSet<usize> = keys.iter().copied().filter(|i| read.get(i).is_none_or(Vec::is_empty)).collect();
+    let entries: HashSet<usize> = keys.iter().copied().filter(|i| !matches!(read.get(i), Some(Some(_)))).collect();
     let mut resolved = Resolved::default();
     let mut placed: HashMap<usize, usize> = HashMap::new();
     // The matched key each redirect hit came by (its chain's first), and each such key's problems: a hit carries
@@ -110,7 +110,7 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let mut ways: Vec<(usize, Vec<Problem>)> = Vec::new();
     let mut steps = 0usize;
     for (i, how) in matched {
-        let Some(named) = read.get(&i).filter(|t| !t.is_empty()).cloned() else {
+        let Some(named) = read.get(&i).cloned().flatten() else {
             if let Entry::Vacant(slot) = placed.entry(i) {
                 slot.insert(resolved.hits.len());
                 resolved.hits.push(Hit { key: i, how, problems: vec![] });
@@ -173,7 +173,7 @@ fn follow(
     from: usize,
     named: &[String],
     budget: &mut Budget,
-    read: &mut HashMap<usize, Vec<String>>,
+    read: &mut HashMap<usize, Targets>,
     steps: &mut usize,
 ) -> Result<Followed, Error> {
     let mut walk = Walk::new(from, named);
@@ -219,13 +219,22 @@ struct Walk {
 
 impl Walk {
     fn new(from: usize, named: &[String]) -> Self {
-        Self {
+        let mut walk = Self {
             from,
             queue: named.iter().take(FAN_OUT + 1).map(|t| (t.clone(), vec![from])).collect(),
             tried: 0,
             landed: 0,
             given: HashSet::new(),
             out: Followed { reached: Vec::new(), problems: Vec::new() },
+        };
+        walk.nowhere(from, named);
+        walk
+    }
+
+    /// A redirect naming no target leads nowhere: a dangling redirect, its target empty.
+    fn nowhere(&mut self, from: usize, named: &[String]) {
+        if named.is_empty() {
+            self.out.problems.push(Problem::Dangling { from, target: String::new() });
         }
     }
 
@@ -266,15 +275,16 @@ impl Walk {
 
     /// Key `j`, landed on along `chain`: a loop if the chain has it already, else its targets queued (no more
     /// than could still be tried) if it is a redirect, else an entry reached, given once.
-    fn arrive(&mut self, j: usize, chain: &[usize], read: &HashMap<usize, Vec<String>>) {
+    fn arrive(&mut self, j: usize, chain: &[usize], read: &HashMap<usize, Targets>) {
         let mut next = chain.to_vec();
         next.push(j);
         if chain.contains(&j) {
             self.out.problems.push(Problem::Loop { chain: next });
             return;
         }
-        match read.get(&j).filter(|t| !t.is_empty()) {
+        match read.get(&j).and_then(Option::as_ref) {
             Some(targets) => {
+                self.nowhere(j, targets);
                 let room = (FAN_OUT + 1).saturating_sub(self.tried + self.queue.len());
                 self.queue.extend(targets.iter().take(room).map(|t| (t.clone(), next.clone())));
             }
@@ -304,36 +314,46 @@ fn land(file: &File, target: &str) -> Result<Vec<usize>, Error> {
     Ok(found)
 }
 
-/// Adds to `read`, for each of `keys` not already in it, the targets its record names if it is a redirect, or
-/// none: every block read once, every record taken from `budget` once.
+/// What a record is to a lookup: `None` for an entry, else the targets its redirect names (perhaps none).
+type Targets = Option<Vec<String>>;
+
+/// Adds to `read`, for each of `keys` not already in it, what its record is: every block read once, every
+/// record taken from `budget` once.
 fn redirects(
     file: &File,
     keys: &[usize],
     budget: &mut Budget,
-    read: &mut HashMap<usize, Vec<String>>,
+    read: &mut HashMap<usize, Targets>,
 ) -> Result<(), Error> {
     let mut unread: Vec<usize> = keys.iter().copied().filter(|i| !read.contains_key(i)).collect();
     unread.sort_unstable();
     unread.dedup();
     file.for_each_record(&unread, budget, |i, record| {
-        read.insert(i, redirect_targets(&String::from_utf8_lossy(&record.data)));
+        read.insert(i, targets(&String::from_utf8_lossy(&record.data)));
         Ok(())
     })
 }
 
 /// The targets of an `@@@LINK=` record, one per line that names one, at most one more than [`FAN_OUT`] (no more
-/// can be followed); none for an entry.
+/// can be followed); none for an entry, or for a redirect that names nothing.
 pub fn redirect_targets(text: &str) -> Vec<String> {
+    targets(text).unwrap_or_default()
+}
+
+/// `None` for an entry; for an `@@@LINK=` record, the targets its lines name, which may be none.
+fn targets(text: &str) -> Targets {
     if !text.trim_start().starts_with("@@@LINK=") {
-        return Vec::new();
+        return None;
     }
-    text.lines()
-        .filter_map(|line| line.trim().strip_prefix("@@@LINK="))
-        .map(str::trim)
-        .filter(|t| !t.is_empty())
-        .take(FAN_OUT + 1)
-        .map(str::to_owned)
-        .collect()
+    Some(
+        text.lines()
+            .filter_map(|line| line.trim().strip_prefix("@@@LINK="))
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .take(FAN_OUT + 1)
+            .map(str::to_owned)
+            .collect(),
+    )
 }
 
 /// Each key of `keys`' occurrence: its place among the keys spelt exactly as it is, in file order.
