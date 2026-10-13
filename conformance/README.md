@@ -21,14 +21,15 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
 `expected.json` named in brackets:
 
 1. `versions()` [`versions`]; `Core::new` with client protocol 999 fails [`newWrongProtocol`].
-2. `open` of `tiny.mdx` before any import [`openBeforeImport`].
-3. `import` of the package: `tiny.mdx`, volumes `[tiny.mdd]`, sidecars `[tiny.css]` [`import`]; `open` [`open`].
+2. `open` of the package before any import [`openBeforeImport`]. The package: `tiny.mdx`, volumes
+   `[tiny.mdd]`, sidecars `[tiny.css]`.
+3. `import` of the package [`import`]; `open` of it [`open`].
 4. Each of [`lookups`], [`suggestions`], [`entries`] (edition defaults to the imported one; `cspContains` is a
    substring of the returned policy), [`links`] (origin: the entry `run`/0), [`resources`], in the view
    [`view`].
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
-   this one. Then an import through a source that returns one byte too few.
+   this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.
 6. [`lifecycle`]: close the second handle, then look up with it; close it again; look up with the first handle
    on a second `Core`; `self_test_panic`.
 

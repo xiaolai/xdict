@@ -1,0 +1,18 @@
+[package]
+name = "xdict-identity"
+description = "What a dictionary is keyed by: editions, lineages, locations and the registry that holds them"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+xdict-mdx = { path = "../xdict-mdx" }
+xxhash-rust.workspace = true
+
+[lints]
+workspace = true

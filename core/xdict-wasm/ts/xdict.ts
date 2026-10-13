@@ -70,7 +70,7 @@ export interface Glue {
 
 interface GlueCore {
   import(pkg: string, progress?: { progress(done: number, total: number): boolean }): string;
-  open(location: string): string;
+  open(pkg: string): string;
   close(dict: string): string;
   lookup(query: string, dicts: string, options: string): string;
   suggest(prefix: string, dicts: string, limit: number): string;
@@ -160,13 +160,18 @@ export class XDictCore {
   }
 
   import(pkg: Package, progress?: (done: number, total: number) => boolean): Imported {
-    const wire = { mdx: this.x.location(pkg.mdx), mdd: pkg.mdd.map((l) => this.x.location(l)), sidecars: pkg.sidecars.map((l) => this.x.location(l)) };
     const watcher = progress ? { progress } : undefined;
-    return this.call(() => this.inner.import(JSON.stringify(wire), watcher));
+    return this.call(() => this.inner.import(this.wire(pkg), watcher));
   }
 
-  open(location: Location): Opened {
-    return this.call(() => this.inner.open(JSON.stringify(this.x.location(location))));
+  /** Opens a package imported before, passing every file of it again: the core checks each one's identity. */
+  open(pkg: Package): Opened {
+    return this.call(() => this.inner.open(this.wire(pkg)));
+  }
+
+  private wire(pkg: Package): string {
+    const x = this.x;
+    return JSON.stringify({ mdx: x.location(pkg.mdx), mdd: pkg.mdd.map((l) => x.location(l)), sidecars: pkg.sidecars.map((l) => x.location(l)) });
   }
 
   close(dict: string): void {

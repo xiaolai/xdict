@@ -327,8 +327,8 @@ impl Core {
         }
     }
 
-    pub fn open(&self, location: Location) -> Result<Opened, CoreError> {
-        self.0.open(location.into())
+    pub fn open(&self, package: Package) -> Result<Opened, CoreError> {
+        self.0.open(package.into())
     }
 
     pub fn close(&self, dict: String) -> Result<(), CoreError> {

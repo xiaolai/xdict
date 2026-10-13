@@ -240,10 +240,11 @@ let wrong = x["newWrongProtocol"] as! [String: Any]
 check("newWrongProtocol", wrong["error"], (outcome { _ = try Core(config: config(int(wrong["client"])!)); return "made" } as? [String: Any])?["error"] ?? "made")
 
 let core = try Core(config: config(protocolVersion()))
-check("openBeforeImport", x["openBeforeImport"], outcome { j(try core.open(location: at("tiny.mdx"))) })
-let imported = try core.import(package: Package(mdx: at("tiny.mdx"), mdd: [at("tiny.mdd")], sidecars: [at("tiny.css")]), progress: nil)
+let package = Package(mdx: at("tiny.mdx"), mdd: [at("tiny.mdd")], sidecars: [at("tiny.css")])
+check("openBeforeImport", x["openBeforeImport"], outcome { j(try core.open(package: package)) })
+let imported = try core.import(package: package, progress: nil)
 check("import", x["import"], j(imported))
-let opened = try core.open(location: at("tiny.mdx"))
+let opened = try core.open(package: package)
 check("open", x["open"], j(opened))
 guard case let .ready(dict, _, _) = opened else { fatalError("not open") }
 
@@ -281,8 +282,9 @@ let ident = FileIdentity(device: (idSpec["device"] as! NSNumber).uint64Value, in
 let copy = Location.source(name: b["name"] as! String, source: Bytes(mdx, ident))
 let sidecarSpec = b["sidecar"] as! [String: Any]
 let sidecar = Location.source(name: sidecarSpec["name"] as! String, source: Bytes(Data((sidecarSpec["text"] as! String).utf8), nil))
-check("byteSource.import", b["import"], outcome { j(try core.import(package: Package(mdx: copy, mdd: [], sidecars: [sidecar]), progress: nil)) })
-let second = try core.open(location: copy)
+let copyPackage = Package(mdx: copy, mdd: [], sidecars: [sidecar])
+check("byteSource.import", b["import"], outcome { j(try core.import(package: copyPackage, progress: nil)) })
+let second = try core.open(package: copyPackage)
 check("byteSource.open", b["open"], j(second))
 guard case let .ready(secondDict, _, _) = second else { fatalError("not open") }
 check("byteSource.resourceFromPath", b["resourceFromPath"], outcome { j(try core.resource(dict: dict, path: "tiny.css", view: view())) })

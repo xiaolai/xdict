@@ -945,7 +945,7 @@ name = "xdict-core"
 version = "0.0.1"
 dependencies = [
  "serde",
- "sha2",
+ "xdict-identity",
  "xdict-mdx",
  "xdict-mdx-writer",
  "xdict-mmap",
@@ -958,6 +958,17 @@ version = "0.0.1"
 dependencies = [
  "uniffi",
  "xdict-core",
+]
+
+[[package]]
+name = "xdict-identity"
+version = "0.0.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sha2",
+ "xdict-mdx",
+ "xxhash-rust",
 ]
 
 [[package]]

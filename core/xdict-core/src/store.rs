@@ -87,10 +87,11 @@ impl IndexStore for Directory {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let temporary = self.0.join(format!(".{name}.{}.{n}.tmp", std::process::id()));
+        // Not synced before the rename: an index is disposable and checksummed, so one a crash left short
+        // or zeroed is `Stale` when loaded and built again. The registry, the reader's data, is synced.
         let written = (|| {
             let mut file = std::fs::File::create(&temporary)?;
             file.write_all(bytes)?;
-            file.sync_all()?;
             std::fs::rename(&temporary, self.0.join(name))
         })();
         if written.is_err() {

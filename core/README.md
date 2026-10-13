@@ -11,7 +11,7 @@ typed error.
 | `xdict-mmap` | Read-only maps of XDict's own index files; the one crate allowed `unsafe`, its argument written down | working |
 | `xdict-mdx-writer` | Writes test files, damaged ones included; never shipped | working |
 | `xdict-entry` | Entry processing: `@@@LINK=`, `entry://`, `sound://`, stylesheet substitution, link rewriting | empty |
-| `xdict-identity` | Edition identity (SHA-256 of the whole file) and dictionary lineage | empty |
+| `xdict-identity` | Edition identity (SHA-256 of the whole file), volume tokens, lineages and the registry | working |
 | `xdict-lookup` | Key folding and lemma fallback from the dictionary's own inflections | empty |
 | `xdict-study` | Spaced-repetition scheduler, ledger, append-only event log, sync merge | empty |
 | `xdict-core` | The one API the platforms call, composed from the crates above (ADR-0007) | interface settled; a thin core behind it |

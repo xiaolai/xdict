@@ -253,8 +253,8 @@ impl Core {
         reply(result)
     }
 
-    pub fn open(&self, location: &str) -> Reply {
-        reply(self.0.open(location_from(&from_json(location)?)?))
+    pub fn open(&self, package: &str) -> Reply {
+        reply(self.0.open(package_from(&from_json::<Value>(package)?)?))
     }
 
     pub fn close(&self, dict: &str) -> Reply {

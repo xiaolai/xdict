@@ -112,11 +112,11 @@ fn the_tiny_dictionary_conforms() {
     );
 
     let core = Core::new(config(PROTOCOL)).unwrap();
-    check("openBeforeImport", &x["openBeforeImport"], outcome(core.open(at("tiny.mdx"))));
     let package = Package { mdx: at("tiny.mdx"), mdd: vec![at("tiny.mdd")], sidecars: vec![at("tiny.css")] };
-    let imported = core.import(package, &NoProgress).unwrap();
+    check("openBeforeImport", &x["openBeforeImport"], outcome(core.open(package.clone())));
+    let imported = core.import(package.clone(), &NoProgress).unwrap();
     check("import", &x["import"], outcome::<Imported>(Ok(imported.clone())));
-    let opened = core.open(at("tiny.mdx")).unwrap();
+    let opened = core.open(package).unwrap();
     check("open", &x["open"], outcome::<Opened>(Ok(opened.clone())));
     let Opened::Ready { dict, .. } = opened else { panic!("not open") };
 
@@ -170,9 +170,9 @@ fn the_tiny_dictionary_conforms() {
     let copy = source(name, mdx.clone(), Some(identity), false);
     let sidecar =
         source(b["sidecar"]["name"].as_str().unwrap(), b["sidecar"]["text"].as_str().unwrap().into(), None, false);
-    let package = Package { mdx: copy.clone(), mdd: vec![], sidecars: vec![sidecar] };
-    check("byteSource.import", &b["import"], outcome(core.import(package, &NoProgress)));
-    let opened = core.open(copy).unwrap();
+    let package = Package { mdx: copy, mdd: vec![], sidecars: vec![sidecar] };
+    check("byteSource.import", &b["import"], outcome(core.import(package.clone(), &NoProgress)));
+    let opened = core.open(package).unwrap();
     check("byteSource.open", &b["open"], outcome::<Opened>(Ok(opened.clone())));
     let Opened::Ready { dict: second, .. } = opened else { panic!("not open") };
     check(

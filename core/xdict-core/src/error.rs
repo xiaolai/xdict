@@ -139,6 +139,12 @@ impl std::fmt::Display for CoreError {
 
 impl std::error::Error for CoreError {}
 
+impl From<std::io::Error> for CoreError {
+    fn from(error: std::io::Error) -> Self {
+        Self::io(&error)
+    }
+}
+
 impl From<xdict_mdx::Error> for CoreError {
     fn from(error: xdict_mdx::Error) -> Self {
         use xdict_mdx::{Error as E, Unsupported as U};

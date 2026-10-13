@@ -2,6 +2,8 @@
 
 use std::sync::Arc;
 
+pub use xdict_identity::FileIdentity;
+
 use crate::source::ByteSource;
 
 /// Serialisation for the Web binding: camel-case fields and a `type` tag, the shape TypeScript expects.
@@ -52,16 +54,6 @@ record! {
         pub core: String,
         pub index_format: u32,
         pub normalization: u32,
-    }
-
-    /// A file's identity, as the platform reports it (ADR-0002 decision 2). Times in nanoseconds.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-    pub struct FileIdentity {
-        pub device: u64,
-        pub inode: u64,
-        pub size: u64,
-        pub mtime_ns: i64,
-        pub ctime_ns: i64,
     }
 
     /// What the header of an imported or opened dictionary says.
