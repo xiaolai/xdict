@@ -108,10 +108,16 @@ check('open', x.open, opened);
 if (opened.type !== 'ready') throw new Error('not open');
 const dict = opened.dict;
 
+// The generation each lookup returned, for the cases that continue it (`{ "of": n }`).
+const generations: (number | null)[] = [];
 x.lookups.forEach((c: any, i: number) => {
   const mode: 'reader' | 'link' = c.mode === 'link' ? 'link' : 'reader';
-  const options = { limit: c.limit, offset: c.offset, mode, generation: c.generation ?? null };
-  check(`lookups[${i}]`, c.error ? { error: c.error } : c.page, outcome(() => core.lookup(c.query, [dict], options)));
+  const generation = c.generation ? generations[c.generation.of] ?? null : null;
+  if (c.generation && generation === null) throw new Error(`lookups[${i}] continues a page that gave no generation`);
+  const options = { limit: c.limit, offset: c.offset, mode, generation };
+  const got = outcome(() => core.lookup(c.query, [dict], options)) as any;
+  generations.push(typeof got?.generation === 'number' ? got.generation : null);
+  check(`lookups[${i}]`, c.error ? { error: c.error } : c.page, got);
 });
 x.suggestions.forEach((c: any, i: number) => check(`suggestions[${i}]`, c.keys, outcome(() => core.suggest(c.prefix, [dict], c.limit))));
 x.entries.forEach((c: any, i: number) => {

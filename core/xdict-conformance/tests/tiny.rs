@@ -109,14 +109,21 @@ fn the_tiny_dictionary_conforms() {
     check("open", &x["open"], outcome::<Opened>(Ok(opened.clone())));
     let Opened::Ready { dict, .. } = opened else { panic!("not open") };
 
+    // The generation each lookup returned, for the cases that continue it (`{ "of": n }`).
+    let mut generations: Vec<Option<u64>> = Vec::new();
     for (i, case) in x["lookups"].as_array().unwrap().iter().enumerate() {
+        let generation = match &case["generation"] {
+            Value::Null => None,
+            g => Some(g["of"].as_u64().and_then(|n| generations[n as usize]).expect("a page that gave a generation")),
+        };
         let options = LookupOptions {
             limit: case["limit"].as_u64().unwrap() as u32,
             offset: case["offset"].as_u64().unwrap() as u32,
             mode: if case["mode"] == "link" { MatchMode::Link } else { MatchMode::Reader },
-            generation: case["generation"].as_u64().map(|g| g as u32),
+            generation: generation.map(|g| g as u32),
         };
         let got = outcome(core.lookup(case["query"].as_str().unwrap().into(), vec![dict.clone()], options));
+        generations.push(got["generation"].as_u64());
         let want = if case.get("error").is_some() { json!({ "error": case["error"] }) } else { case["page"].clone() };
         check(&format!("lookups[{i}]"), &want, got);
     }

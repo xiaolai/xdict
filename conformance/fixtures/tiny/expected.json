@@ -42,7 +42,6 @@
       "offset": 0,
       "page": {
         "total": 3,
-        "generation": 1,
         "problems": [],
         "hits": [
           {
@@ -85,10 +84,9 @@
       "query": "run",
       "limit": 1,
       "offset": 1,
-      "generation": 1,
+      "generation": { "of": 0 },
       "page": {
         "total": 3,
-        "generation": 1,
         "problems": [],
         "hits": [
           {
@@ -222,9 +220,19 @@
     },
     {
       "query": "run",
-      "limit": 10,
-      "offset": 0,
-      "generation": 7,
+      "mode": "link",
+      "limit": 1,
+      "offset": 1,
+      "generation": { "of": 0 },
+      "error": {
+        "type": "staleHandle"
+      }
+    },
+    {
+      "query": "colour",
+      "limit": 1,
+      "offset": 1,
+      "generation": { "of": 0 },
       "error": {
         "type": "staleHandle"
       }
