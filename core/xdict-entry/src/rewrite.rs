@@ -379,17 +379,31 @@ pub fn css_text(text: &str, base: &str, dir: &str) -> String {
 fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
     let mut out = Out::new(text.len(), collect);
     let mut rest = text;
-    while let Some((at, which)) = first_of(rest, &["url(", "@import"]) {
+    // Strings and comments are copied whole, so a `url(` written inside one stays text.
+    while let Some((at, which)) = first_of(rest, &["url(", "@import", "/*", "\"", "'"]) {
+        if which >= 2 {
+            let opened = rest.get(at..).unwrap_or("");
+            let len = match which {
+                2 => opened.get(2..).and_then(|c| c.find("*/")).map_or(opened.len(), |e| e + 4),
+                _ => opened
+                    .get(1..)
+                    .map_or(opened.len(), |body| string_end(body, if which == 3 { '"' } else { '\'' }) + 2),
+            };
+            let len = len.min(opened.len());
+            out.text.push_str(rest.get(..at + len).unwrap_or(rest));
+            rest = rest.get(at + len..).unwrap_or("");
+            continue;
+        }
         let is_url = which == 0;
         let skip = if is_url { 4 } else { 7 };
         out.text.push_str(rest.get(..at + skip).unwrap_or(""));
         let after = rest.get(at + skip..).unwrap_or("");
         let value_from = after.trim_start();
         out.text.push_str(after.get(..after.len() - value_from.len()).unwrap_or(""));
-        let (quote, value, tail) = match value_from.chars().next() {
+        let (quote, written, tail) = match value_from.chars().next() {
             Some(q @ ('"' | '\'')) => {
                 let body = value_from.get(1..).unwrap_or("");
-                let end = body.find(q).unwrap_or(body.len());
+                let end = string_end(body, q);
                 (Some(q), body.get(..end).unwrap_or(""), body.get(end + 1..).unwrap_or(""))
             }
             // `@import url(…)` is met as `url(` next time round.
@@ -398,21 +412,71 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
                 continue;
             }
             _ => {
-                let end = value_from.find(')').unwrap_or(value_from.len());
+                let end = string_end(value_from, ')');
                 (None, value_from.get(..end).unwrap_or("").trim_end(), value_from.get(end..).unwrap_or(""))
             }
         };
-        let (to, link) = literal(value, base, dir);
+        let value = css_unescape(written);
+        let (to, link) = literal(&value, base, dir);
         if let Some(link) = link {
             out.link(value, link);
         }
         let q = quote.unwrap_or('"');
         out.text.push(q);
-        out.text.push_str(&to.unwrap_or_else(|| value.to_owned()));
+        out.text.push_str(to.as_deref().unwrap_or(written));
         out.text.push(q);
         rest = tail;
     }
     out.text.push_str(rest);
+    out
+}
+
+/// Where `close` ends `body`, a backslash escaping the character after it; the end of `body` if nothing does. A
+/// quoted string also ends at an unescaped newline, as CSS tokenises a string left open.
+fn string_end(body: &str, close: char) -> usize {
+    let mut escaped = false;
+    for (i, c) in body.char_indices() {
+        match c {
+            _ if escaped => escaped = false,
+            '\\' => escaped = true,
+            '\n' if close != ')' => return i,
+            _ if c == close => return i,
+            _ => {}
+        }
+    }
+    body.len()
+}
+
+/// CSS's escapes decoded: `\` and one to six hex digits (and one space after them) is that code point, `\`
+/// before a newline is nothing, `\` before anything else is that character.
+fn css_unescape(written: &str) -> String {
+    if !written.contains('\\') {
+        return written.to_owned();
+    }
+    let mut out = String::with_capacity(written.len());
+    let mut chars = written.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        let mut hex = String::new();
+        while hex.len() < 6 && chars.peek().is_some_and(char::is_ascii_hexdigit) {
+            hex.extend(chars.next());
+        }
+        if hex.is_empty() {
+            match chars.next() {
+                Some('\n') | None => {}
+                Some(other) => out.push(other),
+            }
+            continue;
+        }
+        if chars.peek().is_some_and(|c| c.is_ascii_whitespace()) {
+            chars.next();
+        }
+        let code = u32::from_str_radix(&hex, 16).ok().and_then(char::from_u32).unwrap_or('\u{fffd}');
+        out.push(if code == '\0' { '\u{fffd}' } else { code });
+    }
     out
 }
 
@@ -551,6 +615,37 @@ mod tests {
         );
         assert!(r.text.contains(r#"srcset="xdict://d/r/d.png 480w""#), "{}", r.text);
         assert_eq!(r.links.len(), 4, "{:?}", r.links);
+    }
+
+    /// `url(` and `@import` inside a string or a comment are text, not URLs.
+    #[test]
+    fn css_strings_and_comments_are_left_alone() {
+        let sheet =
+            r#"a::after { content: "url(a.png)" } /* url(b.png) @import "c.css"; */ b { background: url(d.png) }"#;
+        let r = css(sheet, BASE, "");
+        assert!(r.text.contains(r#"content: "url(a.png)""#), "{}", r.text);
+        assert!(r.text.contains(r#"/* url(b.png) @import "c.css"; */"#), "{}", r.text);
+        assert!(r.text.contains(r#"url("xdict://d/r/d.png")"#), "{}", r.text);
+        assert_eq!(r.links.len(), 1, "{:?}", r.links);
+        let r = css("a { content: 'unclosed }\nb { background: url(e.png) }", BASE, "");
+        assert_eq!(r.links.len(), 1, "a string ends at its line, as CSS tokenises it: {}", r.text);
+    }
+
+    /// CSS escapes name the characters they stand for, and an escaped quote does not end a string.
+    #[test]
+    fn css_escapes_are_decoded() {
+        let r = css(
+            r#"a { background: url(foo\ bar.png) } b { background: url("q\"x.png") } c { background: url(\31 .png) }"#,
+            BASE,
+            "",
+        );
+        let paths: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+        assert_eq!(
+            paths,
+            ["foo bar.png", "q\"x.png", "1.png"].map(|p| Link::Resource { path: Path::resolve("", p).travel() }),
+            "{}",
+            r.text
+        );
     }
 
     /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
