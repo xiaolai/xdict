@@ -193,7 +193,9 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
     if inner.starts_with('/') {
         return None;
     }
-    let name_len = inner.find(|c: char| !(c.is_ascii_alphanumeric() || c == '-' || c == ':')).unwrap_or(inner.len());
+    // A name starts with a letter and runs to whitespace, `/` or `>` (HTML's tag open and tag name states):
+    // `<script.foo>` names no script.
+    let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
     if name_len == 0 || !inner.starts_with(|c: char| c.is_ascii_alphabetic()) {
         return None;
     }
@@ -927,6 +929,18 @@ mod tests {
         }
         let r = html(r#"<!-- <a href="https://example.com/x"> -->"#, BASE);
         assert!(!r.text.contains("blocked"), "a comment's text is left alone: {}", r.text);
+    }
+
+    /// A tag's name runs to whitespace, `/` or `>` (HTML's tag name state): `<script.foo>` is no script, so the
+    /// markup after it is markup and is rewritten.
+    #[test]
+    fn a_tag_name_is_read_whole() {
+        for open in ["<script.foo>", "<style.x>", "<script-x>", "<style:a>"] {
+            let r = html(&format!("{open}<img src=https://example.com/a></script></style>"), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{open}: {}", r.text);
+        }
+        let r = html("<SCRIPT\tsrc=x.js>location='https://example.com/'</SCRIPT>", BASE);
+        assert!(r.text.contains("location='https://example.com/'"), "a script body is not HTML: {}", r.text);
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
