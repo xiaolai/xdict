@@ -243,7 +243,8 @@ pub struct Package {
     pub sidecars: Vec<Location>,
 }
 
-/// Told how an import is going; answering `false` cancels it (ADR-0007 decision 3).
+/// Told how an import is going; answering `false` cancels it (ADR-0007 decision 3). It is asked once more just
+/// before the import registers anything, so `false` there still leaves the registry as it was.
 pub trait Progress: Send + Sync {
     fn progress(&self, done: u64, total: u64) -> bool;
 }

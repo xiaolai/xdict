@@ -151,6 +151,9 @@ impl Core {
                 volumes: records,
                 sidecars: package.sidecars.iter().map(location_key).collect(),
             };
+            // The last moment to stop: nothing is registered yet, so a cancellation here leaves the registry as it
+            // was (the Web binding answers `false` once a source of the import has thrown).
+            report(0)?;
             // A lineage is minted before the registry is asked, so that no lock of the core is held inside it.
             let candidate = self.lock()?.random.uuid();
             let lineage = self.registry.register(record, &mut || candidate.clone()).map_err(registry_error)?;
@@ -1183,6 +1186,26 @@ mod tests {
         let mdx = Location::Source { name: "a.mdx".into(), source };
         let result = core.import(Package { mdx, mdd: vec![], sidecars: vec![] }, &NoProgress);
         assert!(matches!(result, Err(CoreError::SourceChanged { .. })), "{result:?}");
+    }
+
+    /// The import asks its progress once more just before it registers: `false` there is a cancellation that
+    /// registers nothing, so the location is still new.
+    #[test]
+    fn a_cancellation_at_the_last_report_registers_nothing() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        struct AtTheEnd(std::sync::atomic::AtomicU32);
+        impl Progress for AtTheEnd {
+            fn progress(&self, done: u64, total: u64) -> bool {
+                done < total || self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0
+            }
+        }
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let bytes = write(&Spec::mdx(), &[W::text("run", "to move")]).unwrap();
+        let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Fixed(bytes)) };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![] };
+        let got = core.import(package.clone(), &AtTheEnd(0.into()));
+        assert!(matches!(got, Err(CoreError::Cancelled { .. })), "{got:?}");
+        assert_eq!(core.open(package).unwrap(), Opened::NeedsImport { reason: ImportReason::New });
     }
 
     /// A missing or damaged index on disk is never read: `open` asks for an import, and the import repairs it.
