@@ -205,65 +205,11 @@ pub(crate) fn build(
         return Err(malformed("key index"));
     }
     let total = blocks.last().map_or(0, |b| b.records_offset + b.len as u64);
-    let key = |i: usize| keys.key(i);
-
-    // Where each record ends: the next larger start, or the end of all records.
-    let mut sorted = keys.starts.clone();
-    sorted.sort_unstable();
-    sorted.dedup();
-    let mut ends = Vec::new();
-    ends.try_reserve_exact(n).map_err(crate::out_of_memory)?;
-    for &start in &keys.starts {
-        if start > total {
-            return Err(Error::Malformed("a key points past the end of the records".into()));
-        }
-        let next = sorted.partition_point(|&s| s <= start);
-        ends.push(sorted.get(next).copied().unwrap_or(total));
-    }
-
-    // The tier-1 order: folded once, then sorted stably, so keys that fold together stay in file order.
-    let mut folded_text: Vec<u8> = Vec::new();
-    let mut folded_at: Vec<u32> = Vec::new();
-    folded_at.try_reserve_exact(n + 1).map_err(crate::out_of_memory)?;
-    folded_at.push(0);
-    for i in 0..n {
-        folded_text.extend_from_slice(rules.fold(key(i)?).as_bytes());
-        folded_at.push(u32::try_from(folded_text.len()).map_err(|_| too_large())?);
-    }
-    let folded = |i: u32| -> &[u8] {
-        let (from, to) = (folded_at.get(i as usize).copied(), folded_at.get(i as usize + 1).copied());
-        from.zip(to).and_then(|(f, t)| folded_text.get(f as usize..t as usize)).unwrap_or(&[])
-    };
-    let count = u32::try_from(n).map_err(|_| too_large())?;
-    let mut order: Vec<u32> = (0..count).collect();
-    order.sort_by(|&a, &b| folded(a).cmp(folded(b)));
-
-    // The tier-2 order, over the keys tier 2 changes: few (under 2 % of the 25's, `core-api.md` §1a).
-    let mut unmarked: Vec<(String, u32)> = Vec::new();
-    for i in 0..count {
-        let k = key(i as usize)?;
-        let plain = derive.unmark(k);
-        if plain.as_ref() == k {
-            continue;
-        }
-        let tier2 = rules.fold(&plain);
-        if tier2.as_bytes() != folded(i) {
-            unmarked.push((tier2.into_owned(), i));
-        }
-    }
-    unmarked.sort_by(|a, b| a.0.cmp(&b.0));
-    let tier2: Vec<u32> = unmarked.into_iter().map(|(_, i)| i).collect();
-
-    let internal = derive.internal(&keys)?;
-    if internal.len() != n {
-        return Err(Error::Malformed("the internal keys were not marked one per key".into()));
-    }
-    let mut public = vec![0u8; n.div_ceil(8)];
-    for (i, _) in internal.iter().enumerate().filter(|(_, internal)| !**internal) {
-        if let Some(byte) = public.get_mut(i / 8) {
-            *byte |= 1 << (i % 8);
-        }
-    }
+    let ends = record_ends(&keys.starts, total)?;
+    let folded = Folded::of(&keys, rules)?;
+    let order = folded.order()?;
+    let tier2 = tier2_order(&keys, rules, derive, &folded)?;
+    let public = public_bitmap(&keys, derive)?;
 
     let mut table = [(0u64, 0u64, 0u64); SECTIONS];
     let mut out: Vec<u8> = vec![0; HEADER_LEN];
@@ -288,6 +234,106 @@ pub(crate) fn build(
     section(&mut out, PUBLIC, &public)?;
     section(&mut out, TIER2, &le(&tier2, |v| v.to_le_bytes()))?;
 
+    let head = header(rules, &binding, derive, [n as u64, blocks.len() as u64, total], &table);
+    out.get_mut(..HEADER_LEN).ok_or_else(|| malformed("index"))?.copy_from_slice(&head);
+    Ok(out)
+}
+
+/// Where each record ends: the next larger start, or the end of all records.
+fn record_ends(starts: &[u64], total: u64) -> Result<Vec<u64>, Error> {
+    let mut sorted = starts.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut ends = Vec::new();
+    ends.try_reserve_exact(starts.len()).map_err(crate::out_of_memory)?;
+    for &start in starts {
+        if start > total {
+            return Err(Error::Malformed("a key points past the end of the records".into()));
+        }
+        let next = sorted.partition_point(|&s| s <= start);
+        ends.push(sorted.get(next).copied().unwrap_or(total));
+    }
+    Ok(ends)
+}
+
+/// Every key folded once (tier 1), its text concatenated.
+struct Folded {
+    text: Vec<u8>,
+    at: Vec<u32>,
+}
+
+impl Folded {
+    fn of(keys: &Keys, rules: Rules) -> Result<Self, Error> {
+        let n = keys.starts.len();
+        let mut folded = Self { text: Vec::new(), at: Vec::new() };
+        folded.at.try_reserve_exact(n + 1).map_err(crate::out_of_memory)?;
+        folded.at.push(0);
+        for i in 0..n {
+            folded.text.extend_from_slice(rules.fold(keys.key(i)?).as_bytes());
+            folded.at.push(u32::try_from(folded.text.len()).map_err(|_| too_large())?);
+        }
+        Ok(folded)
+    }
+
+    /// Key `i` folded.
+    fn get(&self, i: u32) -> &[u8] {
+        let (from, to) = (self.at.get(i as usize).copied(), self.at.get(i as usize + 1).copied());
+        from.zip(to).and_then(|(f, t)| self.text.get(f as usize..t as usize)).unwrap_or(&[])
+    }
+
+    /// The tier-1 order: sorted stably, so keys that fold together stay in file order.
+    fn order(&self) -> Result<Vec<u32>, Error> {
+        let count = u32::try_from(self.at.len().saturating_sub(1)).map_err(|_| too_large())?;
+        let mut order: Vec<u32> = (0..count).collect();
+        order.sort_by(|&a, &b| self.get(a).cmp(self.get(b)));
+        Ok(order)
+    }
+}
+
+/// The tier-2 order, over the keys tier 2 changes: few (under 2 % of the 25's, `core-api.md` §1a).
+fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive, folded: &Folded) -> Result<Vec<u32>, Error> {
+    let count = u32::try_from(keys.starts.len()).map_err(|_| too_large())?;
+    let mut unmarked: Vec<(String, u32)> = Vec::new();
+    for i in 0..count {
+        let k = keys.key(i as usize)?;
+        let plain = derive.unmark(k);
+        if plain.as_ref() == k {
+            continue;
+        }
+        let tier2 = rules.fold(&plain);
+        if tier2.as_bytes() != folded.get(i) {
+            unmarked.push((tier2.into_owned(), i));
+        }
+    }
+    unmarked.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(unmarked.into_iter().map(|(_, i)| i).collect())
+}
+
+/// One bit per key, set for the keys `derive` leaves public.
+fn public_bitmap(keys: &Keys, derive: &dyn Derive) -> Result<Vec<u8>, Error> {
+    let n = keys.starts.len();
+    let internal = derive.internal(keys)?;
+    if internal.len() != n {
+        return Err(Error::Malformed("the internal keys were not marked one per key".into()));
+    }
+    let mut public = vec![0u8; n.div_ceil(8)];
+    for (i, _) in internal.iter().enumerate().filter(|(_, internal)| !**internal) {
+        if let Some(byte) = public.get_mut(i / 8) {
+            *byte |= 1 << (i % 8);
+        }
+    }
+    Ok(public)
+}
+
+/// The header: what the index is of and how it was built, its counts (keys, blocks, records' total size),
+/// the section table, and its own checksum.
+fn header(
+    rules: Rules,
+    binding: &Binding,
+    derive: &dyn Derive,
+    [keys, blocks, total]: [u64; 3],
+    table: &[(u64, u64, u64); SECTIONS],
+) -> Vec<u8> {
     let mut head = Vec::with_capacity(HEADER_LEN);
     head.extend_from_slice(MAGIC);
     head.extend_from_slice(&FORMAT.to_le_bytes());
@@ -299,8 +345,8 @@ pub(crate) fn build(
     head.extend_from_slice(&binding.identity);
     head.extend_from_slice(&binding.header.to_le_bytes());
     head.extend_from_slice(&binding.source_len.to_le_bytes());
-    head.extend_from_slice(&(n as u64).to_le_bytes());
-    head.extend_from_slice(&(blocks.len() as u64).to_le_bytes());
+    head.extend_from_slice(&keys.to_le_bytes());
+    head.extend_from_slice(&blocks.to_le_bytes());
     head.extend_from_slice(&total.to_le_bytes());
     debug_assert_eq!(head.len(), TABLE_AT);
     for (at, len, sum) in table {
@@ -309,8 +355,7 @@ pub(crate) fn build(
         head.extend_from_slice(&sum.to_le_bytes());
     }
     head.extend_from_slice(&xxh3_64(&head).to_le_bytes());
-    out.get_mut(..HEADER_LEN).ok_or_else(|| malformed("index"))?.copy_from_slice(&head);
-    Ok(out)
+    head
 }
 
 fn le<T: Copy, const N: usize>(values: &[T], bytes: impl Fn(T) -> [u8; N]) -> Vec<u8> {
@@ -460,24 +505,26 @@ impl Index {
                 return Err(damaged("a record's bounds"));
             }
         }
-        let order = words(self.order)?;
-        let mut seen = vec![false; self.keys];
-        for chunk in order.as_chunks::<4>().0 {
-            let i = u32::from_le_bytes(*chunk) as usize;
-            match seen.get_mut(i) {
-                Some(slot @ false) => *slot = true,
-                _ => return Err(damaged("the order is not a permutation")),
-            }
+        // The order has a word per key (its size is checked), so naming each key once makes it a permutation.
+        if !self.names_keys_once(&words(self.order)?) {
+            return Err(damaged("the order is not a permutation"));
         }
-        let tier2 = words(self.tier2)?;
-        let mut seen = vec![false; self.keys];
-        for chunk in tier2.as_chunks::<4>().0 {
-            match seen.get_mut(u32::from_le_bytes(*chunk) as usize) {
-                Some(slot @ false) => *slot = true,
-                _ => return Err(damaged("the tier-2 order names a key twice, or none")),
-            }
+        if !self.names_keys_once(&words(self.tier2)?) {
+            return Err(damaged("the tier-2 order names a key twice, or none"));
         }
         Ok(())
+    }
+
+    /// Whether a table of little-endian `u32` key numbers names only keys, none twice.
+    fn names_keys_once(&self, table: &[u8]) -> bool {
+        let mut seen = vec![false; self.keys];
+        table.as_chunks::<4>().0.iter().all(|chunk| match seen.get_mut(u32::from_le_bytes(*chunk) as usize) {
+            Some(slot @ false) => {
+                *slot = true;
+                true
+            }
+            _ => false,
+        })
     }
 
     fn read_blocks(&self, span: Span, count: usize) -> Result<Vec<RecordBlock>, Stale> {
