@@ -1,0 +1,118 @@
+{
+  "comment": "What every binding must answer for each variant of matrix/, compared by subset as tiny/ is. `$word`, `$gloss` and `$version` are replaced with each variant's own (variants.json) before comparing.",
+  "import": {
+    "info": {
+      "title": "Matrix",
+      "formatVersion": "$version",
+      "keys": 5
+    },
+    "problems": []
+  },
+  "open": {
+    "type": "ready"
+  },
+  "lookups": [
+    {
+      "query": "run",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 2,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "run",
+              "occurrence": 0
+            },
+            "headword": "run",
+            "how": {
+              "type": "exact"
+            },
+            "problems": []
+          },
+          {
+            "entry": {
+              "key": "Run",
+              "occurrence": 0
+            },
+            "headword": "Run",
+            "how": {
+              "type": "folded"
+            },
+            "problems": []
+          }
+        ]
+      }
+    },
+    {
+      "query": "colour",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "color",
+              "occurrence": 0
+            },
+            "headword": "color",
+            "how": {
+              "type": "redirect",
+              "chain": [
+                "colour",
+                "color"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "query": "$word",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "$word",
+              "occurrence": 0
+            },
+            "headword": "$word",
+            "how": {
+              "type": "exact"
+            },
+            "problems": []
+          }
+        ]
+      }
+    }
+  ],
+  "entries": [
+    {
+      "entry": {
+        "key": "run",
+        "occurrence": 0
+      },
+      "result": {
+        "html": "<b>run</b> to move",
+        "lossyBytes": 0
+      }
+    },
+    {
+      "entry": {
+        "key": "$word",
+        "occurrence": 0
+      },
+      "result": {
+        "html": "$gloss",
+        "lossyBytes": 0
+      }
+    }
+  ]
+}

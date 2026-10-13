@@ -1,13 +1,14 @@
 // Runs conformance.ts inside a Worker, as the Web shell runs the core, and exits with its verdict.
-// Usage: node run.ts <wasm-bindgen --target web output dir> <fixture dir> <expected.json>
+// Usage: node run.ts <wasm-bindgen --target web output dir> <tiny dir> <tiny expected.json> <matrix dir>
+//   <matrix expected.json>
 import { Worker } from 'node:worker_threads';
 
-const [pkg, fixtures, expected] = process.argv.slice(2);
-if (!expected) {
-  console.log('usage: node run.ts <pkg dir> <fixture dir> <expected.json>');
+const [pkg, fixtures, expected, matrix, matrixExpected] = process.argv.slice(2);
+if (!matrixExpected) {
+  console.log('usage: node run.ts <pkg dir> <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>');
   process.exit(2);
 }
-const worker = new Worker(new URL('./conformance.ts', import.meta.url), { workerData: { pkg, fixtures, expected } });
+const worker = new Worker(new URL('./conformance.ts', import.meta.url), { workerData: { pkg, fixtures, expected, matrix, matrixExpected } });
 worker.on('message', (failures: string[]) => {
   if (failures.length === 0) {
     console.log('typescript (worker) conformance: all agree');
