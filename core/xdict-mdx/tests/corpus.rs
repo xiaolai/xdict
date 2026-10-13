@@ -2,8 +2,10 @@
 //!
 //! `XDICT_MDX_CORPUS` lists folders (`:`-separated, `;` on Windows) searched two levels deep for `.mdx` and
 //! `.mdd` files. `XDICT_MDX_ORACLE` names a JSON list of `{"file": path, "entries": n}` produced by a
-//! different reader, which every count is checked against. **Without `XDICT_MDX_CORPUS` this test prints
-//! "not measured" and passes: a green run without it is not a measurement.**
+//! different reader, which every count is checked against. `XDICT_MDX_EVERY_KEY=1` looks up every key
+//! instead of three, so every record block is decompressed and its checksum verified. **Without
+//! `XDICT_MDX_CORPUS` this test prints "not measured" and passes: a green run without it is not a
+//! measurement.**
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::collections::HashMap;
@@ -77,9 +79,14 @@ fn every_dictionary_in_the_corpus_opens_and_answers() {
                 failures.push(format!("{}: {} keys, the oracle counts {n}", name(path), file.len()));
             }
         }
-        // First, middle and last key: each must find at least its own record.
-        let keys: Vec<String> = file.keys().map(str::to_owned).collect();
-        let samples = [0, keys.len() / 2, keys.len().saturating_sub(1)];
+        // First, middle and last key, or every key: each must find at least its own record.
+        let mut keys: Vec<String> = file.keys().map(str::to_owned).collect();
+        let samples: Vec<usize> = if std::env::var_os("XDICT_MDX_EVERY_KEY").is_some() {
+            keys.dedup();
+            (0..keys.len()).collect()
+        } else {
+            vec![0, keys.len() / 2, keys.len().saturating_sub(1)]
+        };
         let started = Instant::now();
         for &i in &samples {
             let Some(key) = keys.get(i) else { continue };
@@ -91,8 +98,9 @@ fn every_dictionary_in_the_corpus_opens_and_answers() {
         }
         let kind = if file.header().kind == Kind::Mdx { "mdx" } else { "mdd" };
         eprintln!(
-            "{kind} {:>8} keys  open {:>6.0} ms  3 lookups {:>5.1} ms  {}",
+            "{kind} {:>8} keys  open {:>6.0} ms  {} lookups {:>5.1} ms  {}",
             file.len(),
+            samples.len(),
             opened.as_secs_f64() * 1e3,
             started.elapsed().as_secs_f64() * 1e3,
             name(path)
