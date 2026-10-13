@@ -428,17 +428,15 @@ impl Core {
             let record = opened.mdx.record(i)?;
             opened.mdx_source.unchanged()?;
             let text = String::from_utf8_lossy(&record.data);
-            let html = xdict_entry::html_text(&opened.sheet.apply(&text), &view.base_url, "");
-            if html.len() as u64 > view.max_body_bytes {
-                return Err(CoreError::TooLarge {
-                    limit: Limit::Body,
-                    detail: format!(
-                        "the entry is {} bytes rewritten, the view takes {}",
-                        html.len(),
-                        view.max_body_bytes
-                    ),
-                });
-            }
+            // Expanded and rewritten within the view's ceiling: a small record of many style markers, or of many
+            // short links, would otherwise be written whole before it could be refused.
+            let max = usize::try_from(view.max_body_bytes).unwrap_or(usize::MAX);
+            let too_large = |_| CoreError::TooLarge {
+                limit: Limit::Body,
+                detail: format!("the entry passes {} bytes expanded and rewritten, the view's ceiling", max),
+            };
+            let expanded = opened.sheet.apply_within(&text, max).map_err(too_large)?;
+            let html = xdict_entry::html_text_within(&expanded, &view.base_url, "", max).map_err(too_large)?;
             Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: record.lossy })
         })
     }
@@ -475,13 +473,12 @@ impl Core {
                 let ceiling =
                     if renders(mime) { view.max_body_bytes.min(MAX_RESOURCE_BYTES) } else { MAX_RESOURCE_BYTES };
                 if let Some(bytes) = self.find_resource(&opened, name, ceiling)? {
-                    let bytes = served(bytes, mime, &view.base_url, travelled.dir());
-                    if bytes.len() as u64 > ceiling {
-                        return Err(CoreError::TooLarge {
+                    let bytes = served(bytes, mime, &view.base_url, travelled.dir(), ceiling).map_err(|_| {
+                        CoreError::TooLarge {
                             limit: Limit::Body,
-                            detail: format!("{name} is {} bytes as served, the most is {ceiling}", bytes.len()),
-                        });
-                    }
+                            detail: format!("{name} passes {ceiling} bytes as served, the most it may be"),
+                        }
+                    })?;
                     return Ok(Resource::Found { mime: mime.into(), path: name.clone(), bytes });
                 }
             }
@@ -742,16 +739,21 @@ fn renders(mime: &str) -> bool {
 }
 
 /// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
-/// resource's own directory; anything else, and text that is not UTF-8, as stored.
-fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
-    let Ok(text) = std::str::from_utf8(&bytes) else { return bytes };
+/// resource's own directory; anything else, and text that is not UTF-8, as stored. `Exceeded` as soon as it would
+/// pass `ceiling`, before a rewrite is all written.
+fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str, ceiling: u64) -> Result<Vec<u8>, xdict_entry::Exceeded> {
+    let max = usize::try_from(ceiling).unwrap_or(usize::MAX);
+    if bytes.len() > max {
+        return Err(xdict_entry::Exceeded);
+    }
+    let Ok(text) = std::str::from_utf8(&bytes) else { return Ok(bytes) };
     let rewritten = match mime {
-        "text/css" => xdict_entry::css_text(text, base, dir),
-        "text/javascript" => xdict_entry::script(text, base).text,
-        "text/html" => xdict_entry::html_text(text, base, dir),
-        _ => return bytes,
+        "text/css" => xdict_entry::css_text_within(text, base, dir, max)?,
+        "text/javascript" => xdict_entry::script_text_within(text, base, max)?,
+        "text/html" => xdict_entry::html_text_within(text, base, dir, max)?,
+        _ => return Ok(bytes),
     };
-    rewritten.into_bytes()
+    Ok(rewritten.into_bytes())
 }
 
 fn mime(path: &str) -> &'static str {
