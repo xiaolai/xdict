@@ -108,9 +108,15 @@ pub fn internal(keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
     }
     let pattern = |s: Shape| {
         let count = SHAPES.iter().position(|&t| t == s).and_then(|p| counts.get(p)).copied().unwrap_or(0);
-        count >= PATTERN_KEYS && count * 1000 >= keys.len() * PATTERN_PER_MILLE
+        is_pattern(count, keys.len())
     };
     Ok(shapes.into_iter().map(|s| s.is_some_and(pattern)).collect())
+}
+
+/// Whether `count` keys of one shape among `total` make it a pattern. Compared in `u128`: in `usize`,
+/// `count * 1000` overflowed on wasm32 past 4,294,967 keys of a shape.
+fn is_pattern(count: usize, total: usize) -> bool {
+    count >= PATTERN_KEYS && count as u128 * 1000 >= total as u128 * PATTERN_PER_MILLE as u128
 }
 
 #[cfg(test)]
@@ -120,6 +126,17 @@ mod tests {
 
     /// Codex objection 19's fixtures: a trailing superscript is a homograph number; one inside a key is a
     /// character of it, which NFKC makes a digit.
+    /// The share is compared without overflow, whatever the counts: on wasm32 `usize` is 32 bits, and a file
+    /// may hold 10 million keys.
+    #[test]
+    fn a_pattern_share_does_not_overflow() {
+        let huge = usize::MAX / 100;
+        assert!(is_pattern(huge, huge));
+        assert!(!is_pattern(PATTERN_KEYS, huge));
+        assert!(is_pattern(PATTERN_KEYS, PATTERN_KEYS * 200));
+        assert!(!is_pattern(PATTERN_KEYS, PATTERN_KEYS * 200 + 1));
+    }
+
     #[test]
     fn superscript_homographs_and_formulas() {
         assert_eq!(unmark("AAA²"), "AAA");
