@@ -124,7 +124,7 @@ fn the_tiny_dictionary_conforms() {
         let options = LookupOptions {
             limit: case["limit"].as_u64().unwrap() as u32,
             offset: case["offset"].as_u64().unwrap() as u32,
-            mode: MatchMode::Reader,
+            mode: if case["mode"] == "link" { MatchMode::Link } else { MatchMode::Reader },
             generation: case["generation"].as_u64().map(|g| g as u32),
         };
         let got = outcome(core.lookup(case["query"].as_str().unwrap().into(), vec![dict.clone()], options));

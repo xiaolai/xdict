@@ -158,6 +158,8 @@ message! {
     pub enum HitProblem {
         DanglingRedirect { from: String, target: String },
         RedirectLoop { chain: Vec<String> },
+        /// The chain went past the hop limit, or one key's redirects past the fan-out limit.
+        RedirectLimit { chain: Vec<String> },
     }
 
     /// Something an import met that did not stop it.

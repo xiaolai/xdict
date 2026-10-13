@@ -8,6 +8,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
+use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
 
 use crate::error::{CoreError, Limit, Missing};
@@ -23,8 +25,8 @@ use xdict_mdx::index::Stale;
 pub const PROTOCOL: u32 = 1;
 /// The per-edition index's format.
 pub const INDEX_FORMAT: u32 = xdict_mdx::index::FORMAT;
-/// The tier-2 normalisation's version; 0 until there is one.
-pub const NORMALIZATION: u32 = 0;
+/// The lookup policy's version: tier 2 and internal keys (ADR-0007 decisions 15 and 16).
+pub const NORMALIZATION: u32 = xdict_lookup::NORMALIZATION;
 /// The most hits one page holds.
 pub const MAX_PAGE: u32 = 1_000;
 /// The scheme version an edition is written with (ADR-0002 decision 1).
@@ -205,11 +207,11 @@ impl Core {
             Err(_) => {
                 let verified =
                     Verified { source: &*opened.source, chunk: CHUNK, sums: &hashed.sums, last: Mutex::new(None) };
-                let index = File::build_index(&verified, Some(Kind::Mdx), digest).map_err(changed_or)?;
+                let index = File::build_index(&verified, Some(Kind::Mdx), digest, &Policy).map_err(changed_or)?;
                 self.indexes.put(&index_name(&digest, Kind::Mdx), &index)?;
-                let file =
-                    File::with_index(OpenedSource::open(location)?.source, Some(Kind::Mdx), Box::new(index), digest)?
-                        .map_err(|stale| CoreError::internal(format!("an index just built does not load: {stale:?}")))?;
+                let source = OpenedSource::open(location)?.source;
+                let file = File::with_index(source, Some(Kind::Mdx), Box::new(index), digest, derive(Kind::Mdx))?
+                    .map_err(|stale| CoreError::internal(format!("an index just built does not load: {stale:?}")))?;
                 info(&file)
             }
         };
@@ -226,7 +228,7 @@ impl Core {
     ) -> Result<[u8; 32], CoreError> {
         let token = xdict_identity::volume_token(volume.identity, &*volume.source, report)?;
         if self.with_index(OpenedSource::open(location)?.source, Kind::Mdd, token)?.is_err() {
-            let index = File::build_index(&*volume.source, Some(Kind::Mdd), token)?;
+            let index = File::build_index(&*volume.source, Some(Kind::Mdd), token, &Plain)?;
             self.indexes.put(&index_name(&token, Kind::Mdd), &index)?;
         }
         volume.unchanged()?;
@@ -304,7 +306,7 @@ impl Core {
         let Some(region) = self.indexes.get(&index_name(&identity, kind))? else {
             return Ok(Err(ImportReason::IndexMissing));
         };
-        Ok(match File::with_index(source, Some(kind), region, identity)? {
+        Ok(match File::with_index(source, Some(kind), region, identity, derive(kind))? {
             Ok(file) => Ok(file),
             Err(Stale::Format | Stale::Reader) => Err(ImportReason::IndexOutdated),
             Err(Stale::OtherFile) => Err(ImportReason::Changed),
@@ -344,40 +346,33 @@ impl Core {
         if options.generation.is_some_and(|g| g != generation) {
             return Err(CoreError::stale("the page belongs to another generation"));
         }
+        let mode = match options.mode {
+            MatchMode::Reader => Mode::Reader,
+            MatchMode::Link => Mode::Link,
+        };
         let mut hits = Vec::new();
         let mut problems = Vec::new();
         for id in dicts {
             let dict = self.dict(id)?;
-            let found = dict.mdx.find(query)?;
-            let targets = redirect_targets(&dict.mdx, &found, &mut budget)?;
-            let mut seen: HashMap<String, u32> = HashMap::new();
-            for &i in &found {
-                let key = dict.mdx.key(i)?.into_owned();
-                let occurrence = next_occurrence(&mut seen, &key);
-                let Some(target) = targets.get(&i).cloned().flatten() else {
-                    let how = if key == query { How::Exact } else { How::Folded };
-                    let entry = EntryRef { edition: dict.edition.clone(), key: key.clone(), occurrence };
-                    hits.push(Hit { dict: id.clone(), entry, headword: key, how, problems: vec![] });
-                    continue;
+            let file = &dict.mdx;
+            let resolved = xdict_lookup::resolve(file, query, mode, &mut budget)?;
+            let keys: Vec<usize> = resolved.hits.iter().map(|h| h.key).collect();
+            let occurrences = xdict_lookup::occurrences(file, &keys)?;
+            for hit in resolved.hits {
+                let key = file.key(hit.key)?.into_owned();
+                let occurrence = occurrences.get(&hit.key).copied().ok_or_else(|| CoreError::internal("occurrence"))?;
+                let how = match hit.how {
+                    LookupHow::Exact => How::Exact,
+                    LookupHow::Folded => How::Folded,
+                    LookupHow::Unmarked => How::Unmarked,
+                    LookupHow::Redirect { chain } => How::Redirect { chain: key_names(file, &chain)? },
                 };
-                let landed = dict.mdx.find(&target)?;
-                let landed_targets = redirect_targets(&dict.mdx, &landed, &mut budget)?;
-                let mut found_any = false;
-                let mut seen_target: HashMap<String, u32> = HashMap::new();
-                for &j in &landed {
-                    let landed_key = dict.mdx.key(j)?.into_owned();
-                    let occurrence = next_occurrence(&mut seen_target, &landed_key);
-                    if landed_targets.get(&j).is_some_and(Option::is_some) {
-                        continue;
-                    }
-                    found_any = true;
-                    let entry = EntryRef { edition: dict.edition.clone(), key: landed_key.clone(), occurrence };
-                    let how = How::Redirect { chain: vec![key.clone(), landed_key.clone()] };
-                    hits.push(Hit { dict: id.clone(), entry, headword: landed_key, how, problems: vec![] });
-                }
-                if !found_any {
-                    problems.push(HitProblem::DanglingRedirect { from: key.clone(), target });
-                }
+                let problems = hit.problems.iter().map(|p| hit_problem(file, p)).collect::<Result<_, _>>()?;
+                let entry = EntryRef { edition: dict.edition.clone(), key: key.clone(), occurrence };
+                hits.push(Hit { dict: id.clone(), entry, headword: key, how, problems });
+            }
+            for problem in &resolved.problems {
+                problems.push(hit_problem(file, problem)?);
             }
         }
         let total = hits.len() as u64;
@@ -385,22 +380,13 @@ impl Core {
         Ok(Page { hits, total, generation, problems })
     }
 
-    /// Keys beginning with `prefix`, for a search field.
+    /// Public keys beginning with `prefix` under each file's folding, for a search field: the dictionaries in
+    /// the order given, each in folded order, each spelling once.
     pub fn suggest(&self, prefix: String, dicts: Vec<String>, limit: u32) -> Result<Vec<String>, CoreError> {
         guard(|| {
-            let wanted = prefix.to_lowercase();
             let mut out: Vec<String> = Vec::new();
             for id in &dicts {
-                let dict = self.dict(id)?;
-                for key in dict.mdx.keys() {
-                    if out.len() >= limit as usize {
-                        return Ok(out);
-                    }
-                    let key = key?;
-                    if key.to_lowercase().starts_with(&wanted) && !out.iter().any(|k| *k == key) {
-                        out.push(key.into_owned());
-                    }
-                }
+                xdict_lookup::suggest(&self.dict(id)?.mdx, &prefix, limit as usize, &mut out)?;
             }
             Ok(out)
         })
@@ -584,32 +570,26 @@ fn location_key(location: &Location) -> String {
     }
 }
 
-fn next_occurrence(seen: &mut HashMap<String, u32>, key: &str) -> u32 {
-    let n = seen.entry(key.to_owned()).or_insert(0);
-    let occurrence = *n;
-    *n += 1;
-    occurrence
+/// How a file of `kind` is indexed: dictionaries under the lookup policy, resource libraries plainly.
+fn derive(kind: Kind) -> Arc<dyn Derive> {
+    match kind {
+        Kind::Mdx => Arc::new(Policy),
+        Kind::Mdd => Arc::new(Plain),
+    }
 }
 
-/// For each of `keys`, its record's redirect target, if it is one: every block read once.
-fn redirect_targets(
-    file: &File,
-    keys: &[usize],
-    budget: &mut Budget,
-) -> Result<HashMap<usize, Option<String>>, CoreError> {
-    let mut targets = HashMap::with_capacity(keys.len());
-    file.for_each_record(keys, budget, |i, record| {
-        targets.insert(i, redirect_target(&String::from_utf8_lossy(&record.data)).map(str::to_owned));
-        Ok(())
-    })?;
-    Ok(targets)
+fn key_names(file: &File, chain: &[usize]) -> Result<Vec<String>, CoreError> {
+    chain.iter().map(|&i| Ok(file.key(i)?.into_owned())).collect()
 }
 
-/// The target of an `@@@LINK=` record.
-fn redirect_target(text: &str) -> Option<&str> {
-    let rest = text.trim_start().strip_prefix("@@@LINK=")?;
-    let target = rest.lines().next().unwrap_or("").trim();
-    (!target.is_empty()).then_some(target)
+fn hit_problem(file: &File, problem: &LookupProblem) -> Result<HitProblem, CoreError> {
+    Ok(match problem {
+        LookupProblem::Dangling { from, target } => {
+            HitProblem::DanglingRedirect { from: file.key(*from)?.into_owned(), target: target.clone() }
+        }
+        LookupProblem::Loop { chain } => HitProblem::RedirectLoop { chain: key_names(file, chain)? },
+        LookupProblem::Limit { chain } => HitProblem::RedirectLimit { chain: key_names(file, chain)? },
+    })
 }
 
 /// What a URL means, read the way the entry's web view reads it (the WHATWG URL Standard): otherwise the
@@ -925,9 +905,10 @@ mod tests {
         core.import(package.clone(), &NoProgress).unwrap();
         assert!(matches!(core.open(package.clone()).unwrap(), Opened::Ready { .. }));
 
+        // The first byte of the key text, which follows the 296-byte header (padding between sections is in no
+        // checksum, and changing it changes nothing).
         let mut damaged = std::fs::read(&index).unwrap();
-        let last = damaged.len() - 1;
-        damaged[last] ^= 1;
+        damaged[296] ^= 1;
         std::fs::write(&index, damaged).unwrap();
         assert_eq!(core.open(package).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
         std::fs::remove_dir_all(&dir).unwrap();
@@ -949,6 +930,35 @@ mod tests {
     fn page_of(core: &Core, dict: &str, query: &str, budget: Budget) -> Result<Page, CoreError> {
         let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
         core.lookup_within(query, &[dict.to_owned()], options, budget)
+    }
+
+    /// Codex 23: many records under one key, paged a thousand at a time, give every record once, in file order,
+    /// and the same order from an index built again. 12,000 here, past the reader's own 10,000; the sentence
+    /// library's 66,355 with `XDICT_PAGING_RECORDS=66355` (112 s in a debug build: each page resolves them all).
+    #[test]
+    fn pages_concatenate_to_the_whole_and_survive_a_rebuild() {
+        use xdict_mdx_writer::Entry as W;
+        let n: u32 = std::env::var("XDICT_PAGING_RECORDS").map_or(12_000, |v| v.parse().unwrap());
+        let entries: Vec<W> = (0..n).map(|i| W::text("EC", &format!("{i}"))).collect();
+        let pages = |core: &Core, dict: &str| -> Vec<u32> {
+            let generation = Some(core.lock().unwrap().generation);
+            let mut all = Vec::new();
+            loop {
+                let options =
+                    LookupOptions { limit: 1000, offset: all.len() as u32, mode: MatchMode::Reader, generation };
+                let page = core.lookup("EC".into(), vec![dict.to_owned()], options).unwrap();
+                assert_eq!(page.total, u64::from(n));
+                if page.hits.is_empty() {
+                    return all;
+                }
+                all.extend(page.hits.iter().map(|h| h.entry.occurrence));
+            }
+        };
+        let (core, dict, _) = counted(&entries);
+        let first = pages(&core, &dict);
+        assert_eq!(first, (0..n).collect::<Vec<u32>>());
+        let (again, dict, _) = counted(&entries);
+        assert_eq!(pages(&again, &dict), first, "a rebuilt index pages alike");
     }
 
     /// More candidates than the budget allows are refused before any record is read.

@@ -22,7 +22,8 @@ export type LookupOptions = { limit: number; offset: number; mode: MatchMode; ge
 export type How = { type: 'exact' } | { type: 'folded' } | { type: 'unmarked' } | { type: 'redirect'; chain: string[] };
 export type HitProblem =
   | { type: 'danglingRedirect'; from: string; target: string }
-  | { type: 'redirectLoop'; chain: string[] };
+  | { type: 'redirectLoop'; chain: string[] }
+  | { type: 'redirectLimit'; chain: string[] };
 export type Hit = { dict: string; entry: EntryRef; headword: string; how: How; problems: HitProblem[] };
 export type Page = { hits: Hit[]; total: number; generation: number; problems: HitProblem[] };
 export type View = { baseUrl: string; skin: string | null; maxBodyBytes: number };

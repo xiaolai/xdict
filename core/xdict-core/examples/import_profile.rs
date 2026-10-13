@@ -1,4 +1,5 @@
-//! Where an import's time goes, per phase, over every file under a folder. Never shipped.
+//! Where an import's time goes, per phase, over every file under a folder. Never shipped. With
+//! `XDICT_PROFILE_PLAIN=1`, dictionaries are indexed without the lookup policy, to measure what it costs.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 use std::time::Instant;
 use xdict_mdx::{DiskFile, File, Kind};
@@ -27,11 +28,15 @@ fn main() {
             hash += t.elapsed().as_secs_f64();
             bytes += xdict_mdx::Source::len(&source);
             let t = Instant::now();
-            File::build_index(&source, Some(Kind::Mdx), h.digest).unwrap();
+            if std::env::var_os("XDICT_PROFILE_PLAIN").is_some() {
+                File::build_index(&source, Some(Kind::Mdx), h.digest, &xdict_mdx::index::Plain).unwrap();
+            } else {
+                File::build_index(&source, Some(Kind::Mdx), h.digest, &xdict_lookup::Policy).unwrap();
+            }
             build_mdx += t.elapsed().as_secs_f64();
         } else {
             let t = Instant::now();
-            File::build_index(&source, Some(Kind::Mdd), [0; 32]).unwrap();
+            File::build_index(&source, Some(Kind::Mdd), [0; 32], &xdict_mdx::index::Plain).unwrap();
             build_mdd += t.elapsed().as_secs_f64();
         }
     }

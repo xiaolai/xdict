@@ -24,7 +24,8 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
 2. `open` of the package before any import [`openBeforeImport`]. The package: `tiny.mdx`, volumes
    `[tiny.mdd]`, sidecars `[tiny.css]`.
 3. `import` of the package [`import`]; `open` of it [`open`].
-4. Each of [`lookups`], [`suggestions`], [`entries`] (edition defaults to the imported one; `cspContains` is a
+4. Each of [`lookups`] (in `reader` mode unless the case says `"mode": "link"`), [`suggestions`], [`entries`]
+   (edition defaults to the imported one; `cspContains` is a
    substring of the returned policy), [`links`] (origin: the entry `run`/0), [`resources`], in the view
    [`view`].
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity

@@ -10,11 +10,14 @@
 //! Layout, little-endian: a fixed header (`HEADER_LEN` bytes, ending with the xxh3 of what precedes it),
 //! then the sections the header's table places: key text in file order; text offsets (`u32`, one more than
 //! the keys); record starts and ends (`u64`); the tier-1 order (`u32` key numbers sorted by folded key, ties
-//! in file order); the record-block table (four `u64` per block); the public-key bitmap (empty until the
-//! core marks internal keys); and a section reserved for the tier-2 order.
+//! in file order); the record-block table (four `u64` per block); the public-key bitmap (bit `i % 8` of byte
+//! `i / 8` set when key `i` is public); and the tier-2 order (`u32` key numbers of the keys whose tier-2 form
+//! differs from their tier-1 one, sorted by it, ties in file order). What tier 2 is and which keys are
+//! internal is a lookup policy's, not the reader's: the index stores what a [`Derive`] says, and the
+//! derivation's version, so an index built under another is not used.
 
 use std::borrow::Cow;
-use std::cmp::Ordering;
+use std::sync::Arc;
 
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -22,7 +25,7 @@ use crate::text::fold;
 use crate::{Error, Kind, RecordBlock, Source, limits, malformed};
 
 /// The index's own layout. Any change to what is written, or how, raises it.
-pub const FORMAT: u32 = 1;
+pub const FORMAT: u32 = 2;
 /// The reader's interpretation of a file: raised when the keys, offsets or folding it derives would differ.
 pub const READER: u32 = 1;
 
@@ -39,6 +42,41 @@ const ORDER: usize = 4;
 const BLOCKS: usize = 5;
 const PUBLIC: usize = 6;
 const TIER2: usize = 7;
+
+/// A file's keys, in file order, as a [`Derive`] is shown them.
+pub trait KeyList {
+    fn len(&self) -> usize;
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    fn key(&self, i: usize) -> Result<&str, Error>;
+}
+
+/// What a lookup policy derives from a file's keys when its index is built, and uses again to search it.
+pub trait Derive: Send + Sync {
+    /// The derivation's version, stored in the index: an index built under another is [`Stale::Reader`].
+    fn version(&self) -> u32;
+    /// A key or query without what a reader cannot type; the file's folding is applied after it. Must return
+    /// the text itself, borrowed, when there is nothing to remove: most keys.
+    fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str>;
+    /// Which of the file's keys are internal, never offered to a reader: one flag per key.
+    fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error>;
+}
+
+/// No derivation: no tier 2, every key public. What the reader uses on its own, and for resource libraries.
+pub struct Plain;
+
+impl Derive for Plain {
+    fn version(&self) -> u32 {
+        0
+    }
+    fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        Cow::Borrowed(text)
+    }
+    fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
+        Ok(vec![false; keys.len()])
+    }
+}
 
 /// Bytes the index can be read from: a mapped or loaded file, or one read piece by piece (the Web).
 pub trait Region: Send + Sync {
@@ -143,18 +181,31 @@ impl Rules {
     }
 }
 
+impl KeyList for Keys {
+    fn len(&self) -> usize {
+        self.starts.len()
+    }
+    fn key(&self, i: usize) -> Result<&str, Error> {
+        let (from, to) = (offset(&self.offsets, i)?, offset(&self.offsets, i + 1)?);
+        let bytes = self.text.get(from..to).ok_or_else(|| malformed("key index"))?;
+        std::str::from_utf8(bytes).map_err(|_| malformed("key text"))
+    }
+}
+
 /// Writes the index of a file whose keys and record blocks have been read.
-pub(crate) fn build(keys: Keys, blocks: &[RecordBlock], rules: Rules, binding: Binding) -> Result<Vec<u8>, Error> {
+pub(crate) fn build(
+    keys: Keys,
+    blocks: &[RecordBlock],
+    rules: Rules,
+    binding: Binding,
+    derive: &dyn Derive,
+) -> Result<Vec<u8>, Error> {
     let n = keys.starts.len();
     if keys.offsets.len() != n + 1 {
         return Err(malformed("key index"));
     }
     let total = blocks.last().map_or(0, |b| b.records_offset + b.len as u64);
-    let key = |i: usize| -> Result<&str, Error> {
-        let (from, to) = (offset(&keys.offsets, i)?, offset(&keys.offsets, i + 1)?);
-        let bytes = keys.text.get(from..to).ok_or_else(|| malformed("key index"))?;
-        std::str::from_utf8(bytes).map_err(|_| malformed("key text"))
-    };
+    let key = |i: usize| keys.key(i);
 
     // Where each record ends: the next larger start, or the end of all records.
     let mut sorted = keys.starts.clone();
@@ -187,6 +238,33 @@ pub(crate) fn build(keys: Keys, blocks: &[RecordBlock], rules: Rules, binding: B
     let mut order: Vec<u32> = (0..count).collect();
     order.sort_by(|&a, &b| folded(a).cmp(folded(b)));
 
+    // The tier-2 order, over the keys tier 2 changes: few (under 2 % of the 25's, `core-api.md` §1a).
+    let mut unmarked: Vec<(String, u32)> = Vec::new();
+    for i in 0..count {
+        let k = key(i as usize)?;
+        let plain = derive.unmark(k);
+        if plain.as_ref() == k {
+            continue;
+        }
+        let tier2 = rules.fold(&plain);
+        if tier2.as_bytes() != folded(i) {
+            unmarked.push((tier2.into_owned(), i));
+        }
+    }
+    unmarked.sort_by(|a, b| a.0.cmp(&b.0));
+    let tier2: Vec<u32> = unmarked.into_iter().map(|(_, i)| i).collect();
+
+    let internal = derive.internal(&keys)?;
+    if internal.len() != n {
+        return Err(Error::Malformed("the internal keys were not marked one per key".into()));
+    }
+    let mut public = vec![0u8; n.div_ceil(8)];
+    for (i, _) in internal.iter().enumerate().filter(|(_, internal)| !**internal) {
+        if let Some(byte) = public.get_mut(i / 8) {
+            *byte |= 1 << (i % 8);
+        }
+    }
+
     let mut table = [(0u64, 0u64, 0u64); SECTIONS];
     let mut out: Vec<u8> = vec![0; HEADER_LEN];
     let mut section = |out: &mut Vec<u8>, which: usize, bytes: &[u8]| -> Result<(), Error> {
@@ -207,14 +285,14 @@ pub(crate) fn build(keys: Keys, blocks: &[RecordBlock], rules: Rules, binding: B
     let block_table: Vec<u64> =
         blocks.iter().flat_map(|b| [b.file_offset, b.stored_len as u64, b.records_offset, b.len as u64]).collect();
     section(&mut out, BLOCKS, &le(&block_table, |v| v.to_le_bytes()))?;
-    section(&mut out, PUBLIC, &[])?;
-    section(&mut out, TIER2, &[])?;
+    section(&mut out, PUBLIC, &public)?;
+    section(&mut out, TIER2, &le(&tier2, |v| v.to_le_bytes()))?;
 
     let mut head = Vec::with_capacity(HEADER_LEN);
     head.extend_from_slice(MAGIC);
     head.extend_from_slice(&FORMAT.to_le_bytes());
     head.extend_from_slice(&READER.to_le_bytes());
-    head.extend_from_slice(&0u32.to_le_bytes());
+    head.extend_from_slice(&derive.version().to_le_bytes());
     head.push(u8::from(binding.kind == Kind::Mdd));
     head.push(u8::from(rules.case_sensitive) | u8::from(rules.strip) << 1);
     head.extend_from_slice(&[0, 0]);
@@ -263,14 +341,17 @@ pub(crate) struct Index {
     starts: Span,
     ends: Span,
     order: Span,
+    public: Span,
+    tier2: Span,
+    derive: Arc<dyn Derive>,
     pub(crate) blocks: Vec<RecordBlock>,
     pub(crate) total_records: u64,
     pub(crate) rules: Rules,
 }
 
 impl Index {
-    /// Loads and checks an index for the file `binding` describes.
-    pub(crate) fn load(region: Box<dyn Region>, binding: &Binding) -> Result<Self, Stale> {
+    /// Loads and checks an index for the file `binding` describes, built under `derive`.
+    pub(crate) fn load(region: Box<dyn Region>, binding: &Binding, derive: Arc<dyn Derive>) -> Result<Self, Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
         let head = region.bytes(0, HEADER_LEN).map_err(|_| Stale::Format)?;
         let field = |at: usize, len: usize| head.get(at..at + len).ok_or(Stale::Format);
@@ -286,7 +367,7 @@ impl Index {
         if xxh3_64(field(0, HEADER_LEN - 8)?) != u64_at(HEADER_LEN - 8)? {
             return Err(damaged("the header's checksum"));
         }
-        if u32_at(12)? != READER {
+        if u32_at(12)? != READER || u32_at(16)? != derive.version() {
             return Err(Stale::Reader);
         }
         let kind = if field(20, 1)? == [1] { Kind::Mdd } else { Kind::Mdx };
@@ -320,26 +401,43 @@ impl Index {
                 return Err(Stale::Damaged(format!("section {i}'s checksum")));
             }
         }
-        let [text, offsets, starts, ends, order, blocks, _, _] = spans;
+        let [text, offsets, starts, ends, order, blocks, public, tier2] = spans;
         let sized = |span: Span, width: u64, count: usize| span.len == width * count as u64;
         if !sized(offsets, 4, keys + 1)
             || !sized(starts, 8, keys)
             || !sized(ends, 8, keys)
             || !sized(order, 4, keys)
             || !sized(blocks, 32, block_count)
+            || public.len != keys.div_ceil(8) as u64
+            || !tier2.len.is_multiple_of(4)
+            || tier2.len > 4 * keys as u64
         {
             return Err(damaged("a section's size"));
         }
         drop(head);
 
-        let index = Self { region, keys, text, offsets, starts, ends, order, blocks: Vec::new(), total_records, rules };
+        let index = Self {
+            region,
+            keys,
+            text,
+            offsets,
+            starts,
+            ends,
+            order,
+            public,
+            tier2,
+            derive,
+            blocks: Vec::new(),
+            total_records,
+            rules,
+        };
         index.check_structure()?;
         let blocks = index.read_blocks(blocks, block_count)?;
         Ok(Self { blocks, ..index })
     }
 
     /// One pass over each table, no folding: text offsets rise within the text, records lie within the
-    /// records, and the order names every key once.
+    /// records, the order names every key once, and the tier-2 order names keys, none twice.
     fn check_structure(&self) -> Result<(), Stale> {
         let damaged = |what: &str| Stale::Damaged(what.to_owned());
         let words = |span: Span| self.region.bytes(span.at, span.len as usize).map_err(|_| damaged("a section"));
@@ -369,6 +467,14 @@ impl Index {
             match seen.get_mut(i) {
                 Some(slot @ false) => *slot = true,
                 _ => return Err(damaged("the order is not a permutation")),
+            }
+        }
+        let tier2 = words(self.tier2)?;
+        let mut seen = vec![false; self.keys];
+        for chunk in tier2.as_chunks::<4>().0 {
+            match seen.get_mut(u32::from_le_bytes(*chunk) as usize) {
+                Some(slot @ false) => *slot = true,
+                _ => return Err(damaged("the tier-2 order names a key twice, or none")),
             }
         }
         Ok(())
@@ -437,28 +543,52 @@ impl Index {
         Ok((self.word(self.starts, 8, i)?, self.word(self.ends, 8, i)?))
     }
 
-    /// Every key equal to `query` under the file's rules: those spelt exactly as asked first, then the rest,
-    /// each in file order. Every candidate is compared with the query, whatever the order says.
-    pub(crate) fn find(&self, query: &str) -> Result<Vec<usize>, Error> {
-        let wanted = self.rules.fold(query);
-        let folded_at = |j: usize| -> Result<(usize, Ordering), Error> {
-            let i = self.word(self.order, 4, j)? as usize;
-            Ok((i, self.rules.fold(&self.key(i)?).as_ref().cmp(wanted.as_ref())))
-        };
-        // The first position whose folded key is not less than the query's.
-        let (mut low, mut high) = (0usize, self.keys);
+    /// Whether key `i` is offered to a reader: not one its [`Derive`] marked internal.
+    pub(crate) fn is_public(&self, i: usize) -> Result<bool, Error> {
+        if i >= self.keys {
+            return Err(malformed("key number"));
+        }
+        let byte = self.region.bytes(self.public.at + (i / 8) as u64, 1)?;
+        Ok(byte.first().is_some_and(|b| b & (1 << (i % 8)) != 0))
+    }
+
+    /// The first of `count` positions for which `less(j)` is false; `less` must be true and then false.
+    fn lower_bound(count: usize, less: impl Fn(usize) -> Result<bool, Error>) -> Result<usize, Error> {
+        let (mut low, mut high) = (0usize, count);
         while low < high {
             let mid = low + (high - low) / 2;
-            if folded_at(mid)?.1 == Ordering::Less {
+            if less(mid)? {
                 low = mid + 1;
             } else {
                 high = mid;
             }
         }
+        Ok(low)
+    }
+
+    /// The key number at position `j` of the tier-1 order, and `f` of its folded key: borrowed, not copied.
+    fn tier1<T>(&self, j: usize, f: impl FnOnce(&str) -> T) -> Result<(usize, T), Error> {
+        let i = self.word(self.order, 4, j)? as usize;
+        let key = self.key(i)?;
+        Ok((i, f(&self.rules.fold(&key))))
+    }
+
+    /// The key number at position `j` of the tier-2 order, and `f` of its tier-2 form.
+    fn tier2<T>(&self, j: usize, f: impl FnOnce(&str) -> T) -> Result<(usize, T), Error> {
+        let i = self.word(self.tier2, 4, j)? as usize;
+        let key = self.key(i)?;
+        Ok((i, f(&self.rules.fold(&self.derive.unmark(&key)))))
+    }
+
+    /// Every key equal to `query` under the file's rules: those spelt exactly as asked first, then the rest,
+    /// each in file order. Every candidate is compared with the query, whatever the order says.
+    pub(crate) fn find(&self, query: &str) -> Result<Vec<usize>, Error> {
+        let wanted = self.rules.fold(query);
+        let low = Self::lower_bound(self.keys, |j| Ok(self.tier1(j, |f| f < wanted.as_ref())?.1))?;
         let (mut exact, mut rest) = (Vec::new(), Vec::new());
         for j in low..self.keys {
-            let (i, ordering) = folded_at(j)?;
-            if ordering != Ordering::Equal {
+            let (i, equal) = self.tier1(j, |f| f == wanted.as_ref())?;
+            if !equal {
                 break;
             }
             if self.key(i)? == query { exact.push(i) } else { rest.push(i) }
@@ -467,5 +597,46 @@ impl Index {
         rest.sort_unstable();
         exact.extend(rest);
         Ok(exact)
+    }
+
+    /// The keys whose tier-2 form differs from their tier-1 one and equals `query`'s, in file order. With
+    /// [`Self::find`] of the unmarked query, every key equal to it at tier 2. Compared like [`Self::find`].
+    pub(crate) fn find_unmarked(&self, query: &str) -> Result<Vec<usize>, Error> {
+        let wanted = self.rules.fold(&self.derive.unmark(query)).into_owned();
+        let count = (self.tier2.len / 4) as usize;
+        let low = Self::lower_bound(count, |j| Ok(self.tier2(j, |f| f < wanted.as_str())?.1))?;
+        let mut found = Vec::new();
+        for j in low..count {
+            let (i, equal) = self.tier2(j, |f| f == wanted)?;
+            if !equal {
+                break;
+            }
+            found.push(i);
+        }
+        found.sort_unstable();
+        Ok(found)
+    }
+
+    /// The keys whose folded form begins with `prefix`'s, in the tier-1 order, until `each` says stop.
+    /// Every candidate is compared with the prefix.
+    pub(crate) fn prefixed(
+        &self,
+        prefix: &str,
+        mut each: impl FnMut(usize) -> Result<bool, Error>,
+    ) -> Result<(), Error> {
+        let wanted = self.rules.fold(prefix);
+        let low = Self::lower_bound(self.keys, |j| Ok(self.tier1(j, |f| f < wanted.as_ref())?.1))?;
+        for j in low..self.keys {
+            let (i, starts) = self.tier1(j, |f| f.starts_with(wanted.as_ref()))?;
+            if !starts || !each(i)? {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    /// The derivation the index was built under.
+    pub(crate) fn derive(&self) -> &dyn Derive {
+        &*self.derive
     }
 }

@@ -119,6 +119,7 @@ pub enum How {
 pub enum HitProblem {
     DanglingRedirect { from: String, target: String },
     RedirectLoop { chain: Vec<String> },
+    RedirectLimit { chain: Vec<String> },
 }
 
 #[uniffi::remote(Enum)]

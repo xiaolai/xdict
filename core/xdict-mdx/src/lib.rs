@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::io;
 #[cfg(any(unix, windows))]
 use std::path::Path;
+use std::sync::Arc;
 
 mod block;
 mod bytes;
@@ -32,7 +33,7 @@ mod text;
 mod v3;
 
 use bytes::length;
-use index::{Binding, Index, Region, Rules, Stale};
+use index::{Binding, Derive, Index, Plain, Region, Rules, Stale};
 use text::Codec;
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -300,14 +301,19 @@ impl File {
     /// is, where there is a name: a 3.0 header does not say, so a 3.0 file declared [`Kind::Mdd`] is refused,
     /// and one declared nothing is read as a dictionary.
     pub fn from_source(source: Box<dyn Source>, declared: Option<Kind>) -> Result<Self, Error> {
-        let index = Self::build_index(&*source, declared, [0; 32])?;
-        Self::with_index(source, declared, Box::new(index), [0; 32])?
+        let index = Self::build_index(&*source, declared, [0; 32], &Plain)?;
+        Self::with_index(source, declared, Box::new(index), [0; 32], Arc::new(Plain))?
             .map_err(|stale| Error::Malformed(format!("an index just built does not load ({stale:?})")))
     }
 
     /// Reads every key block of a file and writes its index, bound to `identity` (an edition, or an MDD's
-    /// validation token): the slow step, done once per edition.
-    pub fn build_index(source: &dyn Source, declared: Option<Kind>, identity: [u8; 32]) -> Result<Vec<u8>, Error> {
+    /// validation token), with what `derive` says of its keys: the slow step, done once per edition.
+    pub fn build_index(
+        source: &dyn Source,
+        declared: Option<Kind>,
+        identity: [u8; 32],
+        derive: &dyn Derive,
+    ) -> Result<Vec<u8>, Error> {
         let opening = read_header(source, declared)?;
         let header = &opening.header;
         let parts = match header.version {
@@ -315,16 +321,18 @@ impl File {
             FormatVersion::V1_2 | FormatVersion::V2_0 => classic::parts(source, opening.at, header)?,
         };
         let binding = Binding { identity, header: opening.digest, source_len: source.len(), kind: header.kind };
-        index::build(parts.keys, &parts.blocks, rules(header), binding)
+        index::build(parts.keys, &parts.blocks, rules(header), binding, derive)
     }
 
-    /// Opens a file through an index built for it: reads the file's header and nothing else of it. The
-    /// outer error is the file's; the inner [`Stale`] says the index cannot be used and must be built again.
+    /// Opens a file through an index built for it under `derive`: reads the file's header and nothing else of
+    /// it. The outer error is the file's; the inner [`Stale`] says the index cannot be used and must be built
+    /// again.
     pub fn with_index(
         source: Box<dyn Source>,
         declared: Option<Kind>,
         region: Box<dyn Region>,
         identity: [u8; 32],
+        derive: Arc<dyn Derive>,
     ) -> Result<Result<Self, Stale>, Error> {
         let opening = read_header(&*source, declared)?;
         let header = opening.header;
@@ -333,7 +341,7 @@ impl File {
             FormatVersion::V1_2 | FormatVersion::V2_0 => (classic::codec(&header)?, Scheme::Classic),
         };
         let binding = Binding { identity, header: opening.digest, source_len: source.len(), kind: header.kind };
-        let index = match Index::load(region, &binding) {
+        let index = match Index::load(region, &binding, derive) {
             Ok(index) => index,
             Err(stale) => return Ok(Err(stale)),
         };
@@ -376,6 +384,29 @@ impl File {
     /// order. Cheap: no record is read, so a caller can count and page what [`Self::lookup`] would refuse.
     pub fn find(&self, key: &str) -> Result<Vec<usize>, Error> {
         self.index.find(key)
+    }
+
+    /// The keys equal to `query` at tier 2 only: once both are unmarked by the index's [`Derive`], where the
+    /// key's tier-2 form differs from its tier-1 one. In file order. [`Self::find`] of the unmarked query
+    /// gives the rest of tier 2.
+    pub fn find_unmarked(&self, query: &str) -> Result<Vec<usize>, Error> {
+        self.index.find_unmarked(query)
+    }
+
+    /// `text` as the index's [`Derive`] unmarks it.
+    pub fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        self.index.derive().unmark(text)
+    }
+
+    /// Whether key `i` is offered to a reader, not marked internal by the index's [`Derive`].
+    pub fn is_public(&self, i: usize) -> Result<bool, Error> {
+        self.index.is_public(i)
+    }
+
+    /// The keys whose folded form begins with `prefix`'s, in folded order (ties in file order), passed to
+    /// `each` until it returns `false`.
+    pub fn prefixed(&self, prefix: &str, each: impl FnMut(usize) -> Result<bool, Error>) -> Result<(), Error> {
+        self.index.prefixed(prefix, each)
     }
 
     /// The size of key `i`'s record as stored, before any decoding: what reading it will take.

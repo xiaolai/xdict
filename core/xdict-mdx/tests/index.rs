@@ -3,8 +3,11 @@
 //! never give a key another key's record.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use xdict_mdx::index::Stale;
-use xdict_mdx::{File, Kind};
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use xdict_mdx::index::{Derive, KeyList, Stale};
+use xdict_mdx::{Error, File, Kind};
 use xdict_mdx_writer::{self as writer, Entry, Spec, Version};
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -23,12 +26,33 @@ fn entries() -> Vec<Entry> {
     entries
 }
 
+/// A test policy: `é` is unmarked to `e`, and keys beginning with `@` are internal.
+struct Marks(u32);
+
+impl Derive for Marks {
+    fn version(&self) -> u32 {
+        self.0
+    }
+    fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
+        if text.contains('é') { Cow::Owned(text.replace('é', "e")) } else { Cow::Borrowed(text) }
+    }
+    fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
+        (0..keys.len()).map(|i| Ok(keys.key(i)?.starts_with('@'))).collect()
+    }
+}
+
+const MARKS: Marks = Marks(9);
+
+fn build(file: &[u8]) -> Vec<u8> {
+    File::build_index(&file.to_vec(), Some(Kind::Mdx), EDITION, &MARKS).unwrap()
+}
+
 fn mdx() -> Vec<u8> {
     writer::write(&Spec { block_size: 256, ..Spec::mdx() }, &entries()).unwrap()
 }
 
 fn open_with(file: &[u8], index: Vec<u8>) -> Result<File, Stale> {
-    File::with_index(Box::new(file.to_vec()), Some(Kind::Mdx), Box::new(index), EDITION).unwrap()
+    File::with_index(Box::new(file.to_vec()), Some(Kind::Mdx), Box::new(index), EDITION, Arc::new(Marks(9))).unwrap()
 }
 
 /// Every key's answer, as text: what a correct reader returns.
@@ -64,7 +88,7 @@ fn section(index: &[u8], which: usize) -> (usize, usize) {
 #[test]
 fn a_kept_index_answers_as_the_file_does() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     let kept = open_with(&file, index).unwrap();
     let fresh = File::from_source(Box::new(file), Some(Kind::Mdx)).unwrap();
     assert_eq!(answers(&kept), answers(&fresh));
@@ -81,7 +105,7 @@ fn every_layout_indexes() {
             }
             let spec = Spec { version, compression, block_size: 256, ..Spec::mdx() };
             let file = writer::write(&spec, &entries()).unwrap();
-            let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+            let index = build(&file);
             let kept = open_with(&file, index).unwrap();
             assert_eq!(kept.lookup("word123").unwrap()[0].data, b"meaning 123", "{version:?} {compression:?}");
         }
@@ -92,7 +116,7 @@ fn every_layout_indexes() {
 #[test]
 fn a_flipped_byte_makes_the_index_stale() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     let mut positions: Vec<usize> = (0..HEADER_LEN).collect();
     positions.extend((HEADER_LEN..index.len()).step_by(7));
     for at in positions {
@@ -114,7 +138,7 @@ fn a_flipped_byte_makes_the_index_stale() {
 #[test]
 fn a_short_index_is_stale() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     for len in [0, 8, HEADER_LEN - 1, HEADER_LEN, index.len() / 2, index.len() - 1] {
         assert!(open_with(&file, index[..len].to_vec()).is_err(), "an index cut to {len} bytes loaded");
     }
@@ -123,7 +147,7 @@ fn a_short_index_is_stale() {
 #[test]
 fn another_version_is_stale() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     let mut format = index.clone();
     format[8] ^= 1;
     assert_eq!(open_with(&file, format).err(), Some(Stale::Format));
@@ -133,14 +157,76 @@ fn another_version_is_stale() {
     assert_eq!(open_with(&file, reader).err(), Some(Stale::Reader));
 }
 
+/// An index built under another derivation (another tier-2 algorithm or internal-key rule) is not used.
+#[test]
+fn another_derivation_is_stale() {
+    let file = mdx();
+    let index = build(&file);
+    let other =
+        File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(index), EDITION, Arc::new(Marks(10)));
+    assert_eq!(other.unwrap().err(), Some(Stale::Reader));
+}
+
+/// The two sections a policy fills: the tier-2 order, searched with the query unmarked the same way, and the
+/// public-key bitmap.
+#[test]
+fn the_index_keeps_tier_2_and_the_public_keys() {
+    let file = mdx();
+    let read = open_with(&file, build(&file)).unwrap();
+    let key = |i: usize| read.key(i).unwrap().into_owned();
+    assert!(read.find("cafe").unwrap().is_empty(), "tier 1 keeps the accent");
+    assert_eq!(read.find_unmarked("cafe").unwrap().iter().map(|&i| key(i)).collect::<Vec<_>>(), ["café"]);
+    assert_eq!(read.find_unmarked("Cafe").unwrap().iter().map(|&i| key(i)).collect::<Vec<_>>(), ["café"]);
+    assert!(read.find_unmarked("run").unwrap().is_empty(), "only keys tier 2 changes are in its order");
+    let internal: Vec<String> = (0..read.len()).filter(|&i| !read.is_public(i).unwrap()).map(key).collect();
+    assert_eq!(internal, ["@x"]);
+    let mut prefixed = Vec::new();
+    read.prefixed("RU", |i| {
+        prefixed.push(key(i));
+        Ok(true)
+    })
+    .unwrap();
+    assert_eq!(prefixed, ["Run", "run", "run"], "folded order, ties in file order");
+}
+
+/// A tier-2 order that names a key twice is caught; one resealed into the wrong order can hide a key from tier
+/// 2 but never return another.
+#[test]
+fn a_wrong_tier_2_order_never_answers_wrongly() {
+    let entries: Vec<Entry> = ["é1", "é2", "é3", "plain"].iter().map(|k| Entry::text(k, k)).collect();
+    let file = writer::write(&Spec::mdx(), &entries).unwrap();
+    let index = build(&file);
+    let (tier2, len) = section(&index, 7);
+    assert_eq!(len, 12, "three keys are changed by tier 2");
+    let mut repeated = index.clone();
+    let first = repeated[tier2..tier2 + 4].to_vec();
+    repeated[tier2 + 4..tier2 + 8].copy_from_slice(&first);
+    reseal(&mut repeated, 7);
+    assert!(matches!(open_with(&file, repeated).err(), Some(Stale::Damaged(_))));
+    let mut swapped = index.clone();
+    let (a, b) = (swapped[tier2..tier2 + 4].to_vec(), swapped[tier2 + 8..tier2 + 12].to_vec());
+    swapped[tier2..tier2 + 4].copy_from_slice(&b);
+    swapped[tier2 + 8..tier2 + 12].copy_from_slice(&a);
+    reseal(&mut swapped, 7);
+    let read = open_with(&file, swapped).unwrap();
+    for query in ["e1", "e2", "e3"] {
+        for i in read.find_unmarked(query).unwrap() {
+            assert_eq!(read.key(i).unwrap().replace('é', "e"), query);
+        }
+    }
+}
+
 #[test]
 fn an_index_of_another_file_is_stale() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
-    let other = File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(index.clone()), [8; 32]).unwrap();
+    let index = build(&file);
+    let other =
+        File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(index.clone()), [8; 32], Arc::new(Marks(9)))
+            .unwrap();
     assert_eq!(other.err(), Some(Stale::OtherFile));
     let changed = writer::write(&Spec { block_size: 256, ..Spec::mdx() }, &entries()[1..]).unwrap();
-    let wrong = File::with_index(Box::new(changed), Some(Kind::Mdx), Box::new(index), EDITION).unwrap();
+    let wrong =
+        File::with_index(Box::new(changed), Some(Kind::Mdx), Box::new(index), EDITION, Arc::new(Marks(9))).unwrap();
     assert_eq!(wrong.err(), Some(Stale::OtherFile));
 }
 
@@ -149,7 +235,7 @@ fn an_index_of_another_file_is_stale() {
 #[test]
 fn a_consistent_but_wrong_order_never_answers_wrongly() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     let truth = answers(&open_with(&file, index.clone()).unwrap());
     let (order, len) = section(&index, 4);
 
@@ -192,9 +278,11 @@ fn a_consistent_but_wrong_order_never_answers_wrongly() {
 #[test]
 fn an_index_reads_through_a_source() {
     let file = mdx();
-    let index = File::build_index(&file, Some(Kind::Mdx), EDITION).unwrap();
+    let index = build(&file);
     let region = xdict_mdx::index::SourceRegion(Box::new(index.clone()));
-    let read = File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(region), EDITION).unwrap().unwrap();
+    let read = File::with_index(Box::new(file.clone()), Some(Kind::Mdx), Box::new(region), EDITION, Arc::new(Marks(9)))
+        .unwrap()
+        .unwrap();
     assert_eq!(answers(&read), answers(&open_with(&file, index).unwrap()));
 }
 
