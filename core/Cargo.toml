@@ -1,0 +1,27 @@
+[workspace]
+resolver = "3"
+members = ["xdict-mdx", "xdict-mdx-writer"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "ISC"
+repository = "https://github.com/xiaolai/xdict"
+rust-version = "1.99"
+
+[workspace.dependencies]
+encoding_rs = "=0.8.42"
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+ripemd = "=0.2.0"
+thiserror = "=2.0.21"
+xxhash-rust = { version = "=0.8.19", default-features = false, features = ["xxh64"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+warnings = "deny"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
