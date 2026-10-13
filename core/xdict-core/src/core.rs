@@ -463,7 +463,17 @@ impl Core {
             for name in &tries {
                 if let Some(bytes) = self.find_resource(&opened, name)? {
                     let mime = mime(name);
-                    let bytes = served(bytes, mime, &view.base_url, travelled.dir());
+                    let (bytes, rewritten) = served(bytes, mime, &view.base_url, travelled.dir());
+                    // Served rewritten, it is a body the view renders, held to the view's ceiling; and nothing
+                    // leaves larger than the core's own.
+                    let ceiling =
+                        if rewritten { view.max_body_bytes.min(MAX_RESOURCE_BYTES) } else { MAX_RESOURCE_BYTES };
+                    if bytes.len() as u64 > ceiling {
+                        return Err(CoreError::TooLarge {
+                            limit: Limit::Body,
+                            detail: format!("{name} is {} bytes as served, the most is {ceiling}", bytes.len()),
+                        });
+                    }
                     return Ok(Resource::Found { mime: mime.into(), path: name.clone(), bytes });
                 }
             }
@@ -496,11 +506,18 @@ impl Core {
         let key = format!("\\{}", path.replace('/', "\\"));
         for (check, volume) in &opened.mdd {
             check.unchanged()?;
-            let found = volume.lookup(&key)?.into_iter().next();
-            check.unchanged()?;
-            if let Some(record) = found {
-                return Ok(Some(record.data));
+            // The record's size is checked before it is read, as a sidecar's is.
+            let Some(&i) = volume.find(&key)?.first() else { continue };
+            let size = volume.record_size(i)?;
+            if size > MAX_RESOURCE_BYTES {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Body,
+                    detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
+                });
             }
+            let record = volume.record(i)?;
+            check.unchanged()?;
+            return Ok(Some(record.data));
         }
         Ok(None)
     }
@@ -671,16 +688,17 @@ fn volume_records(
     Ok((records, problems))
 }
 
-/// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
-/// resource's own directory; anything else, and text that is not UTF-8, as stored.
-fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
-    let Ok(text) = std::str::from_utf8(&bytes) else { return bytes };
-    match mime {
-        "text/css" => xdict_entry::css_text(text, base, dir).into_bytes(),
-        "text/javascript" => xdict_entry::script(text, base).text.into_bytes(),
-        "text/html" => xdict_entry::html_text(text, base).into_bytes(),
-        _ => bytes,
-    }
+/// A resource as the view gets it, and whether it was rewritten: a stylesheet, script or page rewritten for the
+/// view, resolving against the resource's own directory; anything else, and text that is not UTF-8, as stored.
+fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> (Vec<u8>, bool) {
+    let Ok(text) = std::str::from_utf8(&bytes) else { return (bytes, false) };
+    let rewritten = match mime {
+        "text/css" => xdict_entry::css_text(text, base, dir),
+        "text/javascript" => xdict_entry::script(text, base).text,
+        "text/html" => xdict_entry::html_text(text, base),
+        _ => return (bytes, false),
+    };
+    (rewritten.into_bytes(), true)
 }
 
 fn mime(path: &str) -> &'static str {
@@ -878,6 +896,29 @@ mod tests {
         fn identity(&self) -> Option<FileIdentity> {
             None
         }
+    }
+
+    /// Codex objection 4: the edition and the index come from the same bytes, or the import fails.
+    /// A stylesheet, script or page is a body the view renders, so the view's ceiling holds for it, rewritten; an
+    /// image or a recording is not, and is served whole.
+    #[test]
+    fn a_rewritten_resource_is_held_to_the_views_ceiling() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let css = "b { background: url(a.png) }\n".repeat(100);
+        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let mdd =
+            write(&Spec::mdd(), &[W::bytes("\\big.css", css.as_bytes()), W::bytes("\\big.png", &[7; 4000])]).unwrap();
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let source =
+            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let view = View { base_url: "xdict://d/".into(), skin: None, max_body_bytes: 2000 };
+        let css = core.resource(dict.clone(), "big.css".into(), view.clone());
+        assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
+        let png = core.resource(dict, "big.png".into(), view);
+        assert!(matches!(&png, Ok(Resource::Found { bytes, .. }) if bytes.len() == 4000), "{:?}", png.map(|_| "found"));
     }
 
     /// A sidecar that cannot be opened is reported when it is asked for, not passed over for a volume's copy.
