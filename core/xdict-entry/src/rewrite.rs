@@ -99,7 +99,14 @@ pub fn html(text: &str, base: &str) -> Rewritten {
         let (before, from) = rest.split_at(at);
         out.text.push_str(before);
         if let Some(comment) = from.strip_prefix("<!--") {
-            let end = comment.find("-->").map_or(comment.len(), |e| e + 3);
+            // `<!-->` and `<!--->` close at once, as a browser reads them.
+            let end = if comment.starts_with('>') {
+                1
+            } else if comment.starts_with("->") {
+                2
+            } else {
+                comment.find("-->").map_or(comment.len(), |e| e + 3)
+            };
             out.text.push_str("<!--");
             out.text.push_str(comment.get(..end).unwrap_or(comment));
             rest = comment.get(end..).unwrap_or("");
@@ -412,6 +419,18 @@ mod tests {
     fn a_stylesheet_resolves_against_itself() {
         let r = css("@font-face { src: url(../fonts/a.woff2) }", BASE, "styles");
         assert!(r.text.contains(r#"url("xdict://d/r/fonts/a.woff2")"#), "{}", r.text);
+    }
+
+    /// `<!-->` and `<!--->` are whole comments to a browser (HTML's abrupt closing), so what follows them is
+    /// markup and must be rewritten.
+    #[test]
+    fn an_abruptly_closed_comment_ends_where_a_browser_ends_it() {
+        for open in ["<!-->", "<!--->"] {
+            let r = html(&format!(r#"{open}<a href="https://example.com/x">out</a>-->"#), BASE);
+            assert!(r.text.contains("xdict://d/blocked/"), "{open}: {}", r.text);
+        }
+        let r = html(r#"<!-- <a href="https://example.com/x"> -->"#, BASE);
+        assert!(!r.text.contains("blocked"), "a comment's text is left alone: {}", r.text);
     }
 
     /// Each match is found once: searching the rest for every needle at every match made a large script or
