@@ -1,0 +1,29 @@
+# Private, never committed — the same choice XiaolaiDict made: design notes, ADRs and the agent
+# bridge stay on this machine. Slash-free so a worktree's symlink back here matches too.
+/dev-docs
+/AGENTS.md
+/CLAUDE.md
+/.claude
+/.agents
+/.codex
+/.cc-suite
+/.cc-suite.md
+/.mcp.json
+
+# Swift build output, and Xcode's per-user state except the shared schemes.
+/.build
+/.swiftpm/*
+!/.swiftpm/xcode
+/.swiftpm/xcode/*
+!/.swiftpm/xcode/xcshareddata
+
+# Dictionary files never enter this repository: they are licensed to the reader, not to XDict.
+*.mdx
+*.mdd
+
+# Secrets, wherever they land.
+.env
+.env.*
+
+# The machine-local build settings (E2E host and the like).
+/local.mk
