@@ -172,6 +172,16 @@ fn to_io(error: CoreError) -> io::Error {
     io::Error::new(kind, error)
 }
 
+/// An empty buffer with room for `len` bytes, or `OutOfMemory` when there is none: an index or a body can be
+/// large, and a copy that cannot be made is a typed error, not an abort.
+pub(crate) fn buffer(len: u64, what: &str) -> Result<Vec<u8>, CoreError> {
+    let no_room = |detail: String| CoreError::Io { kind: IoKind::OutOfMemory, detail };
+    let n = usize::try_from(len).map_err(|_| no_room(format!("{what} of {len} bytes is beyond this platform")))?;
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(n).map_err(|e| no_room(format!("no room for {what} of {len} bytes: {e}")))?;
+    Ok(bytes)
+}
+
 /// Reads the first `total` bytes of a location, the size its caller checked, `chunk` bytes at a time, telling
 /// `each` about every chunk; and `SourceChanged` when the location's size is no longer `total`, so a file that
 /// moved after the check is neither read past it nor served cut short.
@@ -267,3 +277,14 @@ impl std::fmt::Display for Changed {
 }
 
 impl std::error::Error for Changed {}
+
+#[cfg(test)]
+mod tests {
+    /// A buffer there is no room for is `OutOfMemory`, reported, not an abort.
+    #[test]
+    fn a_buffer_there_is_no_room_for_is_a_typed_error() {
+        let refused = super::buffer(u64::MAX, "a test");
+        assert!(matches!(refused, Err(crate::CoreError::Io { kind: crate::IoKind::OutOfMemory, .. })), "{refused:?}");
+        assert!(super::buffer(16, "a test").is_ok_and(|b| b.capacity() >= 16));
+    }
+}

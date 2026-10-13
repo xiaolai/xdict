@@ -14,7 +14,7 @@ use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
 
 use crate::error::{CoreError, Limit, Missing};
-use crate::source::{Changed, Opened as OpenedSource, Verified, read_all};
+use crate::source::{Changed, Opened as OpenedSource, Verified, buffer, read_all};
 #[cfg(not(target_family = "wasm"))]
 use crate::store::Directory;
 use crate::store::{IndexStorage, IndexStore, Memory, Shell};
@@ -498,7 +498,7 @@ impl Core {
                         detail: format!("{path} is {size} bytes, more than {ceiling}"),
                     });
                 }
-                let mut bytes = Vec::new();
+                let mut bytes = buffer(size, path)?;
                 read_all(&*sidecar.source, size, IMPORT_CHUNK, |chunk, _, _| {
                     bytes.extend_from_slice(chunk);
                     Ok(())
