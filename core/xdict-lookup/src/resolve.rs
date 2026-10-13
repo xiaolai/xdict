@@ -102,57 +102,82 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let mut read = Read::default();
     read.add(file, &keys, budget)?;
     let entries: HashSet<usize> = keys.iter().copied().filter(|i| !read.is_redirect(*i)).collect();
-    let mut resolved = Resolved::default();
-    let mut placed: HashMap<usize, usize> = HashMap::new();
-    // The matched key each redirect hit came by (its chain's first), and each such key's problems: a hit carries
-    // its own way's, decided once every way is known, since a later, shorter way replaces an earlier one.
-    let mut owner: HashMap<usize, usize> = HashMap::new();
-    let mut ways: Vec<(usize, Vec<Problem>)> = Vec::new();
+    let mut hits = Hits::default();
     let mut steps = 0usize;
     for (i, how) in matched {
         let Some(named) = read.targets(i).map(<[String]>::to_vec) else {
-            if let Entry::Vacant(slot) = placed.entry(i) {
-                slot.insert(resolved.hits.len());
-                resolved.hits.push(Hit { key: i, how, problems: vec![] });
-            }
+            hits.matched(i, how);
             continue;
         };
         let Followed { reached, problems } = follow(file, i, &named, budget, &mut read, &mut steps)?;
-        for (j, chain) in reached {
-            if entries.contains(&j) {
-                continue;
-            }
-            match placed.get(&j).copied() {
-                Some(at) => {
-                    if let Some(hit) = resolved.hits.get_mut(at)
-                        && let How::Redirect { chain: kept } = &hit.how
-                        && chain.len() < kept.len()
-                    {
-                        hit.how = How::Redirect { chain };
-                        owner.insert(at, i);
-                    }
-                }
-                None => {
-                    placed.insert(j, resolved.hits.len());
-                    owner.insert(resolved.hits.len(), i);
-                    resolved.hits.push(Hit { key: j, how: How::Redirect { chain }, problems: vec![] });
-                }
-            }
+        for (j, chain) in reached.into_iter().filter(|(j, _)| !entries.contains(j)) {
+            hits.reached(i, j, chain);
         }
-        ways.push((i, problems));
+        hits.ways.push((i, problems));
     }
-    // Each walk's problems, moved once: to the first hit it finally owns, or, owning none, to the lookup's.
-    let mut first: HashMap<usize, usize> = HashMap::new();
-    for (&at, &from) in &owner {
-        first.entry(from).and_modify(|kept| *kept = (*kept).min(at)).or_insert(at);
-    }
-    for (i, problems) in ways {
-        match first.get(&i).and_then(|&at| resolved.hits.get_mut(at)) {
-            Some(hit) => hit.problems = problems,
-            None => resolved.problems.extend(problems),
+    Ok(hits.finish())
+}
+
+/// A lookup's hits as they are found: each key placed once, and which matched key's walk owns each redirect
+/// hit, so that the walks' problems are given out once every way is known (a later, shorter way replaces an
+/// earlier one, and takes the hit with it).
+#[derive(Default)]
+struct Hits {
+    resolved: Resolved,
+    /// Where each key's hit is.
+    placed: HashMap<usize, usize>,
+    /// The matched key whose walk owns each redirect hit, by the hit's place.
+    owner: HashMap<usize, usize>,
+    /// Each walk's problems, in the order the keys matched.
+    ways: Vec<(usize, Vec<Problem>)>,
+}
+
+impl Hits {
+    /// A matched key that is an entry: a hit, unless the key has one already.
+    fn matched(&mut self, i: usize, how: How) {
+        if let Entry::Vacant(slot) = self.placed.entry(i) {
+            slot.insert(self.resolved.hits.len());
+            self.resolved.hits.push(Hit { key: i, how, problems: vec![] });
         }
     }
-    Ok(resolved)
+
+    /// Entry `j`, reached from matched key `from` along `chain`: a new hit, or a shorter way to a redirect hit
+    /// already placed, which then belongs to `from`'s walk.
+    fn reached(&mut self, from: usize, j: usize, chain: Vec<usize>) {
+        match self.placed.get(&j).copied() {
+            Some(at) => {
+                if let Some(hit) = self.resolved.hits.get_mut(at)
+                    && let How::Redirect { chain: kept } = &hit.how
+                    && chain.len() < kept.len()
+                {
+                    hit.how = How::Redirect { chain };
+                    self.owner.insert(at, from);
+                }
+            }
+            None => {
+                let at = self.resolved.hits.len();
+                self.placed.insert(j, at);
+                self.owner.insert(at, from);
+                self.resolved.hits.push(Hit { key: j, how: How::Redirect { chain }, problems: vec![] });
+            }
+        }
+    }
+
+    /// The hits, each walk's problems moved once: to the first hit it finally owns, or, owning none, to the
+    /// lookup's.
+    fn finish(mut self) -> Resolved {
+        let mut first: HashMap<usize, usize> = HashMap::new();
+        for (&at, &from) in &self.owner {
+            first.entry(from).and_modify(|kept| *kept = (*kept).min(at)).or_insert(at);
+        }
+        for (i, problems) in self.ways {
+            match first.get(&i).and_then(|&at| self.resolved.hits.get_mut(at)) {
+                Some(hit) => hit.problems = problems,
+                None => self.resolved.problems.extend(problems),
+            }
+        }
+        self.resolved
+    }
 }
 
 /// Where one key's redirects lead.
