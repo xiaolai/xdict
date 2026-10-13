@@ -463,7 +463,8 @@ impl File {
 
     fn lookup_within(&self, key: &str, mut budget: Budget) -> Result<Vec<Record>, Error> {
         let order = self.find(key)?;
-        let mut by_key: HashMap<usize, Record> = HashMap::with_capacity(order.len());
+        // Grown as records are read, so a lookup the budget refuses reserves nothing for every match first.
+        let mut by_key: HashMap<usize, Record> = HashMap::new();
         self.for_each_record(&order, &mut budget, |i, record| {
             by_key.insert(i, record);
             Ok(())
