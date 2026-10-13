@@ -11,7 +11,7 @@ rust-version = "1.99"
 
 [workspace.dependencies]
 encoding_rs = "=0.8.42"
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
 ripemd = "=0.2.0"
 thiserror = "=2.0.21"
 xxhash-rust = { version = "=0.8.19", default-features = false, features = ["xxh64"] }
