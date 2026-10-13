@@ -39,6 +39,9 @@ pub enum Error {
     Unsupported(Unsupported),
     #[error("the file is damaged: {0}")]
     Malformed(String),
+    /// A valid file asking for more than XDict holds at once: a limit, not damage.
+    #[error("this is more than XDict reads at once: {0}")]
+    TooLarge(String),
 }
 
 /// A feature of the format XDict refuses, named so the refusal can say which.
@@ -319,7 +322,7 @@ impl File {
         let rest = folded.iter().filter(|&&i| self.keys.get(i).is_some_and(|k| k.text != key));
         let order: Vec<usize> = exact.iter().chain(rest).copied().collect();
         if order.len() > budget.records {
-            return Err(Error::Malformed(format!("\"{key}\" matches more than {} records", budget.records)));
+            return Err(Error::TooLarge(format!("\"{key}\" matches more than {} records", budget.records)));
         }
         // Read in file order, so the blocks are touched in rising order and each is decompressed once
         // however the answer is ordered; then answer in the promised order.
@@ -328,7 +331,7 @@ impl File {
             by_offset.push((self.span(i)?.0, slot));
         }
         by_offset.sort_unstable();
-        let over = || Error::Malformed(format!("the records for \"{key}\" total more than {} bytes", budget.bytes));
+        let over = || Error::TooLarge(format!("the records for \"{key}\" total more than {} bytes", budget.bytes));
         let mut answers: Vec<Option<Record>> = order.iter().map(|_| None).collect();
         let (mut total, mut cache) = (0u64, Vec::new());
         for (_, slot) in by_offset {
@@ -462,8 +465,8 @@ mod tests {
         // Each stored record is its 100 bytes and a terminating null; each returned one, 100 bytes and its key.
         let bytes = |n| Budget { bytes: n, records: 10 };
         assert_eq!(file.lookup_within("bank", bytes(312)).unwrap().len(), 3);
-        assert!(matches!(file.lookup_within("bank", bytes(311)), Err(Error::Malformed(_))));
-        assert!(matches!(file.lookup_within("bank", Budget { bytes: 1 << 20, records: 2 }), Err(Error::Malformed(_))));
+        assert!(matches!(file.lookup_within("bank", bytes(311)), Err(Error::TooLarge(_))));
+        assert!(matches!(file.lookup_within("bank", Budget { bytes: 1 << 20, records: 2 }), Err(Error::TooLarge(_))));
     }
 
     /// The budget counts what a lookup returns, after decoding: an invalid byte becomes a 3-byte U+FFFD.
@@ -473,7 +476,7 @@ mod tests {
         let file = File::from_source(Box::new(writer::write(&Spec::mdx(), &entries).unwrap()), None).unwrap();
         let records = file.lookup_within("bad", Budget { bytes: 1 << 20, records: 10 }).unwrap();
         assert_eq!(records[0].data.len(), 300);
-        assert!(matches!(file.lookup_within("bad", Budget { bytes: 200, records: 10 }), Err(Error::Malformed(_))));
+        assert!(matches!(file.lookup_within("bad", Budget { bytes: 200, records: 10 }), Err(Error::TooLarge(_))));
     }
 
     #[test]

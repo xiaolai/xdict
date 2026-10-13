@@ -14,8 +14,9 @@ pub const KEYS: u64 = 10_000_000;
 /// The records one lookup may return, together: four records of the largest size a block allows. A file
 /// where thousands of keys lead to one large record would otherwise multiply it without bound.
 pub const LOOKUP_BYTES: u64 = 4 * BLOCK_BYTES;
-/// Records one lookup may return. A key with thousands of homographs is not a dictionary's; a file where
-/// millions of keys fold together would otherwise build millions of results.
+/// Records one lookup may return. A file where millions of keys fold together would otherwise build millions
+/// of results. Real files do reach it: a sentence library on freemdict ("6万多个句子飞跃6.0句库导出") files all
+/// 66,355 of its records under the one key "EC", so going past it is [`crate::Error::TooLarge`], not damage.
 pub const LOOKUP_RECORDS: usize = 10_000;
 /// Memory the key index may take, as `keys::index_cost` estimates it (232 bytes and five times the text a
 /// key): about 3.8 million keys of 10 bytes, five times OED's 706,524. Bounds what a small, highly
