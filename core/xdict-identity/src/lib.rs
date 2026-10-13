@@ -235,13 +235,15 @@ struct Cached {
 pub struct FileRegistry {
     path: PathBuf,
     cached: Mutex<Cached>,
+    /// Makes a renamed document durable: [`confirm`], except where a test makes it fail.
+    confirm: fn(std::fs::File, &std::path::Path) -> io::Result<()>,
 }
 
 impl FileRegistry {
     pub fn open(dir: impl Into<PathBuf>) -> Result<Self, RegistryError> {
         let path = dir.into().join("registry.json");
         let cached = load(&path)?;
-        Ok(Self { path, cached: Mutex::new(cached) })
+        Ok(Self { path, cached: Mutex::new(cached), confirm })
     }
 
     /// The document, read again if the file changed since it was last read.
@@ -281,35 +283,38 @@ impl FileRegistry {
                 return Err(fail(e));
             }
         };
-        // The rename is durable only once it is flushed: without this, a power failure can bring back the old
-        // document after the registration was reported. From here the new document is in place, so a failure
-        // says that, not that nothing changed.
-        #[cfg(any(unix, windows))]
-        let unconfirmed = |e: io::Error| {
+        // From here the new document is in place, so a failure says that, not that nothing changed.
+        (self.confirm)(file, dir).map_err(|e| {
             RegistryError(format!(
                 "the new registry document was installed at {}, but its durability could not be confirmed: {e}",
                 self.path.display()
             ))
-        };
-        // Unix: flush the directory, which holds the name.
-        #[cfg(unix)]
-        {
-            drop(file);
-            std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(unconfirmed)?;
-        }
-        // Windows: flush the renamed file through the handle that wrote it, which writes its metadata
-        // (`FlushFileBuffers`), as PostgreSQL's `durable_rename` does; keeping the handle means no new open that a
-        // reader holding the file could refuse. `std::fs::rename` is `MoveFileExW` without
-        // `MOVEFILE_WRITE_THROUGH` (Rust 1.99, `library/std/src/sys/fs/windows.rs`), and no documented
-        // directory-flush durability contract is relied upon. Write-through renaming needs `unsafe`, which this
-        // crate does not allow.
-        #[cfg(windows)]
-        {
-            let _ = dir;
-            file.sync_all().map_err(unconfirmed)?;
-        }
-        // The Web keeps no registry on disk.
-        #[cfg(not(any(unix, windows)))]
+        })
+    }
+}
+
+/// Makes a renamed document durable, given the handle that wrote it and its directory: without this, a power
+/// failure can bring back the old document after the registration was reported.
+///
+/// Unix flushes the directory, which holds the name. Windows flushes the renamed file through the handle that
+/// wrote it, which writes its metadata (`FlushFileBuffers`), as PostgreSQL's `durable_rename` does; keeping the
+/// handle means no new open that a reader holding the file could refuse. `std::fs::rename` is `MoveFileExW`
+/// without `MOVEFILE_WRITE_THROUGH` (Rust 1.99, `library/std/src/sys/fs/windows.rs`), and no documented
+/// directory-flush durability contract is relied upon; write-through renaming needs `unsafe`, which this crate
+/// does not allow. The Web keeps no registry on disk.
+fn confirm(file: std::fs::File, dir: &std::path::Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        drop(file);
+        std::fs::File::open(dir)?.sync_all()
+    }
+    #[cfg(windows)]
+    {
+        let _ = dir;
+        file.sync_all()
+    }
+    #[cfg(not(any(unix, windows)))]
+    {
         let _ = (file, dir);
         Ok(())
     }
@@ -428,6 +433,22 @@ mod tests {
         registry.register(record("/a/y.mdx", "e2"), &mut || "second".into()).unwrap();
         assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("second"));
         drop(_held);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A flush that fails after the rename is reported, and says the new document is in place; a retry then
+    /// finds the lineage it holds rather than minting another.
+    #[test]
+    fn a_flush_that_fails_after_the_rename_is_reported_and_the_document_kept() {
+        let dir = scratch("unconfirmed");
+        let mut registry = FileRegistry::open(&dir).unwrap();
+        registry.confirm = |_, _| Err(io::Error::other("injected"));
+        let failed = registry.register(record("/a/x.mdx", "e1"), &mut || "kept".into()).err().unwrap();
+        assert!(failed.0.contains("was installed") && failed.0.contains("injected"), "{}", failed.0);
+        let again = FileRegistry::open(&dir).unwrap();
+        assert_eq!(again.lineage("e1").unwrap().as_deref(), Some("kept"));
+        let retried = again.register(record("/a/x.mdx", "e1"), &mut || "minted again".into()).unwrap();
+        assert_eq!(retried, "kept");
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
