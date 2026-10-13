@@ -500,7 +500,7 @@ impl Core {
                     });
                 }
                 let mut bytes = Vec::new();
-                read_all(&*sidecar.source, IMPORT_CHUNK, |chunk, _, _| {
+                read_all(&*sidecar.source, size, IMPORT_CHUNK, |chunk, _, _| {
                     bytes.extend_from_slice(chunk);
                     Ok(())
                 })?;
@@ -1001,6 +1001,43 @@ mod tests {
         let side = core.resource(dict, "side.css".into(), view);
         assert!(matches!(side, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", side.map(|_| "found"));
         assert_eq!(read.load(std::sync::atomic::Ordering::SeqCst), 0, "the stylesheet was read before it was refused");
+    }
+
+    /// Claims one size at first and a far larger one after, counting the bytes read through it.
+    struct Growing(std::sync::atomic::AtomicU64, Arc<std::sync::atomic::AtomicU64>);
+
+    impl crate::ByteSource for Growing {
+        fn size(&self) -> u64 {
+            if self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst) == 0 { 100 } else { 1 << 30 }
+        }
+        fn read_at(&self, _: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+            self.1.fetch_add(u64::from(len), std::sync::atomic::Ordering::SeqCst);
+            Ok(vec![b'x'; len as usize])
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            None
+        }
+    }
+
+    /// A sidecar is read to the size its ceiling was checked against, and one whose size moves in between is
+    /// `SourceChanged`, not read to whatever it claims next.
+    #[test]
+    fn a_sidecar_that_grows_after_its_size_is_checked_is_not_read_past_it() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let read = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Fixed(mdx)) };
+        let growing = Arc::new(Growing(std::sync::atomic::AtomicU64::new(0), read.clone()));
+        let sidecar = Location::Source { name: "grow.png".into(), source: growing.clone() };
+        let package = Package { mdx, mdd: vec![], sidecars: vec![sidecar] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        growing.0.store(0, std::sync::atomic::Ordering::SeqCst);
+        read.store(0, std::sync::atomic::Ordering::SeqCst);
+        let got = core.resource(dict, "grow.png".into(), View { max_body_bytes: 2000, ..view() });
+        assert!(matches!(got, Err(CoreError::SourceChanged { .. })), "{:?}", got.map(|_| "found"));
+        assert!(read.load(std::sync::atomic::Ordering::SeqCst) <= 100, "read past the checked size");
     }
 
     /// A page served from a folder resolves its links against that folder, as a stylesheet does.

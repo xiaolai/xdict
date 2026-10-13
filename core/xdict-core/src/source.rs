@@ -172,13 +172,15 @@ fn to_io(error: CoreError) -> io::Error {
     io::Error::new(kind, error)
 }
 
-/// Reads a whole location, `chunk` bytes at a time, telling `each` about every chunk.
+/// Reads the first `total` bytes of a location, the size its caller checked, `chunk` bytes at a time, telling
+/// `each` about every chunk; and `SourceChanged` when the location's size is no longer `total`, so a file that
+/// moved after the check is neither read past it nor served cut short.
 pub(crate) fn read_all(
     source: &dyn xdict_mdx::Source,
+    total: u64,
     chunk: u64,
     mut each: impl FnMut(&[u8], u64, u64) -> Result<(), CoreError>,
 ) -> Result<(), CoreError> {
-    let total = source.len();
     let mut buf = vec![0u8; usize::try_from(chunk.min(total)).map_err(|_| CoreError::internal("chunk size"))?];
     let mut at = 0u64;
     while at < total {
@@ -187,6 +189,9 @@ pub(crate) fn read_all(
         source.read_exact_at(at, part).map_err(|e| CoreError::io(&e))?;
         at += n as u64;
         each(part, at, total)?;
+    }
+    if source.len() != total {
+        return Err(changed("the source's size"));
     }
     Ok(())
 }
