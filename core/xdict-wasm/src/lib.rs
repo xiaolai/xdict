@@ -432,15 +432,24 @@ impl Core {
     }
 
     pub fn lookup(&self, query: &str, dicts: &str, options: &str) -> Reply {
-        reply(self.0.lookup(query.into(), from_json(dicts)?, from_json(options)?))
+        let (dicts, options) = (from_json(dicts)?, from_json(options)?);
+        let (result, checked) = watched(|| self.0.lookup(query.into(), dicts, options));
+        checked?;
+        reply(result)
     }
 
     pub fn suggest(&self, prefix: &str, dicts: &str, limit: u32) -> Reply {
-        reply(self.0.suggest(prefix.into(), from_json(dicts)?, limit))
+        let dicts = from_json(dicts)?;
+        let (result, checked) = watched(|| self.0.suggest(prefix.into(), dicts, limit));
+        checked?;
+        reply(result)
     }
 
     pub fn entry(&self, dict: &str, entry: &str, view: &str) -> Reply {
-        reply(self.0.entry(dict.into(), from_json(entry)?, from_json(view)?))
+        let (entry, view) = (from_json(entry)?, from_json(view)?);
+        let (result, checked) = watched(|| self.0.entry(dict.into(), entry, view));
+        checked?;
+        reply(result)
     }
 
     pub fn link(&self, dict: &str, url: &str, origin: &str, view: &str) -> Reply {
@@ -448,7 +457,10 @@ impl Core {
     }
 
     pub fn resource(&self, dict: &str, path: &str, view: &str) -> Result<ResourceReply, String> {
-        match self.0.resource(dict.into(), path.into(), from_json(view)?) {
+        let view = from_json(view)?;
+        let (result, checked) = watched(|| self.0.resource(dict.into(), path.into(), view));
+        checked?;
+        match result {
             Ok(core::Resource::Found { path, mime, bytes }) => {
                 let json = serde_json::json!({ "type": "found", "path": path, "mime": mime }).to_string();
                 Ok(ResourceReply::new(json, bytes))
