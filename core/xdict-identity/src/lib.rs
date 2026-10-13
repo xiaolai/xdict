@@ -281,6 +281,10 @@ impl FileRegistry {
         // old document after the registration was reported.
         #[cfg(unix)]
         std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(fail)?;
+        // Elsewhere a directory cannot be opened to sync: on Windows the rename's durability is the file
+        // system's, and the Web keeps no registry on disk.
+        #[cfg(not(unix))]
+        let _ = dir;
         Ok(())
     }
 }
