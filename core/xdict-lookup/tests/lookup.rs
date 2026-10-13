@@ -199,6 +199,38 @@ fn a_record_is_read_once_per_lookup() {
     assert_eq!(r.hits.len(), 1, "{r:?}");
 }
 
+/// The file's reads, counted.
+struct Counting(Vec<u8>, Arc<std::sync::atomic::AtomicUsize>);
+
+impl xdict_mdx::Source for Counting {
+    fn len(&self) -> u64 {
+        self.0.len() as u64
+    }
+    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> std::io::Result<()> {
+        self.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        xdict_mdx::Source::read_exact_at(&self.0, offset, buf)
+    }
+}
+
+/// A lookup decompresses a block once, however many of its records the redirects reach, one target at a time:
+/// a record and the three it names, all in one block, are one read of it.
+#[test]
+fn a_block_is_read_once_per_lookup() {
+    let entries: Vec<Entry> = [("A", "@@@LINK=B\r\n@@@LINK=C\r\n@@@LINK=D"), ("B", "b"), ("C", "c"), ("D", "d")]
+        .iter()
+        .map(|(k, v)| Entry::text(k, v))
+        .collect();
+    let bytes = writer::write(&Spec { block_size: 1 << 16, ..Spec::mdx() }, &entries).unwrap();
+    let index = File::build_index(&bytes, Some(Kind::Mdx), [1; 32], &Policy).unwrap();
+    let reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let source = Box::new(Counting(bytes, reads.clone()));
+    let f = File::with_index(source, Some(Kind::Mdx), Box::new(index), [1; 32], Arc::new(Policy)).unwrap().unwrap();
+    reads.store(0, std::sync::atomic::Ordering::SeqCst);
+    let r = hits(&f, "A");
+    assert_eq!(r.hits.len(), 3, "{r:?}");
+    assert_eq!(reads.load(std::sync::atomic::Ordering::SeqCst), 1);
+}
+
 /// A walk's problems are given once, with the first hit it reaches, not copied into every hit: one target landing
 /// on 32 records beside 31 dangling targets is 31 problems, not 32 × 31.
 #[test]

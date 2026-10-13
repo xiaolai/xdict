@@ -4,7 +4,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::{HashMap, HashSet, VecDeque};
 
-use xdict_mdx::{Budget, Error, File};
+use xdict_mdx::{Budget, Error, File, Kept};
 
 /// Which matching a lookup uses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -99,10 +99,9 @@ pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>
 pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Result<Resolved, Error> {
     let matched = matches(file, query, mode)?;
     let keys: Vec<usize> = matched.iter().map(|(i, _)| *i).collect();
-    // Every record read in this lookup, by key: each is read, and taken from `budget`, once.
-    let mut read = HashMap::new();
-    redirects(file, &keys, budget, &mut read)?;
-    let entries: HashSet<usize> = keys.iter().copied().filter(|i| !matches!(read.get(i), Some(Some(_)))).collect();
+    let mut read = Read::default();
+    read.add(file, &keys, budget)?;
+    let entries: HashSet<usize> = keys.iter().copied().filter(|i| !read.is_redirect(*i)).collect();
     let mut resolved = Resolved::default();
     let mut placed: HashMap<usize, usize> = HashMap::new();
     // The matched key each redirect hit came by (its chain's first), and each such key's problems: a hit carries
@@ -111,7 +110,7 @@ pub fn resolve(file: &File, query: &str, mode: Mode, budget: &mut Budget) -> Res
     let mut ways: Vec<(usize, Vec<Problem>)> = Vec::new();
     let mut steps = 0usize;
     for (i, how) in matched {
-        let Some(named) = read.get(&i).cloned().flatten() else {
+        let Some(named) = read.targets(i).map(<[String]>::to_vec) else {
             if let Entry::Vacant(slot) = placed.entry(i) {
                 slot.insert(resolved.hits.len());
                 resolved.hits.push(Hit { key: i, how, problems: vec![] });
@@ -173,7 +172,7 @@ fn follow(
     from: usize,
     named: &[String],
     budget: &mut Budget,
-    read: &mut HashMap<usize, Targets>,
+    read: &mut Read,
     steps: &mut usize,
 ) -> Result<Followed, Error> {
     let mut walk = Walk::new(from, named);
@@ -190,7 +189,7 @@ fn follow(
             Flow::Stop => break,
         };
         let fresh: Vec<usize> = landed.iter().copied().filter(|j| !chain.contains(j)).collect();
-        redirects(file, &fresh, budget, read)?;
+        read.add(file, &fresh, budget)?;
         for j in landed {
             walk.arrive(j, &chain, read);
         }
@@ -275,14 +274,14 @@ impl Walk {
 
     /// Key `j`, landed on along `chain`: a loop if the chain has it already, else its targets queued (no more
     /// than could still be tried) if it is a redirect, else an entry reached, given once.
-    fn arrive(&mut self, j: usize, chain: &[usize], read: &HashMap<usize, Targets>) {
+    fn arrive(&mut self, j: usize, chain: &[usize], read: &Read) {
         let mut next = chain.to_vec();
         next.push(j);
         if chain.contains(&j) {
             self.out.problems.push(Problem::Loop { chain: next });
             return;
         }
-        match read.get(&j).and_then(Option::as_ref) {
+        match read.targets(j) {
             Some(targets) => {
                 self.nowhere(j, targets);
                 let room = (FAN_OUT + 1).saturating_sub(self.tried + self.queue.len());
@@ -317,21 +316,35 @@ fn land(file: &File, target: &str) -> Result<Vec<usize>, Error> {
 /// What a record is to a lookup: `None` for an entry, else the targets its redirect names (perhaps none).
 type Targets = Option<Vec<String>>;
 
-/// Adds to `read`, for each of `keys` not already in it, what its record is: every block read once, every
-/// record taken from `budget` once.
-fn redirects(
-    file: &File,
-    keys: &[usize],
-    budget: &mut Budget,
-    read: &mut HashMap<usize, Targets>,
-) -> Result<(), Error> {
-    let mut unread: Vec<usize> = keys.iter().copied().filter(|i| !read.contains_key(i)).collect();
-    unread.sort_unstable();
-    unread.dedup();
-    file.for_each_record(&unread, budget, |i, record| {
-        read.insert(i, targets(&String::from_utf8_lossy(&record.data)));
-        Ok(())
-    })
+/// Every record a lookup has read, by key, each read and taken from the budget once, and the blocks kept
+/// between reads, so a block several targets share is decompressed once while it is kept.
+#[derive(Default)]
+struct Read {
+    records: HashMap<usize, Targets>,
+    kept: Kept,
+}
+
+impl Read {
+    /// Reads, for each of `keys` not read yet, what its record is.
+    fn add(&mut self, file: &File, keys: &[usize], budget: &mut Budget) -> Result<(), Error> {
+        let mut unread: Vec<usize> = keys.iter().copied().filter(|i| !self.records.contains_key(i)).collect();
+        unread.sort_unstable();
+        unread.dedup();
+        let records = &mut self.records;
+        file.for_each_record_kept(&unread, budget, &mut self.kept, |i, record| {
+            records.insert(i, targets(&String::from_utf8_lossy(&record.data)));
+            Ok(())
+        })
+    }
+
+    /// The targets of key `i`'s record, if it was read and is a redirect.
+    fn targets(&self, i: usize) -> Option<&[String]> {
+        self.records.get(&i).and_then(Option::as_deref)
+    }
+
+    fn is_redirect(&self, i: usize) -> bool {
+        self.targets(i).is_some()
+    }
 }
 
 /// The targets of an `@@@LINK=` record, one per line that names one, at most one more than [`FAN_OUT`] (no more

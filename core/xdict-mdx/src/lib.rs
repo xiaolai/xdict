@@ -424,7 +424,7 @@ impl File {
 
     /// Key `i`'s record.
     pub fn record(&self, i: usize) -> Result<Record, Error> {
-        self.read_record(i, &mut Vec::new())
+        self.read_record(i, &mut Kept::default())
     }
 
     /// Reads the records of `keys` (key numbers), in the order they lie in the file, so that each block is
@@ -436,6 +436,19 @@ impl File {
         &self,
         keys: &[usize],
         budget: &mut Budget,
+        each: impl FnMut(usize, Record) -> Result<(), Error>,
+    ) -> Result<(), Error> {
+        self.for_each_record_kept(keys, budget, &mut Kept::default(), each)
+    }
+
+    /// [`Self::for_each_record`], keeping decompressed blocks in `kept` from one call to the next, so that a
+    /// caller reading a few records at a time (a redirect's targets, one by one) decompresses a block once
+    /// while `kept` still holds it.
+    pub fn for_each_record_kept(
+        &self,
+        keys: &[usize],
+        budget: &mut Budget,
+        kept: &mut Kept,
         mut each: impl FnMut(usize, Record) -> Result<(), Error>,
     ) -> Result<(), Error> {
         budget.take_records(keys.len())?;
@@ -444,10 +457,9 @@ impl File {
             by_offset.push((self.span(i)?.0, i));
         }
         by_offset.sort_unstable();
-        let mut cache = Vec::new();
         for (_, i) in by_offset {
             budget.afford(self.record_size(i)?)?;
-            let record = self.read_record(i, &mut cache)?;
+            let record = self.read_record(i, kept)?;
             budget.take_bytes((record.key.len() + record.data.len()) as u64)?;
             each(i, record)?;
         }
@@ -481,7 +493,7 @@ impl File {
         self.index.span(i)
     }
 
-    fn read_record(&self, i: usize, cache: &mut Vec<(usize, Vec<u8>)>) -> Result<Record, Error> {
+    fn read_record(&self, i: usize, cache: &mut Kept) -> Result<Record, Error> {
         let key = self.index.key(i)?.into_owned();
         let (start, end) = self.span(i)?;
         let mut data = self.records(start, end, cache)?;
@@ -494,14 +506,13 @@ impl File {
         Ok(Record { key, data, lossy })
     }
 
-    /// The bytes from `start` to `end` of the concatenated records, decompressing every block they touch.
-    /// `cache` holds the blocks the previous record touched, so records of one lookup that share blocks
-    /// (matches sit next to each other, or lead to the same record) decompress each block once. It never
-    /// holds more than one record's blocks.
-    fn records(&self, start: u64, end: u64, cache: &mut Vec<(usize, Vec<u8>)>) -> Result<Vec<u8>, Error> {
+    /// The bytes from `start` to `end` of the concatenated records, decompressing every block they touch that
+    /// `cache` does not hold, and leaving in it the blocks this record touched and then the most recent others,
+    /// within [`Kept`]'s bound.
+    fn records(&self, start: u64, end: u64, cache: &mut Kept) -> Result<Vec<u8>, Error> {
         let len = length(end.saturating_sub(start), limits::BLOCK_BYTES, "record")?;
         let mut out = Vec::with_capacity(len);
-        let mut previous: HashMap<usize, Vec<u8>> = std::mem::take(cache).into_iter().collect();
+        let mut previous = std::mem::take(&mut cache.blocks);
         let mut touched = Vec::new();
         let blocks = &self.index.blocks;
         let first = blocks.partition_point(|b| b.records_offset + b.len as u64 <= start);
@@ -509,8 +520,8 @@ impl File {
             if block.records_offset >= end {
                 break;
             }
-            let decoded = match previous.remove(&index) {
-                Some(decoded) => decoded,
+            let decoded = match previous.iter().position(|(i, _)| *i == index) {
+                Some(at) => previous.remove(at).1,
                 None => {
                     let mut at = block.file_offset;
                     let raw = read(&*self.source, &mut at, block.stored_len, "record block")?;
@@ -526,11 +537,33 @@ impl File {
             let to = usize::try_from(end - block.records_offset).unwrap_or(usize::MAX).min(data.len());
             out.extend_from_slice(data.get(from..to).ok_or_else(|| malformed("record block"))?);
         }
-        *cache = touched;
+        cache.keep(touched, previous);
         if out.len() != len {
             return Err(Error::Malformed("a record runs past the end of the records".into()));
         }
         Ok(out)
+    }
+}
+
+/// Decompressed record blocks kept between reads, most recent first: the blocks of the record read last, always,
+/// and then older ones while all of them together stay within [`limits::BLOCK_BYTES`]: never more than the larger
+/// of one record's blocks, which reading it needs anyway, and that bound.
+#[derive(Default)]
+pub struct Kept {
+    blocks: Vec<(usize, Vec<u8>)>,
+}
+
+impl Kept {
+    fn keep(&mut self, mut touched: Vec<(usize, Vec<u8>)>, older: Vec<(usize, Vec<u8>)>) {
+        let mut held: u64 = touched.iter().map(|(_, b)| b.len() as u64).sum();
+        for (index, block) in older {
+            if held + block.len() as u64 > limits::BLOCK_BYTES {
+                break;
+            }
+            held += block.len() as u64;
+            touched.push((index, block));
+        }
+        self.blocks = touched;
     }
 }
 
