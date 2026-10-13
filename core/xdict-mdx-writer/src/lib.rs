@@ -13,6 +13,7 @@ use flate2::Compression as Level;
 use flate2::write::ZlibEncoder;
 use ripemd::{Digest, Ripemd128};
 
+pub mod lzo;
 mod v3;
 
 /// The format version written into the header.
@@ -29,6 +30,8 @@ pub enum Version {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Compression {
     None,
+    /// LZO1X (block type 1): format 1.2 and 2.0 only.
+    Lzo,
     Zlib,
 }
 
@@ -167,6 +170,9 @@ pub fn write(spec: &Spec, entries: &[Entry]) -> Result<Vec<u8>, WriteError> {
             return Err(WriteError::DefectNotApplicable { defect, why: "only a 2.0 keyword section has a checksum" });
         }
         _ => {}
+    }
+    if spec.version == Version::V3_0 && spec.compression == Compression::Lzo {
+        return Err(WriteError::Incompatible("no real 3.0 file has shown LZO"));
     }
     if spec.version == Version::V3_0 && spec.kind == Kind::Mdx(TextEncoding::Utf16) {
         return Err(WriteError::Incompatible("a 3.0 file is UTF-8"));
@@ -409,6 +415,7 @@ fn header(spec: &Spec) -> Result<Vec<u8>, WriteError> {
 fn compress(data: &[u8], compression: Compression) -> Result<Vec<u8>, WriteError> {
     let (kind, payload) = match compression {
         Compression::None => (0u32, data.to_vec()),
+        Compression::Lzo => (1u32, lzo::compress(data)?),
         Compression::Zlib => (2u32, zlib(data)?),
     };
     let mut out = kind.to_le_bytes().to_vec();

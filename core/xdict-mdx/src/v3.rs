@@ -214,6 +214,10 @@ pub(crate) fn decode_unit(unit: &[u8], expected: usize, key: &[u8; 16], what: &'
     if adler32(&payload) != checksum {
         return Err(Error::Malformed(format!("the {what}'s checksum does not match")));
     }
+    // LZO is type 1 in 2.0, but no real 3.0 file has shown it: refused rather than guessed (ADR-0005).
+    if flags & 0x0F == 1 {
+        return Err(Error::Unsupported(Unsupported::Lzo));
+    }
     block::decompress(u32::from(flags & 0x0F), &payload, expected, what)
 }
 

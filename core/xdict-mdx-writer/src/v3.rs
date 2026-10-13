@@ -194,6 +194,7 @@ fn unit(data: &[u8], compression: Compression, cipher: Cipher, key: &[u8; 16]) -
     let (code, mut payload) = match compression {
         Compression::None => (0u8, data.to_vec()),
         Compression::Zlib => (2u8, zlib(data)?),
+        Compression::Lzo => return Err(WriteError::Incompatible("no real 3.0 file has shown LZO")),
     };
     let checksum = adler32(&payload);
     let encrypted = payload.len().min(16);
