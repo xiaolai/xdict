@@ -366,3 +366,65 @@ fn an_index_is_checked_in_pieces() {
     let largest = largest.load(Ordering::SeqCst);
     assert!(largest <= 1 << 20, "a read of {largest} bytes");
 }
+
+/// An index region with `extra` bytes of zeros past its real end, as a sparse file reads, counting every byte
+/// read from it.
+struct Sparse(Vec<u8>, u64, Arc<AtomicUsize>);
+
+impl Region for Sparse {
+    fn len(&self) -> u64 {
+        self.0.len() as u64 + self.1
+    }
+    fn bytes(&self, offset: u64, len: usize) -> Result<Cow<'_, [u8]>, Error> {
+        self.2.fetch_add(len, Ordering::SeqCst);
+        let mut out = vec![0u8; len];
+        for (i, byte) in out.iter_mut().enumerate() {
+            if let Some(b) = self.0.get(offset as usize + i) {
+                *byte = *b;
+            }
+        }
+        Ok(Cow::Owned(out))
+    }
+}
+
+/// A block count no file the reader opens could have is refused before the block table is read or checked:
+/// through a source every byte of a declared section is a read, and only the region's length bounds it (audit
+/// 2026-10-14, row 30). The table here is 512 MiB of a sparse region, sealed with its true checksum.
+#[test]
+fn a_block_count_the_file_cannot_hold_is_refused_unread() {
+    let file = mdx();
+    let mut index = build(&file);
+    let count: u64 = 1 << 24;
+    let table_len = count * 32;
+    let at = index.len() as u64;
+    index[80..88].copy_from_slice(&count.to_le_bytes());
+    let slot = 96 + 5 * 24;
+    index[slot..slot + 8].copy_from_slice(&at.to_le_bytes());
+    index[slot + 8..slot + 16].copy_from_slice(&table_len.to_le_bytes());
+    let mut zeros = xxhash_rust::xxh3::Xxh3::new();
+    let chunk = vec![0u8; 1 << 20];
+    for _ in 0..table_len >> 20 {
+        zeros.update(&chunk);
+    }
+    index[slot + 16..slot + 24].copy_from_slice(&zeros.digest().to_le_bytes());
+    let head = xxh3_64(&index[..HEADER_LEN - 8]);
+    index[HEADER_LEN - 8..HEADER_LEN].copy_from_slice(&head.to_le_bytes());
+
+    let read = Arc::new(AtomicUsize::new(0));
+    let region = Box::new(Sparse(index, table_len, read.clone()));
+    let opened = File::with_index(Box::new(file), Some(Kind::Mdx), region, EDITION, Arc::new(Marks(9))).unwrap();
+    assert!(matches!(opened.err(), Some(Stale::Damaged(_))));
+    let read = read.load(Ordering::SeqCst);
+    assert!(read < 8 << 20, "{read} bytes read");
+}
+
+/// A record block shorter than its own framing (a type and a checksum, 8 bytes) is no block the reader made.
+#[test]
+fn a_block_shorter_than_its_framing_is_stale() {
+    let file = mdx();
+    let mut index = build(&file);
+    let (start, _) = section(&index, 5);
+    index[start + 8..start + 16].copy_from_slice(&7u64.to_le_bytes());
+    reseal(&mut index, 5);
+    assert!(matches!(open_with(&file, index).err(), Some(Stale::Damaged(_))));
+}
