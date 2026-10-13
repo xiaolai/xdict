@@ -353,6 +353,33 @@ attempt('web.throwingImportKeepsRecord', () => {
   c3.close(o.dict);
 });
 
+// A source whose identity moves during an import is a changed file (ADR-0007 decision 13): the binding passes the
+// core what the source answers now, not what it answered first.
+attempt('web.identityChangedDuringImport', () => {
+  let asked = 0;
+  const mdx = src(at(20n), { identity: () => at(asked++ === 0 ? 20n : 21n) });
+  check('web.identityChangedDuringImport', { error: { type: 'sourceChanged' } }, outcome(() => c3.import(only(mdx))));
+});
+// A volume that throws only when asked again, late in the import, still fails it before anything is registered.
+attempt('web.lateThrowKeepsRecord', () => {
+  const mddBytes = readFileSync(join(fixtures, 'tiny.mdd'));
+  const mddAt: FileIdentity = { device: 9n, inode: 150n, size: BigInt(mddBytes.length), mtimeNs: 15n, ctimeNs: 15n };
+  const state = { broken: false, asked: 0 };
+  const volume = Object.assign(new Bytes(mddBytes, mddAt), {
+    identity: () => { if (state.broken && state.asked++ > 0) throw new Error('identity failed'); return mddAt; },
+  });
+  const pkg: Package = { ...only(src(at(15n))), mdd: [{ type: 'source', name: 'tiny.mdd', source: volume }] };
+  c3.import(pkg);
+  state.broken = true;
+  check('web.lateThrowKeepsRecord.fails', { error: { type: 'io' } }, outcome(() => c3.import(pkg)));
+  state.broken = false;
+  const o = outcome(() => c3.open(pkg)) as any;
+  check('web.lateThrowKeepsRecord.open', 'ready', o?.type);
+  if (o?.type !== 'ready') return;
+  check('web.lateThrowKeepsRecord', { type: 'found' }, outcome(() => c3.resource(o.dict, 'run.mp3', view())));
+  c3.close(o.dict);
+});
+
 // Counted from here: dictionaries the checks above left open hold their sources, as they should.
 attempt('web.sourcesReleased', () => {
   const before = tables().sources;

@@ -120,50 +120,6 @@ thread_local! {
     static DEPTH: Cell<u32> = const { Cell::new(0) };
     /// Resource replies not yet freed.
     static REPLIES: Cell<u32> = const { Cell::new(0) };
-    /// The size and identity each source of an import gave when it began ([`Pinned`]), by its number.
-    static PINNED: RefCell<HashMap<u32, Answers>> = RefCell::new(HashMap::new());
-    /// Whether the sources asked now are being pinned.
-    static PINNING: Cell<bool> = const { Cell::new(false) };
-}
-
-/// What one source answered when an import began.
-#[derive(Clone, Copy, Default)]
-struct Answers {
-    size: Option<u64>,
-    identity: Option<Option<FileIdentity>>,
-}
-
-/// The sources of one import, asked their size and identity once as it begins and answering the same for the
-/// rest of it: a source that throws then fails the import before the core reads or registers anything, and one
-/// that would throw later is not asked again. Released when the import ends.
-struct Pinned(Vec<u32>);
-
-impl Pinned {
-    fn package(package: &core::Package) -> Self {
-        let sources = std::iter::once(&package.mdx).chain(&package.mdd).chain(&package.sidecars);
-        // Only what this import pins is released with it: an import nested in another's callback leaves the
-        // outer one's sources pinned.
-        let before: Vec<u32> = PINNED.with(|pinned| pinned.borrow().keys().copied().collect());
-        PINNING.with(|pinning| pinning.set(true));
-        for location in sources {
-            if let core::Location::Source { source, .. } = location {
-                let _ = (source.size(), source.identity());
-            }
-        }
-        PINNING.with(|pinning| pinning.set(false));
-        Self(PINNED.with(|pinned| pinned.borrow().keys().copied().filter(|id| !before.contains(id)).collect()))
-    }
-}
-
-impl Drop for Pinned {
-    fn drop(&mut self) {
-        PINNED.with(|pinned| {
-            let mut pinned = pinned.borrow_mut();
-            for id in &self.0 {
-                pinned.remove(id);
-            }
-        });
-    }
 }
 
 /// A shell's index storage by its number in [`STORAGE`], owned by its core: it goes when the core does.
@@ -287,32 +243,13 @@ fn gone() -> CoreError {
     CoreError::Io { kind: core::IoKind::NotFound, detail: "the source was released".into() }
 }
 
-impl Source {
-    /// What this source answered when its import began, if it is pinned.
-    fn pinned(&self) -> Option<Answers> {
-        PINNED.with(|pinned| pinned.borrow().get(&self.0).copied())
-    }
-
-    /// Keeps an answer for the rest of the import, while its sources are being pinned.
-    fn pin(&self, update: impl FnOnce(&mut Answers)) {
-        if PINNING.with(Cell::get) {
-            PINNED.with(|pinned| update(pinned.borrow_mut().entry(self.0).or_default()));
-        }
-    }
-}
-
 impl core::ByteSource for Source {
     fn size(&self) -> u64 {
-        if let Some(size) = self.pinned().and_then(|a| a.size) {
-            return size;
-        }
         let Some(handle) = self.handle() else { return 0 };
-        let size = handle.size().unwrap_or_else(|e| {
+        handle.size().unwrap_or_else(|e| {
             self.fail("size", &e);
             0.0
-        }) as u64;
-        self.pin(|a| a.size = Some(size));
-        size
+        }) as u64
     }
     fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
         if let Some(why) = FAILED.with(|failed| failed.borrow().get(&self.0).cloned()) {
@@ -324,10 +261,7 @@ impl core::ByteSource for Source {
             .map_err(|e| CoreError::Io { kind: core::IoKind::Other, detail: format!("the source failed: {e:?}") })
     }
     fn identity(&self) -> Option<FileIdentity> {
-        if let Some(identity) = self.pinned().and_then(|a| a.identity) {
-            return identity;
-        }
-        let identity = match self.handle()?.identity().map(|value| identity_from(&value)) {
+        match self.handle()?.identity().map(|value| identity_from(&value)) {
             Ok(Ok(identity)) => identity,
             Ok(Err(why)) => {
                 self.failed(format!("the source's identity() gave no identity a file can have: {why}"));
@@ -337,9 +271,7 @@ impl core::ByteSource for Source {
                 self.fail("identity", &e);
                 None
             }
-        };
-        self.pin(|a| a.identity = Some(identity));
-        identity
+        }
     }
 }
 
@@ -378,10 +310,16 @@ extern "C" {
 
 /// The progress callback of one import, by its number in [`PROGRESS`], released when the import ends. A
 /// callback that throws cancels the import.
-struct Progress(Option<u32>);
+/// An import's progress callback, by its number, and how many exceptions [`THROWN`] held when the import began:
+/// once a source of the import has thrown, the answer is `false`, so the core stops before it registers anything
+/// (it asks once more just before), and the import fails with the source's exception ([`watched`]).
+struct Progress(Option<u32>, usize);
 
 impl core::Progress for Progress {
     fn progress(&self, done: u64, total: u64) -> bool {
+        if THROWN.with(|thrown| thrown.borrow().len()) > self.1 {
+            return false;
+        }
         let Some(id) = self.0 else { return true };
         match PROGRESS.with(|table| table.borrow().get(id)) {
             Some(callback) => callback.progress(done as f64, total as f64).unwrap_or(false),
@@ -509,13 +447,8 @@ impl Core {
             ),
             None => None,
         };
-        let progress = Progress(progress);
-        // A source that throws when first asked fails the import here, before the core registers anything.
-        let (pinned, checked) = watched(|| Pinned::package(&package));
-        checked?;
-        let replied = watched_reply(|| self.0.import(package, &progress));
-        drop(pinned);
-        replied
+        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        watched_reply(|| self.0.import(package, &progress))
     }
 
     /// All or nothing: a dictionary opened while one of its sources threw is closed again before the error.
