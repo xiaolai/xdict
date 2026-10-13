@@ -123,3 +123,20 @@ fn suggestions_are_folded_order_once_each() {
     suggest(&f, "", 2, &mut out).unwrap();
     assert_eq!(out, ["café", "Run"]);
 }
+
+/// A record may name any number of targets within the byte budget: each costs a search, so one key's targets
+/// are followed only to the fan-out limit, and every target of a lookup counts against one step limit.
+#[test]
+fn many_targets_cost_at_most_the_limits() {
+    let many: String = (0..5_000).map(|i| format!("@@@LINK=missing{i}\r\n")).collect();
+    let f = file(&[("a", many.as_str())]);
+    let r = hits(&f, "a");
+    assert!(r.problems.len() <= xdict_lookup::FAN_OUT + 1, "{} problems", r.problems.len());
+    assert!(matches!(r.problems.last(), Some(Problem::Limit { .. })), "{:?}", r.problems.last());
+
+    let some: String = (0..1_000).map(|i| format!("@@@LINK=missing{i}\r\n")).collect();
+    let entries: Vec<(&str, &str)> = (0..(xdict_lookup::STEPS / 1_000 + 1)).map(|_| ("a", some.as_str())).collect();
+    let f = file(&entries);
+    let refused = resolve(&f, "a", Mode::Reader, &mut Budget::lookup());
+    assert!(matches!(refused, Err(xdict_mdx::Error::TooLarge(_))), "{:?}", refused.map(|r| r.problems.len()));
+}
