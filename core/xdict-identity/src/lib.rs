@@ -281,11 +281,41 @@ impl FileRegistry {
         // old document after the registration was reported.
         #[cfg(unix)]
         std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(fail)?;
-        // Elsewhere a directory cannot be opened to sync: on Windows the rename's durability is the file
-        // system's, and the Web keeps no registry on disk.
-        #[cfg(not(unix))]
+        #[cfg(windows)]
+        sync_directory(dir).map_err(fail)?;
+        // The Web keeps no registry on disk.
+        #[cfg(not(any(unix, windows)))]
         let _ = dir;
         Ok(())
+    }
+}
+
+/// Flushes a directory on Windows, the closest safe Rust comes to Unix's directory `fsync`: the directory is
+/// opened for writing with `FILE_FLAG_BACKUP_SEMANTICS` (the only way to open one) and flushed by
+/// `FlushFileBuffers`, which needs the write access. **Residual:** `std::fs::rename` itself is not
+/// write-through (`MOVEFILE_WRITE_THROUGH` is out of reach without `unsafe`), and Microsoft documents
+/// `FlushFileBuffers` for files and volumes, not directories. So a file system that refuses to flush a
+/// directory is tolerated, as PostgreSQL tolerates it for directories: the rename then rests on the file
+/// system's own journal (NTFS logs it). Any other failure is reported.
+#[cfg(windows)]
+fn sync_directory(dir: &std::path::Path) -> io::Result<()> {
+    use std::os::windows::fs::OpenOptionsExt;
+    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+    let flushed = std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
+        .open(dir)
+        .and_then(|d| d.sync_all());
+    match flushed {
+        Err(e)
+            if matches!(
+                e.kind(),
+                io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported | io::ErrorKind::InvalidInput
+            ) =>
+        {
+            Ok(())
+        }
+        other => other,
     }
 }
 
