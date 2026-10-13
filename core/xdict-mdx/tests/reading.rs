@@ -176,14 +176,18 @@ fn refusal_in(version: Version, defect: Defect) -> Error {
 fn an_unknown_format_version_is_refused_by_name() {
     for version in [Version::V2_0, Version::V3_0] {
         let refused = refusal_in(version, Defect::UnknownFormatVersion);
-        assert!(matches!(&refused, Error::Unsupported(Unsupported::FormatVersion(v)) if v == "4.0"), "{version:?}: {refused}");
+        assert!(
+            matches!(&refused, Error::Unsupported(Unsupported::FormatVersion(v)) if v == "4.0"),
+            "{version:?}: {refused}"
+        );
     }
 }
 
 #[test]
 fn a_format_3_resource_library_is_refused_by_name() {
     // No real 3.0 `.mdd` has been seen (dev-docs/format-v3-facts.md), so one is refused rather than guessed at.
-    let scratch = Scratch::with(&writer::write(&Spec { version: Version::V3_0, ..Spec::mdx() }, &words()).unwrap(), "mdd");
+    let scratch =
+        Scratch::with(&writer::write(&Spec { version: Version::V3_0, ..Spec::mdx() }, &words()).unwrap(), "mdd");
     let refused = File::open(scratch.path()).err().expect("a 3.0 .mdd must be refused");
     assert!(matches!(refused, Error::Unsupported(Unsupported::ResourceLibraryV3)), "{refused}");
 }
@@ -285,6 +289,10 @@ fn truncated_and_corrupted_files_never_panic() {
             bad[at] ^= ((state >> 32) as u8) | 1;
             exercise(&bad);
         }
-        assert!(opened.get() > 1, "{:?}: no corrupted variant opened, so lookups on damaged files went untested", spec.kind);
+        assert!(
+            opened.get() > 1,
+            "{:?}: no corrupted variant opened, so lookups on damaged files went untested",
+            spec.kind
+        );
     }
 }
