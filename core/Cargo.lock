@@ -1019,6 +1019,7 @@ dependencies = [
 name = "xdict-mdx-writer"
 version = "0.0.1"
 dependencies = [
+ "encoding_rs",
  "flate2",
  "ripemd",
  "thiserror",

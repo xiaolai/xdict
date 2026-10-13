@@ -8,6 +8,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+encoding_rs.workspace = true
 flate2.workspace = true
 ripemd.workspace = true
 thiserror.workspace = true
