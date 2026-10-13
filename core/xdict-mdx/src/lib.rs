@@ -116,6 +116,8 @@ pub struct Record {
     /// The record's bytes. For an MDX file, its text as UTF-8 with the terminating null removed; for an
     /// MDD file, the bytes as stored.
     pub data: Vec<u8>,
+    /// Bytes of an MDX record its encoding could not read, each run replaced by U+FFFD in `data`.
+    pub lossy: u64,
 }
 
 /// Random access to a file's bytes. A path on disk is one source; the Web build supplies its own.
@@ -477,10 +479,13 @@ impl File {
         let key = self.index.key(i)?.into_owned();
         let (start, end) = self.span(i)?;
         let mut data = self.records(start, end, cache)?;
+        let mut lossy = 0;
         if self.header.kind == Kind::Mdx {
-            data = self.codec.decode(&trim_terminators(data, self.codec.unit())?).into_bytes();
+            let (text, bad) = self.codec.decode_counted(&trim_terminators(data, self.codec.unit())?);
+            data = text.into_bytes();
+            lossy = bad;
         }
-        Ok(Record { key, data })
+        Ok(Record { key, data, lossy })
     }
 
     /// The bytes from `start` to `end` of the concatenated records, decompressing every block they touch.
