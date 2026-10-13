@@ -375,7 +375,12 @@ fn attribute(
             }
             if text == decoded { value.to_owned() } else { escaped(&text, quote.unwrap_or('"')) }
         }
-        _ if lower.starts_with("on") => script(value, base).text,
+        // A handler runs as its value decodes; written back escaped for its quote, as a style is.
+        _ if lower.starts_with("on") => {
+            let decoded = unescape(value);
+            let text = script(&decoded, base).text;
+            if text == decoded { value.to_owned() } else { escaped(&text, quote.unwrap_or('"')) }
+        }
         _ => value.to_owned(),
     }
 }
@@ -1121,6 +1126,18 @@ mod tests {
         }
         let kept = r#"<!DOCTYPE html><?xml version="1.0"?></p ><!-- <a href="https://example.com/x"> -->"#;
         assert_eq!(html(kept, BASE).text, kept);
+    }
+
+    /// An event handler runs as its value decodes (`&colon;` is `:`), so it is rewritten decoded and written back
+    /// escaped for its quote.
+    #[test]
+    fn a_handler_is_rewritten_as_it_runs() {
+        let r = html(r#"<a onclick="location='entry&colon;//run'">x</a>"#, BASE);
+        assert!(r.text.contains(r#"onclick="location='xdict://d/entry/run'""#), "{}", r.text);
+        let r = html(r#"<a onclick='go("entry://a&#39;s")'>x</a>"#, BASE);
+        assert!(r.text.contains(r#"onclick='go("xdict://d/entry/a&#39;s")'"#), "{}", r.text);
+        let kept = r#"<a onclick="f(&quot;x&quot;)">x</a>"#;
+        assert_eq!(html(kept, BASE).text, kept, "an unchanged handler is written as found");
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
