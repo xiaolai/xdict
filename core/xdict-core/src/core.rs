@@ -565,7 +565,7 @@ fn info(file: &File) -> DictInfo {
 /// An index's name in the store: its identity, and what it indexes.
 fn index_name(identity: &[u8; 32], kind: Kind) -> String {
     let kind = if kind == Kind::Mdd { "mdd" } else { "mdx" };
-    format!("{}.{kind}.xdidx", hex(identity))
+    format!("{}.{kind}.xdidx", xdict_identity::hex(identity))
 }
 
 fn registry_error(error: xdict_identity::RegistryError) -> CoreError {
@@ -683,10 +683,6 @@ fn csp(base: &str) -> String {
          img-src {base} data:; font-src {base} data:; media-src {base}; connect-src 'none'; form-action 'none'; \
          frame-src 'none'; object-src 'none'; base-uri 'none'"
     )
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// SplitMix64: unique handles and lineage ids, not secrets. Seeded from the shell's entropy, or natively from
