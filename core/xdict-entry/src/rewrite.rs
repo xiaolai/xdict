@@ -333,7 +333,9 @@ fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> String {
     candidates.join(", ")
 }
 
-/// The character references a URL in an attribute is likely to hold: HTML 4's named ones and numeric ones.
+/// An attribute value's character references decoded as HTML's tokeniser decodes them in an attribute (HTML
+/// §13.2.5.72–80): numeric ones with or without `;`, every named one of the standard's table, the longest that
+/// matches, and a name without `;` only where history allows it. What is no reference stays as written.
 fn unescape(value: &str) -> String {
     if !value.contains('&') {
         return value.to_owned();
@@ -342,37 +344,57 @@ fn unescape(value: &str) -> String {
     let mut rest = value;
     while let Some(at) = rest.find('&') {
         out.push_str(rest.get(..at).unwrap_or(""));
-        let from = rest.get(at..).unwrap_or("");
-        // The longest reference is ten bytes (`&#x10FFFF;`, `&thetasym;`): no search past it.
-        let end = from.bytes().take(11).position(|b| b == b';');
-        let decoded = end.and_then(|e| {
-            let name = from.get(1..e)?;
-            let c = match name.strip_prefix('#') {
-                Some(n) => {
-                    let code = match n.strip_prefix(['x', 'X']) {
-                        Some(hex) => u32::from_str_radix(hex, 16).ok()?,
-                        None => n.parse().ok()?,
-                    };
-                    char::from_u32(code)?
-                }
-                None if name == "apos" => '\'',
-                None => crate::entities::named(name)?,
-            };
-            Some((c, e + 1))
-        });
-        match decoded {
-            Some((c, len)) => {
-                out.push(c);
-                rest = from.get(len..).unwrap_or("");
-            }
+        let after = rest.get(at + 1..).unwrap_or("");
+        match reference(after, &mut out) {
+            Some(len) => rest = after.get(len..).unwrap_or(""),
             None => {
                 out.push('&');
-                rest = from.get(1..).unwrap_or("");
+                rest = after;
             }
         }
     }
     out.push_str(rest);
     out
+}
+
+/// The reference `after` (what follows an `&`) starts with, written to `out`, and how many bytes of `after` it
+/// takes; `None`, and nothing written, if it starts none. A name is searched for no further than the longest.
+fn reference(after: &str, out: &mut String) -> Option<usize> {
+    use crate::entities::{LONGEST, LONGEST_LEGACY, c1, named};
+    let bytes = after.as_bytes();
+    if bytes.first() == Some(&b'#') {
+        let (radix, start) = if matches!(bytes.get(1), Some(b'x' | b'X')) { (16, 2) } else { (10, 1) };
+        let digits = bytes.get(start..)?.iter().take_while(|b| char::from(**b).is_digit(radix)).count();
+        if digits == 0 {
+            return None;
+        }
+        // Too large is as wrong as any number past Unicode's last: both are U+FFFD.
+        let code = after
+            .get(start..start + digits)?
+            .chars()
+            .filter_map(|d| d.to_digit(radix))
+            .fold(0u32, |n, d| n.saturating_mul(radix).saturating_add(d));
+        let c = match code {
+            0x80..=0x9f => c1(code).or_else(|| char::from_u32(code)),
+            _ => char::from_u32(code).filter(|&c| c != '\0'),
+        };
+        out.push(c.unwrap_or('\u{fffd}'));
+        return Some(start + digits + usize::from(bytes.get(start + digits) == Some(&b';')));
+    }
+    let run = bytes.iter().take(LONGEST).take_while(|b| b.is_ascii_alphanumeric()).count();
+    if bytes.get(run) == Some(&b';')
+        && let Some(text) = named(after.get(..=run)?)
+    {
+        out.push_str(text);
+        return Some(run + 1);
+    }
+    // A name a browser still reads without `;`, the longest; in an attribute not before `=`, a letter or a digit.
+    let len = (1..=run.min(LONGEST_LEGACY)).rev().find(|&n| after.get(..n).and_then(named).is_some())?;
+    if bytes.get(len).is_some_and(|&b| b == b'=' || b.is_ascii_alphanumeric()) {
+        return None;
+    }
+    out.push_str(named(after.get(..len)?)?);
+    Some(len)
 }
 
 /// A stylesheet's `url(…)` and `@import "…"` rewritten, and the URLs met; `dir` is the stylesheet's own directory.
@@ -841,6 +863,31 @@ mod tests {
         let r = html(r#"<a href="entry://caf&eacute;">x</a><a href="entry://a&nbsp;b">y</a>"#, BASE);
         let queries: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
         assert_eq!(queries, ["café", "a\u{a0}b"].map(|q| Link::Lookup { query: q.into(), anchor: None }), "{}", r.text);
+    }
+
+    /// An attribute's references decode as HTML's tokeniser decodes them: every name of the standard's table,
+    /// the longest that matches, a name without `;` only where history allows it (not before `=` or a letter or
+    /// digit), and numbers with their replacements.
+    #[test]
+    fn references_decode_as_a_browser_decodes_them() {
+        for (written, decoded) in [
+            ("a&colon;b", "a:b"),
+            ("&NotEqualTilde;", "\u{2242}\u{338}"),
+            ("caf&eacute", "café"),
+            ("&notit;", "&notit;"),
+            ("&not.", "¬."),
+            ("a?x=1&copy=2", "a?x=1&copy=2"),
+            ("a&copy2", "a&copy2"),
+            ("&amp;&AMP;&ampx", "&&&ampx"),
+            ("a&#58b", "a:b"),
+            ("&#150;", "\u{2013}"),
+            ("&#x80;", "\u{20ac}"),
+            ("a&#0;&#xD800;&#x110000;&#99999999999999999999;", "a\u{fffd}\u{fffd}\u{fffd}\u{fffd}"),
+            ("&#;&#x;&#xg;", "&#;&#x;&#xg;"),
+            ("&CounterClockwiseContourIntegral;", "\u{2233}"),
+        ] {
+            assert_eq!(unescape(written), decoded, "{written}");
+        }
     }
 
     /// A value of many `&` and no `;` decodes in one pass.
