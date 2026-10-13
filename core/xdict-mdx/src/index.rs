@@ -179,6 +179,12 @@ impl Rules {
     pub(crate) fn fold<'a>(&self, key: &'a str) -> Cow<'a, str> {
         fold(key, self.case_sensitive, self.strip)
     }
+
+    /// [`Self::fold`]'s text appended to `out`, reserved fallibly: how an index build folds, so that one long
+    /// key's folding is an error it can return, not an allocation that aborts.
+    fn fold_into(&self, key: &str, out: &mut Vec<u8>) -> Result<(), Error> {
+        crate::text::fold_into(key, self.case_sensitive, self.strip, out).map_err(crate::out_of_memory)
+    }
 }
 
 impl KeyList for Keys {
@@ -277,21 +283,21 @@ struct Folded {
 }
 
 impl Folded {
-    /// The text is reserved once, at most what folding can make it: an ASCII key never grows, so only the
-    /// others are folded to be measured first (0.6 % of TLD's keys).
+    /// The text is measured first and reserved once, exactly, then each key is folded straight into it: no key's
+    /// folding is held as a string of its own.
     fn of(keys: &Keys, rules: Rules) -> Result<Self, Error> {
         let n = keys.starts.len();
         let mut room = 0usize;
         for i in 0..n {
-            let key = keys.key(i)?;
-            room += if key.is_ascii() { key.len() } else { rules.fold(key).len() };
+            let len = crate::text::fold_len(keys.key(i)?, rules.case_sensitive, rules.strip);
+            room = room.checked_add(len).ok_or_else(too_large)?;
         }
         let mut folded = Self { text: Vec::new(), at: Vec::new() };
         folded.text.try_reserve_exact(room).map_err(crate::out_of_memory)?;
         folded.at.try_reserve_exact(n + 1).map_err(crate::out_of_memory)?;
         folded.at.push(0);
         for i in 0..n {
-            folded.text.extend_from_slice(rules.fold(keys.key(i)?).as_bytes());
+            rules.fold_into(keys.key(i)?, &mut folded.text)?;
             folded.at.push(u32::try_from(folded.text.len()).map_err(|_| too_large())?);
         }
         Ok(folded)
@@ -318,23 +324,16 @@ impl Folded {
 /// the tier-1 folding is held, comparing with each such key's tier-1 form folded again; their tier-2 forms are
 /// kept in one text, not a string each, sorted stably so ties stay in file order. The text and its entries are
 /// measured in a first pass and reserved exactly, so neither grows by doubling past what `keys::cost_of` counts.
+/// Each key's two foldings go into two buffers used again for every key, reserved fallibly: at most three times
+/// the longest key each, which `keys::scratch_cost` counts.
 fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32>, Error> {
     let count = u32::try_from(keys.starts.len()).map_err(|_| too_large())?;
-    // Key `i`'s tier-2 form, where tier 2 changes it.
-    let tier2_of = |i: u32| -> Result<Option<String>, Error> {
-        let k = keys.key(i as usize)?;
-        let plain = derive.unmark(k);
-        if plain.as_ref() == k {
-            return Ok(None);
-        }
-        let tier2 = rules.fold(&plain);
-        Ok((tier2 != rules.fold(k)).then(|| tier2.into_owned()))
-    };
+    let mut scratch = Tier2 { form: Vec::new(), tier1: Vec::new() };
     let (mut entries, mut bytes) = (0usize, 0usize);
     for i in 0..count {
-        if let Some(tier2) = tier2_of(i)? {
+        if scratch.changes(keys, rules, derive, i)? {
             entries += 1;
-            bytes = bytes.checked_add(tier2.len()).ok_or_else(too_large)?;
+            bytes = bytes.checked_add(scratch.form.len()).ok_or_else(too_large)?;
         }
     }
     let mut text: Vec<u8> = Vec::new();
@@ -342,12 +341,12 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32
     text.try_reserve_exact(bytes).map_err(crate::out_of_memory)?;
     changed.try_reserve_exact(entries).map_err(crate::out_of_memory)?;
     for i in 0..count {
-        if let Some(tier2) = tier2_of(i)? {
-            if changed.len() == entries || text.len() + tier2.len() > bytes {
+        if scratch.changes(keys, rules, derive, i)? {
+            if changed.len() == entries || text.len() + scratch.form.len() > bytes {
                 return Err(Error::Malformed("a key's tier-2 form changed between two readings".into()));
             }
             let from = u32::try_from(text.len()).map_err(|_| too_large())?;
-            text.extend_from_slice(tier2.as_bytes());
+            text.extend_from_slice(&scratch.form);
             changed.push((from, u32::try_from(text.len()).map_err(|_| too_large())?, i));
         }
     }
@@ -357,6 +356,30 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32
     order.try_reserve_exact(changed.len()).map_err(crate::out_of_memory)?;
     order.extend(changed.into_iter().map(|(_, _, i)| i));
     Ok(order)
+}
+
+/// The two foldings `tier2_order` compares for one key at a time, in buffers it uses again for every key.
+struct Tier2 {
+    /// The key's tier-2 form: its unmarked spelling folded.
+    form: Vec<u8>,
+    /// The key itself folded: its tier-1 form.
+    tier1: Vec<u8>,
+}
+
+impl Tier2 {
+    /// Whether tier 2 changes key `i`, its tier-2 form left in `form` when it does.
+    fn changes(&mut self, keys: &Keys, rules: Rules, derive: &dyn Derive, i: u32) -> Result<bool, Error> {
+        let k = keys.key(i as usize)?;
+        let plain = derive.unmark(k);
+        if plain.as_ref() == k {
+            return Ok(false);
+        }
+        self.form.clear();
+        rules.fold_into(&plain, &mut self.form)?;
+        self.tier1.clear();
+        rules.fold_into(k, &mut self.tier1)?;
+        Ok(self.form != self.tier1)
+    }
 }
 
 /// One bit per key, set for the keys `derive` leaves public.
