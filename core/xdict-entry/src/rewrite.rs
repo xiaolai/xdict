@@ -256,7 +256,8 @@ fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
 fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: &str, out: &mut Out) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
-    if lower == "srcset" && matches!(local.as_str(), "img" | "source") {
+    if (lower == "srcset" && matches!(local.as_str(), "img" | "source")) || (lower == "imagesrcset" && local == "link")
+    {
         let decoded = unescape(value);
         let rewritten = srcset(&decoded, base, out);
         return if rewritten == decoded { value.to_owned() } else { escaped(&rewritten, quote.unwrap_or('"')) };
@@ -375,57 +376,151 @@ pub fn css_text(text: &str, base: &str, dir: &str) -> String {
 
 fn css_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
     let mut out = Out::new(text.len(), collect);
-    let mut rest = text;
-    // Strings and comments are copied whole, so a `url(` written inside one stays text.
-    while let Some((at, which)) = first_of(rest, &["url(", "@import", "/*", "\"", "'"]) {
-        if which >= 2 {
-            let opened = rest.get(at..).unwrap_or("");
-            let len = match which {
-                2 => opened.get(2..).and_then(|c| c.find("*/")).map_or(opened.len(), |e| e + 4),
-                _ => opened
-                    .get(1..)
-                    .map_or(opened.len(), |body| string_end(body, if which == 3 { '"' } else { '\'' }) + 2),
-            };
-            let len = len.min(opened.len());
-            out.text.push_str(rest.get(..at + len).unwrap_or(rest));
-            rest = rest.get(at + len..).unwrap_or("");
-            continue;
-        }
-        let is_url = which == 0;
-        let skip = if is_url { 4 } else { 7 };
-        out.text.push_str(rest.get(..at + skip).unwrap_or(""));
-        let after = rest.get(at + skip..).unwrap_or("");
-        let value_from = after.trim_start();
-        out.text.push_str(after.get(..after.len() - value_from.len()).unwrap_or(""));
-        let (quote, written, tail) = match value_from.chars().next() {
-            Some(q @ ('"' | '\'')) => {
-                let body = value_from.get(1..).unwrap_or("");
-                let end = string_end(body, q);
-                (Some(q), body.get(..end).unwrap_or(""), body.get(end + 1..).unwrap_or(""))
+    let bytes = text.as_bytes();
+    // Read as CSS's tokeniser reads it (css-syntax §4), so that what is a URL here is what a browser fetches:
+    // comments and strings are text, an escaped character is part of a name, `url(` is a function whose name
+    // decodes to `url`, and an image function's strings are images. `copied` is how much of `text` is written.
+    let (mut i, mut copied) = (0, 0);
+    // For each open parenthesis, whether its function fetches its strings.
+    let mut parens: Vec<bool> = Vec::new();
+    // Since `@import`, until its next token: a string there is the imported sheet.
+    let mut importing = false;
+    while let Some(&b) = bytes.get(i) {
+        match b {
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i = text.get(i + 2..).and_then(|r| r.find("*/")).map_or(text.len(), |e| i + 2 + e + 2);
             }
-            // `@import url(…)` is met as `url(` next time round.
-            _ if !is_url => {
-                rest = value_from;
-                continue;
+            b'"' | b'\'' => {
+                let body = text.get(i + 1..).unwrap_or("");
+                let end = string_end(body, char::from(b));
+                let next = (i + 1 + end + 1).min(text.len());
+                if importing || parens.last() == Some(&true) {
+                    out.text.push_str(text.get(copied..i).unwrap_or(""));
+                    write_url(&mut out, body.get(..end).unwrap_or(""), char::from(b), base, dir);
+                    copied = next;
+                }
+                importing = false;
+                i = next;
+            }
+            b'(' => {
+                parens.push(false);
+                importing = false;
+                i += 1;
+            }
+            b')' => {
+                parens.pop();
+                importing = false;
+                i += 1;
+            }
+            b'@' => {
+                let (name, len) = name_at(text, i + 1);
+                importing = name.eq_ignore_ascii_case("import");
+                i += 1 + len;
+            }
+            _ if b.is_ascii_digit() || starts_name(text, i) => {
+                importing = false;
+                let (name, len) = name_at(text, i);
+                let open = i + len.max(1);
+                i = open;
+                if b.is_ascii_digit() || bytes.get(open) != Some(&b'(') {
+                    continue;
+                }
+                if !name.eq_ignore_ascii_case("url") {
+                    parens.push(IMAGE_FUNCTIONS.iter().any(|f| name.eq_ignore_ascii_case(f)));
+                    i = open + 1;
+                    continue;
+                }
+                // `url(`: whitespace, then a string or an unquoted URL; its `)` is met as any other.
+                parens.push(false);
+                let inner = text.get(open + 1..).unwrap_or("");
+                let value_from = inner.trim_start();
+                let start = open + 1 + (inner.len() - value_from.len());
+                out.text.push_str(text.get(copied..start).unwrap_or(""));
+                match value_from.chars().next() {
+                    Some(q @ ('"' | '\'')) => {
+                        let body = value_from.get(1..).unwrap_or("");
+                        let end = string_end(body, q);
+                        write_url(&mut out, body.get(..end).unwrap_or(""), q, base, dir);
+                        copied = (start + 1 + end + 1).min(text.len());
+                    }
+                    _ => {
+                        // Unquoted, it runs to `)`; the spaces before it are dropped with the quotes added.
+                        let end = string_end(value_from, ')');
+                        write_url(&mut out, value_from.get(..end).unwrap_or("").trim_end(), '"', base, dir);
+                        copied = start + end;
+                    }
+                }
+                i = copied;
             }
             _ => {
-                let end = string_end(value_from, ')');
-                (None, value_from.get(..end).unwrap_or("").trim_end(), value_from.get(end..).unwrap_or(""))
+                importing &= b.is_ascii_whitespace();
+                i += 1;
             }
-        };
-        let value = css_unescape(written);
-        let (to, link) = literal(&value, base, dir);
-        if let Some(link) = link {
-            out.link(value, link);
         }
-        let q = quote.unwrap_or('"');
-        out.text.push(q);
-        out.text.push_str(to.as_deref().unwrap_or(written));
-        out.text.push(q);
-        rest = tail;
     }
-    out.text.push_str(rest);
+    out.text.push_str(text.get(copied..).unwrap_or(""));
     out
+}
+
+/// The functions whose string arguments a browser fetches as images (css-images-4).
+const IMAGE_FUNCTIONS: [&str; 3] = ["image-set", "-webkit-image-set", "image"];
+
+/// A URL a stylesheet wrote (`written`, its escapes undecoded), rewritten and written between `quote`s.
+fn write_url(out: &mut Out, written: &str, quote: char, base: &str, dir: &str) {
+    let value = css_unescape(written);
+    let (to, link) = literal(&value, base, dir);
+    if let Some(link) = link {
+        out.link(value, link);
+    }
+    out.text.push(quote);
+    out.text.push_str(to.as_deref().unwrap_or(written));
+    out.text.push(quote);
+}
+
+/// Whether a CSS name starts at `at`: a letter, `_`, `-`, any non-ASCII character, or an escape.
+fn starts_name(text: &str, at: usize) -> bool {
+    let bytes = text.as_bytes();
+    match bytes.get(at) {
+        Some(b'\\') => bytes.get(at + 1).is_some_and(|&b| b != b'\n'),
+        Some(&b) => b.is_ascii_alphabetic() || b == b'_' || b == b'-' || b >= 0x80,
+        None => false,
+    }
+}
+
+/// The name starting at `at`, decoded, and how many bytes it is written in: name characters (letters, digits,
+/// `_`, `-`, non-ASCII) and escapes.
+fn name_at(text: &str, at: usize) -> (String, usize) {
+    let rest = text.get(at..).unwrap_or("");
+    let mut chars = rest.char_indices().peekable();
+    let mut len = 0;
+    while let Some((i, c)) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some((_, '\n')) | None => break,
+                Some((j, e)) if e.is_ascii_hexdigit() => {
+                    let mut end = j + 1;
+                    let mut digits = 1;
+                    while digits < 6 && chars.peek().is_some_and(|(_, h)| h.is_ascii_hexdigit()) {
+                        end += 1;
+                        digits += 1;
+                        chars.next();
+                    }
+                    if chars.peek().is_some_and(|(_, w)| w.is_ascii_whitespace()) {
+                        end += 1;
+                        chars.next();
+                    }
+                    len = end;
+                }
+                Some((j, e)) => len = j + e.len_utf8(),
+            }
+            continue;
+        }
+        if !(c.is_ascii_alphanumeric() || c == '_' || c == '-' || !c.is_ascii()) {
+            break;
+        }
+        len = i + c.len_utf8();
+    }
+    (css_unescape(rest.get(..len).unwrap_or("")), len)
 }
 
 /// Where `close` ends `body`, a backslash escaping the character after it; the end of `body` if nothing does. A
@@ -626,6 +721,39 @@ mod tests {
         assert_eq!(r.links.len(), 1, "{:?}", r.links);
         let r = css("a { content: 'unclosed }\nb { background: url(e.png) }", BASE, "");
         assert_eq!(r.links.len(), 1, "a string ends at its line, as CSS tokenises it: {}", r.text);
+    }
+
+    /// Every way CSS can name a remote URL is blocked, read as CSS's tokeniser reads it: an escaped quote or
+    /// slash starts no string or comment, an escaped `url` is still `url(`, and image functions fetch their strings.
+    #[test]
+    fn no_remote_url_hides_from_the_css_scanner() {
+        let remote = "https://evil.example/x";
+        for sheet in [
+            format!(r#"a{{b:\"}} c{{background:url({remote})}} d{{e:"}}"#),
+            format!(r#"a{{b:\/*}} c{{background:url({remote})}} d{{e:*/}}"#),
+            format!(r#"b{{background:u\72 l({remote})}}"#),
+            format!(r#"b{{background:\75rl("{remote}")}}"#),
+            format!(r#"b{{background-image:image-set("{remote}" 1x, url(a.png) 2x)}}"#),
+            format!(r#"b{{background-image:-webkit-image-set('{remote}' 1x)}}"#),
+            format!(r#"@import "{remote}";"#),
+            format!(r#"@im\70 ort '{remote}';"#),
+        ] {
+            let r = css(&sheet, BASE, "");
+            assert!(!r.text.contains(remote), "{sheet} → {}", r.text);
+            assert!(
+                r.links.iter().any(|w| matches!(&w.link, Link::Blocked(Block::Remote { url }) if url == remote)),
+                "{sheet}: {:?}",
+                r.links
+            );
+        }
+    }
+
+    /// Only a function named `url` is a URL: `myurl(` is another function.
+    #[test]
+    fn only_the_url_function_is_a_url() {
+        let r = css("b { x: myurl(a.png); y: url(b.png) }", BASE, "");
+        assert!(r.text.contains("myurl(a.png)"), "{}", r.text);
+        assert_eq!(r.links.len(), 1, "{:?}", r.links);
     }
 
     /// CSS escapes name the characters they stand for, and an escaped quote does not end a string.
