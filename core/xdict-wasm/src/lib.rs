@@ -71,11 +71,19 @@ impl<T: Clone> Table<T> {
         Self { next: 0, items: HashMap::new() }
     }
 
-    /// A new entry with one owner, the caller.
-    fn insert(&mut self, item: T) -> u32 {
-        self.next = self.next.wrapping_add(1);
-        self.items.insert(self.next, (item, 1));
-        self.next
+    /// A new entry with one owner, the caller, under a number no live entry has (never 0); `None` when every
+    /// number is in use. The counter wraps, so a number is found by moving past those still held.
+    fn insert(&mut self, item: T) -> Option<u32> {
+        if self.items.len() >= u32::MAX as usize {
+            return None;
+        }
+        loop {
+            self.next = self.next.wrapping_add(1);
+            if self.next != 0 && !self.items.contains_key(&self.next) {
+                self.items.insert(self.next, (item, 1));
+                return Some(self.next);
+            }
+        }
     }
 
     /// One more owner of `id`; false if there is no such entry.
@@ -186,7 +194,7 @@ impl core::IndexStorage for Storage {
         if found.is_null() || found.is_undefined() {
             return Ok(None);
         }
-        Ok(Some(Arc::new(IndexSource(Source::adopt(found.unchecked_into())))))
+        Ok(Some(Arc::new(IndexSource(Source::adopt(found.unchecked_into())?))))
     }
     fn put(&self, name: &str, bytes: Vec<u8>) -> Result<(), CoreError> {
         self.handle()?.put(name, bytes).map_err(|e| storage_error("write", &e))
@@ -218,8 +226,8 @@ impl Source {
     }
 
     /// A source the binding registers itself, with this as its only owner.
-    fn adopt(handle: JsByteSource) -> Source {
-        Source(SOURCES.with(|table| table.borrow_mut().insert(handle)))
+    fn adopt(handle: JsByteSource) -> Result<Source, CoreError> {
+        SOURCES.with(|table| table.borrow_mut().insert(handle)).map(Source).ok_or_else(|| exhausted("sources"))
     }
 
     fn handle(&self) -> Option<JsByteSource> {
@@ -263,6 +271,11 @@ impl Drop for Source {
     fn drop(&mut self) {
         release_source(self.0);
     }
+}
+
+/// Every number of a table is in use.
+fn exhausted(what: &str) -> CoreError {
+    CoreError::Io { kind: core::IoKind::OutOfMemory, detail: format!("no number is left for more {what}") }
 }
 
 fn gone() -> CoreError {
@@ -383,8 +396,8 @@ pub fn release_source(id: u32) {
 /// Registers a source; the number goes into a location's JSON as `sourceId`. The shell owns the registration
 /// until it calls `releaseSource`.
 #[wasm_bindgen(js_name = registerSource)]
-pub fn register_source(source: JsByteSource) -> u32 {
-    SOURCES.with(|table| table.borrow_mut().insert(source))
+pub fn register_source(source: JsByteSource) -> Result<u32, String> {
+    SOURCES.with(|table| table.borrow_mut().insert(source)).ok_or_else(|| to_json(&exhausted("sources")))
 }
 
 #[wasm_bindgen(js_name = versions)]
@@ -466,7 +479,8 @@ impl Core {
         let config: core::Config = from_json(config)?;
         let made = match storage {
             Some(storage) => {
-                let storage = Storage(STORAGE.with(|table| table.borrow_mut().insert(storage)));
+                let id = STORAGE.with(|table| table.borrow_mut().insert(storage));
+                let storage = Storage(id.ok_or_else(|| to_json(&exhausted("index storages")))?);
                 core::Core::with_index_storage(config, Arc::new(storage))
             }
             None => core::Core::new(config),
@@ -476,7 +490,13 @@ impl Core {
 
     pub fn import(&self, package: &str, progress: Option<JsProgress>) -> Reply {
         let package = package_from(&from_json::<Value>(package)?)?;
-        let progress = Progress(progress.map(|p| PROGRESS.with(|table| table.borrow_mut().insert(p))));
+        let progress = match progress {
+            Some(p) => Some(
+                PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("imports")))?,
+            ),
+            None => None,
+        };
+        let progress = Progress(progress);
         // A source that throws when first asked fails the import here, before the core registers anything.
         let (pinned, checked) = watched(|| Pinned::package(&package));
         checked?;
@@ -597,8 +617,21 @@ fn package_from(value: &Value) -> Result<core::Package, String> {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    /// A number still in use is never handed out again: when the counter wraps, the new entry takes a free one.
+    #[test]
+    fn a_wrapped_handle_never_replaces_a_live_one() {
+        let mut table = Table::new();
+        let first = table.insert('a').unwrap();
+        table.next = u32::MAX - 1;
+        let later: Vec<u32> = ['b', 'c', 'd'].into_iter().map(|item| table.insert(item).unwrap()).collect();
+        assert_eq!(table.get(first), Some('a'));
+        assert!(!later.contains(&first) && !later.contains(&0), "{later:?}");
+        assert_eq!(later.iter().map(|&id| table.get(id).unwrap()).collect::<String>(), "bcd");
+    }
 
     #[test]
     fn a_package_list_that_is_not_a_list_is_refused() {
@@ -626,7 +659,7 @@ mod tests {
     #[test]
     fn a_table_entry_goes_with_its_last_owner() {
         let mut table = Table::new();
-        let id = table.insert("source");
+        let id = table.insert("source").unwrap();
         assert!(table.claim(id));
         assert!(!table.release(id), "one owner is left");
         assert_eq!(table.get(id), Some("source"));
