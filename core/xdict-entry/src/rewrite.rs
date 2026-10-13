@@ -263,11 +263,8 @@ fn unescape(value: &str) -> String {
 pub fn css(text: &str, base: &str, dir: &str) -> Rewritten {
     let mut out = Rewritten { text: String::with_capacity(text.len()), links: Vec::new() };
     let mut rest = text;
-    loop {
-        let url_at = find_ignore_case(rest, "url(");
-        let import_at = find_ignore_case(rest, "@import");
-        let Some(at) = [url_at, import_at].into_iter().flatten().min() else { break };
-        let is_url = url_at == Some(at);
+    while let Some((at, which)) = first_of(rest, &["url(", "@import"]) {
+        let is_url = which == 0;
         let skip = if is_url { 4 } else { 7 };
         out.text.push_str(rest.get(..at + skip).unwrap_or(""));
         let after = rest.get(at + skip..).unwrap_or("");
@@ -310,9 +307,8 @@ pub fn script(text: &str, base: &str) -> Rewritten {
         [("entry://", ENTRY), ("bword://", ENTRY), ("sound://", SOUND), ("gdau://", SOUND)];
     let mut out = String::with_capacity(text.len());
     let mut rest = text;
-    loop {
-        let next = PREFIXES.iter().filter_map(|&(p, route)| find_ignore_case(rest, p).map(|at| (at, p, route))).min();
-        let Some((at, prefix, route)) = next else { break };
+    while let Some((at, which)) = first_of(rest, &PREFIXES.map(|(p, _)| p)) {
+        let Some(&(prefix, route)) = PREFIXES.get(which) else { break };
         out.push_str(rest.get(..at).unwrap_or(""));
         out.push_str(base);
         out.push_str(route);
@@ -323,11 +319,20 @@ pub fn script(text: &str, base: &str) -> Rewritten {
 }
 
 fn find_ignore_case(haystack: &str, needle: &str) -> Option<usize> {
-    let (h, n) = (haystack.as_bytes(), needle.as_bytes());
-    if n.is_empty() || h.len() < n.len() {
-        return None;
-    }
-    (0..=h.len() - n.len()).find(|&i| h.get(i..i + n.len()).is_some_and(|w| w.eq_ignore_ascii_case(n)))
+    first_of(haystack, &[needle]).map(|(at, _)| at)
+}
+
+/// The first place any of `needles` (ASCII, compared ignoring case) starts, and which one. One forward pass that
+/// stops there, so a caller resuming after each match reads its text once in all.
+fn first_of(haystack: &str, needles: &[&str]) -> Option<(usize, usize)> {
+    let h = haystack.as_bytes();
+    (0..h.len()).find_map(|i| {
+        let tail = h.get(i..)?;
+        needles
+            .iter()
+            .position(|n| tail.get(..n.len()).is_some_and(|w| !n.is_empty() && w.eq_ignore_ascii_case(n.as_bytes())))
+            .map(|which| (i, which))
+    })
 }
 
 #[cfg(test)]
@@ -407,5 +412,18 @@ mod tests {
     fn a_stylesheet_resolves_against_itself() {
         let r = css("@font-face { src: url(../fonts/a.woff2) }", BASE, "styles");
         assert!(r.text.contains(r#"url("xdict://d/r/fonts/a.woff2")"#), "{}", r.text);
+    }
+
+    /// Each match is found once: searching the rest for every needle at every match made a large script or
+    /// stylesheet quadratic, and a dictionary's resource can be 64 MiB.
+    #[test]
+    fn many_matches_are_rewritten_in_one_pass() {
+        let n = 40_000;
+        let started = std::time::Instant::now();
+        let r = script(&"location='entry://a';".repeat(n), BASE);
+        assert_eq!(r.text.matches("xdict://d/entry/a").count(), n);
+        let r = css(&"b{background:url(a.png)}".repeat(n), BASE, "");
+        assert_eq!(r.links.len(), n);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1), "took {:?}", started.elapsed());
     }
 }
