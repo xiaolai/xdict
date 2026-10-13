@@ -224,18 +224,8 @@ fn tag<'a>(from: &'a str, base: &str, out: &mut Out) -> Option<(String, &'a str)
         out.text.push('=');
         let value_from = after_eq.trim_start();
         out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
-        let (quote, value, after) = match value_from.chars().next() {
-            Some(q @ ('"' | '\'')) => {
-                let body = value_from.get(1..)?;
-                let end = body.find(q).unwrap_or(body.len());
-                (Some(q), body.get(..end)?, body.get(end + 1..).unwrap_or(""))
-            }
-            _ => {
-                let end = value_from.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(value_from.len());
-                (None, value_from.get(..end)?, value_from.get(end..)?)
-            }
-        };
-        let new = attribute(&name, attr, value, base, out);
+        let (quote, value, after) = attribute_value(value_from)?;
+        let new = attribute(&name, attr, value, quote, base, out);
         // Written as found unless it changed; a changed value is quoted.
         let q = if new == value { quote } else { Some(quote.unwrap_or('"')) };
         out.text.extend(q);
@@ -245,9 +235,25 @@ fn tag<'a>(from: &'a str, base: &str, out: &mut Out) -> Option<(String, &'a str)
     }
 }
 
+/// An attribute's value as HTML delimits it: its quote, the value as written, and what follows it.
+fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
+    match from.chars().next() {
+        Some(q @ ('"' | '\'')) => {
+            let body = from.get(1..)?;
+            let end = body.find(q).unwrap_or(body.len());
+            Some((Some(q), body.get(..end)?, body.get(end + 1..).unwrap_or("")))
+        }
+        _ => {
+            let end = from.find(|c: char| c.is_whitespace() || c == '>').unwrap_or(from.len());
+            Some((None, from.get(..end)?, from.get(end..)?))
+        }
+    }
+}
+
 /// An attribute's value, rewritten if it holds URLs. The value is written back as it was unless it changes; a
-/// changed URL holds only characters that need no escaping.
-fn attribute(element: &str, name: &str, value: &str, base: &str, out: &mut Out) -> String {
+/// changed URL holds only characters that need no escaping, and changed text is escaped for `quote` (an unquoted
+/// value is quoted with `"` when it changes).
+fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: &str, out: &mut Out) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
@@ -261,15 +267,22 @@ fn attribute(element: &str, name: &str, value: &str, base: &str, out: &mut Out) 
     }
     match lower.as_str() {
         "style" => {
-            let Out { text, links } = css_out(value, base, "", out.collects());
+            let decoded = unescape(value);
+            let Out { text, links } = css_out(&decoded, base, "", out.collects());
             if let (Some(all), Some(more)) = (&mut out.links, links) {
                 all.extend(more);
             }
-            text
+            if text == decoded { value.to_owned() } else { escaped(&text, quote.unwrap_or('"')) }
         }
         _ if lower.starts_with("on") => script(value, base).text,
         _ => value.to_owned(),
     }
+}
+
+/// `text` as an attribute value delimited by `quote`: `&` and the quote escaped.
+fn escaped(text: &str, quote: char) -> String {
+    let as_reference = if quote == '"' { "&quot;" } else { "&#39;" };
+    text.replace('&', "&amp;").replace(quote, as_reference)
 }
 
 /// The character references a URL in an attribute is likely to hold.
@@ -479,6 +492,16 @@ mod tests {
     fn a_stylesheet_resolves_against_itself() {
         let r = css("@font-face { src: url(../fonts/a.woff2) }", BASE, "styles");
         assert!(r.text.contains(r#"url("xdict://d/r/fonts/a.woff2")"#), "{}", r.text);
+    }
+
+    /// A rewritten inline style stays inside its attribute, whatever quote the attribute uses.
+    #[test]
+    fn an_inline_style_is_escaped_for_its_attribute() {
+        let r =
+            html(r#"<b style="background:url(a.png)">x</b><i style='background:url(&quot;b.png&quot;)'>y</i>"#, BASE);
+        assert!(r.text.contains(r#"style="background:url(&quot;xdict://d/r/a.png&quot;)""#), "{}", r.text);
+        assert!(r.text.contains(r#"style='background:url("xdict://d/r/b.png")'"#), "{}", r.text);
+        assert_eq!(r.links.len(), 2, "{:?}", r.links);
     }
 
     /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
