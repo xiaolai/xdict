@@ -1,0 +1,17 @@
+[package]
+name = "xdict-mdx-writer"
+description = "Writes MDX and MDD files for tests. Never shipped."
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+flate2.workspace = true
+ripemd.workspace = true
+thiserror.workspace = true
+xxhash-rust.workspace = true
+
+[lints]
+workspace = true

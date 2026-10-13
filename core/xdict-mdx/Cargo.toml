@@ -1,0 +1,22 @@
+[package]
+name = "xdict-mdx"
+description = "A clean-room reader for MDict MDX and MDD files"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+encoding_rs.workspace = true
+flate2.workspace = true
+ripemd.workspace = true
+thiserror.workspace = true
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+serde_json = "=1.0.154"
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
+[lints]
+workspace = true
