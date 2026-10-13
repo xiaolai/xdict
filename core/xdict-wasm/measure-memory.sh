@@ -1,6 +1,7 @@
 #!/bin/sh
 # ADR-0007 refutation 24: peak memory of import, entry() and resource() on memory-fixture's dictionary, through
-# the Web binding (Node 24, wasm-bindgen 0.2.129). Each step runs in its own process, so each peak is that step's.
+# the Web binding inside a Node Worker, as the Web shell runs the core (Node 24, wasm-bindgen 0.2.129). Each step
+# runs in its own process, so each peak is that step's.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 core=$(cd "$here/.." && pwd)
