@@ -25,6 +25,9 @@ pub const MAX_PAGE: u32 = 1_000;
 /// The scheme version an edition is written with (ADR-0002 decision 1).
 pub const EDITION_SCHEME: &str = "mdx-sha256-v1:";
 
+/// The largest resource the core serves: one block of the reader's, the most an MDD record can be.
+pub const MAX_RESOURCE_BYTES: u64 = xdict_mdx::limits::BLOCK_BYTES;
+
 /// How much of a file one read takes during import.
 const IMPORT_CHUNK: u64 = 4 << 20;
 
@@ -311,6 +314,13 @@ impl Core {
             for (name, sidecar) in &opened.sidecars {
                 if name.eq_ignore_ascii_case(&path) {
                     sidecar.unchanged()?;
+                    let size = sidecar.source.len();
+                    if size > MAX_RESOURCE_BYTES {
+                        return Err(CoreError::TooLarge {
+                            limit: Limit::Body,
+                            detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
+                        });
+                    }
                     let mut bytes = Vec::new();
                     read_all(&*sidecar.source, IMPORT_CHUNK, |chunk, _, _| {
                         bytes.extend_from_slice(chunk);
@@ -552,7 +562,7 @@ impl SplitMix {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::indexing_slicing)]
+#[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
 
@@ -580,6 +590,55 @@ mod tests {
         ] {
             assert!(remote(url), "{url:?} was classified {:?}", classify(url));
         }
+    }
+
+    /// A source that claims a size and refuses to be read.
+    struct Huge;
+
+    impl crate::ByteSource for Huge {
+        fn size(&self) -> u64 {
+            1 << 40
+        }
+        fn read_at(&self, _: u64, _: u32) -> Result<Vec<u8>, CoreError> {
+            Err(CoreError::internal("a resource over the limit was read"))
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            None
+        }
+    }
+
+    struct Fixed(Vec<u8>);
+
+    impl crate::ByteSource for Fixed {
+        fn size(&self) -> u64 {
+            self.0.len() as u64
+        }
+        fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+            Ok(self.0[offset as usize..offset as usize + len as usize].to_vec())
+        }
+        fn identity(&self) -> Option<FileIdentity> {
+            Some(FileIdentity { device: 1, inode: 1, size: self.0.len() as u64, mtime_ns: 0, ctime_ns: 0 })
+        }
+    }
+
+    fn view() -> View {
+        View { base_url: "xdict://d/".into(), skin: None, max_body_bytes: 1 << 20 }
+    }
+
+    /// The limit is checked against the size the source declares, before anything is read or allocated.
+    #[test]
+    fn a_resource_over_the_limit_is_refused_before_it_is_read() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let mdx = Location::Source {
+            name: "a.mdx".into(),
+            source: Arc::new(Fixed(write(&Spec::mdx(), &[W::text("a", "b")]).unwrap())),
+        };
+        let huge = Location::Source { name: "huge.css".into(), source: Arc::new(Huge) };
+        core.import(Package { mdx: mdx.clone(), mdd: vec![], sidecars: vec![huge] }, &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(mdx).unwrap() else { panic!("not open") };
+        let refused = core.resource(dict, "huge.css".into(), view());
+        assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{refused:?}");
     }
 
     #[test]
