@@ -271,6 +271,30 @@ attempt('web.reentrantProgress', () => {
   check('web.reentrantProgress.outerStillWatched', true, after > 0);
 });
 
+// A callback that throws fails the call it threw in, whichever call that is: `size()` and `identity()` cannot
+// return an error to the core, so the binding checks after every call. (After the re-entrant checks: importing
+// another tiny.mdx moves the name on, and those open the one imported before them.)
+const cssBytes = readFileSync(join(fixtures, 'tiny.css'));
+const cssAt = (n: bigint): FileIdentity => ({ device: 9n, inode: 90n + n, size: BigInt(cssBytes.length), mtimeNs: n, ctimeNs: n });
+/** A package of tiny.mdx and a tiny.css sidecar whose `size()` or `identity()` throws once `broken` is set. */
+const withSidecar = (n: bigint, breaks: 'size' | 'identity') => {
+  const state = { broken: false };
+  const sidecar = Object.assign(new Bytes(cssBytes, cssAt(n)), {
+    size: () => { if (state.broken && breaks === 'size') throw new Error('size failed'); return cssBytes.length; },
+    identity: () => { if (state.broken && breaks === 'identity') throw new Error('identity failed'); return cssAt(n); },
+  });
+  const pkg: Package = { ...only(src(at(n))), sidecars: [{ type: 'source', name: 'tiny.css', source: sidecar }] };
+  return { pkg, state };
+};
+attempt('web.throwingIdentityOnOpen', () => {
+  const { pkg, state } = withSidecar(12n, 'identity');
+  c3.import(pkg);
+  const before = tables().sources;
+  state.broken = true;
+  check('web.throwingIdentityOnOpen', { error: { type: 'io' } }, outcome(() => c3.open(pkg)));
+  check('web.throwingIdentityOnOpen.nothingKept', before, tables().sources);
+});
+
 // Counted from here: dictionaries the checks above left open hold their sources, as they should.
 attempt('web.sourcesReleased', () => {
   const before = tables().sources;
