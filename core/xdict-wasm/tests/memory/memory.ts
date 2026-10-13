@@ -58,7 +58,7 @@ if (isMainThread) {
   const opened = core.open(pack);
   if (opened.type !== 'ready') throw new Error('not open');
   const big = { edition: imported.edition, key: 'big', occurrence: 0 };
-  const view = (max: number) => ({ baseUrl: 'xdict://d/', skin: null, maxBodyBytes: max });
+  const view = (max: number) => ({ baseUrl: 'xdict://d/', maxBodyBytes: max });
   const before = { rss: process.resourceUsage().maxRSS * 1024, wasm: memory.buffer.byteLength };
   let size = 0;
   if (step === 'entry') size = core.entry(opened.dict, big, view(128 << 20)).html.length;

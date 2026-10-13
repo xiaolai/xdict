@@ -77,7 +77,7 @@ const big = (i: { device: number; inode: number; size: number; mtimeNs: number; 
 const glueUrl = pathToFileURL(join(pkg, 'xdict_wasm.js')).href;
 const wasm = readFileSync(join(pkg, 'xdict_wasm_bg.wasm'));
 const xd = XDict.load(await import(glueUrl), wasm);
-const view = (max?: number): View => ({ baseUrl: x.view.baseUrl, skin: null, maxBodyBytes: max ?? x.view.maxBodyBytes });
+const view = (max?: number): View => ({ baseUrl: x.view.baseUrl, maxBodyBytes: max ?? x.view.maxBodyBytes });
 const config = (clientProtocol: number) => ({ dataDir: null, cacheDir: null, clientProtocol });
 
 check('versions', x.versions, xd.versions());
@@ -187,7 +187,7 @@ check('web.freshInstance', x.versions, fresh.versions());
 const template = readFileSync(matrixExpected, 'utf8');
 const variants = JSON.parse(readFileSync(join(matrix, 'variants.json'), 'utf8'));
 check('matrix.variants', 32, variants.length);
-const matrixView: View = { baseUrl: 'xdict://d/', skin: null, maxBodyBytes: 1 << 20 };
+const matrixView: View = { baseUrl: 'xdict://d/', maxBodyBytes: 1 << 20 };
 for (const v of variants) {
   const m = JSON.parse(template.replaceAll('$word', v.word).replaceAll('$gloss', v.gloss).replaceAll('$version', v.version));
   const c = fresh.core(config(fresh.protocolVersion()));

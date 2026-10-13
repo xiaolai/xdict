@@ -19,7 +19,7 @@ let package = Package(mdx: .path(path: dir.appendingPathComponent("big.mdx").pat
                       mdd: [.path(path: dir.appendingPathComponent("big.mdd").path)], sidecars: [])
 let imported = try core.import(package: package, progress: nil)
 guard case let .ready(dict, _, _) = try core.open(package: package) else { fatalError("not open") }
-let view = View(baseUrl: "xdict://d/", skin: nil, maxBodyBytes: 128 << 20)
+let view = View(baseUrl: "xdict://d/", maxBodyBytes: 128 << 20)
 let big = EntryRef(edition: imported.edition, key: "big", occurrence: 0)
 let before = peakMiB()
 var size = 0
@@ -29,7 +29,7 @@ case "entry":
     size = try core.entry(dict: dict, entry: big, view: view).html.utf8.count
 case "refused":
     do {
-        _ = try core.entry(dict: dict, entry: big, view: View(baseUrl: "xdict://d/", skin: nil, maxBodyBytes: 64 << 20))
+        _ = try core.entry(dict: dict, entry: big, view: View(baseUrl: "xdict://d/", maxBodyBytes: 64 << 20))
         print("not refused"); exit(1)
     } catch CoreError.TooLarge {}
 case "resource":

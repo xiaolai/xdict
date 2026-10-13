@@ -122,8 +122,6 @@ record! {
     pub struct View {
         /// Every URL the core writes is under it: `xdict://d/` natively, the Worker's own path on the Web.
         pub base_url: String,
-        /// The skin a pack offers, by its stylesheet's name; `None` for the pack's default.
-        pub skin: Option<String>,
         /// The shell's ceiling on one body, within the core's own limit: an entry, or a stylesheet, script or
         /// page it loads, as served rewritten. Images and recordings are held only to the core's limit.
         pub max_body_bytes: u64,

@@ -169,7 +169,7 @@ fun main(args: Array<String>) {
     fun list(v: Any?) = (v as List<Any?>).map { obj(it) }
     fun uint(v: Any?) = (v as java.math.BigDecimal?)?.toInt()?.toUInt()
     val viewSpec = obj(x["view"])
-    fun view(max: ULong? = null) = View(viewSpec["baseUrl"] as String, null, max ?: (viewSpec["maxBodyBytes"] as java.math.BigDecimal).toLong().toULong())
+    fun view(max: ULong? = null) = View(viewSpec["baseUrl"] as String, max ?: (viewSpec["maxBodyBytes"] as java.math.BigDecimal).toLong().toULong())
     fun config(client: UInt) = Config(null, null, client, ByteArray(0))
     fun errorOr(c: Map<String, Any?>, key: String) = if (c.containsKey("error")) mapOf("error" to c["error"]) else c[key]
 
@@ -256,7 +256,7 @@ fun main(args: Array<String>) {
     val template = File(args[3]).readText()
     val variants = list(Json(File(matrixDir, "variants.json").readText()).parse())
     check("matrix.variants", java.math.BigDecimal(32), java.math.BigDecimal(variants.size))
-    val matrixView = View("xdict://d/", null, (1uL shl 20))
+    val matrixView = View("xdict://d/", (1uL shl 20))
     for (v in variants) {
         val name = v["name"] as String
         val text = template.replace("\$word", v["word"] as String).replace("\$gloss", v["gloss"] as String)
