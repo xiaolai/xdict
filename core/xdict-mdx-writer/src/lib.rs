@@ -425,27 +425,26 @@ fn header(spec: &Spec) -> Result<Vec<u8>, WriteError> {
     }
     let yes = |b: bool| if b { "Yes" } else { "No" };
     let strip = spec.strip_key.map(|s| format!(r#"StripKey="{}" "#, yes(s))).unwrap_or_default();
-    let text = match spec.kind {
-        Kind::Mdx(encoding) => format!(
-            r#"<Dictionary GeneratedByEngineVersion="{version}" RequiredEngineVersion="{version}" Encrypted="{encrypted}" Encoding="{}" Format="Html" CreationDate="2026-10-13" Compact="No" Compat="No" KeyCaseSensitive="{}" {strip}Description="{}" Title="{}" DataSourceFormat="106" StyleSheet="" RegisterBy="" RegCode=""/>"#,
-            match encoding {
+    // The two kinds differ only in their element and in what they say of the text.
+    let (element, text_attributes) = match spec.kind {
+        Kind::Mdx(encoding) => {
+            let name = match encoding {
                 TextEncoding::Utf8 => "UTF-8",
                 TextEncoding::Utf16 => "UTF-16",
                 TextEncoding::Gbk => "GBK",
                 TextEncoding::Big5 => "BIG5",
                 TextEncoding::Latin1 => "ISO-8859-1",
-            },
-            yes(spec.key_case_sensitive),
-            escape(&spec.description),
-            escape(&spec.title),
-        ),
-        Kind::Mdd => format!(
-            r#"<Library_Data GeneratedByEngineVersion="{version}" RequiredEngineVersion="{version}" Encrypted="{encrypted}" Format="" CreationDate="2026-10-13" Compact="No" Compat="No" KeyCaseSensitive="{}" {strip}Description="{}" Title="{}" DataSourceFormat="106" StyleSheet="" RegisterBy="" RegCode=""/>"#,
-            yes(spec.key_case_sensitive),
-            escape(&spec.description),
-            escape(&spec.title),
-        ),
+            };
+            ("Dictionary", format!(r#"Encoding="{name}" Format="Html""#))
+        }
+        Kind::Mdd => ("Library_Data", r#"Format="""#.to_owned()),
     };
+    let text = format!(
+        r#"<{element} GeneratedByEngineVersion="{version}" RequiredEngineVersion="{version}" Encrypted="{encrypted}" {text_attributes} CreationDate="2026-10-13" Compact="No" Compat="No" KeyCaseSensitive="{}" {strip}Description="{}" Title="{}" DataSourceFormat="106" StyleSheet="" RegisterBy="" RegCode=""/>"#,
+        yes(spec.key_case_sensitive),
+        escape(&spec.description),
+        escape(&spec.title),
+    );
     let bytes = utf16le(&format!("{text}\r\n\0"));
     let mut checksum = adler32(&bytes);
     if spec.defect == Some(Defect::HeaderChecksum) {
