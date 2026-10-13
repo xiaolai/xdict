@@ -163,7 +163,8 @@ fn to_io(error: CoreError) -> io::Error {
         CoreError::Io { kind: IoKind::OutOfMemory, .. } => io::ErrorKind::OutOfMemory,
         _ => io::ErrorKind::Other,
     };
-    io::Error::new(kind, error.to_string())
+    // The error itself travels inside, so that it comes back as what the shell said (`CoreError::io`).
+    io::Error::new(kind, error)
 }
 
 /// Reads a whole location, `chunk` bytes at a time, telling `each` about every chunk.

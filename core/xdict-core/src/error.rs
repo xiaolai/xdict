@@ -116,7 +116,11 @@ impl CoreError {
         Self::StaleHandle { detail: detail.into() }
     }
 
+    /// An I/O failure; one carrying a shell source's own error is that error.
     pub(crate) fn io(error: &std::io::Error) -> Self {
+        if let Some(carried) = error.get_ref().and_then(|inner| inner.downcast_ref::<CoreError>()) {
+            return carried.clone();
+        }
         Self::Io { kind: io_kind(error), detail: error.to_string() }
     }
 }
@@ -150,7 +154,7 @@ impl From<xdict_mdx::Error> for CoreError {
         use xdict_mdx::{Error as E, Unsupported as U};
         let detail = error.to_string();
         match error {
-            E::Io(e) => Self::Io { kind: io_kind(&e), detail },
+            E::Io(e) => Self::io(&e),
             E::Malformed(_) => Self::Malformed { detail },
             E::TooLarge(_) => Self::TooLarge { limit: Limit::File, detail },
             E::Unsupported(u) => {

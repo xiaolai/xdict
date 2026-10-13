@@ -882,6 +882,33 @@ mod tests {
         }
     }
 
+    /// An error a shell's source returns reaches the shell as itself, through the reader: not as `Io`.
+    #[test]
+    fn a_sources_own_error_comes_back_as_itself() {
+        struct Failing(CoreError);
+        impl crate::ByteSource for Failing {
+            fn size(&self) -> u64 {
+                4096
+            }
+            fn read_at(&self, _: u64, _: u32) -> Result<Vec<u8>, CoreError> {
+                Err(self.0.clone())
+            }
+            fn identity(&self) -> Option<FileIdentity> {
+                None
+            }
+        }
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        for error in [
+            CoreError::SourceChanged { detail: "moved".into() },
+            CoreError::Cancelled { detail: "the shell stopped".into() },
+            CoreError::Io { kind: crate::IoKind::PermissionDenied, detail: "revoked".into() },
+        ] {
+            let mdx = Location::Source { name: "a.mdx".into(), source: Arc::new(Failing(error.clone())) };
+            let result = core.import(Package { mdx, mdd: vec![], sidecars: vec![] }, &NoProgress);
+            assert_eq!(result.map(|_| ()), Err(error));
+        }
+    }
+
     /// A lookup reads records to follow redirects, so a file rewritten after it was opened is refused there too,
     /// not answered from the old index over the new bytes.
     #[test]
