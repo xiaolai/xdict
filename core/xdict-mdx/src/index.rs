@@ -19,7 +19,7 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use xxhash_rust::xxh3::xxh3_64;
+use xxhash_rust::xxh3::{Xxh3, xxh3_64};
 
 use crate::text::fold;
 use crate::{Error, Kind, RecordBlock, Source, limits, malformed};
@@ -358,6 +358,21 @@ fn header(
     head
 }
 
+/// The most of a section read at once to check it: through a source, a read is an allocation of its size.
+const CHECK_CHUNK: u64 = 1 << 20;
+
+/// A section's checksum, read a piece at a time.
+fn checksum(region: &dyn Region, span: Span) -> Result<u64, Error> {
+    let mut hasher = Xxh3::new();
+    let mut at = 0;
+    while at < span.len {
+        let len = usize::try_from((span.len - at).min(CHECK_CHUNK)).map_err(|_| malformed("index"))?;
+        hasher.update(&region.bytes(span.at + at, len)?);
+        at += len as u64;
+    }
+    Ok(hasher.digest())
+}
+
 fn le<T: Copy, const N: usize>(values: &[T], bytes: impl Fn(T) -> [u8; N]) -> Vec<u8> {
     values.iter().flat_map(|&v| bytes(v)).collect()
 }
@@ -432,6 +447,7 @@ impl Index {
             return Err(damaged("the key count"));
         }
 
+        // Every section's bounds and size are checked before any of it is read.
         let mut spans = [Span { at: 0, len: 0 }; SECTIONS];
         for (i, span) in spans.iter_mut().enumerate() {
             let at = TABLE_AT + i * 24;
@@ -440,14 +456,9 @@ impl Index {
             if span.at < HEADER_LEN as u64 || end > region.len() {
                 return Err(damaged("a section's bounds"));
             }
-            let len = usize::try_from(span.len).map_err(|_| damaged("a section's bounds"))?;
-            let bytes = region.bytes(span.at, len).map_err(|_| damaged("a section"))?;
-            if xxh3_64(&bytes) != u64_at(at + 16)? {
-                return Err(Stale::Damaged(format!("section {i}'s checksum")));
-            }
         }
         let [text, offsets, starts, ends, order, blocks, public, tier2] = spans;
-        let sized = |span: Span, width: u64, count: usize| span.len == width * count as u64;
+        let sized = |span: Span, width: u64, count: usize| (count as u64).checked_mul(width) == Some(span.len);
         if !sized(offsets, 4, keys + 1)
             || !sized(starts, 8, keys)
             || !sized(ends, 8, keys)
@@ -458,6 +469,11 @@ impl Index {
             || tier2.len > 4 * keys as u64
         {
             return Err(damaged("a section's size"));
+        }
+        for (i, span) in spans.iter().enumerate() {
+            if checksum(&*region, *span).map_err(|_| damaged("a section"))? != u64_at(TABLE_AT + i * 24 + 16)? {
+                return Err(Stale::Damaged(format!("section {i}'s checksum")));
+            }
         }
         drop(head);
 
@@ -562,11 +578,14 @@ impl Index {
         self.keys
     }
 
+    /// Entry `i` of a table of `width`-byte words; an error past its end, however large `i` is.
     fn word(&self, span: Span, width: usize, i: usize) -> Result<u64, Error> {
-        let at = span.at.checked_add((i * width) as u64).ok_or_else(|| malformed("index"))?;
-        if (i * width + width) as u64 > span.len {
+        let from = i.checked_mul(width).ok_or_else(|| malformed("index"))?;
+        let to = from.checked_add(width).ok_or_else(|| malformed("index"))?;
+        if to as u64 > span.len {
             return Err(malformed("index"));
         }
+        let at = span.at.checked_add(from as u64).ok_or_else(|| malformed("index"))?;
         let bytes = self.region.bytes(at, width)?;
         let mut value = [0u8; 8];
         value.get_mut(..width).ok_or_else(|| malformed("index"))?.copy_from_slice(&bytes);
@@ -575,7 +594,8 @@ impl Index {
 
     /// Key `i`, as the file spells it.
     pub(crate) fn key(&self, i: usize) -> Result<Cow<'_, str>, Error> {
-        let (from, to) = (self.word(self.offsets, 4, i)?, self.word(self.offsets, 4, i + 1)?);
+        let next = i.checked_add(1).ok_or_else(|| malformed("key number"))?;
+        let (from, to) = (self.word(self.offsets, 4, i)?, self.word(self.offsets, 4, next)?);
         let len = usize::try_from(to.checked_sub(from).ok_or_else(|| malformed("key index"))?)
             .map_err(|_| malformed("key index"))?;
         let at = self.text.at.checked_add(from).ok_or_else(|| malformed("key index"))?;

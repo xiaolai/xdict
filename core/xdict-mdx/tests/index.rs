@@ -5,8 +5,9 @@
 
 use std::borrow::Cow;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
-use xdict_mdx::index::{Derive, KeyList, Stale};
+use xdict_mdx::index::{Derive, KeyList, Region, Stale};
 use xdict_mdx::{Error, File, Kind};
 use xdict_mdx_writer::{self as writer, Entry, Spec, Version};
 use xxhash_rust::xxh3::xxh3_64;
@@ -308,4 +309,60 @@ fn find_pages_what_lookup_refuses() {
     let found = read.find("EC").unwrap();
     assert_eq!(found.len(), 10_001);
     assert_eq!(read.record(found[10_000]).unwrap().data, b"10000");
+}
+
+/// A key number past the end is an error from every call that takes one, never a wrapped read of another key
+/// (audit 2026-10-14: `i * width` was unchecked).
+#[test]
+fn a_key_number_past_the_end_is_an_error() {
+    let file = mdx();
+    let read = open_with(&file, build(&file)).unwrap();
+    for i in [read.len(), usize::MAX / 8 + 1, usize::MAX / 4 + 1, usize::MAX / 2, usize::MAX] {
+        assert!(read.key(i).is_err(), "key {i}");
+        assert!(read.record_size(i).is_err(), "record_size {i}");
+        assert!(read.record(i).is_err(), "record {i}");
+    }
+}
+
+/// A block count whose table size wraps to zero is a damaged index, not an allocation of 2^59 blocks.
+#[test]
+fn a_wrapping_block_count_is_stale() {
+    let file = mdx();
+    let mut index = build(&file);
+    index[80..88].copy_from_slice(&(1u64 << 59).to_le_bytes());
+    let at = 96 + 5 * 24;
+    index[at + 8..at + 16].copy_from_slice(&0u64.to_le_bytes());
+    reseal(&mut index, 5);
+    assert!(matches!(open_with(&file, index).err(), Some(Stale::Damaged(_))));
+}
+
+/// An index region that records the largest single read asked of it.
+struct Recording(Vec<u8>, Arc<AtomicUsize>);
+
+impl Region for Recording {
+    fn len(&self) -> u64 {
+        self.0.len() as u64
+    }
+    fn bytes(&self, offset: u64, len: usize) -> Result<Cow<'_, [u8]>, Error> {
+        self.1.fetch_max(len, Ordering::SeqCst);
+        let from = offset as usize;
+        self.0.get(from..from + len).map(|b| Cow::Owned(b.to_vec())).ok_or(Error::Malformed("past the end".into()))
+    }
+}
+
+/// Opening checks every section's checksum without reading the key text whole: through a source (the Web's
+/// way) a whole read is an allocation of the section's declared size, which only the index file bounds.
+#[test]
+fn an_index_is_checked_in_pieces() {
+    let long: Vec<Entry> =
+        (0..40_000).map(|i| Entry::text(&format!("{i:06}{}", "x".repeat(70)), "a meaning")).collect();
+    let file = writer::write(&Spec { block_size: 1 << 16, ..Spec::mdx() }, &long).unwrap();
+    let index = build(&file);
+    assert!(section(&index, 0).1 > 2 << 20, "the key text is over 2 MiB");
+    let largest = Arc::new(AtomicUsize::new(0));
+    let region = Box::new(Recording(index, largest.clone()));
+    let read = File::with_index(Box::new(file), Some(Kind::Mdx), region, EDITION, Arc::new(Marks(9))).unwrap().unwrap();
+    assert_eq!(read.len(), 40_000);
+    let largest = largest.load(Ordering::SeqCst);
+    assert!(largest <= 1 << 20, "a read of {largest} bytes");
 }
