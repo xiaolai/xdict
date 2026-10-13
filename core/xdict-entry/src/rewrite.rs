@@ -128,15 +128,16 @@ const HREF_ELEMENTS: [&str; 6] = ["a", "area", "link", "base", "image", "use"];
 /// An entry's HTML, its URLs rewritten, and the URLs met. Inline styles and scripts are rewritten as stylesheets
 /// and scripts are.
 pub fn html(text: &str, base: &str) -> Rewritten {
-    html_out(text, base, true).done()
+    html_out(text, base, "", true).done()
 }
 
-/// An entry's HTML, its URLs rewritten, as a view shows it: [`html`] without the URLs met.
-pub fn html_text(text: &str, base: &str) -> String {
-    html_out(text, base, false).text
+/// HTML as a view shows it: [`html`] without the URLs met. `dir` is the folder relative URLs resolve against: an
+/// entry's is the package's root (`""`), a page served from the package its own folder.
+pub fn html_text(text: &str, base: &str, dir: &str) -> String {
+    html_out(text, base, dir, false).text
 }
 
-fn html_out(text: &str, base: &str, collect: bool) -> Out {
+fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
     let mut out = Out::new(text.len() + text.len() / 8, collect);
     let mut rest = text;
     while let Some(at) = rest.find('<') {
@@ -156,7 +157,7 @@ fn html_out(text: &str, base: &str, collect: bool) -> Out {
             rest = comment.get(end..).unwrap_or("");
             continue;
         }
-        match tag(from, base, &mut out) {
+        match tag(from, base, dir, &mut out) {
             Some((name, after)) => {
                 rest = after;
                 for (raw, script) in [("script", true), ("style", false)] {
@@ -166,7 +167,7 @@ fn html_out(text: &str, base: &str, collect: bool) -> Out {
                         if script {
                             out.text.push_str(&self::script(body, base).text);
                         } else {
-                            let sheet = css_out(body, base, "", out.collects());
+                            let sheet = css_out(body, base, dir, out.collects());
                             out.append(sheet);
                         }
                         rest = after;
@@ -185,7 +186,7 @@ fn html_out(text: &str, base: &str, collect: bool) -> Out {
 
 /// One start tag at the start of `from`, written to `out` with its attributes rewritten: the tag's name and
 /// what follows it. `None` if `from` does not start a tag (`a < b`, an end tag is copied as text).
-fn tag<'a>(from: &'a str, base: &str, out: &mut Out) -> Option<(String, &'a str)> {
+fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(String, &'a str)> {
     let inner = from.strip_prefix('<')?;
     if inner.starts_with('/') {
         return None;
@@ -225,7 +226,7 @@ fn tag<'a>(from: &'a str, base: &str, out: &mut Out) -> Option<(String, &'a str)
         let value_from = after_eq.trim_start();
         out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
         let (quote, value, after) = attribute_value(value_from)?;
-        let new = attribute(&name, attr, value, quote, base, out);
+        let new = attribute(&name, attr, value, quote, base, dir, out);
         // Written as found unless it changed; a changed value is quoted.
         let q = if new == value { quote } else { Some(quote.unwrap_or('"')) };
         out.text.extend(q);
@@ -253,19 +254,27 @@ fn attribute_value(from: &str) -> Option<(Option<char>, &str, &str)> {
 /// An attribute's value, rewritten if it holds URLs. The value is written back as it was unless it changes; a
 /// changed URL holds only characters that need no escaping, and changed text is escaped for `quote` (an unquoted
 /// value is quoted with `"` when it changes).
-fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: &str, out: &mut Out) -> String {
+fn attribute(
+    element: &str,
+    name: &str,
+    value: &str,
+    quote: Option<char>,
+    base: &str,
+    dir: &str,
+    out: &mut Out,
+) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
     if (lower == "srcset" && matches!(local.as_str(), "img" | "source")) || (lower == "imagesrcset" && local == "link")
     {
         let decoded = unescape(value);
-        let rewritten = srcset(&decoded, base, out);
+        let rewritten = srcset(&decoded, base, dir, out);
         return if rewritten == decoded { value.to_owned() } else { escaped(&rewritten, quote.unwrap_or('"')) };
     }
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
     if href || URL_ATTRIBUTES.contains(&lower.as_str()) {
         let url = unescape(value);
-        let (to, link) = literal(&url, base, "");
+        let (to, link) = literal(&url, base, dir);
         if let Some(link) = link {
             out.link(url, link);
         }
@@ -274,7 +283,7 @@ fn attribute(element: &str, name: &str, value: &str, quote: Option<char>, base: 
     match lower.as_str() {
         "style" => {
             let decoded = unescape(value);
-            let Out { text, links } = css_out(&decoded, base, "", out.collects());
+            let Out { text, links } = css_out(&decoded, base, dir, out.collects());
             if let (Some(all), Some(more)) = (&mut out.links, links) {
                 all.extend(more);
             }
@@ -293,7 +302,7 @@ fn escaped(text: &str, quote: char) -> String {
 
 /// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of non-space, trailing commas end
 /// it; a descriptor runs to the next comma), each URL rewritten, written back `url descriptor, …`.
-fn srcset(value: &str, base: &str, out: &mut Out) -> String {
+fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> String {
     let mut candidates = Vec::new();
     let mut rest = value;
     loop {
@@ -312,7 +321,7 @@ fn srcset(value: &str, base: &str, out: &mut Out) -> String {
             }
         };
         rest = after;
-        let (to, link) = literal(url, base, "");
+        let (to, link) = literal(url, base, dir);
         if let Some(link) = link {
             out.link(url, link);
         }
@@ -807,7 +816,7 @@ mod tests {
             r#"<style>@import "d.css"; b { background: url(e.png) }</style><span onclick="location='sound://x.mp3'">"#,
             r#"<a href="https://example.com/x">out</a>"#,
         );
-        assert_eq!(html_text(entry, BASE), html(entry, BASE).text);
+        assert_eq!(html_text(entry, BASE, ""), html(entry, BASE).text);
         assert_eq!(html(entry, BASE).links.len(), 7);
         let sheet = "@import url(x.css); b { background: url('../f.png') }";
         assert_eq!(css_text(sheet, BASE, "s"), css(sheet, BASE, "s").text);

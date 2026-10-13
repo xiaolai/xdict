@@ -421,7 +421,7 @@ impl Core {
             let record = opened.mdx.record(i)?;
             opened.mdx_source.unchanged()?;
             let text = String::from_utf8_lossy(&record.data);
-            let html = xdict_entry::html_text(&opened.sheet.apply(&text), &view.base_url);
+            let html = xdict_entry::html_text(&opened.sheet.apply(&text), &view.base_url, "");
             if html.len() as u64 > view.max_body_bytes {
                 return Err(CoreError::TooLarge {
                     limit: Limit::Body,
@@ -695,7 +695,7 @@ fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> (Vec<u8>, bool) 
     let rewritten = match mime {
         "text/css" => xdict_entry::css_text(text, base, dir),
         "text/javascript" => xdict_entry::script(text, base).text,
-        "text/html" => xdict_entry::html_text(text, base),
+        "text/html" => xdict_entry::html_text(text, base, dir),
         _ => return (bytes, false),
     };
     (rewritten.into_bytes(), true)
@@ -919,6 +919,25 @@ mod tests {
         assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
         let png = core.resource(dict, "big.png".into(), view);
         assert!(matches!(&png, Ok(Resource::Found { bytes, .. }) if bytes.len() == 4000), "{:?}", png.map(|_| "found"));
+    }
+
+    /// A page served from a folder resolves its links against that folder, as a stylesheet does.
+    #[test]
+    fn a_page_resolves_against_its_own_folder() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let mdx = write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap();
+        let mdd = write(&Spec::mdd(), &[W::bytes("\\help\\page.html", br#"<img src="image.png">"#)]).unwrap();
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let source =
+            |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
+        let package = Package { mdx: source("a.mdx", mdx), mdd: vec![source("a.mdd", mdd)], sidecars: vec![] };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        let Ok(Resource::Found { bytes, .. }) = core.resource(dict, "help/page.html".into(), view()) else {
+            panic!("not found")
+        };
+        let page = String::from_utf8(bytes).unwrap();
+        assert!(page.contains("xdict://d/r/help/image.png"), "{page}");
     }
 
     /// A sidecar that cannot be opened is reported when it is asked for, not passed over for a volume's copy.
