@@ -172,6 +172,9 @@ check('web.indexStorage', true, calls.put >= 2 && calls.get >= 2 && calls.reads 
 check('lifecycle.panic', l.panic, outcome(() => core.selfTestPanic()));
 // The trapped instance refuses further calls; a freshly loaded one works (ADR-0007 decision 12).
 check('web.afterTrap', { error: { type: 'internal' } }, outcome(() => core.lookup('run', [dict], page)));
+// Loading the same glue again reuses its trapped instance, so it is refused too (audit-fix round 2, row 36).
+const again = XDict.load(await import(glueUrl), wasm);
+check('web.reloadAfterTrap', { error: { type: 'internal' } }, outcome(() => again.versions()));
 const fresh = XDict.load(await import(`${glueUrl}?instance=2`), wasm);
 check('web.freshInstance', x.versions, fresh.versions());
 

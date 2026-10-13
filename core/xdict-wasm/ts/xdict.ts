@@ -117,10 +117,21 @@ export class XDict {
     this.glue = glue;
   }
 
+  /**
+   * Loads the module into `glue`, once: loading the same glue again gives the same wrapper, since the glue keeps
+   * its one instance, and a trap that poisoned it poisons every use. A fresh instance needs a fresh glue.
+   */
   static load(glue: Glue, module: BufferSource | WebAssembly.Module): XDict {
+    const loaded = XDict.loaded.get(glue);
+    if (loaded) return loaded;
     glue.initSync({ module });
-    return new XDict(glue);
+    const x = new XDict(glue);
+    XDict.loaded.set(glue, x);
+    return x;
   }
+
+  /** The wrapper of each glue loaded. */
+  private static readonly loaded = new WeakMap<Glue, XDict>();
 
   versions(): Versions {
     return this.guard(() => JSON.parse(this.glue.versions()));
