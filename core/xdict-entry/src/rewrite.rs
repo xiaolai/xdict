@@ -773,6 +773,14 @@ mod tests {
         );
     }
 
+    /// A preload's `imagesrcset` is a `srcset`.
+    #[test]
+    fn imagesrcset_is_a_srcset() {
+        let r = html(r#"<link rel="preload" as="image" imagesrcset="https://evil.example/x 1x, a.png 2x">"#, BASE);
+        assert!(!r.text.contains("https://evil.example"), "{}", r.text);
+        assert_eq!(r.links.len(), 2, "{:?}", r.links);
+    }
+
     /// HTML's named references are decoded as a browser decodes them, not only the five XML ones.
     #[test]
     fn named_references_are_decoded() {
