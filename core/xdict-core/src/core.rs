@@ -348,35 +348,40 @@ impl Core {
         let mut hits = Vec::new();
         let mut problems = Vec::new();
         for id in dicts {
-            let dict = self.dict(id)?;
-            let file = &dict.mdx;
-            // Redirects are read from the file: it is checked before, and after, so that bytes read from a file
-            // rewritten meanwhile are never answered from the old index.
-            dict.mdx_source.unchanged()?;
-            let resolved = xdict_lookup::resolve(file, query, mode, &mut budget)?;
-            let keys: Vec<usize> = resolved.hits.iter().map(|h| h.key).collect();
-            let occurrences = xdict_lookup::occurrences(file, &keys)?;
-            dict.mdx_source.unchanged()?;
-            for hit in resolved.hits {
-                let key = file.key(hit.key)?.into_owned();
-                let occurrence = occurrences.get(&hit.key).copied().ok_or_else(|| CoreError::internal("occurrence"))?;
-                let how = match hit.how {
-                    LookupHow::Exact => How::Exact,
-                    LookupHow::Folded => How::Folded,
-                    LookupHow::Unmarked => How::Unmarked,
-                    LookupHow::Redirect { chain } => How::Redirect { chain: key_names(file, &chain)? },
-                };
-                let problems = hit.problems.iter().map(|p| hit_problem(file, p)).collect::<Result<_, _>>()?;
-                let entry = EntryRef { edition: dict.edition.clone(), key: key.clone(), occurrence };
-                hits.push(Hit { dict: id.clone(), entry, headword: key, how, problems });
-            }
-            for problem in &resolved.problems {
-                problems.push(hit_problem(file, problem)?);
-            }
+            self.lookup_in(id, query, mode, &mut budget, &mut hits, &mut problems)?;
         }
         let total = hits.len() as u64;
         let hits = hits.into_iter().skip(options.offset as usize).take(options.limit as usize).collect();
         Ok(Page { hits, total, generation, problems })
+    }
+
+    /// One dictionary's part of a lookup: its hits, in file order, and the problems that belong to no hit.
+    fn lookup_in(
+        &self,
+        id: &str,
+        query: &str,
+        mode: Mode,
+        budget: &mut Budget,
+        hits: &mut Vec<Hit>,
+        problems: &mut Vec<HitProblem>,
+    ) -> Result<(), CoreError> {
+        let dict = self.dict(id)?;
+        let file = &dict.mdx;
+        // Redirects are read from the file: it is checked before, and after, so that bytes read from a file
+        // rewritten meanwhile are never answered from the old index.
+        dict.mdx_source.unchanged()?;
+        let resolved = xdict_lookup::resolve(file, query, mode, budget)?;
+        let keys: Vec<usize> = resolved.hits.iter().map(|h| h.key).collect();
+        let occurrences = xdict_lookup::occurrences(file, &keys)?;
+        dict.mdx_source.unchanged()?;
+        for hit in resolved.hits {
+            let occurrence = occurrences.get(&hit.key).copied().ok_or_else(|| CoreError::internal("occurrence"))?;
+            hits.push(boundary_hit(file, id, &dict.edition, hit, occurrence)?);
+        }
+        for problem in &resolved.problems {
+            problems.push(hit_problem(file, problem)?);
+        }
+        Ok(())
     }
 
     /// Public keys beginning with `prefix` under each file's folding, for a search field: the dictionaries in
@@ -654,6 +659,26 @@ fn derive(kind: Kind) -> Arc<dyn Derive> {
 
 fn key_names(file: &File, chain: &[usize]) -> Result<Vec<String>, CoreError> {
     chain.iter().map(|&i| Ok(file.key(i)?.into_owned())).collect()
+}
+
+/// A resolver's hit as it crosses the boundary: its key, how it was found and its problems, by name.
+fn boundary_hit(
+    file: &File,
+    id: &str,
+    edition: &str,
+    hit: xdict_lookup::Hit,
+    occurrence: u32,
+) -> Result<Hit, CoreError> {
+    let key = file.key(hit.key)?.into_owned();
+    let how = match hit.how {
+        LookupHow::Exact => How::Exact,
+        LookupHow::Folded => How::Folded,
+        LookupHow::Unmarked => How::Unmarked,
+        LookupHow::Redirect { chain } => How::Redirect { chain: key_names(file, &chain)? },
+    };
+    let problems = hit.problems.iter().map(|p| hit_problem(file, p)).collect::<Result<_, _>>()?;
+    let entry = EntryRef { edition: edition.to_owned(), key: key.clone(), occurrence };
+    Ok(Hit { dict: id.to_owned(), entry, headword: key, how, problems })
 }
 
 fn hit_problem(file: &File, problem: &LookupProblem) -> Result<HitProblem, CoreError> {
