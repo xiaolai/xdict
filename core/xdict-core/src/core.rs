@@ -8,6 +8,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use xdict_entry::StyleSheet;
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
@@ -67,6 +68,8 @@ struct Dict {
     mdx: File,
     mdd: Vec<(OpenedSource, File)>,
     sidecars: Vec<(String, OpenedSource)>,
+    /// The MDX header's compact styles, applied to every entry.
+    sheet: StyleSheet,
 }
 
 impl Core {
@@ -287,7 +290,8 @@ impl Core {
                 }
             }
             let info = info(&mdx);
-            let dict = Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars };
+            let sheet = StyleSheet::parse(&mdx.header().stylesheet);
+            let dict = Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars, sheet };
             let mut state = self.lock()?;
             let handle = state.next_handle;
             state.next_handle = handle.checked_add(1).ok_or_else(|| CoreError::internal("handles exhausted"))?;
@@ -422,8 +426,19 @@ impl Core {
                 });
             }
             let record = opened.mdx.record(i)?;
-            let html = String::from_utf8_lossy(&record.data).into_owned();
-            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: 0 })
+            let text = String::from_utf8_lossy(&record.data);
+            let html = xdict_entry::html(&opened.sheet.apply(&text), &view.base_url).text;
+            if html.len() as u64 > view.max_body_bytes {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Body,
+                    detail: format!(
+                        "the entry is {} bytes rewritten, the view takes {}",
+                        html.len(),
+                        view.max_body_bytes
+                    ),
+                });
+            }
+            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: record.lossy })
         })
     }
 
@@ -431,44 +446,65 @@ impl Core {
     pub fn link(&self, dict: String, url: String, origin: LinkOrigin, view: View) -> Result<Link, CoreError> {
         guard(|| {
             self.dict(&dict)?;
-            let _ = (&origin, &view);
-            Ok(classify(&url))
+            let dir = match &origin {
+                LinkOrigin::Entry { .. } => String::new(),
+                LinkOrigin::Resource { path } => xdict_entry::travelled(path).dir().to_owned(),
+            };
+            Ok(link(xdict_entry::classify(&url, &view.base_url, &dir)))
         })
     }
 
-    /// A resource's bytes: the sidecars first, then the volumes in order. Missing is a value.
+    /// A resource's bytes, by its path as it travels (decoded once here): the sidecars first, then the volumes in
+    /// order. Missing is a value. A stylesheet, script or page is served rewritten for `view`.
     pub fn resource(&self, dict: String, path: String, view: View) -> Result<Resource, CoreError> {
         guard(|| {
-            let _ = &view;
             let opened = self.dict(&dict)?;
-            let path = normalize_path(&path);
-            for (name, sidecar) in &opened.sidecars {
-                if name.eq_ignore_ascii_case(&path) {
-                    sidecar.unchanged()?;
-                    let size = sidecar.source.len();
-                    if size > MAX_RESOURCE_BYTES {
-                        return Err(CoreError::TooLarge {
-                            limit: Limit::Body,
-                            detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
-                        });
-                    }
-                    let mut bytes = Vec::new();
-                    read_all(&*sidecar.source, IMPORT_CHUNK, |chunk, _, _| {
-                        bytes.extend_from_slice(chunk);
-                        Ok(())
-                    })?;
-                    return Ok(Resource::Found { mime: mime(&path).into(), path, bytes });
+            let travelled = xdict_entry::travelled(&path);
+            let resolved = travelled.resolved();
+            // MDict paths may hold `?` and `#`; a web-style `a.css?v=2` is tried without its query after.
+            let mut tries = vec![resolved.to_owned()];
+            if let Some(cut) = resolved.find(['?', '#']).and_then(|at| resolved.get(..at)) {
+                tries.push(cut.to_owned());
+            }
+            for name in &tries {
+                if let Some(bytes) = self.find_resource(&opened, name)? {
+                    let mime = mime(name);
+                    let bytes = served(bytes, mime, &view.base_url, travelled.dir());
+                    return Ok(Resource::Found { mime: mime.into(), path: name.clone(), bytes });
                 }
             }
-            let key = format!("\\{}", path.replace('/', "\\"));
-            for (check, volume) in &opened.mdd {
-                check.unchanged()?;
-                if let Some(record) = volume.lookup(&key)?.into_iter().next() {
-                    return Ok(Resource::Found { mime: mime(&path).into(), path, bytes: record.data });
-                }
-            }
-            Ok(Resource::Missing { path })
+            Ok(Resource::Missing { path: resolved.to_owned() })
         })
+    }
+
+    /// A resource's bytes by its resolved path: a sidecar of that name, else the first volume that holds it.
+    fn find_resource(&self, opened: &Dict, path: &str) -> Result<Option<Vec<u8>>, CoreError> {
+        for (name, sidecar) in &opened.sidecars {
+            if name.eq_ignore_ascii_case(path) {
+                sidecar.unchanged()?;
+                let size = sidecar.source.len();
+                if size > MAX_RESOURCE_BYTES {
+                    return Err(CoreError::TooLarge {
+                        limit: Limit::Body,
+                        detail: format!("{path} is {size} bytes, more than {MAX_RESOURCE_BYTES}"),
+                    });
+                }
+                let mut bytes = Vec::new();
+                read_all(&*sidecar.source, IMPORT_CHUNK, |chunk, _, _| {
+                    bytes.extend_from_slice(chunk);
+                    Ok(())
+                })?;
+                return Ok(Some(bytes));
+            }
+        }
+        let key = format!("\\{}", path.replace('/', "\\"));
+        for (check, volume) in &opened.mdd {
+            check.unchanged()?;
+            if let Some(record) = volume.lookup(&key)?.into_iter().next() {
+                return Ok(Some(record.data));
+            }
+        }
+        Ok(None)
     }
 
     /// Panics on purpose, so that each binding can prove a panic reaches it as `Internal`.
@@ -592,65 +628,31 @@ fn hit_problem(file: &File, problem: &LookupProblem) -> Result<HitProblem, CoreE
     })
 }
 
-/// What a URL means, read the way the entry's web view reads it (the WHATWG URL Standard): otherwise the
-/// core could call "local" a URL the view fetches from the network (`/\\host/x`, `ht<TAB>tp://host`).
-fn classify(url: &str) -> Link {
-    let url = preprocess(url);
-    if let Some((scheme, rest)) = scheme(&url) {
-        let body = rest.strip_prefix("//").unwrap_or(rest);
-        return match scheme.as_str() {
-            "entry" | "bword" => {
-                let (query, anchor) = match body.split_once('#') {
-                    Some((q, a)) => (q.to_owned(), Some(a.to_owned())),
-                    None => (body.to_owned(), None),
-                };
-                Link::Lookup { query, anchor }
-            }
-            "sound" => match body
-                .len()
-                .checked_sub(4)
-                .filter(|&n| body.get(n..).is_some_and(|t| t.eq_ignore_ascii_case(".tts")))
-            {
-                Some(n) => Link::Speak { text: body.get(..n).unwrap_or("").to_owned() },
-                None => Link::Sound { path: body.to_owned() },
-            },
-            "javascript" => Link::Blocked { why: BlockReason::Script },
-            // The URL Standard's special schemes other than `file`: each reaches the network, with or
-            // without slashes after the colon.
-            "http" | "https" | "ws" | "wss" | "ftp" => Link::Blocked { why: BlockReason::Remote { url } },
-            "file" | "mdd" => Link::Resource { path: normalize_path(body) },
-            _ => Link::Blocked { why: BlockReason::UnknownScheme { scheme } },
-        };
+/// The core's link for the entry crate's.
+fn link(link: xdict_entry::Link) -> Link {
+    use xdict_entry::{Block, Link as L};
+    match link {
+        L::Lookup { query, anchor } => Link::Lookup { query, anchor },
+        L::Resource { path } => Link::Resource { path },
+        L::Sound { path } => Link::Sound { path },
+        L::Speak { text } => Link::Speak { text },
+        L::Anchor { name } => Link::Anchor { name },
+        L::Blocked(Block::Remote { url }) => Link::Blocked { why: BlockReason::Remote { url } },
+        L::Blocked(Block::Script) => Link::Blocked { why: BlockReason::Script },
+        L::Blocked(Block::UnknownScheme { scheme }) => Link::Blocked { why: BlockReason::UnknownScheme { scheme } },
     }
-    if let Some(name) = url.strip_prefix('#') {
-        return Link::Anchor { name: name.into() };
-    }
-    // Without a scheme, two leading slashes in either direction name another host.
-    if url.replace('\\', "/").starts_with("//") {
-        return Link::Blocked { why: BlockReason::Remote { url } };
-    }
-    Link::Resource { path: normalize_path(&url) }
 }
 
-/// A URL as a browser's parser takes it in: leading and trailing C0 controls and spaces trimmed, and every
-/// tab and newline removed, wherever it is.
-fn preprocess(url: &str) -> String {
-    url.trim_matches(|c: char| c <= ' ').chars().filter(|c| !matches!(c, '\t' | '\n' | '\r')).collect()
-}
-
-/// The URL's scheme, lower-cased, and what follows its colon: an ASCII letter, then letters, digits, `+`,
-/// `-` or `.`, then `:`.
-fn scheme(url: &str) -> Option<(String, &str)> {
-    let (head, rest) = url.split_once(':')?;
-    let mut chars = head.chars();
-    let first = chars.next()?;
-    let valid = first.is_ascii_alphabetic() && chars.all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'));
-    valid.then(|| (head.to_ascii_lowercase(), rest))
-}
-
-/// A resource path as the core compares it: forward slashes, no leading separator.
-fn normalize_path(path: &str) -> String {
-    path.replace('\\', "/").trim_start_matches('/').to_owned()
+/// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
+/// resource's own directory; anything else, and text that is not UTF-8, as stored.
+fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str) -> Vec<u8> {
+    let Ok(text) = std::str::from_utf8(&bytes) else { return bytes };
+    match mime {
+        "text/css" => xdict_entry::css(text, base, dir).text.into_bytes(),
+        "text/javascript" => xdict_entry::script(text, base).text.into_bytes(),
+        "text/html" => xdict_entry::html(text, base).text.into_bytes(),
+        _ => bytes,
+    }
 }
 
 fn mime(path: &str) -> &'static str {
@@ -675,8 +677,11 @@ fn mime(path: &str) -> &'static str {
     }
 }
 
-/// The policy the view must apply: only the view's own base for every fetch, nothing remote.
+/// The policy the view must apply: only the view's own base for every fetch, nothing remote. A base that is a
+/// path (the Web's `/x/`) is no CSP source expression, so there the policy names the entry's own origin, which
+/// is the entry's alone (`core-api.md` §5.3).
 fn csp(base: &str) -> String {
+    let base = if base.starts_with('/') { "'self'" } else { base };
     format!(
         "default-src {base}; script-src {base} 'unsafe-inline' 'unsafe-eval'; style-src {base} 'unsafe-inline'; \
          img-src {base} data:; font-src {base} data:; media-src {base}; connect-src 'none'; form-action 'none'; \
@@ -738,30 +743,15 @@ impl SplitMix {
 mod tests {
     use super::*;
 
-    fn remote(url: &str) -> bool {
-        matches!(classify(url), Link::Blocked { why: BlockReason::Remote { .. } })
-    }
-
-    /// A URL is read the way the entry's web view will read it (the WHATWG URL Standard), or the core would
-    /// call "local" what the view fetches from the network.
+    /// A CSP source expression cannot be a bare path: under a path-only base (the Web, where the entry has an
+    /// origin of its own) the policy names the entry's own origin; under a scheme's base, that base.
     #[test]
-    fn urls_a_browser_reads_as_remote_are_remote() {
-        for url in [
-            "https://example.com/a.mp3",
-            "HTTP://example.com/a.mp3",
-            "//example.com/a.mp3",
-            "/\\example.com/a.mp3",
-            "\\\\example.com/a.mp3",
-            "\\/example.com/a.mp3",
-            " \u{1}https://example.com/a.mp3",
-            "ht\ttps://example.com/a.mp3",
-            "https\n://example.com/a.mp3",
-            "http:example.com/a.mp3",
-            "wss://example.com/socket",
-            "ftp://example.com/a",
-        ] {
-            assert!(remote(url), "{url:?} was classified {:?}", classify(url));
-        }
+    fn the_policy_names_a_source_a_browser_accepts() {
+        let web = csp("/x/");
+        assert!(web.contains("default-src 'self';") && !web.contains(" /x/"), "{web}");
+        let native = csp("xdict://d/");
+        assert!(native.contains("default-src xdict://d/;"), "{native}");
+        assert!(native.contains("connect-src 'none'"), "{native}");
     }
 
     /// A source that claims a size and refuses to be read.
@@ -986,20 +976,5 @@ mod tests {
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's read was not counted: {refused:?}");
         let refused = page_of(&core, &dict, "a", Budget::new(100, 10));
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's bytes were not counted: {refused:?}");
-    }
-
-    #[test]
-    fn script_urls_are_blocked_however_they_are_spelt() {
-        for url in ["javascript:void(0)", "JavaScript:alert(1)", "java\nscript:alert(1)", " \tjavascript:x"] {
-            assert_eq!(classify(url), Link::Blocked { why: BlockReason::Script }, "{url:?}");
-        }
-    }
-
-    #[test]
-    fn dictionary_links_survive_the_same_reading() {
-        assert_eq!(classify(" entry://run#n1 "), Link::Lookup { query: "run".into(), anchor: Some("n1".into()) });
-        assert_eq!(classify("sound://a\tb.mp3"), Link::Sound { path: "ab.mp3".into() });
-        assert_eq!(classify("styles/main.css"), Link::Resource { path: "styles/main.css".into() });
-        assert_eq!(classify("/x.css"), Link::Resource { path: "x.css".into() });
     }
 }

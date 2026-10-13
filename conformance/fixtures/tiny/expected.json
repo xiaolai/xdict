@@ -275,6 +275,20 @@
     {
       "entry": {
         "key": "run",
+        "occurrence": 0
+      },
+      "result": {
+        "entry": {
+          "key": "run",
+          "occurrence": 0
+        },
+        "html": "<link rel=\"stylesheet\" href=\"xdict://d/r/tiny.css\"><b>run</b> to move fast <a href=\"xdict://d/sound/run.mp3\">play</a>",
+        "lossyBytes": 0
+      }
+    },
+    {
+      "entry": {
+        "key": "run",
         "occurrence": 5
       },
       "error": {
@@ -366,6 +380,21 @@
       "link": {
         "type": "resource",
         "path": "tiny.css"
+      }
+    },
+    {
+      "url": "xdict://d/entry/caf%C3%A9#sense1",
+      "link": {
+        "type": "lookup",
+        "query": "café",
+        "anchor": "sense1"
+      }
+    },
+    {
+      "url": "xdict://d/r/a%20b/c.css",
+      "link": {
+        "type": "resource",
+        "path": "a%20b/c.css"
       }
     }
   ],
