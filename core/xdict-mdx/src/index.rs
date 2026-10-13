@@ -746,13 +746,9 @@ impl Index {
     /// each in file order. Every candidate is compared with the query, whatever the order says.
     pub(crate) fn find(&self, query: &str) -> Result<Vec<usize>, Error> {
         let wanted = self.rules.fold(query);
-        let low = Self::lower_bound(self.keys, |j| Ok(self.tier1(j, |f| f < wanted.as_ref())?.1))?;
+        let run = self.equal_run(self.keys, |j| self.tier1(j, |f| f.cmp(wanted.as_ref())))?;
         let (mut exact, mut rest) = (Vec::new(), Vec::new());
-        for j in low..self.keys {
-            let (i, equal) = self.tier1(j, |f| f == wanted.as_ref())?;
-            if !equal {
-                break;
-            }
+        for i in run {
             if self.key(i)? == query { exact.push(i) } else { rest.push(i) }
         }
         exact.sort_unstable();
@@ -766,17 +762,29 @@ impl Index {
     pub(crate) fn find_unmarked(&self, query: &str) -> Result<Vec<usize>, Error> {
         let wanted = self.rules.fold(&self.derive.unmark(query)).into_owned();
         let count = (self.tier2.len / 4) as usize;
-        let low = Self::lower_bound(count, |j| Ok(self.tier2(j, |f| f < wanted.as_str())?.1))?;
-        let mut found = Vec::new();
-        for j in low..count {
-            let (i, equal) = self.tier2(j, |f| f == wanted)?;
-            if !equal {
-                break;
-            }
-            found.push(i);
-        }
+        let mut found = self.equal_run(count, |j| self.tier2(j, |f| f.cmp(wanted.as_str())))?;
         found.sort_unstable();
         Ok(found)
+    }
+
+    /// The key numbers of the run of positions, in a sorted table of `count`, whose form compares equal:
+    /// `at(j)` gives position `j`'s key and how its form compares with the one wanted. The run is found by a
+    /// binary search and checked position by position, so a wrong order loses keys but never adds one.
+    fn equal_run(
+        &self,
+        count: usize,
+        at: impl Fn(usize) -> Result<(usize, std::cmp::Ordering), Error>,
+    ) -> Result<Vec<usize>, Error> {
+        let low = Self::lower_bound(count, |j| Ok(at(j)?.1.is_lt()))?;
+        let mut run = Vec::new();
+        for j in low..count {
+            let (i, ordering) = at(j)?;
+            if ordering.is_ne() {
+                break;
+            }
+            run.push(i);
+        }
+        Ok(run)
     }
 
     /// The keys whose folded form begins with `prefix`'s, in the tier-1 order, until `each` says stop.
