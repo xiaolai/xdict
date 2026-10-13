@@ -351,8 +351,18 @@ impl Core {
             self.lookup_in(id, query, mode, &mut budget, &mut hits, &mut problems)?;
         }
         let total = hits.len() as u64;
-        let hits = hits.into_iter().skip(options.offset as usize).take(options.limit as usize).collect();
-        Ok(Page { hits, total, generation, problems })
+        // A walk's problems travel with its first hit (`xdict_lookup`); a hit this page leaves out gives its
+        // problems to the page, so that no page loses one.
+        let (from, to) = (options.offset as usize, (options.offset as usize).saturating_add(options.limit as usize));
+        let mut page = Vec::new();
+        for (i, hit) in hits.into_iter().enumerate() {
+            if (from..to).contains(&i) {
+                page.push(hit);
+            } else {
+                problems.extend(hit.problems);
+            }
+        }
+        Ok(Page { hits: page, total, generation, problems })
     }
 
     /// One dictionary's part of a lookup: its hits, in file order, and the problems that belong to no hit.
@@ -1238,6 +1248,28 @@ mod tests {
     fn page_of(core: &Core, dict: &str, query: &str, budget: Budget) -> Result<Page, CoreError> {
         let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
         core.lookup_within(query, &[dict.to_owned()], options, budget)
+    }
+
+    /// A walk's problems travel with its first hit; a page that leaves that hit out gives them as the page's own,
+    /// so no page loses a problem of its lookup (with `limit` 0, every one is the page's).
+    #[test]
+    fn a_page_without_a_walks_first_hit_keeps_its_problems() {
+        use xdict_mdx_writer::Entry as W;
+        let (core, dict, _) =
+            counted(&[W::text("a", "@@@LINK=b\r\n@@@LINK=gone"), W::text("b", "first"), W::text("b", "second")]);
+        let page = |offset, limit| {
+            let options = LookupOptions { limit, offset, mode: MatchMode::Reader, generation: None };
+            core.lookup("a".into(), vec![dict.clone()], options).unwrap()
+        };
+        let dangling = |p: &[HitProblem]| p.iter().filter(|p| matches!(p, HitProblem::DanglingRedirect { .. })).count();
+        let all = page(0, 10);
+        assert_eq!(all.hits.len(), 2, "{all:?}");
+        let on_hits = |p: &Page| p.hits.iter().map(|h| dangling(&h.problems)).sum::<usize>();
+        assert_eq!(on_hits(&all) + dangling(&all.problems), 1, "{all:?}");
+        for (offset, limit) in [(1, 1), (0, 0), (0, 1)] {
+            let p = page(offset, limit);
+            assert_eq!(on_hits(&p) + dangling(&p.problems), 1, "offset {offset}, limit {limit}: {p:?}");
+        }
     }
 
     /// Codex 23: many records under one key, paged a thousand at a time, give every record once, in file order,
