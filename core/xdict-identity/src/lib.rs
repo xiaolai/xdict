@@ -208,16 +208,27 @@ const VERSION: u32 = 1;
 struct Stamp {
     len: u64,
     modified: Option<std::time::SystemTime>,
-    file: u64,
+    /// The file's identity, where stable Rust gives one: the inode on Unix. Windows' file index is not in stable
+    /// `std`, and its length and time alone can stay the same across a write, so there it is `None`.
+    file: Option<u64>,
 }
 
 impl Stamp {
     fn of(meta: &std::fs::Metadata) -> Self {
         #[cfg(unix)]
-        let file = std::os::unix::fs::MetadataExt::ino(meta);
+        let file = Some(std::os::unix::fs::MetadataExt::ino(meta));
         #[cfg(not(unix))]
-        let file = 0;
+        let file = None;
         Self { len: meta.len(), modified: meta.modified().ok(), file }
+    }
+
+    /// Whether the document at `now` is surely the one stamped `then`: never when the file has no identity.
+    fn unchanged(now: Option<Self>, then: Option<Self>) -> bool {
+        match (now, then) {
+            (None, None) => true,
+            (Some(now), Some(then)) => now.file.is_some() && now == then,
+            _ => false,
+        }
     }
 }
 
@@ -248,7 +259,8 @@ impl FileRegistry {
         Ok(Self { path, cached: Mutex::new(cached), confirm })
     }
 
-    /// The document, read again if the file changed since it was last read.
+    /// The document, read again if the file changed since it was last read, or always where a file has no
+    /// identity to tell (Windows): the registry is read only at import and open, so this costs little.
     fn current(&self) -> Result<std::sync::MutexGuard<'_, Cached>, RegistryError> {
         let mut cached = self.cached.lock().map_err(poisoned)?;
         let now = match std::fs::metadata(&self.path) {
@@ -256,7 +268,7 @@ impl FileRegistry {
             Err(e) if e.kind() == io::ErrorKind::NotFound => None,
             Err(e) => return Err(RegistryError(format!("{} cannot be read: {e}", self.path.display()))),
         };
-        if now != cached.stamp {
+        if !Stamp::unchanged(now, cached.stamp) {
             *cached = load(&self.path)?;
         }
         Ok(cached)
@@ -560,5 +572,27 @@ mod tests {
         expected.extend_from_slice(&300u64.to_le_bytes());
         expected.extend_from_slice(&xxhash_rust::xxh3::xxh3_128(&content).to_le_bytes());
         assert_eq!(token.to_vec(), expected);
+    }
+
+    /// Another registry's write that leaves the document's length and modification time as they were is still
+    /// seen: a stamp with no file identity (Windows) is never taken as proof that nothing changed.
+    #[test]
+    fn a_write_that_keeps_length_and_time_is_still_read() {
+        let dir = scratch("same-stamp");
+        let writer = FileRegistry::open(&dir).unwrap();
+        writer.register(record("/a/x.mdx", "e1"), &mut || "kept".into()).unwrap();
+        let reader = FileRegistry::open(&dir).unwrap();
+        assert_eq!(reader.lineage("e1").unwrap().as_deref(), Some("kept"));
+        // Another write of the same length, renamed into place as a registry writes, its time set back.
+        let path = dir.join("registry.json");
+        let before = std::fs::metadata(&path).unwrap().modified().unwrap();
+        let text = std::fs::read_to_string(&path).unwrap().replace("\"kept\"", "\"lost\"");
+        let temporary = dir.join("other.tmp");
+        std::fs::write(&temporary, text).unwrap();
+        std::fs::File::options().write(true).open(&temporary).unwrap().set_modified(before).unwrap();
+        std::fs::rename(&temporary, &path).unwrap();
+        assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), before);
+        assert_eq!(reader.lineage("e1").unwrap().as_deref(), Some("lost"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
