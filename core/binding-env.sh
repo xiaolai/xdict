@@ -27,13 +27,22 @@ target_dir() {
     printf '%s\n' "$dir"
 }
 
+# The triple of the machine running this, which the native library is built for.
+host_triple() {
+    host=$(rustc -vV | sed -n 's/^host: //p')
+    [ -n "$host" ] || { echo "rustc named no host triple" >&2; return 1; }
+    printf '%s\n' "$host"
+}
+
 # The core built as a native library (release), and its UniFFI binding for $1 (swift, kotlin) generated into $2.
-# Sets $release, the directory that holds the library.
+# Sets $release, the directory that holds the library. Built for the host by name, so its artifacts are under
+# target/<host>/release whatever build target a Cargo configuration sets.
 native_binding() {
     case $(uname) in Darwin) native_lib=libxdict_ffi.dylib ;; *) native_lib=libxdict_ffi.so ;; esac
-    release=$(target_dir)/release
-    cargo build -q --release -p xdict-ffi
-    cargo run -q --release -p xdict-ffi --features bindgen --bin uniffi-bindgen -- \
+    host=$(host_triple)
+    release=$(target_dir)/$host/release
+    cargo build -q --release -p xdict-ffi --target "$host"
+    cargo run -q --release -p xdict-ffi --target "$host" --features bindgen --bin uniffi-bindgen -- \
         generate --no-format --library "$release/$native_lib" --language "$1" --out-dir "$2" >/dev/null
 }
 
@@ -46,6 +55,7 @@ swift_program() {
 
 # The core built for wasm32 (release), and its wasm-bindgen package (--target web) written into $1.
 web_binding() {
+    target=$(target_dir)
     cargo build -q --release -p xdict-wasm --target wasm32-unknown-unknown
-    wasm-bindgen --target web --out-dir "$1" "$(target_dir)/wasm32-unknown-unknown/release/xdict_wasm.wasm"
+    wasm-bindgen --target web --out-dir "$1" "$target/wasm32-unknown-unknown/release/xdict_wasm.wasm"
 }
