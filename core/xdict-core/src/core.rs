@@ -351,9 +351,13 @@ impl Core {
         for id in dicts {
             let dict = self.dict(id)?;
             let file = &dict.mdx;
+            // Redirects are read from the file: it is checked before, and after, so that bytes read from a file
+            // rewritten meanwhile are never answered from the old index.
+            dict.mdx_source.unchanged()?;
             let resolved = xdict_lookup::resolve(file, query, mode, &mut budget)?;
             let keys: Vec<usize> = resolved.hits.iter().map(|h| h.key).collect();
             let occurrences = xdict_lookup::occurrences(file, &keys)?;
+            dict.mdx_source.unchanged()?;
             for hit in resolved.hits {
                 let key = file.key(hit.key)?.into_owned();
                 let occurrence = occurrences.get(&hit.key).copied().ok_or_else(|| CoreError::internal("occurrence"))?;
@@ -418,6 +422,7 @@ impl Core {
                 });
             }
             let record = opened.mdx.record(i)?;
+            opened.mdx_source.unchanged()?;
             let text = String::from_utf8_lossy(&record.data);
             let html = xdict_entry::html_text(&opened.sheet.apply(&text), &view.base_url);
             if html.len() as u64 > view.max_body_bytes {
@@ -486,13 +491,16 @@ impl Core {
                     bytes.extend_from_slice(chunk);
                     Ok(())
                 })?;
+                sidecar.unchanged()?;
                 return Ok(Some(bytes));
             }
         }
         let key = format!("\\{}", path.replace('/', "\\"));
         for (check, volume) in &opened.mdd {
             check.unchanged()?;
-            if let Some(record) = volume.lookup(&key)?.into_iter().next() {
+            let found = volume.lookup(&key)?.into_iter().next();
+            check.unchanged()?;
+            if let Some(record) = found {
                 return Ok(Some(record.data));
             }
         }
@@ -872,6 +880,43 @@ mod tests {
         fn identity(&self) -> Option<FileIdentity> {
             None
         }
+    }
+
+    /// A lookup reads records to follow redirects, so a file rewritten after it was opened is refused there too,
+    /// not answered from the old index over the new bytes.
+    #[test]
+    fn a_lookup_refuses_a_file_rewritten_since_it_was_opened() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let entries = |gloss: &str| [W::text("colour", "@@@LINK=color"), W::text("color", gloss)];
+        let a = write(&Spec::mdx(), &entries("AAAA")).unwrap();
+        let b = write(&Spec::mdx(), &entries("BBBB")).unwrap();
+        assert_eq!(a.len(), b.len());
+        let dir = std::env::temp_dir().join(format!("xdict-rewritten-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.mdx");
+        std::fs::write(&path, &a).unwrap();
+        let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+        let package = Package {
+            mdx: Location::Path { path: path.to_string_lossy().into_owned() },
+            mdd: vec![],
+            sidecars: vec![],
+        };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .and_then(|mut f| std::io::Write::write_all(&mut f, &b))
+            .unwrap();
+        let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
+        let result = core.lookup("colour".into(), vec![dict.clone()], options.clone());
+        assert!(matches!(result, Err(CoreError::SourceChanged { .. })), "{result:?}");
+        // A file moved or deleted since it was opened has changed too, not gone missing.
+        std::fs::remove_file(&path).unwrap();
+        let result = core.lookup("colour".into(), vec![dict], options);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(matches!(result, Err(CoreError::SourceChanged { .. })), "{result:?}");
     }
 
     #[test]

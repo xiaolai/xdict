@@ -80,7 +80,11 @@ impl Opened {
             #[cfg(any(unix, windows))]
             Check::Path { path, file } => {
                 let held = file.metadata().map_err(|e| CoreError::io(&e))?;
-                let at_path = std::fs::metadata(path).map_err(|e| CoreError::io(&e))?;
+                // Nothing at the path any more: the file was moved or deleted, which is a change, not a miss.
+                let at_path = match std::fs::metadata(path) {
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(changed(path)),
+                    other => other.map_err(|e| CoreError::io(&e))?,
+                };
                 let (held, at_path) = (identity_of(&held), identity_of(&at_path));
                 if held != at_path {
                     return Err(changed(path));
