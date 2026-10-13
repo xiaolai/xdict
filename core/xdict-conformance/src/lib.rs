@@ -102,9 +102,15 @@ fn write_variants(base: &Spec, entries: &Value, variants: &[Value], out: &Path) 
             other => return Err(bad(format!("{name}: no encoding {other}"))),
         };
         let (word, gloss) = (string(field(variant, "word")?)?, string(field(variant, "gloss")?)?);
-        // The suites substitute these into expected.json's text, so they must need no escaping in JSON.
+        // The suites substitute these into expected.json's text, so they must need no escaping in JSON; and they
+        // substitute one placeholder after another, so neither may hold a `$` that a later one would replace.
         if [word, gloss].iter().any(|t| t.chars().any(|c| c == '"' || c == '\\' || c.is_control())) {
             return Err(bad(format!("{name}: a word or gloss needs escaping in JSON")));
+        }
+        if [word, gloss].iter().any(|t| t.contains('$')) {
+            return Err(bad(format!(
+                "{name}: a word or gloss holds a `$`, which the suites would read as a placeholder"
+            )));
         }
         let text = entries.to_string().replace("$word", word).replace("$gloss", gloss);
         let spec = Spec {
@@ -144,4 +150,30 @@ fn string(value: &Value) -> Result<&str, Error> {
 
 fn array(value: &Value) -> Result<&Vec<Value>, Error> {
     value.as_array().ok_or_else(|| bad(format!("expected a list, found {value}")))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// The suites put each variant's word and gloss into expected.json one placeholder after another, so a word
+    /// or gloss holding a placeholder would be replaced again: such a variant is refused, not written.
+    #[test]
+    fn a_word_or_gloss_holding_a_placeholder_is_refused() {
+        let out = std::env::temp_dir().join(format!("xdict-conformance-placeholder-{}", std::process::id()));
+        std::fs::create_dir_all(&out).unwrap();
+        let entries = serde_json::json!([["$word", "$gloss"]]);
+        for (word, gloss) in [("$gloss", "a gloss"), ("run", "$version"), ("$word", "a gloss")] {
+            let variant = serde_json::json!({
+                "name": "v", "version": "2.0", "compression": "zlib", "encoding": "utf8", "word": word, "gloss": gloss,
+            });
+            assert!(write_variants(&Spec::mdx(), &entries, &[variant], &out).is_err(), "{word:?} {gloss:?}");
+        }
+        let fine = serde_json::json!({
+            "name": "v", "version": "2.0", "compression": "zlib", "encoding": "utf8", "word": "run", "gloss": "to go",
+        });
+        write_variants(&Spec::mdx(), &entries, &[fine], &out).unwrap();
+        std::fs::remove_dir_all(&out).unwrap();
+    }
 }
