@@ -321,7 +321,7 @@ fn srcset(value: &str, base: &str, out: &mut Out) -> String {
     candidates.join(", ")
 }
 
-/// The character references a URL in an attribute is likely to hold.
+/// The character references a URL in an attribute is likely to hold: HTML 4's named ones and numeric ones.
 fn unescape(value: &str) -> String {
     if !value.contains('&') {
         return value.to_owned();
@@ -335,20 +335,16 @@ fn unescape(value: &str) -> String {
         let end = from.bytes().take(11).position(|b| b == b';');
         let decoded = end.and_then(|e| {
             let name = from.get(1..e)?;
-            let c = match name {
-                "amp" => '&',
-                "lt" => '<',
-                "gt" => '>',
-                "quot" => '"',
-                "apos" => '\'',
-                _ => {
-                    let n = name.strip_prefix('#')?;
+            let c = match name.strip_prefix('#') {
+                Some(n) => {
                     let code = match n.strip_prefix(['x', 'X']) {
                         Some(hex) => u32::from_str_radix(hex, 16).ok()?,
                         None => n.parse().ok()?,
                     };
                     char::from_u32(code)?
                 }
+                None if name == "apos" => '\'',
+                None => crate::entities::named(name)?,
             };
             Some((c, e + 1))
         });
@@ -647,6 +643,14 @@ mod tests {
             "{}",
             r.text
         );
+    }
+
+    /// HTML's named references are decoded as a browser decodes them, not only the five XML ones.
+    #[test]
+    fn named_references_are_decoded() {
+        let r = html(r#"<a href="entry://caf&eacute;">x</a><a href="entry://a&nbsp;b">y</a>"#, BASE);
+        let queries: Vec<_> = r.links.iter().map(|w| w.link.clone()).collect();
+        assert_eq!(queries, ["café", "a\u{a0}b"].map(|q| Link::Lookup { query: q.into(), anchor: None }), "{}", r.text);
     }
 
     /// A value of many `&` and no `;` decodes in one pass.
