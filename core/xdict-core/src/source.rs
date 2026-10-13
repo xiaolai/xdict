@@ -47,7 +47,7 @@ impl Opened {
                 let file = Arc::new(std::fs::File::open(path).map_err(|e| CoreError::io(&e))?);
                 let metadata = file.metadata().map_err(|e| CoreError::io(&e))?;
                 let identity = identity_of(&metadata);
-                let source = PathSource { file: file.clone(), len: metadata.len() };
+                let source = xdict_mdx::DiskFile::shared(file.clone(), metadata.len());
                 Ok(Self { source: Box::new(source), identity, check: Check::Path { path: path.clone(), file } })
             }
             #[cfg(not(any(unix, windows)))]
@@ -67,7 +67,7 @@ impl Opened {
     pub(crate) fn reader(&self) -> Box<dyn xdict_mdx::Source> {
         match &self.check {
             #[cfg(any(unix, windows))]
-            Check::Path { file, .. } => Box::new(PathSource { file: file.clone(), len: self.source.len() }),
+            Check::Path { file, .. } => Box::new(xdict_mdx::DiskFile::shared(file.clone(), self.source.len())),
             Check::Source(source) => Box::new(Adapter(source.clone())),
         }
     }
@@ -118,36 +118,6 @@ pub(crate) fn identity_of(metadata: &std::fs::Metadata) -> Option<FileIdentity> 
 #[cfg(windows)]
 pub(crate) fn identity_of(_: &std::fs::Metadata) -> Option<FileIdentity> {
     None
-}
-
-#[cfg(any(unix, windows))]
-struct PathSource {
-    file: Arc<std::fs::File>,
-    len: u64,
-}
-
-#[cfg(any(unix, windows))]
-impl xdict_mdx::Source for PathSource {
-    fn len(&self) -> u64 {
-        self.len
-    }
-    #[cfg(unix)]
-    fn read_exact_at(&self, offset: u64, buf: &mut [u8]) -> io::Result<()> {
-        std::os::unix::fs::FileExt::read_exact_at(&*self.file, buf, offset)
-    }
-    #[cfg(windows)]
-    fn read_exact_at(&self, mut offset: u64, mut buf: &mut [u8]) -> io::Result<()> {
-        while !buf.is_empty() {
-            let n = std::os::windows::fs::FileExt::seek_read(&*self.file, buf, offset)?;
-            if n == 0 {
-                return Err(io::ErrorKind::UnexpectedEof.into());
-            }
-            offset += n as u64;
-            let rest = std::mem::take(&mut buf);
-            buf = rest.get_mut(n..).ok_or(io::ErrorKind::UnexpectedEof)?;
-        }
-        Ok(())
-    }
 }
 
 /// A shell's source as the reader's.
