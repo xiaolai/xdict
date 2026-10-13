@@ -144,13 +144,15 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool) -> Out {
         let (before, from) = rest.split_at(at);
         out.text.push_str(before);
         if let Some(comment) = from.strip_prefix("<!--") {
-            // `<!-->` and `<!--->` close at once, as a browser reads them.
+            // `<!-->` and `<!--->` close at once, as a browser reads them, and `--!>` closes as `-->` does
+            // (HTML's comment end bang state).
             let end = if comment.starts_with('>') {
                 1
             } else if comment.starts_with("->") {
                 2
             } else {
-                comment.find("-->").map_or(comment.len(), |e| e + 3)
+                first_of(comment, &["-->", "--!>"])
+                    .map_or(comment.len(), |(e, which)| e + if which == 0 { 3 } else { 4 })
             };
             out.text.push_str("<!--");
             out.text.push_str(comment.get(..end).unwrap_or(comment));
@@ -925,6 +927,15 @@ mod tests {
         }
         let r = html(r#"<!-- <a href="https://example.com/x"> -->"#, BASE);
         assert!(!r.text.contains("blocked"), "a comment's text is left alone: {}", r.text);
+    }
+
+    /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
+    #[test]
+    fn a_comment_closed_by_a_bang_ends_where_a_browser_ends_it() {
+        let r = html("<!--x--!><img src=https://example.com/a>", BASE);
+        assert!(r.text.contains("xdict://d/blocked/"), "{}", r.text);
+        let r = html("<!--x--!-><img src=https://example.com/a>-->", BASE);
+        assert!(!r.text.contains("blocked"), "`--!-` does not end it: {}", r.text);
     }
 
     /// Each match is found once: searching the rest for every needle at every match made a large script or
