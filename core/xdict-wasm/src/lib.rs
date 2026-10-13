@@ -513,10 +513,9 @@ impl Core {
         // A source that throws when first asked fails the import here, before the core registers anything.
         let (pinned, checked) = watched(|| Pinned::package(&package));
         checked?;
-        let (result, checked) = watched(|| self.0.import(package, &progress));
+        let replied = watched_reply(|| self.0.import(package, &progress));
         drop(pinned);
-        checked?;
-        reply(result)
+        replied
     }
 
     /// All or nothing: a dictionary opened while one of its sources threw is closed again before the error.
@@ -538,23 +537,17 @@ impl Core {
 
     pub fn lookup(&self, query: &str, dicts: &str, options: &str) -> Reply {
         let (dicts, options) = (from_json(dicts)?, from_json(options)?);
-        let (result, checked) = watched(|| self.0.lookup(query.into(), dicts, options));
-        checked?;
-        reply(result)
+        watched_reply(|| self.0.lookup(query.into(), dicts, options))
     }
 
     pub fn suggest(&self, prefix: &str, dicts: &str, limit: u32) -> Reply {
         let dicts = from_json(dicts)?;
-        let (result, checked) = watched(|| self.0.suggest(prefix.into(), dicts, limit));
-        checked?;
-        reply(result)
+        watched_reply(|| self.0.suggest(prefix.into(), dicts, limit))
     }
 
     pub fn entry(&self, dict: &str, entry: &str, view: &str) -> Reply {
         let (entry, view) = (from_json(entry)?, from_json(view)?);
-        let (result, checked) = watched(|| self.0.entry(dict.into(), entry, view));
-        checked?;
-        reply(result)
+        watched_reply(|| self.0.entry(dict.into(), entry, view))
     }
 
     pub fn link(&self, dict: &str, url: &str, origin: &str, view: &str) -> Reply {
@@ -579,6 +572,13 @@ impl Core {
     pub fn self_test_panic(&self) -> Reply {
         reply(self.0.self_test_panic().map(|()| Value::Null))
     }
+}
+
+/// A call into the core, [`watched`]: the error of a source that threw while it ran, else its own answer.
+fn watched_reply<T: serde::Serialize>(call: impl FnOnce() -> Result<T, CoreError>) -> Reply {
+    let (result, checked) = watched(call);
+    checked?;
+    reply(result)
 }
 
 fn reply<T: serde::Serialize>(result: Result<T, CoreError>) -> Reply {

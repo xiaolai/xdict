@@ -318,6 +318,19 @@ attempt('web.throwingIdentityOnOpen', () => {
   check('web.throwingIdentityOnOpen.nothingKept', before, tables().sources);
 });
 
+attempt('web.throwingIdentityOnLookup', () => {
+  // The core sees no identity, which alone would read as a changed file; the binding reports the throw instead.
+  const state = { broken: false };
+  const mdx = src(at(14n), { identity: () => { if (state.broken) throw new Error('identity failed'); return at(14n); } });
+  c3.import(only(mdx));
+  const o = c3.open(only(mdx));
+  if (o.type !== 'ready') throw new Error(`not open: ${JSON.stringify(o)}`);
+  state.broken = true;
+  const options = { limit: 10, offset: 0, mode: 'reader' as const, generation: null };
+  check('web.throwingIdentityOnLookup', { error: { type: 'io' } }, outcome(() => c3.lookup('run', [o.dict], options)));
+  c3.close(o.dict);
+});
+
 // A source that throws during an import fails it before anything is registered: the record a valid import
 // left stays, its volume readable (audit-fix round 2, row 35).
 attempt('web.throwingImportKeepsRecord', () => {
