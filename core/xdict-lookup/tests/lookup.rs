@@ -140,3 +140,26 @@ fn many_targets_cost_at_most_the_limits() {
     let refused = resolve(&f, "a", Mode::Reader, &mut Budget::lookup());
     assert!(matches!(refused, Err(xdict_mdx::Error::TooLarge(_))), "{:?}", refused.map(|r| r.problems.len()));
 }
+
+/// A redirect lands on the keys spelt as its target where there are any, not on every key folded with it: in
+/// COBUILD, `'m` → `m` would otherwise land on `M`, `-m` and the rest, each a redirect again, and `A` → `a`
+/// would land on `A` itself and look like a loop.
+#[test]
+fn a_redirect_lands_on_its_exact_spelling() {
+    let f = file(&[
+        ("A", "@@@LINK=a"),
+        ("a", "the letter"),
+        ("'m", "@@@LINK=m"),
+        ("m", "the letter m"),
+        ("M", "@@@LINK=m"),
+    ]);
+    let r = resolve(&f, "A", Mode::Link, &mut Budget::lookup()).unwrap();
+    assert!(r.problems.is_empty() && r.hits.iter().all(|h| h.problems.is_empty()), "{r:?}");
+    let r = resolve(&f, "'m", Mode::Link, &mut Budget::lookup()).unwrap();
+    let got: Vec<String> = r.hits.iter().map(|h| f.key(h.key).unwrap().into_owned()).collect();
+    assert_eq!(got, ["m"], "{r:?}");
+    assert!(r.problems.is_empty() && r.hits.iter().all(|h| h.problems.is_empty()), "{r:?}");
+    let f = file(&[("x", "@@@LINK=Y"), ("y", "only folded")]);
+    let r = resolve(&f, "x", Mode::Link, &mut Budget::lookup()).unwrap();
+    assert_eq!(r.hits.len(), 1, "with no exact spelling, folded keys are landed on: {r:?}");
+}

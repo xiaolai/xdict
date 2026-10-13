@@ -12,7 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use xdict_lookup::{Mode, Policy, matches, redirect_targets, suggest, unmark};
+use xdict_lookup::{Mode, Policy, Problem, matches, redirect_targets, resolve, suggest, unmark};
 use xdict_mdx::{Budget, DiskFile, File, Kind};
 
 fn mdx_files(dir: &Path, out: &mut Vec<PathBuf>) {
@@ -177,6 +177,35 @@ fn redirect_shapes(file: &File, targets: &[Vec<String>]) -> String {
     )
 }
 
+/// The resolver itself from every redirect key: dangling targets and loops counted, and no limit met.
+fn resolved(file: &File, targets: &[Vec<String>], failures: &mut Vec<String>, name: &str) -> String {
+    let mut texts: Vec<String> = targets
+        .iter()
+        .enumerate()
+        .filter(|(_, t)| !t.is_empty())
+        .map(|(i, _)| file.key(i).unwrap().into_owned())
+        .collect();
+    texts.sort();
+    texts.dedup();
+    let (mut hits, mut dangling, mut loops) = (0, 0, 0);
+    for text in &texts {
+        match resolve(file, text, Mode::Link, &mut Budget::lookup()) {
+            Ok(r) => {
+                hits += r.hits.len();
+                for p in r.problems.iter().chain(r.hits.iter().flat_map(|h| &h.problems)) {
+                    match p {
+                        Problem::Dangling { .. } => dangling += 1,
+                        Problem::Loop { .. } => loops += 1,
+                        Problem::Limit { .. } => failures.push(format!("{name}: {text:?} met a redirect limit")),
+                    }
+                }
+            }
+            Err(e) => failures.push(format!("{name}: {text:?}: {e}")),
+        }
+    }
+    format!("resolved {} redirect keys: {hits} hits, {dangling} dangling, {loops} loops", texts.len())
+}
+
 #[test]
 fn lookup_on_the_corpus() {
     let Ok(dirs) = std::env::var("XDICT_MDX_CORPUS") else {
@@ -194,7 +223,9 @@ fn lookup_on_the_corpus() {
         let file = open(path);
         let r = reach(&file, &mut failures, &name);
         let internal_keys = internal(&file, &mut failures, &name);
-        let shapes = redirect_shapes(&file, &records(&file));
+        let targets = records(&file);
+        let shapes = redirect_shapes(&file, &targets);
+        let followed = resolved(&file, &targets, &mut failures, &name);
         eprintln!(
             "{name:10} keys {:>8}  internal {internal_keys:>6}  marked {:>6} (reached plainly {:>6}, internal {:>5})  \
              nothing at tier 1 {:>6} (stressed {:>6})",
@@ -206,6 +237,7 @@ fn lookup_on_the_corpus() {
             r.stressed_unreachable,
         );
         eprintln!("{name:10} {shapes}");
+        eprintln!("{name:10} {followed}");
         total.marked += r.marked;
         total.reached += r.reached;
         total.internal += r.internal;

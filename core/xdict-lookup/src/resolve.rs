@@ -181,7 +181,7 @@ fn follow(
             problems.push(Problem::Limit { chain });
             continue;
         }
-        let landed = file.find(&target)?;
+        let landed = land(file, &target)?;
         let last = chain.last().copied().unwrap_or(from);
         if landed.is_empty() {
             problems.push(Problem::Dangling { from: last, target });
@@ -214,6 +214,23 @@ fn follow(
         }
     }
     Ok(Followed { reached, problems })
+}
+
+/// The keys a redirect to `target` lands on: those spelt exactly as it is, where there are any (`find` gives
+/// them first), else every key tier 1 finds for it.
+fn land(file: &File, target: &str) -> Result<Vec<usize>, Error> {
+    let mut found = file.find(target)?;
+    let mut exact = 0;
+    for &i in &found {
+        if file.key(i)? != target {
+            break;
+        }
+        exact += 1;
+    }
+    if exact > 0 {
+        found.truncate(exact);
+    }
+    Ok(found)
 }
 
 /// For each of `keys`, the targets its record names if it is a redirect, or none: every block read once.
