@@ -104,7 +104,7 @@ pub(crate) fn fold(key: &str, case_sensitive: bool, strip: bool) -> Cow<'_, str>
 fn fold_ascii(key: &str, case_sensitive: bool, strip: bool) -> Cow<'_, str> {
     let keep = |b: u8| !strip || b.is_ascii_alphanumeric();
     let unchanged = key.bytes().all(|b| keep(b) && (case_sensitive || !b.is_ascii_uppercase()));
-    if unchanged && (key.bytes().any(keep) || key.is_empty()) {
+    if unchanged {
         return Cow::Borrowed(key);
     }
     let cased = |b: u8| if case_sensitive { b } else { b.to_ascii_lowercase() };
