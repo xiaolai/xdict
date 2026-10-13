@@ -310,6 +310,28 @@ attempt('web.throwingIdentityOnOpen', () => {
   check('web.throwingIdentityOnOpen.nothingKept', before, tables().sources);
 });
 
+// A source that throws during an import fails it before anything is registered: the record a valid import
+// left stays, its volume readable (audit-fix round 2, row 35).
+attempt('web.throwingImportKeepsRecord', () => {
+  const mddBytes = readFileSync(join(fixtures, 'tiny.mdd'));
+  const mddAt: FileIdentity = { device: 9n, inode: 130n, size: BigInt(mddBytes.length), mtimeNs: 13n, ctimeNs: 13n };
+  const state = { broken: false };
+  const volume = Object.assign(new Bytes(mddBytes, mddAt), {
+    identity: () => { if (state.broken) throw new Error('identity failed'); return mddAt; },
+  });
+  const pkg: Package = { ...only(src(at(13n))), mdd: [{ type: 'source', name: 'tiny.mdd', source: volume }] };
+  c3.import(pkg);
+  state.broken = true;
+  check('web.throwingImportKeepsRecord.fails', { error: { type: 'io' } }, outcome(() => c3.import(pkg)));
+  state.broken = false;
+  const o = outcome(() => c3.open(pkg)) as any;
+  check('web.throwingImportKeepsRecord.open', 'ready', o?.type);
+  if (o?.type !== 'ready') return;
+  // The volume's record is the valid import's: its resources are served, not skipped as unreadable.
+  check('web.throwingImportKeepsRecord', { type: 'found' }, outcome(() => c3.resource(o.dict, 'run.mp3', view())));
+  c3.close(o.dict);
+});
+
 // Counted from here: dictionaries the checks above left open hold their sources, as they should.
 attempt('web.sourcesReleased', () => {
   const before = tables().sources;
