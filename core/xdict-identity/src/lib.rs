@@ -271,51 +271,47 @@ impl FileRegistry {
             let mut file = std::fs::OpenOptions::new().write(true).create_new(true).open(&temporary)?;
             file.write_all(&bytes)?;
             file.sync_all()?;
-            std::fs::rename(&temporary, &self.path)
+            std::fs::rename(&temporary, &self.path)?;
+            Ok::<_, io::Error>(file)
         })();
-        if written.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        written.map_err(fail)?;
-        // The rename is durable only once the directory is: without this, a power failure can bring back the
-        // old document after the registration was reported.
+        let file = match written {
+            Ok(file) => file,
+            Err(e) => {
+                let _ = std::fs::remove_file(&temporary);
+                return Err(fail(e));
+            }
+        };
+        // The rename is durable only once it is flushed: without this, a power failure can bring back the old
+        // document after the registration was reported. From here the new document is in place, so a failure
+        // says that, not that nothing changed.
+        #[cfg(any(unix, windows))]
+        let unconfirmed = |e: io::Error| {
+            RegistryError(format!(
+                "the new registry document was installed at {}, but its durability could not be confirmed: {e}",
+                self.path.display()
+            ))
+        };
+        // Unix: flush the directory, which holds the name.
         #[cfg(unix)]
-        std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(fail)?;
+        {
+            drop(file);
+            std::fs::File::open(dir).and_then(|d| d.sync_all()).map_err(unconfirmed)?;
+        }
+        // Windows: flush the renamed file through the handle that wrote it, which writes its metadata
+        // (`FlushFileBuffers`), as PostgreSQL's `durable_rename` does; keeping the handle means no new open that a
+        // reader holding the file could refuse. `std::fs::rename` is `MoveFileExW` without
+        // `MOVEFILE_WRITE_THROUGH` (Rust 1.99, `library/std/src/sys/fs/windows.rs`), and no documented
+        // directory-flush durability contract is relied upon. Write-through renaming needs `unsafe`, which this
+        // crate does not allow.
         #[cfg(windows)]
-        sync_directory(dir).map_err(fail)?;
+        {
+            let _ = dir;
+            file.sync_all().map_err(unconfirmed)?;
+        }
         // The Web keeps no registry on disk.
         #[cfg(not(any(unix, windows)))]
-        let _ = dir;
+        let _ = (file, dir);
         Ok(())
-    }
-}
-
-/// Flushes a directory on Windows, the closest safe Rust comes to Unix's directory `fsync`: the directory is
-/// opened for writing with `FILE_FLAG_BACKUP_SEMANTICS` (the only way to open one) and flushed by
-/// `FlushFileBuffers`, which needs the write access. **Residual:** `std::fs::rename` itself is not
-/// write-through (`MOVEFILE_WRITE_THROUGH` is out of reach without `unsafe`), and Microsoft documents
-/// `FlushFileBuffers` for files and volumes, not directories. So a file system that refuses to flush a
-/// directory is tolerated, as PostgreSQL tolerates it for directories: the rename then rests on the file
-/// system's own journal (NTFS logs it). Any other failure is reported.
-#[cfg(windows)]
-fn sync_directory(dir: &std::path::Path) -> io::Result<()> {
-    use std::os::windows::fs::OpenOptionsExt;
-    const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
-    let flushed = std::fs::OpenOptions::new()
-        .write(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS)
-        .open(dir)
-        .and_then(|d| d.sync_all());
-    match flushed {
-        Err(e)
-            if matches!(
-                e.kind(),
-                io::ErrorKind::PermissionDenied | io::ErrorKind::Unsupported | io::ErrorKind::InvalidInput
-            ) =>
-        {
-            Ok(())
-        }
-        other => other,
     }
 }
 
@@ -415,6 +411,23 @@ mod tests {
         let again = FileRegistry::open(&dir).unwrap();
         assert_eq!(again.lineage("e1").unwrap().as_deref(), Some("kept"));
         assert_eq!(again.location("/a/x.mdx").unwrap().unwrap().edition, "e1");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A reader holding the document without sharing it for writing (an antivirus scan, a backup) does not stop
+    /// the next registration: the new document replaces the held one, and is flushed through its own handle.
+    #[cfg(windows)]
+    #[test]
+    fn a_reader_holding_the_document_does_not_fail_a_registration() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch("held");
+        let registry = FileRegistry::open(&dir).unwrap();
+        registry.register(record("/a/x.mdx", "e1"), &mut || "first".into()).unwrap();
+        let _held =
+            std::fs::OpenOptions::new().read(true).share_mode(0x1 | 0x4).open(dir.join("registry.json")).unwrap();
+        registry.register(record("/a/y.mdx", "e2"), &mut || "second".into()).unwrap();
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("second"));
+        drop(_held);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
