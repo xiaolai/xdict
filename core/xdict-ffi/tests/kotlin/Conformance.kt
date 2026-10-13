@@ -62,6 +62,7 @@ fun j(h: How): Map<String, Any?> = when (h) {
 fun j(p: HitProblem): Map<String, Any?> = when (p) {
     is HitProblem.DanglingRedirect -> mapOf("type" to "danglingRedirect", "from" to p.from, "target" to p.target)
     is HitProblem.RedirectLoop -> mapOf("type" to "redirectLoop", "chain" to p.chain)
+    is HitProblem.RedirectLimit -> mapOf("type" to "redirectLimit", "chain" to p.chain)
 }
 fun j(h: Hit) = mapOf("dict" to h.dict, "entry" to j(h.entry), "headword" to h.headword, "how" to j(h.how), "problems" to h.problems.map { j(it) })
 fun j(p: Page) = mapOf("hits" to p.hits.map { j(it) }, "total" to p.total, "generation" to p.generation, "problems" to p.problems.map { j(it) })
@@ -173,7 +174,9 @@ fun main(args: Array<String>) {
     val dict = (opened as Opened.Ready).dict
 
     list(x["lookups"]).forEachIndexed { n, c ->
-        val options = LookupOptions(uint(c["limit"])!!, uint(c["offset"])!!, MatchMode.READER, uint(c["generation"]))
+        val options = LookupOptions(
+            uint(c["limit"])!!, uint(c["offset"])!!,
+            if (c["mode"] == "link") MatchMode.LINK else MatchMode.READER, uint(c["generation"]))
         check("lookups[$n]", errorOr(c, "page"), outcome { j(core.lookup(c["query"] as String, listOf(dict), options)) })
     }
     list(x["suggestions"]).forEachIndexed { n, c ->

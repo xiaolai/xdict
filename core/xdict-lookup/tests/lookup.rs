@@ -1,0 +1,125 @@
+//! Lookup through an index built under XDict's policy, on dictionaries the test writer makes: the shapes real
+//! dictionaries have (`core-api.md` findings 8, 10 and 11) and Codex's objections 19–23.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
+use std::sync::Arc;
+
+use xdict_lookup::{How, Mode, Policy, Problem, matches, resolve, suggest};
+use xdict_mdx::{Budget, File, Kind};
+use xdict_mdx_writer::{self as writer, Entry, Spec};
+
+fn file(entries: &[(&str, &str)]) -> File {
+    let entries: Vec<Entry> = entries.iter().map(|(k, v)| Entry::text(k, v)).collect();
+    let bytes = writer::write(&Spec::mdx(), &entries).unwrap();
+    let index = File::build_index(&bytes, Some(Kind::Mdx), [1; 32], &Policy).unwrap();
+    File::with_index(Box::new(bytes), Some(Kind::Mdx), Box::new(index), [1; 32], Arc::new(Policy)).unwrap().unwrap()
+}
+
+fn keys(file: &File, query: &str, mode: Mode) -> Vec<(String, How)> {
+    matches(file, query, mode).unwrap().into_iter().map(|(i, how)| (file.key(i).unwrap().into_owned(), how)).collect()
+}
+
+fn names(file: &File, chain: &[usize]) -> Vec<String> {
+    chain.iter().map(|&i| file.key(i).unwrap().into_owned()).collect()
+}
+
+/// Codex 19: the tier each key is found by, for the superscript and accent fixtures.
+#[test]
+fn tiers_for_homographs_formulas_and_accents() {
+    let f = file(&[("AAA", "a"), ("AAA²", "b"), ("AAA2", "c"), ("H²O", "d"), ("cafe\u{301}", "e"), ("café", "f")]);
+    assert_eq!(keys(&f, "AAA", Mode::Reader), [("AAA".into(), How::Exact), ("AAA²".into(), How::Unmarked)]);
+    assert_eq!(keys(&f, "AAA²", Mode::Reader), [("AAA²".into(), How::Exact), ("AAA".into(), How::Unmarked)]);
+    assert_eq!(keys(&f, "AAA2", Mode::Reader), [("AAA2".into(), How::Exact)], "a homograph number is not a 2");
+    assert_eq!(keys(&f, "H2O", Mode::Reader), [("H²O".into(), How::Unmarked)]);
+    let cafe: Vec<String> = keys(&f, "cafe", Mode::Reader).into_iter().map(|(k, _)| k).collect();
+    assert_eq!(cafe.len(), 2, "decomposed and precomposed: {cafe:?}");
+    assert_eq!(keys(&f, "café", Mode::Reader)[0], ("café".into(), How::Exact));
+}
+
+/// Codex 20: a link is matched at tier 1 alone; a reader's query at both.
+#[test]
+fn a_link_never_falls_into_tier_2() {
+    let f = file(&[("abbé", "an abbot")]);
+    assert_eq!(keys(&f, "abbe", Mode::Reader), [("abbé".into(), How::Unmarked)]);
+    assert!(keys(&f, "abbe", Mode::Link).is_empty());
+}
+
+/// Codex 21 and finding 8: internal keys are reached by links, never offered to a reader.
+#[test]
+fn internal_keys_are_links_only() {
+    let mut entries: Vec<(String, String)> = (0..150).map(|i| (format!("@sense{i}"), format!("sense {i}"))).collect();
+    entries.extend((0..1000).map(|i| (format!("word{i}"), "w".to_owned())));
+    entries.push(("sense1".into(), "a public sense".into()));
+    let pairs: Vec<(&str, &str)> = entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let f = file(&pairs);
+    assert_eq!(keys(&f, "sense1", Mode::Reader), [("sense1".into(), How::Exact)], "@sense1 folds to sense1");
+    assert_eq!(keys(&f, "@sense1", Mode::Link)[0], ("@sense1".into(), How::Exact));
+    let mut out = Vec::new();
+    suggest(&f, "sens", 500, &mut out).unwrap();
+    assert_eq!(out, ["sense1"]);
+}
+
+fn hits(f: &File, query: &str) -> xdict_lookup::Resolved {
+    resolve(f, query, Mode::Reader, &mut Budget::lookup()).unwrap()
+}
+
+/// Codex 22: a diamond gives its end once, by the shortest way, and is not a loop.
+#[test]
+fn a_diamond_is_one_hit_and_no_loop() {
+    let f = file(&[("A", "@@@LINK=B\r\n@@@LINK=C"), ("B", "@@@LINK=D"), ("C", "@@@LINK=D"), ("D", "the end")]);
+    let r = hits(&f, "A");
+    assert_eq!(r.hits.len(), 1, "{r:?}");
+    let How::Redirect { chain } = &r.hits[0].how else { panic!("{r:?}") };
+    assert_eq!(names(&f, chain), ["A", "B", "D"]);
+    assert!(r.hits[0].problems.is_empty() && r.problems.is_empty(), "{r:?}");
+}
+
+/// Codex 22: a self-loop and a dangling target are problems; with no hit left, the page carries them.
+#[test]
+fn loops_and_dangling_targets_are_data() {
+    let f = file(&[("A", "@@@LINK=A"), ("B", "@@@LINK=nowhere")]);
+    let r = hits(&f, "A");
+    assert!(r.hits.is_empty());
+    assert!(matches!(&r.problems[..], [Problem::Loop { chain }] if names(&f, chain) == ["A", "A"]), "{r:?}");
+    let r = hits(&f, "B");
+    assert!(matches!(&r.problems[..], [Problem::Dangling { target, .. }] if target == "nowhere"), "{r:?}");
+}
+
+/// Codex 22: a key that is both an entry and a redirect gives both; a target also matched directly is given
+/// once, as matched.
+#[test]
+fn a_key_both_entry_and_redirect_gives_both() {
+    let f = file(&[("run", "an entry"), ("run", "@@@LINK=sprint"), ("sprint", "to run fast")]);
+    let r = hits(&f, "run");
+    let got: Vec<(String, bool)> =
+        r.hits.iter().map(|h| (f.key(h.key).unwrap().into_owned(), matches!(h.how, How::Redirect { .. }))).collect();
+    assert_eq!(got, [("run".into(), false), ("sprint".into(), true)]);
+    let f = file(&[("a", "@@@LINK=b"), ("b", "the b")]);
+    let both = resolve(&f, "a", Mode::Reader, &mut Budget::lookup()).unwrap();
+    assert_eq!(both.hits.len(), 1);
+}
+
+/// A chain longer than the hop limit stops with a problem, not a hang.
+#[test]
+fn a_long_chain_stops_at_the_hop_limit() {
+    let names: Vec<String> = (0..=xdict_lookup::HOPS + 2).map(|i| format!("k{i:02}")).collect();
+    let mut entries: Vec<(String, String)> =
+        names.windows(2).map(|w| (w[0].clone(), format!("@@@LINK={}", w[1]))).collect();
+    entries.push((names.last().unwrap().clone(), "the end".into()));
+    let pairs: Vec<(&str, &str)> = entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let f = file(&pairs);
+    let r = hits(&f, "k00");
+    assert!(r.hits.is_empty());
+    assert!(matches!(&r.problems[..], [Problem::Limit { .. }]), "{r:?}");
+}
+
+#[test]
+fn suggestions_are_folded_order_once_each() {
+    let f = file(&[("Run", "a"), ("run", "b"), ("run", "c"), ("rune", "d"), ("café", "e")]);
+    let mut out = Vec::new();
+    suggest(&f, "RU", 10, &mut out).unwrap();
+    assert_eq!(out, ["Run", "run", "rune"]);
+    let mut out = Vec::new();
+    suggest(&f, "", 2, &mut out).unwrap();
+    assert_eq!(out, ["café", "Run"]);
+}

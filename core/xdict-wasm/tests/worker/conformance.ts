@@ -104,7 +104,8 @@ if (opened.type !== 'ready') throw new Error('not open');
 const dict = opened.dict;
 
 x.lookups.forEach((c: any, i: number) => {
-  const options = { limit: c.limit, offset: c.offset, mode: 'reader' as const, generation: c.generation ?? null };
+  const mode: 'reader' | 'link' = c.mode === 'link' ? 'link' : 'reader';
+  const options = { limit: c.limit, offset: c.offset, mode, generation: c.generation ?? null };
   check(`lookups[${i}]`, c.error ? { error: c.error } : c.page, outcome(() => core.lookup(c.query, [dict], options)));
 });
 x.suggestions.forEach((c: any, i: number) => check(`suggestions[${i}]`, c.keys, outcome(() => core.suggest(c.prefix, [dict], c.limit))));

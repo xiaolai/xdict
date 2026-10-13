@@ -12,7 +12,9 @@
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use xdict_mdx::index::Slice;
+use std::sync::Arc;
+
+use xdict_mdx::index::{Derive, Plain, Slice};
 use xdict_mdx::{DiskFile, File, Kind};
 
 fn files(roots: &[String]) -> Vec<PathBuf> {
@@ -97,7 +99,7 @@ fn main() {
             let mut kept = Vec::new();
             for (n, path) in list.iter().enumerate() {
                 let source = DiskFile::open(path).unwrap();
-                match File::build_index(&source, Some(kind(path)), identity(n)) {
+                match File::build_index(&source, Some(kind(path)), identity(n), &*derive(kind(path))) {
                     Ok(index) => {
                         bytes += index.len() as u64;
                         std::fs::write(cache.join(format!("{n}.xdidx")), &index).unwrap();
@@ -124,9 +126,15 @@ fn main() {
                 let path = PathBuf::from(path);
                 let region = Box::new(Slice(xdict_mmap::Mapped::open(&cache.join(format!("{n}.xdidx"))).unwrap()));
                 let source = Box::new(DiskFile::open(&path).unwrap());
-                let file = File::with_index(source, Some(kind(&path)), region, identity(n.parse().unwrap()))
-                    .unwrap()
-                    .unwrap_or_else(|stale| panic!("{}: {stale:?}", path.display()));
+                let file = File::with_index(
+                    source,
+                    Some(kind(&path)),
+                    region,
+                    identity(n.parse().unwrap()),
+                    derive(kind(&path)),
+                )
+                .unwrap()
+                .unwrap_or_else(|stale| panic!("{}: {stale:?}", path.display()));
                 open.push(file);
             }
             let opened = started.elapsed();
@@ -213,5 +221,13 @@ fn main() {
         _ => eprintln!(
             "usage: index_bench build <cache> <dir>... | open <cache> | core <cache> <mdx> <query> | import-all <scratch> <dir>"
         ),
+    }
+}
+
+/// What the core indexes each kind under: dictionaries under the lookup policy, resource libraries plainly.
+fn derive(kind: Kind) -> Arc<dyn Derive> {
+    match kind {
+        Kind::Mdx => Arc::new(xdict_lookup::Policy),
+        Kind::Mdd => Arc::new(Plain),
     }
 }

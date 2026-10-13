@@ -1,0 +1,18 @@
+[package]
+name = "xdict-lookup"
+description = "What a reader's query finds: the two matching tiers, internal keys and redirects"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+unicode-normalization.workspace = true
+xdict-mdx = { path = "../xdict-mdx" }
+
+[dev-dependencies]
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
+[lints]
+workspace = true

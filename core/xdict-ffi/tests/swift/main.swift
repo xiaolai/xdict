@@ -56,6 +56,7 @@ func j(_ p: HitProblem) -> [String: Any] {
     switch p {
     case let .danglingRedirect(from, target): return ["type": "danglingRedirect", "from": from, "target": target]
     case let .redirectLoop(chain): return ["type": "redirectLoop", "chain": chain]
+    case let .redirectLimit(chain): return ["type": "redirectLimit", "chain": chain]
     }
 }
 
@@ -249,7 +250,7 @@ check("open", x["open"], j(opened))
 guard case let .ready(dict, _, _) = opened else { fatalError("not open") }
 
 for (i, c) in (x["lookups"] as! [[String: Any]]).enumerated() {
-    let options = LookupOptions(limit: int(c["limit"])!, offset: int(c["offset"])!, mode: .reader, generation: int(c["generation"]))
+    let options = LookupOptions(limit: int(c["limit"])!, offset: int(c["offset"])!, mode: c["mode"] as? String == "link" ? .link : .reader, generation: int(c["generation"]))
     let got = outcome { j(try core.lookup(query: c["query"] as! String, dicts: [dict], options: options)) }
     check("lookups[\(i)]", c["error"].map { ["error": $0] } ?? c["page"], got)
 }

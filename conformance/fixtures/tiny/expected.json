@@ -7,8 +7,8 @@
   },
   "versions": {
     "protocol": 1,
-    "indexFormat": 1,
-    "normalization": 0
+    "indexFormat": 2,
+    "normalization": 1
   },
   "newWrongProtocol": {
     "client": 999,
@@ -157,6 +157,62 @@
       }
     },
     {
+      "query": "cafe",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "café",
+              "occurrence": 0
+            },
+            "headword": "café",
+            "how": {
+              "type": "unmarked"
+            },
+            "problems": []
+          }
+        ]
+      }
+    },
+    {
+      "query": "cafe",
+      "mode": "link",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 0,
+        "problems": [],
+        "hits": []
+      }
+    },
+    {
+      "query": "Café",
+      "mode": "link",
+      "limit": 10,
+      "offset": 0,
+      "page": {
+        "total": 1,
+        "problems": [],
+        "hits": [
+          {
+            "entry": {
+              "key": "café",
+              "occurrence": 0
+            },
+            "headword": "café",
+            "how": {
+              "type": "folded"
+            },
+            "problems": []
+          }
+        ]
+      }
+    },
+    {
       "query": "run",
       "limit": 1001,
       "offset": 0,
@@ -195,8 +251,8 @@
       "prefix": "",
       "limit": 2,
       "keys": [
-        "Run",
-        "café"
+        "café",
+        "color"
       ]
     }
   ],
