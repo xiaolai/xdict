@@ -30,6 +30,8 @@ public enum LibrarySentences {
             LocalizedStringResource("“\(name)” is not where it was, and XDict cannot find where it went.")
         case .unreadable(let name):
             LocalizedStringResource("“\(name)” could not be opened. Check that you may read it.")
+        case .notAFile(let name):
+            LocalizedStringResource("“\(name)” is no longer a file XDict reads: a link, a folder or a pipe has taken its place.")
         case .changedDuringImport:
             LocalizedStringResource("The file changed while XDict was reading it. Try again.")
         case .cancelled:

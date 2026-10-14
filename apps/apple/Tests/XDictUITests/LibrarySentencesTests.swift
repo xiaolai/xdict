@@ -9,7 +9,8 @@ import XDictUI
 struct LibrarySentencesTests {
     static let refusals: [ImportRefusal] = [
         .formatVersion("4.0"), .resourceLibraryV3, .registrationCode, .encrypted, .compression, .encoding("KOI8-R"),
-        .damaged, .tooLarge, .missingFile("a.mdx"), .unreadable("a.mdx"), .changedDuringImport, .cancelled, .serviceFailed,
+        .damaged, .tooLarge, .missingFile("a.mdx"), .unreadable("a.mdx"), .notAFile("a.mdx"), .changedDuringImport,
+        .cancelled, .serviceFailed,
     ]
 
     @Test func eachRefusalHasItsOwnSentence() {
@@ -22,6 +23,7 @@ struct LibrarySentencesTests {
         #expect(String(localized: LibrarySentences.refusal(.formatVersion("4.0"))).contains("4.0"))
         #expect(String(localized: LibrarySentences.refusal(.encoding("KOI8-R"))).contains("KOI8-R"))
         #expect(String(localized: LibrarySentences.refusal(.missingFile("a.mdx"))).contains("a.mdx"))
+        #expect(String(localized: LibrarySentences.refusal(.notAFile("a.mdx"))).contains("a.mdx"))
         #expect(String(localized: LibrarySentences.refusal(.resourceLibraryV3)).contains("3.0"))
         #expect(String(localized: LibrarySentences.refusal(.registrationCode)).contains("registration code"))
         #expect(String(localized: LibrarySentences.refusal(.damaged)).contains("damaged"))

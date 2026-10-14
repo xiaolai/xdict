@@ -27,6 +27,9 @@ public enum ImportRefusal: Codable, Hashable, Sendable {
     case missingFile(String)
     /// A file of the dictionary is there and could not be opened (permissions, most likely). Named.
     case unreadable(String)
+    /// Something else has taken a file's place: a link (never followed, in its place or in a folder above it), a folder,
+    /// a pipe. Named.
+    case notAFile(String)
     /// The file changed while it was being read.
     case changedDuringImport
     /// The reader cancelled the import.
@@ -39,7 +42,11 @@ public enum ImportRefusal: Codable, Hashable, Sendable {
         switch failure {
         case .fileUnavailable(let file, let errno):
             let name = fileName(file) ?? ""
-            self = errno == ENOENT || errno == ENOTDIR ? .missingFile(name) : .unreadable(name)
+            switch errno {
+            case ENOENT, ENOTDIR: self = .missingFile(name)
+            case ELOOP, EFTYPE: self = .notAFile(name)
+            default: self = .unreadable(name)
+            }
         case .wire(.core(let core)):
             self = Self(core)
         case .wire(.interrupted), .wire(.invalidated), .wire(.timedOut), .wire(.undecodable), .wire(.contractMismatch),
@@ -72,7 +79,7 @@ public enum ImportRefusal: Codable, Hashable, Sendable {
         switch self {
         case .formatVersion, .resourceLibraryV3, .registrationCode, .encrypted, .compression, .encoding, .damaged,
              .tooLarge: true
-        case .missingFile, .unreadable, .changedDuringImport, .cancelled, .serviceFailed: false
+        case .missingFile, .unreadable, .notAFile, .changedDuringImport, .cancelled, .serviceFailed: false
         }
     }
 }

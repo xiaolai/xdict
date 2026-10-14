@@ -56,4 +56,12 @@ struct ImportRefusalTests {
         #expect(ImportRefusal(.fileUnavailable(file: UUID(), errno: ENOENT), fileName: name) == .missingFile(""))
         #expect(!ImportRefusal.missingFile("a.mdx").isPermanent)
     }
+
+    /// What the client refuses to open (the security review of 2026-10-15) is said as what it is, not as a file the
+    /// reader may not read: a link in the file's place or above it (`ELOOP`), a folder or a pipe there (`EFTYPE`).
+    @Test func somethingElseInAFilesPlaceIsNamedAsThat() {
+        #expect(ImportRefusal(.fileUnavailable(file: file, errno: ELOOP), fileName: name) == .notAFile("a.mdx"))
+        #expect(ImportRefusal(.fileUnavailable(file: file, errno: EFTYPE), fileName: name) == .notAFile("a.mdx"))
+        #expect(!ImportRefusal.notAFile("a.mdx").isPermanent, "the reader can put the file back")
+    }
 }

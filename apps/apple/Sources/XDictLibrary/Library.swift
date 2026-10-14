@@ -1,6 +1,5 @@
 import Foundation
 import Observation
-import Synchronization
 import XDictClient
 import XDictContract
 import os
@@ -404,51 +403,24 @@ public final class Library {
         }
     }
 
-    /// The package of a stored dictionary, every file found where it is now (its bookmark first, unless relinking is
-    /// off) and held inside the folder the reader chose while the MDX is still in it — or else inside the MDX's own
-    /// folder, when the chosen one cannot be found or the dictionary's own folder was moved out of it. Locations that
-    /// moved are kept.
+    /// The package of a stored dictionary, by `PackageResolution`'s rule; locations that moved are kept. Its files are
+    /// located from then on by a `LivePackage`, which holds them to the same rule while the dictionary is open.
     private func resolve(_ id: UUID) -> Result<DictionaryPackage, Unresolved> {
         guard let at = index(id) else { return .failure(Unresolved(phase: .missing(fileName: ""))) }
-        var entry = entries[at]
-        var urls: [URL] = []
-        var changed = false
-        for (position, file) in entry.files.enumerated() {
-            switch locator.resolve(file.location) {
-            case .found(let url, let renewed):
-                urls.append(url)
-                if let renewed {
-                    entry.files[position].location = renewed
-                    changed = true
-                }
-            case .missing:
-                return .failure(Unresolved(phase: .missing(fileName: file.fileName)))
-            case .notCanonical:
-                return .failure(Unresolved(phase: .outsideItsFolder(fileName: file.fileName)))
-            }
+        let rule = PackageResolution(locator: locator)
+        let found: PackageResolution.Found
+        switch rule.resolve(entries[at].files, root: entries[at].root) {
+        case .success(let resolved): found = resolved
+        case .failure(let unresolved): return .failure(unresolved)
         }
-        let mdx = zip(entry.files, urls).first { $0.0.role == .mdx }?.1
-        let folder: URL?
-        switch locator.resolve(entry.root) {
-        case .found(let root, let renewed):
-            folder = mdx.map { FileLocator.isInside($0, root) } == true ? root : mdx?.deletingLastPathComponent()
-            if let renewed {
-                entry.root = renewed
-                changed = true
-            }
-        case .missing, .notCanonical:
-            folder = mdx?.deletingLastPathComponent()
-        }
-        if let folder, let outside = zip(entry.files, urls).first(where: { !FileLocator.isInside($0.1, folder) }) {
-            return .failure(Unresolved(phase: .outsideItsFolder(fileName: outside.0.fileName)))
-        }
-        if changed {
-            entries[at] = entry
+        if found.changed {
+            entries[at].files = found.files
+            entries[at].root = found.root
             save()
         }
-        return .success(DictionaryPackage(files: zip(entry.files, urls).map { file, url in
-            let live = LiveLocation(stored: file.location, url: url, locator: locator)
-            return PackageFile(spec: file.spec, locate: { live.current() })
+        let live = LivePackage(found, rule: rule)
+        return .success(DictionaryPackage(files: found.files.enumerated().map { position, file in
+            PackageFile(spec: file.spec, locate: { live.current(position) })
         }))
     }
 
@@ -590,28 +562,4 @@ public final class Library {
 /// A dictionary whose package could not be put together, and the phase that says why.
 struct Unresolved: Error {
     let phase: EntryPhase
-}
-
-/// **One file's location for the service's client** (`PackageFile.locate`, asked before every token and every open): the
-/// canonical path found when the package was resolved; if nothing answers there any more, the file's bookmark is asked
-/// again (ADR-0009 decision 1: the app re-resolves when its path answers ENOENT, before sending `missing`), and a link
-/// is never followed.
-final class LiveLocation: Sendable {
-    private let stored: StoredLocation
-    private let locator: FileLocator
-    private let url: Mutex<URL>
-
-    init(stored: StoredLocation, url: URL, locator: FileLocator) {
-        self.stored = stored
-        self.locator = locator
-        self.url = Mutex(url)
-    }
-
-    func current() -> URL {
-        url.withLock { url in
-            if access(url.path, F_OK) == 0 || errno != ENOENT { return url }
-            if case .found(let moved, _) = locator.resolve(stored) { url = moved }
-            return url
-        }
-    }
 }
