@@ -1218,13 +1218,25 @@ mod tests {
         assert_eq!(html(kept, BASE).text, kept, "an unchanged handler is written as found");
     }
 
+    /// That `bounded` refuses, in under half the time `whole` takes on the same input on this machine: what a
+    /// fixed duration cannot tell (a slow runner once took 530 ms for a 500 ms bound), a refusal that stops early
+    /// against one that is written whole first can.
+    fn stops_early(what: &str, whole: impl Fn() -> String, bounded: impl Fn() -> Result<String, crate::Exceeded>) {
+        let started = std::time::Instant::now();
+        let written = whole();
+        let full = started.elapsed();
+        assert!(!written.is_empty(), "{what}");
+        let started = std::time::Instant::now();
+        assert_eq!(bounded(), Err(crate::Exceeded), "{what}");
+        let refused = started.elapsed();
+        assert!(refused * 2 < full, "{what}: refused in {refused:?}, written whole in {full:?}");
+    }
+
     /// Held to `max`, the rewrite stops as soon as its text would pass it; under it, it is the unbounded text.
     #[test]
     fn a_rewrite_past_its_ceiling_is_refused_early() {
         let entry = "<img src=a><a href='entry://b'>b</a><style>p{background:url(c.png)}</style>".repeat(200_000);
-        let started = std::time::Instant::now();
-        assert_eq!(html_text_within(&entry, BASE, "", 1 << 20), Err(crate::Exceeded));
-        assert!(started.elapsed() < std::time::Duration::from_secs(2), "took {:?}", started.elapsed());
+        stops_early("entry", || html_text(&entry, BASE, ""), || html_text_within(&entry, BASE, "", 1 << 20));
         let sheet = "p{background:url(c.png)}".repeat(200_000);
         assert_eq!(css_text_within(&sheet, BASE, "", 1 << 20), Err(crate::Exceeded));
         for text in [r#"<img src=a srcset="b 1x"><p style="background:url(c)">x</p><svg><style>a{}</style>"#, "plain"] {
@@ -1252,9 +1264,7 @@ mod tests {
         let handler = format!("<a onclick=\"{}\">x</a>", "gdau://".repeat(n));
         let srcset = format!("<img srcset=\"{}\">", "a.png 1x, ".repeat(n / 2));
         for (what, page) in [("handler", &handler), ("srcset", &srcset)] {
-            let started = std::time::Instant::now();
-            assert_eq!(html_text_within(page, BASE, "", 1 << 10), Err(crate::Exceeded), "{what}");
-            assert!(started.elapsed() < std::time::Duration::from_millis(500), "{what} took {:?}", started.elapsed());
+            stops_early(what, || html_text(page, BASE, ""), || html_text_within(page, BASE, "", 1 << 10));
         }
         for page in [
             "<script>a='gdau://x';b='entry://y'</script><p>after</p>",
@@ -1271,6 +1281,9 @@ mod tests {
     /// A rewritten URL is weighed before it is built: one that percent-encodes to three times its length (a
     /// blocked remote URL, a lookup) is refused as soon as it could not fit, whether it stands in a `srcset`, an
     /// attribute or a stylesheet, rather than once it is whole. Under the ceiling each is written as without one.
+    /// What weighing saves is memory, not time: scanning the input takes as long either way, so this test asserts
+    /// no duration (a 500 ms bound once failed on a slow runner without telling the two apart). The saving was
+    /// measured with `XDICT_WEIGHED_URL_BYTES` = 32 MiB under `/usr/bin/time -l`: a 475 MB peak before, 240 after.
     #[test]
     fn a_url_is_weighed_before_it_is_built() -> Result<(), std::num::ParseIntError> {
         // `XDICT_WEIGHED_URL_BYTES` sets the URL's size, for measuring the peak under `/usr/bin/time -l`.
@@ -1283,14 +1296,10 @@ mod tests {
             ("style", format!("<p style=\"background:url(https://e.example/{bang})\">x</p>")),
         ];
         for (what, page) in &pages {
-            let started = std::time::Instant::now();
             assert_eq!(html_text_within(page, BASE, "", 1 << 10), Err(crate::Exceeded), "{what}");
-            assert!(started.elapsed() < std::time::Duration::from_millis(500), "{what} took {:?}", started.elapsed());
         }
         let sheet = format!("a{{background:url(https://e.example/{bang})}}");
-        let started = std::time::Instant::now();
         assert_eq!(css_text_within(&sheet, BASE, "", 1 << 10), Err(crate::Exceeded));
-        assert!(started.elapsed() < std::time::Duration::from_millis(500), "sheet took {:?}", started.elapsed());
         for page in [
             r#"<img srcset="https://e.example/a!b 1x, c.png 2x">"#,
             r#"<a href="entry://a b#c d">x</a><a href="sound://s.mp3">s</a><a href="gdau://say:hi">t</a>"#,
