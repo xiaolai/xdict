@@ -7,6 +7,10 @@ extension ConformanceScenario {
     /// a rebuilt file imported, joined to tiny's lineage and joined again (idempotent), split back to the lineage it had,
     /// split to a lineage the client minted and split so again (a retried split is the same split), then the refusals.
     /// Each lineage answered is compared as a label, `tiny` or `rebuilt`, since the service mints them at random.
+    ///
+    /// **The client's lineage is minted fresh on every run** and compared as `newLineage`: the E2E Mac's service keeps
+    /// its registry between runs, where `expected.json`'s fixed one is, after the first run, the lineage the rebuilt
+    /// edition is already in — no longer new, and answered as `rebuilt` (2026-10-15).
     func lineages(_ x: [String: Any], dir: URL, tiny: Imported, _ c: inout Comparisons) async {
         guard let n = x["lineages"] as? [String: Any], let file = n["file"] as? String,
               let minted = n["newLineage"] as? String, let unknownEdition = n["unknownEdition"] as? String,
@@ -14,9 +18,12 @@ extension ConformanceScenario {
         else { return c.fail("tiny/expected.json has no lineages to ask") }
         let outcome = await client.importPackage(DictionaryPackage.of(mdx: dir.appending(path: file), volumes: [], sidecars: []))
         guard case .success(let rebuilt) = outcome else { return c.fail("lineages: \(file) did not import: \(outcome)") }
+        let fresh = UUID().uuidString
         func label(_ value: Any) -> Any {
             guard let id = value as? String else { return value }
-            return id == tiny.lineage.rawValue ? "tiny" : id == rebuilt.lineage.rawValue ? "rebuilt" : id
+            if id == tiny.lineage.rawValue { return "tiny" }
+            if id == rebuilt.lineage.rawValue { return "rebuilt" }
+            return id.lowercased() == fresh.lowercased() ? minted.lowercased() : id
         }
         var projected = P.imported(rebuilt)
         projected["lineage"] = label(rebuilt.lineage.rawValue)
@@ -31,7 +38,7 @@ extension ConformanceScenario {
         let edition = rebuilt.edition
         let join = ServiceOperation.joinLineage(edition: edition, lineage: tiny.lineage)
         let splitBack = ServiceOperation.splitLineage(edition: edition, newLineage: rebuilt.lineage)
-        let splitToNew = ServiceOperation.splitLineage(edition: edition, newLineage: LineageId(rawValue: minted))
+        let splitToNew = ServiceOperation.splitLineage(edition: edition, newLineage: LineageId(rawValue: fresh))
         c.compare("lineages.before", n["before"], await ask(.lineageOf(edition: edition)))
         c.compare("lineages.join", n["join"], await ask(join))
         c.compare("lineages.afterJoin", n["afterJoin"], await ask(.lineageOf(edition: edition)))
