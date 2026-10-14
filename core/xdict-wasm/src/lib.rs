@@ -308,23 +308,25 @@ extern "C" {
     fn stringify(value: &JsValue) -> Result<JsValue, JsValue>;
 }
 
-/// The progress callback of one import, by its number in [`PROGRESS`], released when the import ends. A
-/// callback that throws cancels the import.
-/// An import's progress callback, by its number, and how many exceptions [`THROWN`] held when the import began:
-/// once a source of the import has thrown, the answer is `false`, so the core stops before it registers anything
-/// (it asks once more just before), and the import fails with the source's exception ([`watched`]).
+/// An import's progress callback, by its number in [`PROGRESS`] (released when the import ends; one that throws
+/// cancels the import), and how many exceptions [`THROWN`] held when the import began: once a source has thrown
+/// during the import, the answer is `false`, so the core stops before it registers anything (it asks once more
+/// just before), and the import fails with the source's exception ([`watched`]). Asked again after the callback,
+/// since the callback may call into the core, and a source may throw there.
 struct Progress(Option<u32>, usize);
 
 impl core::Progress for Progress {
     fn progress(&self, done: u64, total: u64) -> bool {
-        if THROWN.with(|thrown| thrown.borrow().len()) > self.1 {
+        let clean = || THROWN.with(|thrown| thrown.borrow().len()) <= self.1;
+        if !clean() {
             return false;
         }
         let Some(id) = self.0 else { return true };
-        match PROGRESS.with(|table| table.borrow().get(id)) {
+        let go = match PROGRESS.with(|table| table.borrow().get(id)) {
             Some(callback) => callback.progress(done as f64, total as f64).unwrap_or(false),
             None => true,
-        }
+        };
+        go && clean()
     }
 }
 

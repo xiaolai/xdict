@@ -379,6 +379,48 @@ attempt('web.lateThrowKeepsRecord', () => {
   check('web.lateThrowKeepsRecord', { type: 'found' }, outcome(() => c3.resource(o.dict, 'run.mp3', view())));
   c3.close(o.dict);
 });
+// A source that throws inside the import's last progress callback, here through a lookup the callback makes into
+// the core, still stops the import before it registers: the veto is checked after the callback as well as before.
+attempt('web.throwInLastProgressKeepsRecord', () => {
+  const mddBytes = readFileSync(join(fixtures, 'tiny.mdd'));
+  const mddAt: FileIdentity = { device: 9n, inode: 160n, size: BigInt(mddBytes.length), mtimeNs: 16n, ctimeNs: 16n };
+  const mdx = src(at(16n));
+  const withVolume: Package = { ...only(mdx), mdd: [{ type: 'source', name: 'tiny.mdd', source: new Bytes(mddBytes, mddAt) }] };
+  c3.import(withVolume);
+  // Another dictionary, under its own name, whose identity throws while `side.broken` is set.
+  const side = { broken: false };
+  const sideSource = src(at(17n), { identity: () => { if (side.broken) throw new Error('identity failed'); return at(17n); } });
+  const sidePkg: Package = { mdx: { type: 'source', name: 'side.mdx', source: sideSource }, mdd: [], sidecars: [] };
+  c3.import(sidePkg);
+  const opened = outcome(() => c3.open(sidePkg)) as any;
+  check('web.throwInLastProgressKeepsRecord.side', 'ready', opened?.type);
+  if (opened?.type !== 'ready') return;
+  // How many reports an import of these bytes makes, counted on a package of its own name.
+  let reports = 0;
+  c3.import({ mdx: { type: 'source', name: 'count.mdx', source: src(at(16n)) }, mdd: [], sidecars: [] }, () => {
+    reports++;
+    return true;
+  });
+  // Without the volume: registering this would replace the record the valid import left.
+  let call = 0;
+  const failed = outcome(() => c3.import(only(mdx), () => {
+    if (++call === reports) {
+      side.broken = true;
+      outcome(() => c3.lookup('run', [opened.dict], page));
+      side.broken = false;
+    }
+    return true;
+  }));
+  check('web.throwInLastProgressKeepsRecord.lastCall', reports, call);
+  check('web.throwInLastProgressKeepsRecord.fails', { error: { type: 'io' } }, failed);
+  const o = outcome(() => c3.open(withVolume)) as any;
+  check('web.throwInLastProgressKeepsRecord.open', 'ready', o?.type);
+  if (o?.type === 'ready') {
+    check('web.throwInLastProgressKeepsRecord', { type: 'found' }, outcome(() => c3.resource(o.dict, 'run.mp3', view())));
+    c3.close(o.dict);
+  }
+  c3.close(opened.dict);
+});
 
 // Counted from here: dictionaries the checks above left open hold their sources, as they should.
 attempt('web.sourcesReleased', () => {
