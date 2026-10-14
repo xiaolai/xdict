@@ -37,7 +37,8 @@ struct CoreMappingTests {
         ]
         for (core, wire) in features { #expect(XDictContract.Feature(core) == wire) }
         #expect([XDictCore.Limit.file, .page, .body].map(XDictContract.Limit.init) == [.file, .page, .body])
-        #expect([XDictCore.Missing.file, .entry].map(XDictContract.Missing.init) == [.file, .entry])
+        #expect([XDictCore.Missing.file, .entry, .edition, .lineage].map(XDictContract.Missing.init)
+                == [.file, .entry, .edition, .lineage])
         #expect([XDictCore.IoKind.notFound, .permissionDenied, .shortRead, .outOfMemory, .other].map(XDictContract.IoKind.init)
                 == [.notFound, .permissionDenied, .shortRead, .outOfMemory, .other])
     }

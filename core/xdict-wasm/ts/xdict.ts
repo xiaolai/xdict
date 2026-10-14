@@ -97,6 +97,9 @@ interface GlueCore {
   entry(dict: string, entry: string, view: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
+  joinLineage(edition: string, lineage: string): string;
+  splitLineage(edition: string, newLineage: string): string;
+  lineageOf(edition: string): string;
   selfTestPanic(): string;
 }
 
@@ -266,6 +269,21 @@ export class XDictCore {
         reply.free();
       }
     });
+  }
+
+  /** Joins an edition to a lineage the registry holds, as the reader asked; answers the lineage it now has. */
+  joinLineage(edition: string, lineage: string): string {
+    return this.call(() => this.inner.joinLineage(edition, lineage));
+  }
+
+  /** Moves an edition to `newLineage`: one the shell minted, or the one it had before a join, which undoes it. */
+  splitLineage(edition: string, newLineage: string): string {
+    return this.call(() => this.inner.splitLineage(edition, newLineage));
+  }
+
+  /** The edition's lineage now; `null` for an edition never imported. */
+  lineageOf(edition: string): string | null {
+    return this.call(() => this.inner.lineageOf(edition));
   }
 
   selfTestPanic(): void {

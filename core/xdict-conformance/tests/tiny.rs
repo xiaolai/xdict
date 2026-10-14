@@ -209,6 +209,40 @@ fn the_tiny_dictionary_conforms() {
         outcome(core.resource(watched, "tiny.css".into(), view(None))),
     );
 
+    // The reader's joins and splits; each lineage answered is compared as a label, since ids are minted at random.
+    let n = &x["lineages"];
+    let rebuilt = Package { mdx: at(n["file"].as_str().unwrap()), mdd: vec![], sidecars: vec![] };
+    let rebuilt = core.import(rebuilt, &NoProgress).unwrap();
+    let label = |v: Value| match v.as_str() {
+        Some(id) if id == imported.lineage => json!("tiny"),
+        Some(id) if id == rebuilt.lineage => json!("rebuilt"),
+        _ => v,
+    };
+    let mut got = outcome::<Imported>(Ok(rebuilt.clone()));
+    got["lineage"] = label(got["lineage"].clone());
+    check("lineages.import", &n["import"], got);
+    let edition = rebuilt.edition.clone();
+    let lineage_of = |e: &str| label(outcome(core.lineage_of(e.into())));
+    let join = |e: &str, l: &str| label(outcome(core.join_lineage(e.into(), l.into())));
+    let split = |e: &str, l: &str| label(outcome(core.split_lineage(e.into(), l.into())));
+    check("lineages.before", &n["before"], lineage_of(&edition));
+    check("lineages.join", &n["join"], join(&edition, &imported.lineage));
+    check("lineages.afterJoin", &n["afterJoin"], lineage_of(&edition));
+    check("lineages.joinAgain", &n["joinAgain"], join(&edition, &imported.lineage));
+    check("lineages.split", &n["split"], split(&edition, &rebuilt.lineage));
+    check("lineages.afterSplit", &n["afterSplit"], lineage_of(&edition));
+    let new = n["newLineage"].as_str().unwrap();
+    check("lineages.splitToNew", &n["splitToNew"], split(&edition, new));
+    check("lineages.splitToNewAgain", &n["splitToNewAgain"], split(&edition, new));
+    let unknown = n["unknownEdition"].as_str().unwrap();
+    check("lineages.joinUnknownEdition", &n["joinUnknownEdition"], join(unknown, &imported.lineage));
+    check("lineages.lineageOfUnknownEdition", &n["lineageOfUnknownEdition"], lineage_of(unknown));
+    let nobody = n["unknownLineage"].as_str().unwrap();
+    check("lineages.joinUnknownLineage", &n["joinUnknownLineage"], join(&edition, nobody));
+    let not_one = n["notALineage"].as_str().unwrap();
+    check("lineages.splitNotALineage", &n["splitNotALineage"], split(&edition, not_one));
+    check("lineages.splitIntoAnother", &n["splitIntoAnother"], split(&imported.edition, &rebuilt.lineage));
+
     let l = &x["lifecycle"];
     core.close(second.clone()).unwrap();
     let page = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };

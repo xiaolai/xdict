@@ -503,6 +503,21 @@ impl Core {
         }
     }
 
+    #[wasm_bindgen(js_name = joinLineage)]
+    pub fn join_lineage(&self, edition: &str, lineage: &str) -> Reply {
+        reply(self.0.join_lineage(edition.into(), lineage.into()))
+    }
+
+    #[wasm_bindgen(js_name = splitLineage)]
+    pub fn split_lineage(&self, edition: &str, new_lineage: &str) -> Reply {
+        reply(self.0.split_lineage(edition.into(), new_lineage.into()))
+    }
+
+    #[wasm_bindgen(js_name = lineageOf)]
+    pub fn lineage_of(&self, edition: &str) -> Reply {
+        reply(self.0.lineage_of(edition.into()))
+    }
+
     #[wasm_bindgen(js_name = selfTestPanic)]
     pub fn self_test_panic(&self) -> Reply {
         reply(self.0.self_test_panic().map(|()| Value::Null))

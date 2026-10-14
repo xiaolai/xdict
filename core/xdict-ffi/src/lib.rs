@@ -214,6 +214,8 @@ pub enum Limit {
 pub enum Missing {
     File,
     Entry,
+    Edition,
+    Lineage,
 }
 
 #[uniffi::remote(Enum)]
@@ -353,6 +355,18 @@ impl Core {
 
     pub fn resource(&self, dict: String, path: String, view: View) -> Result<Resource, CoreError> {
         self.0.resource(dict, path, view)
+    }
+
+    pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {
+        self.0.join_lineage(edition, lineage)
+    }
+
+    pub fn split_lineage(&self, edition: String, new_lineage: String) -> Result<String, CoreError> {
+        self.0.split_lineage(edition, new_lineage)
+    }
+
+    pub fn lineage_of(&self, edition: String) -> Result<Option<String>, CoreError> {
+        self.0.lineage_of(edition)
     }
 
     pub fn self_test_panic(&self) -> Result<(), CoreError> {

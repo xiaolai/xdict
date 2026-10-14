@@ -30,7 +30,8 @@ public enum WireError: Error, Codable, Hashable, Sendable {
 public enum CoreFailure: Codable, Hashable, Sendable {
     /// The file uses something XDict refuses, named. Never defeated (AGENTS.md).
     case unsupported(feature: Feature, detail: String)
-    /// The file is damaged.
+    /// The file is damaged, or the request does not fit its call: a lineage that is not a UUID, or a split into another
+    /// dictionary's lineage. The operation says which.
     case malformed(detail: String)
     /// A valid request for more than XDict holds at once: a limit, not damage.
     case tooLarge(limit: Limit, detail: String)
@@ -74,9 +75,10 @@ public enum Limit: String, Codable, Hashable, Sendable {
     case body
 }
 
-/// What `CoreFailure.notFound` did not find.
+/// What `CoreFailure.notFound` did not find. `edition` and `lineage` came with contract version 2: an edition no import
+/// registered, and a lineage no edition was ever in, as the lineage operations report them.
 public enum Missing: String, Codable, Hashable, Sendable {
-    case file, entry
+    case file, entry, edition, lineage
 }
 
 public enum IoKind: String, Codable, Hashable, Sendable {

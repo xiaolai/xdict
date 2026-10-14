@@ -1,7 +1,8 @@
 //! What a dictionary is keyed by (ADR-0002): an **edition** is the SHA-256 of the whole `.mdx`; a resource
 //! volume is recognised by a local **validation token**; a **location** is where a package was found, with
 //! the file identity that tells whether it has changed since; a **lineage** is the dictionary the reader sees,
-//! minted once per new edition. A path is never an identity.
+//! minted once per new edition, and joined or split only by the reader, each act recorded and none rewritten. A path
+//! is never an identity.
 //!
 //! The [`Registry`] holds them. It is study data (ADR-0002 decision 4): the study ledger will implement the
 //! trait; [`FileRegistry`] keeps it in one JSON document until then.
@@ -158,7 +159,42 @@ pub trait Registry: Send + Sync {
     /// seen for the first time, the one `mint` makes.
     fn register(&self, record: LocationRecord, mint: &mut dyn FnMut() -> String) -> Result<String, RegistryError>;
     fn location(&self, location: &str) -> Result<Option<LocationRecord>, RegistryError>;
+    /// The lineage the edition has now: the last one the reader associated it with, else the one minted for it.
     fn lineage(&self, edition: &str) -> Result<Option<String>, RegistryError>;
+    /// Associates an edition with a lineage, as the reader asked (ADR-0002 decision 3): recorded as an act of the
+    /// reader's, never a rewrite of the lineage the edition was minted with, so every association can be undone by
+    /// another. Answers the lineage the edition now has. Idempotent: an edition already in `lineage` records nothing.
+    fn associate(&self, edition: &str, lineage: &str, target: Target)
+    -> Result<Result<String, Refused>, RegistryError>;
+}
+
+/// Which lineages an association may name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Target {
+    /// Only one the registry holds: a join, so that a stale or mistaken id never makes a dictionary of its own.
+    Existing,
+    /// A new one, or one this edition had before: a split, to a lineage the shell has just minted, or back to where a
+    /// join took the edition from. Never another dictionary's, which would be a join no one asked for.
+    NewOrOwn,
+}
+
+/// Why an association was refused. Nothing is recorded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Refused {
+    /// No location of this edition was ever registered.
+    Edition,
+    /// No edition was ever minted in, joined to or split to this lineage.
+    Lineage,
+    /// A split named a lineage of other editions that this one never had.
+    Foreign,
+}
+
+/// One act of the reader's: an edition associated with a lineage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Association {
+    edition: String,
+    lineage: String,
 }
 
 #[derive(Default, Clone, Serialize, Deserialize)]
@@ -166,17 +202,60 @@ pub trait Registry: Send + Sync {
 struct Contents {
     /// The document's own version.
     version: u32,
-    /// Edition → lineage.
+    /// Edition → the lineage minted for it when it was first seen. Never rewritten.
     lineages: BTreeMap<String, String>,
+    /// The reader's joins and splits, in the order made, never rewritten either: an edition's lineage is the one its
+    /// last association names, else the one minted for it. Absent from a version 1 document.
+    #[serde(default)]
+    associations: Vec<Association>,
     /// Location → what was found there.
     locations: BTreeMap<String, LocationRecord>,
 }
 
 impl Contents {
     fn register(&mut self, record: LocationRecord, mint: &mut dyn FnMut() -> String) -> String {
-        let lineage = self.lineages.entry(record.edition.clone()).or_insert_with(mint).clone();
+        let minted = self.lineages.entry(record.edition.clone()).or_insert_with(mint).clone();
+        let lineage = self.associated(&record.edition).cloned().unwrap_or(minted);
         self.locations.insert(record.location.clone(), record);
         lineage
+    }
+
+    /// The lineage the reader last associated the edition with, if any.
+    fn associated(&self, edition: &str) -> Option<&String> {
+        self.associations.iter().rev().find(|a| a.edition == edition).map(|a| &a.lineage)
+    }
+
+    fn lineage(&self, edition: &str) -> Option<&String> {
+        self.associated(edition).or_else(|| self.lineages.get(edition))
+    }
+
+    /// Whether any edition was ever minted in, joined to or split to `lineage`: a lineage left with no edition is
+    /// still one, so that an edition can return to it.
+    fn holds_lineage(&self, lineage: &str) -> bool {
+        self.lineages.values().any(|l| l == lineage) || self.associations.iter().any(|a| a.lineage == lineage)
+    }
+
+    /// Whether the edition was ever in `lineage`: minted in it, or associated with it.
+    fn has_had(&self, edition: &str, lineage: &str) -> bool {
+        self.lineages.get(edition).is_some_and(|l| l == lineage)
+            || self.associations.iter().any(|a| a.edition == edition && a.lineage == lineage)
+    }
+
+    /// Records the act, unless the edition already has `lineage`.
+    fn associate(&mut self, edition: &str, lineage: &str, target: Target) -> Result<(), Refused> {
+        let current = self.lineage(edition).ok_or(Refused::Edition)?;
+        if current == lineage {
+            return Ok(());
+        }
+        match target {
+            Target::Existing if !self.holds_lineage(lineage) => return Err(Refused::Lineage),
+            Target::NewOrOwn if self.holds_lineage(lineage) && !self.has_had(edition, lineage) => {
+                return Err(Refused::Foreign);
+            }
+            Target::Existing | Target::NewOrOwn => {}
+        }
+        self.associations.push(Association { edition: edition.to_owned(), lineage: lineage.to_owned() });
+        Ok(())
     }
 }
 
@@ -192,7 +271,16 @@ impl Registry for MemoryRegistry {
         Ok(self.0.lock().map_err(poisoned)?.locations.get(location).cloned())
     }
     fn lineage(&self, edition: &str) -> Result<Option<String>, RegistryError> {
-        Ok(self.0.lock().map_err(poisoned)?.lineages.get(edition).cloned())
+        Ok(self.0.lock().map_err(poisoned)?.lineage(edition).cloned())
+    }
+    fn associate(
+        &self,
+        edition: &str,
+        lineage: &str,
+        target: Target,
+    ) -> Result<Result<String, Refused>, RegistryError> {
+        let mut contents = self.0.lock().map_err(poisoned)?;
+        Ok(contents.associate(edition, lineage, target).map(|()| lineage.to_owned()))
     }
 }
 
@@ -200,7 +288,10 @@ fn poisoned<T>(_: T) -> RegistryError {
     RegistryError("the registry was left inconsistent by an earlier fault".into())
 }
 
-const VERSION: u32 = 1;
+/// The document's version: 2 added the reader's associations. A build reads every version up to its own and writes
+/// its own, so a build that knows no associations refuses a document holding them rather than writing it back
+/// without them.
+const VERSION: u32 = 2;
 
 /// What tells whether the document on disk is the one read last: a write renames a new file into place, so the
 /// file's identity changes with every write, this registry's or another's.
@@ -371,15 +462,26 @@ fn load(path: &std::path::Path) -> Result<Cached, RegistryError> {
     let stamp = Stamp::of(&file.metadata().map_err(|e| unreadable(&e))?);
     let mut bytes = Vec::new();
     file.read_to_end(&mut bytes).map_err(|e| unreadable(&e))?;
-    let contents: Contents = serde_json::from_slice(&bytes).map_err(|e| unreadable(&e))?;
-    if contents.version != VERSION {
-        return Err(RegistryError(format!("{} is version {}, not {VERSION}", path.display(), contents.version)));
+    let document: serde_json::Value = serde_json::from_slice(&bytes).map_err(|e| unreadable(&e))?;
+    let version = document.get("version").and_then(serde_json::Value::as_u64).unwrap_or(0);
+    if !(1..=u64::from(VERSION)).contains(&version) {
+        return Err(RegistryError(format!("{} is version {version}; this build reads 1 to {VERSION}", path.display())));
     }
+    // Version 1 had no associations, so it may lack the field; a later version that lacks it lost it, and read as a
+    // document with no joins it would return every joined edition to its own lineage.
+    if version >= 2 && document.get("associations").is_none() {
+        return Err(unreadable(&"it holds no associations, which its version has"));
+    }
+    let mut contents: Contents = serde_json::from_value(document).map_err(|e| unreadable(&e))?;
+    // An earlier version is this one with nothing it added: written back, it is written as this one.
+    contents.version = VERSION;
     Ok(Cached { contents, stamp: Some(stamp) })
 }
 
-impl Registry for FileRegistry {
-    fn register(&self, record: LocationRecord, mint: &mut dyn FnMut() -> String) -> Result<String, RegistryError> {
+impl FileRegistry {
+    /// Changes the document as it is on disk now, under the directory's lock, and writes it back when `change` answers
+    /// that it should be.
+    fn update<T>(&self, change: impl FnOnce(&mut Contents) -> (T, bool)) -> Result<T, RegistryError> {
         let mut cached = self.cached.lock().map_err(poisoned)?;
         let dir = self.path.parent().ok_or_else(|| RegistryError("the registry has no directory".into()))?;
         let fail = |e: io::Error| RegistryError(format!("{} cannot be locked: {e}", dir.display()));
@@ -394,17 +496,38 @@ impl Registry for FileRegistry {
             .map_err(fail)?;
         lock.lock().map_err(fail)?;
         let mut next = load(&self.path)?;
-        let lineage = next.contents.register(record, mint);
-        self.write(dir, &next.contents)?;
-        next.stamp = std::fs::metadata(&self.path).ok().map(|m| Stamp::of(&m));
+        let (answer, changed) = change(&mut next.contents);
+        if changed {
+            self.write(dir, &next.contents)?;
+            next.stamp = std::fs::metadata(&self.path).ok().map(|m| Stamp::of(&m));
+        }
         *cached = next;
-        Ok(lineage)
+        Ok(answer)
+    }
+}
+
+impl Registry for FileRegistry {
+    fn register(&self, record: LocationRecord, mint: &mut dyn FnMut() -> String) -> Result<String, RegistryError> {
+        self.update(|contents| (contents.register(record, mint), true))
     }
     fn location(&self, location: &str) -> Result<Option<LocationRecord>, RegistryError> {
         Ok(self.current()?.contents.locations.get(location).cloned())
     }
     fn lineage(&self, edition: &str) -> Result<Option<String>, RegistryError> {
-        Ok(self.current()?.contents.lineages.get(edition).cloned())
+        Ok(self.current()?.contents.lineage(edition).cloned())
+    }
+    fn associate(
+        &self,
+        edition: &str,
+        lineage: &str,
+        target: Target,
+    ) -> Result<Result<String, Refused>, RegistryError> {
+        // Written even when nothing new is recorded: a retry after a write whose durability was not confirmed is
+        // what confirms it, so an answer is never given for a document that a power failure could still take back.
+        self.update(|contents| match contents.associate(edition, lineage, target) {
+            Ok(()) => (Ok(lineage.to_owned()), true),
+            Err(refused) => (Err(refused), false),
+        })
     }
 }
 
@@ -616,6 +739,179 @@ mod tests {
         std::fs::rename(&temporary, &path).unwrap();
         assert_eq!(std::fs::metadata(&path).unwrap().modified().unwrap(), before);
         assert_eq!(reader.lineage("e1").unwrap().as_deref(), Some("lost"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Two editions, each with the lineage minted for it: `e1` in `L1`, `e2` in `L2`.
+    fn two_editions(registry: &dyn Registry) {
+        registry.register(record("/a/x.mdx", "e1"), &mut || "L1".into()).unwrap();
+        registry.register(record("/b/y.mdx", "e2"), &mut || "L2".into()).unwrap();
+    }
+
+    /// The associations a document on disk holds, as `(edition, lineage)`.
+    fn associations_on_disk(dir: &std::path::Path) -> Vec<(String, String)> {
+        let text = std::fs::read_to_string(dir.join("registry.json")).unwrap();
+        let document: serde_json::Value = serde_json::from_str(&text).unwrap();
+        document["associations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|a| (a["edition"].as_str().unwrap().to_owned(), a["lineage"].as_str().unwrap().to_owned()))
+            .collect()
+    }
+
+    /// The reader joins an edition to another's lineage, and splits it back to the one it had: each act answers the
+    /// lineage the edition now has, and repeating one changes nothing.
+    #[test]
+    fn a_join_moves_an_edition_and_a_split_returns_it() {
+        let registry = MemoryRegistry::default();
+        two_editions(&registry);
+        assert_eq!(registry.associate("e2", "L1", Target::Existing).unwrap(), Ok("L1".to_owned()));
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("L1"));
+        assert_eq!(registry.lineage("e1").unwrap().as_deref(), Some("L1"), "the lineage joined is not changed");
+        assert_eq!(registry.associate("e2", "L1", Target::Existing).unwrap(), Ok("L1".to_owned()));
+        assert_eq!(registry.associate("e2", "L2", Target::NewOrOwn).unwrap(), Ok("L2".to_owned()));
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("L2"));
+        assert_eq!(registry.associate("e2", "L2", Target::NewOrOwn).unwrap(), Ok("L2".to_owned()));
+    }
+
+    /// An edition the registry never saw is refused; a join names only a lineage the registry holds, while a split may
+    /// name a new one.
+    #[test]
+    fn an_association_names_a_known_edition_and_a_join_a_known_lineage() {
+        let registry = MemoryRegistry::default();
+        two_editions(&registry);
+        assert_eq!(registry.associate("e9", "L1", Target::Existing).unwrap(), Err(Refused::Edition));
+        assert_eq!(registry.associate("e9", "fresh", Target::NewOrOwn).unwrap(), Err(Refused::Edition));
+        assert_eq!(registry.associate("e2", "never", Target::Existing).unwrap(), Err(Refused::Lineage));
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("L2"), "a refusal changes nothing");
+        assert_eq!(registry.associate("e2", "fresh", Target::NewOrOwn).unwrap(), Ok("fresh".to_owned()));
+    }
+
+    /// A split goes to a new lineage or back to one the edition had; into another dictionary's it would be a join no
+    /// one asked for, and is refused.
+    #[test]
+    fn a_split_never_moves_an_edition_into_another_dictionary() {
+        let registry = MemoryRegistry::default();
+        two_editions(&registry);
+        assert_eq!(registry.associate("e2", "L1", Target::NewOrOwn).unwrap(), Err(Refused::Foreign));
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("L2"));
+        assert_eq!(registry.associate("e2", "fresh", Target::NewOrOwn).unwrap(), Ok("fresh".to_owned()));
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        assert_eq!(registry.associate("e2", "fresh", Target::NewOrOwn).unwrap(), Ok("fresh".to_owned()));
+        assert_eq!(registry.associate("e2", "L2", Target::NewOrOwn).unwrap(), Ok("L2".to_owned()));
+        assert_eq!(registry.associate("e1", "fresh", Target::NewOrOwn).unwrap(), Err(Refused::Foreign));
+    }
+
+    /// The durability a failed confirmation left unproven is proven by the retry, which therefore writes again,
+    /// though it records nothing new (Codex, 2026-10-14, objection 1).
+    #[test]
+    fn a_retry_after_an_unconfirmed_association_confirms_it() {
+        static CONFIRMED: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = scratch("unconfirmed-association");
+        let mut registry = FileRegistry::open(&dir).unwrap();
+        two_editions(&registry);
+        registry.confirm = |_, _| Err(io::Error::other("injected"));
+        let failed = registry.associate("e2", "L1", Target::Existing).err().unwrap();
+        assert!(failed.0.contains("was installed"), "{}", failed.0);
+        registry.confirm = |file, dir| {
+            CONFIRMED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            confirm(file, dir)
+        };
+        assert_eq!(registry.associate("e2", "L1", Target::Existing).unwrap(), Ok("L1".to_owned()));
+        assert_eq!(CONFIRMED.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert_eq!(associations_on_disk(&dir), [("e2".to_owned(), "L1".to_owned())]);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// Importing a joined edition again answers the lineage it was joined to, never a new one (ADR-0002 decision 4).
+    #[test]
+    fn a_registration_after_a_join_answers_the_joined_lineage() {
+        let registry = MemoryRegistry::default();
+        two_editions(&registry);
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        assert_eq!(registry.register(record("/c/y.mdx", "e2"), &mut || "minted again".into()).unwrap(), "L1");
+    }
+
+    /// A lineage left with no edition stays one: the edition can be split back to it, and another joined to it.
+    #[test]
+    fn a_lineage_left_empty_stays_reachable() {
+        let registry = MemoryRegistry::default();
+        two_editions(&registry);
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        registry.register(record("/c/z.mdx", "e3"), &mut || "L3".into()).unwrap();
+        assert_eq!(registry.associate("e3", "L2", Target::Existing).unwrap(), Ok("L2".to_owned()));
+        registry.associate("e3", "fresh", Target::NewOrOwn).unwrap().unwrap();
+        assert_eq!(registry.associate("e1", "fresh", Target::Existing).unwrap(), Ok("fresh".to_owned()));
+    }
+
+    /// Joins and splits outlive the process, each kept as one recorded act; repeating an act records nothing.
+    #[test]
+    fn associations_persist_and_a_repeated_act_records_nothing() {
+        let dir = scratch("associations");
+        let registry = FileRegistry::open(&dir).unwrap();
+        two_editions(&registry);
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        drop(registry);
+        let again = FileRegistry::open(&dir).unwrap();
+        assert_eq!(again.lineage("e2").unwrap().as_deref(), Some("L1"));
+        assert_eq!(associations_on_disk(&dir), [("e2".to_owned(), "L1".to_owned())]);
+        again.associate("e2", "L2", Target::NewOrOwn).unwrap().unwrap();
+        drop(again);
+        let last = FileRegistry::open(&dir).unwrap();
+        assert_eq!(last.lineage("e2").unwrap().as_deref(), Some("L2"));
+        let acts = [("e2".to_owned(), "L1".to_owned()), ("e2".to_owned(), "L2".to_owned())];
+        assert_eq!(associations_on_disk(&dir), acts);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A join through one registry is seen by another on the same directory, and the other's registration keeps it.
+    #[test]
+    fn two_registries_on_one_directory_keep_each_others_associations() {
+        let dir = scratch("two-associations");
+        let (a, b) = (FileRegistry::open(&dir).unwrap(), FileRegistry::open(&dir).unwrap());
+        two_editions(&a);
+        a.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        assert_eq!(b.lineage("e2").unwrap().as_deref(), Some("L1"));
+        b.register(record("/c/z.mdx", "e3"), &mut || "L3".into()).unwrap();
+        assert_eq!(FileRegistry::open(&dir).unwrap().lineage("e2").unwrap().as_deref(), Some("L1"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A document written before associations existed (version 1) is read, and written back with them; one of a
+    /// version this build does not know is refused, never rewritten without what it holds.
+    #[test]
+    fn a_version_1_document_is_read_and_a_later_one_refused() {
+        let dir = scratch("version-1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let old = r#"{"version":1,"lineages":{"e1":"L1","e2":"L2"},"locations":{}}"#;
+        std::fs::write(dir.join("registry.json"), old).unwrap();
+        let registry = FileRegistry::open(&dir).unwrap();
+        assert_eq!(registry.lineage("e2").unwrap().as_deref(), Some("L2"));
+        registry.associate("e2", "L1", Target::Existing).unwrap().unwrap();
+        let text = std::fs::read_to_string(dir.join("registry.json")).unwrap();
+        let document: serde_json::Value = serde_json::from_str(&text).unwrap();
+        assert_ne!(document["version"], 1, "a build that knows no associations would drop them");
+        assert_eq!(document["lineages"]["e2"], "L2", "the lineage minted is never rewritten");
+        let later = text.replacen(&format!("\"version\": {VERSION}"), &format!("\"version\": {}", VERSION + 1), 1);
+        assert_ne!(later, text);
+        std::fs::write(dir.join("registry.json"), later).unwrap();
+        assert!(FileRegistry::open(&dir).is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A document of a version that holds associations but holds none is damaged, not a document with no joins: read
+    /// as one, every joined edition would fall back to its own lineage (Codex, 2026-10-14, objection 5).
+    #[test]
+    fn a_document_missing_its_associations_is_refused_and_left_as_it_was() {
+        let dir = scratch("no-associations");
+        std::fs::create_dir_all(&dir).unwrap();
+        let damaged = format!(r#"{{"version":{VERSION},"lineages":{{"e1":"L1","e2":"L2"}},"locations":{{}}}}"#);
+        std::fs::write(dir.join("registry.json"), &damaged).unwrap();
+        let refused = FileRegistry::open(&dir).err().unwrap();
+        assert!(refused.0.contains("associations"), "{}", refused.0);
+        assert_eq!(std::fs::read_to_string(dir.join("registry.json")).unwrap(), damaged);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

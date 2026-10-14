@@ -34,7 +34,9 @@ import Foundation
 /// another thing: the core's page generation, ADR-0007 decision 9.)
 public enum Contract {
     /// The contract's version: raised by any change this notice calls frozen; never lowered, never reused.
-    public static let version: UInt32 = 1
+    /// 2 (2026-10-14): `Missing` gained the raw values `edition` and `lineage`, which the core's lineage operations
+    /// report (ADR-0002 decision 3, as amended that day).
+    public static let version: UInt32 = 2
 }
 
 // MARK: - The request
@@ -169,11 +171,14 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// bytes, when found, are the reply's payload.
     case resource(dict: DictId, path: String, render: RenderContext)
     /// Reserved for WI-5 (ADR-0002: a lineage join made only by the reader, reversibly), as are the two below: the
-    /// service answers `refused(.unsupportedOperation)` until the core has them. **Idempotent**: joining an edition to
-    /// the lineage it already has changes nothing and answers that lineage, so a retry after a lost reply is safe.
+    /// service answers `refused(.unsupportedOperation)` until it calls the core's `join_lineage`, `split_lineage` and
+    /// `lineage_of` (the core has them since 2026-10-14). **Idempotent**: joining an edition to the lineage it already
+    /// has changes nothing and answers that lineage, so a retry after a lost reply is safe.
     case joinLineage(edition: Edition, lineage: LineageId)
     /// Undo a join: the edition takes `newLineage`, **minted by the client**, so a retried split is the same split and
-    /// not a second one (Codex objection 14).
+    /// not a second one (Codex objection 14), or the lineage the edition had before the join, which the client kept,
+    /// and which returns it exactly where it was. Never another dictionary's lineage: the core refuses that as
+    /// `malformed`, since it would be a join (ADR-0002 decision 3, as amended 2026-10-14).
     case splitLineage(edition: Edition, newLineage: LineageId)
     /// The edition's lineage as the registry holds it: how a client whose join or split lost its reply (the service
     /// died after committing) learns what happened, without repeating it.

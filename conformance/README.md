@@ -39,10 +39,20 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
    that answers `false` [`cancelled`]; then the byte source's MDX with a sidecar `tiny.css` that is a source
    with the byte source's `identity`: `import`, `open`, the sidecar's inode raised by one, then `resource` of
    `tiny.css` [`sourceChanged`].
-7. [`lifecycle`]: close the second handle, then look up with it; close it again; look up with the first handle
+7. [`lineages`] (ADR-0002 decision 3, as amended 2026-10-14): `import` of `tiny-rebuilt.mdx` alone, the same entries
+   under another title, so another edition with a lineage of its own [`import`]. Each lineage a call answers is
+   compared as a label: `tiny` for the lineage step 3's import answered, `rebuilt` for the one this import answered,
+   the id itself otherwise. Then, on the rebuilt edition: `lineage_of` [`before`]; `join_lineage` to tiny's lineage
+   [`join`], `lineage_of` [`afterJoin`], the join again [`joinAgain`]; `split_lineage` back to its own lineage
+   [`split`], `lineage_of` [`afterSplit`]; `split_lineage` to `newLineage`, a shell's UUID in capitals
+   [`splitToNew`], and again [`splitToNewAgain`]. Refused or empty: `join_lineage` of `unknownEdition` to tiny's
+   lineage [`joinUnknownEdition`], `lineage_of` it [`lineageOfUnknownEdition`]; `join_lineage` of the rebuilt
+   edition to `unknownLineage` [`joinUnknownLineage`]; its `split_lineage` to `notALineage` [`splitNotALineage`];
+   `split_lineage` of tiny's edition to the rebuilt one's lineage, another dictionary's [`splitIntoAnother`].
+8. [`lifecycle`]: close the second handle, then look up with it; close it again; look up with the first handle
    on a second `Core`; `self_test_panic`.
 
-The Web has no paths, so its suite reads every file of step 3 through sources too, each with its file's identity.
+The Web has no paths, so its suite reads every file of steps 3 and 7 through sources too, each with its file's identity.
 
 ## The matrix (`matrix/`)
 
@@ -87,4 +97,6 @@ Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.j
 `XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json` (a relative path is read from where
 the script is started), so a deliberately wrong expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
 naming `lookups[0].total`. 2026-10-14: the matrix's `formatVersion` and both entries' `lossyBytes` altered failed
-all four, 96 failures each (32 variants × 3).
+all four, 96 failures each (32 variants × 3). 2026-10-14: the 14 `lineages` expectations altered (the labels swapped, the
+split's lineage in capitals, the null a label, each refusal's `what` or `type` changed) failed all four, 14 failures
+each, each named.
