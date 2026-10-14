@@ -10,6 +10,8 @@ import XDictLibrary
 actor FakeBackend: LibraryBackend {
     private(set) var imports: [String] = []
     private(set) var opens: [String] = []
+    /// The package of each MDX's last open, by file name: its `locate` is what the service's client would ask.
+    private(set) var opened: [String: DictionaryPackage] = [:]
     private(set) var lineageCalls: [LineageOperation] = []
     private(set) var closed: [DictId] = []
     var failures: [String: ClientFailure] = [:]
@@ -82,6 +84,7 @@ actor FakeBackend: LibraryBackend {
     func open(_ package: DictionaryPackage) async -> Result<Opened, ClientFailure> {
         let name = Self.mdxName(package)
         opens.append(name)
+        opened[name] = package
         for file in package.files where !FileManager.default.fileExists(atPath: file.locate().path) {
             return .failure(.fileUnavailable(file: file.spec.id, errno: ENOENT))
         }

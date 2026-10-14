@@ -1585,6 +1585,22 @@
         }
       }
     },
+    "“%@” is no longer a file XDict reads: a link, a folder or a pipe has taken its place." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is no longer a file XDict reads: a link, a folder or a pipe has taken its place."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”已不再是 XDict 能读取的文件：它的位置已被链接、文件夹或管道占据。"
+          }
+        }
+      }
+    },
     "“%@” is not a dictionary file (.mdx or .mdd)." : {
       "localizations" : {
         "en" : {

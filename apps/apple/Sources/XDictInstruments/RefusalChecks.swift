@@ -11,7 +11,9 @@ extension ServiceChecks {
         var findings = Findings()
         let client = makeClient(.contract, nil)
         let observer = FileObserver()
-        let dir = fixtures.appending(path: "tiny")
+        // Canonical, as the client's own paths are: a token is taken without following a link (`FileAccess`), and these
+        // refusals are each for their own reason, not for a token missing on a path through `/var`.
+        let dir = FileAccess.canonical(fixtures.appending(path: "tiny"))
         let mdx = dir.appending(path: "tiny.mdx"), volume = dir.appending(path: "tiny.mdd")
         let file = UUID()
         let spec = PackageSpec(files: [.mdx(id: file)])
@@ -29,7 +31,7 @@ extension ServiceChecks {
         try? pipe.fileHandleForReading.close()
         try? pipe.fileHandleForWriting.close()
 
-        let writable = scratch.appending(path: "writable.mdx")
+        let writable = FileAccess.canonical(scratch.appending(path: "writable.mdx"))
         try? FileManager.default.removeItem(at: writable)
         if (try? FileManager.default.copyItem(at: mdx, to: writable)) != nil, let handle = try? FileHandle(forUpdating: writable) {
             expect("refusal.writable", await client.submitUnchecked(

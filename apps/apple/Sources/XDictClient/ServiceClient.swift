@@ -320,18 +320,18 @@ public actor ServiceClient {
         } else if let package = call.package {
             operation = call.operation
             // Each path observed, then opened: a file replaced between the two is refused by the service as not the
-            // path's file, and the client tries again from the start.
+            // path's file, and the client tries again from the start. Both without following a link and only to a
+            // regular file (`FileAccess`): this open is also the one after a restart, which no resolution precedes.
             tokens = package.files.map(observer.token)
             var opened: [FileHandle] = []
             for file in package.files {
-                // `open(2)` itself, so the failure is the system's errno and not a Foundation error code.
-                let descriptor = Darwin.open(file.locate().path, O_RDONLY | O_CLOEXEC)
-                guard descriptor >= 0 else {
-                    let failure = errno
+                switch FileAccess.open(file.locate()) {
+                case .success(let descriptor):
+                    opened.append(FileHandle(fileDescriptor: descriptor, closeOnDealloc: true))
+                case .failure(let refused):
                     link.credits.release(credit)
-                    return finish(call, .failure(.fileUnavailable(file: file.spec.id, errno: failure)))
+                    return finish(call, .failure(.fileUnavailable(file: file.spec.id, errno: refused.errno)))
                 }
-                opened.append(FileHandle(fileDescriptor: descriptor, closeOnDealloc: true))
             }
             files = opened
         } else {

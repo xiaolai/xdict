@@ -174,6 +174,38 @@ struct LibraryTests {
         #expect(relaunched.entries.first { $0.id == a.id }?.files.allSatisfy { $0.location.path.contains("/elsewhere/") } == true)
     }
 
+    /// **A relink while a dictionary is open keeps the folder rule** (the security review of 2026-10-15): when a file's
+    /// path answers ENOENT, the library finds it again, and takes the new place only if the package still holds by the
+    /// rule `resolve()` applies. A sidecar moved out of its folder alone is not followed there.
+    @Test func aFileMovedOutOfItsFolderWhileOpenIsNotFollowed() async throws {
+        try dir.files("lib/a/a.mdx", "lib/a/a.css", "elsewhere/.keep")
+        let library = library()
+        await library.start()
+        _ = library.add([dir.url.appending(path: "lib")])
+        await library.settle()
+        let package = try #require(await backend.opened["a.mdx"])
+        let css = try #require(package.files.first { $0.spec.role == .sidecar })
+        let before = css.locate()
+        try FileManager.default.moveItem(at: dir.url.appending(path: "lib/a/a.css"), to: dir.url.appending(path: "elsewhere/a.css"))
+        #expect(css.locate() == before, "a file moved out of its folder was followed there: \(css.locate().path)")
+    }
+
+    /// The other half: the dictionary's whole folder moved out of the one the reader chose, while it is open. Each file's
+    /// new place is outside the folder its package was held to, so the whole package is resolved again by `resolve()`'s
+    /// rule, which holds it to the MDX's own folder: every file is followed.
+    @Test func aFolderMovedWhileOpenIsFollowed() async throws {
+        try dir.files("lib/a/a.mdx", "lib/a/a.css")
+        let library = library()
+        await library.start()
+        _ = library.add([dir.url.appending(path: "lib")])
+        await library.settle()
+        let package = try #require(await backend.opened["a.mdx"])
+        try FileManager.default.moveItem(at: dir.url.appending(path: "lib/a"), to: dir.url.appending(path: "elsewhere"))
+        for file in package.files {
+            #expect(file.locate().path.contains("/elsewhere/"), "\(file.spec.role) not followed: \(file.locate().path)")
+        }
+    }
+
     /// An import that never ends is a wait that ends: `settled(within:)` says it is not settled, rather than hanging.
     @Test func aWaitForAnImportThatNeverEndsEnds() async throws {
         try dir.files("a.mdx")

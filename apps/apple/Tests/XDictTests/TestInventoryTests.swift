@@ -18,9 +18,9 @@ struct TestInventoryTests {
         // 8 → 2 (WI-3): the handshake became the contract's `versions`; its tests moved with it, to XDictClientTests
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
         "XDictBaseTests": 2,
-        "XDictClientTests": 15,
+        "XDictClientTests": 20,
         "XDictContractTests": 67,
-        "XDictLibraryTests": 49,
+        "XDictLibraryTests": 52,
         "XDictUITests": 8,
         "XDictEntryViewTests": 36,
         "XDictServiceTests": 40,
