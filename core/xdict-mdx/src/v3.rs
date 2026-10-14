@@ -45,10 +45,12 @@ pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Par
 
     let [record_data, record_index, key_data, key_index] = sections(source, at, &key)?;
     let key_count = check_descriptors(&record_data, &record_index, &key_data, &key_index)?;
-    let blocks = record_blocks(source, &record_data, &record_index, &key)?;
+    // A 3.0 file's record blocks are read before its keys, so the keys get what the block table left.
+    let blocks_cost = block::weigh(record_data.count, limits::INDEX_BYTES)?;
+    let blocks = record_blocks(source, &record_data, &record_index, &key, limits::INDEX_BYTES)?;
     let key_blocks = key_blocks(source, &key_index, &key_data, key_count, &key)?;
 
-    let mut keys = Keys::new(key_count, Codec::Utf8, true, limits::INDEX_BYTES);
+    let mut keys = Keys::new(key_count, Codec::Utf8, true, limits::INDEX_BYTES.saturating_sub(blocks_cost));
     let mut at = key_data.units_at;
     for b in &key_blocks {
         let raw = read(source, &mut at, length(b.stored, limits::BLOCK_BYTES, "key block")?, "key block")?;
@@ -138,14 +140,16 @@ fn record_blocks(
     record_data: &Section,
     record_index: &Section,
     key: &[u8; 16],
+    budget: u64,
 ) -> Result<Vec<RecordBlock>, Error> {
+    block::weigh(record_data.count, budget)?;
     let index = section_data(source, record_index, key, "record index")?;
     if Some(index.len() as u64) != record_data.count.checked_mul(16) {
         return Err(Error::Malformed("the record index has the wrong length".into()));
     }
     let mut ri = Cursor::new(&index, "record index");
-    let pairs = (0..record_data.count).map(|_| Ok((ri.u64()?, ri.u64()?))).collect::<Result<Vec<_>, Error>>()?;
-    let (blocks, end) = block::layout(pairs, record_data.units_at, UNIT_FRAMING)?;
+    let next = || Ok((ri.u64()?, ri.u64()?));
+    let (blocks, end) = block::layout(record_data.count, next, record_data.units_at, UNIT_FRAMING, budget)?;
     if end.checked_sub(record_data.units_at) != Some(record_data.units_len) {
         return Err(Error::Malformed("the record blocks' sizes do not add up".into()));
     }

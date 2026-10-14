@@ -69,14 +69,25 @@ pub(crate) fn decompress(kind: u32, payload: &[u8], expected: usize, what: &str)
 /// Where each record block lies, from an index's (stored size, decompressed size) pairs: end to end from
 /// `start` in the file, and in the concatenated records. Every stored size must hold at least `framing`
 /// bytes, the block's own prefix. Returns the blocks and where the last one ends in the file.
+///
+/// The `count` blocks are weighed first, at [`crate::keys::BLOCK_COST`] each, against `budget`, what the index
+/// may still take: `TooLarge` before any pair is read or the table reserved. The table is then reserved
+/// exactly, so it never holds a doubled capacity the cost does not count.
 pub(crate) fn layout(
-    pairs: impl IntoIterator<Item = (u64, u64)>,
+    count: u64,
+    mut next: impl FnMut() -> Result<(u64, u64), Error>,
     start: u64,
     framing: u64,
+    budget: u64,
 ) -> Result<(Vec<RecordBlock>, u64), Error> {
+    weigh(count, budget)?;
     let mut blocks = Vec::new();
+    blocks
+        .try_reserve_exact(usize::try_from(count).map_err(|_| malformed("record index"))?)
+        .map_err(crate::out_of_memory)?;
     let (mut file_offset, mut records_offset) = (start, 0u64);
-    for (stored, decompressed) in pairs {
+    for _ in 0..count {
+        let (stored, decompressed) = next()?;
         if stored < framing {
             return Err(Error::Malformed(format!("a record block declares {stored} bytes, too few for its framing")));
         }
@@ -90,6 +101,16 @@ pub(crate) fn layout(
         records_offset = records_offset.checked_add(decompressed).ok_or_else(|| malformed("record index"))?;
     }
     Ok((blocks, file_offset))
+}
+
+/// What `count` record blocks cost an index build, [`crate::keys::BLOCK_COST`] each; `TooLarge` past `budget`.
+/// Called before a record index is read, as well as by [`layout`], so the index's own bytes are weighed first.
+pub(crate) fn weigh(count: u64, budget: u64) -> Result<u64, Error> {
+    let cost = count.saturating_mul(crate::keys::BLOCK_COST);
+    if cost > budget {
+        return Err(Error::TooLarge(format!("{count} record blocks would take the key index past its memory")));
+    }
+    Ok(cost)
 }
 
 /// Reverses the `Encrypted="2"` obfuscation of the key index, which covers everything past the 8-byte
@@ -138,9 +159,37 @@ mod tests {
         assert!(refused.contains("5 were declared"), "{refused}");
     }
 
+    /// `layout` over a list, with as much budget as the test gives it.
+    fn laid(pairs: &[(u64, u64)], framing: u64, budget: u64) -> Result<(Vec<RecordBlock>, u64), Error> {
+        let mut next = pairs.iter().copied();
+        layout(pairs.len() as u64, || next.next().ok_or_else(|| malformed("test")), 100, framing, budget)
+    }
+
     #[test]
     fn a_block_too_small_for_its_framing_is_malformed() {
-        assert!(layout([(16, 4), (16, 9)], 100, 16).is_ok());
-        assert!(matches!(layout([(16, 4), (8, 0)], 100, 16), Err(Error::Malformed(_))));
+        assert!(laid(&[(16, 4), (16, 9)], 16, u64::MAX).is_ok());
+        assert!(matches!(laid(&[(16, 4), (8, 0)], 16, u64::MAX), Err(Error::Malformed(_))));
+    }
+
+    /// A record-block table is weighed against what the index may still take before any of it is read or
+    /// reserved: the keys may already have spent most of it, and a table of minimal blocks is many entries.
+    #[test]
+    fn a_block_table_past_the_budget_is_refused_before_it_is_read() {
+        let pairs = [(16, 4), (16, 9), (16, 1)];
+        let cost = 3 * crate::keys::BLOCK_COST;
+        assert!(laid(&pairs, 16, cost).is_ok());
+        let mut read = 0;
+        let refused = layout(
+            3,
+            || {
+                read += 1;
+                Ok((16, 4))
+            },
+            100,
+            16,
+            cost - 1,
+        );
+        assert!(matches!(refused, Err(Error::TooLarge(_))), "{:?}", refused.map(|(b, _)| b.len()));
+        assert_eq!(read, 0, "the table was read before it was weighed");
     }
 }
