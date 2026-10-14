@@ -27,7 +27,11 @@
 #                    `Tools/tests/ssh-to-this-mac`, which runs the remote side here
 #   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for the `entries` stage: their
 #                    folders are copied to the E2E Mac (never into the repository) and `entries_corpus`'s sample of them
-#                    is rendered there. Unset, that stage fails as not measured: a green run without it measured nothing
+#                    is rendered there. Unset, that stage fails as not measured: a green run without it measured nothing.
+#                    The `library` stage registers the same folders, against the editions `index_bench` computes here
+#   XDICT_E2E_LIBRARY_NO_RELINK
+#                    a positive control: the `library` stage relaunches its library of the 25 with relinking off, so the
+#                    moved dictionaries must be reported missing. A run with it records nothing
 set -euo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 readonly SELF
@@ -35,9 +39,10 @@ cd "$(dirname "$SELF")/.."
 
 # **The only list of the stages.** A stage named that is not on it is refused: a typo that ran nothing once printed "all
 # stages passed" (XiaolaiDict). The remote script is handed this list, so the two cannot differ.
-readonly KNOWN_STAGES="launch service hostile reader entries"
-# The stages that need the entry view's kit (`Tools/build-lab.sh`): the development lab, the fixtures, the observers.
-readonly KIT_STAGES="hostile reader entries"
+readonly KNOWN_STAGES="launch service hostile reader entries library"
+# The stages that need the entry view's kit (`Tools/build-lab.sh`): the development lab, the fixtures, the observers;
+# the pointer and the drag source, for `library`'s drop.
+readonly KIT_STAGES="hostile reader entries library"
 if [ "${1:-}" = --list-stages ]; then
     printf '%s\n' $KNOWN_STAGES
     exit 0
@@ -150,6 +155,7 @@ expected_override=${XDICT_E2E_EXPECTED_VERSIONS:-}
 [ -z "$expected_override" ] || [ -s "$expected_override" ] || fail "XDICT_E2E_EXPECTED_VERSIONS names no file: $expected_override"
 service_checks=${XDICT_E2E_SERVICE_CHECKS:-}
 case $service_checks in *[!A-Za-z,]*) fail "XDICT_E2E_SERVICE_CHECKS is check names and commas; got '$service_checks'" ;; esac
+library_no_relink=${XDICT_E2E_LIBRARY_NO_RELINK:-}
 
 # ---------------------------------------------------------------------------------------------------------------------
 section "install"
@@ -159,7 +165,11 @@ app="$HOME/$1/XDict.app"; exe="$app/Contents/MacOS/XDict"
 service="$app/Contents/XPCServices/ai.xdict.app.DictionaryService.xpc/Contents/MacOS/XDictService"
 quit_bundle
 SH
-on_host "mkdir -p '$REMOTE_DIR' && rm -f '$REMOTE_DIR/expected-versions.json' '$REMOTE_DIR/service-checks'"
+on_host "mkdir -p '$REMOTE_DIR' && rm -f '$REMOTE_DIR/expected-versions.json' '$REMOTE_DIR/service-checks' \
+    '$REMOTE_DIR/library-no-relink' '$REMOTE_DIR/library-editions.json'"
+if [ -n "$library_no_relink" ]; then
+    on_host "touch '$REMOTE_DIR/library-no-relink'" || fail "could not mark the library's positive control"
+fi
 rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$APP" "$host:$REMOTE_DIR/" \
     || fail "could not copy the bundle"
 if [ -n "$expected_override" ]; then
@@ -177,7 +187,7 @@ on_host "codesign --verify --strict --deep '$REMOTE_DIR/XDict.app'" || fail "the
 # **The `service` stage's dictionaries are written here, by the core's own MDX writer, and shipped with the bundle**: no
 # dictionary content enters the repository or reaches the E2E Mac from anywhere else (Tools/build-fixtures.sh).
 case " ${STAGES:-$KNOWN_STAGES} " in
-    *" service "*)
+    *" service "* | *" library "*)
         Tools/build-fixtures.sh "$scratch/fixtures" >/dev/null || fail "could not write the service stage's fixtures"
         rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$scratch/fixtures/" "$host:$REMOTE_DIR/fixtures/" \
             || fail "could not copy the fixtures"
@@ -203,21 +213,37 @@ if [ "$needs_kit" = true ]; then
     on_host "codesign --verify --strict '$REMOTE_DIR/kit/XDictEntryLab.app'" || fail "the shipped lab does not verify there"
 fi
 
-# **The real dictionaries, for `entries`**: `entries_corpus`'s own sample of them (the bindings cannot enumerate a file's
-# keys), and their folders copied beside the bundle. An unset corpus ships nothing, and the stage says not measured.
-wants_entries=false
-for wanted in ${STAGES:-$KNOWN_STAGES}; do [ "$wanted" != entries ] || wants_entries=true; done
-if [ "$wants_entries" = true ] && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
+# **The real dictionaries, for `entries` and `library`**: `entries_corpus`'s own sample of them (the bindings cannot
+# enumerate a file's keys), the editions `index_bench import-all` computes for them (what the library must register),
+# and their folders copied beside the bundle. An unset corpus ships nothing, and those stages say not measured.
+wants_entries=false wants_library=false
+for wanted in ${STAGES:-$KNOWN_STAGES}; do
+    [ "$wanted" != entries ] || wants_entries=true
+    [ "$wanted" != library ] || wants_library=true
+done
+if { [ "$wants_entries" = true ] || [ "$wants_library" = true ]; } && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
     section "corpus"
     [ -d "$XDICT_E2E_CORPUS" ] || fail "XDICT_E2E_CORPUS is not a folder: $XDICT_E2E_CORPUS"
     corpus=$(cd "$XDICT_E2E_CORPUS" && pwd)
     sample=$(pwd)/.build/entries-sample.json
-    (cd ../../core && XDICT_MDX_CORPUS="$corpus" XDICT_ENTRIES_SAMPLE_OUT="$sample" \
-        cargo test -q --release -p xdict-core --test entries_corpus -- --nocapture >"$scratch/entries-corpus.log" 2>&1) \
-        || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/entries-corpus.log")"
-    [ -s "$sample" ] || fail "entries_corpus wrote no sample"
-    rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$sample" "$host:$REMOTE_DIR/kit/entries-sample.json" \
-        || fail "could not copy the sample"
+    if [ "$wants_entries" = true ]; then
+        (cd ../../core && XDICT_MDX_CORPUS="$corpus" XDICT_ENTRIES_SAMPLE_OUT="$sample" \
+            cargo test -q --release -p xdict-core --test entries_corpus -- --nocapture >"$scratch/entries-corpus.log" 2>&1) \
+            || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/entries-corpus.log")"
+        [ -s "$sample" ] || fail "entries_corpus wrote no sample"
+        rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$sample" "$host:$REMOTE_DIR/kit/entries-sample.json" \
+            || fail "could not copy the sample"
+        echo "$(python3 -I -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$sample") sampled entries"
+    fi
+    if [ "$wants_library" = true ]; then
+        (cd ../../core && cargo run -q --release -p xdict-core --example index_bench -- import-all "$scratch/bench" "$corpus" \
+            >"$scratch/index-bench.log" 2>&1) || fail "index_bench import-all failed: $(tail -3 "$scratch/index-bench.log")"
+        python3 -I Tools/library/editions.py "$scratch/bench/data/registry.json" "$corpus" >"$scratch/library-editions.json" \
+            || fail "index_bench's registry gave no edition for every dictionary"
+        rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$scratch/library-editions.json" \
+            "$host:$REMOTE_DIR/library-editions.json" || fail "could not copy the editions"
+        echo "$(python3 -I -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$scratch/library-editions.json") editions from index_bench: $(tail -1 "$scratch/index-bench.log")"
+    fi
     folders=()
     for folder in "$corpus"/*/; do
         name=$(basename "$folder")
@@ -225,7 +251,7 @@ if [ "$wants_entries" = true ] && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
         folders+=("${folder%/}")   # no trailing slash: rsync copies the folder, not its contents
     done
     [ "${#folders[@]}" -gt 0 ] || fail "no dictionary folder in $corpus"
-    echo "${#folders[@]} dictionaries, $(python3 -I -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$sample") sampled entries"
+    echo "${#folders[@]} dictionaries"
     rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "${folders[@]}" "$host:$REMOTE_DIR/corpus/" \
         || fail "could not copy the corpus"
 fi
@@ -630,6 +656,145 @@ entries_stage() {
 entries_stage
 fi
 
+# ---------------------------------------------------------------------------------------------------------------------
+if want library; then
+# **library**: the reader's library through the signed app and its service (plan-macos-v1 WI-5, done-when). With the
+# core's generated packages (`XDict --library-report`): file and folder import, ordered volumes and a sidecar, a missing
+# volume, cancel then retry while another dictionary answers, languages asked and edited, three refusals each with its
+# sentence in both languages, a link out of the folder refused, sounds told apart, a rewritten file joined and undone,
+# a moved folder relinked (and missing with relinking off). Then a real drag of a dictionary into the production
+# library window (`dragsource`, `pointer`). Then the owner's 25, in three launches: registered with `index_bench`'s
+# editions, found again in their order after their folder moved, and one rewritten and joined only when asked.
+# **Every check is required by name**: an instrument that stopped early leaves one missing.
+readonly LIBRARY_CHECKS="file.registered folder.registered folder.volumesInOrder folder.sidecarFound
+    gap.missingVolumeReported cancel.cancelledWhileRunning retry.completed lookup.answeredDuringImport
+    languages.statedNotAsked languages.guessAsked languages.editPersists refusal.resourceLibraryV3
+    refusal.registrationCode refusal.damaged escape.refused sounds.toldApart changed.newEdition changed.notJoinedUnasked
+    changed.joined changed.persists changed.undone relink.followsAMove relink.controlWithoutRelinking
+    sentence.resourceLibraryV3 sentence.registrationCode sentence.damaged"
+
+# findings <file> <required names…>: each check of an instrument's report as this stage's assertion, and each required
+# name it never reported as a failure.
+findings() {
+    local file=$1 count i name passed detail seen=" " wanted
+    shift
+    count=$(plutil -extract checks raw -o - "$file" 2>/dev/null || echo 0)
+    [ "$count" -gt 0 ] || flunk "library: the instrument reported no check: $(head -c 300 "$file")"
+    for (( i = 0; i < count; i++ )); do
+        name=$(plutil -extract "checks.$i.name" raw -o - "$file")
+        passed=$(plutil -extract "checks.$i.pass" raw -o - "$file")
+        detail=$(plutil -extract "checks.$i.detail" raw -o - "$file")
+        seen="$seen$name "
+        if [ "$passed" = true ]; then pass "library: $name — ${detail:0:240}"; else flunk "library: $name — ${detail:0:900}"; fi
+    done
+    for wanted in "$@"; do
+        case $seen in *" $wanted "*) ;; *) flunk "library: $wanted was never reported: the instrument stopped before it" ;; esac
+    done
+}
+
+# The drop: the production library window shown by the app (`--library-drop`), a file dragged into it from another app
+# by real pointer events.
+library_drop() {
+    local work="$reports/library-drop" out="$reports/library-drop.json" access waited=0 drop source source_pid
+    mkdir -p "$work/from"
+    access=$("$kit/pointer" access 2>&1 || true)
+    if ! grep -q '"postEvents":true' <<<"$access"; then
+        flunk "library: this SSH session may not post events ($access), so nothing was dropped"
+        return 0
+    fi
+    cp "$home/fixtures/library/drop/dropped.mdx" "$work/from/dropped.mdx"
+    rm -f "$out" "$work/ready.json" "$work/source-ready"
+    open -n --stdout "$out" --stderr "$out.err" "$app" --args --library-drop "$work/library" --ready "$work/ready.json" \
+        --expect dropped.mdx || { flunk "library: the drop window could not be started"; return 0; }
+    while [ ! -s "$work/ready.json" ] && [ "$waited" -lt 300 ]; do sleep 0.1; waited=$((waited + 1)); done
+    if [ ! -s "$work/ready.json" ]; then
+        flunk "library: the drop window never said where it was ($(head -c 300 "$out.err" 2>/dev/null))"
+        return 0
+    fi
+    drop=$(python3 -I -c 'import json, sys; d = json.load(open(sys.argv[1]))["drop"]; print(int(d[0]), int(d[1]))' "$work/ready.json")
+    "$kit/dragsource" "$work/from/dropped.mdx" 840 120 "$work/source-ready" >"$work/source.log" 2>&1 &
+    source_pid=$!
+    waited=0
+    while [ ! -s "$work/source-ready" ] && [ "$waited" -lt 100 ]; do sleep 0.1; waited=$((waited + 1)); done
+    if [ ! -s "$work/source-ready" ]; then
+        kill "$source_pid" 2>/dev/null || true
+        flunk "library: the drag source never showed ($(head -c 300 "$work/source.log"))"
+        return 0
+    fi
+    source=$(cat "$work/source-ready")
+    # shellcheck disable=SC2086 # two coordinates each, split on purpose
+    "$kit/pointer" drag $source $drop || flunk "library: pointer could not drag"
+    waited=0
+    while [ ! -s "$out" ] && [ "$waited" -lt 1000 ]; do sleep 0.1; waited=$((waited + 1)); done
+    kill "$source_pid" 2>/dev/null || true
+    wait "$source_pid" 2>/dev/null || true
+    echo "      drag: from $source to $drop; $(tail -1 "$work/source.log" 2>/dev/null)"
+    if [ ! -s "$out" ]; then
+        flunk "library: the drop window wrote no report within 100 s ($(head -c 300 "$out.err" 2>/dev/null))"
+        return 0
+    fi
+    findings "$out" drop.registered
+}
+
+# The owner's 25, in three launches of the app, on APFS clones of their folders (instant, and nothing written to the
+# originals): imported, then the clone's folder moved and the app launched again, then one file rewritten.
+library_corpus() {
+    local out="$reports/library-corpus.json" library="$reports/library-corpus" relink=""
+    if [ ! -d "$home/corpus" ] || [ ! -s "$home/library-editions.json" ]; then
+        flunk "library: the 25 not measured — no corpus or editions on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac)"
+        return 0
+    fi
+    [ ! -e "$home/library-no-relink" ] || relink="--no-relink"
+    rm -rf "$reports/corpus-a" "$reports/corpus-b" "$library"
+    cp -cR "$home/corpus" "$reports/corpus-a" || { flunk "library: the corpus could not be cloned"; return 0; }
+    if ! report --library-corpus 1800 import "$reports/corpus-a" --library-dir "$library" \
+        --expected "$home/library-editions.json" >/dev/null; then
+        flunk "library: the import launch wrote nothing ($(head -c 300 "$reports/library-corpus.err" 2>/dev/null))"
+        return 0
+    fi
+    cp "$out" "$reports/library-corpus-import.json"
+    findings "$reports/library-corpus-import.json" corpus.registered corpus.editions corpus.choicesMade
+    mv "$reports/corpus-a" "$reports/corpus-b"
+    if report --library-corpus 900 relaunch --library-dir "$library" --moved-to "$reports/corpus-b" $relink >/dev/null; then
+        cp "$out" "$reports/library-corpus-relaunch.json"
+        findings "$reports/library-corpus-relaunch.json" relaunch.everyDictionary relaunch.order relaunch.foundWhereMoved \
+            relaunch.answering
+    else
+        flunk "library: the relaunch wrote nothing ($(head -c 300 "$reports/library-corpus.err" 2>/dev/null))"
+    fi
+    [ -z "$relink" ] || return 0
+    if report --library-corpus 900 rewrite --library-dir "$library" >/dev/null; then
+        cp "$out" "$reports/library-corpus-rewrite.json"
+        findings "$reports/library-corpus-rewrite.json" corpus.changed.newEdition corpus.changed.notJoinedUnasked \
+            corpus.changed.joined corpus.changed.persists corpus.changed.undone
+    else
+        flunk "library: the rewrite launch wrote nothing ($(head -c 300 "$reports/library-corpus.err" 2>/dev/null))"
+    fi
+}
+
+library_stage() {
+    local results="$home/results/library"
+    rm -rf "$results"
+    mkdir -p "$results"
+    if [ -e "$home/library-no-relink" ]; then
+        echo "      positive control: relinking off for the 25's relaunch; only that is run"
+        library_corpus
+    else
+        if report --library-report 600 "$home/fixtures" >/dev/null; then
+            findings "$reports/library-report.json" $LIBRARY_CHECKS
+            echo "      facts: $(plutil -extract facts json -o - "$reports/library-report.json" 2>/dev/null | head -c 600)"
+        else
+            flunk "library: --library-report wrote nothing within 600 s ($(head -c 300 "$reports/library-report.err" 2>/dev/null))"
+        fi
+        library_drop
+        library_corpus
+    fi
+    cp "$reports"/library-*.json "$results/" 2>/dev/null || true
+    rm -rf "$reports/corpus-a" "$reports/corpus-b"
+}
+library_stage
+fi
+
 finished=true
 echo
 [ "$failures" -eq 0 ] && echo "all stages passed" || { echo "$failures assertion(s) failed"; exit 1; }
@@ -660,9 +825,9 @@ if on_host "test -d '$REMOTE_DIR/results'"; then
         || echo "the stages' results could not be copied back from the E2E Mac"
 fi
 
-if [ -n "$expected_override" ] || [ -n "$service_checks" ]; then
+if [ -n "$expected_override" ] || [ -n "$service_checks" ] || [ -n "$library_no_relink" ]; then
     echo
-    echo "a positive control or a subset (XDICT_E2E_EXPECTED_VERSIONS, XDICT_E2E_SERVICE_CHECKS): nothing is recorded"
+    echo "a positive control or a subset (XDICT_E2E_EXPECTED_VERSIONS, XDICT_E2E_SERVICE_CHECKS, XDICT_E2E_LIBRARY_NO_RELINK): nothing is recorded"
     exit "$remote_status"
 fi
 # The tree likewise: one that moved while the stages ran is no tree this run tested.

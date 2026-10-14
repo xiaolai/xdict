@@ -14,4 +14,13 @@ if arguments.contains(ServiceReport.flag) {
 if arguments.contains(ConnectReport.flag) {
     ConnectReport.run()
 }
+if arguments.contains(LibraryReport.flag) {
+    LibraryReport.run(arguments)
+}
+if arguments.contains(LibraryCorpusReport.flag) {
+    LibraryCorpusReport.run(arguments)
+}
+if arguments.contains(LibraryDropReport.flag) {
+    LibraryDropReport.run(arguments)
+}
 XDictApp.main()

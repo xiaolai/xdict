@@ -8,6 +8,9 @@
 #     <dir>/matrix/   the 32 variants and variants.json, with conformance/fixtures/matrix/expected.json
 #     <dir>/slow/     slow.mdx, slow.mdd and heavy.mdx (`service-fixture`): a lookup, a resource and an import that keep
 #                     the service busy
+#     <dir>/library/  the packages the library's checks import (`library-fixture`): a file, a folder with ordered
+#                     volumes and a sidecar, a missing volume, three refusals, language names, a symbolic link out of
+#                     its folder, sounds, a file rewritten, and a 128 MiB one to cancel (plan-macos-v1 WI-5)
 #
 # Written into a scratch directory first and moved into place whole, so a failed run never leaves a mixture that
 # looks complete.
@@ -29,14 +32,21 @@ trap 'rm -rf "$scratch"' EXIT
     --bin conformance-fixtures -- "$scratch")
 (cd "$core" && CARGO_TARGET_DIR=$apple/.build/cargo cargo run --quiet --release --locked -p xdict-conformance \
     --bin service-fixture -- "$scratch/slow")
+(cd "$core" && CARGO_TARGET_DIR=$apple/.build/cargo cargo run --quiet --release --locked -p xdict-conformance \
+    --bin library-fixture -- "$scratch/library")
 for fixture in tiny matrix; do
     cp "$conformance/$fixture/expected.json" "$scratch/$fixture/expected.json"
 done
 # What the checks open, asserted here: a writer that wrote nothing would otherwise show up as a test that found nothing.
 for file in tiny/tiny.mdx tiny/tiny.mdd tiny/tiny.css tiny/tiny-rebuilt.mdx tiny/expected.json matrix/variants.json matrix/expected.json \
-    slow/slow.mdx slow/slow.mdd slow/heavy.mdx; do
+    slow/slow.mdx slow/slow.mdd slow/heavy.mdx library/file/single.mdx library/folder/vol/vol.2.mdd \
+    library/folder/vol/vol.css library/gap/gap.2.mdd library/drop/dropped.mdx library/refused/v3/v3.mdd \
+    library/refused/regcode/regcode.mdx library/refused/damaged/damaged.mdx library/lang/Plain\ Glossary.mdx \
+    library/escape/esc/esc.css library/sounds/sounds.mdd library/rewrite/second.mdx library/big/big.mdx; do
     [ -s "$scratch/$file" ] || fail "the writer left no $file"
 done
+# The escape is a symbolic link, or it tests nothing.
+[ -L "$scratch/library/escape/esc/esc.css" ] || fail "library/escape/esc/esc.css is not a symbolic link"
 
 rm -rf "$out"
 mv "$scratch" "$out"
