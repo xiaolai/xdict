@@ -1,0 +1,985 @@
+{
+ "comment": "The hostile-input battery (apps/apple/Tools/hostile/battery.py writes this file; do not edit by hand): one egress attempt per entry, every target on this Mac's loopback or under .invalid. Our own text, no dictionary content.",
+ "mdx": {
+  "name": "hostile.mdx",
+  "title": "Hostile",
+  "entries": [
+   [
+    "img",
+    "<img src=\"http://127.0.0.1:47100/h1/img/img.png\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img~textarea",
+    "<textarea><!--</textarea><img src=\"http://127.0.0.1:47101/h1/img~textarea/img.png\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img~srcdoc",
+    "<iframe srcdoc=\"&lt;img src=&quot;http://127.0.0.1:47102/h1/img~srcdoc/img.png&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img~write",
+    "<script>document.write(atob(\"PGltZyBzcmM9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxMDMvaDEvaW1nfndyaXRlL2ltZy5wbmciPg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img~resource",
+    "<iframe src=\"xdict://d/r/img~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-srcset",
+    "<img srcset=\"http://127.0.0.1:47105/h1/img-srcset/srcset.png 1x\"><picture><source srcset=\"http://127.0.0.1:47105/h1/img-srcset/picture.png\"><img></picture><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-srcset~textarea",
+    "<textarea><!--</textarea><img srcset=\"http://127.0.0.1:47106/h1/img-srcset~textarea/srcset.png 1x\"><picture><source srcset=\"http://127.0.0.1:47106/h1/img-srcset~textarea/picture.png\"><img></picture>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-srcset~srcdoc",
+    "<iframe srcdoc=\"&lt;img srcset=&quot;http://127.0.0.1:47107/h1/img-srcset~srcdoc/srcset.png 1x&quot;&gt;&lt;picture&gt;&lt;source srcset=&quot;http://127.0.0.1:47107/h1/img-srcset~srcdoc/picture.png&quot;&gt;&lt;img&gt;&lt;/picture&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-srcset~write",
+    "<script>document.write(atob(\"PGltZyBzcmNzZXQ9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxMDgvaDEvaW1nLXNyY3NldH53cml0ZS9zcmNzZXQucG5nIDF4Ij48cGljdHVyZT48c291cmNlIHNyY3NldD0iaHR0cDovLzEyNy4wLjAuMTo0NzEwOC9oMS9pbWctc3Jjc2V0fndyaXRlL3BpY3R1cmUucG5nIj48aW1nPjwvcGljdHVyZT4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-srcset~resource",
+    "<iframe src=\"xdict://d/r/img-srcset~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script",
+    "<script src=\"http://127.0.0.1:47110/h1/script/script.js\"></script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script~textarea",
+    "<textarea><!--</textarea><script src=\"http://127.0.0.1:47111/h1/script~textarea/script.js\"></script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script~srcdoc",
+    "<iframe srcdoc=\"&lt;script src=&quot;http://127.0.0.1:47112/h1/script~srcdoc/script.js&quot;&gt;&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script~write",
+    "<script>document.write(atob(\"PHNjcmlwdCBzcmM9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxMTMvaDEvc2NyaXB0fndyaXRlL3NjcmlwdC5qcyI+PC9zY3JpcHQ+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script~resource",
+    "<iframe src=\"xdict://d/r/script~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "script-module",
+    "<script type=\"module\" src=\"http://127.0.0.1:47115/h1/script-module/module.js\"></script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};import('http://127.0.0.1:47115/h1/script-module/dynamic-import.js').then(function(){R('import','ok')},function(e){R('import','err '+e)})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "stylesheet",
+    "<link rel=\"stylesheet\" href=\"http://127.0.0.1:47116/h1/stylesheet/style.css\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "stylesheet~textarea",
+    "<textarea><!--</textarea><link rel=\"stylesheet\" href=\"http://127.0.0.1:47117/h1/stylesheet~textarea/style.css\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "stylesheet~srcdoc",
+    "<iframe srcdoc=\"&lt;link rel=&quot;stylesheet&quot; href=&quot;http://127.0.0.1:47118/h1/stylesheet~srcdoc/style.css&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "stylesheet~write",
+    "<script>document.write(atob(\"PGxpbmsgcmVsPSJzdHlsZXNoZWV0IiBocmVmPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTE5L2gxL3N0eWxlc2hlZXR+d3JpdGUvc3R5bGUuY3NzIj4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "stylesheet~resource",
+    "<iframe src=\"xdict://d/r/stylesheet~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-import",
+    "<style>@import url(\"http://127.0.0.1:47121/h1/css-import/import.css\");</style><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-import~textarea",
+    "<textarea><!--</textarea><style>@import url(\"http://127.0.0.1:47122/h1/css-import~textarea/import.css\");</style>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-import~srcdoc",
+    "<iframe srcdoc=\"&lt;style&gt;@import url(&quot;http://127.0.0.1:47123/h1/css-import~srcdoc/import.css&quot;);&lt;/style&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-import~write",
+    "<script>document.write(atob(\"PHN0eWxlPkBpbXBvcnQgdXJsKCJodHRwOi8vMTI3LjAuMC4xOjQ3MTI0L2gxL2Nzcy1pbXBvcnR+d3JpdGUvaW1wb3J0LmNzcyIpOzwvc3R5bGU+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-import~resource",
+    "<iframe src=\"xdict://d/r/css-import~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-url",
+    "<div style=\"width:40px;height:40px;background-image:url('http://127.0.0.1:47126/h1/css-url/bg.png')\"></div><style>.x{list-style-image:url(\"http://127.0.0.1:47126/h1/css-url/list.png\");cursor:url(\"http://127.0.0.1:47126/h1/css-url/cursor.png\"),auto;border:10px solid;border-image:url(\"http://127.0.0.1:47126/h1/css-url/border.png\") 30;-webkit-mask-image:url(\"http://127.0.0.1:47126/h1/css-url/mask.png\");background:image-set(url(\"http://127.0.0.1:47126/h1/css-url/image-set.png\") 1x)}</style><ul class=\"x\"><li>x</li></ul><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-url~textarea",
+    "<textarea><!--</textarea><div style=\"width:40px;height:40px;background-image:url('http://127.0.0.1:47127/h1/css-url~textarea/bg.png')\"></div><style>.x{list-style-image:url(\"http://127.0.0.1:47127/h1/css-url~textarea/list.png\");cursor:url(\"http://127.0.0.1:47127/h1/css-url~textarea/cursor.png\"),auto;border:10px solid;border-image:url(\"http://127.0.0.1:47127/h1/css-url~textarea/border.png\") 30;-webkit-mask-image:url(\"http://127.0.0.1:47127/h1/css-url~textarea/mask.png\");background:image-set(url(\"http://127.0.0.1:47127/h1/css-url~textarea/image-set.png\") 1x)}</style><ul class=\"x\"><li>x</li></ul>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-url~srcdoc",
+    "<iframe srcdoc=\"&lt;div style=&quot;width:40px;height:40px;background-image:url(&#x27;http://127.0.0.1:47128/h1/css-url~srcdoc/bg.png&#x27;)&quot;&gt;&lt;/div&gt;&lt;style&gt;.x{list-style-image:url(&quot;http://127.0.0.1:47128/h1/css-url~srcdoc/list.png&quot;);cursor:url(&quot;http://127.0.0.1:47128/h1/css-url~srcdoc/cursor.png&quot;),auto;border:10px solid;border-image:url(&quot;http://127.0.0.1:47128/h1/css-url~srcdoc/border.png&quot;) 30;-webkit-mask-image:url(&quot;http://127.0.0.1:47128/h1/css-url~srcdoc/mask.png&quot;);background:image-set(url(&quot;http://127.0.0.1:47128/h1/css-url~srcdoc/image-set.png&quot;) 1x)}&lt;/style&gt;&lt;ul class=&quot;x&quot;&gt;&lt;li&gt;x&lt;/li&gt;&lt;/ul&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-url~write",
+    "<script>document.write(atob(\"PGRpdiBzdHlsZT0id2lkdGg6NDBweDtoZWlnaHQ6NDBweDtiYWNrZ3JvdW5kLWltYWdlOnVybCgnaHR0cDovLzEyNy4wLjAuMTo0NzEyOS9oMS9jc3MtdXJsfndyaXRlL2JnLnBuZycpIj48L2Rpdj48c3R5bGU+Lnh7bGlzdC1zdHlsZS1pbWFnZTp1cmwoImh0dHA6Ly8xMjcuMC4wLjE6NDcxMjkvaDEvY3NzLXVybH53cml0ZS9saXN0LnBuZyIpO2N1cnNvcjp1cmwoImh0dHA6Ly8xMjcuMC4wLjE6NDcxMjkvaDEvY3NzLXVybH53cml0ZS9jdXJzb3IucG5nIiksYXV0bztib3JkZXI6MTBweCBzb2xpZDtib3JkZXItaW1hZ2U6dXJsKCJodHRwOi8vMTI3LjAuMC4xOjQ3MTI5L2gxL2Nzcy11cmx+d3JpdGUvYm9yZGVyLnBuZyIpIDMwOy13ZWJraXQtbWFzay1pbWFnZTp1cmwoImh0dHA6Ly8xMjcuMC4wLjE6NDcxMjkvaDEvY3NzLXVybH53cml0ZS9tYXNrLnBuZyIpO2JhY2tncm91bmQ6aW1hZ2Utc2V0KHVybCgiaHR0cDovLzEyNy4wLjAuMTo0NzEyOS9oMS9jc3MtdXJsfndyaXRlL2ltYWdlLXNldC5wbmciKSAxeCl9PC9zdHlsZT48dWwgY2xhc3M9IngiPjxsaT54PC9saT48L3VsPg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "css-url~resource",
+    "<iframe src=\"xdict://d/r/css-url~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "font",
+    "<style>@font-face{font-family:X;src:url(\"http://127.0.0.1:47131/h1/font/font.woff\") format(\"woff\")}</style><p style=\"font-family:X\">abc</p><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "font~textarea",
+    "<textarea><!--</textarea><style>@font-face{font-family:X;src:url(\"http://127.0.0.1:47132/h1/font~textarea/font.woff\") format(\"woff\")}</style><p style=\"font-family:X\">abc</p>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "font~srcdoc",
+    "<iframe srcdoc=\"&lt;style&gt;@font-face{font-family:X;src:url(&quot;http://127.0.0.1:47133/h1/font~srcdoc/font.woff&quot;) format(&quot;woff&quot;)}&lt;/style&gt;&lt;p style=&quot;font-family:X&quot;&gt;abc&lt;/p&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "font~write",
+    "<script>document.write(atob(\"PHN0eWxlPkBmb250LWZhY2V7Zm9udC1mYW1pbHk6WDtzcmM6dXJsKCJodHRwOi8vMTI3LjAuMC4xOjQ3MTM0L2gxL2ZvbnR+d3JpdGUvZm9udC53b2ZmIikgZm9ybWF0KCJ3b2ZmIil9PC9zdHlsZT48cCBzdHlsZT0iZm9udC1mYW1pbHk6WCI+YWJjPC9wPg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "font~resource",
+    "<iframe src=\"xdict://d/r/font~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "fetch",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};fetch('http://127.0.0.1:47136/h1/fetch/fetch').then(function(r){R('fetch','ok '+r.status)},function(e){R('fetch','err '+e)})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "xhr",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};try{var x=new XMLHttpRequest();x.open('GET','http://127.0.0.1:47137/h1/xhr/xhr');x.onload=function(){R('xhr','ok')};x.onerror=function(){R('xhr','error')};x.send()}catch(e){R('xhr','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "fetch-keepalive",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};fetch('http://127.0.0.1:47138/h1/fetch-keepalive/keepalive',{method:'POST',keepalive:true,body:'x'}).then(function(){R('ka','ok')},function(e){R('ka','err '+e)})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "beacon",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('beacon',navigator.sendBeacon('http://127.0.0.1:47139/h1/beacon/beacon','x'))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "eventsource",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};try{var s=new EventSource('http://127.0.0.1:47140/h1/eventsource/es');s.onerror=function(){R('es','error');s.close()}}catch(e){R('es','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "websocket",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};try{var w=new WebSocket('ws://127.0.0.1:47141/h1/websocket/ws');w.onerror=function(){R('ws','error')}}catch(e){R('ws','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "webtransport",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('wt-type',typeof WebTransport);try{var t=new WebTransport('https://127.0.0.1:47442/h1');t.ready.then(function(){R('wt','ready')},function(e){R('wt','err '+e)})}catch(e){R('wt','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "object-embed",
+    "<object data=\"http://127.0.0.1:47143/h1/object-embed/object.html\" type=\"text/html\"></object><embed src=\"http://127.0.0.1:47143/h1/object-embed/embed.html\" type=\"text/html\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "object-embed~textarea",
+    "<textarea><!--</textarea><object data=\"http://127.0.0.1:47144/h1/object-embed~textarea/object.html\" type=\"text/html\"></object><embed src=\"http://127.0.0.1:47144/h1/object-embed~textarea/embed.html\" type=\"text/html\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "object-embed~srcdoc",
+    "<iframe srcdoc=\"&lt;object data=&quot;http://127.0.0.1:47145/h1/object-embed~srcdoc/object.html&quot; type=&quot;text/html&quot;&gt;&lt;/object&gt;&lt;embed src=&quot;http://127.0.0.1:47145/h1/object-embed~srcdoc/embed.html&quot; type=&quot;text/html&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "object-embed~write",
+    "<script>document.write(atob(\"PG9iamVjdCBkYXRhPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTQ2L2gxL29iamVjdC1lbWJlZH53cml0ZS9vYmplY3QuaHRtbCIgdHlwZT0idGV4dC9odG1sIj48L29iamVjdD48ZW1iZWQgc3JjPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTQ2L2gxL29iamVjdC1lbWJlZH53cml0ZS9lbWJlZC5odG1sIiB0eXBlPSJ0ZXh0L2h0bWwiPg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "object-embed~resource",
+    "<iframe src=\"xdict://d/r/object-embed~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "misc-tags",
+    "<video poster=\"http://127.0.0.1:47148/h1/misc-tags/poster.png\"></video><input type=\"image\" src=\"http://127.0.0.1:47148/h1/misc-tags/input.png\"><link rel=\"icon\" href=\"http://127.0.0.1:47148/h1/misc-tags/icon.png\"><link rel=\"manifest\" href=\"http://127.0.0.1:47148/h1/misc-tags/manifest.json\"><table background=\"http://127.0.0.1:47148/h1/misc-tags/table.png\"><tr><td>x</td></tr></table><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "misc-tags~textarea",
+    "<textarea><!--</textarea><video poster=\"http://127.0.0.1:47149/h1/misc-tags~textarea/poster.png\"></video><input type=\"image\" src=\"http://127.0.0.1:47149/h1/misc-tags~textarea/input.png\"><link rel=\"icon\" href=\"http://127.0.0.1:47149/h1/misc-tags~textarea/icon.png\"><link rel=\"manifest\" href=\"http://127.0.0.1:47149/h1/misc-tags~textarea/manifest.json\"><table background=\"http://127.0.0.1:47149/h1/misc-tags~textarea/table.png\"><tr><td>x</td></tr></table>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "misc-tags~srcdoc",
+    "<iframe srcdoc=\"&lt;video poster=&quot;http://127.0.0.1:47150/h1/misc-tags~srcdoc/poster.png&quot;&gt;&lt;/video&gt;&lt;input type=&quot;image&quot; src=&quot;http://127.0.0.1:47150/h1/misc-tags~srcdoc/input.png&quot;&gt;&lt;link rel=&quot;icon&quot; href=&quot;http://127.0.0.1:47150/h1/misc-tags~srcdoc/icon.png&quot;&gt;&lt;link rel=&quot;manifest&quot; href=&quot;http://127.0.0.1:47150/h1/misc-tags~srcdoc/manifest.json&quot;&gt;&lt;table background=&quot;http://127.0.0.1:47150/h1/misc-tags~srcdoc/table.png&quot;&gt;&lt;tr&gt;&lt;td&gt;x&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "misc-tags~write",
+    "<script>document.write(atob(\"PHZpZGVvIHBvc3Rlcj0iaHR0cDovLzEyNy4wLjAuMTo0NzE1MS9oMS9taXNjLXRhZ3N+d3JpdGUvcG9zdGVyLnBuZyI+PC92aWRlbz48aW5wdXQgdHlwZT0iaW1hZ2UiIHNyYz0iaHR0cDovLzEyNy4wLjAuMTo0NzE1MS9oMS9taXNjLXRhZ3N+d3JpdGUvaW5wdXQucG5nIj48bGluayByZWw9Imljb24iIGhyZWY9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxNTEvaDEvbWlzYy10YWdzfndyaXRlL2ljb24ucG5nIj48bGluayByZWw9Im1hbmlmZXN0IiBocmVmPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTUxL2gxL21pc2MtdGFnc353cml0ZS9tYW5pZmVzdC5qc29uIj48dGFibGUgYmFja2dyb3VuZD0iaHR0cDovLzEyNy4wLjAuMTo0NzE1MS9oMS9taXNjLXRhZ3N+d3JpdGUvdGFibGUucG5nIj48dHI+PHRkPng8L3RkPjwvdHI+PC90YWJsZT4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "misc-tags~resource",
+    "<iframe src=\"xdict://d/r/misc-tags~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preload",
+    "<link rel=\"preload\" as=\"image\" href=\"http://127.0.0.1:47153/h1/preload/preload.png\"><link rel=\"preload\" as=\"fetch\" crossorigin href=\"http://127.0.0.1:47153/h1/preload/preload-fetch\"><link rel=\"preload\" as=\"style\" href=\"http://127.0.0.1:47153/h1/preload/preload.css\"><link rel=\"preload\" as=\"font\" crossorigin href=\"http://127.0.0.1:47153/h1/preload/preload-font.woff\"><link rel=\"modulepreload\" href=\"http://127.0.0.1:47153/h1/preload/modulepreload.js\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preload~textarea",
+    "<textarea><!--</textarea><link rel=\"preload\" as=\"image\" href=\"http://127.0.0.1:47154/h1/preload~textarea/preload.png\"><link rel=\"preload\" as=\"fetch\" crossorigin href=\"http://127.0.0.1:47154/h1/preload~textarea/preload-fetch\"><link rel=\"preload\" as=\"style\" href=\"http://127.0.0.1:47154/h1/preload~textarea/preload.css\"><link rel=\"preload\" as=\"font\" crossorigin href=\"http://127.0.0.1:47154/h1/preload~textarea/preload-font.woff\"><link rel=\"modulepreload\" href=\"http://127.0.0.1:47154/h1/preload~textarea/modulepreload.js\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preload~srcdoc",
+    "<iframe srcdoc=\"&lt;link rel=&quot;preload&quot; as=&quot;image&quot; href=&quot;http://127.0.0.1:47155/h1/preload~srcdoc/preload.png&quot;&gt;&lt;link rel=&quot;preload&quot; as=&quot;fetch&quot; crossorigin href=&quot;http://127.0.0.1:47155/h1/preload~srcdoc/preload-fetch&quot;&gt;&lt;link rel=&quot;preload&quot; as=&quot;style&quot; href=&quot;http://127.0.0.1:47155/h1/preload~srcdoc/preload.css&quot;&gt;&lt;link rel=&quot;preload&quot; as=&quot;font&quot; crossorigin href=&quot;http://127.0.0.1:47155/h1/preload~srcdoc/preload-font.woff&quot;&gt;&lt;link rel=&quot;modulepreload&quot; href=&quot;http://127.0.0.1:47155/h1/preload~srcdoc/modulepreload.js&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preload~write",
+    "<script>document.write(atob(\"PGxpbmsgcmVsPSJwcmVsb2FkIiBhcz0iaW1hZ2UiIGhyZWY9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxNTYvaDEvcHJlbG9hZH53cml0ZS9wcmVsb2FkLnBuZyI+PGxpbmsgcmVsPSJwcmVsb2FkIiBhcz0iZmV0Y2giIGNyb3Nzb3JpZ2luIGhyZWY9Imh0dHA6Ly8xMjcuMC4wLjE6NDcxNTYvaDEvcHJlbG9hZH53cml0ZS9wcmVsb2FkLWZldGNoIj48bGluayByZWw9InByZWxvYWQiIGFzPSJzdHlsZSIgaHJlZj0iaHR0cDovLzEyNy4wLjAuMTo0NzE1Ni9oMS9wcmVsb2FkfndyaXRlL3ByZWxvYWQuY3NzIj48bGluayByZWw9InByZWxvYWQiIGFzPSJmb250IiBjcm9zc29yaWdpbiBocmVmPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTU2L2gxL3ByZWxvYWR+d3JpdGUvcHJlbG9hZC1mb250LndvZmYiPjxsaW5rIHJlbD0ibW9kdWxlcHJlbG9hZCIgaHJlZj0iaHR0cDovLzEyNy4wLjAuMTo0NzE1Ni9oMS9wcmVsb2FkfndyaXRlL21vZHVsZXByZWxvYWQuanMiPg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preload~resource",
+    "<iframe src=\"xdict://d/r/preload~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "prefetch",
+    "<link rel=\"prefetch\" href=\"http://127.0.0.1:47158/h1/prefetch/prefetch\"><link rel=\"prerender\" href=\"http://127.0.0.1:47158/h1/prefetch/prerender\"><link rel=\"next\" href=\"http://127.0.0.1:47158/h1/prefetch/next\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "speculation-rules",
+    "<script type=\"speculationrules\">{\"prefetch\": [{\"source\": \"list\", \"urls\": [\"http://127.0.0.1:47159/h1/speculation-rules/spec-prefetch\"]}], \"prerender\": [{\"source\": \"list\", \"urls\": [\"http://127.0.0.1:47159/h1/speculation-rules/spec-prerender\"]}]}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect",
+    "<link rel=\"preconnect\" href=\"http://127.0.0.1:47160\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect~textarea",
+    "<textarea><!--</textarea><link rel=\"preconnect\" href=\"http://127.0.0.1:47161\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect~srcdoc",
+    "<iframe srcdoc=\"&lt;link rel=&quot;preconnect&quot; href=&quot;http://127.0.0.1:47162&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect~write",
+    "<script>document.write(atob(\"PGxpbmsgcmVsPSJwcmVjb25uZWN0IiBocmVmPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTYzIj4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect~resource",
+    "<iframe src=\"xdict://d/r/preconnect~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect-name",
+    "<link rel=\"preconnect\" href=\"https://pc-preconnect-name-h1.invalid:47165\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect-name~textarea",
+    "<textarea><!--</textarea><link rel=\"preconnect\" href=\"https://pc-preconnect-name-textarea-h1.invalid:47166\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect-name~srcdoc",
+    "<iframe srcdoc=\"&lt;link rel=&quot;preconnect&quot; href=&quot;https://pc-preconnect-name-srcdoc-h1.invalid:47167&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect-name~write",
+    "<script>document.write(atob(\"PGxpbmsgcmVsPSJwcmVjb25uZWN0IiBocmVmPSJodHRwczovL3BjLXByZWNvbm5lY3QtbmFtZS13cml0ZS1oMS5pbnZhbGlkOjQ3MTY4Ij4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "preconnect-name~resource",
+    "<iframe src=\"xdict://d/r/preconnect-name~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-prefetch",
+    "<link rel=\"dns-prefetch\" href=\"//dp-dns-prefetch-h1.invalid\"><link rel=\"dns-prefetch\" href=\"http://dq-dns-prefetch-h1.invalid/\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-prefetch~textarea",
+    "<textarea><!--</textarea><link rel=\"dns-prefetch\" href=\"//dp-dns-prefetch-textarea-h1.invalid\"><link rel=\"dns-prefetch\" href=\"http://dq-dns-prefetch-textarea-h1.invalid/\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-prefetch~srcdoc",
+    "<iframe srcdoc=\"&lt;link rel=&quot;dns-prefetch&quot; href=&quot;//dp-dns-prefetch-srcdoc-h1.invalid&quot;&gt;&lt;link rel=&quot;dns-prefetch&quot; href=&quot;http://dq-dns-prefetch-srcdoc-h1.invalid/&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-prefetch~write",
+    "<script>document.write(atob(\"PGxpbmsgcmVsPSJkbnMtcHJlZmV0Y2giIGhyZWY9Ii8vZHAtZG5zLXByZWZldGNoLXdyaXRlLWgxLmludmFsaWQiPjxsaW5rIHJlbD0iZG5zLXByZWZldGNoIiBocmVmPSJodHRwOi8vZHEtZG5zLXByZWZldGNoLXdyaXRlLWgxLmludmFsaWQvIj4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-prefetch~resource",
+    "<iframe src=\"xdict://d/r/dns-prefetch~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-anchor",
+    "<a href=\"https://da-dns-anchor-h1.invalid/x\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-anchor~textarea",
+    "<textarea><!--</textarea><a href=\"https://da-dns-anchor-textarea-h1.invalid/x\">x</a>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-anchor~srcdoc",
+    "<iframe srcdoc=\"&lt;a href=&quot;https://da-dns-anchor-srcdoc-h1.invalid/x&quot;&gt;x&lt;/a&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-anchor~write",
+    "<script>document.write(atob(\"PGEgaHJlZj0iaHR0cHM6Ly9kYS1kbnMtYW5jaG9yLXdyaXRlLWgxLmludmFsaWQveCI+eDwvYT4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "dns-anchor~resource",
+    "<iframe src=\"xdict://d/r/dns-anchor~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-name",
+    "<img src=\"https://im-img-name-h1.invalid:47180/h1/x.png\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-name~textarea",
+    "<textarea><!--</textarea><img src=\"https://im-img-name-textarea-h1.invalid:47181/h1/x.png\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-name~srcdoc",
+    "<iframe srcdoc=\"&lt;img src=&quot;https://im-img-name-srcdoc-h1.invalid:47182/h1/x.png&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-name~write",
+    "<script>document.write(atob(\"PGltZyBzcmM9Imh0dHBzOi8vaW0taW1nLW5hbWUtd3JpdGUtaDEuaW52YWxpZDo0NzE4My9oMS94LnBuZyI+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "img-name~resource",
+    "<iframe src=\"xdict://d/r/img-name~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "fetch-name",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};fetch('https://fe-fetch-name-h1.invalid:47185/x').catch(function(){})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "websocket-name",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};try{new WebSocket('wss://ws-websocket-name-h1.invalid:47186/x')}catch(e){R('ws','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ping",
+    "<a id=\"a\" href=\"xdict://d/entry/landing\" ping=\"http://127.0.0.1:47187/h1/ping/ping\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ping~textarea",
+    "<textarea><!--</textarea><a id=\"a\" href=\"xdict://d/entry/landing\" ping=\"http://127.0.0.1:47188/h1/ping~textarea/ping\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ping~srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; href=&quot;xdict://d/entry/landing&quot; ping=&quot;http://127.0.0.1:47189/h1/ping~srcdoc/ping&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ping~write",
+    "<script>document.write(atob(\"PGEgaWQ9ImEiIGhyZWY9InhkaWN0Oi8vZC9lbnRyeS9sYW5kaW5nIiBwaW5nPSJodHRwOi8vMTI3LjAuMC4xOjQ3MTkwL2gxL3Bpbmd+d3JpdGUvcGluZyI+eDwvYT48c2NyaXB0PmZ1bmN0aW9uIFIoayxkKXt0cnl7dmFyIHQ7dHJ5e3Q9dG9wLmRvY3VtZW50LmRvY3VtZW50RWxlbWVudH1jYXRjaChlKXt0PWRvY3VtZW50LmRvY3VtZW50RWxlbWVudH12YXIgYT1KU09OLnBhcnNlKHQuZ2V0QXR0cmlidXRlKCdkYXRhLWxhYicpfHwnW10nKTthLnB1c2goW1N0cmluZyhrKSxkPT09dW5kZWZpbmVkfHxkPT09bnVsbD9udWxsOlN0cmluZyhkKV0pO3Quc2V0QXR0cmlidXRlKCdkYXRhLWxhYicsSlNPTi5zdHJpbmdpZnkoYSkpfWNhdGNoKGUpe319O3NldFRpbWVvdXQoZnVuY3Rpb24oKXt0cnl7ZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2EnKS5jbGljaygpfWNhdGNoKGUpe1IoJ3Rocm93JyxlKX19LDQwMCk8L3NjcmlwdD4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ping~resource",
+    "<iframe src=\"xdict://d/r/ping~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "csp-report-meta",
+    "<meta http-equiv=\"Content-Security-Policy\" content=\"img-src 'none'; report-uri http://127.0.0.1:47192/h1/csp-report-meta/report\"><img src=\"xdict://d/r/csp-report-meta/blocked.svg\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audio",
+    "<audio src=\"http://127.0.0.1:47193/h1/audio/a.mp3\" preload=\"auto\" autoplay></audio><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audio~textarea",
+    "<textarea><!--</textarea><audio src=\"http://127.0.0.1:47194/h1/audio~textarea/a.mp3\" preload=\"auto\" autoplay></audio>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audio~srcdoc",
+    "<iframe srcdoc=\"&lt;audio src=&quot;http://127.0.0.1:47195/h1/audio~srcdoc/a.mp3&quot; preload=&quot;auto&quot; autoplay&gt;&lt;/audio&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audio~write",
+    "<script>document.write(atob(\"PGF1ZGlvIHNyYz0iaHR0cDovLzEyNy4wLjAuMTo0NzE5Ni9oMS9hdWRpb353cml0ZS9hLm1wMyIgcHJlbG9hZD0iYXV0byIgYXV0b3BsYXk+PC9hdWRpbz4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audio~resource",
+    "<iframe src=\"xdict://d/r/audio~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "video",
+    "<video src=\"http://127.0.0.1:47198/h1/video/v.mp4\" preload=\"auto\" autoplay muted></video><video preload=\"auto\" muted><source src=\"http://127.0.0.1:47198/h1/video/source.mp4\"></video><video src=\"xdict://d/r/video/ok.wav\" muted><track default kind=\"subtitles\" src=\"http://127.0.0.1:47198/h1/video/track.vtt\"></video><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "video~textarea",
+    "<textarea><!--</textarea><video src=\"http://127.0.0.1:47199/h1/video~textarea/v.mp4\" preload=\"auto\" autoplay muted></video><video preload=\"auto\" muted><source src=\"http://127.0.0.1:47199/h1/video~textarea/source.mp4\"></video><video src=\"xdict://d/r/video~textarea/ok.wav\" muted><track default kind=\"subtitles\" src=\"http://127.0.0.1:47199/h1/video~textarea/track.vtt\"></video>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "video~srcdoc",
+    "<iframe srcdoc=\"&lt;video src=&quot;http://127.0.0.1:47200/h1/video~srcdoc/v.mp4&quot; preload=&quot;auto&quot; autoplay muted&gt;&lt;/video&gt;&lt;video preload=&quot;auto&quot; muted&gt;&lt;source src=&quot;http://127.0.0.1:47200/h1/video~srcdoc/source.mp4&quot;&gt;&lt;/video&gt;&lt;video src=&quot;xdict://d/r/video~srcdoc/ok.wav&quot; muted&gt;&lt;track default kind=&quot;subtitles&quot; src=&quot;http://127.0.0.1:47200/h1/video~srcdoc/track.vtt&quot;&gt;&lt;/video&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "video~write",
+    "<script>document.write(atob(\"PHZpZGVvIHNyYz0iaHR0cDovLzEyNy4wLjAuMTo0NzIwMS9oMS92aWRlb353cml0ZS92Lm1wNCIgcHJlbG9hZD0iYXV0byIgYXV0b3BsYXkgbXV0ZWQ+PC92aWRlbz48dmlkZW8gcHJlbG9hZD0iYXV0byIgbXV0ZWQ+PHNvdXJjZSBzcmM9Imh0dHA6Ly8xMjcuMC4wLjE6NDcyMDEvaDEvdmlkZW9+d3JpdGUvc291cmNlLm1wNCI+PC92aWRlbz48dmlkZW8gc3JjPSJ4ZGljdDovL2Qvci92aWRlb353cml0ZS9vay53YXYiIG11dGVkPjx0cmFjayBkZWZhdWx0IGtpbmQ9InN1YnRpdGxlcyIgc3JjPSJodHRwOi8vMTI3LjAuMC4xOjQ3MjAxL2gxL3ZpZGVvfndyaXRlL3RyYWNrLnZ0dCI+PC92aWRlbz4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "video~resource",
+    "<iframe src=\"xdict://d/r/video~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "hls",
+    "<video src=\"xdict://d/r/hls/a.m3u8\" preload=\"auto\" autoplay muted></video><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "media-js",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};var a=new Audio('http://127.0.0.1:47204/h1/media-js/js-audio.mp3');a.play().catch(function(e){R('play','err '+e)})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-url",
+    "<iframe src=\"http://127.0.0.1:47205/h1/iframe-url/iframe.html\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-url~textarea",
+    "<textarea><!--</textarea><iframe src=\"http://127.0.0.1:47206/h1/iframe-url~textarea/iframe.html\"></iframe>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-url~srcdoc",
+    "<iframe srcdoc=\"&lt;iframe src=&quot;http://127.0.0.1:47207/h1/iframe-url~srcdoc/iframe.html&quot;&gt;&lt;/iframe&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-url~write",
+    "<script>document.write(atob(\"PGlmcmFtZSBzcmM9Imh0dHA6Ly8xMjcuMC4wLjE6NDcyMDgvaDEvaWZyYW1lLXVybH53cml0ZS9pZnJhbWUuaHRtbCI+PC9pZnJhbWU+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-url~resource",
+    "<iframe src=\"xdict://d/r/iframe-url~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc",
+    "<iframe srcdoc=\"&lt;img src=&quot;http://127.0.0.1:47210/h1/iframe-srcdoc/srcdoc-img.png&quot;&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};R(&#x27;srcdoc-ran&#x27;,location.href)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc-fetch",
+    "<iframe srcdoc=\"&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};R(&#x27;srcdoc-ran&#x27;,location.href);fetch(&#x27;http://127.0.0.1:47211/h1/iframe-srcdoc-fetch/srcdoc-fetch&#x27;).then(function(){R(&#x27;sf&#x27;,&#x27;ok&#x27;)},function(e){R(&#x27;sf&#x27;,&#x27;err &#x27;+e)});navigator.sendBeacon(&#x27;http://127.0.0.1:47211/h1/iframe-srcdoc-fetch/srcdoc-beacon&#x27;,&#x27;x&#x27;);try{new WebSocket(&#x27;ws://127.0.0.1:47211/h1/iframe-srcdoc-fetch/srcdoc-ws&#x27;)}catch(e){R(&#x27;sws&#x27;,&#x27;throw &#x27;+e)}&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc-nav",
+    "<iframe srcdoc=\"&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};R(&#x27;srcdoc-ran&#x27;,location.href)&lt;/script&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href=&#x27;http://127.0.0.1:47212/h1/iframe-srcdoc-nav/srcdoc-self-nav&#x27;}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc-top",
+    "<iframe srcdoc=\"&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};R(&#x27;srcdoc-ran&#x27;,location.href)&lt;/script&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{top.location.href=&#x27;http://127.0.0.1:47213/h1/iframe-srcdoc-top/srcdoc-top-nav&#x27;}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc-refresh",
+    "<iframe srcdoc=\"&lt;meta http-equiv=&quot;refresh&quot; content=&quot;0;url=http://127.0.0.1:47214/h1/iframe-srcdoc-refresh/srcdoc-refresh&quot;&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};R(&#x27;srcdoc-ran&#x27;,location.href)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-srcdoc-scripted",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var f=document.createElement('iframe');f.srcdoc=\"<img src=\\\"http://127.0.0.1:47215/h1/iframe-srcdoc-scripted/scripted-srcdoc.png\\\">\";document.body.appendChild(f)}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-blank-write",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var f=document.createElement('iframe');document.body.appendChild(f);R('blank-doc',!!f.contentDocument);f.contentDocument.write(\"<img src=\\\"http://127.0.0.1:47216/h1/iframe-blank-write/blank-img.png\\\">\");f.contentWindow.fetch('http://127.0.0.1:47216/h1/iframe-blank-write/blank-fetch').catch(function(){})}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-data",
+    "<iframe src=\"data:text/html,&lt;img src=http://127.0.0.1:47217/h1/iframe-data/data-iframe.png&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-blob",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var b=new Blob([\"<img src=\\\"http://127.0.0.1:47218/h1/iframe-blob/blob-iframe.png\\\">\"],{type:'text/html'});var f=document.createElement('iframe');f.src=URL.createObjectURL(b);document.body.appendChild(f)}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "iframe-xdict",
+    "<iframe src=\"xdict://d/r/iframe-xdict/inner.html\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "worker-xdict",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function W(make){try{var w=make();w.onmessage=function(e){R('worker',e.data)};w.onerror=function(e){R('worker-error',e.message||'error')}}catch(e){R('worker-throw',e)}}W(function(){return new Worker('xdict://d/r/worker-xdict/w.js')})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "worker-blob",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function W(make){try{var w=make();w.onmessage=function(e){R('worker',e.data)};w.onerror=function(e){R('worker-error',e.message||'error')}}catch(e){R('worker-throw',e)}}var b=new Blob([\"try{fetch('http://127.0.0.1:47221/h1/worker-blob/dedicated-fetch').then(function(){postMessage('fetch-ok')},function(e){postMessage('fetch-err '+e)})}catch(e){postMessage('fetch-throw '+e)}\\ntry{importScripts('http://127.0.0.1:47221/h1/worker-blob/dedicated-import.js')}catch(e){postMessage('import-throw '+e)}\\ntry{new WebSocket('ws://127.0.0.1:47221/h1/worker-blob/dedicated-ws')}catch(e){postMessage('ws-throw '+e)}\\npostMessage('dedicated-ran');\"],{type:'text/javascript'});W(function(){return new Worker(URL.createObjectURL(b))})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "worker-data",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function W(make){try{var w=make();w.onmessage=function(e){R('worker',e.data)};w.onerror=function(e){R('worker-error',e.message||'error')}}catch(e){R('worker-throw',e)}}W(function(){return new Worker('data:text/javascript,'+encodeURIComponent(\"try{fetch('http://127.0.0.1:47222/h1/worker-data/dedicated-fetch').then(function(){postMessage('fetch-ok')},function(e){postMessage('fetch-err '+e)})}catch(e){postMessage('fetch-throw '+e)}\\ntry{importScripts('http://127.0.0.1:47222/h1/worker-data/dedicated-import.js')}catch(e){postMessage('import-throw '+e)}\\ntry{new WebSocket('ws://127.0.0.1:47222/h1/worker-data/dedicated-ws')}catch(e){postMessage('ws-throw '+e)}\\npostMessage('dedicated-ran');\"))})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "worker-http",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function W(make){try{var w=make();w.onmessage=function(e){R('worker',e.data)};w.onerror=function(e){R('worker-error',e.message||'error')}}catch(e){R('worker-throw',e)}}W(function(){return new Worker('http://127.0.0.1:47223/h1/worker-http/w-http.js')})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "sharedworker-xdict",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function SW(make){try{var w=make();w.port.onmessage=function(e){R('shared',e.data)};w.port.start();w.onerror=function(e){R('shared-error',e.message||'error')}}catch(e){R('shared-throw',e)}}R('sw-type',typeof SharedWorker);SW(function(){return new SharedWorker('xdict://d/r/sharedworker-xdict/s.js')})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "sharedworker-blob",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function SW(make){try{var w=make();w.port.onmessage=function(e){R('shared',e.data)};w.port.start();w.onerror=function(e){R('shared-error',e.message||'error')}}catch(e){R('shared-throw',e)}}var b=new Blob([\"var p={postMessage:function(){}};onconnect=function(e){p=e.ports[0];p.postMessage('shared-connected')};try{fetch('http://127.0.0.1:47225/h1/sharedworker-blob/shared-fetch').then(function(){p.postMessage('fetch-ok')},function(e){p.postMessage('fetch-err '+e)})}catch(e){p.postMessage('fetch-throw '+e)}\\ntry{importScripts('http://127.0.0.1:47225/h1/sharedworker-blob/shared-import.js')}catch(e){p.postMessage('import-throw '+e)}\\ntry{new WebSocket('ws://127.0.0.1:47225/h1/sharedworker-blob/shared-ws')}catch(e){p.postMessage('ws-throw '+e)}\\np.postMessage('shared-ran');\"],{type:'text/javascript'});SW(function(){return new SharedWorker(URL.createObjectURL(b))})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "serviceworker",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('sw-present','serviceWorker' in navigator);if('serviceWorker' in navigator){navigator.serviceWorker.register('xdict://d/r/serviceworker/sw.js').then(function(){R('sw','registered')},function(e){R('sw','reject '+e)});navigator.serviceWorker.register('http://127.0.0.1:47226/h1/serviceworker/sw-http.js').then(function(){R('sw-http','registered')},function(e){R('sw-http','reject '+e)})}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "audioworklet",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};try{var a=new AudioContext();R('aw-type',typeof a.audioWorklet);a.audioWorklet.addModule('http://127.0.0.1:47227/h1/audioworklet/worklet.js').then(function(){R('aw','ok')},function(e){R('aw','err '+e)})}catch(e){R('aw','throw '+e)}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "meta-refresh",
+    "<meta http-equiv=\"refresh\" content=\"1;url=http://127.0.0.1:47228/h1/meta-refresh/refresh\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "meta-refresh~textarea",
+    "<textarea><!--</textarea><meta http-equiv=\"refresh\" content=\"1;url=http://127.0.0.1:47229/h1/meta-refresh~textarea/refresh\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "meta-refresh~srcdoc",
+    "<iframe srcdoc=\"&lt;meta http-equiv=&quot;refresh&quot; content=&quot;1;url=http://127.0.0.1:47230/h1/meta-refresh~srcdoc/refresh&quot;&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "meta-refresh~write",
+    "<script>document.write(atob(\"PG1ldGEgaHR0cC1lcXVpdj0icmVmcmVzaCIgY29udGVudD0iMTt1cmw9aHR0cDovLzEyNy4wLjAuMTo0NzIzMS9oMS9tZXRhLXJlZnJlc2h+d3JpdGUvcmVmcmVzaCI+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "meta-refresh~resource",
+    "<iframe src=\"xdict://d/r/meta-refresh~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-location",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href='http://127.0.0.1:47233/h1/nav-location/location'}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-api",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('nav-type',typeof navigation);navigation.navigate('http://127.0.0.1:47234/h1/nav-api/navigation-api')}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "window-open",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('open',!!window.open('http://127.0.0.1:47235/h1/window-open/window-open'))}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "window-open-blank-write",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var w=window.open('');R('open',!!w);if(w){w.document.write(\"<img src=\\\"http://127.0.0.1:47236/h1/window-open-blank-write/popup-img.png\\\">\");w.fetch('http://127.0.0.1:47236/h1/window-open-blank-write/popup-fetch').catch(function(){})}}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-post",
+    "<form id=\"f\" action=\"http://127.0.0.1:47237/h1/form-post/form-post\" method=\"post\"><input name=\"a\" value=\"b\"></form><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('f').submit()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-post~textarea",
+    "<textarea><!--</textarea><form id=\"f\" action=\"http://127.0.0.1:47238/h1/form-post~textarea/form-post\" method=\"post\"><input name=\"a\" value=\"b\"></form><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('f').submit()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-post~srcdoc",
+    "<iframe srcdoc=\"&lt;form id=&quot;f&quot; action=&quot;http://127.0.0.1:47239/h1/form-post~srcdoc/form-post&quot; method=&quot;post&quot;&gt;&lt;input name=&quot;a&quot; value=&quot;b&quot;&gt;&lt;/form&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;f&#x27;).submit()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-post~write",
+    "<script>document.write(atob(\"PGZvcm0gaWQ9ImYiIGFjdGlvbj0iaHR0cDovLzEyNy4wLjAuMTo0NzI0MC9oMS9mb3JtLXBvc3R+d3JpdGUvZm9ybS1wb3N0IiBtZXRob2Q9InBvc3QiPjxpbnB1dCBuYW1lPSJhIiB2YWx1ZT0iYiI+PC9mb3JtPjxzY3JpcHQ+ZnVuY3Rpb24gUihrLGQpe3RyeXt2YXIgdDt0cnl7dD10b3AuZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fWNhdGNoKGUpe3Q9ZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fXZhciBhPUpTT04ucGFyc2UodC5nZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyl8fCdbXScpO2EucHVzaChbU3RyaW5nKGspLGQ9PT11bmRlZmluZWR8fGQ9PT1udWxsP251bGw6U3RyaW5nKGQpXSk7dC5zZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyxKU09OLnN0cmluZ2lmeShhKSl9Y2F0Y2goZSl7fX07c2V0VGltZW91dChmdW5jdGlvbigpe3RyeXtkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnZicpLnN1Ym1pdCgpfWNhdGNoKGUpe1IoJ3Rocm93JyxlKX19LDQwMCk8L3NjcmlwdD4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-post~resource",
+    "<iframe src=\"xdict://d/r/form-post~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "form-blank",
+    "<form id=\"f\" action=\"http://127.0.0.1:47242/h1/form-blank/form-blank\" target=\"_blank\"><input name=\"a\" value=\"b\"></form><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('f').submit()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click",
+    "<a id=\"a\" href=\"http://127.0.0.1:47243/h1/anchor-click/anchor\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click~textarea",
+    "<textarea><!--</textarea><a id=\"a\" href=\"http://127.0.0.1:47244/h1/anchor-click~textarea/anchor\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click~srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; href=&quot;http://127.0.0.1:47245/h1/anchor-click~srcdoc/anchor&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click~write",
+    "<script>document.write(atob(\"PGEgaWQ9ImEiIGhyZWY9Imh0dHA6Ly8xMjcuMC4wLjE6NDcyNDYvaDEvYW5jaG9yLWNsaWNrfndyaXRlL2FuY2hvciI+eDwvYT48c2NyaXB0PmZ1bmN0aW9uIFIoayxkKXt0cnl7dmFyIHQ7dHJ5e3Q9dG9wLmRvY3VtZW50LmRvY3VtZW50RWxlbWVudH1jYXRjaChlKXt0PWRvY3VtZW50LmRvY3VtZW50RWxlbWVudH12YXIgYT1KU09OLnBhcnNlKHQuZ2V0QXR0cmlidXRlKCdkYXRhLWxhYicpfHwnW10nKTthLnB1c2goW1N0cmluZyhrKSxkPT09dW5kZWZpbmVkfHxkPT09bnVsbD9udWxsOlN0cmluZyhkKV0pO3Quc2V0QXR0cmlidXRlKCdkYXRhLWxhYicsSlNPTi5zdHJpbmdpZnkoYSkpfWNhdGNoKGUpe319O3NldFRpbWVvdXQoZnVuY3Rpb24oKXt0cnl7ZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2EnKS5jbGljaygpfWNhdGNoKGUpe1IoJ3Rocm93JyxlKX19LDQwMCk8L3NjcmlwdD4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click~resource",
+    "<iframe src=\"xdict://d/r/anchor-click~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-name",
+    "<a id=\"a\" href=\"https://an-anchor-click-name-h1.invalid:47248/x\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-name~textarea",
+    "<textarea><!--</textarea><a id=\"a\" href=\"https://an-anchor-click-name-textarea-h1.invalid:47249/x\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-name~srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; href=&quot;https://an-anchor-click-name-srcdoc-h1.invalid:47250/x&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-name~write",
+    "<script>document.write(atob(\"PGEgaWQ9ImEiIGhyZWY9Imh0dHBzOi8vYW4tYW5jaG9yLWNsaWNrLW5hbWUtd3JpdGUtaDEuaW52YWxpZDo0NzI1MS94Ij54PC9hPjxzY3JpcHQ+ZnVuY3Rpb24gUihrLGQpe3RyeXt2YXIgdDt0cnl7dD10b3AuZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fWNhdGNoKGUpe3Q9ZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fXZhciBhPUpTT04ucGFyc2UodC5nZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyl8fCdbXScpO2EucHVzaChbU3RyaW5nKGspLGQ9PT11bmRlZmluZWR8fGQ9PT1udWxsP251bGw6U3RyaW5nKGQpXSk7dC5zZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyxKU09OLnN0cmluZ2lmeShhKSl9Y2F0Y2goZSl7fX07c2V0VGltZW91dChmdW5jdGlvbigpe3RyeXtkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnYScpLmNsaWNrKCl9Y2F0Y2goZSl7UigndGhyb3cnLGUpfX0sNDAwKTwvc2NyaXB0Pg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-name~resource",
+    "<iframe src=\"xdict://d/r/anchor-click-name~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-click-https",
+    "<a id=\"a\" href=\"https://127.0.0.1:47253/h1/anchor-click-https/x\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-detached",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var a=document.createElement('a');a.href='https://127.0.0.1:47254/h1/anchor-detached/detached';a.click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-in-srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; href=&quot;https://127.0.0.1:47255/h1/anchor-in-srcdoc/in-srcdoc&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-top-from-srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; target=&quot;_top&quot; href=&quot;https://127.0.0.1:47256/h1/anchor-top-from-srcdoc/top-from-srcdoc&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-in-blank-frame",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var f=document.createElement('iframe');document.body.appendChild(f);var d=f.contentDocument;d.body.innerHTML='<a href=\"https://127.0.0.1:47257/h1/anchor-in-blank-frame/in-blank\">x</a>';d.querySelector('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-blank",
+    "<a id=\"a\" target=\"_blank\" href=\"http://127.0.0.1:47258/h1/anchor-blank/anchor-blank\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-blank~textarea",
+    "<textarea><!--</textarea><a id=\"a\" target=\"_blank\" href=\"http://127.0.0.1:47259/h1/anchor-blank~textarea/anchor-blank\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-blank~srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; target=&quot;_blank&quot; href=&quot;http://127.0.0.1:47260/h1/anchor-blank~srcdoc/anchor-blank&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-blank~write",
+    "<script>document.write(atob(\"PGEgaWQ9ImEiIHRhcmdldD0iX2JsYW5rIiBocmVmPSJodHRwOi8vMTI3LjAuMC4xOjQ3MjYxL2gxL2FuY2hvci1ibGFua353cml0ZS9hbmNob3ItYmxhbmsiPng8L2E+PHNjcmlwdD5mdW5jdGlvbiBSKGssZCl7dHJ5e3ZhciB0O3RyeXt0PXRvcC5kb2N1bWVudC5kb2N1bWVudEVsZW1lbnR9Y2F0Y2goZSl7dD1kb2N1bWVudC5kb2N1bWVudEVsZW1lbnR9dmFyIGE9SlNPTi5wYXJzZSh0LmdldEF0dHJpYnV0ZSgnZGF0YS1sYWInKXx8J1tdJyk7YS5wdXNoKFtTdHJpbmcoayksZD09PXVuZGVmaW5lZHx8ZD09PW51bGw/bnVsbDpTdHJpbmcoZCldKTt0LnNldEF0dHJpYnV0ZSgnZGF0YS1sYWInLEpTT04uc3RyaW5naWZ5KGEpKX1jYXRjaChlKXt9fTtzZXRUaW1lb3V0KGZ1bmN0aW9uKCl7dHJ5e2RvY3VtZW50LmdldEVsZW1lbnRCeUlkKCdhJykuY2xpY2soKX1jYXRjaChlKXtSKCd0aHJvdycsZSl9fSw0MDApPC9zY3JpcHQ+\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-blank~resource",
+    "<iframe src=\"xdict://d/r/anchor-blank~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-download",
+    "<a id=\"a\" download=\"x.bin\" href=\"http://127.0.0.1:47263/h1/anchor-download/download.bin\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-download~textarea",
+    "<textarea><!--</textarea><a id=\"a\" download=\"x.bin\" href=\"http://127.0.0.1:47264/h1/anchor-download~textarea/download.bin\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-download~srcdoc",
+    "<iframe srcdoc=\"&lt;a id=&quot;a&quot; download=&quot;x.bin&quot; href=&quot;http://127.0.0.1:47265/h1/anchor-download~srcdoc/download.bin&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},400)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-download~write",
+    "<script>document.write(atob(\"PGEgaWQ9ImEiIGRvd25sb2FkPSJ4LmJpbiIgaHJlZj0iaHR0cDovLzEyNy4wLjAuMTo0NzI2Ni9oMS9hbmNob3ItZG93bmxvYWR+d3JpdGUvZG93bmxvYWQuYmluIj54PC9hPjxzY3JpcHQ+ZnVuY3Rpb24gUihrLGQpe3RyeXt2YXIgdDt0cnl7dD10b3AuZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fWNhdGNoKGUpe3Q9ZG9jdW1lbnQuZG9jdW1lbnRFbGVtZW50fXZhciBhPUpTT04ucGFyc2UodC5nZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyl8fCdbXScpO2EucHVzaChbU3RyaW5nKGspLGQ9PT11bmRlZmluZWR8fGQ9PT1udWxsP251bGw6U3RyaW5nKGQpXSk7dC5zZXRBdHRyaWJ1dGUoJ2RhdGEtbGFiJyxKU09OLnN0cmluZ2lmeShhKSl9Y2F0Y2goZSl7fX07c2V0VGltZW91dChmdW5jdGlvbigpe3RyeXtkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgnYScpLmNsaWNrKCl9Y2F0Y2goZSl7UigndGhyb3cnLGUpfX0sNDAwKTwvc2NyaXB0Pg==\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "anchor-download~resource",
+    "<iframe src=\"xdict://d/r/anchor-download~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-data-url",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href='data:text/html,'+encodeURIComponent(\"<img src=\\\"http://127.0.0.1:47268/h1/nav-data-url/data-nav.png\\\">\")}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-blob-url",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{var b=new Blob([\"<img src=\\\"http://127.0.0.1:47269/h1/nav-blob-url/blob-nav.png\\\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};fetch('http://127.0.0.1:47269/h1/nav-blob-url/blob-nav-fetch')</script>\"],{type:'text/html'});location.href=URL.createObjectURL(b)}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-svg-doc",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href='xdict://d/r/nav-svg-doc/evil.svg'}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "nav-xdict-html",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href='xdict://d/r/nav-xdict-html/page.html'}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "base-href",
+    "<base href=\"http://127.0.0.1:47272/h1/base-href/base/\"><img src=\"rel.png\"><a id=\"a\" href=\"rel-nav\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('base',document.baseURI);document.getElementById('a').click()}catch(e){R('throw',e)}},600)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "base-href~textarea",
+    "<textarea><!--</textarea><base href=\"http://127.0.0.1:47273/h1/base-href~textarea/base/\"><img src=\"rel.png\"><a id=\"a\" href=\"rel-nav\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('base',document.baseURI);document.getElementById('a').click()}catch(e){R('throw',e)}},600)</script>--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "base-href~srcdoc",
+    "<iframe srcdoc=\"&lt;base href=&quot;http://127.0.0.1:47274/h1/base-href~srcdoc/base/&quot;&gt;&lt;img src=&quot;rel.png&quot;&gt;&lt;a id=&quot;a&quot; href=&quot;rel-nav&quot;&gt;x&lt;/a&gt;&lt;script&gt;function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute(&#x27;data-lab&#x27;)||&#x27;[]&#x27;);a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute(&#x27;data-lab&#x27;,JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R(&#x27;base&#x27;,document.baseURI);document.getElementById(&#x27;a&#x27;).click()}catch(e){R(&#x27;throw&#x27;,e)}},600)&lt;/script&gt;\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "base-href~write",
+    "<script>document.write(atob(\"PGJhc2UgaHJlZj0iaHR0cDovLzEyNy4wLjAuMTo0NzI3NS9oMS9iYXNlLWhyZWZ+d3JpdGUvYmFzZS8iPjxpbWcgc3JjPSJyZWwucG5nIj48YSBpZD0iYSIgaHJlZj0icmVsLW5hdiI+eDwvYT48c2NyaXB0PmZ1bmN0aW9uIFIoayxkKXt0cnl7dmFyIHQ7dHJ5e3Q9dG9wLmRvY3VtZW50LmRvY3VtZW50RWxlbWVudH1jYXRjaChlKXt0PWRvY3VtZW50LmRvY3VtZW50RWxlbWVudH12YXIgYT1KU09OLnBhcnNlKHQuZ2V0QXR0cmlidXRlKCdkYXRhLWxhYicpfHwnW10nKTthLnB1c2goW1N0cmluZyhrKSxkPT09dW5kZWZpbmVkfHxkPT09bnVsbD9udWxsOlN0cmluZyhkKV0pO3Quc2V0QXR0cmlidXRlKCdkYXRhLWxhYicsSlNPTi5zdHJpbmdpZnkoYSkpfWNhdGNoKGUpe319O3NldFRpbWVvdXQoZnVuY3Rpb24oKXt0cnl7UignYmFzZScsZG9jdW1lbnQuYmFzZVVSSSk7ZG9jdW1lbnQuZ2V0RWxlbWVudEJ5SWQoJ2EnKS5jbGljaygpfWNhdGNoKGUpe1IoJ3Rocm93JyxlKX19LDYwMCk8L3NjcmlwdD4=\"))</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "base-href~resource",
+    "<iframe src=\"xdict://d/r/base-href~resource/doc.html\" width=\"300\" height=\"150\"></iframe><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "svg-image",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><image href=\"http://127.0.0.1:47277/h1/svg-image/svg-image.png\" width=\"10\" height=\"10\"/><image xlink:href=\"http://127.0.0.1:47277/h1/svg-image/svg-xlink-image.png\" width=\"10\" height=\"10\"/></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "svg-cdata",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><![CDATA[x]]><image href=\"http://127.0.0.1:47278/h1/svg-cdata/cdata-image.png\" width=\"10\" height=\"10\"/></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "svg-use",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><use href=\"http://127.0.0.1:47279/h1/svg-use/use.svg#a\"/></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "svg-feimage",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><filter id=\"f\"><feImage href=\"http://127.0.0.1:47280/h1/svg-feimage/feimage.png\"/></filter><rect filter=\"url(#f)\" width=\"10\" height=\"10\"/></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "svg-a-click",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><a id=\"s\" href=\"http://127.0.0.1:47281/h1/svg-a-click/svg-a\"><rect width=\"50\" height=\"50\"/></a></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('s').dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}))}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "smil-set-image",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><image href=\"xdict://d/r/smil-set-image/ok.svg\" width=\"10\" height=\"10\"><set attributeName=\"href\" to=\"http://127.0.0.1:47282/h1/smil-set-image/smil-set.png\" begin=\"0s\"/></image><image xlink:href=\"xdict://d/r/smil-set-image/ok.svg\" width=\"10\" height=\"10\"><animate attributeName=\"xlink:href\" values=\"http://127.0.0.1:47282/h1/smil-set-image/smil-animate-xlink.png\" dur=\"5s\" begin=\"0s\"/></image></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "smil-animate-a",
+    "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"60\" height=\"60\"><a id=\"s\" href=\"xdict://d/entry/landing\"><animate attributeName=\"href\" values=\"http://127.0.0.1:47283/h1/smil-animate-a/smil-a\" dur=\"10s\" begin=\"0s\"/><rect width=\"50\" height=\"50\"/></a></svg><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('href',document.getElementById('s').href.animVal);document.getElementById('s').dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,view:window}))}catch(e){R('throw',e)}},600)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "textarea-comment",
+    "<textarea><!--</textarea><img src=\"http://127.0.0.1:47284/h1/textarea-comment/textarea.png\">--></textarea><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "rtc-stun",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function go(cfg){if(typeof RTCPeerConnection==='undefined'){R('rtc','absent');return}try{var pc=new RTCPeerConnection(cfg);pc.onicecandidate=function(e){R('cand',e.candidate?e.candidate.candidate:'end')};pc.createDataChannel('x');pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).then(function(){R('rtc','offer-set')},function(e){R('rtc','err '+e)})}catch(e){R('rtc','throw '+e)}}go({iceServers:[{urls:'stun:127.0.0.1:47585'}]})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "rtc-stun-name",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function go(cfg){if(typeof RTCPeerConnection==='undefined'){R('rtc','absent');return}try{var pc=new RTCPeerConnection(cfg);pc.onicecandidate=function(e){R('cand',e.candidate?e.candidate.candidate:'end')};pc.createDataChannel('x');pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).then(function(){R('rtc','offer-set')},function(e){R('rtc','err '+e)})}catch(e){R('rtc','throw '+e)}}go({iceServers:[{urls:'stun:st-rtc-stun-name-h1.invalid:47586'}]})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "rtc-turn",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function go(cfg){if(typeof RTCPeerConnection==='undefined'){R('rtc','absent');return}try{var pc=new RTCPeerConnection(cfg);pc.onicecandidate=function(e){R('cand',e.candidate?e.candidate.candidate:'end')};pc.createDataChannel('x');pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).then(function(){R('rtc','offer-set')},function(e){R('rtc','err '+e)})}catch(e){R('rtc','throw '+e)}}go({iceServers:[{urls:['turn:127.0.0.1:47287?transport=tcp','turn:127.0.0.1:47587?transport=udp'],username:'u',credential:'p'}]})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "rtc-remote-candidate",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};if(typeof RTCPeerConnection==='undefined'){R('rtc','absent')}else{var a=new RTCPeerConnection(),b=new RTCPeerConnection();a.createDataChannel('x');a.createOffer().then(function(o){return a.setLocalDescription(o).then(function(){return b.setRemoteDescription(o)})}).then(function(){return b.createAnswer()}).then(function(ans){return a.setRemoteDescription(ans)}).then(function(){return a.addIceCandidate({candidate:'candidate:1 1 udp 2122260223 127.0.0.1 47588 typ host',sdpMid:'0',sdpMLineIndex:0})}).then(function(){R('rtc','remote-added')},function(e){R('rtc','err '+e)})}</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "rtc-host",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};function go(cfg){if(typeof RTCPeerConnection==='undefined'){R('rtc','absent');return}try{var pc=new RTCPeerConnection(cfg);pc.onicecandidate=function(e){R('cand',e.candidate?e.candidate.candidate:'end')};pc.createDataChannel('x');pc.createOffer().then(function(o){return pc.setLocalDescription(o)}).then(function(){R('rtc','offer-set')},function(e){R('rtc','err '+e)})}catch(e){R('rtc','throw '+e)}}go({iceServers:[]})</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ok-xdict",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};</script><img src=\"xdict://d/r/ok-xdict/ok.svg\" onload=\"R('ok','img')\" onerror=\"R('bad','img')\"><img src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=\" onload=\"R('ok','data-img')\" onerror=\"R('bad','data-img')\"><link rel=\"stylesheet\" href=\"xdict://d/r/ok-xdict/ok.css\" onload=\"R('ok','css')\" onerror=\"R('bad','css')\"><script src=\"xdict://d/r/ok-xdict/ok.js\" onerror=\"R('bad','script')\"></script><audio src=\"xdict://d/r/ok-xdict/ok.wav\" preload=\"auto\" oncanplay=\"R('ok','audio')\" onerror=\"R('bad','audio')\"></audio><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('ok','inline');eval(\"R('ok','eval')\");new Function(\"R('ok','function')\")()</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ok-placeholder",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};</script><img id=\"p\" src=\"https://ph-ok-placeholder-h1.invalid:47291/x.png\" onload=\"R('ok','placeholder '+this.naturalWidth)\" onerror=\"R('bad','placeholder')\"><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "ok-link-nav",
+    "<script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{location.href='xdict://d/entry/landing'}catch(e){R('throw',e)}},400)</script><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};R('loaded',document.readyState)</script>"
+   ],
+   [
+    "reader",
+    "<p id=\"text\">Selectable text of the reader entry: run, ran, running.</p><p><a id=\"link-remote\" href=\"https://rl-reader-h1.invalid:47293/x\">a remote link</a></p><p><a id=\"link-ip\" href=\"http://127.0.0.1:47293/h1/reader/ip\">a link to an address</a></p><p><a id=\"link-download\" download=\"x.bin\" href=\"http://127.0.0.1:47293/h1/reader/download.bin\">a remote download</a></p><p><a id=\"link-resource-download\" download=\"file.txt\" href=\"xdict://d/r/reader/file.txt\">a resource download</a></p><p><a id=\"link-entry\" href=\"entry://ok-xdict\">another entry</a></p><p><img id=\"img-remote\" src=\"https://ri-reader-h1.invalid:47293/x.png\" width=\"160\" height=\"28\"></p><p><a id=\"link-image\" href=\"http://127.0.0.1:47293/h1/reader/wrapped\"><img id=\"img-in-link\" src=\"xdict://d/r/reader/pic.bmp\" width=\"40\" height=\"40\"></a></p><p><img id=\"img-local\" src=\"xdict://d/r/reader/pic.svg\" width=\"60\" height=\"60\"></p><p><img id=\"img-data\" src=\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=\" width=\"60\" height=\"60\"></p><p><img id=\"img-raster\" src=\"xdict://d/r/reader/pic.bmp\" width=\"60\" height=\"60\"></p>"
+   ],
+   [
+    "landing",
+    "<p>landing</p>"
+   ]
+  ]
+ },
+ "mdd": [
+  {
+   "name": "hostile.mdd",
+   "entries": [
+    [
+     "\\img~resource\\doc.html",
+     "<textarea><!--</textarea><img src=\"http://127.0.0.1:47104/h1/img~resource/img.png\">--></textarea>"
+    ],
+    [
+     "\\img-srcset~resource\\doc.html",
+     "<textarea><!--</textarea><img srcset=\"http://127.0.0.1:47109/h1/img-srcset~resource/srcset.png 1x\"><picture><source srcset=\"http://127.0.0.1:47109/h1/img-srcset~resource/picture.png\"><img></picture>--></textarea>"
+    ],
+    [
+     "\\script~resource\\doc.html",
+     "<textarea><!--</textarea><script src=\"http://127.0.0.1:47114/h1/script~resource/script.js\"></script>--></textarea>"
+    ],
+    [
+     "\\stylesheet~resource\\doc.html",
+     "<textarea><!--</textarea><link rel=\"stylesheet\" href=\"http://127.0.0.1:47120/h1/stylesheet~resource/style.css\">--></textarea>"
+    ],
+    [
+     "\\css-import~resource\\doc.html",
+     "<textarea><!--</textarea><style>@import url(\"http://127.0.0.1:47125/h1/css-import~resource/import.css\");</style>--></textarea>"
+    ],
+    [
+     "\\css-url~resource\\doc.html",
+     "<textarea><!--</textarea><div style=\"width:40px;height:40px;background-image:url('http://127.0.0.1:47130/h1/css-url~resource/bg.png')\"></div><style>.x{list-style-image:url(\"http://127.0.0.1:47130/h1/css-url~resource/list.png\");cursor:url(\"http://127.0.0.1:47130/h1/css-url~resource/cursor.png\"),auto;border:10px solid;border-image:url(\"http://127.0.0.1:47130/h1/css-url~resource/border.png\") 30;-webkit-mask-image:url(\"http://127.0.0.1:47130/h1/css-url~resource/mask.png\");background:image-set(url(\"http://127.0.0.1:47130/h1/css-url~resource/image-set.png\") 1x)}</style><ul class=\"x\"><li>x</li></ul>--></textarea>"
+    ],
+    [
+     "\\font~resource\\doc.html",
+     "<textarea><!--</textarea><style>@font-face{font-family:X;src:url(\"http://127.0.0.1:47135/h1/font~resource/font.woff\") format(\"woff\")}</style><p style=\"font-family:X\">abc</p>--></textarea>"
+    ],
+    [
+     "\\object-embed~resource\\doc.html",
+     "<textarea><!--</textarea><object data=\"http://127.0.0.1:47147/h1/object-embed~resource/object.html\" type=\"text/html\"></object><embed src=\"http://127.0.0.1:47147/h1/object-embed~resource/embed.html\" type=\"text/html\">--></textarea>"
+    ],
+    [
+     "\\misc-tags~resource\\doc.html",
+     "<textarea><!--</textarea><video poster=\"http://127.0.0.1:47152/h1/misc-tags~resource/poster.png\"></video><input type=\"image\" src=\"http://127.0.0.1:47152/h1/misc-tags~resource/input.png\"><link rel=\"icon\" href=\"http://127.0.0.1:47152/h1/misc-tags~resource/icon.png\"><link rel=\"manifest\" href=\"http://127.0.0.1:47152/h1/misc-tags~resource/manifest.json\"><table background=\"http://127.0.0.1:47152/h1/misc-tags~resource/table.png\"><tr><td>x</td></tr></table>--></textarea>"
+    ],
+    [
+     "\\preload~resource\\doc.html",
+     "<textarea><!--</textarea><link rel=\"preload\" as=\"image\" href=\"http://127.0.0.1:47157/h1/preload~resource/preload.png\"><link rel=\"preload\" as=\"fetch\" crossorigin href=\"http://127.0.0.1:47157/h1/preload~resource/preload-fetch\"><link rel=\"preload\" as=\"style\" href=\"http://127.0.0.1:47157/h1/preload~resource/preload.css\"><link rel=\"preload\" as=\"font\" crossorigin href=\"http://127.0.0.1:47157/h1/preload~resource/preload-font.woff\"><link rel=\"modulepreload\" href=\"http://127.0.0.1:47157/h1/preload~resource/modulepreload.js\">--></textarea>"
+    ],
+    [
+     "\\preconnect~resource\\doc.html",
+     "<textarea><!--</textarea><link rel=\"preconnect\" href=\"http://127.0.0.1:47164\">--></textarea>"
+    ],
+    [
+     "\\preconnect-name~resource\\doc.html",
+     "<textarea><!--</textarea><link rel=\"preconnect\" href=\"https://pc-preconnect-name-resource-h1.invalid:47169\">--></textarea>"
+    ],
+    [
+     "\\dns-prefetch~resource\\doc.html",
+     "<textarea><!--</textarea><link rel=\"dns-prefetch\" href=\"//dp-dns-prefetch-resource-h1.invalid\"><link rel=\"dns-prefetch\" href=\"http://dq-dns-prefetch-resource-h1.invalid/\">--></textarea>"
+    ],
+    [
+     "\\dns-anchor~resource\\doc.html",
+     "<textarea><!--</textarea><a href=\"https://da-dns-anchor-resource-h1.invalid/x\">x</a>--></textarea>"
+    ],
+    [
+     "\\img-name~resource\\doc.html",
+     "<textarea><!--</textarea><img src=\"https://im-img-name-resource-h1.invalid:47184/h1/x.png\">--></textarea>"
+    ],
+    [
+     "\\ping~resource\\doc.html",
+     "<textarea><!--</textarea><a id=\"a\" href=\"xdict://d/entry/landing\" ping=\"http://127.0.0.1:47191/h1/ping~resource/ping\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\csp-report-meta\\blocked.svg",
+     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\" fill=\"#3a6\"/></svg>"
+    ],
+    [
+     "\\audio~resource\\doc.html",
+     "<textarea><!--</textarea><audio src=\"http://127.0.0.1:47197/h1/audio~resource/a.mp3\" preload=\"auto\" autoplay></audio>--></textarea>"
+    ],
+    [
+     "\\video\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\video~textarea\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\video~srcdoc\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\video~write\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\video~resource\\doc.html",
+     "<textarea><!--</textarea><video src=\"http://127.0.0.1:47202/h1/video~resource/v.mp4\" preload=\"auto\" autoplay muted></video><video preload=\"auto\" muted><source src=\"http://127.0.0.1:47202/h1/video~resource/source.mp4\"></video><video src=\"xdict://d/r/video~resource/ok.wav\" muted><track default kind=\"subtitles\" src=\"http://127.0.0.1:47202/h1/video~resource/track.vtt\"></video>--></textarea>"
+    ],
+    [
+     "\\video~resource\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\hls\\a.m3u8",
+     "#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:4\n#EXT-X-MEDIA-SEQUENCE:0\n#EXTINF:4.0,\nhttp://127.0.0.1:47203/h1/hls/seg0.ts\n#EXT-X-ENDLIST\n"
+    ],
+    [
+     "\\iframe-url~resource\\doc.html",
+     "<textarea><!--</textarea><iframe src=\"http://127.0.0.1:47209/h1/iframe-url~resource/iframe.html\"></iframe>--></textarea>"
+    ],
+    [
+     "\\iframe-xdict\\inner.html",
+     "<textarea><!--</textarea><img src=\"http://127.0.0.1:47219/h1/iframe-xdict/inner-img.png\">--></textarea>"
+    ],
+    [
+     "\\worker-xdict\\w.js",
+     "try{fetch('http://127.0.0.1:47220/h1/worker-xdict/dedicated-fetch').then(function(){postMessage('fetch-ok')},function(e){postMessage('fetch-err '+e)})}catch(e){postMessage('fetch-throw '+e)}\ntry{importScripts('http://127.0.0.1:47220/h1/worker-xdict/dedicated-import.js')}catch(e){postMessage('import-throw '+e)}\ntry{new WebSocket('ws://127.0.0.1:47220/h1/worker-xdict/dedicated-ws')}catch(e){postMessage('ws-throw '+e)}\npostMessage('dedicated-ran');"
+    ],
+    [
+     "\\sharedworker-xdict\\s.js",
+     "var p={postMessage:function(){}};onconnect=function(e){p=e.ports[0];p.postMessage('shared-connected')};try{fetch('http://127.0.0.1:47224/h1/sharedworker-xdict/shared-fetch').then(function(){p.postMessage('fetch-ok')},function(e){p.postMessage('fetch-err '+e)})}catch(e){p.postMessage('fetch-throw '+e)}\ntry{importScripts('http://127.0.0.1:47224/h1/sharedworker-xdict/shared-import.js')}catch(e){p.postMessage('import-throw '+e)}\ntry{new WebSocket('ws://127.0.0.1:47224/h1/sharedworker-xdict/shared-ws')}catch(e){p.postMessage('ws-throw '+e)}\np.postMessage('shared-ran');"
+    ],
+    [
+     "\\serviceworker\\sw.js",
+     "self.addEventListener('install',function(){fetch('http://127.0.0.1:47226/h1/serviceworker/sw-install-fetch')});fetch('http://127.0.0.1:47226/h1/serviceworker/sw-top-fetch');"
+    ],
+    [
+     "\\meta-refresh~resource\\doc.html",
+     "<textarea><!--</textarea><meta http-equiv=\"refresh\" content=\"1;url=http://127.0.0.1:47232/h1/meta-refresh~resource/refresh\">--></textarea>"
+    ],
+    [
+     "\\form-post~resource\\doc.html",
+     "<textarea><!--</textarea><form id=\"f\" action=\"http://127.0.0.1:47241/h1/form-post~resource/form-post\" method=\"post\"><input name=\"a\" value=\"b\"></form><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('f').submit()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\anchor-click~resource\\doc.html",
+     "<textarea><!--</textarea><a id=\"a\" href=\"http://127.0.0.1:47247/h1/anchor-click~resource/anchor\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\anchor-click-name~resource\\doc.html",
+     "<textarea><!--</textarea><a id=\"a\" href=\"https://an-anchor-click-name-resource-h1.invalid:47252/x\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\anchor-blank~resource\\doc.html",
+     "<textarea><!--</textarea><a id=\"a\" target=\"_blank\" href=\"http://127.0.0.1:47262/h1/anchor-blank~resource/anchor-blank\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\anchor-download~resource\\doc.html",
+     "<textarea><!--</textarea><a id=\"a\" download=\"x.bin\" href=\"http://127.0.0.1:47267/h1/anchor-download~resource/download.bin\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{document.getElementById('a').click()}catch(e){R('throw',e)}},400)</script>--></textarea>"
+    ],
+    [
+     "\\nav-svg-doc\\evil.svg",
+     "<svg xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" width=\"20\" height=\"20\"><image href=\"http://127.0.0.1:47270/h1/nav-svg-doc/svgdoc-image.png\" width=\"10\" height=\"10\"/><script>fetch(\"http://127.0.0.1:47270/h1/nav-svg-doc/svgdoc-fetch\")</script></svg>"
+    ],
+    [
+     "\\nav-xdict-html\\page.html",
+     "<textarea><!--</textarea><img src=\"http://127.0.0.1:47271/h1/nav-xdict-html/resource-page-img.png\">--></textarea>"
+    ],
+    [
+     "\\base-href~resource\\doc.html",
+     "<textarea><!--</textarea><base href=\"http://127.0.0.1:47276/h1/base-href~resource/base/\"><img src=\"rel.png\"><a id=\"a\" href=\"rel-nav\">x</a><script>function R(k,d){try{var t;try{t=top.document.documentElement}catch(e){t=document.documentElement}var a=JSON.parse(t.getAttribute('data-lab')||'[]');a.push([String(k),d===undefined||d===null?null:String(d)]);t.setAttribute('data-lab',JSON.stringify(a))}catch(e){}};setTimeout(function(){try{R('base',document.baseURI);document.getElementById('a').click()}catch(e){R('throw',e)}},600)</script>--></textarea>"
+    ],
+    [
+     "\\smil-set-image\\ok.svg",
+     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\" fill=\"#3a6\"/></svg>"
+    ],
+    [
+     "\\ok-xdict\\ok.css",
+     "body{color:rgb(1,2,3)}"
+    ],
+    [
+     "\\ok-xdict\\ok.js",
+     "R('ok','script')"
+    ],
+    [
+     "\\ok-xdict\\ok.svg",
+     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\" fill=\"#3a6\"/></svg>"
+    ],
+    [
+     "\\ok-xdict\\ok.wav",
+     "RIFF\u007f\u0000\u0000\u0000WAVEfmt \u0010\u0000\u0000\u0000\u0001\u0000\u0001\u0000@\u001f\u0000\u0000@\u001f\u0000\u0000\u0001\u0000\b\u0000data[\u0000\u0000\u0000\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f\u007f"
+    ],
+    [
+     "\\reader\\file.txt",
+     "a resource answered whole, never as an attachment"
+    ],
+    [
+     "\\reader\\pic.bmp",
+     "BMf\u0000\u0000\u0000\u0000\u0000\u0000\u00006\u0000\u0000\u0000(\u0000\u0000\u0000\u0004\u0000\u0000\u0000\u0004\u0000\u0000\u0000\u0001\u0000\u0018\u0000\u0000\u0000\u0000\u00000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000 `@(`@0`@8`@ `D(`D0`D8`D `H(`H0`H8`H `L(`L0`L8`L"
+    ],
+    [
+     "\\reader\\pic.svg",
+     "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"><rect width=\"8\" height=\"8\" fill=\"#3a6\"/></svg>"
+    ]
+   ]
+  }
+ ],
+ "sidecars": []
+}

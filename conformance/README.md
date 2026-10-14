@@ -57,6 +57,19 @@ variant's `name`, `word`, `gloss`, `version`). For each variant, every suite rep
 (`<variant>.mdx`, no volumes, no sidecars) [`import`], `open` [`open`], each of [`lookups`] in `reader` mode,
 each of [`entries`] (edition the imported one) in the view `xdict://d/`, 1 MiB.
 
+## The shells' own fixtures (`hostile/`, `twin-a/`, `twin-b/`)
+
+Written by the same writer, run by a shell's end-to-end suite rather than by every binding, so they hold no
+`expected.json`:
+
+- `hostile/`: the hostile-input battery (ADR-0007 decision 14). One egress attempt per entry, each payload at byte zero
+  and again behind each context the core's rewriter cannot see into, every target on the measuring Mac's loopback or
+  under `.invalid`. Generated, never edited: `apps/apple/Tools/hostile/battery.py` writes `dictionary.json` and
+  `cases.json` (the runs and each layer's probes), and `--check` fails when either is stale. The macOS run is
+  `apps/apple/Tools/e2e.sh`'s `hostile` and `reader` stages.
+- `twin-a/`, `twin-b/`: two dictionaries with the same key and resource paths and different markers, for "one web view
+  per open dictionary" (ADR-0009, refutation item 13).
+
 ## Suites
 
 | Binding | Command | Runs on |

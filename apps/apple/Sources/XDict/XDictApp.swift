@@ -1,17 +1,26 @@
 import SwiftUI
 import XDictBase
+import XDictEntryView
 import XDictUI
 import os
 
 /// The skeleton's app: one window, which asks the dictionary service for its core's versions as the app launches and
-/// says what came back.
+/// says what came back — and whether entries can be shown confined on this Mac (ADR-0009 decision 7: the two WebKit
+/// switches read back at launch; with either missing or still on, no entry will render, and the window says why).
 struct XDictApp: App {
     @State private var status = LaunchStatus.asking
+    @State private var entries: LocalizedStringResource?
 
     var body: some Scene {
         WindowGroup {
-            LaunchView(status: status)
-                .task { status = await Self.handshake() }
+            VStack(alignment: .leading, spacing: 0) {
+                LaunchView(status: status)
+                    .task { status = await Self.handshake() }
+                if let entries {
+                    Text(entries).foregroundStyle(.secondary).padding([.horizontal, .bottom], 24)
+                }
+            }
+            .task { entries = Self.entryReadiness() }
         }
         .windowResizability(.contentSize)
     }
@@ -25,6 +34,14 @@ struct XDictApp: App {
         case .failure(let failure):
             log.error("the dictionary service did not answer: \(String(describing: failure), privacy: .public)")
             return .failed(failure)
+        }
+    }
+
+    @MainActor
+    static func entryReadiness() -> LocalizedStringResource {
+        switch EntryReadiness.check() {
+        case .success: EntrySentences.ready
+        case .failure(let why): EntrySentences.refusal(why)
         }
     }
 }

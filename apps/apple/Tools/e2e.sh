@@ -22,6 +22,9 @@
 #                    records nothing
 #   XDICT_E2E_SSH    the program that reaches the host, `ssh` unless set. The host guard's positive control sets it to
 #                    `Tools/tests/ssh-to-this-mac`, which runs the remote side here
+#   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for the `entries` stage: their
+#                    folders are copied to the E2E Mac (never into the repository) and `entries_corpus`'s sample of them
+#                    is rendered there. Unset, that stage fails as not measured: a green run without it measured nothing
 set -euo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 readonly SELF
@@ -29,7 +32,9 @@ cd "$(dirname "$SELF")/.."
 
 # **The only list of the stages.** A stage named that is not on it is refused: a typo that ran nothing once printed "all
 # stages passed" (XiaolaiDict). The remote script is handed this list, so the two cannot differ.
-readonly KNOWN_STAGES="launch"
+readonly KNOWN_STAGES="launch hostile reader entries"
+# The stages that need the entry view's kit (`Tools/build-lab.sh`): the development lab, the fixtures, the observers.
+readonly KIT_STAGES="hostile reader entries"
 if [ "${1:-}" = --list-stages ]; then
     printf '%s\n' $KNOWN_STAGES
     exit 0
@@ -166,6 +171,47 @@ esac
 on_host "codesign --verify --strict --deep '$REMOTE_DIR/XDict.app'" || fail "the shipped bundle does not verify there"
 echo "build $remote_version ($build_mode) installed and verified"
 
+# **The entry view's kit**, for the stages that render entries before the service answers them (plan-macos-v1 WI-4):
+# built here, shipped beside the bundle, never inside it.
+needs_kit=false
+for wanted in ${STAGES:-$KNOWN_STAGES}; do
+    case " $KIT_STAGES " in *" $wanted "*) needs_kit=true ;; esac
+done
+if [ "$needs_kit" = true ]; then
+    section "kit"
+    Tools/build-lab.sh || fail "the entry view's kit could not be built"
+    rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" .build/e2e-kit/ "$host:$REMOTE_DIR/kit/" \
+        || fail "could not copy the kit"
+    on_host "codesign --verify --strict '$REMOTE_DIR/kit/XDictEntryLab.app'" || fail "the shipped lab does not verify there"
+fi
+
+# **The real dictionaries, for `entries`**: `entries_corpus`'s own sample of them (the bindings cannot enumerate a file's
+# keys), and their folders copied beside the bundle. An unset corpus ships nothing, and the stage says not measured.
+wants_entries=false
+for wanted in ${STAGES:-$KNOWN_STAGES}; do [ "$wanted" != entries ] || wants_entries=true; done
+if [ "$wants_entries" = true ] && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
+    section "corpus"
+    [ -d "$XDICT_E2E_CORPUS" ] || fail "XDICT_E2E_CORPUS is not a folder: $XDICT_E2E_CORPUS"
+    corpus=$(cd "$XDICT_E2E_CORPUS" && pwd)
+    sample=$(pwd)/.build/entries-sample.json
+    (cd ../../core && XDICT_MDX_CORPUS="$corpus" XDICT_ENTRIES_SAMPLE_OUT="$sample" \
+        cargo test -q --release -p xdict-core --test entries_corpus -- --nocapture >"$scratch/entries-corpus.log" 2>&1) \
+        || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/entries-corpus.log")"
+    [ -s "$sample" ] || fail "entries_corpus wrote no sample"
+    rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$sample" "$host:$REMOTE_DIR/kit/entries-sample.json" \
+        || fail "could not copy the sample"
+    folders=()
+    for folder in "$corpus"/*/; do
+        name=$(basename "$folder")
+        case $name in _*) continue ;; esac
+        folders+=("${folder%/}")   # no trailing slash: rsync copies the folder, not its contents
+    done
+    [ "${#folders[@]}" -gt 0 ] || fail "no dictionary folder in $corpus"
+    echo "${#folders[@]} dictionaries, $(python3 -I -c 'import json, sys; print(len(json.load(open(sys.argv[1]))))' "$sample") sampled entries"
+    rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "${folders[@]}" "$host:$REMOTE_DIR/corpus/" \
+        || fail "could not copy the corpus"
+fi
+
 # ---------------------------------------------------------------------------------------------------------------------
 section "run${STAGES:+: $STAGES}"
 cat "$scratch/common.sh" - >"$scratch/run.sh" <<'SH'
@@ -259,6 +305,39 @@ report() {
     cat "$out"
 }
 
+# The entry view's lab (`Tools/build-lab.sh`), started by LaunchServices like the app; never left running.
+kit="$home/kit"
+lab="$kit/XDictEntryLab.app"; lab_exe="$lab/Contents/MacOS/XDictEntryLab"
+quit_lab() {
+    find_pids "$lab_exe"
+    [ "${#PIDS[@]}" -eq 0 ] || kill -KILL "${PIDS[@]}" 2>/dev/null || true
+    return 0
+}
+at_exit quit_lab
+# lab_report <out> <seconds> <arguments…>: the lab's JSON report once it has written it, or status 1.
+lab_report() {
+    local out=$1 budget=$2 waited=0
+    shift 2
+    rm -f "$out"
+    if is_running "$lab_exe"; then echo "a lab is already running"; return 1; fi
+    open -n --stdout "$out.out" --stderr "$out.err" "$lab" --args "$@" --out "$out" || return 1
+    while [ ! -s "$out" ] && [ "$waited" -lt $((budget * 10)) ]; do sleep 0.1; waited=$((waited + 1)); done
+    for _ in $(seq 1 50); do is_running "$lab_exe" || break; sleep 0.1; done
+    quit_lab
+    [ -s "$out" ]
+}
+# verdicts <prefix> <file>: each PASS or FAIL line of an analysis, as this stage's assertions; none at all is a FAIL.
+verdicts() {
+    local prefix=$1 file=$2 line seen=0
+    while IFS= read -r line; do
+        case $line in
+            "PASS  "*) pass "$prefix: ${line#PASS  }"; seen=$((seen + 1)) ;;
+            "FAIL  "*) flunk "$prefix: ${line#FAIL  }"; seen=$((seen + 1)) ;;
+        esac
+    done <"$file"
+    [ "$seen" -gt 0 ] || flunk "$prefix: the analysis gave no verdict ($(head -c 300 "$file"))"
+}
+
 # ---------------------------------------------------------------------------------------------------------------------
 if want launch; then
 # **launch**: LaunchServices starts the app, its dictionary service answers the handshake through the real XPC path,
@@ -313,6 +392,17 @@ launch_stage() {
     done
     if [ -z "$mismatched" ]; then pass "launch: the service answered the handshake with the core's versions ($(tr -d '\n' <"$expected"))"
     else flunk "launch: the service's versions are not the core's:$mismatched"; fi
+    # The shipped app's own launch check of the entry view (ADR-0009 decision 7): both WebKit switches turned off and
+    # read back off on this Mac's WebKit, with no web view made. Either missing or still on, no entry would render.
+    local ready preconnect peer
+    ready=$(plutil -extract entryView.ready raw -o - "$reports/handshake-report.json" 2>/dev/null || echo "(none)")
+    preconnect=$(plutil -extract entryView.switches.LinkPreconnect raw -o - "$reports/handshake-report.json" 2>/dev/null || echo "(none)")
+    peer=$(plutil -extract entryView.switches.PeerConnectionEnabled raw -o - "$reports/handshake-report.json" 2>/dev/null || echo "(none)")
+    if [ "$ready" = true ] && [ "$preconnect" = false ] && [ "$peer" = false ]; then
+        pass "launch: the app reads LinkPreconnect and PeerConnectionEnabled back off: entries can be shown confined"
+    else
+        flunk "launch: the app's entry view would refuse (ready $ready, LinkPreconnect $preconnect, PeerConnectionEnabled $peer, $(plutil -extract entryView.refusal raw -o - "$reports/handshake-report.json" 2>/dev/null))"
+    fi
     parent=$(plutil -extract parentPid raw -o - "$reports/handshake-report.json" 2>/dev/null || echo "?")
     if [ "$parent" = 1 ]; then pass "launch: the handshake was asked by an XDict started by LaunchServices"
     else flunk "launch: the instrument's parent was $parent, not launchd"; fi
@@ -324,6 +414,102 @@ launch_stage() {
     if [ "$gone" = yes ]; then pass "launch: quits on TERM within 5 s"; else flunk "launch: still running 5 s after TERM"; fi
 }
 launch_stage
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+if want hostile; then
+# **hostile**: the hostile-input suite through the production entry view (plan-macos-v1 WI-4; ADR-0007 decision 14).
+# One observed run per configuration in `cases.json` (no layer, each layer alone, the navigation table with and
+# without the link-preconnect switch, production), then the suite's rules (`analyze.py suite`): every observer shown
+# its deliberate attempt, every case loaded, each layer's probes leaving with it off and refused with it on, and
+# production at zero on every observer. Then fail-closed: each WebKit-switch fault refuses with its own sentence and
+# makes no web view, beside a control that renders. Then one web view per dictionary: twins with the same paths keep
+# their own answers across a held request and a switch. Results stay on the E2E Mac under results/hostile.
+hostile_stage() {
+    local results="$home/results/hostile" label off fault
+    rm -rf "$results"
+    mkdir -p "$results"
+    cp "$kit/cases.json" "$results/cases.json"
+    for label in $(python3 -I "$kit/analyze.py" runs "$kit/cases.json"); do
+        off=$(python3 -I "$kit/analyze.py" off "$kit/cases.json" "$label")
+        if "$kit/run-hostile.sh" "$kit" "$results" "$label" hostile ${off:+--disable-layer "$off"} \
+            >"$results/$label.log" 2>&1; then
+            echo "      $label: $(tail -1 "$results/$label.log")"
+        else
+            flunk "hostile: the $label run did not happen as described — $(tail -2 "$results/$label.log" | tr '\n' ' ')"
+        fi
+    done
+    python3 -I "$kit/analyze.py" suite "$results" >"$results/suite.txt" 2>&1 || true
+    verdicts hostile "$results/suite.txt"
+
+    for fault in none missing-list missing-feature missing-setter missing-getter ineffective-setter; do
+        lab_report "$results/fault-$fault.json" 60 --fault-switch "$fault" --fixture "$kit/fixtures/hostile" \
+            || echo "      fault $fault: no report ($(head -c 300 "$results/fault-$fault.json.err" 2>/dev/null))"
+    done
+    python3 -I "$kit/analyze.py" faults "$results" >"$results/faults.txt" 2>&1 || true
+    verdicts hostile "$results/faults.txt"
+
+    lab_report "$results/binding.json" 90 --binding "$kit/fixtures/twin-a" "$kit/fixtures/twin-b" \
+        || echo "      binding: no report ($(head -c 300 "$results/binding.json.err" 2>/dev/null))"
+    python3 -I "$kit/analyze.py" binding "$results" >"$results/binding.txt" 2>&1 || true
+    verdicts hostile "$results/binding.txt"
+}
+hostile_stage
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+if want reader; then
+# **reader**: a person's hands on the production entry view (ADR-0009 refutation, item 8). Real pointer events from
+# `pointer` (hover; plain, command-, option- and shift-clicks; downloads; the context menu; drags out of the view), the
+# observers watching the reader entry's own ports and names: nothing leaves, every remote question is a native prompt
+# answered by a real click, and only the one "Open in Browser" reaches the opener.
+reader_stage() {
+    local results="$home/results/reader" access
+    rm -rf "$results"
+    mkdir -p "$results"
+    access=$("$kit/pointer" access 2>&1 || true)
+    if ! grep -q '"postEvents":true' <<<"$access"; then
+        flunk "reader: this SSH session may not post events ($access): grant Accessibility (Privacy & Security, Device Control and Data Access) to sshd-keygen-wrapper on the E2E Mac; nothing was driven"
+        return 0
+    fi
+    pass "reader: this session may post events ($access)"
+    if ! "$kit/run-hostile.sh" "$kit" "$results" reader reader >"$results/run.log" 2>&1; then
+        flunk "reader: the run did not happen as described — $(tail -2 "$results/run.log" | tr '\n' ' ')"
+        return 0
+    fi
+    python3 -I "$kit/analyze.py" verdicts "$results/reader" >"$results/verdicts.txt" 2>&1 || true
+    verdicts reader "$results/verdicts.txt"
+    grep '^NOTE' "$results/verdicts.txt" | sed 's/^NOTE /      /' || true
+}
+reader_stage
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+if want entries; then
+# **entries**: the owner's dictionaries through the production entry view (plan-macos-v1 WI-4, done-when):
+# `entries_corpus`'s sample renders with every image and stylesheet the core resolves loaded and nothing outside
+# `xdict:`; OALD's and LDOCE's folding scripts open a section (R5); LDOCE's *hold* finishes, find's count equals a count
+# over the entry's text, and a narrow window stays usable; zoom and appearance survive a relaunch per dictionary.
+entries_stage() {
+    local results="$home/results/entries"
+    rm -rf "$results"
+    mkdir -p "$results"
+    if [ ! -s "$kit/entries-sample.json" ] || [ ! -d "$home/corpus" ]; then
+        flunk "entries: not measured — no corpus on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac)"
+        return 0
+    fi
+    lab_report "$results/corpus.json" 5400 --corpus "$home/corpus" --sample "$kit/entries-sample.json" \
+        || echo "      corpus: no report ($(head -c 300 "$results/corpus.json.err" 2>/dev/null))"
+    defaults delete ai.xdict.lab.persistence >/dev/null 2>&1 || true
+    lab_report "$results/persistence-set.json" 120 --corpus "$home/corpus" --persistence set \
+        || echo "      persistence set: no report ($(head -c 300 "$results/persistence-set.json.err" 2>/dev/null))"
+    lab_report "$results/persistence-check.json" 120 --corpus "$home/corpus" --persistence check \
+        || echo "      persistence check: no report ($(head -c 300 "$results/persistence-check.json.err" 2>/dev/null))"
+    python3 -I "$kit/analyze.py" entries "$results" >"$results/verdicts.txt" 2>&1 || true
+    verdicts entries "$results/verdicts.txt"
+    grep '^NOTE' "$results/verdicts.txt" | sed 's/^NOTE /      /' || true
+}
+entries_stage
 fi
 
 finished=true
@@ -348,6 +534,13 @@ if [ "$remote_status" -ge 2 ]; then
     exit "$remote_status"
 fi
 grep -q "^RESULT	" "$RUN_LOG" || fail "the run reported no result at all; nothing is recorded"
+# What the entry view's stages measured (each run's observations, summaries, the suite's matrix), kept here for reading;
+# the verdicts are the log's. A copy that fails costs the detail, not the run.
+if on_host "test -d '$REMOTE_DIR/results'"; then
+    mkdir -p .build/e2e-results
+    rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$host:$REMOTE_DIR/results/" .build/e2e-results/ \
+        || echo "the stages' results could not be copied back from the E2E Mac"
+fi
 
 if [ -n "$expected_override" ]; then
     echo

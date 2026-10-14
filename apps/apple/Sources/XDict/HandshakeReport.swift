@@ -1,5 +1,6 @@
 import Foundation
 import XDictBase
+import XDictEntryView
 
 /// `XDict --handshake-report`: a development instrument, for the E2E `launch` stage (run on the E2E Mac only).
 /// Asks the dictionary service embedded in this bundle for its core's versions, exactly as the app does at launch,
@@ -8,8 +9,16 @@ import XDictBase
 /// another app, its ADR-0010).
 ///
 /// `pid` and `parentPid` say how it was started: launched by LaunchServices (`open`), its parent is launchd, 1.
+/// `entryView` is the entry view's launch check (ADR-0009 decision 7): the two WebKit switches turned off and read back
+/// on a fresh `WKPreferences`, with no web view made — `ready`, each switch's read-back, or why it refuses.
 enum HandshakeReport {
     static let flag = "--handshake-report"
+
+    struct EntryViewCheck: Encodable {
+        let ready: Bool
+        let switches: [String: Bool]
+        let refusal: String?
+    }
 
     struct Report: Encodable {
         let pid: Int32
@@ -18,6 +27,7 @@ enum HandshakeReport {
         let seconds: Double
         let service: CoreVersions?
         let failure: String?
+        let entryView: EntryViewCheck
     }
 
     static func run() -> Never {
@@ -30,11 +40,17 @@ enum HandshakeReport {
             case .success(let versions): service = versions
             case .failure(let why): failure = String(describing: why)
             }
+            let entryView = await MainActor.run { () -> EntryViewCheck in
+                switch EntryReadiness.check() {
+                case .success(let switches): EntryViewCheck(ready: true, switches: switches, refusal: nil)
+                case .failure(let why): EntryViewCheck(ready: false, switches: [:], refusal: String(describing: why))
+                }
+            }
             let report = Report(
                 pid: ProcessInfo.processInfo.processIdentifier, parentPid: getppid(),
                 bundle: Bundle.main.bundlePath,
                 seconds: Double(elapsed.seconds) + Double(elapsed.attoseconds) / 1e18,
-                service: service, failure: failure)
+                service: service, failure: failure, entryView: entryView)
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.sortedKeys]
             do {
@@ -45,6 +61,11 @@ enum HandshakeReport {
             }
             exit(service == nil ? 1 : 0)
         }
-        dispatchMain()
+        // **The main thread's run loop, not `dispatchMain()`**: that parks the main thread, and the main queue is then
+        // drained on another thread, where WebKit's initialisation (`WKPreferences()`, the entry view's check) stops
+        // the process (EXC_BREAKPOINT in `WebKit::runInitializationCode`, measured on the E2E Mac 2026-10-14). A timer
+        // keeps the run loop from returning for want of a source; the task above ends the process.
+        RunLoop.main.add(Timer(timeInterval: 3600, repeats: true) { _ in }, forMode: .default)
+        while true { RunLoop.main.run() }
     }
 }
