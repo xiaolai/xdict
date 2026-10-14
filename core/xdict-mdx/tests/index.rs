@@ -546,3 +546,33 @@ fn a_kept_index_gives_every_key_what_the_writer_wrote() {
         assert_eq!(got, wanted, "{key:?}");
     }
 }
+
+/// Keys equal after folding keep file order, however many and however interleaved: the orders are sorted in
+/// place, and only the key numbers' tie-break makes that a stable sort's order. Tier 1's shows in what a prefix
+/// search walks; tier 2's answers are sorted by key number before they are returned, so its tie-break shows only
+/// in the index's bytes (identical before and after the in-place sort, on the 297's five largest files).
+#[test]
+fn equal_keys_keep_file_order_in_both_tiers() {
+    let entries: Vec<Entry> = (0..3000)
+        .map(|i| match i % 5 {
+            0 => Entry::text("Run", &format!("{i}")),
+            1 => Entry::text("RUN", &format!("{i}")),
+            2 => Entry::text("café", &format!("{i}")),
+            3 => Entry::text(&format!("zé{:04}", 3000 - i), &format!("{i}")),
+            _ => Entry::text(&format!("w{:04}", 3000 - i), &format!("{i}")),
+        })
+        .collect();
+    let file = writer::write(&Spec { block_size: 256, ..Spec::mdx() }, &entries).unwrap();
+    let read = open_with(&file, build(&file)).unwrap();
+    let mut tier1 = Vec::new();
+    read.prefixed("ru", |i| {
+        tier1.push(i);
+        Ok(true)
+    })
+    .unwrap();
+    assert_eq!(tier1.len(), 1200);
+    assert!(tier1.windows(2).all(|w| w[0] < w[1]), "tier 1 ties out of file order");
+    let tier2 = read.find_unmarked("cafe").unwrap();
+    assert_eq!(tier2.len(), 600);
+    assert!(tier2.windows(2).all(|w| w[0] < w[1]), "tier 2 ties out of file order");
+}

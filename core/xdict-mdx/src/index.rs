@@ -229,8 +229,8 @@ impl KeyList for Keys {
 /// refuses early what could not fit. The output is reserved whole and written in place.
 ///
 /// Outside the ledger, and fixed: the index's head, `HEADER_LEN` bytes, made beside the output it is copied
-/// into. Inside it but not its to refuse: the stable sorts' scratch, at most the table sorted again (taken
-/// with each table), which std allocates infallibly, so a system out of memory there aborts rather than fails.
+/// into. The sorts are in place (`sort_unstable_by`, ties broken by key number, so the order is a stable sort's)
+/// and allocate nothing.
 pub(crate) fn build(
     keys: Keys,
     blocks: &[RecordBlock],
@@ -399,13 +399,13 @@ impl Folded {
     /// is taken from the ledger for as long as it sorts.
     fn order(&self, ledger: &mut Ledger) -> Result<Vec<u32>, Error> {
         let count = u32::try_from(self.at.len().saturating_sub(1)).map_err(|_| too_large())?;
-        let (table, scratch) = (bytes_of::<u32>(count as usize), bytes_of::<u32>(count as usize));
-        ledger.take(table.saturating_add(scratch))?;
+        ledger.take(bytes_of::<u32>(count as usize))?;
         let mut order: Vec<u32> = Vec::new();
         order.try_reserve_exact(count as usize).map_err(crate::out_of_memory)?;
         order.extend(0..count);
-        order.sort_by(|&a, &b| self.get(a).cmp(self.get(b)));
-        ledger.give(scratch);
+        // In place, with no scratch to allocate: equal keys keep file order by their numbers, as a stable sort
+        // would keep them.
+        order.sort_unstable_by(|&a, &b| self.get(a).cmp(self.get(b)).then(a.cmp(&b)));
         Ok(order)
     }
 }
@@ -452,7 +452,8 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive, ledger: &mut Ledg
         }
     }
     let form = |&(from, to, _): &(u32, u32, u32)| text.get(from as usize..to as usize).unwrap_or(&[]);
-    changed.sort_by(|a, b| form(a).cmp(form(b)));
+    // In place, as `order` is: equal forms keep file order by their key numbers, pushed in that order.
+    changed.sort_unstable_by(|a, b| form(a).cmp(form(b)).then(a.2.cmp(&b.2)));
     let mut order = Vec::new();
     order.try_reserve_exact(changed.len()).map_err(crate::out_of_memory)?;
     order.extend(changed.into_iter().map(|(_, _, i)| i));
