@@ -791,15 +791,17 @@ fn mime(path: &str) -> &'static str {
     }
 }
 
-/// The policy the view must apply: only the view's own base for every fetch, nothing remote. A base that is a
-/// path (the Web's `/x/`) is no CSP source expression, so there the policy names the entry's own origin, which
-/// is the entry's alone (`core-api.md` §5.3).
+/// The policy the view must enforce: fetches from the view's base, and `data:` for images and fonts; no connection,
+/// form, frame, object or worker; inline scripts and `eval` allowed. A base that is a path (the Web's `/x/`) is no
+/// CSP source expression, so there the policy names the entry's own origin, which is the entry's alone
+/// (`core-api.md` §5.3), and allows every path of it. It is not a sandbox for what a script does, and it does not
+/// confine navigations: the shell refuses those itself (ADR-0007 decision 14).
 fn csp(base: &str) -> String {
     let base = if base.starts_with('/') { "'self'" } else { base };
     format!(
         "default-src {base}; script-src {base} 'unsafe-inline' 'unsafe-eval'; style-src {base} 'unsafe-inline'; \
          img-src {base} data:; font-src {base} data:; media-src {base}; connect-src 'none'; form-action 'none'; \
-         frame-src 'none'; object-src 'none'; base-uri 'none'"
+         frame-src 'none'; object-src 'none'; worker-src 'none'; base-uri 'none'"
     )
 }
 
@@ -862,6 +864,15 @@ mod tests {
         let native = csp("xdict://d/");
         assert!(native.contains("default-src xdict://d/;"), "{native}");
         assert!(native.contains("connect-src 'none'"), "{native}");
+    }
+
+    /// A worker would otherwise fall back to `script-src`, load from the base, and run under the policy of its own
+    /// response, which a view serves without one: `connect-src 'none'` would not reach it.
+    #[test]
+    fn the_policy_starts_no_worker() {
+        for base in ["/x/", "xdict://d/"] {
+            assert!(csp(base).contains("worker-src 'none'"), "{}", csp(base));
+        }
     }
 
     /// A source that claims a size and refuses to be read.
