@@ -1,9 +1,13 @@
-//! Every URL of an entry, and of the stylesheets and scripts it loads, rewritten under the view's base (ADR-0007
-//! decisions 6, 8 and 14), so that each shell serves one space of URLs and nothing else loads.
+//! The URLs an entry, and the stylesheets and scripts it loads, are seen to hold, rewritten under the view's base
+//! (ADR-0007 decisions 6, 8 and 14), so that each shell serves one space of URLs.
 //!
 //! An entry is not parsed into a tree: a tag scanner finds attributes, `<script>` and `<style>`, and copies
 //! everything else unchanged. Scripts are rewritten by prefix only (`entry://` and its kin), which is best effort by construction: a URL a
 //! script builds from pieces (`'entry' + '://'`) is not seen, so each shell still intercepts navigations.
+//!
+//! This is compatibility, not the boundary: where a browser's parsing context differs from the scanner's (a
+//! `<textarea>`, SVG, a `srcdoc` document) a URL can go unrewritten. That nothing else loads is the CSP's and the
+//! shell's to ensure (ADR-0007 decision 14, corrected 2026-10-14).
 
 use crate::Exceeded;
 use crate::url::{
