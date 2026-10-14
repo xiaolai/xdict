@@ -123,6 +123,12 @@ impl Keys {
         Ok(())
     }
 
+    /// What the keys read so far cost the build, their tier-2 scratch with them: what is left of the budget is
+    /// what the record-block table may take.
+    pub(crate) fn spent(&self) -> u64 {
+        self.cost.saturating_add(scratch_cost(self.longest))
+    }
+
     pub(crate) fn finish(self) -> Result<crate::index::Keys, Error> {
         if self.count() != self.declared {
             return Err(Error::Malformed("the key blocks hold a different number of keys than declared".into()));

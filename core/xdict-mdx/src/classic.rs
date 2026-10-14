@@ -29,8 +29,10 @@ pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result
         let raw = read(source, &mut at, stored, "key block")?;
         keys.add_block(&block::decode(&raw, decompressed, "key block")?, b.entries)?;
     }
+    // The record-block table may take what the keys left of the index's budget, weighed before it is read.
+    let left = limits::INDEX_BYTES.saturating_sub(keys.spent());
     let keys = keys.finish()?;
-    let blocks = record_section(source, &mut at, key_count, wide)?;
+    let blocks = record_section(source, &mut at, key_count, wide, left)?;
     Ok(Parts { keys, blocks })
 }
 
@@ -98,7 +100,13 @@ fn keyword_section(
 }
 
 /// The record section: its preamble, the block index, and where each record block lies.
-fn record_section(source: &dyn Source, at: &mut u64, key_count: u64, wide: bool) -> Result<Vec<RecordBlock>, Error> {
+fn record_section(
+    source: &dyn Source,
+    at: &mut u64,
+    key_count: u64,
+    wide: bool,
+    budget: u64,
+) -> Result<Vec<RecordBlock>, Error> {
     let preamble = read(source, at, if wide { 32 } else { 16 }, "record section")?;
     let mut p = Cursor::new(&preamble, "record section");
     let record_block_count = p.number(wide)?;
@@ -112,13 +120,13 @@ fn record_section(source: &dyn Source, at: &mut u64, key_count: u64, wide: bool)
     if record_block_count.checked_mul(pair) != Some(record_index_len) {
         return Err(Error::Malformed("the record index has the wrong length".into()));
     }
+    block::weigh(record_block_count, budget)?;
     let record_index_len = length(record_index_len, limits::BLOCK_BYTES, "record index")?;
     let record_index = read(source, at, record_index_len, "record index")?;
     let mut ri = Cursor::new(&record_index, "record index");
-    let pairs =
-        (0..record_block_count).map(|_| Ok((ri.number(wide)?, ri.number(wide)?))).collect::<Result<Vec<_>, Error>>()?;
     // A stored block opens with its 4-byte type and 4-byte checksum.
-    let (blocks, file_offset) = block::layout(pairs, *at, 8)?;
+    let next = || Ok((ri.number(wide)?, ri.number(wide)?));
+    let (blocks, file_offset) = block::layout(record_block_count, next, *at, 8, budget)?;
     if file_offset.checked_sub(*at) != Some(record_blocks_len) {
         return Err(Error::Malformed("the record blocks' sizes do not add up".into()));
     }
