@@ -133,7 +133,8 @@ fn the_tiny_dictionary_conforms() {
             vec![dict.clone()],
             case["limit"].as_u64().unwrap() as u32,
         );
-        check(&format!("suggestions[{i}]"), &case["keys"], outcome(got));
+        let want = if case.get("error").is_some() { json!({ "error": case["error"] }) } else { case["keys"].clone() };
+        check(&format!("suggestions[{i}]"), &want, outcome(got));
     }
     for (i, case) in x["entries"].as_array().unwrap().iter().enumerate() {
         let entry = EntryRef {

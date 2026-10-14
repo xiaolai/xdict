@@ -119,7 +119,7 @@ x.lookups.forEach((c: any, i: number) => {
   generations.push(typeof got?.generation === 'number' ? got.generation : null);
   check(`lookups[${i}]`, c.error ? { error: c.error } : c.page, got);
 });
-x.suggestions.forEach((c: any, i: number) => check(`suggestions[${i}]`, c.keys, outcome(() => core.suggest(c.prefix, [dict], c.limit))));
+x.suggestions.forEach((c: any, i: number) => check(`suggestions[${i}]`, c.error ? { error: c.error } : c.keys, outcome(() => core.suggest(c.prefix, [dict], c.limit))));
 x.entries.forEach((c: any, i: number) => {
   const ref = { edition: c.edition ?? imported.edition, key: c.entry.key, occurrence: c.entry.occurrence };
   const got = outcome(() => core.entry(dict, ref, view(c.maxBodyBytes))) as any;

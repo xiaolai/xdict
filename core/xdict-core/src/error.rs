@@ -79,7 +79,8 @@ pub enum Feature {
 pub enum Limit {
     /// One of the reader's limits on a file (`xdict_mdx::limits`).
     File,
-    /// More results than one page holds ([`crate::MAX_PAGE`]).
+    /// More results than one page holds ([`crate::MAX_PAGE`]), or more suggestions than one call returns
+    /// ([`crate::MAX_SUGGEST`]).
     Page,
     /// A body larger than the view's `max_body_bytes`, or the core's own ceiling.
     Body,

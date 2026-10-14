@@ -198,7 +198,7 @@ fun main(args: Array<String>) {
         check("lookups[$n]", errorOr(c, "page"), got)
     }
     list(x["suggestions"]).forEachIndexed { n, c ->
-        check("suggestions[$n]", c["keys"], outcome { core.suggest(c["prefix"] as String, listOf(dict), uint(c["limit"])!!) })
+        check("suggestions[$n]", errorOr(c, "keys"), outcome { core.suggest(c["prefix"] as String, listOf(dict), uint(c["limit"])!!) })
     }
     list(x["entries"]).forEachIndexed { n, c ->
         val e = obj(c["entry"])

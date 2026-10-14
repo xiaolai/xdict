@@ -261,6 +261,14 @@
         "café",
         "color"
       ]
+    },
+    {
+      "prefix": "",
+      "limit": 1001,
+      "error": {
+        "type": "tooLarge",
+        "limit": "page"
+      }
     }
   ],
   "entries": [

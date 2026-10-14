@@ -9,16 +9,18 @@ wrapper, built from `apps/extension/`, and the native-messaging host the other b
 
 **macOS skeleton and harness** (plan-macos-v1 WI-2). XDict.app opens one window that says what its dictionary service
 answered; the service is sandboxed, links the core and answers one call, `versions()`, over NSXPC. WI-3 replaces that
-handshake with the frozen contract. Every gate below runs; iOS is not started.
+handshake with the IPC contract, frozen on 2026-10-14 (plan-macos-v1 WI-1, ADR-0009) in `XDictContract`. Every gate below
+runs; iOS is not started.
 
 | Target | What it is |
 |---|---|
 | `XDictBase` | The bundle identities and the handshake: its `@objc` protocol, its wire value, its client |
+| `XDictContract` | The frozen IPC contract: the NSXPC protocols and interfaces, versioned envelopes, the records and error kinds both sides exchange, files by handle, the identity rule, limits and deadlines. Foundation only; the service converts the core's types into it (`CoreMapping.swift`) |
 | `XDictUI` | The view layer: the launch window and its sentences |
 | `XDict` | The app: not sandboxed, Developer ID, hardened runtime; never links the core |
 | `xdictFFI`, `XDictCore` | The core: `libxdict_ffi.a` as an XCFramework, and its UniFFI binding, both generated into `Generated/` |
 | `XDictService` | The dictionary service, `ai.xdict.app.DictionaryService`: sandboxed, no file or network entitlement, the only target that reaches the core |
-| `XDictTestSupport` and four test targets | `XDictTests` holds the harness's own rules: module boundaries, test floors, the string catalog, the platform floor, the bundle's facts |
+| `XDictTestSupport` and five test targets | `XDictTests` holds the harness's own rules: module boundaries, test floors, the string catalog, the platform floor, the bundle's facts |
 
 ## Build and test
 
@@ -46,6 +48,7 @@ target. The archive is linked statically into the service alone.
 | Gate | Where | Refuses |
 |---|---|---|
 | The core reaches the service alone | `ModuleBoundaryTests`; `Tools/build-bundle.sh` | any other target that depends on or imports `XDictCore`/`xdictFFI`; an app binary holding a core symbol or linking a core dylib |
+| The contract stands alone | `ModuleBoundaryTests` | `XDictContract` importing anything but Foundation (the core, AppKit, a target of this package) or depending on a target here |
 | Warnings are errors | `Package.swift` (every target); `Tools/compiler-warnings.py` (each source's diagnostics file, debug and release) | any warning the compiler wrote down |
 | `MemberImportVisibility`, warnings as errors on every target | `ModuleBoundaryTests`, from SwiftPM's own reading of the manifest | a target added after the loop that sets them |
 | SwiftLint `--strict`, pinned 0.65.1 | `make lint` | its correctness rules (`.swiftlint.yml`), or another SwiftLint version |
