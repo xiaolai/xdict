@@ -39,25 +39,26 @@ pub(crate) fn index_cost(text: &str) -> u64 {
     cost_of(1, text.len() as u64)
 }
 
-/// The most building the index of `keys` keys whose text is `text` bytes (t) holds at once, block tables aside
-/// ([`BLOCK_COST`]): 65 bytes a key and five times its text. What a loaded index may declare, too, since no
-/// build that kept within [`limits::INDEX_BYTES`] wrote more. Phase by phase (`index::build`), per key:
+/// What building the index of `keys` keys whose text is `text` bytes (t) is expected to hold at once, block
+/// tables aside ([`BLOCK_COST`]): 65 bytes a key and five times its text. An estimate, made while the keys are
+/// read so that a file too large is refused before it all is; what holds the build to its budget is its own
+/// ledger (`index::build`), which counts each table as it is made, whatever unmarking and folding make of the
+/// keys. What a loaded index may declare, too, since `index::build` checks it first. Phase by phase, per key:
 ///
 /// - read from the blocks: text, offset (4) and record start (8), in vectors that grow by doubling, so up to
 ///   twice that held after reading: 2t + 24;
-/// - tier 2: the tier-2 forms in one text, which folding can make three times longer in UTF-8 (ΐ, 2 bytes, folds
-///   to 6, the most any character grows, measured over every code point on 2026-10-13), 12 bytes of entry and
-///   6 of stable sorting: 2t + 24 + 3t + 18 = 5t + 42, its result then 4 (the text and entries are measured
-///   first and reserved exactly, so they never hold the doubling a growing vector would);
-/// - tier 1: the folded text (3t at most) and its offsets (4), the order (4) and its sorting (2): 5t + 38;
+/// - tier 2: the forms of the keys it changes (few: under 2 % of the 25's), taken as up to three times their
+///   text, with 12 bytes of entry and 6 of stable sorting: 3t + 18, its result then 4;
+/// - tier 1: the folded text (at most [`crate::text::FOLD_GROWTH`] t) and its offsets (4), the order (4) and its
+///   sorting (4): 3t + 12;
 /// - written out: the record ends (8, and 8 of sorted starts while they are found), the public bitmap, and the
 ///   index itself, reserved whole: the text and 28 bytes of tables a key: 3t + 64.
 pub(crate) fn cost_of(keys: u64, text: u64) -> u64 {
     keys.saturating_mul(65).saturating_add(text.saturating_mul(5))
 }
 
-/// What ordering tier 2 adds beside [`cost_of`]: two buffers it folds each key into, used again for every key,
-/// so as large as the longest key folded, three times its text at most.
+/// What ordering tier 2 is expected to add beside [`cost_of`] for the longest key, folding alone counted: the
+/// ledger counts it with what unmarking adds (`index::tier2_scratch`).
 pub(crate) fn scratch_cost(longest: u64) -> u64 {
     longest.saturating_mul(6)
 }

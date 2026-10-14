@@ -330,7 +330,7 @@ impl File {
             FormatVersion::V1_2 | FormatVersion::V2_0 => classic::parts(source, opening.at, header)?,
         };
         let binding = Binding { identity, header: opening.digest, source_len: source.len(), kind: header.kind };
-        index::build(parts.keys, &parts.blocks, rules(header), binding, derive)
+        index::build(parts.keys, &parts.blocks, rules(header), binding, derive, limits::INDEX_BYTES)
     }
 
     /// Opens a file through an index built for it under `derive`: reads the file's header and nothing else of

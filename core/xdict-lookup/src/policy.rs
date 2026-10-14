@@ -23,10 +23,19 @@ impl Derive for Policy {
         unmark(text)
     }
 
+    /// The NFKD text and the NFKC text made from it, each at most [`NFKD_GROWTH`] times the key.
+    fn growth(&self) -> u64 {
+        2 * NFKD_GROWTH
+    }
+
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
         internal(keys)
     }
 }
+
+/// The most NFKD lengthens text, in UTF-8 bytes per byte: U+FDFA (ARABIC LIGATURE SALLALLAHOU ALAYHE
+/// WASALLAM, 3 bytes) decomposes to 18 characters, 33 bytes. Measured over every scalar value by a test.
+const NFKD_GROWTH: u64 = 11;
 
 /// Superscript digits: at the end of a key, a homograph number (YHDCD `AAA²`).
 const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
@@ -209,6 +218,49 @@ mod tests {
             keys.extend((0..*n).map(|i| format!("{prefix}{i}")));
         }
         Keys(keys)
+    }
+
+    /// [`NFKD_GROWTH`] is measured, not guessed: no scalar value's NFKD is longer in UTF-8 than that many times
+    /// its own length, and one is exactly that long (U+FDFA, 3 bytes to 33). A Unicode update that lengthens a
+    /// decomposition fails here, and with it the index build's memory account (`Derive::growth`).
+    #[test]
+    fn nfkd_growth_is_measured_over_every_scalar_value() {
+        let mut most = (0u64, 1u64, '\0');
+        for c in (0..=0x10FFFFu32).filter_map(char::from_u32) {
+            let (from, to) = (c.len_utf8() as u64, c.nfkd().map(char::len_utf8).sum::<usize>() as u64);
+            assert!(to <= NFKD_GROWTH * from, "U+{:04X}: {from} bytes to {to}", c as u32);
+            if to * most.1 > most.0 * from {
+                most = (to, from, c);
+            }
+        }
+        assert_eq!(
+            most.0.div_ceil(most.1),
+            NFKD_GROWTH,
+            "U+{:04X} is the most: the constant is not tight",
+            most.2 as u32
+        );
+    }
+
+    /// What `unmark` holds is within [`Policy::growth`] times its key: the NFKD text and the NFKC text made
+    /// from it, which composing never lengthens: a primary composite is no longer in UTF-8 than what it
+    /// replaces. Every scalar value alone, and runs of the longest decomposition.
+    #[test]
+    fn unmark_holds_within_its_growth() {
+        for c in (0..=0x10FFFFu32).filter_map(char::from_u32) {
+            let nfd: String = c.to_string().nfd().collect();
+            if nfd.chars().count() > 1 && nfd.nfc().eq(std::iter::once(c)) {
+                assert!(c.len_utf8() <= nfd.len(), "U+{:04X} composes longer than its parts", c as u32);
+            }
+            let text = c.to_string();
+            let nfkd: String = text.nfkd().collect();
+            assert!(unmark(&text).len() <= nfkd.len(), "U+{:04X}", c as u32);
+        }
+        for text in ["\u{FDFA}".repeat(1000), "\u{FDFA}é²".repeat(300), "Å\u{301}\u{FDFA}".repeat(200)] {
+            let nfkd: String = text.nfkd().collect();
+            assert!(nfkd.len() as u64 <= NFKD_GROWTH * text.len() as u64);
+            assert!(unmark(&text).len() <= nfkd.len());
+            assert!((nfkd.len() + unmark(&text).len()) as u64 <= Policy.growth() * text.len() as u64);
+        }
     }
 
     /// Codex objection 21: a shape is internal where the file uses it as a pattern, not wherever it appears.

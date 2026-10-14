@@ -78,6 +78,10 @@ impl Codec {
     }
 }
 
+/// The most folding lengthens a key, in UTF-8 bytes per byte: ΐ (2 bytes) folds to 6. Measured over every
+/// scalar value under all four rules by a test; an index build counts it (`keys.rs`).
+pub(crate) const FOLD_GROWTH: u64 = 3;
+
 /// The folded form of a key under a file's rules: case-folded unless the file is case-sensitive, and with
 /// everything but letters and digits removed unless `StripKey="No"`. A key made only of punctuation keeps
 /// its case-folded form, so such keys do not all collapse into the empty string.
@@ -200,6 +204,25 @@ fn case_fold(key: &str) -> String {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    /// [`FOLD_GROWTH`] is measured: no scalar value folds, under any of the four rules, to more than that many
+    /// times its UTF-8 length, and one folds to exactly that (ΐ, 2 bytes to 6). Folding goes character by
+    /// character, so a key's folding is at most the sum of its characters'.
+    #[test]
+    fn fold_growth_is_measured_over_every_scalar_value() {
+        let mut most = (0u64, 1u64);
+        for c in (0..=0x10FFFFu32).filter_map(char::from_u32) {
+            let key = c.to_string();
+            for (case_sensitive, strip) in [(false, false), (false, true), (true, false), (true, true)] {
+                let (from, to) = (key.len() as u64, fold_len(&key, case_sensitive, strip) as u64);
+                assert!(to <= FOLD_GROWTH * from, "U+{:04X}: {from} bytes to {to}", c as u32);
+                if to * most.1 > most.0 * from {
+                    most = (to, from);
+                }
+            }
+        }
+        assert_eq!(most.0.div_ceil(most.1), FOLD_GROWTH, "the constant is not tight");
+    }
 
     /// Folding into a buffer writes exactly what [`fold`] returns, and measures it exactly: every scalar value
     /// alone and the cases folding treats apart (dotless ı, ΐ's growth, ß, final sigma, punctuation-only keys
