@@ -19,6 +19,8 @@ struct ModuleBoundaryTests {
     static let systemModules: [String: Set<String>] = [
         // No UI and no domain: the identities, the handshake's wire value and its NSXPC client.
         "XDictBase": ["Foundation", "Synchronization"],
+        // The IPC contract: Foundation alone (`theContractStandsAlone` says why, and refuses more).
+        "XDictContract": contractMayBind,
         "XDictUI": ["Foundation", "SwiftUI"],
         "XDict": ["Foundation", "SwiftUI", "os"],
         "XDictService": ["Foundation", "os"],
@@ -26,10 +28,17 @@ struct ModuleBoundaryTests {
         "XDictCore": ["Foundation"],
         "XDictTestSupport": ["Foundation"],
         "XDictBaseTests": ["Foundation", "Testing"],
+        "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
         "XDictUITests": ["Foundation", "Testing"],
         "XDictServiceTests": ["Foundation", "Testing"],
         "XDictTests": ["Foundation", "Testing"],
     ]
+
+    /// **The contract binds Foundation and nothing else, and depends on no target of this package.** Both processes
+    /// compile it: the app, which must never reach the core, and the service, which has no UI. So it may not import the
+    /// core (the app could not link it), AppKit or SwiftUI (the service would carry a UI framework), nor `XDictBase` or
+    /// any other target here (a frozen contract that moves with the code beside it is not frozen).
+    static let contractMayBind: Set<String> = ["Foundation"]
 
     /// The settings every compiled target carries, as `dump-package` spells them.
     static let everyTargetIsCompiledWith: Set<String> = [
@@ -62,6 +71,35 @@ struct ModuleBoundaryTests {
         #expect(Self.importProblems(["XDict": planted]) == ["XDict/Planted.swift imports XDictCore"])
         #expect(Self.importProblems(["XDictService": planted]) == [])
         #expect(Self.graphProblems(reaching: ["XDictService", "XDictUI"]) == ["XDictUI reaches the core"])
+    }
+
+    // MARK: - The contract
+
+    @Test func theContractStandsAlone() throws {
+        let targets = try Manifest.dump().targets
+        let contract = try #require(targets["XDictContract"], "no XDictContract target")
+        let files = try #require(try Self.importsByTarget()["XDictContract"])
+        #expect(!files.isEmpty, "the walk read nothing of XDictContract")
+        #expect(Self.contractProblems(dependencies: contract.dependencies, files: files) == [])
+        // The premise: both sides compile against it. A rule about a module nothing uses holds nothing.
+        #expect(Manifest.reaching("XDictContract", in: targets).contains("XDictService"),
+                "the service no longer compiles against the contract")
+    }
+
+    /// **The control: a contract that imports the core, AppKit or a target of this package, or depends on one, is
+    /// named** — on a scan of a directory of the test's own, never by writing into `Sources/`.
+    @Test func aContractThatReachesFurtherIsNamed() throws {
+        let scratch = try TemporaryDirectory(named: "xdict-planted-contract-import")
+        try "import Foundation\nimport AppKit\n@preconcurrency import XDictCore\nimport XDictBase\n"
+            .write(to: scratch.appending("Planted.swift"), atomically: true, encoding: .utf8)
+        let planted = try SourceScan.files(under: scratch.url).map { ($0.file.lastPathComponent, SourceScan.imports(in: $0.text)) }
+        #expect(Self.contractProblems(dependencies: ["XDictBase"], files: planted) == [
+            "XDictContract depends on XDictBase",
+            "XDictContract/Planted.swift imports AppKit",
+            "XDictContract/Planted.swift imports XDictCore",
+            "XDictContract/Planted.swift imports XDictBase",
+        ])
+        #expect(Self.contractProblems(dependencies: [], files: [("Clean.swift", ["Foundation"])]) == [])
     }
 
     // MARK: - Every target's edges and frameworks
@@ -140,6 +178,12 @@ struct ModuleBoundaryTests {
             mayReachTheCore.contains(target) ? [] : files.flatMap { file, modules in
                 modules.filter(coreModules.contains).map { "\(target)/\(file) imports \($0)" }
             }
+        }
+    }
+
+    static func contractProblems(dependencies: Set<String>, files: [(file: String, modules: [String])]) -> [String] {
+        dependencies.sorted().map { "XDictContract depends on \($0)" } + files.flatMap { file, modules in
+            modules.filter { !contractMayBind.contains($0) }.map { "XDictContract/\(file) imports \($0)" }
         }
     }
 

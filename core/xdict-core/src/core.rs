@@ -30,6 +30,8 @@ pub const INDEX_FORMAT: u32 = xdict_mdx::index::FORMAT;
 pub const NORMALIZATION: u32 = xdict_lookup::NORMALIZATION;
 /// The most hits one page holds.
 pub const MAX_PAGE: u32 = 1_000;
+/// The most suggestions one call returns: a page's worth, so a search field cannot ask the core to walk every key.
+pub const MAX_SUGGEST: u32 = MAX_PAGE;
 /// The scheme version an edition is written with (ADR-0002 decision 1).
 pub use xdict_identity::EDITION_SCHEME;
 
@@ -398,9 +400,16 @@ impl Core {
     }
 
     /// Public keys beginning with `prefix` under each file's folding, for a search field: the dictionaries in
-    /// the order given, each in folded order, each spelling once.
+    /// the order given, each in folded order, each spelling once. At most [`MAX_SUGGEST`] in all; asking for more
+    /// is `TooLarge { limit: Page }`, as for a page.
     pub fn suggest(&self, prefix: String, dicts: Vec<String>, limit: u32) -> Result<Vec<String>, CoreError> {
         guard(|| {
+            if limit > MAX_SUGGEST {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Page,
+                    detail: format!("a call suggests at most {MAX_SUGGEST} keys, {limit} were asked"),
+                });
+            }
             let mut out: Vec<String> = Vec::new();
             for id in &dicts {
                 xdict_lookup::suggest(&self.dict(id)?.mdx, &prefix, limit as usize, &mut out)?;
@@ -921,6 +930,18 @@ mod tests {
 
     fn view() -> View {
         View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
+    }
+
+    /// Suggestions are bounded as a page is: a shell asking for more than [`MAX_SUGGEST`] is refused before any key
+    /// is read, as `lookup` refuses more than [`MAX_PAGE`] (Codex objection 2 on the macOS contract, 2026-10-14).
+    #[test]
+    fn suggestions_are_bounded_as_a_page_is() {
+        let (core, dict) = opened(&[], vec![]);
+        assert_eq!(core.suggest("r".into(), vec![dict.clone()], MAX_SUGGEST).unwrap(), vec!["run".to_owned()]);
+        let refused = core.suggest("r".into(), vec![dict.clone()], MAX_SUGGEST + 1);
+        assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::Page, .. })), "{refused:?}");
+        let most = core.suggest(String::new(), vec![dict], u32::MAX);
+        assert!(matches!(most, Err(CoreError::TooLarge { limit: Limit::Page, .. })), "{most:?}");
     }
 
     /// A source that calls back into the core when it is dropped, as a shell's source may (a JavaScript object's

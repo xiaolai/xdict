@@ -11,7 +11,9 @@ mod source;
 mod store;
 mod types;
 
-pub use crate::core::{Core, EDITION_SCHEME, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, NORMALIZATION, PROTOCOL};
+pub use crate::core::{
+    Core, EDITION_SCHEME, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, MAX_SUGGEST, NORMALIZATION, PROTOCOL,
+};
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
 pub use source::{ByteSource, MAX_TRANSFER};
 pub use store::IndexStorage;

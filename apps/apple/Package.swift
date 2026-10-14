@@ -15,12 +15,19 @@ let package = Package(
         // handshake with the frozen contract. Foundation, Dispatch and Synchronization.
         .target(name: "XDictBase"),
 
+        // **The IPC contract between the app and the service, frozen at WI-1** (ADR-0009): the NSXPC protocols and
+        // their interfaces, the versioned envelopes, the records both sides exchange, the error kinds, the limits and
+        // the deadlines. Foundation only, and no other target of this package: the app compiles it without the core,
+        // and the service converts the core's types into it (`ModuleBoundaryTests` holds both).
+        .target(name: "XDictContract"),
+
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`).
         .target(name: "XDictUI", dependencies: ["XDictBase"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
         .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictUI"]),
+
 
         // **The core, and who may reach it.** `xdictFFI` is libxdict_ffi.a and its C header as an XCFramework, and
         // `XDictCore` the UniFFI binding generated from that archive; both are written by `Tools/build-core.sh` into
@@ -38,16 +45,19 @@ let package = Package(
 
         // The dictionary service: sandboxed, with no file and no network entitlement, and the only process that runs
         // the core (ADR-0001 decision 5). Today it answers the handshake; WI-3 makes it the contract.
-        .executableTarget(name: "XDictService", dependencies: ["XDictBase", "XDictCore"]),
+        .executableTarget(name: "XDictService", dependencies: ["XDictBase", "XDictContract", "XDictCore"]),
 
         // What the test targets share, and nothing ships: a source walk that cannot skip silently, a directory that
         // removes itself, and the manifest as SwiftPM reads it.
         .target(name: "XDictTestSupport", path: "Tests/Support"),
         .testTarget(name: "XDictBaseTests", dependencies: ["XDictBase"]),
+        // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
+        .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictUI"]),
         // The one test target besides the service that reaches the core: it asks the service's own handler, over a
-        // real NSXPC connection, and compares the answer with the core's.
-        .testTarget(name: "XDictServiceTests", dependencies: ["XDictBase", "XDictCore", "XDictService"]),
+        // real NSXPC connection, and compares the answer with the core's; and it maps the core's types into the
+        // contract's.
+        .testTarget(name: "XDictServiceTests", dependencies: ["XDictBase", "XDictContract", "XDictCore", "XDictService"]),
         // The harness's own rules, read off the tree: module boundaries, test floors, the string catalog, the floor.
         .testTarget(name: "XDictTests", dependencies: ["XDictTestSupport"]),
     ],

@@ -280,7 +280,7 @@ for (i, c) in (x["lookups"] as! [[String: Any]]).enumerated() {
     check("lookups[\(i)]", c["error"].map { ["error": $0] } ?? c["page"], got)
 }
 for (i, c) in (x["suggestions"] as! [[String: Any]]).enumerated() {
-    check("suggestions[\(i)]", c["keys"], outcome { try core.suggest(prefix: c["prefix"] as! String, dicts: [dict], limit: int(c["limit"])!) })
+    check("suggestions[\(i)]", c["error"].map { ["error": $0] } ?? c["keys"], outcome { try core.suggest(prefix: c["prefix"] as! String, dicts: [dict], limit: int(c["limit"])!) })
 }
 for (i, c) in (x["entries"] as! [[String: Any]]).enumerated() {
     let e = c["entry"] as! [String: Any]
