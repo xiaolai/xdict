@@ -32,6 +32,50 @@ impl Codec {
         })
     }
 
+    /// What [`Self::decode_exact`] holds to decode `bytes`, known before it does, so a key can be weighed first
+    /// (`keys.rs`): the UTF-8 text exactly (each bad sequence becomes U+FFFD, three bytes), or the most the
+    /// decoder says its text can take. `TooLarge` past `usize`.
+    pub(crate) fn decoded_capacity(self, bytes: &[u8]) -> Result<usize, Error> {
+        let encoding = match self {
+            Self::Utf8 => {
+                let mut lengths =
+                    bytes.utf8_chunks().map(|c| c.valid().len() + if c.invalid().is_empty() { 0 } else { 3 });
+                return lengths.try_fold(0usize, usize::checked_add).ok_or_else(too_long);
+            }
+            Self::Utf16Le => encoding_rs::UTF_16LE,
+            Self::Legacy(encoding) => encoding,
+        };
+        encoding.new_decoder_without_bom_handling().max_utf8_buffer_length(bytes.len()).ok_or_else(too_long)
+    }
+
+    /// [`Self::decode`]'s text, made in exactly `capacity` bytes ([`Self::decoded_capacity`]) reserved fallibly
+    /// and never grown: std and encoding_rs would grow a string by doubling, holding up to three times the text
+    /// while they do.
+    pub(crate) fn decode_exact(self, bytes: &[u8], capacity: usize) -> Result<String, Error> {
+        let mut text = String::new();
+        text.try_reserve_exact(capacity).map_err(crate::out_of_memory)?;
+        let encoding = match self {
+            Self::Utf8 => {
+                // What `String::from_utf8_lossy` does, into the reserved text.
+                for chunk in bytes.utf8_chunks() {
+                    text.push_str(chunk.valid());
+                    if !chunk.invalid().is_empty() {
+                        text.push('\u{FFFD}');
+                    }
+                }
+                return Ok(text);
+            }
+            Self::Utf16Le => encoding_rs::UTF_16LE,
+            Self::Legacy(encoding) => encoding,
+        };
+        // Into the spare capacity alone: with the decoder's most reserved, it reads every byte in one call.
+        let (result, read, _) = encoding.new_decoder_without_bom_handling().decode_to_string(bytes, &mut text, true);
+        if result != encoding_rs::CoderResult::InputEmpty || read != bytes.len() {
+            return Err(Error::Malformed("a key does not decode within the room its decoder asked for".into()));
+        }
+        Ok(text)
+    }
+
     /// Bytes in one code unit, which is also the width of a terminating null.
     pub(crate) fn unit(self) -> usize {
         match self {
@@ -68,7 +112,9 @@ impl Codec {
     }
 
     /// Decodes text. Invalid sequences become U+FFFD rather than failing the entry: one bad byte in a
-    /// 600 KB entry should not hide the other 599,999.
+    /// 600 KB entry should not hide the other 599,999. Through std and encoding_rs alone: what
+    /// [`Self::decode_exact`] and [`Self::decode_counted`] are checked against.
+    #[cfg(test)]
     pub(crate) fn decode(self, bytes: &[u8]) -> String {
         match self {
             Self::Utf8 => String::from_utf8_lossy(bytes).into_owned(),
@@ -81,6 +127,10 @@ impl Codec {
 /// The most folding lengthens a key, in UTF-8 bytes per byte: ΐ (2 bytes) folds to 6. Measured over every
 /// scalar value under all four rules by a test; an index build counts it (`keys.rs`).
 pub(crate) const FOLD_GROWTH: u64 = 3;
+
+fn too_long() -> Error {
+    Error::TooLarge("a key is too long to decode".into())
+}
 
 /// The folded form of a key under a file's rules: case-folded unless the file is case-sensitive, and with
 /// everything but letters and digits removed unless `StripKey="No"`. A key made only of punctuation keeps
@@ -242,6 +292,62 @@ mod tests {
                 fold_into(key, case_sensitive, strip, &mut buf).unwrap();
                 assert_eq!(buf, want.as_bytes(), "{key:?} {case_sensitive} {strip}");
                 assert_eq!(fold_len(key, case_sensitive, strip), want.len(), "{key:?} {case_sensitive} {strip}");
+            }
+        }
+    }
+
+    /// [`Codec::decode_exact`] gives [`Codec::decode`]'s text and holds nothing but the capacity
+    /// [`Codec::decoded_capacity`] said, by the allocator: for every codec, the bytes that grow most under each
+    /// (bad bytes, windows-1252's 0x80–0x9F, four-byte GB18030 and Big5 HKSCS, UTF-16 astral and lone surrogates,
+    /// cut sequences) and random bytes, at every length to 300 and either side of each power of two to 8192,
+    /// where a string grown by doubling would show it. 3,000 bad Big5 bytes held 24,576 decoded by `decode`.
+    #[test]
+    fn decode_holds_what_it_reserved_by_the_allocator() {
+        let codecs = [
+            ("UTF-8", Codec::Utf8),
+            ("UTF-16LE", Codec::Utf16Le),
+            ("GB18030", Codec::Legacy(encoding_rs::GB18030)),
+            ("Big5", Codec::Legacy(encoding_rs::BIG5)),
+            ("windows-1252", Codec::Legacy(encoding_rs::WINDOWS_1252)),
+        ];
+        let mut seed = 7u32;
+        let random: Vec<u8> = (0..8192)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                (seed >> 16) as u8
+            })
+            .collect();
+        let patterns: [&[u8]; 14] = [
+            &[0x80],
+            &[0xFF],
+            &[0xE9],
+            &[0xC3, 0xA9],
+            &[0xF0, 0x9F, 0x98, 0x80],
+            &[0xE2, 0x82],
+            &[0x90, 0x30, 0x81, 0x30],
+            &[0x81, 0x30, 0x81, 0x30],
+            &[0x87, 0x40],
+            &[0x00, 0xD8],
+            &[0x3D, 0xD8, 0x00, 0xDE],
+            &[0x2D, 0x4E],
+            &[0x41, 0x80],
+            &random,
+        ];
+        let powers = (2..=13).flat_map(|k| [(1 << k) - 1, 1 << k, (1 << k) + 1]);
+        let lengths: Vec<usize> = (0..=300).chain(powers).chain([3000]).collect();
+        for (name, codec) in codecs {
+            for (p, pattern) in patterns.iter().enumerate() {
+                for &len in &lengths {
+                    let bytes: Vec<u8> = pattern.iter().copied().cycle().take(len).collect();
+                    let capacity = codec.decoded_capacity(&bytes).unwrap();
+                    let mut text = None;
+                    let held = allocation_counter::measure(|| text = Some(codec.decode_exact(&bytes, capacity)));
+                    let text = text.unwrap().unwrap();
+                    let at = format!("{name}, pattern {p}, {len} bytes");
+                    assert_eq!(text, codec.decode(&bytes), "{at}");
+                    assert_eq!(text.capacity(), capacity, "{at}: the text grew");
+                    assert!(held.bytes_max <= capacity as u64, "{at}: held {}, reserved {capacity}", held.bytes_max);
+                }
             }
         }
     }

@@ -5,6 +5,10 @@
 
 /// The header's XML, in bytes.
 pub const HEADER_BYTES: u64 = 1 << 20;
+/// Attributes in one header or 3.0 section descriptor. The most in the owner's 359 files is 17 (2026-10-14);
+/// a megabyte of short ones would otherwise hold twenty times its size in entries, and checking each for a
+/// repeat of the ones before takes time growing with their square.
+pub const HEADER_ATTRIBUTES: usize = 1024;
 /// One decompressed key or record block, or the decompressed key index.
 pub const BLOCK_BYTES: u64 = 64 << 20;
 /// Keys in one file: 14 times OED's 706,524, the largest in the owner's collection. A count check made

@@ -48,14 +48,15 @@ pub(crate) fn parts(source: &dyn Source, at: u64, header: &Header) -> Result<Par
     // A 3.0 file's record blocks are read before its keys, so the keys get what the block table left.
     let blocks_cost = block::weigh(record_data.count, limits::INDEX_BYTES)?;
     let blocks = record_blocks(source, &record_data, &record_index, &key, limits::INDEX_BYTES)?;
-    let key_blocks = key_blocks(source, &key_index, &key_data, key_count, &key)?;
+    let budget = limits::INDEX_BYTES.saturating_sub(blocks_cost);
+    let (key_blocks, table_cost) = key_blocks(source, &key_index, &key_data, key_count, &key, budget)?;
 
-    let mut keys = Keys::new(key_count, Codec::Utf8, true, limits::INDEX_BYTES.saturating_sub(blocks_cost));
+    let mut keys = Keys::new(key_count, Codec::Utf8, true, budget.saturating_sub(table_cost));
     let mut at = key_data.units_at;
     for b in &key_blocks {
         let raw = read(source, &mut at, length(b.stored, limits::BLOCK_BYTES, "key block")?, "key block")?;
         let decompressed = length(b.decompressed, limits::BLOCK_BYTES, "key block")?;
-        keys.add_block(&decode_unit(&raw, decompressed, &key, "key block")?, b.entries)?;
+        keys.add_block(&decode_unit(raw, decompressed, &key, "key block")?, b.entries)?;
     }
     Ok(Parts { keys: keys.finish()?, blocks })
 }
@@ -93,7 +94,7 @@ fn sections(source: &dyn Source, mut at: u64, key: &[u8; 16]) -> Result<[Section
             limits::HEADER_BYTES,
             "section descriptor",
         )?;
-        let attributes = parse_descriptor(&decode_unit(&unit, expected, key, "section descriptor")?, name)?;
+        let attributes = parse_descriptor(&decode_unit(unit, expected, key, "section descriptor")?, name)?;
         let slot = found.get_mut(slot).ok_or_else(|| malformed("section"))?;
         if slot.replace(Section { units_at, count, units_len, attributes }).is_some() {
             return Err(Error::Malformed(format!("the file has two sections of type {kind:#010x}")));
@@ -167,17 +168,20 @@ fn record_blocks(
 }
 
 /// What each key block holds, from the key index: per block, its key count, first and last key, unit
-/// size and decompressed size.
+/// size and decompressed size. With what that table costs, weighed against `budget` (`keys::block_table`).
 fn key_blocks(
     source: &dyn Source,
     key_index: &Section,
     key_data: &Section,
     key_count: u64,
     key: &[u8; 16],
-) -> Result<Vec<KeyBlock>, Error> {
+    budget: u64,
+) -> Result<(Vec<KeyBlock>, u64), Error> {
     let index = section_data(source, key_index, key, "key index")?;
+    // The least a block's entry takes: its key count, first and last keys empty (a length and a null), and its
+    // two sizes.
+    let (mut blocks, cost) = keys::block_table(key_data.count, index.len(), 4 + 2 * 3 + 8, budget)?;
     let mut ki = Cursor::new(&index, "key index");
-    let mut blocks = Vec::new();
     for _ in 0..key_data.count {
         let entries = u64::from(ki.u32()?);
         for _ in 0..2 {
@@ -193,13 +197,19 @@ fn key_blocks(
         return Err(Error::Malformed("the key index has bytes past its last block".into()));
     }
     keys::check_blocks(&blocks, key_count, key_data.units_len)?;
-    Ok(blocks)
+    Ok((blocks, cost))
 }
 
 /// Decodes a unit: checks its two sizes, decrypts its stored block's leading bytes, verifies the checksum
-/// of the still-compressed payload, and decompresses to exactly `expected` bytes.
-pub(crate) fn decode_unit(unit: &[u8], expected: usize, key: &[u8; 16], what: &'static str) -> Result<Vec<u8>, Error> {
-    let mut c = Cursor::new(unit, what);
+/// of the still-compressed payload, and decompresses to exactly `expected` bytes. Decrypted where it lies, so
+/// decoding holds the unit and what it decompresses to, not a copy of it too.
+pub(crate) fn decode_unit(
+    mut unit: Vec<u8>,
+    expected: usize,
+    key: &[u8; 16],
+    what: &'static str,
+) -> Result<Vec<u8>, Error> {
+    let mut c = Cursor::new(&unit, what);
     let decompressed = c.u32()?;
     let stored_len = c.u32()?;
     if u64::from(stored_len) + UNIT_PREFIX != unit.len() as u64 || decompressed as usize != expected {
@@ -209,7 +219,7 @@ pub(crate) fn decode_unit(unit: &[u8], expected: usize, key: &[u8; 16], what: &'
     let encrypted = usize::from(c.u8()?);
     c.take(2)?;
     let checksum = c.u32()?;
-    let mut payload = unit.get(16..).ok_or_else(|| Error::Malformed(format!("the {what} ends early")))?.to_vec();
+    let payload = unit.get_mut(16..).ok_or_else(|| Error::Malformed(format!("the {what} ends early")))?;
     let head_len = encrypted.min(payload.len());
     let head = payload.get_mut(..head_len).ok_or_else(|| malformed(what))?;
     match flags >> 4 {
@@ -218,46 +228,63 @@ pub(crate) fn decode_unit(unit: &[u8], expected: usize, key: &[u8; 16], what: &'
         2 => cipher::salsa8_xor(head, key),
         other => return Err(Error::Unsupported(Unsupported::BlockEncryption(other))),
     }
-    if adler32(&payload) != checksum {
+    if adler32(payload) != checksum {
         return Err(Error::Malformed(format!("the {what}'s checksum does not match")));
     }
     // LZO is type 1 in 2.0, but no real 3.0 file has shown it: refused rather than guessed (ADR-0005).
     if flags & 0x0F == 1 {
         return Err(Error::Unsupported(Unsupported::Lzo));
     }
-    block::decompress(u32::from(flags & 0x0F), &payload, expected, what)
+    block::decompress(u32::from(flags & 0x0F), payload, expected, what)
 }
 
-/// Every unit of a small section (an index), decoded and joined. Each unit must lie inside the section,
-/// and the joined size is checked against the limit before each unit is decoded.
+/// Every unit of a small section (an index), decoded and joined. Each unit must lie inside the section. The
+/// units' sizes are read first, so the joined size is checked against the limit and reserved whole before any
+/// unit is decoded: decoding holds the joined data, one unit, and what that unit decodes to.
 fn section_data(source: &dyn Source, section: &Section, key: &[u8; 16], what: &'static str) -> Result<Vec<u8>, Error> {
-    let mut at = section.units_at;
-    let end = at.checked_add(section.units_len).ok_or_else(|| malformed(what))?;
-    let mut out = Vec::new();
+    let end = section.units_at.checked_add(section.units_len).ok_or_else(|| malformed(what))?;
+    let (mut at, mut total) = (section.units_at, 0u64);
     for _ in 0..section.count {
-        if at.checked_add(UNIT_PREFIX).is_none_or(|e| e > end) {
-            return Err(Error::Malformed(format!("the {what}'s blocks run past its section")));
-        }
-        let sizes = read(source, &mut at.clone(), UNIT_PREFIX as usize, what)?;
-        let mut c = Cursor::new(&sizes, what);
-        let decompressed = u64::from(c.u32()?);
-        let unit_len = u64::from(c.u32()?) + UNIT_PREFIX;
-        if at.checked_add(unit_len).is_none_or(|e| e > end) {
-            return Err(Error::Malformed(format!("the {what}'s blocks run past its section")));
-        }
-        if (out.len() as u64).saturating_add(decompressed) > limits::BLOCK_BYTES {
+        let (decompressed, unit_len) = unit_sizes(source, at, end, what)?;
+        total = total.saturating_add(decompressed);
+        if total > limits::BLOCK_BYTES {
             return Err(Error::Malformed(format!(
                 "the {what} is larger than the {} bytes allowed",
                 limits::BLOCK_BYTES
             )));
         }
-        let unit = read(source, &mut at, length(unit_len, limits::BLOCK_BYTES, what)?, what)?;
-        out.extend(decode_unit(&unit, length(decompressed, limits::BLOCK_BYTES, what)?, key, what)?);
+        at += unit_len;
     }
     if at != end {
         return Err(Error::Malformed(format!("the {what}'s blocks do not fill its section")));
     }
+    let mut out = Vec::new();
+    out.try_reserve_exact(length(total, limits::BLOCK_BYTES, what)?).map_err(crate::out_of_memory)?;
+    let mut at = section.units_at;
+    for _ in 0..section.count {
+        let (decompressed, unit_len) = unit_sizes(source, at, end, what)?;
+        if (out.len() as u64).saturating_add(decompressed) > total {
+            return Err(Error::Malformed(format!("the {what}'s sizes changed between two readings")));
+        }
+        let unit = read(source, &mut at, length(unit_len, limits::BLOCK_BYTES, what)?, what)?;
+        out.extend_from_slice(&decode_unit(unit, length(decompressed, limits::BLOCK_BYTES, what)?, key, what)?);
+    }
     Ok(out)
+}
+
+/// The sizes of the unit at `at`, which must lie before `end`: what it decompresses to, and its whole length.
+fn unit_sizes(source: &dyn Source, at: u64, end: u64, what: &'static str) -> Result<(u64, u64), Error> {
+    if at.checked_add(UNIT_PREFIX).is_none_or(|e| e > end) {
+        return Err(Error::Malformed(format!("the {what}'s blocks run past its section")));
+    }
+    let sizes = read(source, &mut at.clone(), UNIT_PREFIX as usize, what)?;
+    let mut c = Cursor::new(&sizes, what);
+    let decompressed = u64::from(c.u32()?);
+    let unit_len = u64::from(c.u32()?) + UNIT_PREFIX;
+    if at.checked_add(unit_len).is_none_or(|e| e > end) {
+        return Err(Error::Malformed(format!("the {what}'s blocks run past its section")));
+    }
+    Ok((decompressed, unit_len))
 }
 
 /// The attributes of a descriptor such as `<KeyData encoding="UTF-8" keyCount="4010"/>`, which must be the
@@ -278,4 +305,32 @@ fn count(attributes: &[(String, String)], name: &str) -> Result<u64, Error> {
         .trim()
         .parse()
         .map_err(|_| Error::Malformed(format!("a section descriptor's {name} is missing or not a number")))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// A unit stored as it is: no encryption, no compression.
+    fn stored(payload: &[u8]) -> Vec<u8> {
+        let len = |n: usize| u32::try_from(n).unwrap().to_be_bytes();
+        [&len(payload.len()), &len(payload.len() + 8), &[0, 0, 0, 0][..], &adler32(payload).to_be_bytes(), payload]
+            .concat()
+    }
+
+    /// A section of several units is joined into data reserved whole, weighed before any unit is decoded, and
+    /// each unit is decrypted where it lies: decoding holds the joined data, one unit and what it decodes to.
+    #[test]
+    fn a_section_is_joined_into_data_reserved_whole() {
+        let parts: [Vec<u8>; 3] = [vec![1; 1000], vec![2; 1000], vec![3; 1000]];
+        let file: Vec<u8> = parts.iter().flat_map(|p| stored(p)).collect();
+        let section = Section { units_at: 0, count: 3, units_len: file.len() as u64, attributes: Vec::new() };
+        let mut joined = None;
+        let held = allocation_counter::measure(|| joined = Some(section_data(&file, &section, &[0; 16], "test")));
+        let joined = joined.unwrap().unwrap();
+        assert_eq!(joined, parts.concat());
+        assert_eq!(joined.capacity(), joined.len(), "the joined data grew past its size");
+        assert!(held.bytes_max <= 3000 + 1016 + 1000, "{} bytes held", held.bytes_max);
+    }
 }

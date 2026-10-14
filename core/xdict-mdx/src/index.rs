@@ -59,10 +59,10 @@ pub trait Derive: Send + Sync {
     /// A key or query without what a reader cannot type; the file's folding is applied after it. Must return
     /// the text itself, borrowed, when there is nothing to remove: most keys.
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str>;
-    /// The most [`Self::unmark`] holds while it works on a key, in bytes per byte of the key: the text it
-    /// returns and any it builds on the way. An index build counts it against its memory before it unmarks
-    /// (`keys::scratch_cost`), so it must be measured, not guessed.
-    fn growth(&self) -> u64;
+    /// The most [`Self::unmark`] holds while it works on one key, the text it returns included. An index build
+    /// counts it against its memory before it unmarks (`tier2_scratch`), so it must be measured by an allocator,
+    /// not guessed from lengths: spare capacity and buffers inside an iterator are memory too.
+    fn growth(&self) -> Growth;
     /// Which of the file's keys are internal, never offered to a reader: one flag per key, and nothing else
     /// held but at most [`INTERNAL_BYTES`] a key beside the flags, which an index build counts.
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error>;
@@ -70,6 +70,20 @@ pub trait Derive: Send + Sync {
 
 /// What [`Derive::internal`] may hold a key beside the flags it returns.
 pub const INTERNAL_BYTES: u64 = 1;
+
+/// What [`Derive::unmark`] may hold for a key of `n` bytes: `per_byte` times `n`, and `fixed` more.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Growth {
+    pub per_byte: u64,
+    pub fixed: u64,
+}
+
+impl Growth {
+    /// What unmarking a key of `bytes` bytes may hold.
+    pub fn of(self, bytes: u64) -> u64 {
+        self.per_byte.saturating_mul(bytes).saturating_add(self.fixed)
+    }
+}
 
 /// No derivation: no tier 2, every key public. What the reader uses on its own, and for resource libraries.
 pub struct Plain;
@@ -81,8 +95,8 @@ impl Derive for Plain {
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
         Cow::Borrowed(text)
     }
-    fn growth(&self) -> u64 {
-        0
+    fn growth(&self) -> Growth {
+        Growth { per_byte: 0, fixed: 0 }
     }
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
         filled(keys.len(), false)
@@ -213,6 +227,10 @@ impl KeyList for Keys {
 /// table is made when it is needed and let go once used, and every one is taken from a [`Ledger`] before it is
 /// made, so the budget holds whatever the keys and `derive` do to them; `keys::cost_of`, checked first, only
 /// refuses early what could not fit. The output is reserved whole and written in place.
+///
+/// Outside the ledger, and fixed: the index's head, `HEADER_LEN` bytes, made beside the output it is copied
+/// into. Inside it but not its to refuse: the stable sorts' scratch, at most the table sorted again (taken
+/// with each table), which std allocates infallibly, so a system out of memory there aborts rather than fails.
 pub(crate) fn build(
     keys: Keys,
     blocks: &[RecordBlock],
@@ -241,8 +259,9 @@ pub(crate) fn build(
     let tier2 = tier2_order(&keys, rules, derive, &mut ledger)?;
     let folded = Folded::of(&keys, rules, &mut ledger)?;
     let order = folded.order(&mut ledger)?;
-    ledger.give(folded.held());
+    let freed = folded.held();
     drop(folded);
+    ledger.give(freed);
     let ends = record_ends(&keys.starts, total, &mut ledger)?;
     let public = public_bitmap(&keys, derive, &mut ledger)?;
 
@@ -331,6 +350,7 @@ fn record_ends(starts: &[u64], total: u64, ledger: &mut Ledger) -> Result<Vec<u6
         ends.push(sorted.get(next).copied().unwrap_or(total));
     }
     // The sorted starts are let go; the ends are the index's.
+    drop(sorted);
     ledger.give(bytes_of::<u64>(starts.len()));
     Ok(ends)
 }
@@ -437,17 +457,22 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive, ledger: &mut Ledg
     order.try_reserve_exact(changed.len()).map_err(crate::out_of_memory)?;
     order.extend(changed.into_iter().map(|(_, _, i)| i));
     // All but the order is let go.
+    drop(text);
+    drop(scratch);
     ledger.give(held.saturating_sub(bytes_of::<u32>(entries)).saturating_add(scratch_bytes));
     Ok(order)
 }
 
-/// What ordering tier 2 holds for one key at a time, sized by the longest key (`longest` bytes) and how much
-/// `derive` may lengthen one (`growth`, [`Derive::growth`]): what unmarking holds, the unmarked form folded (at
-/// most [`crate::text::FOLD_GROWTH`] times the unmarked text, which is at most the key or `growth` times it),
-/// and the key itself folded.
-fn tier2_scratch(longest: u64, growth: u64) -> u64 {
-    let fold = crate::text::FOLD_GROWTH;
-    longest.saturating_mul(growth.saturating_add(fold.saturating_mul(growth.max(1))).saturating_add(fold))
+/// What ordering tier 2 holds for one key at a time, sized by the longest key (`longest` bytes): what `derive`
+/// holds to unmark it ([`Derive::growth`]), which is at least the unmarked text; that text folded, or the key if
+/// it is longer, at most [`crate::text::FOLD_GROWTH`] times either; and the key itself folded. The two foldings
+/// go into buffers used again for every key, reserved exactly, and a buffer that grows holds its old and its
+/// new allocation for a moment: each is counted twice.
+fn tier2_scratch(longest: u64, growth: Growth) -> u64 {
+    let fold = crate::text::FOLD_GROWTH.saturating_mul(2);
+    let unmarking = growth.of(longest);
+    let form = fold.saturating_mul(unmarking.max(longest));
+    unmarking.saturating_add(form).saturating_add(fold.saturating_mul(longest))
 }
 
 /// The two foldings `tier2_order` compares for one key at a time, in buffers it uses again for every key.
@@ -490,6 +515,7 @@ fn public_bitmap(keys: &Keys, derive: &dyn Derive, ledger: &mut Ledger) -> Resul
             *byte |= 1 << (i % 8);
         }
     }
+    drop(internal);
     ledger.give(deciding);
     Ok(public)
 }
@@ -993,8 +1019,8 @@ mod tests {
         fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
             Cow::Owned(text.repeat(100))
         }
-        fn growth(&self) -> u64 {
-            100
+        fn growth(&self) -> Growth {
+            Growth { per_byte: 100, fixed: 0 }
         }
         fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
             Ok(vec![false; keys.len()])

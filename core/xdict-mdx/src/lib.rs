@@ -535,7 +535,7 @@ impl File {
                     let raw = read(&*self.source, &mut at, block.stored_len, "record block")?;
                     match self.scheme {
                         Scheme::Classic => block::decode(&raw, block.len, "record block")?,
-                        Scheme::V3(key) => v3::decode_unit(&raw, block.len, &key, "record block")?,
+                        Scheme::V3(key) => v3::decode_unit(raw, block.len, &key, "record block")?,
                     }
                 }
             };

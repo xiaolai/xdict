@@ -34,14 +34,21 @@ pub(crate) fn decompress(kind: u32, payload: &[u8], expected: usize, what: &str)
         0 => payload.to_vec(),
         1 => crate::lzo::decompress(payload, expected, what)?,
         2 => {
-            let mut out = Vec::with_capacity(expected);
-            // One byte past the expected size, so an oversized stream is caught rather than truncated.
-            let limit = u64::try_from(expected).unwrap_or(u64::MAX).saturating_add(1);
+            let mut out = Vec::new();
+            out.try_reserve_exact(expected).map_err(crate::out_of_memory)?;
+            let undecodable = |_| Error::Malformed(format!("the {what} does not decompress"));
             let mut decoder = flate2::read::ZlibDecoder::new(payload);
+            // Read to the expected size and no further, so the output never grows past what was reserved.
             (&mut decoder)
-                .take(limit)
+                .take(u64::try_from(expected).unwrap_or(u64::MAX))
                 .read_to_end(&mut out)
-                .map_err(|_| Error::Malformed(format!("the {what} does not decompress")))?;
+                .map_err(undecodable)?;
+            // Then one byte aside: an oversized stream is caught rather than truncated.
+            if decoder.read(&mut [0u8; 1]).map_err(undecodable)? != 0 {
+                return Err(Error::Malformed(format!(
+                    "the {what} decompresses to more than {expected} bytes where {expected} were declared"
+                )));
+            }
             // Size first: a stream cut off at the limit has not consumed its input either.
             if out.len() != expected {
                 return Err(Error::Malformed(format!(
@@ -157,6 +164,19 @@ mod tests {
         let data: Vec<u8> = (0..200_000u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
         let refused = decompress(2, &zlib(&data), 5, "test").err().unwrap().to_string();
         assert!(refused.contains("5 were declared"), "{refused}");
+    }
+
+    /// A stream longer than declared is refused without holding more than the declared size: the output is
+    /// reserved exactly and never grown to find out.
+    #[test]
+    fn a_stream_longer_than_declared_is_refused_within_its_size() {
+        let data = vec![7u8; 1_000_000];
+        let payload = zlib(&data);
+        let mut refused = None;
+        let held = allocation_counter::measure(|| refused = Some(decompress(2, &payload, 500_000, "test")));
+        assert!(matches!(refused, Some(Err(Error::Malformed(_)))), "{refused:?}");
+        // The output, and the decoder's own state, a fixed size: its window and tables, 80,372 bytes in zlib-rs.
+        assert!(held.bytes_max <= 500_000 + (96 << 10), "{} bytes held", held.bytes_max);
     }
 
     /// `layout` over a list, with as much budget as the test gives it.

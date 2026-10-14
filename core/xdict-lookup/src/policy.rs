@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use unicode_normalization::UnicodeNormalization;
 use xdict_mdx::Error;
-use xdict_mdx::index::{Derive, KeyList};
+use xdict_mdx::index::{Derive, Growth, KeyList};
 
 /// The tier-2 algorithm and internal-key rule together, stored in every index built under them: raised by any
 /// change to either, so indexes built before are rebuilt.
@@ -23,9 +23,12 @@ impl Derive for Policy {
         unmark(text)
     }
 
-    /// The NFKD text and the NFKC text made from it, each at most [`NFKD_GROWTH`] times the key.
-    fn growth(&self) -> u64 {
-        2 * NFKD_GROWTH
+    /// The NFKD text, collected by doubling, up to twice its length; the NFKC text collected from it, up to three
+    /// times its length while it grows, its old and its new buffer at once; each text at most [`NFKD_GROWTH`]
+    /// times the key. Short keys hold more than their share, in least capacities and normalization's buffers:
+    /// [`UNMARK_FIXED`]. Both measured by an allocator (`tests/unmark_memory.rs`).
+    fn growth(&self) -> Growth {
+        Growth { per_byte: 5 * NFKD_GROWTH, fixed: UNMARK_FIXED }
     }
 
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
@@ -36,6 +39,10 @@ impl Derive for Policy {
 /// The most NFKD lengthens text, in UTF-8 bytes per byte: U+FDFA (ARABIC LIGATURE SALLALLAHOU ALAYHE
 /// WASALLAM, 3 bytes) decomposes to 18 characters, 33 bytes. Measured over every scalar value by a test.
 const NFKD_GROWTH: u64 = 11;
+
+/// What `unmark` holds of a key beyond five times [`NFKD_GROWTH`] a byte, at most. Measured over every scalar
+/// value, alone and in runs, by `tests/unmark_memory.rs`, which fails when it moves.
+const UNMARK_FIXED: u64 = 219;
 
 /// Superscript digits: at the end of a key, a homograph number (YHDCD `AAA²`).
 const SUPERSCRIPT_DIGITS: [char; 10] = ['⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹'];
@@ -241,11 +248,12 @@ mod tests {
         );
     }
 
-    /// What `unmark` holds is within [`Policy::growth`] times its key: the NFKD text and the NFKC text made
-    /// from it, which composing never lengthens: a primary composite is no longer in UTF-8 than what it
-    /// replaces. Every scalar value alone, and runs of the longest decomposition.
+    /// The lengths [`Policy::growth`] rests on: the NFKC text is no longer than the NFKD text it is made from,
+    /// since a primary composite is no longer in UTF-8 than what it replaces, and both are within it. Every
+    /// scalar value alone, and runs of the longest decomposition; the allocator's measure is
+    /// `tests/unmark_memory.rs`.
     #[test]
-    fn unmark_holds_within_its_growth() {
+    fn unmark_texts_are_within_their_growth() {
         for c in (0..=0x10FFFFu32).filter_map(char::from_u32) {
             let nfd: String = c.to_string().nfd().collect();
             if nfd.chars().count() > 1 && nfd.nfc().eq(std::iter::once(c)) {
@@ -259,7 +267,7 @@ mod tests {
             let nfkd: String = text.nfkd().collect();
             assert!(nfkd.len() as u64 <= NFKD_GROWTH * text.len() as u64);
             assert!(unmark(&text).len() <= nfkd.len());
-            assert!((nfkd.len() + unmark(&text).len()) as u64 <= Policy.growth() * text.len() as u64);
+            assert!((nfkd.len() + unmark(&text).len()) as u64 <= Policy.growth().of(text.len() as u64));
         }
     }
 

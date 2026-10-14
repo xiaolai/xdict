@@ -10,6 +10,9 @@ repository = "https://github.com/xiaolai/xdict"
 rust-version = "1.99"
 
 [workspace.dependencies]
+# Test-only: counts what a closure allocates, peak included, through its own global allocator; the workspace
+# forbids the unsafe code one takes (`xdict-lookup/tests/unmark_memory.rs`).
+allocation-counter = "=0.8.1"
 encoding_rs = "=0.8.42"
 flate2 = { version = "=1.1.10", default-features = false, features = ["zlib-rs"] }
 ripemd = "=0.2.0"

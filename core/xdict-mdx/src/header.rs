@@ -125,6 +125,12 @@ pub(crate) fn attributes(mut rest: &str) -> Result<Vec<(String, String)>, Error>
         if out.iter().any(|(k, _)| k.eq_ignore_ascii_case(name)) {
             return Err(Error::Malformed(format!("the header attribute {name} appears twice")));
         }
+        if out.len() == crate::limits::HEADER_ATTRIBUTES {
+            return Err(Error::Malformed(format!(
+                "an element has more than the {} attributes allowed",
+                crate::limits::HEADER_ATTRIBUTES
+            )));
+        }
         out.push((name.to_owned(), unescape(value)));
         rest = tail.get(1..).unwrap_or("");
     }
@@ -184,6 +190,20 @@ mod tests {
     fn parse_text(text: &str) -> Result<Header, Error> {
         let bytes = text.as_bytes();
         parse(bytes, adler32(bytes))
+    }
+
+    /// A header holds at most `limits::HEADER_ATTRIBUTES` attributes: past it, a megabyte of short ones would
+    /// hold twenty times its size in entries and take minutes to check for repeats. The most in the owner's
+    /// 359 files is 17.
+    #[test]
+    fn a_header_of_too_many_attributes_is_refused() {
+        let with = |n: usize| {
+            let names: String = (0..n).map(|i| format!(" a{i}=\"\"")).collect();
+            format!("<ZDB GeneratedByEngineVersion=\"3.0\" UUID=\"u\"{names}/>")
+        };
+        assert!(parse_text(&with(crate::limits::HEADER_ATTRIBUTES - 2)).is_ok());
+        let refused = parse_text(&with(crate::limits::HEADER_ATTRIBUTES - 1)).err().unwrap().to_string();
+        assert!(refused.contains("attributes"), "{refused}");
     }
 
     fn parse_utf16(text: &str) -> Result<Header, Error> {
