@@ -1,0 +1,20 @@
+#!/bin/bash
+# A stand-in for ssh that reaches this very Mac, for one purpose: the host guard's positive control.
+#
+#   XDICT_E2E_SSH=Tools/tests/ssh-to-this-mac Tools/e2e.sh any-name launch
+#
+# must stop at the guard ("… is this Mac"), because the hardware UUID the "remote" side reports is this Mac's own. The
+# build Mac runs no SSH server, so without this the guard could only ever be seen passing. It behaves as ssh does for
+# `Tools/e2e.sh`: options are skipped, the host is ignored, and the command (joined with spaces, as ssh joins it) runs
+# here under bash, with standard input passed through.
+set -euo pipefail
+while [ $# -gt 0 ]; do
+    case $1 in
+        -o | -e | -i | -p | -l | -F) shift 2 ;;
+        -*) shift ;;
+        *) break ;;
+    esac
+done
+[ $# -gt 0 ] || { echo "ssh-to-this-mac: no host" >&2; exit 255; }
+shift
+if [ $# -eq 0 ]; then exec bash; else exec bash -c "$*"; fi

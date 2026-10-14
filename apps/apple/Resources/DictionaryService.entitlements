@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!-- The dictionary service: the sandbox, and nothing else. No file entitlement (a dictionary arrives as a descriptor
+     the app opened) and no network: a dictionary file is untrusted input, and what parses it reaches nothing.
+     BundleFactsTests and Tools/build-bundle.sh hold the signed service to exactly this. -->
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+</dict>
+</plist>
