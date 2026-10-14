@@ -12,7 +12,9 @@
 #                     `launch` asks the bundle's service for the handshake there; `service` runs the contract's
 #                     instruments against the signed service there; `hostile`, `reader` and `entries` run the entry
 #                     view (Tools/build-lab.sh's kit): the hostile-input suite, a person's hands on it, and the owner's
-#                     dictionaries (E2E_CORPUS in local.mk). STAGES="launch" runs only those
+#                     dictionaries (E2E_CORPUS in local.mk); `library` imports the core's generated packages through
+#                     the app's library, drops one on its window by real pointer events, and registers, moves and
+#                     relaunches the owner's dictionaries. STAGES="launch" runs only those
 #   make e2e-status   what each stage last did, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses

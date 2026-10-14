@@ -16,11 +16,16 @@ runs; iOS is not started.
 |---|---|
 | `XDictBase` | The bundle identities and the handshake: its `@objc` protocol, its wire value, its client |
 | `XDictContract` | The frozen IPC contract: the NSXPC protocols and interfaces, versioned envelopes, the records and error kinds both sides exchange, files by handle, the identity rule, limits and deadlines. Foundation only; the service converts the core's types into it (`CoreMapping.swift`) |
-| `XDictUI` | The view layer: the launch window and its sentences |
+| `XDictUI` | The view layer: the launch window, the library window and their sentences |
+| `XDictClient` | The app's side of the contract: `ServiceClient` (request ids, deadlines, credits, generations, reconnection, tokens) |
+| `XDictLibrary` | The reader's library (WI-5): packages found in what the reader chose, bookmarks and file ids, imports with cancel and retry, order, names, languages, changed editions and lineage joins; kinds, never sentences |
+| `XDictEntryView` | The entry view and its confinement (WI-4) |
+| `XDictInstruments` | The E2E instruments' scenarios, compiled into the app and run by its development flags |
+| `XDictEntryLab` | A development host of the entry view that links the core; never in XDict.app |
 | `XDict` | The app: not sandboxed, Developer ID, hardened runtime; never links the core |
 | `xdictFFI`, `XDictCore` | The core: `libxdict_ffi.a` as an XCFramework, and its UniFFI binding, both generated into `Generated/` |
 | `XDictService` | The dictionary service, `ai.xdict.app.DictionaryService`: sandboxed, no file or network entitlement, the only target that reaches the core |
-| `XDictTestSupport` and five test targets | `XDictTests` holds the harness's own rules: module boundaries, test floors, the string catalog, the platform floor, the bundle's facts |
+| `XDictTestSupport` and the test targets | `XDictTests` holds the harness's own rules: module boundaries, test floors, the string catalog, the platform floor, the bundle's facts |
 
 ## Build and test
 
@@ -82,11 +87,18 @@ The stages:
 - **`hostile`**, **`reader`** and **`entries`** (plan-macos-v1 WI-4) run the entry view in `Tools/build-lab.sh`'s kit,
   shipped beside the bundle: the hostile-input suite, a person's hands on it, and the owner's dictionaries (`E2E_CORPUS`
   in `local.mk`).
+- **`library`** (plan-macos-v1 WI-5): `--library-report` imports `Tools/build-fixtures.sh`'s `library/` packages through
+  the app's library and the signed service (file, folder, ordered volumes and a sidecar, a missing volume, cancel then
+  retry while another dictionary answers, languages, three refusals and their sentences in both languages, a link out of
+  the folder, sounds, a rewritten file joined and undone, a moved folder relinked); `--library-drop` shows the
+  production library window and `dragsource` plus `pointer` drag a dictionary onto it; `--library-corpus` registers the
+  owner's 25 against the editions `index_bench` computes here, moves their folder, relaunches, and rewrites one.
 
 Positive controls: `XDICT_E2E_EXPECTED_VERSIONS=<json> Tools/e2e.sh <host> launch` expects other versions and must fail
 (it records nothing); `XDICT_E2E_SSH=Tools/tests/ssh-to-this-mac Tools/e2e.sh any launch` reaches this Mac and must stop
 at the host guard; `XDICT_E2E_SERVICE_CHECKS=supersede,drop Tools/e2e.sh <host> service` runs a subset of the service's
-checks, for a bundle built with one switched off (it records nothing).
+checks, for a bundle built with one switched off (it records nothing); `XDICT_E2E_LIBRARY_NO_RELINK=1 make e2e
+STAGES=library` relaunches the moved 25 with relinking off and must fail (it records nothing).
 
 ## Release
 

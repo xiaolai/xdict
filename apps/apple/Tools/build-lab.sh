@@ -56,4 +56,6 @@ cp ../../conformance/fixtures/hostile/cases.json "$KIT/cases.json"
 cp Tools/hostile/observe.py Tools/hostile/dns_oracle.py Tools/hostile/analyze.py Tools/hostile/reader.py \
     Tools/hostile/run-hostile.sh "$KIT/"
 swiftc -O -warnings-as-errors -o "$KIT/pointer" Tools/hostile/pointer.swift || fail "the pointer helper did not build"
+# The library stage's drag source: a file dragged in from another app (plan-macos-v1 WI-5).
+swiftc -O -warnings-as-errors -o "$KIT/dragsource" Tools/library/dragsource.swift || fail "the drag source did not build"
 echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"

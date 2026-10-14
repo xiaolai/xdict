@@ -1,6 +1,22 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "%lld files beside the dictionary were left out: one dictionary takes at most 64 files." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld files beside the dictionary were left out: one dictionary takes at most 64 files."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典旁有 %lld 个文件未被纳入：一部词典最多包含 64 个文件。"
+          }
+        }
+      }
+    },
     "%lld more in folded sections" : {
       "localizations" : {
         "en" : {
@@ -29,6 +45,102 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第 %1$lld 处，共 %2$lld 处"
+          }
+        }
+      }
+    },
+    "A Different Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A Different Dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一部词典"
+          }
+        }
+      }
+    },
+    "A question awaits your answer in the details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A question awaits your answer in the details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详情中有一个问题等你回答"
+          }
+        }
+      }
+    },
+    "About" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "About"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关于"
+          }
+        }
+      }
+    },
+    "Add Dictionaries…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Dictionaries…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加词典…"
+          }
+        }
+      }
+    },
+    "Add MDict files (.mdx, .mdd) or a folder of them" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add MDict files (.mdx, .mdd) or a folder of them"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 MDict 文件（.mdx、.mdd）或存放它们的文件夹"
+          }
+        }
+      }
+    },
+    "Already in your library, as “%@”." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already in your library, as “%@”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在你的词库中，名为“%@”。"
           }
         }
       }
@@ -65,6 +177,22 @@
         }
       }
     },
+    "Cancelling…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelling…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消…"
+          }
+        }
+      }
+    },
     "Core %@, protocol %u" : {
       "localizations" : {
         "en" : {
@@ -97,6 +225,22 @@
         }
       }
     },
+    "Description" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "简介"
+          }
+        }
+      }
+    },
     "Dictionary’s Own Colours" : {
       "localizations" : {
         "en" : {
@@ -113,6 +257,22 @@
         }
       }
     },
+    "Dismiss" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dismiss"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
     "Done" : {
       "localizations" : {
         "en" : {
@@ -125,6 +285,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "Edition" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edition"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "版本标识"
+          }
+        }
+      }
+    },
+    "Entries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Entries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词条数"
           }
         }
       }
@@ -209,6 +401,38 @@
         }
       }
     },
+    "Explained in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explained in"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "释义语言"
+          }
+        }
+      }
+    },
+    "Files" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Files"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件"
+          }
+        }
+      }
+    },
     "Find in Entry" : {
       "localizations" : {
         "en" : {
@@ -221,6 +445,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在词条中查找"
+          }
+        }
+      }
+    },
+    "Format" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Format"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "格式"
+          }
+        }
+      }
+    },
+    "Found “%@” again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found “%@” again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已重新找到“%@”。"
+          }
+        }
+      }
+    },
+    "If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You can change your mind afterwards." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You can change your mind afterwards."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "如果是，你为它保存的内容将沿用下去；如果不是，它将成为一部独立的词典。之后你仍可改变主意。"
           }
         }
       }
@@ -241,6 +513,118 @@
         }
       }
     },
+    "Import cancelled." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import cancelled."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消导入。"
+          }
+        }
+      }
+    },
+    "Importing…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导入…"
+          }
+        }
+      }
+    },
+    "Kept as the same dictionary as the file it replaced." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept as the same dictionary as the file it replaced."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已作为与被替换文件相同的词典保留。"
+          }
+        }
+      }
+    },
+    "Known once the dictionary is imported." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Known once the dictionary is imported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入词典后即可显示。"
+          }
+        }
+      }
+    },
+    "Languages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Languages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
+          }
+        }
+      }
+    },
+    "Library" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词库"
+          }
+        }
+      }
+    },
+    "MDict %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MDict %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "MDict %@"
+          }
+        }
+      }
+    },
     "Match the App" : {
       "localizations" : {
         "en" : {
@@ -253,6 +637,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟随应用"
+          }
+        }
+      }
+    },
+    "Move Down" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Down"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下移"
+          }
+        }
+      }
+    },
+    "Move Up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move Up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上移"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "名称"
           }
         }
       }
@@ -273,6 +705,54 @@
         }
       }
     },
+    "No Dictionaries Yet" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Dictionaries Yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有词典"
+          }
+        }
+      }
+    },
+    "No dictionary (.mdx) was found for “%@”." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No dictionary (.mdx) was found for “%@”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有找到与“%@”对应的词典（.mdx）。"
+          }
+        }
+      }
+    },
+    "No dictionary was found in “%@”." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No dictionary was found in “%@”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“%@”中没有找到词典。"
+          }
+        }
+      }
+    },
     "No matches" : {
       "localizations" : {
         "en" : {
@@ -285,6 +765,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无匹配"
+          }
+        }
+      }
+    },
+    "Not Set" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not Set"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未设置"
           }
         }
       }
@@ -305,6 +801,22 @@
         }
       }
     },
+    "Open Library" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开词库"
+          }
+        }
+      }
+    },
     "Open in Browser" : {
       "localizations" : {
         "en" : {
@@ -321,6 +833,38 @@
         }
       }
     },
+    "Opening…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在打开…"
+          }
+        }
+      }
+    },
+    "Plays the dictionary's own recording." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Plays the dictionary's own recording."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放词典自带的录音。"
+          }
+        }
+      }
+    },
     "Previous" : {
       "localizations" : {
         "en" : {
@@ -333,6 +877,150 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "上一个"
+          }
+        }
+      }
+    },
+    "Problems" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Problems"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问题"
+          }
+        }
+      }
+    },
+    "Ready" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用"
+          }
+        }
+      }
+    },
+    "Remove from Library" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from Library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从词库中移除"
+          }
+        }
+      }
+    },
+    "Resource volume “%@” could not be read. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resource volume “%@” could not be read. %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取资源分卷“%@”。%@"
+          }
+        }
+      }
+    },
+    "Resource volume “%@” is missing: pictures and sounds in it will not be found." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resource volume “%@” is missing: pictures and sounds in it will not be found."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缺少资源分卷“%@”：其中的图片和声音将无法找到。"
+          }
+        }
+      }
+    },
+    "Retry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Retry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重试"
+          }
+        }
+      }
+    },
+    "Same Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same Dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同一部词典"
+          }
+        }
+      }
+    },
+    "Search in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询语言"
+          }
+        }
+      }
+    },
+    "Select a dictionary to see its details." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a dictionary to see its details."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一部词典以查看详情。"
           }
         }
       }
@@ -417,6 +1105,134 @@
         }
       }
     },
+    "The dictionary service stopped before it finished. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dictionary service stopped before it finished. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典服务在完成之前停止了。请重试。"
+          }
+        }
+      }
+    },
+    "The file changed while XDict was reading it. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file changed while XDict was reading it. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 读取文件时文件发生了变化。请重试。"
+          }
+        }
+      }
+    },
+    "The file of this dictionary changed. Is it still the same dictionary?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file of this dictionary changed. Is it still the same dictionary?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典的文件已改变。它仍是同一部词典吗？"
+          }
+        }
+      }
+    },
+    "They Are Right" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "They Are Right"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没错"
+          }
+        }
+      }
+    },
+    "This dictionary is compressed in a way XDict does not read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is compressed in a way XDict does not read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典使用了 XDict 无法读取的压缩方式。"
+          }
+        }
+      }
+    },
+    "This dictionary is encrypted in a way XDict does not read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is encrypted in a way XDict does not read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典使用了 XDict 无法读取的加密方式。"
+          }
+        }
+      }
+    },
+    "This dictionary is locked with a registration code. XDict opens it only with your own code, and cannot take codes yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is locked with a registration code. XDict opens it only with your own code, and cannot take codes yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典需要注册码才能打开。XDict 只会用你自己的注册码打开它，目前还不能输入注册码。"
+          }
+        }
+      }
+    },
+    "This dictionary's text is in the %@ encoding, which XDict does not read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary's text is in the %@ encoding, which XDict does not read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典的文字采用 %@ 编码，XDict 无法读取。"
+          }
+        }
+      }
+    },
     "This entry could not be shown." : {
       "localizations" : {
         "en" : {
@@ -449,6 +1265,54 @@
         }
       }
     },
+    "This file is damaged: a checksum or its structure is wrong." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is damaged: a checksum or its structure is wrong."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件已损坏：校验和或文件结构有误。"
+          }
+        }
+      }
+    },
+    "This file is larger than XDict can hold." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file is larger than XDict can hold."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件超出了 XDict 能处理的上限。"
+          }
+        }
+      }
+    },
+    "This file uses MDict format %@, which XDict does not read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This file uses MDict format %@, which XDict does not read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此文件使用 MDict %@ 格式，XDict 无法读取。"
+          }
+        }
+      }
+    },
     "This link leaves the dictionary for %@. XDict does not load it here; your browser will, if you say so." : {
       "localizations" : {
         "en" : {
@@ -461,6 +1325,326 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此链接将离开词典，前往 %@。XDict 不会在此加载它；如果你同意，将由你的浏览器打开。"
+          }
+        }
+      }
+    },
+    "This recording is in a format macOS does not play (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This recording is in a format macOS does not play (%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这段录音的格式 macOS 无法播放（%@）。"
+          }
+        }
+      }
+    },
+    "This recording is not among the dictionary's files (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This recording is not among the dictionary's files (%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典的文件中没有这段录音（%@）。"
+          }
+        }
+      }
+    },
+    "This resource file (.mdd) uses MDict format 3.0, which XDict cannot read yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This resource file (.mdd) uses MDict format 3.0, which XDict cannot read yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此资源文件（.mdd）使用 MDict 3.0 格式，XDict 暂时无法读取。"
+          }
+        }
+      }
+    },
+    "Title" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Title"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "标题"
+          }
+        }
+      }
+    },
+    "Undo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销"
+          }
+        }
+      }
+    },
+    "Use in lookups" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use in lookups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于查词"
+          }
+        }
+      }
+    },
+    "Waiting to import" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting to import"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待导入"
+          }
+        }
+      }
+    },
+    "XDict could not tell this dictionary's languages from its file name. Which are they?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict could not tell this dictionary's languages from its file name. Which are they?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 无法从文件名判断这部词典的语言。它们是什么语言？"
+          }
+        }
+      }
+    },
+    "XDict guessed these languages from the file name. Are they right?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict guessed these languages from the file name. Are they right?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 根据文件名推测了这些语言。是否正确？"
+          }
+        }
+      }
+    },
+    "XDict reads the MDict dictionaries you already have: .mdx files, with their .mdd resources. Add files or a folder, or drop them here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict reads the MDict dictionaries you already have: .mdx files, with their .mdd resources. Add files or a folder, or drop them here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 读取你已有的 MDict 词典：.mdx 文件及其 .mdd 资源。请添加文件或文件夹，或将它们拖放到这里。"
+          }
+        }
+      }
+    },
+    "Your library could not be saved." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your library could not be saved."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存你的词库。"
+          }
+        }
+      }
+    },
+    "Your library file could not be read, so XDict leaves it as it is and adds nothing to it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your library file could not be read, so XDict leaves it as it is and adds nothing to it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取你的词库文件，因此 XDict 不会改动它，也不会向其中添加任何内容。"
+          }
+        }
+      }
+    },
+    "Your library was saved by a newer XDict. Update XDict to use it; it was left as it is." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your library was saved by a newer XDict. Update XDict to use it; it was left as it is."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的词库由更新版本的 XDict 保存。请更新 XDict 后再使用；词库文件未作改动。"
+          }
+        }
+      }
+    },
+    "“%@” could not be opened. Check that you may read it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” could not be opened. Check that you may read it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开“%@”。请检查你是否有读取权限。"
+          }
+        }
+      }
+    },
+    "“%@” could not be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” could not be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取“%@”。"
+          }
+        }
+      }
+    },
+    "“%@” has become a link or has left its folder, so XDict will not read it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” has become a link or has left its folder, so XDict will not read it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”已变成链接或已离开所在文件夹，因此 XDict 不会读取它。"
+          }
+        }
+      }
+    },
+    "“%@” is not a dictionary file (.mdx or .mdd)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is not a dictionary file (.mdx or .mdd)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”不是词典文件（.mdx 或 .mdd）。"
+          }
+        }
+      }
+    },
+    "“%@” is not where it was, and XDict cannot find where it went." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is not where it was, and XDict cannot find where it went."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”已不在原处，XDict 也找不到它的新位置。"
+          }
+        }
+      }
+    },
+    "“%@” points outside the folder you chose, so XDict does not read it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” points outside the folder you chose, so XDict does not read it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”指向你所选文件夹之外，因此 XDict 不会读取它。"
+          }
+        }
+      }
+    },
+    "“%@” points outside the folder you chose, so it was not added." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” points outside the folder you chose, so it was not added."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”指向你所选文件夹之外，因此未被添加。"
           }
         }
       }

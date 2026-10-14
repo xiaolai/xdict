@@ -11,16 +11,19 @@ import XDictTestSupport
 struct TestInventoryTests {
     /// Set to each target's count when the skeleton landed (2026-10-14, WI-2); `XDictContractTests` added, and the
     /// service's and the harness's raised, with the frozen contract and its Codex refutation (2026-10-14, WI-1);
-    /// `XDictEntryViewTests` added with the entry view, and the harness's raised by its boundary rows (2026-10-14, WI-4).
+    /// `XDictEntryViewTests` added with the entry view, and the harness's raised by its boundary rows (2026-10-14, WI-4);
+    /// `XDictLibraryTests` added with the library, and the view layer's and the service's raised by its sentences and
+    /// its scenario (2026-10-14, WI-5).
     static let floors = [
         // 8 → 2 (WI-3): the handshake became the contract's `versions`; its tests moved with it, to XDictClientTests
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
         "XDictBaseTests": 2,
         "XDictClientTests": 15,
         "XDictContractTests": 67,
-        "XDictUITests": 3,
+        "XDictLibraryTests": 49,
+        "XDictUITests": 8,
         "XDictEntryViewTests": 36,
-        "XDictServiceTests": 37,
+        "XDictServiceTests": 40,
         "XDictTests": 35,
     ]
 
