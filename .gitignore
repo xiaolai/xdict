@@ -35,6 +35,14 @@
 # state except the shared schemes.
 target/
 /.build
+# The macOS shell's: SwiftPM's and cargo's build output, and the core as `Tools/build-core.sh` generates it (the static
+# library as an XCFramework, and its UniFFI binding).
+/apps/apple/.build
+/apps/apple/Generated
+/apps/apple/.swiftpm/*
+!/apps/apple/.swiftpm/xcode
+/apps/apple/.swiftpm/xcode/*
+!/apps/apple/.swiftpm/xcode/xcshareddata
 /.swiftpm/*
 !/.swiftpm/xcode
 /.swiftpm/xcode/*

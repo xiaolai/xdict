@@ -1,0 +1,57 @@
+# The macOS shell (apps/apple): the core built as its static library and Swift binding, the app and the dictionary
+# service built unsigned, and `swift test` with the warnings gate. Signing, the bundle, the E2E stages and releases need
+# the Developer ID and the E2E Mac, so they run on the owner's machines, not here (apps/apple/README.md).
+# SwiftLint is not run here: the gate is pinned to one version (apps/apple/Makefile), which this runner does not carry.
+name: macos
+
+on:
+  push:
+    paths:
+      - apps/apple/**
+      - core/**
+      - .github/workflows/macos.yml
+  pull_request:
+    paths:
+      - apps/apple/**
+      - core/**
+      - .github/workflows/macos.yml
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: 1.99.0
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: apps/apple
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: aarch64-apple-darwin
+      # The package's floor is macOS 27 and its binaries are arm64 alone (macOS 27 runs only on Apple silicon): a
+      # runner without that SDK or that architecture cannot build it, and says so here rather than in a compiler error.
+      - name: the toolchain can build for macOS 27 on arm64
+        run: |
+          swift --version
+          sdk=$(xcrun --sdk macosx --show-sdk-version)
+          echo "macOS SDK $sdk on $(uname -m)"
+          [ "$(uname -m)" = arm64 ] || { echo "::error::this runner is $(uname -m); the shell builds for arm64 alone"; exit 1; }
+          [ "${sdk%%.*}" -ge 27 ] || { echo "::error::macOS SDK $sdk; the package needs 27 or later (select a newer Xcode)"; exit 1; }
+      - name: the core, as the shell links it
+        run: Tools/build-core.sh
+      - name: the app and the dictionary service, unsigned
+        run: swift build -c release --product XDict && swift build -c release --product XDictService
+      - name: swift test, then every compiled source's diagnostics
+        run: |
+          status=0
+          swift test || status=1
+          python3 Tools/compiler-warnings.py .build/out/Intermediates.noindex/XDict.build/Debug || status=1
+          exit $status
