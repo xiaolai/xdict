@@ -166,6 +166,7 @@ enum Fixtures {
         .tooLarge(limit: .file, detail: "key block"), .tooLarge(limit: .page, detail: "1001"),
         .tooLarge(limit: .body, detail: "17 MiB"),
         .notFound(what: .file, detail: "gone"), .notFound(what: .entry, detail: "no record"),
+        .notFound(what: .edition, detail: "never imported"), .notFound(what: .lineage, detail: "no such dictionary"),
         .io(kind: .notFound, detail: "ENOENT"), .io(kind: .permissionDenied, detail: "EPERM"),
         .io(kind: .shortRead, detail: "3 of 4"), .io(kind: .outOfMemory, detail: "64 MiB"), .io(kind: .other, detail: "EIO"),
         .staleHandle(detail: "another core"), .editionMismatch(detail: "other edition"),

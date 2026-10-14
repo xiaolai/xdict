@@ -72,6 +72,12 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
         let faulty = Spec { defect: Some(defect), ..spec.clone() };
         write_file(&faulty, field(mdx, "entries")?, &out.join(string(field(file, "name")?)?))?;
     }
+    // The MDX again under another title: the same entries in another file, so another edition (a repack, ADR-0002
+    // decision 1), for the reader to join to the first one's lineage.
+    for file in description.get("rebuilt").map(array).transpose()?.into_iter().flatten() {
+        let rebuilt = Spec { title: string(field(file, "title")?)?.into(), ..spec.clone() };
+        write_file(&rebuilt, field(mdx, "entries")?, &out.join(string(field(file, "name")?)?))?;
+    }
     Ok(())
 }
 

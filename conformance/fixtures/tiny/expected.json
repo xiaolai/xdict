@@ -499,6 +499,32 @@
       "error": { "type": "sourceChanged" }
     }
   },
+  "lineages": {
+    "comment": "The reader joins a rebuilt file's edition to tiny's lineage, then splits it back (ADR-0002 decision 3). Lineage ids are minted at random, so each lineage a call answers is compared as a label: \"tiny\" for the lineage step 3's import answered, \"rebuilt\" for the one this step's import answered, the id itself otherwise.",
+    "file": "tiny-rebuilt.mdx",
+    "newLineage": "1E2D3C4B-5A69-4788-97A6-B5C4D3E2F100",
+    "unknownEdition": "mdx-sha256-v1:0000000000000000000000000000000000000000000000000000000000000000",
+    "unknownLineage": "0b7e1c9a-4f2d-4c3e-9a8b-1d2e3f4a5b6c",
+    "notALineage": "not a lineage",
+    "import": {
+      "edition": "mdx-sha256-v1:1becd952115598419309d09580a47b6806a0b3ce47a20e167d6ed9f2ad43ba74",
+      "lineage": "rebuilt",
+      "info": { "title": "Tiny, rebuilt" }
+    },
+    "before": "rebuilt",
+    "join": "tiny",
+    "afterJoin": "tiny",
+    "joinAgain": "tiny",
+    "split": "rebuilt",
+    "afterSplit": "rebuilt",
+    "splitToNew": "1e2d3c4b-5a69-4788-97a6-b5c4d3e2f100",
+    "splitToNewAgain": "1e2d3c4b-5a69-4788-97a6-b5c4d3e2f100",
+    "joinUnknownEdition": { "error": { "type": "notFound", "what": "edition" } },
+    "lineageOfUnknownEdition": null,
+    "joinUnknownLineage": { "error": { "type": "notFound", "what": "lineage" } },
+    "splitNotALineage": { "error": { "type": "malformed" } },
+    "splitIntoAnother": { "error": { "type": "malformed" } }
+  },
   "lifecycle": {
     "afterClose": {
       "error": {

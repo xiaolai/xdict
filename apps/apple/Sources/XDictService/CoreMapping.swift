@@ -63,6 +63,8 @@ extension XDictContract.Missing {
         switch missing {
         case .file: self = .file
         case .entry: self = .entry
+        case .edition: self = .edition
+        case .lineage: self = .lineage
         }
     }
 }

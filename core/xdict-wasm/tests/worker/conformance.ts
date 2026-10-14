@@ -158,6 +158,28 @@ if (watched.type !== 'ready') throw new Error('not open');
 moving.ident!.inode += 1n;
 check('errors.sourceChanged', { error: errs.sourceChanged.error }, outcome(() => core.resource(watched.dict, 'tiny.css', view())));
 
+// The reader's joins and splits; each lineage answered is compared as a label, since ids are minted at random.
+const n = x.lineages;
+const rebuilt = core.import({ mdx: file(n.file), mdd: [], sidecars: [] });
+const label = (v: unknown) => (v === imported.lineage ? 'tiny' : v === rebuilt.lineage ? 'rebuilt' : v);
+check('lineages.import', n.import, { ...rebuilt, lineage: label(rebuilt.lineage) });
+const lineageOf = (e: string) => label(outcome(() => core.lineageOf(e)));
+const joined = (e: string, l: string) => label(outcome(() => core.joinLineage(e, l)));
+const splitTo = (e: string, l: string) => label(outcome(() => core.splitLineage(e, l)));
+check('lineages.before', n.before, lineageOf(rebuilt.edition));
+check('lineages.join', n.join, joined(rebuilt.edition, imported.lineage));
+check('lineages.afterJoin', n.afterJoin, lineageOf(rebuilt.edition));
+check('lineages.joinAgain', n.joinAgain, joined(rebuilt.edition, imported.lineage));
+check('lineages.split', n.split, splitTo(rebuilt.edition, rebuilt.lineage));
+check('lineages.afterSplit', n.afterSplit, lineageOf(rebuilt.edition));
+check('lineages.splitToNew', n.splitToNew, splitTo(rebuilt.edition, n.newLineage));
+check('lineages.splitToNewAgain', n.splitToNewAgain, splitTo(rebuilt.edition, n.newLineage));
+check('lineages.joinUnknownEdition', n.joinUnknownEdition, joined(n.unknownEdition, imported.lineage));
+check('lineages.lineageOfUnknownEdition', n.lineageOfUnknownEdition, lineageOf(n.unknownEdition));
+check('lineages.joinUnknownLineage', n.joinUnknownLineage, joined(rebuilt.edition, n.unknownLineage));
+check('lineages.splitNotALineage', n.splitNotALineage, splitTo(rebuilt.edition, n.notALineage));
+check('lineages.splitIntoAnother', n.splitIntoAnother, splitTo(imported.edition, rebuilt.lineage));
+
 const l = x.lifecycle;
 const page = { limit: 10, offset: 0, mode: 'reader' as const, generation: null };
 core.close(second.dict);

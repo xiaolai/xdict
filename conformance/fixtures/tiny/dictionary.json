@@ -23,5 +23,8 @@
   "defective": [
     { "name": "tiny-v4.mdx", "defect": "unknownFormatVersion" },
     { "name": "tiny-badheader.mdx", "defect": "headerChecksum" }
+  ],
+  "rebuilt": [
+    { "name": "tiny-rebuilt.mdx", "title": "Tiny, rebuilt" }
   ]
 }

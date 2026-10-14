@@ -143,6 +143,101 @@ fn an_empty_cache_with_the_registry_keeps_the_lineage() {
     ready(restored.open(alone(&file)).unwrap());
 }
 
+/// ADR-0002 decision 3: the reader joins a rebuilt file's edition to the lineage of the file it replaces. The join
+/// outlives the core, a re-import answers it, and a split to the lineage the edition had undoes it exactly.
+#[test]
+fn a_join_persists_and_a_split_returns_the_edition_to_its_own_lineage() {
+    let dir = Scratch::new("join");
+    let (old, new) = (dir.join("old.mdx"), dir.join("new.mdx"));
+    std::fs::write(&old, mdx("the first build")).unwrap();
+    std::fs::write(&new, mdx("the second build")).unwrap();
+    let running = core(&dir, "cache");
+    let first = running.import(alone(&old), &NoProgress).unwrap();
+    let second = running.import(alone(&new), &NoProgress).unwrap();
+    assert_ne!(first.lineage, second.lineage, "a rebuilt file is another dictionary until the reader says so");
+    assert_eq!(running.join_lineage(second.edition.clone(), first.lineage.clone()).unwrap(), first.lineage);
+    drop(running);
+
+    let restarted = core(&dir, "cache");
+    assert_eq!(restarted.lineage_of(second.edition.clone()).unwrap().as_ref(), Some(&first.lineage));
+    assert_eq!(restarted.import(alone(&new), &NoProgress).unwrap().lineage, first.lineage);
+    let split = restarted.split_lineage(second.edition.clone(), second.lineage.clone()).unwrap();
+    assert_eq!(split, second.lineage);
+    drop(restarted);
+
+    let again = core(&dir, "cache");
+    assert_eq!(again.lineage_of(second.edition).unwrap(), Some(second.lineage));
+    assert_eq!(again.lineage_of(first.edition).unwrap(), Some(first.lineage), "the lineage joined never changed");
+}
+
+/// What a join or a split cannot name is refused with the reason, and changes nothing.
+#[test]
+fn joins_and_splits_refuse_what_they_cannot_name() {
+    let dir = Scratch::new("refused");
+    let file = dir.join("x.mdx");
+    std::fs::write(&file, mdx("kept")).unwrap();
+    let core = core(&dir, "cache");
+    let Imported { edition, lineage, .. } = core.import(alone(&file), &NoProgress).unwrap();
+    let unknown = format!("{EDITION_SCHEME}{}", "0".repeat(64));
+    let fresh = "0b7e1c9a-4f2d-4c3e-9a8b-1d2e3f4a5b6c";
+    let missing = |r: Result<String, CoreError>| match r {
+        Err(CoreError::NotFound { what, .. }) => what,
+        other => panic!("not refused as missing: {other:?}"),
+    };
+    assert_eq!(missing(core.join_lineage(unknown.clone(), lineage.clone())), Missing::Edition);
+    assert_eq!(missing(core.split_lineage(unknown.clone(), fresh.into())), Missing::Edition);
+    assert_eq!(core.lineage_of(unknown).unwrap(), None);
+    assert_eq!(missing(core.join_lineage(edition.clone(), fresh.into())), Missing::Lineage);
+    let not_lineages = [
+        "",
+        "not a lineage",
+        "00000000-0000-0000-0000-000000000000",
+        "0b7e1c9a4f2d4c3e9a8b1d2e3f4a5b6c",
+        "{0b7e1c9a-4f2d-4c3e-9a8b-1d2e3f4a5b6c}",
+        "0b7e1c9a-4f2d-4c3e-9a8b-1d2e3f4a5b6g",
+        "0b7e1c9a-4f2d-4c3e-9a8b-1d2e3f4a5b6c0",
+    ];
+    for bad in not_lineages {
+        let joined = core.join_lineage(edition.clone(), bad.into());
+        assert!(matches!(joined, Err(CoreError::Malformed { .. })), "{bad:?}: {joined:?}");
+        let split = core.split_lineage(edition.clone(), bad.into());
+        assert!(matches!(split, Err(CoreError::Malformed { .. })), "{bad:?}: {split:?}");
+    }
+    assert_eq!(core.lineage_of(edition).unwrap(), Some(lineage));
+}
+
+/// A split to another dictionary's lineage would be a join no one asked for: a request that does not fit the call,
+/// refused as `Malformed`, and nothing changes.
+#[test]
+fn a_split_into_another_dictionary_is_refused() {
+    let dir = Scratch::new("foreign");
+    let (a, b) = (dir.join("a.mdx"), dir.join("b.mdx"));
+    std::fs::write(&a, mdx("one dictionary")).unwrap();
+    std::fs::write(&b, mdx("another dictionary")).unwrap();
+    let core = core(&dir, "cache");
+    let first = core.import(alone(&a), &NoProgress).unwrap();
+    let second = core.import(alone(&b), &NoProgress).unwrap();
+    let split = core.split_lineage(second.edition.clone(), first.lineage);
+    assert!(matches!(split, Err(CoreError::Malformed { .. })), "{split:?}");
+    assert_eq!(core.lineage_of(second.edition).unwrap(), Some(second.lineage));
+}
+
+/// The shell mints a split's lineage, and Swift's `UUID` writes capitals: the core keeps a lineage in lowercase, as
+/// it mints its own, so a retry in either case is the same split, and a join names a lineage in either case.
+#[test]
+fn a_lineage_is_one_lineage_in_either_case() {
+    let dir = Scratch::new("case");
+    let file = dir.join("x.mdx");
+    std::fs::write(&file, mdx("kept")).unwrap();
+    let core = core(&dir, "cache");
+    let Imported { edition, lineage, .. } = core.import(alone(&file), &NoProgress).unwrap();
+    let minted = "1e2d3c4b-5a69-4788-97a6-b5c4d3e2f100";
+    assert_eq!(core.split_lineage(edition.clone(), minted.to_uppercase()).unwrap(), minted);
+    assert_eq!(core.split_lineage(edition.clone(), minted.into()).unwrap(), minted);
+    assert_eq!(core.lineage_of(edition.clone()).unwrap().as_deref(), Some(minted));
+    assert_eq!(core.join_lineage(edition, lineage.to_uppercase()).unwrap(), lineage);
+}
+
 fn volume(dir: &Scratch, name: &str, css: &str, extra: &str) -> PathBuf {
     let path = dir.join(name);
     let entries = [W::bytes("\\a.css", css.as_bytes()), W::bytes(&format!("\\{extra}"), b"only here")];

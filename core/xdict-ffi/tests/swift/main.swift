@@ -123,6 +123,8 @@ func j(_ m: Missing) -> String {
     switch m {
     case .file: return "file"
     case .entry: return "entry"
+    case .edition: return "edition"
+    case .lineage: return "lineage"
     }
 }
 
@@ -333,6 +335,38 @@ _ = try core.import(package: watchedPackage, progress: nil)
 guard case let .ready(watched, _, _) = try core.open(package: watchedPackage) else { fatalError("not open") }
 moving.ident.inode += 1
 check("errors.sourceChanged", ["error": (errs["sourceChanged"] as! [String: Any])["error"]!], outcome { j(try core.resource(dict: watched, path: "tiny.css", view: view())) })
+
+// The reader's joins and splits; each lineage answered is compared as a label, since ids are minted at random.
+let n = x["lineages"] as! [String: Any]
+let rebuilt = try core.import(package: Package(mdx: at(n["file"] as! String), mdd: [], sidecars: []), progress: nil)
+func label(_ v: Any) -> Any {
+    guard let id = v as? String else { return v }
+    return id == imported.lineage ? "tiny" : id == rebuilt.lineage ? "rebuilt" : id
+}
+var rebuiltImport = j(rebuilt)
+rebuiltImport["lineage"] = label(rebuilt.lineage)
+check("lineages.import", n["import"], rebuiltImport)
+func lineageOf(_ e: String) -> Any {
+    label(outcome { () throws -> Any in
+        if let id = try core.lineageOf(edition: e) { return id }
+        return NSNull()
+    })
+}
+func join(_ e: String, _ l: String) -> Any { label(outcome { try core.joinLineage(edition: e, lineage: l) }) }
+func split(_ e: String, _ l: String) -> Any { label(outcome { try core.splitLineage(edition: e, newLineage: l) }) }
+check("lineages.before", n["before"], lineageOf(rebuilt.edition))
+check("lineages.join", n["join"], join(rebuilt.edition, imported.lineage))
+check("lineages.afterJoin", n["afterJoin"], lineageOf(rebuilt.edition))
+check("lineages.joinAgain", n["joinAgain"], join(rebuilt.edition, imported.lineage))
+check("lineages.split", n["split"], split(rebuilt.edition, rebuilt.lineage))
+check("lineages.afterSplit", n["afterSplit"], lineageOf(rebuilt.edition))
+check("lineages.splitToNew", n["splitToNew"], split(rebuilt.edition, n["newLineage"] as! String))
+check("lineages.splitToNewAgain", n["splitToNewAgain"], split(rebuilt.edition, n["newLineage"] as! String))
+check("lineages.joinUnknownEdition", n["joinUnknownEdition"], join(n["unknownEdition"] as! String, imported.lineage))
+check("lineages.lineageOfUnknownEdition", n["lineageOfUnknownEdition"], lineageOf(n["unknownEdition"] as! String))
+check("lineages.joinUnknownLineage", n["joinUnknownLineage"], join(rebuilt.edition, n["unknownLineage"] as! String))
+check("lineages.splitNotALineage", n["splitNotALineage"], split(rebuilt.edition, n["notALineage"] as! String))
+check("lineages.splitIntoAnother", n["splitIntoAnother"], split(imported.edition, rebuilt.lineage))
 
 let l = x["lifecycle"] as! [String: Any]
 let page = LookupOptions(limit: 10, offset: 0, mode: .reader, generation: nil)

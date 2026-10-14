@@ -54,9 +54,10 @@ struct EnvelopeTests {
     /// **A request of another contract version is answered as a mismatch, never decoded further**: its operation may
     /// be one this service has never heard of, so only `contract` and `id` are read.
     @Test func aRequestOfAnotherVersionIsAMismatchAnswer() {
-        let future = Data(#"{"contract":2,"id":31,"tokens":[],"operation":{"frobnicate":{"how":"hard"}}}"#.utf8)
+        let next = Contract.version + 1
+        let future = Data(#"{"contract":\#(next),"id":31,"tokens":[],"operation":{"frobnicate":{"how":"hard"}}}"#.utf8)
         #expect(Request.receive(future, handles: [], filesOf: [:]) == .answered(
-            Response(id: 31, outcome: .failure(.contractMismatch(service: Contract.version, client: 2)))))
+            Response(id: 31, outcome: .failure(.contractMismatch(service: Contract.version, client: next)))))
     }
 
     /// The same request at this version is not refused for its version: the check reads the number, not the shape.

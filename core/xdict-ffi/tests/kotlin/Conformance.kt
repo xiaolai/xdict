@@ -247,6 +247,32 @@ fun main(args: Array<String>) {
     moving.ident = ident.copy(inode = ident.inode + 1u)
     check("errors.sourceChanged", mapOf("error" to obj(errs["sourceChanged"])["error"]), outcome { j(core.resource(watched, "tiny.css", view())) })
 
+    // The reader's joins and splits; each lineage answered is compared as a label, since ids are minted at random.
+    val n = obj(x["lineages"])
+    val rebuilt = core.`import`(Package(at(n["file"] as String), listOf(), listOf()), null)
+    fun label(v: Any?): Any? = when (v) {
+        imported.lineage -> "tiny"
+        rebuilt.lineage -> "rebuilt"
+        else -> v
+    }
+    check("lineages.import", n["import"], j(rebuilt) + ("lineage" to label(rebuilt.lineage)))
+    fun lineageOf(e: String) = label(outcome { core.lineageOf(e) })
+    fun join(e: String, l: String) = label(outcome { core.joinLineage(e, l) })
+    fun split(e: String, l: String) = label(outcome { core.splitLineage(e, l) })
+    check("lineages.before", n["before"], lineageOf(rebuilt.edition))
+    check("lineages.join", n["join"], join(rebuilt.edition, imported.lineage))
+    check("lineages.afterJoin", n["afterJoin"], lineageOf(rebuilt.edition))
+    check("lineages.joinAgain", n["joinAgain"], join(rebuilt.edition, imported.lineage))
+    check("lineages.split", n["split"], split(rebuilt.edition, rebuilt.lineage))
+    check("lineages.afterSplit", n["afterSplit"], lineageOf(rebuilt.edition))
+    check("lineages.splitToNew", n["splitToNew"], split(rebuilt.edition, n["newLineage"] as String))
+    check("lineages.splitToNewAgain", n["splitToNewAgain"], split(rebuilt.edition, n["newLineage"] as String))
+    check("lineages.joinUnknownEdition", n["joinUnknownEdition"], join(n["unknownEdition"] as String, imported.lineage))
+    check("lineages.lineageOfUnknownEdition", n["lineageOfUnknownEdition"], lineageOf(n["unknownEdition"] as String))
+    check("lineages.joinUnknownLineage", n["joinUnknownLineage"], join(rebuilt.edition, n["unknownLineage"] as String))
+    check("lineages.splitNotALineage", n["splitNotALineage"], split(rebuilt.edition, n["notALineage"] as String))
+    check("lineages.splitIntoAnother", n["splitIntoAnother"], split(imported.edition, rebuilt.lineage))
+
     val l = obj(x["lifecycle"])
     val page = LookupOptions(10u, 0u, MatchMode.READER, null)
     core.close(secondDict)

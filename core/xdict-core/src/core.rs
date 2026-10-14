@@ -19,7 +19,7 @@ use crate::source::{Changed, Opened as OpenedSource, Verified, buffer, read_all}
 use crate::store::Directory;
 use crate::store::{IndexStorage, IndexStore, Memory, Shell};
 use crate::types::*;
-use xdict_identity::{CHUNK, FileRegistry, LocationRecord, MemoryRegistry, Registry, VolumeRecord};
+use xdict_identity::{CHUNK, FileRegistry, LocationRecord, MemoryRegistry, Refused, Registry, Target, VolumeRecord};
 use xdict_mdx::index::Stale;
 
 /// The protocol between shell and core (ADR-0007 decision 11). Raised by any change a shell must be rebuilt for.
@@ -550,6 +550,53 @@ impl Core {
         Ok(None)
     }
 
+    /// Joins an edition to a lineage the registry holds, as the reader asked (ADR-0002 decision 3, as amended
+    /// 2026-10-14): the edition becomes part of that dictionary. Recorded as the reader's act, never a rewrite, so a
+    /// split undoes it. Answers the lineage the edition now has, in lowercase; joining it again changes nothing.
+    /// Refused: a lineage that is not a UUID (`Malformed`), an edition no import registered (`NotFound { Edition }`),
+    /// and a lineage no edition was ever in (`NotFound { Lineage }`): a join never makes a dictionary.
+    pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {
+        guard(|| self.associate(&edition, &lineage, Target::Existing))
+    }
+
+    /// Moves an edition out of its lineage, to `new_lineage`: a UUID the shell has just minted, so that a retried split
+    /// is the same split, or a lineage the edition had before, the one a join took it from above all, which undoes
+    /// that join exactly. Answers the lineage the edition now has, in lowercase; splitting it again changes nothing.
+    /// Refused: a lineage that is not a UUID, or that is another dictionary's and never was this edition's, which
+    /// would be a join no one asked for (`Malformed`, both); an edition no import registered (`NotFound { Edition }`).
+    pub fn split_lineage(&self, edition: String, new_lineage: String) -> Result<String, CoreError> {
+        guard(|| self.associate(&edition, &new_lineage, Target::NewOrOwn))
+    }
+
+    /// The edition's lineage as the registry holds it now; `None` for an edition no import registered.
+    pub fn lineage_of(&self, edition: String) -> Result<Option<String>, CoreError> {
+        guard(|| self.registry.lineage(&edition).map_err(registry_error))
+    }
+
+    fn associate(&self, edition: &str, lineage: &str, target: Target) -> Result<String, CoreError> {
+        let Some(lineage) = lineage_id(lineage) else {
+            // The shell's text, bounded: a detail is for a log line.
+            let shown: String = lineage.chars().take(64).collect();
+            return Err(CoreError::Malformed { detail: format!("{shown:?} is not a lineage, which is a UUID") });
+        };
+        match self.registry.associate(edition, &lineage, target).map_err(registry_error)? {
+            Ok(lineage) => Ok(lineage),
+            Err(Refused::Edition) => {
+                Err(CoreError::NotFound { what: Missing::Edition, detail: format!("{edition} was never imported") })
+            }
+            Err(Refused::Lineage) => Err(CoreError::NotFound {
+                what: Missing::Lineage,
+                detail: format!("no edition was ever in the lineage {lineage}"),
+            }),
+            Err(Refused::Foreign) => Err(CoreError::Malformed {
+                detail: format!(
+                    "{lineage} is another dictionary's lineage, which {edition} never had: a split goes to a new \
+                     lineage or back to one the edition had, and a join is asked for as one"
+                ),
+            }),
+        }
+    }
+
     /// Panics on purpose, so that each binding can prove a panic reaches it as `Internal`.
     pub fn self_test_panic(&self) -> Result<(), CoreError> {
         guard(|| -> Result<(), CoreError> {
@@ -636,6 +683,17 @@ fn index_name(identity: &[u8; 32], kind: Kind) -> String {
 
 fn registry_error(error: xdict_identity::RegistryError) -> CoreError {
     CoreError::Io { kind: crate::IoKind::Other, detail: format!("the registry: {error}") }
+}
+
+/// A lineage in the one form the registry keeps: a UUID, 8-4-4-4-12 hexadecimal digits, in lowercase as the core mints
+/// its own (RFC 9562 reads either case: Swift's `UUID` writes capitals). `None` for anything else, the nil UUID
+/// included, which no shell mints on purpose.
+fn lineage_id(text: &str) -> Option<String> {
+    let groups: Vec<&str> = text.split('-').collect();
+    let shaped = groups.len() == 5
+        && groups.iter().zip([8, 4, 4, 4, 12]).all(|(g, n)| g.len() == n && g.bytes().all(|b| b.is_ascii_hexdigit()));
+    let id = text.to_ascii_lowercase();
+    (shaped && id != "00000000-0000-0000-0000-000000000000").then_some(id)
 }
 
 /// Bytes from their hex, as the registry stores them.

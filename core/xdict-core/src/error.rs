@@ -11,7 +11,8 @@ pub enum CoreError {
         feature: Feature,
         detail: String,
     },
-    /// The file is damaged.
+    /// The file is damaged, or the shell's request does not fit its call: on the Web, a request that does not parse;
+    /// everywhere, a lineage that is not a UUID, or a split into another dictionary's lineage. The call says which.
     Malformed {
         detail: String,
     },
@@ -95,6 +96,10 @@ pub enum Missing {
     File,
     /// An entry reference names no record.
     Entry,
+    /// An edition no import has registered.
+    Edition,
+    /// A lineage no edition was ever minted in, joined to or split to.
+    Lineage,
 }
 
 /// The kinds of I/O failure a shell may treat differently.
