@@ -181,6 +181,11 @@ pub fn decode(text: &str) -> String {
 }
 
 /// Every byte outside RFC 3986's unreserved set, percent-encoded: `/` too, so the result is one segment.
+/// The length of what [`encode`] writes for `text`, counted without writing it.
+pub(crate) fn encoded_len(text: &str) -> usize {
+    text.bytes().map(|b| if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') { 1 } else { 3 }).sum()
+}
+
 pub fn encode(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     for &b in text.as_bytes() {
@@ -224,6 +229,11 @@ impl Path {
     /// The path as it travels in a URL: each segment percent-encoded.
     pub fn travel(&self) -> String {
         self.resolved.split('/').map(encode).collect::<Vec<_>>().join("/")
+    }
+
+    /// The length of [`Self::travel`], counted without writing it.
+    pub(crate) fn travel_len(&self) -> usize {
+        self.resolved.split('/').map(|segment| encoded_len(segment) + 1).sum::<usize>().saturating_sub(1)
     }
 
     /// The path a resource is looked up by.
