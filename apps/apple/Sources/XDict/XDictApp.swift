@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictBase
+import XDictClient
 import XDictEntryView
 import XDictUI
 import os
@@ -8,6 +9,9 @@ import os
 /// says what came back — and whether entries can be shown confined on this Mac (ADR-0009 decision 7: the two WebKit
 /// switches read back at launch; with either missing or still on, no entry will render, and the window says why).
 struct XDictApp: App {
+    /// The app's one client of its dictionary service: one connection at a time, made on demand (`ServiceClient`).
+    static let service = ServiceClient()
+
     @State private var status = LaunchStatus.asking
     @State private var entries: LocalizedStringResource?
 
@@ -27,7 +31,7 @@ struct XDictApp: App {
 
     static func handshake() async -> LaunchStatus {
         let log = Logger(subsystem: XDictIdentity.app, category: "launch")
-        switch await HandshakeClient.ask() {
+        switch await service.handshake() {
         case .success(let versions):
             log.info("the dictionary service answered: core \(versions.core, privacy: .public), protocol \(versions.protocolVersion)")
             return .answered(versions)

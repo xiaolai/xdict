@@ -4,7 +4,14 @@
 // A development instrument is chosen by its flag before any window exists, and exits when it has answered.
 import SwiftUI
 
-if CommandLine.arguments.dropFirst().contains(HandshakeReport.flag) {
+let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.contains(HandshakeReport.flag) {
     HandshakeReport.run()
+}
+if arguments.contains(ServiceReport.flag) {
+    ServiceReport.run(arguments)
+}
+if arguments.contains(ConnectReport.flag) {
+    ConnectReport.run()
 }
 XDictApp.main()

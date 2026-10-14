@@ -9,11 +9,13 @@ on:
     paths:
       - apps/apple/**
       - core/**
+      - conformance/**
       - .github/workflows/macos.yml
   pull_request:
     paths:
       - apps/apple/**
       - core/**
+      - conformance/**
       - .github/workflows/macos.yml
 
 permissions:
@@ -49,6 +51,9 @@ jobs:
         run: Tools/build-core.sh
       - name: the app and the dictionary service, unsigned
         run: swift build -c release --product XDict && swift build -c release --product XDictService
+      # Written by the core's own MDX writer (conformance/ and the slow fixtures), read by the service's tests.
+      - name: the service's test fixtures
+        run: Tools/build-fixtures.sh "$PWD/.build/fixtures"
       - name: swift test, then every compiled source's diagnostics
         run: |
           status=0

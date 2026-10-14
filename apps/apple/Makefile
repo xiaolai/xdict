@@ -9,9 +9,10 @@
 #   make lint         SwiftLint's correctness rules, --strict, at the pinned version
 #   make strings      re-extract every localizable string into Strings/Localizable.xcstrings
 #   make e2e          make app, then the end-to-end stages on the E2E Mac (E2E_HOST_MACOS in the repository's local.mk);
-#                     `launch` asks the bundle's service for the handshake there; `hostile`, `reader` and `entries`
-#                     run the entry view (Tools/build-lab.sh's kit): the hostile-input suite, a person's hands on it,
-#                     and the owner's dictionaries (E2E_CORPUS in local.mk). STAGES="launch" runs only those
+#                     `launch` asks the bundle's service for the handshake there; `service` runs the contract's
+#                     instruments against the signed service there; `hostile`, `reader` and `entries` run the entry
+#                     view (Tools/build-lab.sh's kit): the hostile-input suite, a person's hands on it, and the owner's
+#                     dictionaries (E2E_CORPUS in local.mk). STAGES="launch" runs only those
 #   make e2e-status   what each stage last did, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
@@ -61,7 +62,10 @@ core:
 # every source's diagnostics file of the build it made (Tools/compiler-warnings.py). Both always run; either failing
 # fails the target.
 DIAGNOSTICS := .build/out/Intermediates.noindex/XDict.build/Debug
+# The service's tests read `conformance/`'s fixtures and the slow ones (Tools/build-fixtures.sh), written by the core's
+# own MDX writer: no dictionary content enters the repository.
 test-swift: core
+	Tools/build-fixtures.sh $(APPLE)/.build/fixtures
 	swift test; status=$$?; python3 Tools/compiler-warnings.py $(DIAGNOSTICS) || status=1; exit $$status
 
 # Correctness rules only (.swiftlint.yml says which and why). `--strict` because a warning nobody fails on is a warning
