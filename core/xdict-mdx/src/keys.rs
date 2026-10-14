@@ -1,8 +1,29 @@
 //! Collecting a file's keys from its key blocks, the same for every version.
 //!
-//! **Nothing is reserved from a count the file declares**, and every key is checked against its block's
-//! declared count and the file's before it is stored. A small file that lies about its counts therefore
-//! costs no more memory than the keys it really holds.
+//! **Nothing is reserved from a count the file declares** but a table its index has already been read to hold
+//! ([`block_table`]), and every key is checked against its block's declared count and the file's before it is
+//! stored. A small file that lies about its counts therefore costs no more memory than the keys it really holds.
+//!
+//! ## What reading the keys holds
+//!
+//! Against `limits::INDEX_BYTES`, each counted before it is made: the record-block table
+//! (`block::weigh`), the key-block table ([`block_table`]), the keys ([`cost_of`], which is also what the
+//! build is expected to take, then held to by its own ledger, `index::build`), and each key's decoding, weighed
+//! before it decodes, into exactly the room weighed ([`Codec::decoded_capacity`]).
+//!
+//! Beside it, bounded by named limits and let go before the index is built:
+//!
+//! - **the blocks being read**: at most three times `limits::BLOCK_BYTES` at once. A key index or key block
+//!   is held stored and decompressed (two); a 3.0 index section, joined and reserved whole, beside the one
+//!   unit being decoded and what it decodes to (three, since all a section's units decode to at most one
+//!   block's size together). A 3.0 unit is decrypted where it lies, and zlib output is never grown past its
+//!   declared size, so neither holds a copy more. The decompressor's own state is fixed, about 80 KB;
+//! - **the header**: its bytes, at most `limits::HEADER_BYTES`, a copy as UTF-16 units, its text (at most half
+//!   as long again), and its attributes and the fields taken from them (each no longer than the text): under
+//!   six times `limits::HEADER_BYTES` while it is parsed, half that kept, and at most
+//!   `limits::HEADER_ATTRIBUTES` attribute entries, 48 bytes each in a list that may have doubled. A 3.0
+//!   file's four section descriptors are each at most `limits::HEADER_BYTES`, stored and decoded, their
+//!   attributes kept, under the same limit.
 
 use crate::bytes::Cursor;
 use crate::text::Codec;
@@ -16,6 +37,32 @@ pub(crate) struct KeyBlock {
     pub(crate) stored: u64,
     /// Bytes it decompresses to.
     pub(crate) decompressed: u64,
+}
+
+/// What one key block costs while the keys are read: its entry, in a table reserved exactly.
+pub(crate) const KEY_BLOCK_COST: u64 = std::mem::size_of::<KeyBlock>() as u64;
+
+/// An empty table for the `count` key blocks a key index of `index_len` bytes declares, each block taking at
+/// least `least` bytes of it, and what the table costs. `Malformed` when the index is too short to hold them and
+/// `TooLarge` when the table would pass `budget`, both before anything is reserved; then reserved exactly.
+pub(crate) fn block_table(
+    count: u64,
+    index_len: usize,
+    least: u64,
+    budget: u64,
+) -> Result<(Vec<KeyBlock>, u64), Error> {
+    if count.saturating_mul(least) > index_len as u64 {
+        return Err(Error::Malformed(format!("a key index of {index_len} bytes cannot hold {count} blocks")));
+    }
+    let cost = count.saturating_mul(KEY_BLOCK_COST);
+    if cost > budget {
+        return Err(Error::TooLarge(format!("{count} key blocks would take the key index past its memory")));
+    }
+    let mut table = Vec::new();
+    table
+        .try_reserve_exact(usize::try_from(count).map_err(|_| crate::malformed("key index"))?)
+        .map_err(crate::out_of_memory)?;
+    Ok((table, cost))
 }
 
 /// Checks the blocks' counts and sizes add up to what the file declares, without overflow, before any
@@ -101,7 +148,13 @@ impl Keys {
                 return Err(Error::Malformed(format!("a key block holds more than the {entries} keys it declares")));
             }
             let offset = c.number(self.wide)?;
-            let text = self.codec.decode(c.until_null(self.codec.unit())?);
+            let raw = c.until_null(self.codec.unit())?;
+            // What decoding holds, weighed before it does, beside what the keys already cost.
+            let capacity = self.codec.decoded_capacity(raw)?;
+            if self.spent().saturating_add(capacity as u64) > self.budget {
+                return Err(Error::TooLarge(format!("the key index would take more than {} bytes", self.budget)));
+            }
+            let text = self.codec.decode_exact(raw, capacity)?;
             self.cost = self.cost.saturating_add(index_cost(&text));
             self.longest = self.longest.max(text.len() as u64);
             if self.cost.saturating_add(scratch_cost(self.longest)) > self.budget {
@@ -148,17 +201,65 @@ mod tests {
     }
 
     /// Keys a file really holds are bounded by memory, not only by their count, and the budget holds the
-    /// scratch tier 2 folds the longest key into as well as the keys.
+    /// scratch tier 2 folds the longest key into as well as the keys, and room to decode each.
     #[test]
     fn the_index_stops_at_its_memory_budget() {
         let data = block(&["alpha", "beta", "gamma"]);
         let keys_alone = 3 * index_cost("gamma");
-        let mut roomy = Keys::new(3, Codec::Utf8, true, keys_alone + scratch_cost(5));
+        // Two keys and the scratch held as the third, five bytes, is decoded.
+        let mut roomy = Keys::new(3, Codec::Utf8, true, keys_alone + scratch_cost(5) + 5);
         assert!(roomy.add_block(&data, 3).is_ok());
         let mut no_scratch = Keys::new(3, Codec::Utf8, true, keys_alone);
         assert!(matches!(no_scratch.add_block(&data, 3), Err(Error::TooLarge(_))));
         let mut tight = Keys::new(3, Codec::Utf8, true, 2 * index_cost("gamma"));
         assert!(matches!(tight.add_block(&data, 3), Err(Error::TooLarge(_))));
+    }
+
+    /// A key-block table is weighed and checked against the index that declares it before it is reserved, then
+    /// reserved exactly: a file declaring millions of blocks in a short index costs nothing.
+    #[test]
+    fn a_key_block_table_is_weighed_before_it_is_reserved() {
+        let (table, cost) = block_table(1000, 14_000, 14, 1000 * KEY_BLOCK_COST).unwrap();
+        assert_eq!((table.capacity(), cost), (1000, 1000 * KEY_BLOCK_COST));
+        let mut refused = None;
+        let held = allocation_counter::measure(|| refused = Some(block_table(1001, 14_000, 14, u64::MAX)));
+        assert!(matches!(refused, Some(Err(Error::Malformed(_)))), "an index too short for its blocks");
+        assert!(held.bytes_max < 1000, "{} bytes", held.bytes_max);
+        let held =
+            allocation_counter::measure(|| refused = Some(block_table(1000, 14_000, 14, 1000 * KEY_BLOCK_COST - 1)));
+        assert!(matches!(refused, Some(Err(Error::TooLarge(_)))), "a table past the budget");
+        assert!(held.bytes_max < 1000, "{} bytes", held.bytes_max);
+    }
+
+    /// A key is weighed before it is decoded: one past the budget is refused without the text decoding would
+    /// make, which may be several times the key (`Codec::decoded_capacity`).
+    #[test]
+    fn a_key_is_weighed_before_it_is_decoded() {
+        let key = vec![0xFFu8; 100_000];
+        let data = [0u64.to_be_bytes().as_slice(), &key, &[0]].concat();
+        let capacity = Codec::Utf8.decoded_capacity(&key).unwrap() as u64;
+        let mut keys = Keys::new(1, Codec::Utf8, true, capacity - 1);
+        let mut refused = None;
+        let held = allocation_counter::measure(|| refused = Some(keys.add_block(&data, 1)));
+        assert!(matches!(refused, Some(Err(Error::TooLarge(_)))), "{refused:?}");
+        assert!(held.bytes_max < 1000, "{} bytes were held to refuse it", held.bytes_max);
+    }
+
+    /// A key that fits the room weighed for its decoding holds no more than that room while it decodes, in every
+    /// codec: Codex's case, 3,000 bad Big5 bytes, which a string grown by doubling decoded in 24,576 bytes
+    /// where 21,083 had been weighed.
+    #[test]
+    fn a_key_decodes_within_what_was_weighed() {
+        let key = vec![0xFFu8; 3000];
+        let data = [0u64.to_be_bytes().as_slice(), &key, &[0]].concat();
+        let big5 = Codec::Legacy(encoding_rs::BIG5);
+        let capacity = big5.decoded_capacity(&key).unwrap() as u64;
+        let mut keys = Keys::new(1, big5, true, capacity);
+        let mut result = None;
+        let held = allocation_counter::measure(|| result = Some(keys.add_block(&data, 1)));
+        assert!(matches!(result, Some(Err(Error::TooLarge(_)))), "the key itself does not fit: {result:?}");
+        // The decoded text, and the sentence that refuses the key once it is costed.
+        assert!(held.bytes_max <= capacity + 128, "held {}, weighed {capacity}", held.bytes_max);
     }
 
     /// Case folding can triple a key's UTF-8 length (ΐ, 2 bytes, folds to 6), and the folded copy is kept

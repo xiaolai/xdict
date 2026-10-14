@@ -7,7 +7,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use xdict_mdx::index::{Derive, KeyList, Region, Stale};
+use xdict_mdx::index::{Derive, Growth, KeyList, Region, Stale};
 use xdict_mdx::{Error, File, Kind};
 use xdict_mdx_writer::{self as writer, Entry, Spec, Version};
 use xxhash_rust::xxh3::xxh3_64;
@@ -37,8 +37,9 @@ impl Derive for Marks {
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
         if text.contains('é') { Cow::Owned(text.replace('é', "e")) } else { Cow::Borrowed(text) }
     }
-    fn growth(&self) -> u64 {
-        1
+    fn growth(&self) -> Growth {
+        // `replace` grows its string by doubling, from 8 bytes.
+        Growth { per_byte: 2, fixed: 8 }
     }
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
         (0..keys.len()).map(|i| Ok(keys.key(i)?.starts_with('@'))).collect()

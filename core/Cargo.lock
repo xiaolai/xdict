@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "allocation-counter"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "beb9e990c0a33699f1984d85a6abead615ccc72dd8130bf3e15dcabe2ca149c9"
+
+[[package]]
 name = "anstyle"
 version = "1.0.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -997,6 +1003,7 @@ dependencies = [
 name = "xdict-lookup"
 version = "0.0.1"
 dependencies = [
+ "allocation-counter",
  "unicode-normalization",
  "xdict-mdx",
  "xdict-mdx-writer",
@@ -1006,6 +1013,7 @@ dependencies = [
 name = "xdict-mdx"
 version = "0.0.1"
 dependencies = [
+ "allocation-counter",
  "encoding_rs",
  "flate2",
  "ripemd",

@@ -21,8 +21,10 @@ pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result
     let codec = codec(header)?;
     let wide = header.version == FormatVersion::V2_0;
 
-    let (key_count, key_blocks) = keyword_section(source, &mut at, header, codec, wide)?;
-    let mut keys = Keys::new(key_count, codec, wide, limits::INDEX_BYTES);
+    let (key_count, key_blocks, table_cost) = keyword_section(source, &mut at, header, codec, wide)?;
+    // The key-block table is held while the keys are read, and the record-block table after them.
+    let budget = limits::INDEX_BYTES.saturating_sub(table_cost);
+    let mut keys = Keys::new(key_count, codec, wide, budget);
     for b in &key_blocks {
         let stored = length(b.stored, limits::BLOCK_BYTES, "key block")?;
         let decompressed = length(b.decompressed, limits::BLOCK_BYTES, "key block")?;
@@ -30,20 +32,21 @@ pub(crate) fn parts(source: &dyn Source, mut at: u64, header: &Header) -> Result
         keys.add_block(&block::decode(&raw, decompressed, "key block")?, b.entries)?;
     }
     // The record-block table may take what the keys left of the index's budget, weighed before it is read.
-    let left = limits::INDEX_BYTES.saturating_sub(keys.spent());
+    let left = budget.saturating_sub(keys.spent());
     let keys = keys.finish()?;
     let blocks = record_section(source, &mut at, key_count, wide, left)?;
     Ok(Parts { keys, blocks })
 }
 
-/// The keyword section's preamble and key index: the declared key count, and what each key block holds.
+/// The keyword section's preamble and key index: the declared key count, what each key block holds, and what
+/// that table costs (`keys::block_table`).
 fn keyword_section(
     source: &dyn Source,
     at: &mut u64,
     header: &Header,
     codec: Codec,
     wide: bool,
-) -> Result<(u64, Vec<KeyBlock>), Error> {
+) -> Result<(u64, Vec<KeyBlock>, u64), Error> {
     let preamble = read(source, at, if wide { 40 } else { 16 }, "keyword section")?;
     if wide {
         let checksum = u32::from_be_bytes(read_array(source, at, "keyword section checksum")?);
@@ -76,7 +79,10 @@ fn keyword_section(
     };
 
     let unit = codec.unit() as u64;
-    let mut blocks = Vec::new();
+    // The least a block's entry takes: its key count, first and last keys empty (a length and, from 2.0, a
+    // null), and its two sizes.
+    let least = if wide { 8 + 2 * (2 + unit) + 16 } else { 4 + 2 + 8 };
+    let (mut blocks, cost) = keys::block_table(block_count, index.len(), least, limits::INDEX_BYTES)?;
     let mut ix = Cursor::new(&index, "key index");
     for _ in 0..block_count {
         let entries = ix.number(wide)?;
@@ -96,7 +102,7 @@ fn keyword_section(
         return Err(Error::Malformed("the key index has bytes past its last block".into()));
     }
     keys::check_blocks(&blocks, key_count, key_blocks_len)?;
-    Ok((key_count, blocks))
+    Ok((key_count, blocks, cost))
 }
 
 /// The record section: its preamble, the block index, and where each record block lies.

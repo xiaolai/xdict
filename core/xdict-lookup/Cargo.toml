@@ -12,6 +12,7 @@ unicode-normalization.workspace = true
 xdict-mdx = { path = "../xdict-mdx" }
 
 [dev-dependencies]
+allocation-counter.workspace = true
 xdict-mdx-writer = { path = "../xdict-mdx-writer" }
 
 [lints]
