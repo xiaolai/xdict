@@ -394,9 +394,8 @@ impl Folded {
         from.zip(to).and_then(|(f, t)| self.text.get(f as usize..t as usize)).unwrap_or(&[])
     }
 
-    /// The tier-1 order: sorted stably, so keys that fold together stay in file order. The sort's own scratch,
-    /// which the standard library allocates and cannot be asked to do fallibly, is at most the order's size, and
-    /// is taken from the ledger for as long as it sorts.
+    /// The tier-1 order: keys that fold together stay in file order, by the key numbers' tie-break. Sorted in
+    /// place, so the order itself is all it holds.
     fn order(&self, ledger: &mut Ledger) -> Result<Vec<u32>, Error> {
         let count = u32::try_from(self.at.len().saturating_sub(1)).map_err(|_| too_large())?;
         ledger.take(bytes_of::<u32>(count as usize))?;
@@ -432,10 +431,9 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive, ledger: &mut Ledg
             bytes = bytes.checked_add(scratch.form.len()).ok_or_else(too_large)?;
         }
     }
-    // The forms and their entries, the stable sort's scratch (at most the entries again), and the order.
-    let held = (bytes as u64)
-        .saturating_add(bytes_of::<(u32, u32, u32)>(entries).saturating_mul(2))
-        .saturating_add(bytes_of::<u32>(entries));
+    // The forms and their entries, sorted in place, and the order.
+    let held =
+        (bytes as u64).saturating_add(bytes_of::<(u32, u32, u32)>(entries)).saturating_add(bytes_of::<u32>(entries));
     ledger.take(held)?;
     let mut text: Vec<u8> = Vec::new();
     let mut changed: Vec<(u32, u32, u32)> = Vec::new();
