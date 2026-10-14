@@ -7,8 +7,8 @@
 
 use crate::Exceeded;
 use crate::url::{
-    BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, is_oxford_lookup, is_remote_scheme, names_a_host,
-    preprocess, scheme, tts,
+    BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, encoded_len, is_oxford_lookup, is_remote_scheme,
+    names_a_host, preprocess, scheme, tts,
 };
 
 /// A URL written in a dictionary, and what it means.
@@ -120,22 +120,28 @@ impl Out {
 
 /// What a literal URL becomes: its new text (`None`: kept as it is), and its meaning (`None`: not a link, as
 /// `data:` is not).
-fn literal(url: &str, base: &str, dir: &str) -> (Option<String>, Option<Link>) {
+type Literal = (Option<String>, Option<Link>);
+
+/// [`literal`] held to `room` bytes: a new text longer than that is refused before it is built, from its length
+/// counted first (percent-encoding writes up to three bytes for one).
+fn literal(url: &str, base: &str, dir: &str, room: usize) -> Result<Literal, Exceeded> {
     let clean = preprocess(url);
     if clean.is_empty() {
-        return (None, None);
+        return Ok((None, None));
     }
     if let Some(name) = clean.strip_prefix('#') {
-        return (None, Some(Link::Anchor { name: name.to_owned() }));
+        return Ok((None, Some(Link::Anchor { name: name.to_owned() })));
     }
     if let Some((scheme, rest)) = scheme(&clean) {
         let body = rest.strip_prefix("//").unwrap_or(rest);
-        return match scheme.as_str() {
+        return Ok(match scheme.as_str() {
             "entry" | "bword" => {
                 let (query, anchor) = match body.split_once('#') {
                     Some((q, a)) => (q, Some(a)),
                     None => (body, None),
                 };
+                let anchored = anchor.map_or(0, |a| 1 + encoded_len(a));
+                weigh(room, [base.len(), ENTRY.len(), encoded_len(query), anchored])?;
                 let mut to = format!("{base}{ENTRY}{}", encode(query));
                 if let Some(a) = anchor {
                     to.push('#');
@@ -145,37 +151,51 @@ fn literal(url: &str, base: &str, dir: &str) -> (Option<String>, Option<Link>) {
             }
             "sound" | "gdau" => match tts(body) {
                 Some(text) => {
+                    weigh(room, [base.len(), SOUND.len(), encoded_len(text), ".tts".len()])?;
                     (Some(format!("{base}{SOUND}{}.tts", encode(text))), Some(Link::Speak { text: text.to_owned() }))
                 }
                 None => {
-                    let path = Path::resolve("", body).travel();
+                    let path = Path::resolve("", body);
+                    weigh(room, [base.len(), SOUND.len(), path.travel_len(), 0])?;
+                    let path = path.travel();
                     (Some(format!("{base}{SOUND}{path}")), Some(Link::Sound { path }))
                 }
             },
-            s if is_oxford_lookup(s) => (
-                Some(format!("{base}{ENTRY}{}", encode(rest))),
-                Some(Link::Lookup { query: rest.to_owned(), anchor: None }),
-            ),
-            "file" | "mdd" => resource(body, base, ""),
+            s if is_oxford_lookup(s) => {
+                weigh(room, [base.len(), ENTRY.len(), encoded_len(rest), 0])?;
+                (
+                    Some(format!("{base}{ENTRY}{}", encode(rest))),
+                    Some(Link::Lookup { query: rest.to_owned(), anchor: None }),
+                )
+            }
+            "file" | "mdd" => resource(body, base, "", room)?,
             "javascript" => (None, Some(Link::Blocked(Block::Script))),
             "data" => (None, None),
-            s if is_remote_scheme(s) => blocked(&clean, base),
+            s if is_remote_scheme(s) => blocked(&clean, base, room)?,
             _ => (None, Some(Link::Blocked(Block::UnknownScheme { scheme }))),
-        };
+        });
     }
     if names_a_host(&clean) {
-        return blocked(&clean, base);
+        return blocked(&clean, base, room);
     }
-    resource(&clean, base, dir)
+    resource(&clean, base, dir, room)
 }
 
-fn resource(path: &str, base: &str, dir: &str) -> (Option<String>, Option<Link>) {
-    let path = Path::resolve(dir, path).travel();
-    (Some(format!("{base}{RESOURCE}{path}")), Some(Link::Resource { path }))
+/// `Exceeded` when `parts`, the lengths of what a new text is written from, add up to more than `room`.
+fn weigh(room: usize, parts: [usize; 4]) -> Result<(), Exceeded> {
+    if parts.into_iter().fold(0usize, usize::saturating_add) > room { Err(Exceeded) } else { Ok(()) }
 }
 
-fn blocked(url: &str, base: &str) -> (Option<String>, Option<Link>) {
-    (Some(format!("{base}{BLOCKED}{}", encode(url))), Some(Link::Blocked(Block::Remote { url: url.to_owned() })))
+fn resource(path: &str, base: &str, dir: &str, room: usize) -> Result<Literal, Exceeded> {
+    let path = Path::resolve(dir, path);
+    weigh(room, [base.len(), RESOURCE.len(), path.travel_len(), 0])?;
+    let path = path.travel();
+    Ok((Some(format!("{base}{RESOURCE}{path}")), Some(Link::Resource { path })))
+}
+
+fn blocked(url: &str, base: &str, room: usize) -> Result<Literal, Exceeded> {
+    weigh(room, [base.len(), BLOCKED.len(), encoded_len(url), 0])?;
+    Ok((Some(format!("{base}{BLOCKED}{}", encode(url))), Some(Link::Blocked(Block::Remote { url: url.to_owned() }))))
 }
 
 /// Attributes whose value is a URL, on any element.
@@ -362,7 +382,7 @@ fn attribute(
     let href = lower == "href" && HREF_ELEMENTS.contains(&local.as_str());
     if href || URL_ATTRIBUTES.contains(&lower.as_str()) {
         let url = unescape(value);
-        let (to, link) = literal(&url, base, dir);
+        let Ok((to, link)) = literal(&url, base, dir, out.room()) else { return out.fitting(None) };
         if let Some(link) = link {
             out.link(url, link);
         }
@@ -428,14 +448,16 @@ fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> Option<String> {
             }
         };
         rest = after;
-        let (to, link) = literal(url, base, dir);
+        let separator = if written.is_empty() { "" } else { ", " };
+        let space = if descriptor.is_empty() { "" } else { " " };
+        let around = separator.len() + space.len() + descriptor.len();
+        let room = max.saturating_sub(written.len().saturating_add(around));
+        let (to, link) = literal(url, base, dir, room).ok()?;
         if let Some(link) = link {
             out.link(url, link);
         }
         let url = to.as_deref().unwrap_or(url);
-        let separator = if written.is_empty() { "" } else { ", " };
-        let space = if descriptor.is_empty() { "" } else { " " };
-        let grows = separator.len() + url.len() + space.len() + descriptor.len();
+        let grows = around + url.len();
         if written.len().saturating_add(grows) > max {
             return None;
         }
@@ -665,7 +687,10 @@ const IMAGE_FUNCTIONS: [&str; 3] = ["image-set", "-webkit-image-set", "image"];
 /// A URL a stylesheet wrote (`written`, its escapes undecoded), rewritten and written between `quote`s.
 fn write_url(out: &mut Out, written: &str, quote: char, base: &str, dir: &str) {
     let value = css_unescape(written);
-    let (to, link) = literal(&value, base, dir);
+    let Ok((to, link)) = literal(&value, base, dir, out.room().saturating_sub(2)) else {
+        out.text.exceeded = true;
+        return;
+    };
     if let Some(link) = link {
         out.link(value, link);
     }
@@ -1241,6 +1266,46 @@ mod tests {
             assert_eq!(html_text_within(page, BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()), "{page}");
             assert_eq!(html_text_within(page, BASE, "d", whole.len() - 1), Err(crate::Exceeded), "{page}");
         }
+    }
+
+    /// A rewritten URL is weighed before it is built: one that percent-encodes to three times its length (a
+    /// blocked remote URL, a lookup) is refused as soon as it could not fit, whether it stands in a `srcset`, an
+    /// attribute or a stylesheet, rather than once it is whole. Under the ceiling each is written as without one.
+    #[test]
+    fn a_url_is_weighed_before_it_is_built() -> Result<(), std::num::ParseIntError> {
+        // `XDICT_WEIGHED_URL_BYTES` sets the URL's size, for measuring the peak under `/usr/bin/time -l`.
+        let bytes: usize = std::env::var("XDICT_WEIGHED_URL_BYTES").map_or(Ok(4 << 20), |v| v.parse())?;
+        let bang = "!".repeat(bytes);
+        let pages = [
+            ("srcset", format!("<img srcset=\"https://e.example/{bang} 1x\">")),
+            ("href", format!("<a href=\"https://e.example/{bang}\">x</a>")),
+            ("lookup", format!("<a href=\"entry://{bang}\">x</a>")),
+            ("style", format!("<p style=\"background:url(https://e.example/{bang})\">x</p>")),
+        ];
+        for (what, page) in &pages {
+            let started = std::time::Instant::now();
+            assert_eq!(html_text_within(page, BASE, "", 1 << 10), Err(crate::Exceeded), "{what}");
+            assert!(started.elapsed() < std::time::Duration::from_millis(500), "{what} took {:?}", started.elapsed());
+        }
+        let sheet = format!("a{{background:url(https://e.example/{bang})}}");
+        let started = std::time::Instant::now();
+        assert_eq!(css_text_within(&sheet, BASE, "", 1 << 10), Err(crate::Exceeded));
+        assert!(started.elapsed() < std::time::Duration::from_millis(500), "sheet took {:?}", started.elapsed());
+        for page in [
+            r#"<img srcset="https://e.example/a!b 1x, c.png 2x">"#,
+            r#"<a href="entry://a b#c d">x</a><a href="sound://s.mp3">s</a><a href="gdau://say:hi">t</a>"#,
+            r#"<a href="https://e.example/x y">x</a><img src="../i/a b.png">"#,
+            r#"<p style="background:url('https://e.example/q r')">x</p>"#,
+        ] {
+            let whole = html_text(page, BASE, "d");
+            assert_eq!(html_text_within(page, BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()), "{page}");
+            assert_eq!(html_text_within(page, BASE, "d", whole.len() - 1), Err(crate::Exceeded), "{page}");
+        }
+        let sheet = "a{background:url(https://e.example/q r.png)}b{background:url('../c d.png')}";
+        let whole = css_text(sheet, BASE, "d");
+        assert_eq!(css_text_within(sheet, BASE, "d", whole.len()).as_deref(), Ok(whole.as_str()));
+        assert_eq!(css_text_within(sheet, BASE, "d", whole.len() - 1), Err(crate::Exceeded));
+        Ok(())
     }
 
     /// `--!>` ends a comment as `-->` does (HTML's comment end bang state), so what follows it is markup.
