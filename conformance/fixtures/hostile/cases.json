@@ -1,0 +1,2298 @@
+{
+ "comment": "What the hostile stage runs and what it holds each run to (apps/apple/Tools/hostile/battery.py).",
+ "token": "h1",
+ "control": {
+  "http": 47090,
+  "tcp": 47091,
+  "udp": 47390
+ },
+ "selftestName": "selftest-h1.invalid",
+ "layers": [
+  "csp",
+  "rules",
+  "nav",
+  "popups",
+  "link-preconnect",
+  "peer-connection"
+ ],
+ "runs": {
+  "baseline": [],
+  "csp": [
+   "csp"
+  ],
+  "rules": [
+   "rules"
+  ],
+  "nav": [
+   "nav"
+  ],
+  "popups": [
+   "popups"
+  ],
+  "nav+link-preconnect": [
+   "nav",
+   "link-preconnect"
+  ],
+  "peer-connection": [
+   "peer-connection"
+  ],
+  "production": [
+   "csp",
+   "rules",
+   "nav",
+   "popups",
+   "link-preconnect",
+   "peer-connection"
+  ]
+ },
+ "probes": {
+  "csp": {
+   "run": "csp",
+   "against": "baseline",
+   "cases": [
+    "fetch",
+    "iframe-srcdoc-fetch",
+    "nav-svg-doc",
+    "worker-blob",
+    "img~textarea"
+   ]
+  },
+  "rules": {
+   "run": "rules",
+   "against": "baseline",
+   "cases": [
+    "fetch",
+    "img~textarea",
+    "dns-prefetch~textarea"
+   ]
+  },
+  "nav": {
+   "run": "nav",
+   "against": "baseline",
+   "cases": [
+    "nav-location",
+    "meta-refresh~textarea",
+    "iframe-srcdoc-top"
+   ]
+  },
+  "popups": {
+   "run": "popups",
+   "against": "baseline",
+   "cases": [
+    "window-open-blank-write"
+   ]
+  },
+  "link-preconnect": {
+   "run": "nav+link-preconnect",
+   "against": "nav",
+   "cases": [
+    "anchor-detached",
+    "anchor-click~textarea"
+   ]
+  },
+  "peer-connection": {
+   "run": "peer-connection",
+   "against": "baseline",
+   "cases": [
+    "rtc-stun",
+    "rtc-turn"
+   ]
+  }
+ },
+ "reader": {
+  "tcp": 47293,
+  "udp": 47593,
+  "names": [
+   "rl-reader-h1.invalid",
+   "ri-reader-h1.invalid"
+  ]
+ },
+ "cases": [
+  {
+   "id": "img",
+   "payload": "img",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47100,
+   "udp": 47400,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img~textarea",
+   "payload": "img",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47101,
+   "udp": 47401,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img~srcdoc",
+   "payload": "img",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47102,
+   "udp": 47402,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img~write",
+   "payload": "img",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47103,
+   "udp": 47403,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img~resource",
+   "payload": "img",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47104,
+   "udp": 47404,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img-srcset",
+   "payload": "img-srcset",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47105,
+   "udp": 47405,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img-srcset~textarea",
+   "payload": "img-srcset",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47106,
+   "udp": 47406,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img-srcset~srcdoc",
+   "payload": "img-srcset",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47107,
+   "udp": 47407,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img-srcset~write",
+   "payload": "img-srcset",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47108,
+   "udp": 47408,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "img-srcset~resource",
+   "payload": "img-srcset",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47109,
+   "udp": 47409,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script",
+   "payload": "script",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47110,
+   "udp": 47410,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script~textarea",
+   "payload": "script",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47111,
+   "udp": 47411,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script~srcdoc",
+   "payload": "script",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47112,
+   "udp": 47412,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script~write",
+   "payload": "script",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47113,
+   "udp": 47413,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script~resource",
+   "payload": "script",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47114,
+   "udp": 47414,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "script-module",
+   "payload": "script-module",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47115,
+   "udp": 47415,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "stylesheet",
+   "payload": "stylesheet",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47116,
+   "udp": 47416,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "stylesheet~textarea",
+   "payload": "stylesheet",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47117,
+   "udp": 47417,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "stylesheet~srcdoc",
+   "payload": "stylesheet",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47118,
+   "udp": 47418,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "stylesheet~write",
+   "payload": "stylesheet",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47119,
+   "udp": 47419,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "stylesheet~resource",
+   "payload": "stylesheet",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47120,
+   "udp": 47420,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-import",
+   "payload": "css-import",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47121,
+   "udp": 47421,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-import~textarea",
+   "payload": "css-import",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47122,
+   "udp": 47422,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-import~srcdoc",
+   "payload": "css-import",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47123,
+   "udp": 47423,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-import~write",
+   "payload": "css-import",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47124,
+   "udp": 47424,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-import~resource",
+   "payload": "css-import",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47125,
+   "udp": 47425,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-url",
+   "payload": "css-url",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47126,
+   "udp": 47426,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-url~textarea",
+   "payload": "css-url",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47127,
+   "udp": 47427,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-url~srcdoc",
+   "payload": "css-url",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47128,
+   "udp": 47428,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-url~write",
+   "payload": "css-url",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47129,
+   "udp": 47429,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "css-url~resource",
+   "payload": "css-url",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47130,
+   "udp": 47430,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "font",
+   "payload": "font",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47131,
+   "udp": 47431,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "font~textarea",
+   "payload": "font",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47132,
+   "udp": 47432,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "font~srcdoc",
+   "payload": "font",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47133,
+   "udp": 47433,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "font~write",
+   "payload": "font",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47134,
+   "udp": 47434,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "font~resource",
+   "payload": "font",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47135,
+   "udp": 47435,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "fetch",
+   "payload": "fetch",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47136,
+   "udp": 47436,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "xhr",
+   "payload": "xhr",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47137,
+   "udp": 47437,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "fetch-keepalive",
+   "payload": "fetch-keepalive",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47138,
+   "udp": 47438,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "beacon",
+   "payload": "beacon",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47139,
+   "udp": 47439,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "eventsource",
+   "payload": "eventsource",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47140,
+   "udp": 47440,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "websocket",
+   "payload": "websocket",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47141,
+   "udp": 47441,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "webtransport",
+   "payload": "webtransport",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 3500,
+   "tcp": 47142,
+   "udp": 47442,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "object-embed",
+   "payload": "object-embed",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47143,
+   "udp": 47443,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "object-embed~textarea",
+   "payload": "object-embed",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47144,
+   "udp": 47444,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "object-embed~srcdoc",
+   "payload": "object-embed",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47145,
+   "udp": 47445,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "object-embed~write",
+   "payload": "object-embed",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47146,
+   "udp": 47446,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "object-embed~resource",
+   "payload": "object-embed",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47147,
+   "udp": 47447,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "misc-tags",
+   "payload": "misc-tags",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47148,
+   "udp": 47448,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "misc-tags~textarea",
+   "payload": "misc-tags",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47149,
+   "udp": 47449,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "misc-tags~srcdoc",
+   "payload": "misc-tags",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47150,
+   "udp": 47450,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "misc-tags~write",
+   "payload": "misc-tags",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47151,
+   "udp": 47451,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "misc-tags~resource",
+   "payload": "misc-tags",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47152,
+   "udp": 47452,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preload",
+   "payload": "preload",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47153,
+   "udp": 47453,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preload~textarea",
+   "payload": "preload",
+   "context": "textarea",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47154,
+   "udp": 47454,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preload~srcdoc",
+   "payload": "preload",
+   "context": "srcdoc",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47155,
+   "udp": 47455,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preload~write",
+   "payload": "preload",
+   "context": "write",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47156,
+   "udp": 47456,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preload~resource",
+   "payload": "preload",
+   "context": "resource",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47157,
+   "udp": 47457,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "prefetch",
+   "payload": "prefetch",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47158,
+   "udp": 47458,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "speculation-rules",
+   "payload": "speculation-rules",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47159,
+   "udp": 47459,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect",
+   "payload": "preconnect",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47160,
+   "udp": 47460,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect~textarea",
+   "payload": "preconnect",
+   "context": "textarea",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47161,
+   "udp": 47461,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect~srcdoc",
+   "payload": "preconnect",
+   "context": "srcdoc",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47162,
+   "udp": 47462,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect~write",
+   "payload": "preconnect",
+   "context": "write",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47163,
+   "udp": 47463,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect~resource",
+   "payload": "preconnect",
+   "context": "resource",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47164,
+   "udp": 47464,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "preconnect-name",
+   "payload": "preconnect-name",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47165,
+   "udp": 47465,
+   "exclusive": false,
+   "names": [
+    "pc-preconnect-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "preconnect-name~textarea",
+   "payload": "preconnect-name",
+   "context": "textarea",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47166,
+   "udp": 47466,
+   "exclusive": false,
+   "names": [
+    "pc-preconnect-name-textarea-h1.invalid"
+   ]
+  },
+  {
+   "id": "preconnect-name~srcdoc",
+   "payload": "preconnect-name",
+   "context": "srcdoc",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47167,
+   "udp": 47467,
+   "exclusive": false,
+   "names": [
+    "pc-preconnect-name-srcdoc-h1.invalid"
+   ]
+  },
+  {
+   "id": "preconnect-name~write",
+   "payload": "preconnect-name",
+   "context": "write",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47168,
+   "udp": 47468,
+   "exclusive": false,
+   "names": [
+    "pc-preconnect-name-write-h1.invalid"
+   ]
+  },
+  {
+   "id": "preconnect-name~resource",
+   "payload": "preconnect-name",
+   "context": "resource",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47169,
+   "udp": 47469,
+   "exclusive": false,
+   "names": [
+    "pc-preconnect-name-resource-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-prefetch",
+   "payload": "dns-prefetch",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47170,
+   "udp": 47470,
+   "exclusive": false,
+   "names": [
+    "dp-dns-prefetch-h1.invalid",
+    "dq-dns-prefetch-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-prefetch~textarea",
+   "payload": "dns-prefetch",
+   "context": "textarea",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47171,
+   "udp": 47471,
+   "exclusive": false,
+   "names": [
+    "dp-dns-prefetch-textarea-h1.invalid",
+    "dq-dns-prefetch-textarea-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-prefetch~srcdoc",
+   "payload": "dns-prefetch",
+   "context": "srcdoc",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47172,
+   "udp": 47472,
+   "exclusive": false,
+   "names": [
+    "dp-dns-prefetch-srcdoc-h1.invalid",
+    "dq-dns-prefetch-srcdoc-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-prefetch~write",
+   "payload": "dns-prefetch",
+   "context": "write",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47173,
+   "udp": 47473,
+   "exclusive": false,
+   "names": [
+    "dp-dns-prefetch-write-h1.invalid",
+    "dq-dns-prefetch-write-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-prefetch~resource",
+   "payload": "dns-prefetch",
+   "context": "resource",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47174,
+   "udp": 47474,
+   "exclusive": false,
+   "names": [
+    "dp-dns-prefetch-resource-h1.invalid",
+    "dq-dns-prefetch-resource-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-anchor",
+   "payload": "dns-anchor",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47175,
+   "udp": 47475,
+   "exclusive": false,
+   "names": [
+    "da-dns-anchor-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-anchor~textarea",
+   "payload": "dns-anchor",
+   "context": "textarea",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47176,
+   "udp": 47476,
+   "exclusive": false,
+   "names": [
+    "da-dns-anchor-textarea-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-anchor~srcdoc",
+   "payload": "dns-anchor",
+   "context": "srcdoc",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47177,
+   "udp": 47477,
+   "exclusive": false,
+   "names": [
+    "da-dns-anchor-srcdoc-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-anchor~write",
+   "payload": "dns-anchor",
+   "context": "write",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47178,
+   "udp": 47478,
+   "exclusive": false,
+   "names": [
+    "da-dns-anchor-write-h1.invalid"
+   ]
+  },
+  {
+   "id": "dns-anchor~resource",
+   "payload": "dns-anchor",
+   "context": "resource",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47179,
+   "udp": 47479,
+   "exclusive": false,
+   "names": [
+    "da-dns-anchor-resource-h1.invalid"
+   ]
+  },
+  {
+   "id": "img-name",
+   "payload": "img-name",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47180,
+   "udp": 47480,
+   "exclusive": false,
+   "names": [
+    "im-img-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "img-name~textarea",
+   "payload": "img-name",
+   "context": "textarea",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47181,
+   "udp": 47481,
+   "exclusive": false,
+   "names": [
+    "im-img-name-textarea-h1.invalid"
+   ]
+  },
+  {
+   "id": "img-name~srcdoc",
+   "payload": "img-name",
+   "context": "srcdoc",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47182,
+   "udp": 47482,
+   "exclusive": false,
+   "names": [
+    "im-img-name-srcdoc-h1.invalid"
+   ]
+  },
+  {
+   "id": "img-name~write",
+   "payload": "img-name",
+   "context": "write",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47183,
+   "udp": 47483,
+   "exclusive": false,
+   "names": [
+    "im-img-name-write-h1.invalid"
+   ]
+  },
+  {
+   "id": "img-name~resource",
+   "payload": "img-name",
+   "context": "resource",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47184,
+   "udp": 47484,
+   "exclusive": false,
+   "names": [
+    "im-img-name-resource-h1.invalid"
+   ]
+  },
+  {
+   "id": "fetch-name",
+   "payload": "fetch-name",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47185,
+   "udp": 47485,
+   "exclusive": false,
+   "names": [
+    "fe-fetch-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "websocket-name",
+   "payload": "websocket-name",
+   "context": "byte-zero",
+   "group": "speculative",
+   "wait": 2500,
+   "tcp": 47186,
+   "udp": 47486,
+   "exclusive": false,
+   "names": [
+    "ws-websocket-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "ping",
+   "payload": "ping",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47187,
+   "udp": 47487,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "ping~textarea",
+   "payload": "ping",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47188,
+   "udp": 47488,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "ping~srcdoc",
+   "payload": "ping",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47189,
+   "udp": 47489,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "ping~write",
+   "payload": "ping",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47190,
+   "udp": 47490,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "ping~resource",
+   "payload": "ping",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47191,
+   "udp": 47491,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "csp-report-meta",
+   "payload": "csp-report-meta",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47192,
+   "udp": 47492,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audio",
+   "payload": "audio",
+   "context": "byte-zero",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47193,
+   "udp": 47493,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audio~textarea",
+   "payload": "audio",
+   "context": "textarea",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47194,
+   "udp": 47494,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audio~srcdoc",
+   "payload": "audio",
+   "context": "srcdoc",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47195,
+   "udp": 47495,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audio~write",
+   "payload": "audio",
+   "context": "write",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47196,
+   "udp": 47496,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audio~resource",
+   "payload": "audio",
+   "context": "resource",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47197,
+   "udp": 47497,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "video",
+   "payload": "video",
+   "context": "byte-zero",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47198,
+   "udp": 47498,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "video~textarea",
+   "payload": "video",
+   "context": "textarea",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47199,
+   "udp": 47499,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "video~srcdoc",
+   "payload": "video",
+   "context": "srcdoc",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47200,
+   "udp": 47500,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "video~write",
+   "payload": "video",
+   "context": "write",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47201,
+   "udp": 47501,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "video~resource",
+   "payload": "video",
+   "context": "resource",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47202,
+   "udp": 47502,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "hls",
+   "payload": "hls",
+   "context": "byte-zero",
+   "group": "media",
+   "wait": 3500,
+   "tcp": 47203,
+   "udp": 47503,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "media-js",
+   "payload": "media-js",
+   "context": "byte-zero",
+   "group": "media",
+   "wait": 3000,
+   "tcp": 47204,
+   "udp": 47504,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-url",
+   "payload": "iframe-url",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47205,
+   "udp": 47505,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-url~textarea",
+   "payload": "iframe-url",
+   "context": "textarea",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47206,
+   "udp": 47506,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-url~srcdoc",
+   "payload": "iframe-url",
+   "context": "srcdoc",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47207,
+   "udp": 47507,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-url~write",
+   "payload": "iframe-url",
+   "context": "write",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47208,
+   "udp": 47508,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-url~resource",
+   "payload": "iframe-url",
+   "context": "resource",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47209,
+   "udp": 47509,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc",
+   "payload": "iframe-srcdoc",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47210,
+   "udp": 47510,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc-fetch",
+   "payload": "iframe-srcdoc-fetch",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47211,
+   "udp": 47511,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc-nav",
+   "payload": "iframe-srcdoc-nav",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47212,
+   "udp": 47512,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc-top",
+   "payload": "iframe-srcdoc-top",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47213,
+   "udp": 47513,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc-refresh",
+   "payload": "iframe-srcdoc-refresh",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47214,
+   "udp": 47514,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-srcdoc-scripted",
+   "payload": "iframe-srcdoc-scripted",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47215,
+   "udp": 47515,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-blank-write",
+   "payload": "iframe-blank-write",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47216,
+   "udp": 47516,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-data",
+   "payload": "iframe-data",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47217,
+   "udp": 47517,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-blob",
+   "payload": "iframe-blob",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47218,
+   "udp": 47518,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "iframe-xdict",
+   "payload": "iframe-xdict",
+   "context": "byte-zero",
+   "group": "frames",
+   "wait": 2500,
+   "tcp": 47219,
+   "udp": 47519,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "worker-xdict",
+   "payload": "worker-xdict",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47220,
+   "udp": 47520,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "worker-blob",
+   "payload": "worker-blob",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47221,
+   "udp": 47521,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "worker-data",
+   "payload": "worker-data",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47222,
+   "udp": 47522,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "worker-http",
+   "payload": "worker-http",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47223,
+   "udp": 47523,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "sharedworker-xdict",
+   "payload": "sharedworker-xdict",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47224,
+   "udp": 47524,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "sharedworker-blob",
+   "payload": "sharedworker-blob",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47225,
+   "udp": 47525,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "serviceworker",
+   "payload": "serviceworker",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47226,
+   "udp": 47526,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "audioworklet",
+   "payload": "audioworklet",
+   "context": "byte-zero",
+   "group": "workers",
+   "wait": 2500,
+   "tcp": 47227,
+   "udp": 47527,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "meta-refresh",
+   "payload": "meta-refresh",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47228,
+   "udp": 47528,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "meta-refresh~textarea",
+   "payload": "meta-refresh",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47229,
+   "udp": 47529,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "meta-refresh~srcdoc",
+   "payload": "meta-refresh",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47230,
+   "udp": 47530,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "meta-refresh~write",
+   "payload": "meta-refresh",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47231,
+   "udp": 47531,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "meta-refresh~resource",
+   "payload": "meta-refresh",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47232,
+   "udp": 47532,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-location",
+   "payload": "nav-location",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47233,
+   "udp": 47533,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-api",
+   "payload": "nav-api",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47234,
+   "udp": 47534,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "window-open",
+   "payload": "window-open",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47235,
+   "udp": 47535,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "window-open-blank-write",
+   "payload": "window-open-blank-write",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47236,
+   "udp": 47536,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-post",
+   "payload": "form-post",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47237,
+   "udp": 47537,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-post~textarea",
+   "payload": "form-post",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47238,
+   "udp": 47538,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-post~srcdoc",
+   "payload": "form-post",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47239,
+   "udp": 47539,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-post~write",
+   "payload": "form-post",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47240,
+   "udp": 47540,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-post~resource",
+   "payload": "form-post",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47241,
+   "udp": 47541,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "form-blank",
+   "payload": "form-blank",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47242,
+   "udp": 47542,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click",
+   "payload": "anchor-click",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47243,
+   "udp": 47543,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click~textarea",
+   "payload": "anchor-click",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47244,
+   "udp": 47544,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click~srcdoc",
+   "payload": "anchor-click",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47245,
+   "udp": 47545,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click~write",
+   "payload": "anchor-click",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47246,
+   "udp": 47546,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click~resource",
+   "payload": "anchor-click",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47247,
+   "udp": 47547,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-click-name",
+   "payload": "anchor-click-name",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47248,
+   "udp": 47548,
+   "exclusive": false,
+   "names": [
+    "an-anchor-click-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "anchor-click-name~textarea",
+   "payload": "anchor-click-name",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47249,
+   "udp": 47549,
+   "exclusive": false,
+   "names": [
+    "an-anchor-click-name-textarea-h1.invalid"
+   ]
+  },
+  {
+   "id": "anchor-click-name~srcdoc",
+   "payload": "anchor-click-name",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47250,
+   "udp": 47550,
+   "exclusive": false,
+   "names": [
+    "an-anchor-click-name-srcdoc-h1.invalid"
+   ]
+  },
+  {
+   "id": "anchor-click-name~write",
+   "payload": "anchor-click-name",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47251,
+   "udp": 47551,
+   "exclusive": false,
+   "names": [
+    "an-anchor-click-name-write-h1.invalid"
+   ]
+  },
+  {
+   "id": "anchor-click-name~resource",
+   "payload": "anchor-click-name",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47252,
+   "udp": 47552,
+   "exclusive": false,
+   "names": [
+    "an-anchor-click-name-resource-h1.invalid"
+   ]
+  },
+  {
+   "id": "anchor-click-https",
+   "payload": "anchor-click-https",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47253,
+   "udp": 47553,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-detached",
+   "payload": "anchor-detached",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47254,
+   "udp": 47554,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-in-srcdoc",
+   "payload": "anchor-in-srcdoc",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47255,
+   "udp": 47555,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-top-from-srcdoc",
+   "payload": "anchor-top-from-srcdoc",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47256,
+   "udp": 47556,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-in-blank-frame",
+   "payload": "anchor-in-blank-frame",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47257,
+   "udp": 47557,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-blank",
+   "payload": "anchor-blank",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47258,
+   "udp": 47558,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-blank~textarea",
+   "payload": "anchor-blank",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47259,
+   "udp": 47559,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-blank~srcdoc",
+   "payload": "anchor-blank",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47260,
+   "udp": 47560,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-blank~write",
+   "payload": "anchor-blank",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47261,
+   "udp": 47561,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-blank~resource",
+   "payload": "anchor-blank",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47262,
+   "udp": 47562,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-download",
+   "payload": "anchor-download",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47263,
+   "udp": 47563,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-download~textarea",
+   "payload": "anchor-download",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47264,
+   "udp": 47564,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-download~srcdoc",
+   "payload": "anchor-download",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47265,
+   "udp": 47565,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-download~write",
+   "payload": "anchor-download",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47266,
+   "udp": 47566,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "anchor-download~resource",
+   "payload": "anchor-download",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47267,
+   "udp": 47567,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-data-url",
+   "payload": "nav-data-url",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47268,
+   "udp": 47568,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-blob-url",
+   "payload": "nav-blob-url",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47269,
+   "udp": 47569,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-svg-doc",
+   "payload": "nav-svg-doc",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47270,
+   "udp": 47570,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "nav-xdict-html",
+   "payload": "nav-xdict-html",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47271,
+   "udp": 47571,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "base-href",
+   "payload": "base-href",
+   "context": "byte-zero",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47272,
+   "udp": 47572,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "base-href~textarea",
+   "payload": "base-href",
+   "context": "textarea",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47273,
+   "udp": 47573,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "base-href~srcdoc",
+   "payload": "base-href",
+   "context": "srcdoc",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47274,
+   "udp": 47574,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "base-href~write",
+   "payload": "base-href",
+   "context": "write",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47275,
+   "udp": 47575,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "base-href~resource",
+   "payload": "base-href",
+   "context": "resource",
+   "group": "navigation",
+   "wait": 2500,
+   "tcp": 47276,
+   "udp": 47576,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "svg-image",
+   "payload": "svg-image",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47277,
+   "udp": 47577,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "svg-cdata",
+   "payload": "svg-cdata",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47278,
+   "udp": 47578,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "svg-use",
+   "payload": "svg-use",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47279,
+   "udp": 47579,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "svg-feimage",
+   "payload": "svg-feimage",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47280,
+   "udp": 47580,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "svg-a-click",
+   "payload": "svg-a-click",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47281,
+   "udp": 47581,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "smil-set-image",
+   "payload": "smil-set-image",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47282,
+   "udp": 47582,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "smil-animate-a",
+   "payload": "smil-animate-a",
+   "context": "byte-zero",
+   "group": "svg",
+   "wait": 2500,
+   "tcp": 47283,
+   "udp": 47583,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "textarea-comment",
+   "payload": "textarea-comment",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47284,
+   "udp": 47584,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "rtc-stun",
+   "payload": "rtc-stun",
+   "context": "byte-zero",
+   "group": "webrtc",
+   "wait": 4000,
+   "tcp": 47285,
+   "udp": 47585,
+   "exclusive": true,
+   "names": []
+  },
+  {
+   "id": "rtc-stun-name",
+   "payload": "rtc-stun-name",
+   "context": "byte-zero",
+   "group": "webrtc",
+   "wait": 4000,
+   "tcp": 47286,
+   "udp": 47586,
+   "exclusive": true,
+   "names": [
+    "st-rtc-stun-name-h1.invalid"
+   ]
+  },
+  {
+   "id": "rtc-turn",
+   "payload": "rtc-turn",
+   "context": "byte-zero",
+   "group": "webrtc",
+   "wait": 4000,
+   "tcp": 47287,
+   "udp": 47587,
+   "exclusive": true,
+   "names": []
+  },
+  {
+   "id": "rtc-remote-candidate",
+   "payload": "rtc-remote-candidate",
+   "context": "byte-zero",
+   "group": "webrtc",
+   "wait": 4500,
+   "tcp": 47288,
+   "udp": 47588,
+   "exclusive": true,
+   "names": []
+  },
+  {
+   "id": "rtc-host",
+   "payload": "rtc-host",
+   "context": "byte-zero",
+   "group": "webrtc",
+   "wait": 4000,
+   "tcp": 47289,
+   "udp": 47589,
+   "exclusive": true,
+   "names": []
+  },
+  {
+   "id": "ok-xdict",
+   "payload": "ok-xdict",
+   "context": "byte-zero",
+   "group": "allowed",
+   "wait": 3000,
+   "tcp": 47290,
+   "udp": 47590,
+   "exclusive": false,
+   "names": []
+  },
+  {
+   "id": "ok-placeholder",
+   "payload": "ok-placeholder",
+   "context": "byte-zero",
+   "group": "allowed",
+   "wait": 2500,
+   "tcp": 47291,
+   "udp": 47591,
+   "exclusive": false,
+   "names": [
+    "ph-ok-placeholder-h1.invalid"
+   ]
+  },
+  {
+   "id": "ok-link-nav",
+   "payload": "ok-link-nav",
+   "context": "byte-zero",
+   "group": "allowed",
+   "wait": 2500,
+   "tcp": 47292,
+   "udp": 47592,
+   "exclusive": false,
+   "names": []
+  }
+ ]
+}

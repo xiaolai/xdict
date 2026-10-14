@@ -25,9 +25,22 @@ let package = Package(
         // and nowhere below (`StringCatalogTests`).
         .target(name: "XDictUI", dependencies: ["XDictBase"]),
 
-        // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictUI"]),
+        // **The entry view and its confinement** (plan-macos-v1 WI-4; ADR-0009 decision 7; ADR-0007 decision 14): a
+        // `WKWebView` per open dictionary, its `xdict:` scheme handler, the core's policy as a header on every response,
+        // the rule list, the navigation and UI delegates, the two WebKit switches read back before anything renders, the
+        // reader's consent before a remote link leaves, find, zoom and appearance. Its own target because it binds
+        // WebKit and AppKit, which nothing else in the view layer does. It gets bytes through `EntryContent`, never the
+        // contract's types, so the service's client plugs in without the view knowing the wire (WI-3, WI-6).
+        .target(name: "XDictEntryView", dependencies: ["XDictBase"]),
 
+        // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
+        .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictEntryView", "XDictUI"]),
+
+        // **A development instrument, never in XDict.app** (`Tools/build-lab.sh`, `Tools/build-bundle.sh` holds the app
+        // to its two executables): the production entry view, fed by the core linked in directly, so the E2E stages can
+        // render the hostile battery and real dictionaries before the service answers entries (WI-3). It is the only
+        // place a confinement layer can be switched off (`--disable-layer`), for the isolated per-layer controls.
+        .executableTarget(name: "XDictEntryLab", dependencies: ["XDictCore", "XDictEntryView"]),
 
         // **The core, and who may reach it.** `xdictFFI` is libxdict_ffi.a and its C header as an XCFramework, and
         // `XDictCore` the UniFFI binding generated from that archive; both are written by `Tools/build-core.sh` into
@@ -54,6 +67,10 @@ let package = Package(
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictUI"]),
+        // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
+        // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
+        // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.
+        .testTarget(name: "XDictEntryViewTests", dependencies: ["XDictEntryView"]),
         // The one test target besides the service that reaches the core: it asks the service's own handler, over a
         // real NSXPC connection, and compares the answer with the core's; and it maps the core's types into the
         // contract's.

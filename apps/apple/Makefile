@@ -9,7 +9,9 @@
 #   make lint         SwiftLint's correctness rules, --strict, at the pinned version
 #   make strings      re-extract every localizable string into Strings/Localizable.xcstrings
 #   make e2e          make app, then the end-to-end stages on the E2E Mac (E2E_HOST_MACOS in the repository's local.mk);
-#                     `launch` asks the bundle's service for the handshake there. STAGES="launch" runs only those
+#                     `launch` asks the bundle's service for the handshake there; `hostile`, `reader` and `entries`
+#                     run the entry view (Tools/build-lab.sh's kit): the hostile-input suite, a person's hands on it,
+#                     and the owner's dictionaries (E2E_CORPUS in local.mk). STAGES="launch" runs only those
 #   make e2e-status   what each stage last did, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
@@ -37,12 +39,15 @@ BUILD_NUMBER ?=
 # The notarytool keychain profile: a name, never a credential (XiaolaiDict ADR-0026).
 NOTARY_PROFILE ?= chase-notary
 E2E_HOST ?= $(E2E_HOST_MACOS)
+# The owner's 25 dictionaries, for the `entries` stage; unset, that stage fails as not measured.
+E2E_CORPUS ?=
 
 # Handed to the scripts through the environment, as data, never spliced into a shell command.
 export XDICT_SIGN_ID := $(SIGN_ID)
 export XDICT_BUILD_NUMBER := $(BUILD_NUMBER)
 export XDICT_NOTARY_PROFILE := $(NOTARY_PROFILE)
 export XDICT_E2E_HOST := $(E2E_HOST)
+export XDICT_E2E_CORPUS := $(E2E_CORPUS)
 
 app: lint test-swift
 	@Tools/build-bundle.sh build

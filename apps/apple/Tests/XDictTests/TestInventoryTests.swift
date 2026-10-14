@@ -10,13 +10,15 @@ import XDictTestSupport
 /// needs no edit here, and only a drop is a signal. Lowering one is a deliberate line in a diff, with its reason.
 struct TestInventoryTests {
     /// Set to each target's count when the skeleton landed (2026-10-14, WI-2); `XDictContractTests` added, and the
-    /// service's and the harness's raised, with the frozen contract and its Codex refutation (2026-10-14, WI-1).
+    /// service's and the harness's raised, with the frozen contract and its Codex refutation (2026-10-14, WI-1);
+    /// `XDictEntryViewTests` added with the entry view, and the harness's raised by its boundary rows (2026-10-14, WI-4).
     static let floors = [
         "XDictBaseTests": 8,
         "XDictContractTests": 67,
         "XDictUITests": 3,
+        "XDictEntryViewTests": 36,
         "XDictServiceTests": 15,
-        "XDictTests": 31,
+        "XDictTests": 35,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

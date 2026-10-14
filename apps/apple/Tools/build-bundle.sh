@@ -48,6 +48,10 @@ readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 readonly SIGN_TRIES=5
 # A symbol of the core, by the names Rust and UniFFI give it: the app must hold none, the service must hold some.
 readonly CORE_SYMBOLS='uniffi_xdict_ffi|xdict_core|xdict_mdx|xdict_entry|xdict_lookup|xdict_identity'
+# The development lab (plan-macos-v1 WI-4): it links the core and can switch an entry's confinement layer off, so it
+# never ships. Its flag is what the app binary must not hold, and what the lab binary must, or the reading saw nothing.
+readonly LAB=XDictEntryLab
+readonly LAB_FLAG=--disable-layer
 
 fail() { echo "build-bundle: $*" >&2; exit 1; }
 note() { echo "$*"; }
@@ -191,6 +195,25 @@ verify_binaries() {
     done
 }
 
+# **What ships is the app and its service, and nothing of the development lab.** The bundle's Mach-O files are exactly
+# the two executables (found by their magic, not their names), nothing in it is named after the lab, and the app
+# binary does not hold the lab's flag. Before the signatures: a lab copied in before signing would verify.
+verify_no_development_lab() {
+    local bundle=$1 file magic found="" expected
+    while IFS= read -r -d '' file; do
+        magic=$(head -c 4 "$file" | xxd -p)
+        case $magic in
+            cffaedfe | cefaedfe | feedfacf | feedface | cafebabe | bebafeca) found+="${file#"$bundle"/}"$'\n' ;;
+        esac
+    done < <(find "$bundle" -type f -print0)
+    expected=$(printf '%s\n' "Contents/MacOS/$APP_NAME" "$XPC_PATH/Contents/MacOS/$SERVICE" | sort)
+    [ "$(sort <<<"${found%$'\n'}")" = "$expected" ] \
+        || { echo "the bundle's executables are not exactly the app and its service: $(tr '\n' ' ' <<<"$found")"; return 1; }
+    [ -z "$(find "$bundle" -iname "*$LAB*" -print -quit)" ] || { echo "the bundle carries something named $LAB"; return 1; }
+    ! LC_ALL=C grep -aqF -- "$LAB_FLAG" "$bundle/Contents/MacOS/$APP_NAME" \
+        || { echo "the app binary holds $LAB_FLAG, the development lab's flag"; return 1; }
+}
+
 # Each binary's signed entitlements, compared whole with its file as JSON (plutil sorts keys and compacts): one more
 # key, a `false`, or `get-task-allow` (which the notary refuses) is a different string.
 entitlements_json() {  # $1: a signed code object
@@ -256,6 +279,7 @@ verify_bundle() {
     verify_required_files "$bundle" || return 1
     verify_bundle_metadata "$bundle" || return 1
     verify_binaries "$bundle" || return 1
+    verify_no_development_lab "$bundle" || return 1
     verify_signatures "$bundle" || return 1
     verify_service_boundaries "$bundle" || return 1
 }
@@ -290,6 +314,9 @@ assemble() {
     local products
     products=$(swift build -c "$CONFIG" --show-bin-path)
     [ -x "$products/$APP_NAME" ] && [ -x "$products/$SERVICE" ] || fail "swift build produced no $APP_NAME or $SERVICE"
+    # The control for `verify_no_development_lab`'s flag search: the lab this build made must hold the flag.
+    LC_ALL=C grep -aqF -- "$LAB_FLAG" "$products/$LAB" \
+        || fail "$products/$LAB does not hold $LAB_FLAG, so a search of the app binary for it would see nothing"
 
     local contents=$STAGE/Contents xpc=$STAGE/$XPC_PATH number plist
     rm -rf "$STAGE_ROOT"

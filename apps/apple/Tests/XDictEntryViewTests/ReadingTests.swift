@@ -1,0 +1,207 @@
+import AppKit
+import Foundation
+import JavaScriptCore
+import Testing
+@testable import XDictEntryView
+
+/// **What the reader does with an entry**: follows a link, answers the remote-link question, finds, zooms, picks an
+/// appearance, opens the context menu. The shell's scripts' pure parts run in JavaScriptCore; no web view is made.
+@MainActor
+struct ReadingTests {
+    // MARK: - Links
+
+    @Test func eachLinkGoesWhereItsKindSays() throws {
+        let remote = try #require(URL(string: "https://example.com/a"))
+        let rows: [(EntryLink, Bool, EntryLinkAction)] = [
+            (.lookup(query: "walk", anchor: "s2"), true, .lookup(query: "walk", anchor: "s2")),
+            (.lookup(query: "walk", anchor: nil), false, .lookup(query: "walk", anchor: nil)),
+            (.anchor(name: "s2"), true, .scroll(anchor: "s2")),
+            (.sound(path: "us/run.mp3"), true, .sound(path: "us/run.mp3")),
+            (.speak(text: "run"), true, .speak(text: "run")),
+            (.blocked(.remote(url: "https://example.com/a")), true, .askReader(remote)),
+        ]
+        for (link, activated, action) in rows {
+            #expect(EntryLinkAction.for(link, activatedByALink: activated) == action)
+        }
+        // Nothing, but said why: a remote URL a script reached without a link, one no browser opens, a script, a
+        // resource, an unknown scheme.
+        let nothing: [(EntryLink, Bool)] = [
+            (.blocked(.remote(url: "https://example.com/a")), false),
+            (.blocked(.remote(url: "ftp://example.com/a")), true),
+            (.blocked(.remote(url: "https://user:pw@example.com/")), true),
+            (.blocked(.script), true),
+            (.blocked(.unknownScheme("tel")), true),
+            (.resource(path: "a.css"), true),
+        ]
+        for (link, activated) in nothing {
+            #expect(EntryLinkAction.for(link, activatedByALink: activated).name == "nothing", "\(link)")
+        }
+    }
+
+    // MARK: - The reader's consent
+
+    final class Opener: EntryURLOpener {
+        var opened: [URL] = []
+        func open(_ url: URL) { opened.append(url) }
+    }
+
+    @Test func onlyAYesOpensAndOnlyOneQuestionAtATime() throws {
+        let gate = RemoteOpenGate()
+        let first = try #require(URL(string: "https://example.com/a"))
+        let second = try #require(URL(string: "https://example.org/b"))
+        #expect(gate.request(first) == .ask(first, host: "example.com"))
+        // A page activating links in a loop raises one question, not a stack.
+        guard case .drop = gate.request(second) else {
+            Issue.record("a second question was raised while the first was asked")
+            return
+        }
+        #expect(gate.answer(consent: false) == nil)
+        #expect(gate.asking == nil)
+        #expect(gate.request(second) == .ask(second, host: "example.org"))
+        #expect(gate.answer(consent: true) == second)
+        // An answer with no question opens nothing.
+        #expect(gate.answer(consent: true) == nil)
+    }
+
+    @Test func onlyAWebAddressIsEverOffered() {
+        for text in ["https://example.com/", "http://example.com:8080/a?b#c", "HTTPS://Example.COM/"] {
+            #expect(RemoteOpenGate.openable(text) != nil, "\(text)")
+        }
+        for text in ["file:///etc/passwd", "javascript:alert(1)", "ftp://example.com/", "https:///nohost",
+                     "https://u:p@example.com/", "xdict://d/r/a", "mailto:a@example.com", "not a url"] {
+            #expect(RemoteOpenGate.openable(text) == nil, "\(text)")
+        }
+    }
+
+    // MARK: - Find (R3)
+
+    static func context(_ sources: String...) throws -> JSContext {
+        let context = try #require(JSContext())
+        var failure: String?
+        context.exceptionHandler = { _, value in failure = value?.toString() }
+        for source in sources { context.evaluateScript(source) }
+        if let failure { Issue.record("script failed: \(failure)") }
+        return context
+    }
+
+    static func matches(_ text: String, _ query: String, in context: JSContext) -> [[Int]] {
+        let value = context.objectForKeyedSubscript("XDictFindCore")?.invokeMethod("matches", withArguments: [text, query])
+        return (value?.toArray() as? [[NSNumber]])?.map { $0.map(\.intValue) } ?? [[-1]]
+    }
+
+    @Test func findCountsEveryMatchWhateverItsCaseAndSpacing() throws {
+        let context = try Self.context(EntryScripts.findCore)
+        #expect(Self.matches("Hold, hold on; HOLD.", "hold", in: context) == [[0, 4], [6, 10], [15, 19]])
+        #expect(Self.matches("hold\n  on and hold on", "hold on", in: context) == [[0, 9], [14, 21]])
+        #expect(Self.matches("a.b axb", "a.b", in: context) == [[0, 3]], "a query is text, not a pattern")
+        #expect(Self.matches("(1) [2] $3 ^4", "[2] $3", in: context) == [[4, 10]])
+        #expect(Self.matches("Ärger ärger", "ÄRGER", in: context).count == 2)
+        #expect(Self.matches("取得 取得", "取得", in: context).count == 2)
+        #expect(Self.matches("aaa", "aa", in: context) == [[0, 2]], "matches do not overlap")
+        #expect(Self.matches("anything", "   ", in: context).isEmpty)
+        #expect(Self.matches("anything", "", in: context).isEmpty)
+    }
+
+    /// The DOM half needs a document, which only the E2E Mac gives it; here it must at least be a script that parses,
+    /// and that touches nothing when run with no document.
+    @Test func theDocumentScriptsParse() throws {
+        let context = try Self.context("var parsed = [];")
+        for (name, source) in [("findDOM", EntryScripts.findDOM), ("placeholderClicks", EntryScripts.placeholderClicks),
+                               ("appearance light", EntryScripts.appearance(.light)),
+                               ("appearance dark", EntryScripts.appearance(.dark))] {
+            context.setObject(source, forKeyedSubscript: "source" as NSString)
+            let parsed = context.evaluateScript("try { new Function(source); 'ok' } catch (e) { String(e) }")
+            #expect(parsed?.toString() == "ok", "\(name)")
+        }
+    }
+
+    @Test func noShellScriptMakesARequestOrChangesTheURL() {
+        let all = [EntryScripts.findCore, EntryScripts.findDOM, EntryScripts.readabilityCore,
+                   EntryScripts.appearance(.dark), EntryScripts.placeholderClicks].joined(separator: "\n")
+        for word in ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "location", "window.open",
+                     "import(", "Worker(", ".src =", ".href =", "RTCPeerConnection"] {
+            #expect(!all.contains(word), "a shell script uses \(word)")
+        }
+    }
+
+    // MARK: - Readability (R4)
+
+    @Test func aColourBelowThreeToOneIsReplacedByWhicheverReads() throws {
+        let context = try Self.context(EntryScripts.readabilityCore)
+        func run(_ expression: String) -> JSValue? { context.evaluateScript(expression) }
+        #expect(run("XDictReadability.contrast([0,0,0],[255,255,255])")?.toDouble() ?? 0 > 20.9)
+        #expect(run("XDictReadability.readable([0,0,0],[30,30,30])")?.toBool() == false, "black on dark is unreadable")
+        #expect(run("XDictReadability.readable([0,0,139],[30,30,30])")?.toBool() == false, "dark blue on dark")
+        #expect(run("XDictReadability.readable([255,0,0],[30,30,30])")?.toBool() == true, "a dictionary's red is kept")
+        #expect(run("XDictReadability.replacement([30,30,30,1])")?.toString() == "rgb(255, 255, 255)")
+        #expect(run("XDictReadability.replacement([250,250,250,1])")?.toString() == "rgb(0, 0, 0)")
+        #expect(run("XDictReadability.parse('rgba(1, 2, 3, 0.5)').join()")?.toString() == "1,2,3,0.5")
+        #expect(run("XDictReadability.parse('rgb(1 2 3 / 50%)').join()")?.toString() == "1,2,3,0.5")
+        #expect(run("XDictReadability.parse('color(srgb 1 0 0)')")?.isNull == true, "an unknown form is left alone")
+    }
+
+    @Test func eachThemeDrawsAsItSays() {
+        #expect(EntryTheme.matchApp.scheme(appIsDark: true) == .dark)
+        #expect(EntryTheme.matchApp.scheme(appIsDark: false) == .light)
+        #expect(EntryTheme.original.scheme(appIsDark: true) == .light)
+        #expect(EntryTheme.dark.scheme(appIsDark: false) == .dark)
+        #expect(Set(EntryTheme.allCases.map { String(localized: EntrySentences.theme($0)) }).count == 3)
+    }
+
+    // MARK: - Zoom and appearance, per dictionary, kept (R2, R4)
+
+    @Test func zoomAndThemeAreKeptPerDictionaryAndHeldToRange() throws {
+        let suite = "xdict-entry-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = EntryPreferences(defaults: defaults)
+        #expect(preferences.zoom(for: "a") == 1.0)
+        #expect(preferences.theme(for: "a") == .matchApp)
+        preferences.setZoom(1.25, for: "a")
+        preferences.setTheme(.original, for: "a")
+        #expect(preferences.zoom(for: "a") == 1.25)
+        #expect(preferences.zoom(for: "b") == 1.0, "one dictionary's zoom leaked into another's")
+        #expect(preferences.theme(for: "a") == .original)
+        #expect(preferences.theme(for: "b") == .matchApp)
+        // Read again through a new instance, as after a relaunch.
+        #expect(EntryPreferences(defaults: defaults).zoom(for: "a") == 1.25)
+        preferences.setZoom(40, for: "a")
+        #expect(preferences.zoom(for: "a") == 3.0)
+        defaults.set(-2.0, forKey: EntryPreferences.zoomKey("c"))
+        defaults.set("neon", forKey: EntryPreferences.themeKey("c"))
+        #expect(preferences.zoom(for: "c") == 1.0)
+        #expect(preferences.theme(for: "c") == .matchApp)
+    }
+
+    @Test func zoomStepsWalkTheLadder() {
+        #expect(EntryPreferences.step(1.0, up: true) == 1.1)
+        #expect(EntryPreferences.step(1.0, up: false) == 0.9)
+        #expect(EntryPreferences.step(1.05, up: true) == 1.1)
+        #expect(EntryPreferences.step(3.0, up: true) == 3.0)
+        #expect(EntryPreferences.step(0.5, up: false) == 0.5)
+    }
+
+    // MARK: - The context menu
+
+    @Test func theMenuKeepsOnlyWhatKeepsTheReaderHere() {
+        let menu = NSMenu()
+        func item(_ id: String?) -> NSMenuItem {
+            let made = NSMenuItem(title: id ?? "Untitled", action: nil, keyEquivalent: "")
+            made.identifier = id.map { NSUserInterfaceItemIdentifier(rawValue: $0) }
+            return made
+        }
+        for entry: NSMenuItem in [item("WKMenuItemIdentifierOpenLinkInNewWindow"), item("WKMenuItemIdentifierDownloadLinkedFile"),
+                                  .separator(), item("WKMenuItemIdentifierCopy"), item("WKMenuItemIdentifierCopyLink"),
+                                  .separator(), .separator(), item("WKMenuItemIdentifierOpenImageInNewWindow"),
+                                  item("WKMenuItemIdentifierDownloadImage"), item("WKMenuItemIdentifierLookUp"),
+                                  item(nil), .separator(), item("WKMenuItemIdentifierShareMenu"),
+                                  item("WKMenuItemIdentifierSpeechMenu"), .separator()] {
+            menu.addItem(entry)
+        }
+        let (kept, removed) = EntryMenu.filter(menu)
+        #expect(kept == ["WKMenuItemIdentifierCopy", "WKMenuItemIdentifierLookUp", "WKMenuItemIdentifierSpeechMenu"])
+        #expect(removed.count == 7)
+        #expect(menu.items.map { $0.isSeparatorItem ? "-" : ($0.identifier?.rawValue ?? "") }
+                == ["WKMenuItemIdentifierCopy", "-", "WKMenuItemIdentifierLookUp", "-", "WKMenuItemIdentifierSpeechMenu"])
+    }
+}

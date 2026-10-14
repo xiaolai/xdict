@@ -1,0 +1,30 @@
+{
+  "comment": "Twin A of the entry view's binding test (plan-macos-v1 WI-4; ADR-0009 refutation item 13): the same key and resource paths as twin-b, a different marker. Our own text.",
+  "mdx": {
+    "name": "twin-a.mdx",
+    "title": "Twin A",
+    "entries": [
+      [
+        "word",
+        "<link rel=\"stylesheet\" href=\"marker.css\"><div id=\"m\">word</div><img id=\"i\" src=\"marker.svg\" width=\"20\" height=\"20\">"
+      ]
+    ]
+  },
+  "mdd": [
+    {
+      "name": "twin-a.mdd",
+      "entries": [
+        [
+          "\\marker.svg",
+          "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><text x=\"2\" y=\"16\">A</text></svg>"
+        ]
+      ]
+    }
+  ],
+  "sidecars": [
+    {
+      "name": "marker.css",
+      "text": "#m { --marker: \"A\"; }"
+    }
+  ]
+}

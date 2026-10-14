@@ -21,6 +21,15 @@ public enum Manifest {
         public let path: String
         /// Each Swift setting as `<kind> <argument>`, as `dump-package` writes it: `treatAllWarnings error`.
         public let swiftSettings: Set<String>
+
+        /// A target by hand, for a control that plants a graph no manifest declares.
+        public init(name: String, type: String, dependencies: Set<String>, path: String, swiftSettings: Set<String>) {
+            self.name = name
+            self.type = type
+            self.dependencies = dependencies
+            self.path = path
+            self.swiftSettings = swiftSettings
+        }
     }
 
     /// What `dump-package` said: the targets by name, and the platforms as `<name> <version>`.

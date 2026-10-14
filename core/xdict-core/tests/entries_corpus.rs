@@ -2,6 +2,10 @@
 //! `XDICT_MDX_CORPUS=<the 25> cargo test --release -p xdict-core --test entries_corpus -- --nocapture`. Says
 //! "not measured" when the variable is unset.
 //!
+//! `XDICT_ENTRIES_SAMPLE_OUT=<file>` also writes the sample it rendered, as JSON `[{dict, key, occurrence}]`, `dict`
+//! the dictionary's folder name: the macOS entry view renders the same entries (plan-macos-v1 WI-4, `Tools/e2e.sh`
+//! stage `entries`), since the bindings cannot enumerate a file's keys.
+//!
 //! Each folder is imported as a package (its MDX, its MDD volumes in order, its other files as sidecars). For a
 //! sample of entries: every URL written in the record classifies (none an unknown scheme); every URL of the
 //! rewritten entry, and of the stylesheets it loads, goes through `link()`; every resource and sound resolves
@@ -128,6 +132,7 @@ fn entries_of_the_corpus() {
     folders.sort();
     let mut failures = Vec::new();
     let mut totals = Tally::default();
+    let mut sampled = Vec::new();
     for folder in folders {
         let Some((mdx_path, package)) = package(&folder) else { continue };
         let name = folder.file_name().unwrap().to_string_lossy().into_owned();
@@ -171,6 +176,7 @@ fn entries_of_the_corpus() {
             };
             tally.entries += 1;
             tally.lossy += shown.lossy_bytes;
+            sampled.push(serde_json::json!({"dict": name, "key": key, "occurrence": occurrence}));
             *seen.entry(key).or_insert(0) += 1;
             for url in routes(&shown.html) {
                 follow(&core, &dict, &url, LinkOrigin::Entry { entry: entry.clone() }, &mut tally, &mut failures);
@@ -210,6 +216,10 @@ fn entries_of_the_corpus() {
         totals.lossy
     );
     let _ = std::fs::remove_dir_all(&cache);
+    if let Ok(out) = std::env::var("XDICT_ENTRIES_SAMPLE_OUT") {
+        std::fs::write(&out, serde_json::Value::Array(sampled).to_string()).unwrap();
+        eprintln!("sample written to {out}");
+    }
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
 
