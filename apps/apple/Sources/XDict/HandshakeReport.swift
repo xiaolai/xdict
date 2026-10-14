@@ -1,9 +1,11 @@
 import Foundation
 import XDictBase
+import XDictClient
 import XDictEntryView
 
 /// `XDict --handshake-report`: a development instrument, for the E2E `launch` stage (run on the E2E Mac only).
-/// Asks the dictionary service embedded in this bundle for its core's versions, exactly as the app does at launch,
+/// Asks the dictionary service embedded in this bundle for its core's versions through the contract (`versions`),
+/// exactly as the app does at launch,
 /// prints one JSON object and exits — 0 with `service` set, 1 with `failure` set. It opens no window and reads nothing
 /// of the reader's, so it ships in every build (XiaolaiDict compiled out only instruments that read the screen or
 /// another app, its ADR-0010).
@@ -33,7 +35,7 @@ enum HandshakeReport {
     static func run() -> Never {
         let started = ContinuousClock.now
         Task.detached {
-            let outcome = await HandshakeClient.ask()
+            let outcome = await ServiceClient().handshake()
             let elapsed = (ContinuousClock.now - started).components
             var service: CoreVersions?, failure: String?
             switch outcome {

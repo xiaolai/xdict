@@ -20,6 +20,9 @@
 #                    a positive control: a JSON file of versions the `launch` stage expects instead of the bundle's own
 #                    (`Contents/Resources/CoreVersions.json`), to show a wrong expectation failing. A run with it
 #                    records nothing
+#   XDICT_E2E_SERVICE_CHECKS
+#                    a subset of the `service` stage's instrument checks (`XDict --service-report --checks`), comma
+#                    separated, for working on one. A run with it records nothing
 #   XDICT_E2E_SSH    the program that reaches the host, `ssh` unless set. The host guard's positive control sets it to
 #                    `Tools/tests/ssh-to-this-mac`, which runs the remote side here
 #   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for the `entries` stage: their
@@ -32,7 +35,7 @@ cd "$(dirname "$SELF")/.."
 
 # **The only list of the stages.** A stage named that is not on it is refused: a typo that ran nothing once printed "all
 # stages passed" (XiaolaiDict). The remote script is handed this list, so the two cannot differ.
-readonly KNOWN_STAGES="launch hostile reader entries"
+readonly KNOWN_STAGES="launch service hostile reader entries"
 # The stages that need the entry view's kit (`Tools/build-lab.sh`): the development lab, the fixtures, the observers.
 readonly KIT_STAGES="hostile reader entries"
 if [ "${1:-}" = --list-stages ]; then
@@ -145,6 +148,8 @@ if [ "$source_tree" != - ] && [ "$source_tree" != "$(Tools/source-tree.sh)" ]; t
 fi
 expected_override=${XDICT_E2E_EXPECTED_VERSIONS:-}
 [ -z "$expected_override" ] || [ -s "$expected_override" ] || fail "XDICT_E2E_EXPECTED_VERSIONS names no file: $expected_override"
+service_checks=${XDICT_E2E_SERVICE_CHECKS:-}
+case $service_checks in *[!A-Za-z,]*) fail "XDICT_E2E_SERVICE_CHECKS is check names and commas; got '$service_checks'" ;; esac
 
 # ---------------------------------------------------------------------------------------------------------------------
 section "install"
@@ -154,7 +159,7 @@ app="$HOME/$1/XDict.app"; exe="$app/Contents/MacOS/XDict"
 service="$app/Contents/XPCServices/ai.xdict.app.DictionaryService.xpc/Contents/MacOS/XDictService"
 quit_bundle
 SH
-on_host "mkdir -p '$REMOTE_DIR' && rm -f '$REMOTE_DIR/expected-versions.json'"
+on_host "mkdir -p '$REMOTE_DIR' && rm -f '$REMOTE_DIR/expected-versions.json' '$REMOTE_DIR/service-checks'"
 rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$APP" "$host:$REMOTE_DIR/" \
     || fail "could not copy the bundle"
 if [ -n "$expected_override" ]; then
@@ -169,6 +174,19 @@ case $remote_version in
     *) build_mode=release ;;
 esac
 on_host "codesign --verify --strict --deep '$REMOTE_DIR/XDict.app'" || fail "the shipped bundle does not verify there"
+# **The `service` stage's dictionaries are written here, by the core's own MDX writer, and shipped with the bundle**: no
+# dictionary content enters the repository or reaches the E2E Mac from anywhere else (Tools/build-fixtures.sh).
+case " ${STAGES:-$KNOWN_STAGES} " in
+    *" service "*)
+        Tools/build-fixtures.sh "$scratch/fixtures" >/dev/null || fail "could not write the service stage's fixtures"
+        rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$scratch/fixtures/" "$host:$REMOTE_DIR/fixtures/" \
+            || fail "could not copy the fixtures"
+        if [ -n "$service_checks" ]; then
+            printf '%s\n' "$service_checks" | on_host "cat > '$REMOTE_DIR/service-checks'" || fail "could not copy the check subset"
+        fi
+        echo "fixtures written and copied${service_checks:+; service checks: $service_checks}"
+        ;;
+esac
 echo "build $remote_version ($build_mode) installed and verified"
 
 # **The entry view's kit**, for the stages that render entries before the service answers them (plan-macos-v1 WI-4):
@@ -293,13 +311,14 @@ launch_app() {
     wait_for_process "$exe" 100 || { echo "open exited 0 and no XDict process appeared within 10 s${said:+ ($said)}"; return 1; }
 }
 
-# report <flag> <seconds>: an instrument started by LaunchServices like the app (`open -n --args`), its JSON on stdout
-# once it has written and exited; nothing, and status 1, if it wrote nothing in time.
+# report <flag> <seconds> [argument...]: an instrument started by LaunchServices like the app (`open -n --args`), its
+# JSON on stdout once it has written and exited; nothing, and status 1, if it wrote nothing in time.
 report() {
     local flag=$1 budget=$2 name=${1#--} waited=0
+    shift 2
     local out="$reports/$name.json" err="$reports/$name.err"
     rm -f "$out" "$err"
-    open -n --stdout "$out" --stderr "$err" "$app" --args "$flag" || return 1
+    open -n --stdout "$out" --stderr "$err" "$app" --args "$flag" "$@" || return 1
     while [ ! -s "$out" ] && [ "$waited" -lt $((budget * 10)) ]; do sleep 0.1; waited=$((waited + 1)); done
     [ -s "$out" ] || return 1
     cat "$out"
@@ -414,6 +433,105 @@ launch_stage() {
     if [ "$gone" = yes ]; then pass "launch: quits on TERM within 5 s"; else flunk "launch: still running 5 s after TERM"; fi
 }
 launch_stage
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+if want service; then
+# **service**: this bundle's own signed dictionary service, asked through the app's `ServiceClient` by an instrument
+# LaunchServices started (`XDict --service-report`, plan-macos-v1 WI-3): `conformance/`'s `tiny` and `matrix`, the
+# refusals, supersession, a stalled bulk call, `kill -9` mid-lookup and the idle exit raced. **Every check is required by
+# name**: an instrument that stopped early leaves one missing, and a missing one fails. Then who reaches the service by
+# name, and the client requirement the service holds every connection to.
+readonly SERVICE_CHECKS="conformance.tiny conformance.matrix refusal.noHandle refusal.pipe refusal.writable
+    refusal.otherFile refusal.control refusal.missingToken supersede.lateReply supersede.queuedNeverSent stall.timedOut
+    stall.newConnection stall.answeredWhileTheStalledRun kill.typedError kill.nextLookupSucceeds idle.exitsWhenQuiet
+    idle.workSpanningTheTimer idle.racingRequestsAnsweredOnce"
+
+# bounded <seconds> <command...>: the command's status, or 124 once it has run that long (and it is killed).
+bounded() {
+    local seconds=$1 child waited=0
+    shift
+    "$@" &
+    child=$!
+    while kill -0 "$child" 2>/dev/null; do
+        if [ "$waited" -ge $((seconds * 10)) ]; then
+            kill -KILL "$child" 2>/dev/null || true
+            wait "$child" 2>/dev/null || true
+            return 124
+        fi
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    wait "$child"
+}
+
+service_stage() {
+    local since subset="" file="$reports/service-report.json" count i name passed detail seen=" " wanted
+    since=$(date '+%Y-%m-%d %H:%M:%S')
+    [ ! -s "$home/service-checks" ] || subset=$(cat "$home/service-checks")
+    if ! report --service-report 600 "$home/fixtures" ${subset:+--checks "$subset"} >/dev/null; then
+        flunk "service: --service-report wrote nothing within 600 s ($(head -c 300 "$reports/service-report.err" 2>/dev/null))"
+    else
+        count=$(plutil -extract checks raw -o - "$file" 2>/dev/null || echo 0)
+        [ "$count" -gt 0 ] || flunk "service: the instrument reported no check: $(head -c 300 "$file")"
+        for (( i = 0; i < count; i++ )); do
+            name=$(plutil -extract "checks.$i.name" raw -o - "$file")
+            passed=$(plutil -extract "checks.$i.pass" raw -o - "$file")
+            detail=$(plutil -extract "checks.$i.detail" raw -o - "$file")
+            seen="$seen$name "
+            if [ "$passed" = true ]; then pass "service: $name — ${detail:0:240}"; else flunk "service: $name — ${detail:0:900}"; fi
+        done
+        if [ -z "$subset" ]; then
+            for wanted in $SERVICE_CHECKS; do
+                case $seen in *" $wanted "*) ;; *) flunk "service: $wanted was never reported: the instrument stopped before it" ;; esac
+            done
+        fi
+        echo "      facts: $(plutil -extract facts json -o - "$file" 2>/dev/null | head -c 1500)"
+    fi
+
+    # **Who reaches the service by name.** The executable in the bundle, run from this shell, does: the control. The same
+    # executable copied out of the bundle does not, and starts no service: an embedded XPC service is found in the asking
+    # program's own bundle, and the copy has none. The copy is signed ad hoc, because with the bundle's signature outside
+    # the bundle AMFI kills it at launch (measured 2026-10-14), which would say nothing about the name.
+    local said status before=" " after="" pid outside="$reports/outside/XDict"
+    status=0; said=$(bounded 30 "$exe" --connect-report 2>&1) || status=$?
+    if [ "$status" -eq 0 ] && grep -q '"connected":true' <<<"$said"; then
+        pass "service: the bundle's executable reaches its service by name"
+    else
+        flunk "service: the bundle's executable did not reach its service by name (exit $status): ${said:0:300}"
+    fi
+    mkdir -p "$reports/outside"
+    cp "$exe" "$outside"
+    codesign -s - -f "$outside" >/dev/null 2>&1 || flunk "service: the copy outside the bundle could not be signed ad hoc"
+    find_pids "$service"
+    [ "${#PIDS[@]}" -eq 0 ] || before=" ${PIDS[*]} "
+    status=0; said=$(bounded 30 "$outside" --connect-report 2>&1) || status=$?
+    find_pids "$service"
+    if [ "${#PIDS[@]}" -gt 0 ]; then
+        for pid in "${PIDS[@]}"; do case $before in *" $pid "*) ;; *) after="$after $pid" ;; esac; done
+    fi
+    if [ "$status" -eq 1 ] && grep -q '"connected":false' <<<"$said" && [ -z "$after" ]; then
+        pass "service: a copy of the app outside the bundle cannot reach the service by name ($(grep -o '"failure":"[^"]*"' <<<"$said"))"
+    else
+        flunk "service: a copy of the app outside the bundle: exit $status, new service processes:${after:- none}; ${said:0:300}"
+    fi
+
+    # **The client requirement.** Each start of the service logs the requirement it holds every connection to, or that it
+    # could build none and refuses everyone; this stage started it several times (the kill, the idle exit). It must name
+    # the app and the team that signed this bundle (read from the bundle's signature, and not printed).
+    local team logged required refused
+    team=$(codesign -dv "$app" 2>&1 | sed -n 's/^TeamIdentifier=//p')
+    logged=$(/usr/bin/log show --start "$since" --style compact \
+        --predicate 'subsystem == "ai.xdict.app.DictionaryService" AND category == "service"' 2>&1 || true)
+    required=$(grep -cF "client requirement: anchor apple generic and identifier \"ai.xdict.app\" and certificate leaf[subject.OU] = \"$team\"" <<<"$logged" || true)
+    refused=$(grep -c "no client requirement could be built" <<<"$logged" || true)
+    if [ -n "$team" ] && [ "$required" -gt 0 ] && [ "$refused" -eq 0 ]; then
+        pass "service: the service set its client requirement, the app's identifier and this bundle's own team, at each of $required starts; none failed to build one"
+    else
+        flunk "service: the client requirement: ${team:+with this bundle's team }logged at $required starts, $refused could not build one${team:- (the bundle's signature names no team)}"
+    fi
+}
+service_stage
 fi
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -542,9 +660,9 @@ if on_host "test -d '$REMOTE_DIR/results'"; then
         || echo "the stages' results could not be copied back from the E2E Mac"
 fi
 
-if [ -n "$expected_override" ]; then
+if [ -n "$expected_override" ] || [ -n "$service_checks" ]; then
     echo
-    echo "positive control (XDICT_E2E_EXPECTED_VERSIONS): nothing is recorded"
+    echo "a positive control or a subset (XDICT_E2E_EXPECTED_VERSIONS, XDICT_E2E_SERVICE_CHECKS): nothing is recorded"
     exit "$remote_status"
 fi
 # The tree likewise: one that moved while the stages ran is no tree this run tested.

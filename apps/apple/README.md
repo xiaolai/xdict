@@ -69,14 +69,24 @@ make e2e-status          # what each stage last did, on which build, and whether
 
 `Tools/e2e.sh` refuses the build Mac by hardware UUID, ships the bundle, starts it with `open -n` in the GUI session and
 records each stage's result against the build, the E2E Mac, its macOS and the source tree (`Tools/source-tree.sh`).
-The one stage today, **`launch`**: LaunchServices starts the app (its parent is launchd and `lsappinfo` knows it), its
-service runs from the bundle, the `--handshake-report` instrument (also started by LaunchServices) gets the core's
-versions through the real XPC path, they equal those of the core the bundle was built from
-(`Contents/Resources/CoreVersions.json`), and the app quits on TERM.
+The stages:
+- **`launch`**: LaunchServices starts the app (its parent is launchd and `lsappinfo` knows it), its service runs from
+  the bundle, the `--handshake-report` instrument (also started by LaunchServices) gets the core's versions through the
+  real XPC path, they equal those of the core the bundle was built from (`Contents/Resources/CoreVersions.json`), and
+  the app quits on TERM.
+- **`service`** (plan-macos-v1 WI-3): the `--service-report` instrument, started by LaunchServices, drives the signed
+  service through the app's `ServiceClient` over fixtures `Tools/build-fixtures.sh` writes here and ships:
+  `conformance/`'s `tiny` and `matrix`, the refusals, supersession, a stalled bulk call, `kill -9` mid-lookup and the
+  idle exit raced, every check required by name. Then the bundle's executable reaches the service by name and a copy of
+  it outside the bundle does not, and every start of the service logged the client requirement with the bundle's team.
+- **`hostile`**, **`reader`** and **`entries`** (plan-macos-v1 WI-4) run the entry view in `Tools/build-lab.sh`'s kit,
+  shipped beside the bundle: the hostile-input suite, a person's hands on it, and the owner's dictionaries (`E2E_CORPUS`
+  in `local.mk`).
 
 Positive controls: `XDICT_E2E_EXPECTED_VERSIONS=<json> Tools/e2e.sh <host> launch` expects other versions and must fail
 (it records nothing); `XDICT_E2E_SSH=Tools/tests/ssh-to-this-mac Tools/e2e.sh any launch` reaches this Mac and must stop
-at the host guard.
+at the host guard; `XDICT_E2E_SERVICE_CHECKS=supersede,drop Tools/e2e.sh <host> service` runs a subset of the service's
+checks, for a bundle built with one switched off (it records nothing).
 
 ## Release
 

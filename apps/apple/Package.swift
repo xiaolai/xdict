@@ -10,9 +10,8 @@ let package = Package(
     // bundle carries to the same number, so raising any one of them alone fails.
     platforms: [.macOS("27.0")],
     targets: [
-        // What the app and the service share, and no domain vocabulary beyond it: the bundle identities, and the
-        // skeleton's handshake (`versions()` only, over NSXPC), its wire value and its client. WI-3 replaces the
-        // handshake with the frozen contract. Foundation, Dispatch and Synchronization.
+        // What the app and the service share, and no domain vocabulary beyond it: the bundle identities, and the values
+        // the launch window shows (the core's versions, and how asking for them failed). No framework at all.
         .target(name: "XDictBase"),
 
         // **The IPC contract between the app and the service, frozen at WI-1** (ADR-0009): the NSXPC protocols and
@@ -33,8 +32,19 @@ let package = Package(
         // contract's types, so the service's client plugs in without the view knowing the wire (WI-3, WI-6).
         .target(name: "XDictEntryView", dependencies: ["XDictBase"]),
 
+        // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
+        // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport
+        // seam (NSXPC, or a test's fake), and the tokens it sends. No core: it asks the service.
+        .target(name: "XDictClient", dependencies: ["XDictBase", "XDictContract"]),
+
+        // The development instruments' scenarios (the E2E `service` stage): the conformance fixtures answered through the
+        // contract, and the service's checks that need a real service — a kill, a stall, a racing idle timer. They ship
+        // in the app, as the handshake report does: they read only the fixtures they are pointed at.
+        .target(name: "XDictInstruments", dependencies: ["XDictClient", "XDictContract"]),
+
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictEntryView", "XDictUI"]),
+        .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+                                                        "XDictInstruments", "XDictUI"]),
 
         // **A development instrument, never in XDict.app** (`Tools/build-lab.sh`, `Tools/build-bundle.sh` holds the app
         // to its two executables): the production entry view, fed by the core linked in directly, so the E2E stages can
@@ -57,13 +67,15 @@ let package = Package(
             linkerSettings: [.linkedLibrary("iconv")]),
 
         // The dictionary service: sandboxed, with no file and no network entitlement, and the only process that runs
-        // the core (ADR-0001 decision 5). Today it answers the handshake; WI-3 makes it the contract.
+        // the core (ADR-0001 decision 5), answering the frozen contract.
         .executableTarget(name: "XDictService", dependencies: ["XDictBase", "XDictContract", "XDictCore"]),
 
         // What the test targets share, and nothing ships: a source walk that cannot skip silently, a directory that
         // removes itself, and the manifest as SwiftPM reads it.
         .target(name: "XDictTestSupport", path: "Tests/Support"),
         .testTarget(name: "XDictBaseTests", dependencies: ["XDictBase"]),
+        // The client against services of the tests' own: fakes of the transport, and NSXPC listeners in this process.
+        .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictUI"]),
@@ -71,10 +83,11 @@ let package = Package(
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.
         .testTarget(name: "XDictEntryViewTests", dependencies: ["XDictEntryView"]),
-        // The one test target besides the service that reaches the core: it asks the service's own handler, over a
-        // real NSXPC connection, and compares the answer with the core's; and it maps the core's types into the
-        // contract's.
-        .testTarget(name: "XDictServiceTests", dependencies: ["XDictBase", "XDictContract", "XDictCore", "XDictService"]),
+        // The one test target besides the service that reaches the core: the service's own listener, over a real NSXPC
+        // connection in this process, asked through the real client and the instruments' scenarios; and the core's
+        // types mapped into the contract's.
+        .testTarget(name: "XDictServiceTests", dependencies: ["XDictClient", "XDictContract", "XDictCore",
+                                                              "XDictInstruments", "XDictService"]),
         // The harness's own rules, read off the tree: module boundaries, test floors, the string catalog, the floor.
         .testTarget(name: "XDictTests", dependencies: ["XDictTestSupport"]),
     ],

@@ -149,7 +149,7 @@ public enum Admission: Hashable, Sendable {
 }
 
 /// What a request asks for. The core's operations (ADR-0007), with the core's parameters in the contract's types,
-/// plus `cancel`, which the service implements, and the lineage operations reserved for WI-5.
+/// plus `cancel`, which the service implements, and the reader's lineage operations.
 public enum ServiceOperation: Codable, Hashable, Sendable {
     /// The core's versions (ADR-0007 decision 11).
     case versions
@@ -170,10 +170,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// A resource by its path **inside the package** (encoded once, ADR-0007 decision 8), never a place on disk; its
     /// bytes, when found, are the reply's payload.
     case resource(dict: DictId, path: String, render: RenderContext)
-    /// Reserved for WI-5 (ADR-0002: a lineage join made only by the reader, reversibly), as are the two below: the
-    /// service answers `refused(.unsupportedOperation)` until it calls the core's `join_lineage`, `split_lineage` and
-    /// `lineage_of` (the core has them since 2026-10-14). **Idempotent**: joining an edition to the lineage it already
-    /// has changes nothing and answers that lineage, so a retry after a lost reply is safe.
+    /// A lineage join, made only by the reader and reversibly (ADR-0002), as are the two below: the service calls the
+    /// core's `join_lineage`, `split_lineage` and `lineage_of` (since 2026-10-14, WI-3; the app's side is WI-5's).
+    /// **Idempotent**: joining an edition to the lineage it already has changes nothing and answers that lineage, so a
+    /// retry after a lost reply is safe.
     case joinLineage(edition: Edition, lineage: LineageId)
     /// Undo a join: the edition takes `newLineage`, **minted by the client**, so a retried split is the same split and
     /// not a second one (Codex objection 14), or the lineage the edition had before the join, which the client kept,
