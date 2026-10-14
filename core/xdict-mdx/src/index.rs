@@ -59,9 +59,17 @@ pub trait Derive: Send + Sync {
     /// A key or query without what a reader cannot type; the file's folding is applied after it. Must return
     /// the text itself, borrowed, when there is nothing to remove: most keys.
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str>;
-    /// Which of the file's keys are internal, never offered to a reader: one flag per key.
+    /// The most [`Self::unmark`] holds while it works on a key, in bytes per byte of the key: the text it
+    /// returns and any it builds on the way. An index build counts it against its memory before it unmarks
+    /// (`keys::scratch_cost`), so it must be measured, not guessed.
+    fn growth(&self) -> u64;
+    /// Which of the file's keys are internal, never offered to a reader: one flag per key, and nothing else
+    /// held but at most [`INTERNAL_BYTES`] a key beside the flags, which an index build counts.
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error>;
 }
+
+/// What [`Derive::internal`] may hold a key beside the flags it returns.
+pub const INTERNAL_BYTES: u64 = 1;
 
 /// No derivation: no tier 2, every key public. What the reader uses on its own, and for resource libraries.
 pub struct Plain;
@@ -72,6 +80,9 @@ impl Derive for Plain {
     }
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
         Cow::Borrowed(text)
+    }
+    fn growth(&self) -> u64 {
+        0
     }
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
         filled(keys.len(), false)
@@ -198,15 +209,17 @@ impl KeyList for Keys {
     }
 }
 
-/// Writes the index of a file whose keys and record blocks have been read. Each table is made when it is
-/// needed and the folded keys are let go once ordered, so the most held at once stays within what
-/// `keys::cost_of` estimates (`keys.rs`); the output is reserved whole and written in place.
+/// Writes the index of a file whose keys and record blocks have been read, holding at most `budget` bytes. Each
+/// table is made when it is needed and let go once used, and every one is taken from a [`Ledger`] before it is
+/// made, so the budget holds whatever the keys and `derive` do to them; `keys::cost_of`, checked first, only
+/// refuses early what could not fit. The output is reserved whole and written in place.
 pub(crate) fn build(
     keys: Keys,
     blocks: &[RecordBlock],
     rules: Rules,
     binding: Binding,
     derive: &dyn Derive,
+    budget: u64,
 ) -> Result<Vec<u8>, Error> {
     let n = keys.starts.len();
     if keys.offsets.len() != n + 1 {
@@ -214,19 +227,30 @@ pub(crate) fn build(
     }
     let cost = crate::keys::cost_of(n as u64, keys.text.len() as u64)
         .saturating_add((blocks.len() as u64).saturating_mul(crate::keys::BLOCK_COST));
-    if cost > limits::INDEX_BYTES {
-        return Err(Error::TooLarge(format!("the key index would take more than {} bytes", limits::INDEX_BYTES)));
+    if cost > budget {
+        return Err(Error::TooLarge(format!("the key index would take more than {budget} bytes")));
     }
     let total = blocks.last().map_or(0, |b| b.records_offset + b.len as u64);
-    let tier2 = tier2_order(&keys, rules, derive)?;
-    let order = Folded::of(&keys, rules)?.order()?;
-    let ends = record_ends(&keys.starts, total)?;
-    let public = public_bitmap(&keys, derive)?;
+    let held = [
+        keys.text.capacity() as u64,
+        bytes_of::<u32>(keys.offsets.capacity()),
+        bytes_of::<u64>(keys.starts.capacity()),
+        std::mem::size_of_val(blocks) as u64,
+    ];
+    let mut ledger = Ledger::new(budget, held.iter().fold(0u64, |all, &b| all.saturating_add(b)))?;
+    let tier2 = tier2_order(&keys, rules, derive, &mut ledger)?;
+    let folded = Folded::of(&keys, rules, &mut ledger)?;
+    let order = folded.order(&mut ledger)?;
+    ledger.give(folded.held());
+    drop(folded);
+    let ends = record_ends(&keys.starts, total, &mut ledger)?;
+    let public = public_bitmap(&keys, derive, &mut ledger)?;
 
     let sizes = [keys.text.len(), 4 * (n + 1), 8 * n, 8 * n, 4 * n, 32 * blocks.len(), public.len(), 4 * tier2.len()];
+    let whole = sizes.iter().fold(HEADER_LEN, |at, len| at.next_multiple_of(8) + len);
+    ledger.take(whole as u64)?;
     let mut out: Vec<u8> = Vec::new();
-    out.try_reserve_exact(sizes.iter().fold(HEADER_LEN, |at, len| at.next_multiple_of(8) + len))
-        .map_err(crate::out_of_memory)?;
+    out.try_reserve_exact(whole).map_err(crate::out_of_memory)?;
     out.resize(HEADER_LEN, 0);
     let mut table = [(0u64, 0u64, 0u64); SECTIONS];
     let mut section = |out: &mut Vec<u8>, which: usize, write: &mut dyn FnMut(&mut Vec<u8>)| -> Result<(), Error> {
@@ -257,8 +281,41 @@ pub(crate) fn build(
     Ok(out)
 }
 
+/// What an index build holds against what it may: each table that grows with the file is taken from it before
+/// it is made, and given back when it is let go. `TooLarge` when one would pass the budget.
+struct Ledger {
+    budget: u64,
+    left: u64,
+}
+
+impl Ledger {
+    /// A ledger for `budget` bytes, `held` of them already taken by what the build is given.
+    fn new(budget: u64, held: u64) -> Result<Self, Error> {
+        let mut ledger = Self { budget, left: budget };
+        ledger.take(held)?;
+        Ok(ledger)
+    }
+
+    fn take(&mut self, bytes: u64) -> Result<(), Error> {
+        self.left = self.left.checked_sub(bytes).ok_or_else(|| {
+            Error::TooLarge(format!("the key index would take more than {} bytes to build", self.budget))
+        })?;
+        Ok(())
+    }
+
+    fn give(&mut self, bytes: u64) {
+        self.left = self.left.saturating_add(bytes).min(self.budget);
+    }
+}
+
+/// The bytes `n` values of `T` take.
+fn bytes_of<T>(n: usize) -> u64 {
+    (n as u64).saturating_mul(std::mem::size_of::<T>() as u64)
+}
+
 /// Where each record ends: the next larger start, or the end of all records.
-fn record_ends(starts: &[u64], total: u64) -> Result<Vec<u64>, Error> {
+fn record_ends(starts: &[u64], total: u64, ledger: &mut Ledger) -> Result<Vec<u64>, Error> {
+    ledger.take(bytes_of::<u64>(starts.len()).saturating_mul(2))?;
     let mut sorted = Vec::new();
     sorted.try_reserve_exact(starts.len()).map_err(crate::out_of_memory)?;
     sorted.extend_from_slice(starts);
@@ -273,6 +330,8 @@ fn record_ends(starts: &[u64], total: u64) -> Result<Vec<u64>, Error> {
         let next = sorted.partition_point(|&s| s <= start);
         ends.push(sorted.get(next).copied().unwrap_or(total));
     }
+    // The sorted starts are let go; the ends are the index's.
+    ledger.give(bytes_of::<u64>(starts.len()));
     Ok(ends)
 }
 
@@ -283,15 +342,16 @@ struct Folded {
 }
 
 impl Folded {
-    /// The text is measured first and reserved once, exactly, then each key is folded straight into it: no key's
-    /// folding is held as a string of its own.
-    fn of(keys: &Keys, rules: Rules) -> Result<Self, Error> {
+    /// The text is measured first, taken from the ledger and reserved once, exactly, then each key is folded
+    /// straight into it: no key's folding is held as a string of its own.
+    fn of(keys: &Keys, rules: Rules, ledger: &mut Ledger) -> Result<Self, Error> {
         let n = keys.starts.len();
         let mut room = 0usize;
         for i in 0..n {
             let len = crate::text::fold_len(keys.key(i)?, rules.case_sensitive, rules.strip);
             room = room.checked_add(len).ok_or_else(too_large)?;
         }
+        ledger.take((room as u64).saturating_add(bytes_of::<u32>(n + 1)))?;
         let mut folded = Self { text: Vec::new(), at: Vec::new() };
         folded.text.try_reserve_exact(room).map_err(crate::out_of_memory)?;
         folded.at.try_reserve_exact(n + 1).map_err(crate::out_of_memory)?;
@@ -303,19 +363,29 @@ impl Folded {
         Ok(folded)
     }
 
+    /// What it holds, for the ledger.
+    fn held(&self) -> u64 {
+        (self.text.capacity() as u64).saturating_add(bytes_of::<u32>(self.at.capacity()))
+    }
+
     /// Key `i` folded.
     fn get(&self, i: u32) -> &[u8] {
         let (from, to) = (self.at.get(i as usize).copied(), self.at.get(i as usize + 1).copied());
         from.zip(to).and_then(|(f, t)| self.text.get(f as usize..t as usize)).unwrap_or(&[])
     }
 
-    /// The tier-1 order: sorted stably, so keys that fold together stay in file order.
-    fn order(&self) -> Result<Vec<u32>, Error> {
+    /// The tier-1 order: sorted stably, so keys that fold together stay in file order. The sort's own scratch,
+    /// which the standard library allocates and cannot be asked to do fallibly, is at most the order's size, and
+    /// is taken from the ledger for as long as it sorts.
+    fn order(&self, ledger: &mut Ledger) -> Result<Vec<u32>, Error> {
         let count = u32::try_from(self.at.len().saturating_sub(1)).map_err(|_| too_large())?;
+        let (table, scratch) = (bytes_of::<u32>(count as usize), bytes_of::<u32>(count as usize));
+        ledger.take(table.saturating_add(scratch))?;
         let mut order: Vec<u32> = Vec::new();
         order.try_reserve_exact(count as usize).map_err(crate::out_of_memory)?;
         order.extend(0..count);
         order.sort_by(|&a, &b| self.get(a).cmp(self.get(b)));
+        ledger.give(scratch);
         Ok(order)
     }
 }
@@ -323,11 +393,17 @@ impl Folded {
 /// The tier-2 order, over the keys tier 2 changes: few (under 2 % of the 25's, `core-api.md` §1a). Made before
 /// the tier-1 folding is held, comparing with each such key's tier-1 form folded again; their tier-2 forms are
 /// kept in one text, not a string each, sorted stably so ties stay in file order. The text and its entries are
-/// measured in a first pass and reserved exactly, so neither grows by doubling past what `keys::cost_of` counts.
-/// Each key's two foldings go into two buffers used again for every key, reserved fallibly: at most three times
-/// the longest key each, which `keys::scratch_cost` counts.
-fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32>, Error> {
+/// measured in a first pass, taken from the ledger and reserved exactly, so neither grows past what is counted,
+/// however long `derive` makes a key. Each key's unmarking and its two foldings are held one key at a time, in
+/// buffers used again for every key: [`tier2_scratch`] of the longest key, taken first.
+fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive, ledger: &mut Ledger) -> Result<Vec<u32>, Error> {
     let count = u32::try_from(keys.starts.len()).map_err(|_| too_large())?;
+    let mut longest = 0u64;
+    for i in 0..keys.starts.len() {
+        longest = longest.max(keys.key(i)?.len() as u64);
+    }
+    let scratch_bytes = tier2_scratch(longest, derive.growth());
+    ledger.take(scratch_bytes)?;
     let mut scratch = Tier2 { form: Vec::new(), tier1: Vec::new() };
     let (mut entries, mut bytes) = (0usize, 0usize);
     for i in 0..count {
@@ -336,6 +412,11 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32
             bytes = bytes.checked_add(scratch.form.len()).ok_or_else(too_large)?;
         }
     }
+    // The forms and their entries, the stable sort's scratch (at most the entries again), and the order.
+    let held = (bytes as u64)
+        .saturating_add(bytes_of::<(u32, u32, u32)>(entries).saturating_mul(2))
+        .saturating_add(bytes_of::<u32>(entries));
+    ledger.take(held)?;
     let mut text: Vec<u8> = Vec::new();
     let mut changed: Vec<(u32, u32, u32)> = Vec::new();
     text.try_reserve_exact(bytes).map_err(crate::out_of_memory)?;
@@ -355,7 +436,18 @@ fn tier2_order(keys: &Keys, rules: Rules, derive: &dyn Derive) -> Result<Vec<u32
     let mut order = Vec::new();
     order.try_reserve_exact(changed.len()).map_err(crate::out_of_memory)?;
     order.extend(changed.into_iter().map(|(_, _, i)| i));
+    // All but the order is let go.
+    ledger.give(held.saturating_sub(bytes_of::<u32>(entries)).saturating_add(scratch_bytes));
     Ok(order)
+}
+
+/// What ordering tier 2 holds for one key at a time, sized by the longest key (`longest` bytes) and how much
+/// `derive` may lengthen one (`growth`, [`Derive::growth`]): what unmarking holds, the unmarked form folded (at
+/// most [`crate::text::FOLD_GROWTH`] times the unmarked text, which is at most the key or `growth` times it),
+/// and the key itself folded.
+fn tier2_scratch(longest: u64, growth: u64) -> u64 {
+    let fold = crate::text::FOLD_GROWTH;
+    longest.saturating_mul(growth.saturating_add(fold.saturating_mul(growth.max(1))).saturating_add(fold))
 }
 
 /// The two foldings `tier2_order` compares for one key at a time, in buffers it uses again for every key.
@@ -382,9 +474,12 @@ impl Tier2 {
     }
 }
 
-/// One bit per key, set for the keys `derive` leaves public.
-fn public_bitmap(keys: &Keys, derive: &dyn Derive) -> Result<Vec<u8>, Error> {
+/// One bit per key, set for the keys `derive` leaves public. What `derive` holds to decide (its flags, and at
+/// most [`INTERNAL_BYTES`] a key beside them) is taken from the ledger while it does.
+fn public_bitmap(keys: &Keys, derive: &dyn Derive, ledger: &mut Ledger) -> Result<Vec<u8>, Error> {
     let n = keys.starts.len();
+    let deciding = bytes_of::<bool>(n).saturating_add((n as u64).saturating_mul(INTERNAL_BYTES));
+    ledger.take(deciding.saturating_add(n.div_ceil(8) as u64))?;
     let internal = derive.internal(keys)?;
     if internal.len() != n {
         return Err(Error::Malformed("the internal keys were not marked one per key".into()));
@@ -395,6 +490,7 @@ fn public_bitmap(keys: &Keys, derive: &dyn Derive) -> Result<Vec<u8>, Error> {
             *byte |= 1 << (i % 8);
         }
     }
+    ledger.give(deciding);
     Ok(public)
 }
 
@@ -879,5 +975,57 @@ impl Index {
     /// The derivation the index was built under.
     pub(crate) fn derive(&self) -> &dyn Derive {
         &*self.derive
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// A derivation that makes every key a hundred times longer, and says so.
+    struct Long;
+
+    impl Derive for Long {
+        fn version(&self) -> u32 {
+            1
+        }
+        fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
+            Cow::Owned(text.repeat(100))
+        }
+        fn growth(&self) -> u64 {
+            100
+        }
+        fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
+            Ok(vec![false; keys.len()])
+        }
+    }
+
+    fn keys(n: usize) -> Keys {
+        let mut keys = Keys::default();
+        keys.offsets.push(0);
+        for i in 0..n {
+            keys.text.extend_from_slice(format!("key{i}").as_bytes());
+            keys.offsets.push(keys.text.len() as u32);
+            keys.starts.push(i as u64);
+        }
+        keys
+    }
+
+    const BINDING: Binding = Binding { identity: [0; 32], header: 0, source_len: 0, kind: Kind::Mdx };
+    const RULES: Rules = Rules { case_sensitive: false, strip: true };
+
+    /// What tier 2 holds is counted as it is made, whatever the derivation does to a key: the estimate made
+    /// while reading assumes what folding does, and a derivation may do more. One that lengthens every key a
+    /// hundred times is refused within the estimate's budget, and built given room for its forms.
+    #[test]
+    fn a_build_counts_what_tier_two_holds() {
+        let n = 1000;
+        let blocks = [RecordBlock { file_offset: 0, stored_len: n, records_offset: 0, len: n }];
+        let estimate = crate::keys::cost_of(n as u64, keys(n).text.len() as u64) + crate::keys::BLOCK_COST;
+        build(keys(n), &blocks, RULES, BINDING, &Plain, estimate).unwrap();
+        let refused = build(keys(n), &blocks, RULES, BINDING, &Long, estimate);
+        assert!(matches!(refused, Err(Error::TooLarge(_))), "{:?}", refused.map(|i| i.len()));
+        build(keys(n), &blocks, RULES, BINDING, &Long, 1000 * estimate).unwrap();
     }
 }

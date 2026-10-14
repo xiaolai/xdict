@@ -37,6 +37,9 @@ impl Derive for Marks {
     fn unmark<'a>(&self, text: &'a str) -> Cow<'a, str> {
         if text.contains('é') { Cow::Owned(text.replace('é', "e")) } else { Cow::Borrowed(text) }
     }
+    fn growth(&self) -> u64 {
+        1
+    }
     fn internal(&self, keys: &dyn KeyList) -> Result<Vec<bool>, Error> {
         (0..keys.len()).map(|i| Ok(keys.key(i)?.starts_with('@'))).collect()
     }
