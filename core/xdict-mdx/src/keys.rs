@@ -95,9 +95,10 @@ pub(crate) fn index_cost(text: &str) -> u64 {
 /// - read from the blocks: text, offset (4) and record start (8), in vectors that grow by doubling, so up to
 ///   twice that held after reading: 2t + 24;
 /// - tier 2: the forms of the keys it changes (few: under 2 % of the 25's), taken as up to three times their
-///   text, with 12 bytes of entry and 6 of stable sorting: 3t + 18, its result then 4;
-/// - tier 1: the folded text (at most [`crate::text::FOLD_GROWTH`] t) and its offsets (4), the order (4) and its
-///   sorting (4): 3t + 12;
+///   text, with 12 bytes of entry and 6 once kept for a stable sort's scratch, which the in-place sort
+///   (2026-10-14) no longer takes, a margin now: 3t + 18, its result then 4;
+/// - tier 1: the folded text (at most [`crate::text::FOLD_GROWTH`] t) and its offsets (4), the order (4) and 4 once
+///   kept for its sorting, now in place, a margin: 3t + 12;
 /// - written out: the record ends (8, and 8 of sorted starts while they are found), the public bitmap, and the
 ///   index itself, reserved whole: the text and 28 bytes of tables a key: 3t + 64.
 pub(crate) fn cost_of(keys: u64, text: u64) -> u64 {
