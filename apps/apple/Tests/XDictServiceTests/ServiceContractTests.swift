@@ -39,6 +39,19 @@ struct ServiceContractTests {
         #expect(findings.checks.map(\.name) == ["conformance.tiny", "conformance.matrix"])
     }
 
+    /// The E2E Mac's service keeps its registry from one run to the next, so the scenario must pass on a registry that
+    /// has seen it before: run twice against one service's registry, both pass.
+    @Test func theConformanceFixturesAnswerAgainOnARegistryThatHasSeenThem() async throws {
+        let harness = try ServiceHarness()
+        for run in 1...2 {
+            let scratch = try ServiceHarness.scratch()
+            defer { try? FileManager.default.removeItem(at: scratch) }
+            let findings = await ConformanceScenario(client: harness.client(), fixtures: try ServiceHarness.fixtures(),
+                                                     scratch: scratch).run()
+            #expect(findings.failed.isEmpty, "run \(run): \(findings.failed.map { "\($0.name): \($0.detail.prefix(400))" })")
+        }
+    }
+
     /// Runs `scenario` against the harness's service in a scratch directory of its own, removed afterwards.
     static func run(_ scenario: (ServiceChecks) async -> Findings) async throws -> Findings {
         let harness = try ServiceHarness()
