@@ -13,7 +13,9 @@ struct TestInventoryTests {
     /// service's and the harness's raised, with the frozen contract and its Codex refutation (2026-10-14, WI-1);
     /// `XDictEntryViewTests` added with the entry view, and the harness's raised by its boundary rows (2026-10-14, WI-4);
     /// `XDictLibraryTests` added with the library, and the view layer's and the service's raised by its sentences and
-    /// its scenario (2026-10-14, WI-5).
+    /// its scenario (2026-10-14, WI-5); `XDictSearchTests` added with the main window, and the view layer's, the entry
+    /// view's and the service's raised by its sentences, its landing, Tab to links and replaced loads, and its scenario
+    /// and held transport (2026-10-15, WI-6).
     static let floors = [
         // 8 → 2 (WI-3): the handshake became the contract's `versions`; its tests moved with it, to XDictClientTests
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
@@ -21,9 +23,10 @@ struct TestInventoryTests {
         "XDictClientTests": 20,
         "XDictContractTests": 67,
         "XDictLibraryTests": 52,
-        "XDictUITests": 8,
-        "XDictEntryViewTests": 36,
-        "XDictServiceTests": 40,
+        "XDictSearchTests": 31,
+        "XDictUITests": 14,
+        "XDictEntryViewTests": 43,
+        "XDictServiceTests": 44,
         "XDictTests": 35,
     ]
 

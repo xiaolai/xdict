@@ -1,0 +1,68 @@
+import Foundation
+import XDictClient
+import XDictContract
+import XDictEntryView
+
+/// **The entry view's three calls, answered by the dictionary service** (plan-macos-v1 WI-6; WI-4's seam, through which
+/// the view never sees the contract): an entry, a resource and a link of one open dictionary, under the reader's render
+/// context (`RenderContext.reader`), whose base the service fills in. Bound to the dictionary's handle and edition as
+/// they were when it was made: another handle is another binding, and so another web view (ADR-0009 refutation, item 13).
+public final class ServiceEntryContent: EntryContent {
+    public let binding: EntryBinding
+    private let backend: any SearchBackend
+    private let dict: DictId
+    private let edition: Edition
+
+    /// The content of `source`, while it answers; nil when it cannot (not open, or never imported).
+    public init?(source: SearchSource, backend: any SearchBackend) {
+        guard let handle = source.handle, let edition = source.edition else { return nil }
+        self.backend = backend
+        dict = handle
+        self.edition = edition
+        binding = EntryBinding(dictionary: source.preferencesKey, edition: edition.rawValue, handle: handle.rawValue)
+    }
+
+    private func reference(_ reference: EntryReference) -> EntryRef {
+        EntryRef(edition: edition, key: reference.key, occurrence: reference.occurrence)
+    }
+
+    public func entry(_ reference: EntryReference) async throws -> EntryDocument {
+        let delivered = try await backend.request(.entry(dict: dict, entry: self.reference(reference), render: .reader)).get()
+        guard case .entry(let entry) = delivered.answer, let html = delivered.payload else {
+            throw ClientFailure.wire(.undecodable(detail: "not an entry"))
+        }
+        return EntryDocument(html: html, policy: entry.csp)
+    }
+
+    public func resource(_ path: String) async throws -> EntryResource {
+        let delivered = try await backend.request(.resource(dict: dict, path: path, render: .reader)).get()
+        switch delivered.answer {
+        case .resource(.found(_, let mime)):
+            guard let bytes = delivered.payload else { throw ClientFailure.wire(.undecodable(detail: "no bytes")) }
+            return .found(mime: mime, bytes: bytes)
+        case .resource(.missing):
+            return .missing
+        default:
+            throw ClientFailure.wire(.undecodable(detail: "not a resource"))
+        }
+    }
+
+    public func link(_ url: String, origin: EntryLinkOrigin) async throws -> EntryLink {
+        let from: LinkOrigin = switch origin {
+        case .entry(let reference): .entry(entry: self.reference(reference))
+        case .resource(let path): .resource(path: path)
+        }
+        let delivered = try await backend.request(.link(dict: dict, url: url, origin: from, render: .reader)).get()
+        guard case .link(let link) = delivered.answer else { throw ClientFailure.wire(.undecodable(detail: "not a link")) }
+        return switch link {
+        case .lookup(let query, let anchor): .lookup(query: query, anchor: anchor)
+        case .resource(let path): .resource(path: path)
+        case .sound(let path): .sound(path: path)
+        case .speak(let text): .speak(text: text)
+        case .anchor(let name): .anchor(name: name)
+        case .blocked(.remote(let url)): .blocked(.remote(url: url))
+        case .blocked(.script): .blocked(.script)
+        case .blocked(.unknownScheme(let scheme)): .blocked(.unknownScheme(scheme))
+        }
+    }
+}

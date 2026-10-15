@@ -29,12 +29,17 @@ struct ModuleBoundaryTests {
         "XDictBase": [],
         // The IPC contract: Foundation alone (`theContractStandsAlone` says why, and refuses more).
         "XDictContract": contractMayBind,
-        // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers.
-        "XDictUI": ["Foundation", "SwiftUI", "UniformTypeIdentifiers"],
+        // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers; `AppKit` is the main window's
+        // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6).
+        "XDictUI": ["AppKit", "Foundation", "Observation", "SwiftUI", "UniformTypeIdentifiers"],
+        // The main window's model: the search the window observes, plain Swift (WI-6).
+        "XDictSearch": ["Foundation", "Observation"],
+        "XDictSearchTests": ["Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
-        // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`).
-        "XDict": ["AppKit", "Foundation", "SwiftUI", "os"],
+        // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
+        // main window's instruments read the entry's page in a content world of their own (`InstrumentPage`, WI-6).
+        "XDict": ["AppKit", "Foundation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
         // `Security` reads the service's own signature for the client requirement (`ClientCheck`).

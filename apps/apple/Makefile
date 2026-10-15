@@ -14,7 +14,9 @@
 #                     view (Tools/build-lab.sh's kit): the hostile-input suite, a person's hands on it, and the owner's
 #                     dictionaries (E2E_CORPUS in local.mk); `library` imports the core's generated packages through
 #                     the app's library, drops one on its window by real pointer events, and registers, moves and
-#                     relaunches the owner's dictionaries. STAGES="launch" runs only those
+#                     relaunches the owner's dictionaries; `lookup` drives the real app's main window by key events
+#                     alone, reads it as VoiceOver does, and runs the main window's scenario through it (`hostile` and
+#                     `entries` also run their checks through the app's own window). STAGES="launch" runs only those
 #   make e2e-status   what each stage last did, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses

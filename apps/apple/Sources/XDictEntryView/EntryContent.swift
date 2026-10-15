@@ -88,3 +88,11 @@ public protocol EntryContent: Sendable {
     func resource(_ path: String) async throws -> EntryResource
     func link(_ url: String, origin: EntryLinkOrigin) async throws -> EntryLink
 }
+
+/// Where the view lands in an entry once it has loaded (plan-macos-v1 WI-6): its top; the anchor a link named; or the
+/// scroll offset a place in the reader's trail was left at, in CSS pixels from the top, which Back restores (I8).
+public enum EntryLanding: Hashable, Sendable {
+    case top
+    case anchor(String)
+    case offset(Double)
+}

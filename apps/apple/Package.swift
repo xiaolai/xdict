@@ -21,8 +21,16 @@ let package = Package(
         .target(name: "XDictContract"),
 
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
-        // and nowhere below (`StringCatalogTests`).
-        .target(name: "XDictUI", dependencies: ["XDictBase", "XDictContract", "XDictLibrary"]),
+        // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
+        .target(name: "XDictUI", dependencies: ["XDictBase", "XDictContract", "XDictEntryView", "XDictLibrary",
+                                                "XDictSearch"]),
+
+        // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
+        // dictionary looked up on its own and its results painted as they arrive (Q12), paged to every record (Q10);
+        // why a dictionary has nothing to show, as a kind with its next action (Q11); suggestions; the trail of entries
+        // read, with Back, Forward and the original word (I7, I8); and the entry view fed from the service
+        // (`ServiceEntryContent`, behind the entry view's own seam). Kinds, never sentences: the view layer words them.
+        .target(name: "XDictSearch", dependencies: ["XDictClient", "XDictContract", "XDictEntryView", "XDictLibrary"]),
 
         // **The entry view and its confinement** (plan-macos-v1 WI-4; ADR-0009 decision 7; ADR-0007 decision 14): a
         // `WKWebView` per open dictionary, its `xdict:` scheme handler, the core's policy as a header on every response,
@@ -40,7 +48,8 @@ let package = Package(
         // The development instruments' scenarios (the E2E `service` stage): the conformance fixtures answered through the
         // contract, and the service's checks that need a real service — a kill, a stall, a racing idle timer. They ship
         // in the app, as the handshake report does: they read only the fixtures they are pointed at.
-        .target(name: "XDictInstruments", dependencies: ["XDictClient", "XDictContract", "XDictLibrary"]),
+        .target(name: "XDictInstruments", dependencies: ["XDictClient", "XDictContract", "XDictLibrary",
+                                                        "XDictSearch"]),
 
         // **The reader's library** (plan-macos-v1 WI-5; ADR-0009 decision 2: the app's own, in its Application Support):
         // which files make each dictionary and where they are now (a security-scoped bookmark and a file id per file),
@@ -51,7 +60,7 @@ let package = Package(
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
         .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
-                                                        "XDictInstruments", "XDictLibrary", "XDictUI"]),
+                                                        "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictUI"]),
 
         // **A development instrument, never in XDict.app** (`Tools/build-lab.sh`, `Tools/build-bundle.sh` holds the app
         // to its two executables): the production entry view, fed by the core linked in directly, so the E2E stages can
@@ -85,10 +94,15 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictLibrary", "XDictUI"]),
+        .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
+                                                        "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.
         .testTarget(name: "XDictLibraryTests", dependencies: ["XDictClient", "XDictContract", "XDictLibrary"]),
+        // The main window's model against a fake of the service: scope, order, painting as each answers, paging,
+        // unavailable dictionaries, suggestions, the trail, and the entry view's content over the contract.
+        .testTarget(name: "XDictSearchTests", dependencies: ["XDictClient", "XDictContract", "XDictEntryView",
+                                                             "XDictLibrary", "XDictSearch"]),
         // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.

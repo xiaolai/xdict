@@ -37,23 +37,29 @@ struct ConfinementTests {
 
     static let shown = URL(string: "xdict://d/entry/run")
     static func facts(_ url: String?, main: Bool? = true, kind: EntryNavigationPolicy.Kind = .linkActivated,
-                      download: Bool = false, pending: URL? = nil, current: URL? = shown) -> EntryNavigationPolicy.Facts {
+                      download: Bool = false, own: EntryNavigationPolicy.OwnLoad? = nil,
+                      current: URL? = shown) -> EntryNavigationPolicy.Facts {
         EntryNavigationPolicy.Facts(url: url.flatMap(URL.init(string:)), targetIsMainFrame: main, kind: kind,
-                                    download: download, pendingDocument: pending, currentDocument: current)
+                                    download: download, ownLoad: own, currentDocument: current)
     }
 
     @Test func theNavigationTable() throws {
         let remote = try #require(URL(string: "https://example.com/a"))
         let rows: [(EntryNavigationPolicy.Facts, EntryNavigationPolicy.Verdict)] = [
             // 1. A download, even of the view's own document.
-            (Self.facts("xdict://d/entry/run", kind: .other, download: true, pending: Self.shown), .refuse(.download)),
+            (Self.facts("xdict://d/entry/run", kind: .other, download: true, own: .latest), .refuse(.download)),
             (Self.facts(nil), .refuse(.noURL)),
             // 2. Frames the page writes itself.
             (Self.facts("about:blank", main: false, kind: .other), .allowFrameOfItsOwn),
             (Self.facts("about:srcdoc", main: false, kind: .other), .allowFrameOfItsOwn),
             // 3. The document being loaded, in the main frame only.
-            (Self.facts("xdict://d/entry/run", kind: .other, pending: Self.shown, current: nil), .loadDocument),
-            (Self.facts("xdict://d/entry/run", main: false, kind: .other, pending: Self.shown, current: nil),
+            (Self.facts("xdict://d/entry/run", kind: .other, own: .latest, current: nil), .loadDocument),
+            (Self.facts("xdict://d/entry/run", main: false, kind: .other, own: .latest, current: nil),
+             .route("xdict://d/entry/run")),
+            // 3b. A document the view asked for and has since replaced: dropped, never routed as a link to it.
+            (Self.facts("xdict://d/entry/run", kind: .other, own: .superseded, current: nil), .dropSuperseded),
+            (Self.facts("xdict://d/entry/walk", kind: .other, own: .superseded), .dropSuperseded),
+            (Self.facts("xdict://d/entry/run", main: false, kind: .other, own: .superseded, current: nil),
              .route("xdict://d/entry/run")),
             // 4. A fragment of the shown document.
             (Self.facts("xdict://d/entry/run#sense-2"), .allowSameDocument),
@@ -79,12 +85,58 @@ struct ConfinementTests {
             (Self.facts("file:///etc/passwd"), .refuse(.otherScheme)),
             (Self.facts("mailto:a@example.com"), .refuse(.otherScheme)),
             (Self.facts("xdict://e/entry/run"), .refuse(.otherScheme)),
-            (Self.facts("xdict://d:1/entry/run", pending: URL(string: "xdict://d:1/entry/run")), .refuse(.otherScheme)),
+            (Self.facts("xdict://d:1/entry/run", own: .latest), .refuse(.otherScheme)),
         ]
         for (facts, verdict) in rows {
             #expect(EntryNavigationPolicy.decide(facts) == verdict, "\(facts.url?.absoluteString ?? "nil")")
         }
         #expect(rows.filter { $0.1.allows }.count == 4)
+    }
+
+    // MARK: - The view's own loads
+
+    /// WebKit asks about every load the view makes, in order, even one a later load has already replaced: a question
+    /// about the last load asked is the document to show; one about an earlier load is that load, replaced — not the
+    /// page following a link to its word (the E2E `lookup` stage saw a replaced `apple` looked up as a link, 2026-10-15).
+    @Test func aQuestionAboutALoadSinceReplacedIsThatLoad() throws {
+        let apple = try #require(URL(string: "xdict://d/entry/apple")), banana = try #require(URL(string: "xdict://d/entry/banana"))
+        var loads = EntryDocumentLoads()
+        #expect(loads.status(of: apple) == nil, "a load never asked for is the page's")
+        loads.load(apple)
+        loads.load(banana)
+        #expect(loads.status(of: apple) == .superseded)
+        #expect(loads.status(of: apple) == .superseded, "asking does not answer")
+        loads.answered(apple)
+        #expect(loads.status(of: apple) == nil, "answered once, the page's own navigation to it is a link again")
+        #expect(loads.status(of: banana) == .latest)
+        loads.answered(banana)
+        #expect(loads.status(of: banana) == nil)
+    }
+
+    /// The same document asked for twice: the first question is the first load, replaced; the second, the document.
+    @Test func theSameDocumentAskedForTwiceIsAnsweredInOrder() throws {
+        let apple = try #require(URL(string: "xdict://d/entry/apple"))
+        var loads = EntryDocumentLoads()
+        loads.load(apple)
+        loads.load(apple)
+        #expect(loads.status(of: apple) == .superseded)
+        loads.answered(apple)
+        #expect(loads.status(of: apple) == .latest)
+        loads.answered(apple)
+        #expect(loads.status(of: apple) == nil)
+    }
+
+    /// A load WebKit never asked about (replaced before it began) is forgotten once a later one is answered, so it
+    /// cannot swallow the page's own navigation to that word afterwards.
+    @Test func aLoadNeverAskedAboutIsForgottenOnceALaterOneIsAnswered() throws {
+        let apple = try #require(URL(string: "xdict://d/entry/apple")), banana = try #require(URL(string: "xdict://d/entry/banana"))
+        var loads = EntryDocumentLoads()
+        loads.load(apple)
+        loads.load(banana)
+        #expect(loads.status(of: banana) == .latest)
+        loads.answered(banana)
+        #expect(loads.status(of: apple) == nil)
+        #expect(loads.status(of: banana) == nil)
     }
 
     @Test func onlyItsOwnResponsesAreShown() {

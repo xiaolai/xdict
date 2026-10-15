@@ -40,7 +40,10 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private let confinement: EntryConfinement
     private weak var host: EntryPaneHost?
     private(set) var reference: EntryReference?
-    private var pending: URL?
+    /// Where the document being loaded lands once it has: applied once, at its `didFinish`.
+    private var landing: EntryLanding = .top
+    /// The documents asked of WebKit whose navigation it has not yet asked about.
+    private var loads = EntryDocumentLoads()
     private(set) var current: URL?
     private var generation = 0
     private var scheme: EntryColourScheme
@@ -59,6 +62,15 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         }
         guard !confinement.featuresOff.isEmpty else { return .success([:]) }
         return EntrySwitches.turnOff(confinement.featuresOff, on: switches)
+    }
+
+    /// The preferences every pane's web view is made with: a script opens no window by itself (part of the new-window
+    /// layer; off only in the lab's control for that layer), no element goes full screen, and Tab moves through the
+    /// entry's links so the keyboard can follow one (R10).
+    static func configure(_ preferences: WKPreferences, confinement: EntryConfinement) {
+        preferences.javaScriptCanOpenWindowsAutomatically = !confinement.refusesNewWindows
+        preferences.isElementFullscreenEnabled = false
+        preferences.tabFocusesLinks = true
     }
 
     /// A pane for `content`, or the reason none is made. `makeWebView` is called only once the gate has passed, so a
@@ -80,9 +92,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         let handler = EntrySchemeHandler(server: server) { [weak host] event in host?.record(event) }
         let configuration = WKWebViewConfiguration()
         configuration.preferences = preferences
-        // Part of the new-window layer: a script opens no window by itself. Off only in the lab's control for that layer.
-        preferences.javaScriptCanOpenWindowsAutomatically = !confinement.refusesNewWindows
-        preferences.isElementFullscreenEnabled = false
+        configure(preferences, confinement: confinement)
         configuration.websiteDataStore = .nonPersistent()
         configuration.setURLSchemeHandler(handler, forURLScheme: EntryRoutes.scheme)
         configuration.mediaTypesRequiringUserActionForPlayback = .all
@@ -126,8 +136,9 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     // MARK: - Showing
 
-    /// Asks the dictionary for the entry, then loads it. A later `show` supersedes an earlier one still waiting.
-    func show(_ reference: EntryReference) async -> Bool {
+    /// Asks the dictionary for the entry, then loads it, to land at `landing`. A later `show` supersedes an earlier one
+    /// still waiting.
+    func show(_ reference: EntryReference, landing: EntryLanding = .top) async -> Bool {
         generation += 1
         let mine = generation
         host?.record(.documentRequested(reference))
@@ -149,12 +160,13 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         }
         server.register(document, at: url)
         self.reference = reference
+        self.landing = landing
         load(url)
         return true
     }
 
     private func load(_ url: URL) {
-        pending = url
+        loads.load(url)
         installScripts()
         view.load(URLRequest(url: url))
     }
@@ -226,11 +238,22 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     }
 
     private func scroll(to anchor: String) {
-        Task { @MainActor in
-            _ = try? await view.callAsyncJavaScript(
-                "var e = document.getElementById(a) || document.getElementsByName(a)[0]; if (e) e.scrollIntoView();",
-                arguments: ["a": anchor], in: nil, contentWorld: Self.world)
-        }
+        Task { @MainActor in await land(.anchor(anchor)) }
+    }
+
+    /// Scrolls to `landing`; answers where the document now is.
+    @discardableResult
+    func land(_ landing: EntryLanding) async -> Double? {
+        guard !closed, let script = EntryScripts.landing(landing) else { return nil }
+        return (try? await view.callAsyncJavaScript(script.body, arguments: script.arguments, in: nil,
+                                                    contentWorld: Self.world)) as? Double
+    }
+
+    /// How far down the entry the reader has scrolled, in CSS pixels; nil with no document.
+    func scrollOffset() async -> Double? {
+        guard !closed, current != nil else { return nil }
+        return (try? await view.callAsyncJavaScript(EntryScripts.scrollOffset, arguments: [:], in: nil,
+                                                    contentWorld: Self.world)) as? Double
     }
 
     // MARK: - WKNavigationDelegate
@@ -238,22 +261,27 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     func webView(_ webView: WKWebView, decidePolicyFor action: WKNavigationAction,
                  decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         let kind = EntryNavigationPolicy.Kind(rawValue: action.navigationType.rawValue) ?? .other
+        let url = action.request.url
+        // Only a main-frame navigation can be a load the view asked for.
+        let own = action.targetFrame?.isMainFrame == true ? url.flatMap(loads.status(of:)) : nil
         let facts = EntryNavigationPolicy.Facts(
-            url: action.request.url, targetIsMainFrame: action.targetFrame?.isMainFrame, kind: kind,
-            download: action.shouldPerformDownload, pendingDocument: pending, currentDocument: current)
+            url: url, targetIsMainFrame: action.targetFrame?.isMainFrame, kind: kind,
+            download: action.shouldPerformDownload, ownLoad: own, currentDocument: current)
         let verdict = EntryNavigationPolicy.decide(facts)
-        host?.record(.navigation(url: action.request.url?.absoluteString ?? "", verdict: String(describing: verdict),
+        host?.record(.navigation(url: url?.absoluteString ?? "", verdict: String(describing: verdict),
                                  mainFrame: action.targetFrame?.isMainFrame ?? false, type: kind.rawValue))
+        if let url, verdict == .loadDocument || verdict == .dropSuperseded { loads.answered(url) }
         guard confinement.navigationPolicy else {
-            if case .loadDocument = verdict { pending = nil; current = action.request.url }
+            if case .loadDocument = verdict { current = url }
             decisionHandler(.allow)
             return
         }
         switch verdict {
         case .loadDocument:
-            pending = nil
-            current = action.request.url
+            current = url
             decisionHandler(.allow)
+        case .dropSuperseded:
+            decisionHandler(.cancel)
         case .allowFrameOfItsOwn, .allowSameDocument:
             decisionHandler(.allow)
         case .route(let url):
@@ -277,8 +305,14 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation?) {
         guard let url = webView.url, let current, EntryNavigationPolicy.sameDocument(url, current) else { return }
-        host?.record(.documentFinished(url))
-        host?.documentFinished(self)
+        let arrival = landing
+        landing = .top
+        Task { @MainActor in
+            // Landed before the document is reported finished, so whoever waits for it finds it where it belongs.
+            await land(arrival)
+            host?.record(.documentFinished(url))
+            host?.documentFinished(self)
+        }
     }
 
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {

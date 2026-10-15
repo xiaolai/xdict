@@ -11,6 +11,9 @@
 #     <dir>/library/  the packages the library's checks import (`library-fixture`): a file, a folder with ordered
 #                     volumes and a sidecar, a missing volume, three refusals, language names, a symbolic link out of
 #                     its folder, sounds, a file rewritten, and a 128 MiB one to cancel (plan-macos-v1 WI-5)
+#     <dir>/lookup/   the dictionaries the main window's checks search (`lookup-fixture`): an exact and an accented key,
+#                     phrase keys, internal keys, a trail of six entries, 66,355 records under one key, and four that
+#                     cannot answer, each for its own reason (plan-macos-v1 WI-6)
 #
 # Written into a scratch directory first and moved into place whole, so a failed run never leaves a mixture that
 # looks complete.
@@ -34,6 +37,8 @@ trap 'rm -rf "$scratch"' EXIT
     --bin service-fixture -- "$scratch/slow")
 (cd "$core" && CARGO_TARGET_DIR=$apple/.build/cargo cargo run --quiet --release --locked -p xdict-conformance \
     --bin library-fixture -- "$scratch/library")
+(cd "$core" && CARGO_TARGET_DIR=$apple/.build/cargo cargo run --quiet --release --locked -p xdict-conformance \
+    --bin lookup-fixture -- "$scratch/lookup")
 for fixture in tiny matrix; do
     cp "$conformance/$fixture/expected.json" "$scratch/$fixture/expected.json"
 done
@@ -42,7 +47,9 @@ for file in tiny/tiny.mdx tiny/tiny.mdd tiny/tiny.css tiny/tiny-rebuilt.mdx tiny
     slow/slow.mdx slow/slow.mdd slow/heavy.mdx library/file/single.mdx library/folder/vol/vol.2.mdd \
     library/folder/vol/vol.css library/gap/gap.2.mdd library/drop/dropped.mdx library/refused/v3/v3.mdd \
     library/refused/regcode/regcode.mdx library/refused/damaged/damaged.mdx library/lang/Plain\ Glossary.mdx \
-    library/escape/esc/esc.css library/sounds/sounds.mdd library/rewrite/second.mdx library/big/big.mdx; do
+    library/escape/esc/esc.css library/sounds/sounds.mdd library/rewrite/second.mdx library/big/big.mdx \
+    lookup/alpha/alpha.mdx lookup/beta/beta.mdx lookup/records/records.mdx lookup/damaged/damaged.mdx \
+    lookup/locked/locked.mdx lookup/gone/gone.mdx lookup/slow/slow.mdx; do
     [ -s "$scratch/$file" ] || fail "the writer left no $file"
 done
 # The escape is a symbolic link, or it tests nothing.

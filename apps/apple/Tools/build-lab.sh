@@ -1,6 +1,7 @@
 #!/bin/bash
 # The E2E kit for the entry view's stages (plan-macos-v1 WI-4): the development lab as a signed app, the fixtures the
-# core's own MDX writer makes from `conformance/fixtures`, the observers and the analysis, and the pointer helper.
+# core's own MDX writer makes from `conformance/fixtures`, the observers and the analysis, and the pointer helper; the
+# drag source (WI-5); the keyboard helper, the lookup stage's driver and the app's hostile run (WI-6).
 # Built here, run on the E2E Mac only (`Tools/e2e.sh`); **nothing here launches anything**.
 #
 #   build-lab.sh      writes .build/e2e-kit/ whole, or fails
@@ -58,4 +59,8 @@ cp Tools/hostile/observe.py Tools/hostile/dns_oracle.py Tools/hostile/analyze.py
 swiftc -O -warnings-as-errors -o "$KIT/pointer" Tools/hostile/pointer.swift || fail "the pointer helper did not build"
 # The library stage's drag source: a file dragged in from another app (plan-macos-v1 WI-5).
 swiftc -O -warnings-as-errors -o "$KIT/dragsource" Tools/library/dragsource.swift || fail "the drag source did not build"
+# The lookup stage's keyboard and driver, and the app's own runs of the hostile and entries checks (plan-macos-v1 WI-6).
+mkdir -p "$KIT/lookup"
+swiftc -O -warnings-as-errors -o "$KIT/lookup/keys" Tools/lookup/keys.swift || fail "the keyboard helper did not build"
+cp Tools/lookup/drive.py Tools/lookup/run-app-hostile.sh Tools/lookup/verdicts.py "$KIT/lookup/"
 echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"
