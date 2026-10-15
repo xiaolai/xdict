@@ -89,6 +89,9 @@
 @ library.control default editions,corpus
     library.control.missingWithoutRelinking
 
+@ library.health default corpus
+    health.everyDictionaryChecked health.findingsMatchCore health.keptForTheEdition health.sentencesInBothLanguages
+
 @ hostile.controls default kit
     hostile.suite.controls
 

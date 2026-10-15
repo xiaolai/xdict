@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictContract
 import XDictLibrary
 import XDictUI
 
@@ -55,5 +56,35 @@ struct LibrarySentencesTests {
         #expect(Set(sentences).count == notices.count, "\(sentences)")
         #expect(String(localized: LibrarySentences.unreadable(.damaged))
                 != String(localized: LibrarySentences.unreadable(.newerVersion(2))))
+    }
+
+    /// WI-12: one sentence per kind of finding, each its own and each saying how many; a missing file is named.
+    @Test func eachHealthFindingIsItsOwnSentenceWithItsCount() {
+        let findings = FindingKind.allCases.map {
+            HealthFinding(kind: $0, count: 4_321, name: $0 == .missingFile ? "OED.css" : nil, examples: [])
+        }
+        let sentences = findings.map { String(localized: LibrarySentences.health($0)) }
+        #expect(Set(sentences).count == FindingKind.allCases.count, "\(sentences)")
+        for sentence in sentences {
+            #expect(sentence.contains("4,321") || sentence.contains("4321"), "\(sentence)")
+        }
+        #expect(sentences[0].contains("OED.css"))
+    }
+
+    /// Checking, healthy, checked with findings, and a check that could not finish are told apart.
+    @Test func theCheckSaysWhereItIs() {
+        let healthy = Health(version: 1, entries: 706_524, findings: [], classes: [])
+        let repaired = Health(version: 1, entries: 9, findings: [HealthFinding(kind: .repaired, count: 2, name: nil,
+                                                                                examples: [])], classes: [])
+        let found = Health(version: 1, entries: 9, findings: [HealthFinding(kind: .emptyEntries, count: 1, name: nil,
+                                                                             examples: [])], classes: [])
+        let states: [HealthState] = [.checking(done: 2, total: 5), .checked(healthy), .checked(found), .unavailable]
+        let sentences = states.map { String(localized: LibrarySentences.healthStatus($0)) }
+        #expect(Set(sentences).count == states.count, "\(sentences)")
+        #expect(sentences[0].contains("40"))
+        #expect(sentences[1].contains("706,524") || sentences[1].contains("706524"))
+        #expect(String(localized: LibrarySentences.healthStatus(.checked(repaired))) == sentences[1]
+                    .replacingOccurrences(of: "706,524", with: "9").replacingOccurrences(of: "706524", with: "9"),
+                "what XDict repairs itself leaves a dictionary healthy")
     }
 }

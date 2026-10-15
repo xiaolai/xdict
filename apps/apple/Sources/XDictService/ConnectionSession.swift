@@ -14,6 +14,8 @@ final class ServiceContext: Sendable {
     let bulk = WorkGate(ceiling: WorkGate.ceiling(for: .bulk))
     let lookups = WorkGate(ceiling: WorkGate.ceiling(for: .lookup))
     let queue = DispatchQueue(label: "ai.xdict.app.DictionaryService.core", qos: .userInitiated, attributes: .concurrent)
+    /// Where health checks run (WI-12): below the reader's calls, which they must never hold up.
+    let background = DispatchQueue(label: "ai.xdict.app.DictionaryService.health", qos: .utility, attributes: .concurrent)
     let log = Logger(subsystem: XDictIdentity.dictionaryService, category: "service")
     private let connections = Atomic<UInt64>(0)
 
@@ -112,6 +114,7 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
             answer(Response(id: request.id, outcome: outcome), payload: payload, credit: credit, reply: reply)
         }
         guard let creditClass = operation.creditClass else {
+            if case .health = operation { return context.background.async(execute: job) }
             return context.queue.async(execute: job)
         }
         context.gate(for: creditClass).enter(connection: number, run: { [context] in context.queue.async(execute: job) }, dropped: {
@@ -122,10 +125,10 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         })
     }
 
-    /// An import's progress, reported to the client as events and answering `false` once `cancel` names it. Registered
-    /// before the import is queued, so a `cancel` that follows it on this connection always finds it.
+    /// An import's or a health check's progress, reported to the client as events and answering `false` once `cancel`
+    /// names it. Registered before the work is queued, so a `cancel` that follows it on this connection always finds it.
     private func importProgress(for request: Request) -> ImportProgress? {
-        guard case .importPackage = request.operation else { return nil }
+        guard request.operation.reportsProgress else { return nil }
         let id = request.id
         let progress = ImportProgress { [weak self] done, total in
             self?.send(ServiceEvent(request: id, kind: .progress(done: done, total: total)))

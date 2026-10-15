@@ -259,3 +259,38 @@ extension XDictCore.FileIdentity {
                   ctimeNs: identity.ctimeNs)
     }
 }
+
+// MARK: - Health (WI-12)
+
+extension XDictContract.Health {
+    init(_ health: XDictCore.Health) {
+        self.init(version: health.version, entries: health.entries,
+                  findings: health.findings.map {
+                      XDictContract.HealthFinding(kind: XDictContract.FindingKind($0.kind), count: $0.count, name: $0.name,
+                                                  examples: $0.examples.map { XDictContract.HealthExample(key: $0.key, text: $0.text) })
+                  },
+                  classes: health.classes.map { XDictContract.HealthClass(name: $0.name, count: $0.count) })
+    }
+}
+
+extension XDictContract.FindingKind {
+    init(_ kind: XDictCore.FindingKind) {
+        switch kind {
+        case .missingFile: self = .missingFile
+        case .missingSounds: self = .missingSounds
+        case .missingImages: self = .missingImages
+        case .missingWords: self = .missingWords
+        case .codeAsText: self = .codeAsText
+        case .commentMarks: self = .commentMarks
+        case .styleAsText: self = .styleAsText
+        case .brokenRedirects: self = .brokenRedirects
+        case .doubleEncoded: self = .doubleEncoded
+        case .undecodable: self = .undecodable
+        case .emptyEntries: self = .emptyEntries
+        case .hugeEntries: self = .hugeEntries
+        case .repeatedEntries: self = .repeatedEntries
+        case .oddHeadwords: self = .oddHeadwords
+        case .repaired: self = .repaired
+        }
+    }
+}

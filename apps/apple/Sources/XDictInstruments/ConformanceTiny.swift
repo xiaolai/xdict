@@ -109,6 +109,10 @@ extension ConformanceScenario {
             let got = await client.call(.resource(dict: dict, path: q["path"] as? String ?? "", render: render))
             c.compare("resources[\(n)]", q["resource"], Self.resource(got))
         }
+        c.compare("health", x["health"], Projection.outcome(await client.submitHealth(dict).outcome()) { d -> Any in
+            if case .health(let health) = d.answer { return Projection.health(health) }
+            return "\(d.answer)"
+        })
     }
 
     static func resource(_ outcome: ClientOutcome) -> Any {

@@ -109,11 +109,11 @@ struct LimitsTests {
         }
     }
 
-    /// Every operation has a deadline but the import, which is bounded by silence instead.
+    /// Every operation has a deadline but the import and the health check, which are bounded by silence instead.
     @Test func everyOperationButImportHasADeadline() {
         for operation in Fixtures.operations {
             let deadline = Deadlines.deadline(for: operation, onFreshConnection: false)
-            if case .importPackage = operation {
+            if operation.reportsProgress {
                 #expect(deadline == nil)
             } else {
                 #expect(deadline.map { $0 > .zero && $0 <= .seconds(15) } == true, "\(operation): no deadline in (0, 15 s]")
@@ -147,5 +147,17 @@ struct LimitsTests {
         #expect(Deadlines.deadline(for: .resource(dict: Fixtures.dict, path: "a", render: .reader), onFreshConnection: true)
                 == .seconds(15))
         #expect(Deadlines.deadline(for: .importPackage(spec: Fixtures.package), onFreshConnection: true) == nil)
+    }
+
+    /// WI-12: a health check reads every record of an edition, so like an import it has no deadline, is bounded by the
+    /// silence between its progress events, holds no credit, and names the dictionary whose files it reads.
+    @Test func aHealthCheckIsBoundedBySilenceLikeAnImport() {
+        let health = ServiceOperation.health(dict: Fixtures.dict)
+        #expect(Deadlines.deadline(for: health, onFreshConnection: false) == nil)
+        #expect(health.reportsProgress && ServiceOperation.importPackage(spec: Fixtures.package).reportsProgress)
+        #expect(!ServiceOperation.lookup(query: "a", dicts: [], options: LookupOptions(limit: 1, offset: 0, mode: .reader,
+                                                                                         generation: nil)).reportsProgress)
+        #expect(health.creditClass == nil && !health.isBulk && health.packageSpec == nil)
+        #expect(Contract.version == 3)
     }
 }

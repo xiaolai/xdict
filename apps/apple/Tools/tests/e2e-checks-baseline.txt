@@ -179,3 +179,8 @@ menubar.present
 menubar.looksUp
 shortcut.rebindPersists
 shortcut.clashRestores
+# added by WI-12 (the health check)
+health.everyDictionaryChecked
+health.findingsMatchCore
+health.keptForTheEdition
+health.sentencesInBothLanguages

@@ -75,6 +75,15 @@ enum Projection {
         }
     }
 
+    static func health(_ h: Health) -> [String: Any] {
+        ["version": h.version, "entries": h.entries,
+         "findings": h.findings.map { f -> [String: Any] in
+             ["kind": f.kind.rawValue, "count": f.count, "name": f.name ?? NSNull(),
+              "examples": f.examples.map { ["key": $0.key, "text": $0.text] }]
+         },
+         "classes": h.classes.map { ["name": $0.name, "count": $0.count] }]
+    }
+
     static func resource(_ r: Resource, bytes: Data?) -> [String: Any] {
         switch r {
         case .found(let path, let mime): ["type": "found", "path": path, "mime": mime, "text": String(decoding: bytes ?? Data(), as: UTF8.self)]

@@ -1,4 +1,5 @@
 import Foundation
+import XDictContract
 import XDictLibrary
 
 /// **What the library tells the reader, in their language** (ADR-0007 decision 10: the library hands kinds, the view
@@ -112,6 +113,66 @@ public enum LibrarySentences {
         case .missing(let name): refusal(.missingFile(name))
         case .outsideItsFolder(let name):
             LocalizedStringResource("“\(name)” has become a link or has left its folder, so XDict will not read it.")
+        }
+    }
+
+    // MARK: - Health (WI-12)
+
+    /// One sentence per finding of the health check, saying how many; nothing asks the reader to mend what XDict mends.
+    public static func health(_ finding: HealthFinding) -> LocalizedStringResource {
+        let n = finding.count
+        switch finding.kind {
+        case .missingFile:
+            return LocalizedStringResource("""
+                “\(finding.name ?? "")” is not in this dictionary’s folder, but its entries use it \(n) times, so they may \
+                look unstyled or not work. Put the file next to the .mdx to fix this.
+                """)
+        case .missingSounds:
+            return LocalizedStringResource("\(n) pronunciations point to sound files that are not here. Add the dictionary’s .mdd file.")
+        case .missingImages:
+            return LocalizedStringResource("\(n) pictures are not among the dictionary’s files.")
+        case .missingWords:
+            return LocalizedStringResource("\(n) cross-references point to words this dictionary does not have.")
+        case .codeAsText:
+            return LocalizedStringResource("\(n) places show HTML code as text. This is in the dictionary file itself.")
+        case .commentMarks:
+            return LocalizedStringResource("""
+                \(n) places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the \
+                dictionary file itself.
+                """)
+        case .styleAsText:
+            return LocalizedStringResource("\(n) entries show style rules as text. This is in the dictionary file itself.")
+        case .brokenRedirects:
+            return LocalizedStringResource("\(n) entries redirect to an entry that does not exist, or back to themselves.")
+        case .doubleEncoded:
+            return LocalizedStringResource("\(n) places show garbled characters: their text was encoded twice when the dictionary was made.")
+        case .undecodable:
+            return LocalizedStringResource("\(n) entries hold bytes that are not text in the dictionary’s encoding.")
+        case .emptyEntries:
+            return LocalizedStringResource("\(n) entries are empty.")
+        case .hugeEntries:
+            return LocalizedStringResource("\(n) entries are larger than 1 MB and may be slow to show.")
+        case .repeatedEntries:
+            return LocalizedStringResource("\(n) entries are stored twice under the same headword.")
+        case .oddHeadwords:
+            return LocalizedStringResource("\(n) headwords hold extra spaces, invisible characters or HTML code.")
+        case .repaired:
+            return LocalizedStringResource("XDict cleans up \(n) stray control characters and line breaks when it shows these entries.")
+        }
+    }
+
+    /// Where the check is: running (how far), done (healthy, or with findings below), or unable to finish.
+    public static func healthStatus(_ state: HealthState) -> LocalizedStringResource {
+        switch state {
+        case .checking(let done, let total):
+            let percent = total > 0 ? Int(done * 100 / total) : 0
+            return LocalizedStringResource("Checking entries… \(percent)%")
+        case .checked(let health) where health.findings.allSatisfy({ $0.kind == .repaired }):
+            return LocalizedStringResource("Healthy. Checked all \(health.entries) entries.")
+        case .checked(let health):
+            return LocalizedStringResource("Checked all \(health.entries) entries.")
+        case .unavailable:
+            return LocalizedStringResource("The check could not finish. It runs again when the dictionary next opens.")
         }
     }
 }

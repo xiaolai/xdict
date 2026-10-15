@@ -36,7 +36,8 @@ public enum Contract {
     /// The contract's version: raised by any change this notice calls frozen; never lowered, never reused.
     /// 2 (2026-10-14): `Missing` gained the raw values `edition` and `lineage`, which the core's lineage operations
     /// report (ADR-0002 decision 3, as amended that day).
-    public static let version: UInt32 = 2
+    /// 3 (2026-10-16): the operation `health` and its answer, the core's health check of an open dictionary (WI-12).
+    public static let version: UInt32 = 3
 }
 
 // MARK: - The request
@@ -156,7 +157,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// Hash, index and register a package (ADR-0007 decision 3): the slow call, reported through `ServiceEvent`s and
     /// cancelled by `cancel`. No deadline: bounded by `Deadlines.importSilence`. Sent with handles.
     case importPackage(spec: PackageSpec)
-    /// Stop the import `request` names, at its next progress report; that import then answers `cancelled`.
+    /// Stop the import or health check `request` names, at its next progress report; it then answers `cancelled`.
     case cancel(request: UInt64)
     /// Open an imported package: headers only, never hashing (ADR-0007 decision 3). Sent with handles.
     case openPackage(spec: PackageSpec)
@@ -183,13 +184,17 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// The edition's lineage as the registry holds it: how a client whose join or split lost its reply (the service
     /// died after committing) learns what happened, without repeating it.
     case lineageOf(edition: Edition)
+    /// The health check of an open dictionary's edition (plan-macos-v1 WI-12): every record read once, then kept beside
+    /// its index, so asking again answers at once. Like an import it has no deadline, reports progress as events, and
+    /// `cancel` stops it; the service runs it below the reader's calls.
+    case health(dict: DictId)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf: nil
+             .lineageOf, .health: nil
         }
     }
 
@@ -198,7 +203,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf: nil
+             .lineageOf, .health: nil
         }
     }
 
@@ -207,7 +212,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
-             .splitLineage, .lineageOf: false
+             .splitLineage, .lineageOf, .health: false
         }
     }
 
@@ -217,7 +222,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
-        case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf: nil
+        case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health: nil
         }
     }
 
@@ -226,7 +231,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     func filesRead(filesOf: [DictId: [UUID]]) -> [UUID] {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
-        case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _): filesOf[dict] ?? []
+        case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict):
+            filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf: []
         }
@@ -245,6 +251,17 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .link: .link
         case .resource: .resource
         case .joinLineage, .splitLineage, .lineageOf: .lineage
+        case .health: .health
+        }
+    }
+
+    /// An import or a health check: the long calls, bounded by silence between their progress events rather than by a
+    /// deadline (`Deadlines.importSilence`), and stopped by `cancel`.
+    public var reportsProgress: Bool {
+        switch self {
+        case .importPackage, .health: true
+        case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
+             .splitLineage, .lineageOf: false
         }
     }
 }
@@ -358,13 +375,15 @@ public enum Answer: Codable, Hashable, Sendable {
     /// The edition's lineage: after a join or a split, the one it now has; for `lineageOf`, none when the registry does
     /// not know the edition.
     case lineage(LineageId?)
+    /// What the health check found.
+    case health(Health)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage: false
+             .lineage, .health: false
         }
     }
 
@@ -390,21 +409,22 @@ public enum Answer: Codable, Hashable, Sendable {
         case .link: .link
         case .resource: .resource
         case .lineage: .lineage
+        case .health: .health
         }
     }
 }
 
 /// What `cancel` found.
 public enum Cancellation: String, Codable, Hashable, Sendable {
-    /// The import was running; it stops at its next progress report and answers `cancelled`.
+    /// The import or health check was running; it stops at its next progress report and answers `cancelled`.
     case stopping
-    /// No import of that id is running: it never ran here, or it has already answered.
+    /// No import or health check of that id is running: it never ran here, or it has already answered.
     case notRunning
 }
 
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
-    case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage
+    case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
 }
 
 // MARK: - Events

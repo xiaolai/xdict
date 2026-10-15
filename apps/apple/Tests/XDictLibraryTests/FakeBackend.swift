@@ -101,6 +101,40 @@ actor FakeBackend: LibraryBackend {
         return .success(Delivered(answer: .closed, payload: nil))
     }
 
+    // MARK: - Health (WI-12)
+
+    /// Every dictionary checked, in order, and every check cancelled.
+    private(set) var checked: [DictId] = []
+    private(set) var checksCancelled: [DictId] = []
+    /// What a check answers; held checks wait until `releaseChecks`.
+    var healthAnswer = Health(version: 1, entries: 1, findings: [], classes: [])
+    var holdingChecks = false
+    private var heldChecks: [(DictId, CheckedContinuation<Bool, Never>)] = []
+
+    func setHealthAnswer(_ health: Health) { healthAnswer = health }
+    func holdChecks() { holdingChecks = true }
+    var heldCheckCount: Int { heldChecks.count }
+
+    func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> HealthJob {
+        checked.append(dict)
+        progress(0, 1)
+        return HealthJob(outcome: { await self.check(dict) }, cancel: { await self.cancelCheck(dict) })
+    }
+
+    private func check(_ dict: DictId) async -> Result<Health, ClientFailure> {
+        if holdingChecks, !checksCancelled.contains(dict) {
+            let released = await withCheckedContinuation { heldChecks.append((dict, $0)) }
+            guard released else { return .failure(.wire(.core(.cancelled(detail: "cancelled")))) }
+        }
+        return checksCancelled.contains(dict) ? .failure(.wire(.core(.cancelled(detail: "cancelled")))) : .success(healthAnswer)
+    }
+
+    private func cancelCheck(_ dict: DictId) {
+        checksCancelled.append(dict)
+        for (held, waiting) in heldChecks where held == dict { waiting.resume(returning: false) }
+        heldChecks.removeAll { $0.0 == dict }
+    }
+
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure> {
         lineageCalls.append(operation)
         switch operation {

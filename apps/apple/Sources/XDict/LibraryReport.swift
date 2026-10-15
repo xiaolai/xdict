@@ -1,5 +1,6 @@
 import Foundation
 import XDictClient
+import XDictContract
 import XDictInstruments
 import XDictLibrary
 import XDictUI
@@ -22,6 +23,27 @@ enum LibraryReport {
             findings.merge(sentences())
             return findings
         }
+    }
+
+    /// **Each finding the reader was told shows its sentence** (WI-12), from the bundle's own tables, in both languages
+    /// and translated, with its count in it.
+    static func healthSentences(_ told: [HealthFinding]) -> Findings {
+        var findings = Findings()
+        var bad: [String] = []
+        for finding in told {
+            var english = LibrarySentences.health(finding), chinese = english
+            english.locale = Locale(identifier: "en")
+            chinese.locale = Locale(identifier: "zh-Hans")
+            let en = String(localized: english), zh = String(localized: chinese)
+            let translated = zh != en && zh.unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+            let counted = [en, zh].allSatisfy { text in
+                text.filter(\.isNumber).contains(String(finding.count)) || text.contains(finding.count.formatted())
+            }
+            if en.isEmpty || !translated || !counted { bad.append("\(finding.kind.rawValue): en \(en) | zh-Hans \(zh)") }
+        }
+        findings.check("health.sentencesInBothLanguages", bad.isEmpty && !told.isEmpty,
+                       bad.isEmpty ? "\(told.count) findings, each a sentence in English and Chinese" : "\(bad.prefix(3))")
+        return findings
     }
 
     /// **Each refusal shows its sentence**: the one the library row and details show for it, from the bundle's own
@@ -55,7 +77,8 @@ enum LibraryCorpusReport {
     static func run(_ arguments: [String]) -> Never {
         Instrument.report {
             let usage = "\(flag) import <corpus> --library-dir <dir> --expected <json> | relaunch --library-dir <dir> "
-                + "--moved-to <folder> [--no-relink] | rewrite --library-dir <dir>"
+                + "--moved-to <folder> [--no-relink] | rewrite --library-dir <dir> | health <corpus> --library-dir <dir> "
+                + "--expected <health-expected.json>"
             guard let phase = Instrument.value(after: flag, in: arguments),
                   let directory = Instrument.value(after: "--library-dir", in: arguments).map(URL.init(fileURLWithPath:))
             else { return Instrument.usage(usage) }
@@ -73,6 +96,16 @@ enum LibraryCorpusReport {
                 return await corpus.relaunch(movedTo: URL(fileURLWithPath: moved), relinking: !arguments.contains("--no-relink"))
             case "rewrite":
                 return await corpus.rewrite()
+            case "health":
+                guard let folder = arguments.firstIndex(of: phase).flatMap({ arguments.indices.contains($0 + 1) ? arguments[$0 + 1] : nil }),
+                      let expectedFile = Instrument.value(after: "--expected", in: arguments),
+                      let data = FileManager.default.contents(atPath: expectedFile),
+                      let expected = LibraryHealth.expected(data)
+                else { return Instrument.usage(usage) }
+                var (findings, told) = await LibraryHealth(client: ServiceClient(), libraryDirectory: directory)
+                    .run(URL(fileURLWithPath: folder), expected: expected)
+                findings.merge(LibraryReport.healthSentences(told))
+                return findings
             default:
                 return Instrument.usage(usage)
             }
