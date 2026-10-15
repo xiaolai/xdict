@@ -285,6 +285,9 @@ final class AppCorpusRun {
                      scrollHeight: document.documentElement.scrollHeight }
             """) as? [String: Any] ?? [:]
         narrow["entryPoints"] = entry.view.frame.width
+        // The width the window settled at, which `analyze.py entries` requires as the lab reports it: without it the
+        // narrow check failed as "its width not reported" whatever the entry did (found 2026-10-15).
+        narrow["windowWidth"] = Double(window.window.contentLayoutRect.width)
         report["narrow"] = narrow
         return report
     }
