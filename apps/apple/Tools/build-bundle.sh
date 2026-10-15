@@ -13,6 +13,8 @@
 #
 # Environment:
 #   XDICT_SIGN_ID       a Developer ID Application identity. Unset: the login keychain's, which must be exactly one
+#   XDICT_REMOTE_PRODUCTS  set by `make` when BUILD_HOST is: the products Tools/remote-build.sh built there, used in
+#                       place of a build here (and its warnings gate, run there)
 #   XDICT_BUILD_NUMBER  CFBundleVersion of a release, a positive integer from the release counter. Unset: a development
 #                       build, numbered from the UTC clock and signed offline
 set -euo pipefail
@@ -312,17 +314,31 @@ sign_part() {  # $1: entitlements file; $2: the code object
     done
 }
 
+# The products Tools/remote-build.sh brought back, printed, only if they were built of the tree here now.
+remote_products() {  # $1: the folder
+    local tree
+    tree=$(Tools/source-tree.sh) || fail "could not read the source tree"
+    [ -s "$1/source-tree" ] || fail "$1 holds no finished remote build: run Tools/remote-build.sh (make does)"
+    [ "$(cat "$1/source-tree")" = "$tree" ] || fail "$1 was built of another source tree: build again"
+    printf '%s\n' "$1"
+}
+
 assemble() {
     [ -s "$CORE_VERSIONS" ] && [ -d Generated/xdictFFI.xcframework ] \
         || fail "Generated/ is missing or incomplete: run Tools/build-core.sh (make does)"
     [ -s "$CATALOG" ] || fail "missing string catalog: $CATALOG"
-    swift build -c "$CONFIG"
-    # **A warning the compiler wrote down fails the bundle, as it fails `make`'s tests**: this reads the build the bundle
-    # is made of, which compiles each module whole and no test target.
-    python3 Tools/compiler-warnings.py "$RELEASE_DIAGNOSTICS" --whole-module --no-test-targets \
-        || fail "the bundle's build has a warning the compiler did not fail it on, or its diagnostics could not be read"
     local products
-    products=$(swift build -c "$CONFIG" --show-bin-path)
+    if [ -n "${XDICT_REMOTE_PRODUCTS:-}" ]; then
+        # Built on BUILD_HOST by Tools/remote-build.sh, which ran this same warnings gate there; held to this very tree.
+        products=$(remote_products "$XDICT_REMOTE_PRODUCTS")
+    else
+        swift build -c "$CONFIG"
+        # **A warning the compiler wrote down fails the bundle, as it fails `make`'s tests**: this reads the build the
+        # bundle is made of, which compiles each module whole and no test target.
+        python3 Tools/compiler-warnings.py "$RELEASE_DIAGNOSTICS" --whole-module --no-test-targets \
+            || fail "the bundle's build has a warning the compiler did not fail it on, or its diagnostics could not be read"
+        products=$(swift build -c "$CONFIG" --show-bin-path)
+    fi
     [ -x "$products/$APP_NAME" ] && [ -x "$products/$SERVICE" ] || fail "swift build produced no $APP_NAME or $SERVICE"
     # The control for `verify_no_development_lab`'s flag search: the lab this build made must hold the flag.
     LC_ALL=C grep -aqF -- "$LAB_FLAG" "$products/$LAB" \
