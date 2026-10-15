@@ -352,7 +352,16 @@ fn html_out<'s>(
         });
         if let Some(body) = bogus {
             let whole = 2 + body.find('>').map_or(body.len(), |e| e + 1);
-            out.text.push_str(from.get(..whole).unwrap_or(from));
+            // S2 takes these too, since a browser's reading of one depends on a context a tag scanner cannot know:
+            // in `svg` or `math`, `<![CDATA[` runs to `]]>`, not to the first `>`, and may end inside what this scan
+            // took for an attribute's value (`tests/reassembly.rs`).
+            if let Some(norm) = out.norm.as_mut()
+                && !norm.strip_off_for_tests
+            {
+                norm.counts.strip.comments += 1;
+            } else {
+                out.text.push_str(from.get(..whole).unwrap_or(from));
+            }
             rest = from.get(whole..).unwrap_or("");
             continue;
         }
@@ -393,6 +402,9 @@ fn html_out<'s>(
                 let e = end_tag(after, "script");
                 let body = after.get(..e).unwrap_or("");
                 let purpose = match crate::strip::script_purpose(body) {
+                    // In `svg` or `math` a script's text is markup to a browser: one holding `<` would build elements
+                    // this scan read as script.
+                    _ if out.foreign > 0 && body.contains('<') => Err("other"),
                     Err("other") if norm.style.facts.calls_kept(body) => Ok("calls a kept script"),
                     p => p,
                 };
@@ -459,7 +471,12 @@ fn html_out<'s>(
         }
         let written = out.text.as_str().len();
         let Some((name, after, end)) = tag(from, base, dir, &mut out) else {
-            out.text.push('<');
+            // A `<` that starts no tag is text. In a normalized entry it is written `&lt;` unless what follows it can
+            // never be removed (whitespace, a digit, `=`): a removal after it (a comment, a script, a glyph) would
+            // otherwise join it to the text beyond into a tag this scan never read (`<<!---->script>`).
+            let safe =
+                from.as_bytes().get(1).is_some_and(|b| b.is_ascii_whitespace() || b.is_ascii_digit() || *b == b'=');
+            out.text.push_str(if out.norm.is_some() && !safe { "&lt;" } else { "<" });
             rest = from.get(1..).unwrap_or("");
             continue;
         };
@@ -519,10 +536,18 @@ fn html_out<'s>(
         rest = after;
         if script {
             let text = script_out(body, base, out.room()).ok();
-            let text = out.fitting(text);
+            let mut text = out.fitting(text);
+            if out.norm.is_some() {
+                text = unmarked_script(&text);
+            }
             out.text.push_str(&text);
         } else {
-            let sheet = css_out(body, base, dir, out.collects(), out.room(), out.child_norm(), None);
+            let mut sheet = css_out(body, base, dir, out.collects(), out.room(), out.child_norm(), None);
+            // A sheet's `<` is markup where a browser does not read the style as raw text (in `svg`, `math`, a
+            // `noscript`): written as CSS's escape, it is the same character to CSS and no tag to HTML.
+            if out.norm.is_some() && sheet.text.text.contains('<') {
+                sheet.text.text = sheet.text.text.replace('<', "\\3c ");
+            }
             out.append(sheet);
         }
     }
@@ -618,9 +643,11 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
             rest.find(|c: char| c.is_ascii_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
         let attr = rest.get(..attr_len)?;
         rest = rest.get(attr_len..)?;
+        // In a normalized entry no `<` is written inside a tag (`unmarked`): an attribute named with one goes.
+        let unnamed = out.norm.is_some() && attr.contains('<');
         let before_eq = rest.len() - rest.trim_ascii_start().len();
         let Some(after_eq) = rest.trim_ascii_start().strip_prefix('=') else {
-            if normalizing && skips(&name, attr, None, out) {
+            if unnamed || (normalizing && skips(&name, attr, None, out)) {
                 out.text.text.truncate(spaced);
             } else {
                 out.text.push_str(attr);
@@ -667,7 +694,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
         } else {
             attr
         };
-        if normalizing && skips(&name, attr, Some(value), out) {
+        if unnamed || (normalizing && skips(&name, attr, Some(value), out)) {
             // The attribute goes with the space before it.
             out.text.text.truncate(spaced);
             rest = after;
@@ -702,6 +729,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
         };
         // Written as found unless it changed; a changed value is quoted.
         let q = if new == value { quote } else { Some(quote.unwrap_or('"')) };
+        let new = if out.norm.is_some() && new.contains('<') { new.replace('<', "&lt;") } else { new };
         out.text.extend(q);
         out.text.push_str(&new);
         out.text.extend(q);
@@ -1483,6 +1511,29 @@ fn script_out(text: &str, base: &str, max: usize) -> Result<String, Exceeded> {
     }
     push(&mut out, rest)?;
     Ok(out)
+}
+
+/// A kept script's text with no `</` and no `<script` (`\x3C` for the `<`, the same character in a string, a regular
+/// expression or a template, where alone either is written): the first could end a raw-text element around it (a
+/// `noscript`, read as raw text with scripting on), the second, after a `<!--`, holds the script open past its
+/// `</script>`, so the markup this scan read after it would run as script.
+fn unmarked_script(text: &str) -> String {
+    let lower = text.to_ascii_lowercase();
+    if !lower.contains("</") && !lower.contains("<script") {
+        return text.to_owned();
+    }
+    let mut out = String::with_capacity(text.len() + 8);
+    let mut last = 0;
+    for (at, _) in lower.match_indices('<') {
+        let tail = lower.get(at..).unwrap_or("");
+        if tail.starts_with("</") || tail.starts_with("<script") {
+            out.push_str(text.get(last..at).unwrap_or(""));
+            out.push_str("\\x3C");
+            last = at + 1;
+        }
+    }
+    out.push_str(text.get(last..).unwrap_or(""));
+    out
 }
 
 /// Where the end tag of the raw text element `name` starts in `body`: `</name`, compared ignoring case, and then
