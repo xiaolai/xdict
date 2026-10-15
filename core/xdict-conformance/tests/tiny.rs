@@ -159,6 +159,7 @@ fn the_tiny_dictionary_conforms() {
         let got = core.resource(dict.clone(), case["path"].as_str().unwrap().into(), view(None));
         check(&format!("resources[{i}]"), &case["resource"], outcome(got));
     }
+    check("health", &x["health"], outcome(core.health(dict.clone(), &NoProgress)));
 
     let b = &x["byteSource"];
     let mdx = std::fs::read(dir.join("tiny.mdx")).unwrap();

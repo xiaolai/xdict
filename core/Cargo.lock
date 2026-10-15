@@ -1145,6 +1145,7 @@ dependencies = [
  "serde",
  "serde_json",
  "xdict-entry",
+ "xdict-health",
  "xdict-identity",
  "xdict-lookup",
  "xdict-mdx",
@@ -1168,6 +1169,16 @@ version = "0.0.1"
 dependencies = [
  "uniffi",
  "xdict-core",
+]
+
+[[package]]
+name = "xdict-health"
+version = "0.0.1"
+dependencies = [
+ "xdict-entry",
+ "xdict-lookup",
+ "xdict-mdx",
+ "xdict-mdx-writer",
 ]
 
 [[package]]

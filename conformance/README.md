@@ -29,7 +29,7 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
    [`suggestions`], [`entries`]
    (edition defaults to the imported one; `cspContains` is a
    substring of the returned policy), [`links`] (origin: the entry `run`/0), [`resources`], in the view
-   [`view`].
+   [`view`]. Then `health` of the handle, with no progress [`health`] (WI-12, added 2026-10-16).
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
    this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.

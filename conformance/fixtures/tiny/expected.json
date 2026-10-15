@@ -440,6 +440,19 @@
       }
     }
   ],
+  "health": {
+    "comment": "WI-12: the import health check of the open dictionary, its findings compared by subset (the census classes behind them are not). The one problem tiny holds is the redirect lost -> nowhere.",
+    "version": 1,
+    "entries": 8,
+    "findings": [
+      {
+        "kind": "brokenRedirects",
+        "count": 1,
+        "name": null,
+        "examples": [{ "key": "lost", "text": "lost -> @@@LINK=nowhere" }]
+      }
+    ]
+  },
   "byteSource": {
     "comment": "The same MDX bytes through a ByteSource the suite implements, named copy/tiny.mdx, reporting the identity below, with a sidecar of its own (also a ByteSource): one edition at two locations, both open at once, each handle serving its own package's sidecar (Codex objection 1). Then a source that returns one byte too few.",
     "name": "copy/tiny.mdx",

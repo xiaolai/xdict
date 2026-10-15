@@ -3,7 +3,7 @@
 //! **No lock is held while the shell's code runs**: a `ByteSource`, a `Progress` callback, or a read through
 //! either, so a callback may call back into the core without deadlocking (Codex objection 9).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
@@ -14,6 +14,7 @@ use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
 
 use crate::error::{CoreError, Limit, Missing};
+use crate::health::HEALTH;
 use crate::source::{Changed, Opened as OpenedSource, Verified, buffer, read_all};
 #[cfg(not(target_family = "wasm"))]
 use crate::store::Directory;
@@ -715,6 +716,64 @@ impl Core {
         })
     }
 
+    /// What the health check finds in an open dictionary's edition (plan-macos-v1 WI-12).
+    /// Every record is read once, in file order, and checked (`xdict-health`); `progress` hears records done of all
+    /// after each chunk, and answering `false` cancels the check, which then keeps nothing. The report is kept beside
+    /// the edition's index under the checker's version, the edition and the package's resource names, so it is made
+    /// once per edition and made again when the checker or the resources change. Never synced (ADR-0004).
+    pub fn health(&self, dict: String, progress: &dyn Progress) -> Result<Health, CoreError> {
+        guard(|| {
+            let opened = self.dict(&dict)?;
+            let (resources, sidecars) = self.resource_names(&opened)?;
+            let name = health_name(&opened.edition, &resources, &sidecars);
+            if let Some(region) = self.indexes.get(&name)?
+                && region.len() <= crate::health::MAX_KEPT
+                && let Some(kept) = crate::health::decode(&region.bytes(0, region.len() as usize)?)
+            {
+                return Ok(kept);
+            }
+            let has = |path: &str| {
+                let key = xdict_health::resource_key(path);
+                let name = key.trim_start_matches('\\');
+                resources.contains(&key)
+                    || sidecars.contains(name)
+                    || name.rsplit('\\').next().is_some_and(|n| sidecars.contains(n))
+            };
+            let report = xdict_health::check(&opened.mdx, &has, &mut |done, total| progress.progress(done, total))
+                .map_err(|stop| match stop {
+                    xdict_health::Stop::Cancelled => {
+                        CoreError::Cancelled { detail: "the health check was cancelled".into() }
+                    }
+                    xdict_health::Stop::Read(e) => e.into(),
+                })?;
+            opened.mdx_source.unchanged()?;
+            let health = crate::health::of(&report);
+            self.indexes.put(&name, &crate::health::encode(&health))?;
+            Ok(health)
+        })
+    }
+
+    /// The package's resource names as the health check compares them: each volume's keys and each sidecar's name
+    /// (and its last segment), in lower case, keys with backslashes.
+    fn resource_names(&self, opened: &Dict) -> Result<(HashSet<String>, HashSet<String>), CoreError> {
+        let mut keys = HashSet::new();
+        for (check, volume) in &opened.mdd {
+            check.unchanged()?;
+            for key in volume.keys() {
+                keys.insert(key?.replace('/', "\\").to_lowercase());
+            }
+        }
+        let mut sidecars = HashSet::new();
+        for (name, _) in &opened.sidecars {
+            let name = name.replace('\\', "/").to_lowercase();
+            if let Some(last) = name.rsplit('/').next() {
+                sidecars.insert(last.to_owned());
+            }
+            sidecars.insert(name.replace('/', "\\"));
+        }
+        Ok((keys, sidecars))
+    }
+
     /// Whether the package holds a resource, by its path as it travels, as [`Self::resource`] would find it: a
     /// sidecar, or a key in a volume. Nothing is read. A volume that cannot answer counts as holding it, so an
     /// image is never dropped on an error (S13).
@@ -899,6 +958,21 @@ fn info(file: &File) -> DictInfo {
 }
 
 /// An index's name in the store: its identity, and what it indexes.
+/// Where an edition's health report is kept: by the checker's version, the edition, and a digest of the package's
+/// resource names, which a changed volume or sidecar changes.
+fn health_name(edition: &str, resources: &HashSet<String>, sidecars: &HashSet<String>) -> String {
+    let mut names: Vec<&String> = resources.iter().chain(sidecars.iter()).collect();
+    names.sort_unstable();
+    let mut hasher = xxhash_rust::xxh3::Xxh3::new();
+    for name in names {
+        hasher.update(name.as_bytes());
+        hasher.update(&[0]);
+    }
+    // An edition is a scheme and a digest; the name keeps only its letters and digits.
+    let edition: String = edition.chars().filter(char::is_ascii_alphanumeric).collect();
+    format!("health-{HEALTH}-{edition}-{:016x}", hasher.digest())
+}
+
 fn index_name(identity: &[u8; 32], kind: Kind) -> String {
     let kind = if kind == Kind::Mdd { "mdd" } else { "mdx" };
     format!("{}.{kind}.xdidx", xdict_identity::hex(identity))
@@ -1264,6 +1338,49 @@ mod tests {
         core.import(package.clone(), &NoProgress).unwrap();
         let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
         (core, dict)
+    }
+
+    /// Progress that counts its reports and answers `go`.
+    struct Counted {
+        asked: AtomicU64,
+        go: bool,
+    }
+
+    impl Progress for Counted {
+        fn progress(&self, _: u64, _: u64) -> bool {
+            self.asked.fetch_add(1, Ordering::SeqCst);
+            self.go
+        }
+    }
+
+    /// WI-12: the check reports what the edition holds, is kept per edition and read back without a second pass,
+    /// and a cancelled one keeps nothing.
+    #[test]
+    fn the_health_check_reports_keeps_and_cancels() {
+        let sidecar = Location::Source { name: "a.css".into(), source: Arc::new(Fixed(b"b{}".to_vec())) };
+        let record = "<link href=\"a.css\"><link href=\"OED.css\">x\u{1}y <a href=\"entry://nowhere\">n</a>";
+        let (core, dict) = opened_with(record, &[], vec![sidecar]);
+        let stop = Counted { asked: AtomicU64::new(0), go: false };
+        let got = core.health(dict.clone(), &stop);
+        assert!(matches!(got, Err(CoreError::Cancelled { .. })), "{got:?}");
+        let go = Counted { asked: AtomicU64::new(0), go: true };
+        let health = core.health(dict.clone(), &go).unwrap();
+        assert_eq!(go.asked.load(Ordering::SeqCst), 1, "checked, after a cancellation kept nothing");
+        assert_eq!((health.version, health.entries), (HEALTH, 1));
+        let kinds: Vec<(FindingKind, u64, Option<&str>)> =
+            health.findings.iter().map(|f| (f.kind, f.count, f.name.as_deref())).collect();
+        assert_eq!(
+            kinds,
+            [
+                (FindingKind::MissingFile, 1, Some("oed.css")),
+                (FindingKind::MissingWords, 1, None),
+                (FindingKind::Repaired, 1, None),
+            ]
+        );
+        assert_eq!(health.findings[1].examples[0].key, "run");
+        let again = Counted { asked: AtomicU64::new(0), go: true };
+        assert_eq!(core.health(dict, &again).unwrap(), health);
+        assert_eq!(again.asked.load(Ordering::SeqCst), 0, "read back, not checked again");
     }
 
     fn view() -> View {
