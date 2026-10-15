@@ -35,6 +35,9 @@ struct ModuleBoundaryTests {
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         "XDictSearchTests": ["Foundation", "Synchronization", "Testing"],
+        // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
+        "XDictSpeech": ["AVFAudio", "Foundation", "os"],
+        "XDictSpeechTests": ["AVFAudio", "Foundation", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the

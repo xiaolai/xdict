@@ -97,5 +97,15 @@
 @ entries.lab extra kit,sample,corpus
     entries.lab
 
-# sound.* — reserved for WI-7's sound stage (another worktree): its sub-stages go here, in cost order, each with its
-# checks; `Tools/e2e.sh` runs `substage_sound_<part>` for `sound.<part>`.
+# sound.* (plan-macos-v1 WI-7): one launch of a main window at volume 0 (`XDict --sound-report`). The voice: a `.tts`
+# link, the speak button, the accent, a Chinese dictionary. The notices: missing, Speex and undecodable told apart, read
+# as VoiceOver reads them (`sound.access` the grant that needs), and spoken instead. The 25's recordings, every format.
+@ sound.speech default fixtures group=sound
+    sound.setup.library sound.setup.entry sound.tts.speaks sound.speakButton.speaks sound.accent.changesVoice
+    sound.chinese.speaksChinese
+
+@ sound.notices default kit,fixtures group=sound
+    sound.access sound.notices.toldApart sound.fallback.speaks sound.notices.shown sound.sentences.bothLanguages
+
+@ sound.recordings default fixtures,sample,corpus group=sound
+    sound.corpus.formatsSeen sound.corpus.playablePlay sound.corpus.speexFallsBack sound.corpus.everyClickAnswered

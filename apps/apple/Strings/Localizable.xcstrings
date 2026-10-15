@@ -321,6 +321,22 @@
         }
       }
     },
+    "American English" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "American English"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "美式英语"
+          }
+        }
+      }
+    },
     "Asking the dictionary service…" : {
       "localizations" : {
         "en" : {
@@ -381,6 +397,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在建立索引。"
+          }
+        }
+      }
+    },
+    "British English" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "British English"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "英式英语"
           }
         }
       }
@@ -529,6 +561,22 @@
         }
       }
     },
+    "Each dictionary is spoken in the language set for it in the Library. A dictionary's own recordings play where macOS can play them; the others are spoken by the system voice instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each dictionary is spoken in the language set for it in the Library. A dictionary's own recordings play where macOS can play them; the others are spoken by the system voice instead."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每部词典都按你在词库中为它设定的语言朗读。词典自带的录音在 macOS 能播放时直接播放，其余的改由系统语音朗读。"
+          }
+        }
+      }
+    },
     "Edition" : {
       "localizations" : {
         "en" : {
@@ -541,6 +589,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本标识"
+          }
+        }
+      }
+    },
+    "English accent" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "English accent"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "英语口音"
           }
         }
       }
@@ -1281,6 +1345,38 @@
         }
       }
     },
+    "No system voice for %@ is installed. Voices are added in VoiceOver Utility → Speech." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No system voice for %@ is installed. Voices are added in VoiceOver Utility → Speech."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未安装%@的系统语音。语音可在“旁白实用工具 → 语音”中添加。"
+          }
+        }
+      }
+    },
+    "No voice is installed for this language." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No voice is installed for this language."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这种语言没有安装语音。"
+          }
+        }
+      }
+    },
     "Not Set" : {
       "localizations" : {
         "en" : {
@@ -1293,6 +1389,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未设置"
+          }
+        }
+      }
+    },
+    "Only a compact voice is available for this language. macOS offers nothing better for it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only a compact voice is available for this language. macOS offers nothing better for it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这种语言只有精简版语音，macOS 没有提供更好的。"
+          }
+        }
+      }
+    },
+    "Only a compact voice is installed. %@ is a free download in VoiceOver Utility → Speech." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only a compact voice is installed. %@ is a free download in VoiceOver Utility → Speech."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只安装了精简版语音。可在“旁白实用工具 → 语音”中免费下载 %@。"
+          }
+        }
+      }
+    },
+    "Only a compact voice is installed. Better ones may be available in VoiceOver Utility → Speech." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only a compact voice is installed. Better ones may be available in VoiceOver Utility → Speech."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只安装了精简版语音。“旁白实用工具 → 语音”中可能有更好的语音。"
           }
         }
       }
@@ -1345,6 +1489,22 @@
         }
       }
     },
+    "Open VoiceOver Utility" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open VoiceOver Utility"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开旁白实用工具"
+          }
+        }
+      }
+    },
     "Open in Browser" : {
       "localizations" : {
         "en" : {
@@ -1393,6 +1553,22 @@
         }
       }
     },
+    "Playing the dictionary's own recording." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Playing the dictionary's own recording."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在播放词典自带的录音。"
+          }
+        }
+      }
+    },
     "Plays the dictionary's own recording." : {
       "localizations" : {
         "en" : {
@@ -1437,6 +1613,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问题"
+          }
+        }
+      }
+    },
+    "Pronounce" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronounce"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读"
           }
         }
       }
@@ -1585,6 +1777,22 @@
         }
       }
     },
+    "Say “%@” with the system voice, as written: not the pronunciation of one particular sense." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Say “%@” with the system voice, as written: not the pronunciation of one particular sense."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用系统语音按字面朗读“%@”，不代表某一义项的读音。"
+          }
+        }
+      }
+    },
     "Search" : {
       "localizations" : {
         "en" : {
@@ -1677,6 +1885,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在词库中显示"
+          }
+        }
+      }
+    },
+    "Spoken by the system voice %@ (%@) instead." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spoken by the system voice %1$@ (%2$@) instead."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已改由系统语音 %1$@（%2$@）朗读。"
+          }
+        }
+      }
+    },
+    "Spoken by the system voice %@ (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spoken by the system voice %1$@ (%2$@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由系统语音 %1$@（%2$@）朗读。"
           }
         }
       }
@@ -1793,6 +2033,22 @@
         }
       }
     },
+    "The dictionary service did not deliver this recording." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dictionary service did not deliver this recording."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典服务未能提供这段录音。"
+          }
+        }
+      }
+    },
     "The dictionary service sent an answer XDict cannot read." : {
       "localizations" : {
         "en" : {
@@ -1873,6 +2129,38 @@
         }
       }
     },
+    "The sound output did not start, so this recording (%@) could not be played." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sound output did not start, so this recording (%@) could not be played."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "声音输出未能启动，这段录音（%@）无法播放。"
+          }
+        }
+      }
+    },
+    "There is nothing to say." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is nothing to say."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可朗读的内容。"
+          }
+        }
+      }
+    },
     "They Are Right" : {
       "localizations" : {
         "en" : {
@@ -1949,6 +2237,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典需要注册码才能打开。XDict 只会用你自己的注册码打开它，目前还不能输入注册码。"
+          }
+        }
+      }
+    },
+    "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in the Library." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in the Library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典尚未设定语言，XDict 无法为它选择语音。请在词库中设定。"
           }
         }
       }
@@ -2097,6 +2401,22 @@
         }
       }
     },
+    "This recording (%@) could not be opened: it may be damaged." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This recording (%@) could not be opened: it may be damaged."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开这段录音（%@），它可能已损坏。"
+          }
+        }
+      }
+    },
     "This recording is in a format macOS does not play (%@)." : {
       "localizations" : {
         "en" : {
@@ -2221,6 +2541,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用于查词"
+          }
+        }
+      }
+    },
+    "Voice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Voice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语音"
           }
         }
       }

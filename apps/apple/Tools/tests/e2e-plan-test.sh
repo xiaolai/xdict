@@ -65,7 +65,7 @@ case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "the analyzer's 
     *) bad "the analyzer's change did not bring hostile.controls: $got" ;; esac
 same "a library instrument brings the relinking control" "$(lines library.generated library.corpus library.control)" \
     "$(bash $affected --paths apps/apple/Sources/XDictInstruments/LibraryCorpus.swift)"
-same "product code brings no control" "$(lines hostile.binding hostile.faults reader hostile.production lookup.core lookup.a11y hostile.app entries.quick entries.persistence)" \
+same "product code brings no control" "$(lines hostile.binding hostile.faults reader hostile.production lookup.core lookup.a11y hostile.app entries.quick entries.persistence sound.speech sound.notices sound.recordings)" \
     "$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryWebView.swift)"
 # Every name the map uses is a sub-stage or a stage.
 names=$(awk '/^[[:space:]]*(#|$)/ { next } $1 == "control" { print $2; print $3; next }

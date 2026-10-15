@@ -5,16 +5,20 @@ import XDictContract
 import XDictEntryView
 import XDictLibrary
 import XDictSearch
+import XDictSpeech
 
 /// **One main window** (plan-macos-v1 WI-6): its search (`SearchModel`), the library it searches, the entry view it
 /// shows entries in, and what the window asks of the app — the library window, and the keyboard for its search field.
-/// The entry view's links come back here and are followed in the dictionary whose entry they are in (I7).
+/// The entry view's links come back here and are followed in the dictionary whose entry they are in (I7); its sounds
+/// and spoken words are pronounced from that dictionary, in its declared language (WI-7).
 @MainActor
 @Observable
 public final class SearchWindowState {
     public let model: SearchModel
     public let library: Library
     public let entry: EntryViewController
+    /// The entry's sounds and the system voice (WI-7): what the window's notice shows.
+    public let pronunciation: Pronunciation
     /// What the dictionary service answered at launch: shown when it did not.
     public var service = LaunchStatus.asking
     /// The suggestion ↑ and ↓ have reached, which Return looks up.
@@ -33,15 +37,21 @@ public final class SearchWindowState {
 
     @ObservationIgnored private let backend: any SearchBackend
 
-    /// `window` names the window's callers in the service client, so two windows never supersede each other.
-    public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String) {
+    /// `window` names the window's callers in the service client, so two windows never supersede each other. `speech`
+    /// is where its sound leaves the app, `speechPreferences` the reader's accent: the system's and the reader's own,
+    /// unless an instrument passes a silent output and a defaults suite of its own.
+    public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String,
+                speech: any PronunciationOutput = SystemOutput(),
+                speechPreferences: SpeechPreferences = SpeechPreferences()) {
         self.library = library
         self.backend = backend
         self.entry = entry
         model = SearchModel(backend: backend, window: window) { [library] in library.searchSources }
+        pronunciation = Pronunciation(backend: backend, output: speech, preferences: speechPreferences)
         model.scrollReader = { [weak entry] in await entry?.scrollOffset() }
-        // Sounds and speech are WI-7's; the entry view already logs each link it routes.
         entry.onLookup = { [weak self] query, anchor in self?.follow(query, anchor: anchor) }
+        entry.onSound = { [weak self] path in self?.playRecording(path) }
+        entry.onSpeak = { [weak self] text in self?.speak(text) }
     }
 
     public func focusSearch() { searchFocus += 1 }
@@ -51,6 +61,42 @@ public final class SearchWindowState {
     public func follow(_ query: String, anchor: String?) {
         guard let from = presented else { return }
         model.follow(query, anchor: anchor, from: from)
+    }
+
+    // MARK: - Sound and speech (WI-7)
+
+    /// The language the shown entry's dictionary is declared in (the library's, WI-5): what its sounds are spoken in.
+    public var presentedLanguage: String? {
+        guard let presented else { return nil }
+        return library.entries.first { $0.id == presented }?.languages.pair.search
+    }
+
+    /// The shown entry's word: its headword as its dictionary gives it, else its key.
+    public var shownWord: String? {
+        guard let shown = model.shown else { return nil }
+        return model.hit(shown.result)?.headword ?? shown.result.entry.key
+    }
+
+    /// Whether the speak button has a word, in a dictionary, to say.
+    public var canPronounce: Bool { presented != nil && shownWord != nil }
+
+    /// A `sound://` link in the shown entry: its recording, from the open dictionary the entry was read from, or the
+    /// entry's word spoken in its place.
+    public func playRecording(_ path: String) {
+        guard let handle = entry.binding?.handle else { return }
+        let word = shownWord ?? "", language = presentedLanguage
+        Task { await pronunciation.playRecording(path, from: DictId(rawValue: handle), word: word, language: language) }
+    }
+
+    /// A `.tts` link in the shown entry: its text, in the dictionary's language.
+    public func speak(_ text: String) {
+        pronunciation.speak(text, language: presentedLanguage)
+    }
+
+    /// The speak button: the shown entry's word, as written.
+    public func pronounceShown() {
+        guard let word = shownWord else { return }
+        speak(word)
     }
 
     /// Shows the model's entry in the pane, from its dictionary as the library has it now.

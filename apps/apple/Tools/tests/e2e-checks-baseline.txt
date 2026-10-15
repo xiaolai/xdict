@@ -1,7 +1,7 @@
 # The checks of the full E2E run before its stages were split into sub-stages (Tools/e2e.sh at 636ff07), one per line:
 # the instruments' required names as that script listed them, and the shell's assertions and the analyses, which had
 # no names then and are named as Tools/e2e-substages.txt names them. The lines after `# added by the split` are checks
-# the split introduced. Tools/tests/e2e-plan-test.sh requires the sub-stages' checks to be exactly these, each in one.
+# the split introduced; after `# added by <work item>`, the checks a later stage brought. Tools/tests/e2e-plan-test.sh requires the sub-stages' checks to be exactly these, each in one.
 #
 # stage launch: the shell's assertions (launch_stage)
 launch.startedByLaunchServices
@@ -138,3 +138,19 @@ driver.ran
 # added by the split: entries.quick's reduced sample; library.control, the relinking control (an environment switch before)
 entries.app.quick
 library.control.missingWithoutRelinking
+# added by WI-7: the sound stage, one launch (sound.speech, sound.notices, sound.recordings); sound.access is the shell's
+sound.setup.library
+sound.setup.entry
+sound.tts.speaks
+sound.speakButton.speaks
+sound.accent.changesVoice
+sound.chinese.speaksChinese
+sound.access
+sound.notices.toldApart
+sound.fallback.speaks
+sound.notices.shown
+sound.sentences.bothLanguages
+sound.corpus.formatsSeen
+sound.corpus.playablePlay
+sound.corpus.speexFallsBack
+sound.corpus.everyClickAnswered

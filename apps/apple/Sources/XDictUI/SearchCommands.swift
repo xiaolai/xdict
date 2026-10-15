@@ -4,7 +4,7 @@ import XDictSearch
 
 /// **The main window's menus**, so the whole flow runs from the keyboard (R10): Go (Back ⌘[, Forward ⌘], Return to
 /// Original Word ⌥⌘[, Search ⌥⌘F), Dictionaries (every one ⌥⌘0, the first nine ⌥⌘1–9), find in the entry (⌘F, ⌘G,
-/// ⇧⌘G) in Edit, and zoom and appearance in View. Each acts on the focused main window.
+/// ⇧⌘G) and Pronounce (⌥⌘P, WI-7) in Edit, and zoom and appearance in View. Each acts on the focused main window.
 public struct SearchCommands: Commands {
     @FocusedValue(\.searchWindow) private var window
 
@@ -21,6 +21,10 @@ public struct SearchCommands: Commands {
             Button("Find Previous") { window?.entry.stepFind(forward: false) }
                 .keyboardShortcut("g", modifiers: [.command, .shift])
                 .disabled(window?.entry.webView == nil)
+            Divider()
+            Button("Pronounce") { window?.pronounceShown() }
+                .keyboardShortcut("p", modifiers: [.command, .option])
+                .disabled(window?.canPronounce != true)
         }
         CommandMenu("Go") {
             Button("Back") { window?.model.back() }

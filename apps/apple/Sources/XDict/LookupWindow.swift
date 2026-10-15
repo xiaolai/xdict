@@ -28,7 +28,8 @@ enum LookupWindowReport {
         guard let work = Instrument.value(after: flag, in: arguments) else { return nil }
         return AppSetup(libraryDirectory: URL(fileURLWithPath: work).appending(path: "store"),
                         service: ServiceClient(connect: hold.connect(XPCServiceConnection.embedded)),
-                        entryEvents: { event in LookupWindowRun.shared?.note(event) })
+                        entryEvents: { event in LookupWindowRun.shared?.note(event) },
+                        speechVolume: 0, speechSuite: InstrumentWindow.speechSuite)
     }
 
     /// Readies the run before the app starts: it begins when the first main window is made.

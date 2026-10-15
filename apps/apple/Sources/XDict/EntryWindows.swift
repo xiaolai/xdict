@@ -6,15 +6,20 @@ import XDictContract
 import XDictEntryView
 import XDictLibrary
 import XDictSearch
+import XDictSpeech
 import XDictUI
 
 /// **A main window an instrument makes** (plan-macos-v1 WI-6; the WI-4 entry checks re-measured through the app): the
 /// production `SearchWindow` over a state of its own, in a plain window at a fixed place, its entry view in the
 /// production confinement, reading through the app's own service. Only what is observed differs from the reader's
-/// window: its entry view's events are recorded, a remote link it would open is recorded instead, and its zoom and
-/// appearance are kept in a defaults suite of the instrument's, never the reader's.
+/// window: its entry view's events are recorded, a remote link it would open is recorded instead, its zoom, appearance
+/// and accent are kept in defaults suites of the instrument's, never the reader's, and its sounds are silent (volume 0:
+/// decoded, started and run to their end, unheard on the shared E2E Mac).
 @MainActor
 final class InstrumentWindow {
+    /// Where the instruments keep the accent: never the reader's choice.
+    nonisolated static let speechSuite = "ai.xdict.app.e2e.speech"
+
     let state: SearchWindowState
     let window: NSWindow
     let log: EntryEventLog
@@ -22,7 +27,10 @@ final class InstrumentWindow {
     private(set) var presented = -1
 
     init(_ title: String, frame: NSRect, library: Library, backend: ServiceClient, suite: String,
-         opener: any EntryURLOpener, also: (@MainActor (EntryEvent) -> Void)? = nil) {
+         opener: any EntryURLOpener, also: (@MainActor (EntryEvent) -> Void)? = nil,
+         speech: any PronunciationOutput = SystemOutput(volume: 0),
+         speechPreferences: SpeechPreferences = SpeechPreferences(
+            defaults: UserDefaults(suiteName: InstrumentWindow.speechSuite) ?? .standard)) {
         let log = EntryEventLog()
         self.log = log
         let environment = EntryEnvironment(
@@ -32,7 +40,7 @@ final class InstrumentWindow {
                 also?(event)
             })
         state = SearchWindowState(library: library, backend: backend, entry: EntryViewController(environment: environment),
-                                  window: title)
+                                  window: title, speech: speech, speechPreferences: speechPreferences)
         let screen = NSScreen.main?.frame ?? .zero
         window = NSWindow(contentRect: NSRect(x: frame.minX, y: screen.maxY - frame.maxY, width: frame.width,
                                               height: frame.height),

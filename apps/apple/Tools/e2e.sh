@@ -36,9 +36,10 @@
 #   XDICT_E2E_SSH    the program that reaches the host, `ssh` unless set. The host guard's positive control sets it to
 #                    `Tools/tests/ssh-to-this-mac`, which runs the remote side here
 #   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for `entries.*`, `library.corpus`,
-#                    `library.control` and `lookup.*`: their folders are copied to the E2E Mac (never into the
-#                    repository); `entries_corpus`'s sample of them is rendered there, the library registers them against
-#                    the editions `index_bench` computes here, and the lookup window reads LDOCE's internal keys. Unset,
+#                    `library.control`, `lookup.*` and `sound.recordings`: their folders are copied to the E2E Mac (never
+#                    into the repository); `entries_corpus`'s sample of them is rendered there, the library registers
+#                    them against the editions `index_bench` computes here, the lookup window reads LDOCE's internal
+#                    keys, and the sound window clicks recordings of every format in the sample's entries. Unset,
 #                    those checks fail as not measured: a green run without it measured nothing
 #
 # Replaced, and refused if set: XDICT_E2E_SERVICE_CHECKS (now XDICT_E2E_ONLY with check names) and
@@ -1067,6 +1068,74 @@ substage_lookup() {
     fi
     cp "$work"/*.json "$results/" 2>/dev/null || true
     cp "$work"/commands/ax-*.json "$results/" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
+# **sound.***, one launch (plan-macos-v1 WI-7, done-when): a production main window of the app (`XDict --sound-report`)
+# whose sounds are at volume 0 — decoded, started and run to their end, unheard on this shared Mac — every link clicked in
+# the page as a reader's click is. `sound.speech`: a `.tts` link speaks; the speak button speaks the entry's word;
+# switching the accent changes the voice; a dictionary declared Chinese speaks with a Chinese voice; each utterance also
+# rendered into a buffer (a voice that "spoke" nothing fails). `sound.notices`: a missing, a Speex and an undecodable
+# recording each give their own notice, in both languages, shown in the window and read here as VoiceOver reads it
+# (`keys ax`, whenever the instrument asks: it holds no Accessibility grant), and are spoken instead. `sound.recordings`:
+# the 25's sampled `sound://` links of every format they hold, mp3, WAV and Ogg Vorbis played to their end and labelled
+# as the dictionary's, Speex spoken instead with its notice, a recording a dictionary lacks told so; left out when not
+# asked.
+substage_sound() {
+    local results="$home/results/sound" work="$reports/sound" access out waited=0 checkpoint pid corpus=() was
+    rm -rf "$results" "$work"
+    mkdir -p "$results" "$work"
+    # Only `sound.notices.shown` reads the window. Without the grant `sound.access` fails, and everything else still
+    # runs: the sounds need no permission, and a host that may not read windows still says whether they play.
+    if asked sound.notices; then
+        access=$("$kit/lookup/keys" access 2>&1 || true)
+        if grep -q '"accessibility":true' <<<"$access"; then
+            pass sound.access "sound: this session may read the window ($access)"
+        else
+            flunk sound.access "sound: this SSH session may not read the window ($access): grant Accessibility to sshd-keygen-wrapper on the E2E Mac; sound.notices.shown cannot pass here, the rest runs"
+        fi
+    fi
+    if is_running "$exe"; then
+        flunk - "sound: XDict is already running (pid ${PIDS[*]}), so the window heard would not be this run's"
+        return 0
+    fi
+    if asked sound.recordings; then
+        if [ -d "$home/corpus" ] && [ -s "$kit/entries-sample.json" ]; then
+            corpus=(--corpus "$home/corpus" --sample "$kit/entries-sample.json")
+        else
+            was=$STAGE
+            STAGE=sound.recordings
+            flunk - "sound: the 25 not measured — no corpus or sample on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac)"
+            STAGE=$was
+        fi
+    fi
+    out="$work/sound.json"
+    open -n --stdout "$work/app.out" --stderr "$work/app.err" "$app" --args --sound-report "$home/fixtures" \
+        --library-dir "$reports/sound-library" --work "$work" --out "$out" ${corpus[@]+"${corpus[@]}"} \
+        || { flunk - "sound: the app could not be started"; return 0; }
+    # Thirty minutes at most; each checkpoint the instrument writes is answered with the window's tree, once (unasked,
+    # it waits 15 s for an answer that does not come, and reports nothing read).
+    while [ ! -s "$out" ] && [ "$waited" -lt 18000 ]; do
+        for checkpoint in "$work"/checkpoint-*.json; do
+            case $checkpoint in *.ax.json | *'*'*) continue ;; esac
+            [ ! -e "${checkpoint%.json}.ax.json" ] || continue
+            asked sound.notices || continue
+            pid=$(plutil -extract pid raw -o - "$checkpoint" 2>/dev/null || echo "")
+            "$kit/lookup/keys" ax "$pid" 2000 >"${checkpoint%.json}.ax.tmp" 2>&1 || true
+            mv "${checkpoint%.json}.ax.tmp" "${checkpoint%.json}.ax.json"
+        done
+        sleep 0.1
+        waited=$((waited + 1))
+    done
+    for _ in $(seq 1 50); do is_running "$exe" || break; sleep 0.1; done
+    quit_bundle >/dev/null 2>&1 || true
+    if [ -s "$out" ]; then
+        findings "$out"
+        echo "      facts: $(plutil -extract facts json -o - "$out" 2>/dev/null | head -c 1500)"
+    else
+        flunk - "sound: the instrument wrote no findings within 30 minutes ($(head -c 300 "$work/app.err" 2>/dev/null))"
+    fi
+    cp "$work"/*.json "$results/" 2>/dev/null || true
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
