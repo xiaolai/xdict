@@ -251,6 +251,27 @@ enum EntryScripts {
     }
 
     /// The name of the one message handler, registered in the shell's world only.
+    /// Where an entry lands once loaded (`EntryLanding`), as a function body run in the shell's world with the place as
+    /// an argument, never spliced into the text: `y` an offset, `a` an anchor's id or name. Nil for the top, where a new
+    /// document already is.
+    static func landing(_ landing: EntryLanding) -> (body: String, arguments: [String: Any])? {
+        switch landing {
+        case .top:
+            return nil
+        case .offset(let y):
+            return ("window.scrollTo(0, y); return window.scrollY;", ["y": y])
+        case .anchor(let a):
+            return ("""
+                var e = document.getElementById(a) || document.getElementsByName(a)[0];
+                if (e) e.scrollIntoView();
+                return window.scrollY;
+                """, ["a": a])
+        }
+    }
+
+    /// How far down the entry the reader has scrolled, in CSS pixels.
+    static let scrollOffset = "return window.scrollY;"
+
     static let handlerName = "xdictEntry"
 
     /// A reader's click on a blocked image's placeholder asks the same question as a remote link. Trusted clicks only:

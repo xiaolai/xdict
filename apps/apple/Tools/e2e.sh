@@ -28,7 +28,8 @@
 #   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for the `entries` stage: their
 #                    folders are copied to the E2E Mac (never into the repository) and `entries_corpus`'s sample of them
 #                    is rendered there. Unset, that stage fails as not measured: a green run without it measured nothing.
-#                    The `library` stage registers the same folders, against the editions `index_bench` computes here
+#                    The `library` stage registers the same folders, against the editions `index_bench` computes here;
+#                    the `lookup` stage reads LDOCE's internal keys from them
 #   XDICT_E2E_LIBRARY_NO_RELINK
 #                    a positive control: the `library` stage relaunches its library of the 25 with relinking off, so the
 #                    moved dictionaries must be reported missing. A run with it records nothing
@@ -39,10 +40,10 @@ cd "$(dirname "$SELF")/.."
 
 # **The only list of the stages.** A stage named that is not on it is refused: a typo that ran nothing once printed "all
 # stages passed" (XiaolaiDict). The remote script is handed this list, so the two cannot differ.
-readonly KNOWN_STAGES="launch service hostile reader entries library"
+readonly KNOWN_STAGES="launch service hostile reader entries library lookup"
 # The stages that need the entry view's kit (`Tools/build-lab.sh`): the development lab, the fixtures, the observers;
-# the pointer and the drag source, for `library`'s drop.
-readonly KIT_STAGES="hostile reader entries library"
+# the pointer and the drag source, for `library`'s drop; the keyboard and the driver, for `lookup`.
+readonly KIT_STAGES="hostile reader entries library lookup"
 if [ "${1:-}" = --list-stages ]; then
     printf '%s\n' $KNOWN_STAGES
     exit 0
@@ -187,7 +188,7 @@ on_host "codesign --verify --strict --deep '$REMOTE_DIR/XDict.app'" || fail "the
 # **The `service` stage's dictionaries are written here, by the core's own MDX writer, and shipped with the bundle**: no
 # dictionary content enters the repository or reaches the E2E Mac from anywhere else (Tools/build-fixtures.sh).
 case " ${STAGES:-$KNOWN_STAGES} " in
-    *" service "* | *" library "*)
+    *" service "* | *" library "* | *" lookup "*)
         Tools/build-fixtures.sh "$scratch/fixtures" >/dev/null || fail "could not write the service stage's fixtures"
         rsync -a --delete -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$scratch/fixtures/" "$host:$REMOTE_DIR/fixtures/" \
             || fail "could not copy the fixtures"
@@ -216,12 +217,14 @@ fi
 # **The real dictionaries, for `entries` and `library`**: `entries_corpus`'s own sample of them (the bindings cannot
 # enumerate a file's keys), the editions `index_bench import-all` computes for them (what the library must register),
 # and their folders copied beside the bundle. An unset corpus ships nothing, and those stages say not measured.
-wants_entries=false wants_library=false
+wants_entries=false wants_library=false wants_lookup=false
 for wanted in ${STAGES:-$KNOWN_STAGES}; do
     [ "$wanted" != entries ] || wants_entries=true
     [ "$wanted" != library ] || wants_library=true
+    [ "$wanted" != lookup ] || wants_lookup=true
 done
-if { [ "$wants_entries" = true ] || [ "$wants_library" = true ]; } && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
+if { [ "$wants_entries" = true ] || [ "$wants_library" = true ] || [ "$wants_lookup" = true ]; } \
+    && [ -n "${XDICT_E2E_CORPUS:-}" ]; then
     section "corpus"
     [ -d "$XDICT_E2E_CORPUS" ] || fail "XDICT_E2E_CORPUS is not a folder: $XDICT_E2E_CORPUS"
     corpus=$(cd "$XDICT_E2E_CORPUS" && pwd)
@@ -381,6 +384,38 @@ verdicts() {
         esac
     done <"$file"
     [ "$seen" -gt 0 ] || flunk "$prefix: the analysis gave no verdict ($(head -c 300 "$file"))"
+}
+# findings <file> <required names…>: each check of an instrument's report as this stage's assertion, and each required
+# name it never reported as a failure. With the shared helpers, since `library` and `lookup` both read `Findings`.
+findings() {
+    local file=$1 count i name passed detail seen=" " wanted
+    shift
+    count=$(plutil -extract checks raw -o - "$file" 2>/dev/null || echo 0)
+    [ "$count" -gt 0 ] || flunk "$STAGE: the instrument reported no check: $(head -c 300 "$file")"
+    for (( i = 0; i < count; i++ )); do
+        name=$(plutil -extract "checks.$i.name" raw -o - "$file")
+        passed=$(plutil -extract "checks.$i.pass" raw -o - "$file")
+        detail=$(plutil -extract "checks.$i.detail" raw -o - "$file")
+        seen="$seen$name "
+        if [ "$passed" = true ]; then pass "$STAGE: $name — ${detail:0:240}"; else flunk "$STAGE: $name — ${detail:0:900}"; fi
+    done
+    for wanted in "$@"; do
+        case $seen in *" $wanted "*) ;; *) flunk "$STAGE: $wanted was never reported: the instrument stopped before it" ;; esac
+    done
+}
+
+# app_report <out> <seconds> <arguments…>: an instrument of the app that writes its report to `--out`, started by
+# LaunchServices like the app; the report once written, or status 1. The app is never left running.
+app_report() {
+    local out=$1 budget=$2 waited=0
+    shift 2
+    rm -f "$out"
+    if is_running "$exe"; then echo "XDict is already running"; return 1; fi
+    open -n --stdout "$out.out" --stderr "$out.err" "$app" --args "$@" --out "$out" || return 1
+    while [ ! -s "$out" ] && [ "$waited" -lt $((budget * 10)) ]; do sleep 0.1; waited=$((waited + 1)); done
+    for _ in $(seq 1 50); do is_running "$exe" || break; sleep 0.1; done
+    quit_bundle >/dev/null 2>&1 || true
+    [ -s "$out" ]
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -554,7 +589,12 @@ service_stage() {
     if [ -n "$team" ] && [ "$required" -gt 0 ] && [ "$refused" -eq 0 ]; then
         pass "service: the service set its client requirement, the app's identifier and this bundle's own team, at each of $required starts; none failed to build one"
     else
-        flunk "service: the client requirement: ${team:+with this bundle's team }logged at $required starts, $refused could not build one${team:- (the bundle's signature names no team)}"
+        # Worded without `${team:-…}`, which printed the team itself whenever one was named, and without an apostrophe
+        # inside `${…:+…}`, which bash 3.2 (the E2E Mac's /bin/bash) reads as an opening quote: "bad substitution",
+        # and the stage died just as this failure was reported (found 2026-10-15).
+        local unsigned=""
+        [ -n "$team" ] || unsigned=" (the signature of the bundle names no team)"
+        flunk "service: the client requirement: ${team:+with the team of this bundle }logged at $required starts, $refused could not build one$unsigned"
     fi
 }
 service_stage
@@ -597,6 +637,16 @@ hostile_stage() {
         || echo "      binding: no report ($(head -c 300 "$results/binding.json.err" 2>/dev/null))"
     python3 -I "$kit/analyze.py" binding "$results" >"$results/binding.txt" 2>&1 || true
     verdicts hostile "$results/binding.txt"
+
+    # **Through the app's own window** (WI-4's stamp, re-measured at WI-6): the battery's dictionary in a library of the
+    # app's, each case typed into a production main window's search and shown by its entry view, observed as above.
+    if "$kit/lookup/run-app-hostile.sh" "$kit" "$results" "$app" >"$results/app.log" 2>&1; then
+        echo "      app: $(tail -1 "$results/app.log")"
+    else
+        flunk "hostile: the run through the app did not happen as described — $(tail -2 "$results/app.log" | tr '\n' ' ')"
+    fi
+    python3 -I "$kit/lookup/verdicts.py" hostile "$results/app" >"$results/app.txt" 2>&1 || true
+    verdicts hostile "$results/app.txt"
 }
 hostile_stage
 fi
@@ -652,6 +702,24 @@ entries_stage() {
     python3 -I "$kit/analyze.py" entries "$results" >"$results/verdicts.txt" 2>&1 || true
     verdicts entries "$results/verdicts.txt"
     grep '^NOTE' "$results/verdicts.txt" | sed 's/^NOTE /      /' || true
+
+    # **Through the app's own window** (WI-4's stamp, re-measured at WI-6): the same sample, each entry reached as a
+    # link to it is by a production main window's model and shown by its entry view, the dictionaries in a library of
+    # the app's (an edition the service indexed before is only hashed); held to the same rules.
+    mkdir -p "$results/app"
+    app_report "$results/app/corpus.json" 5400 --entry-corpus "$home/corpus" --library-dir "$reports/entries-library" \
+        --sample "$kit/entries-sample.json" \
+        || echo "      app corpus: no report ($(head -c 300 "$results/app/corpus.json.err" 2>/dev/null))"
+    defaults delete ai.xdict.app.e2e.persistence >/dev/null 2>&1 || true
+    app_report "$results/app/persistence-set.json" 600 --entry-corpus "$home/corpus" \
+        --library-dir "$reports/entries-library" --persistence set \
+        || echo "      app persistence set: no report ($(head -c 300 "$results/app/persistence-set.json.err" 2>/dev/null))"
+    app_report "$results/app/persistence-check.json" 600 --entry-corpus "$home/corpus" \
+        --library-dir "$reports/entries-library" --persistence check \
+        || echo "      app persistence check: no report ($(head -c 300 "$results/app/persistence-check.json.err" 2>/dev/null))"
+    defaults delete ai.xdict.app.e2e.persistence >/dev/null 2>&1 || true
+    python3 -I "$kit/analyze.py" entries "$results/app" >"$results/app/verdicts.txt" 2>&1 || true
+    verdicts "entries (app)" "$results/app/verdicts.txt"
 }
 entries_stage
 fi
@@ -672,25 +740,6 @@ readonly LIBRARY_CHECKS="file.registered folder.registered folder.volumesInOrder
     refusal.registrationCode refusal.damaged escape.refused sounds.toldApart changed.newEdition changed.notJoinedUnasked
     changed.joined changed.persists changed.undone relink.followsAMove relink.controlWithoutRelinking
     sentence.resourceLibraryV3 sentence.registrationCode sentence.damaged"
-
-# findings <file> <required names…>: each check of an instrument's report as this stage's assertion, and each required
-# name it never reported as a failure.
-findings() {
-    local file=$1 count i name passed detail seen=" " wanted
-    shift
-    count=$(plutil -extract checks raw -o - "$file" 2>/dev/null || echo 0)
-    [ "$count" -gt 0 ] || flunk "library: the instrument reported no check: $(head -c 300 "$file")"
-    for (( i = 0; i < count; i++ )); do
-        name=$(plutil -extract "checks.$i.name" raw -o - "$file")
-        passed=$(plutil -extract "checks.$i.pass" raw -o - "$file")
-        detail=$(plutil -extract "checks.$i.detail" raw -o - "$file")
-        seen="$seen$name "
-        if [ "$passed" = true ]; then pass "library: $name — ${detail:0:240}"; else flunk "library: $name — ${detail:0:900}"; fi
-    done
-    for wanted in "$@"; do
-        case $seen in *" $wanted "*) ;; *) flunk "library: $wanted was never reported: the instrument stopped before it" ;; esac
-    done
-}
 
 # The drop: the production library window shown by the app (`--library-drop`), a file dragged into it from another app
 # by real pointer events.
@@ -793,6 +842,77 @@ library_stage() {
     rm -rf "$reports/corpus-a" "$reports/corpus-b"
 }
 library_stage
+fi
+
+# ---------------------------------------------------------------------------------------------------------------------
+if want lookup; then
+# **lookup**: the main window (plan-macos-v1 WI-6, done-when), the real app started by LaunchServices over a library of
+# its own (`XDict --lookup-window`), its service reached through a transport the checks can hold. First a reader's
+# keyboard alone (`keys`, `drive.py`): the search field has the keyboard at launch; a word typed and Return; into the
+# results and through them; into the entry, to a link, followed; Back, Forward and the original word; Search; the scope
+# by its shortcut, read in the toolbar; a suggestion chosen. VoiceOver's reading of the window: every result names its
+# dictionary. Then the scenario through the window's own model and entry view (`LookupScenario`): scope, order,
+# folding, phrases, internal keys (LDOCE's with the corpus), five unavailable states each with its own sentence, a held
+# dictionary delaying no other, 66,355 records paged, a five-hop trail returned exactly — each checkpoint read through
+# the Accessibility API against what the window must show; then entries asked for faster than WebKit answers, none of
+# the replaced loads taken for a link. **Every check is required by name.**
+readonly LOOKUP_CHECKS="setup.library scope.changesResults order.followsTheLibrary folding.exactLeads
+    folding.readerModeOnly phrase.resolvesIntact phrase.suggested internal.neverSuggested internal.ldoce
+    unavailable.toldApart unavailable.indexingEnds delay.othersNotHeld delay.entryKeepsTheOrder paging.everyRecord
+    link.followedInLinkMode trail.backReturnsExactly trail.forwardReturnsExactly trail.originInOneStep
+    entry.supersededLoadIsNoLink ax.scope ax.order
+    ax.folding ax.suggestions ax.unavailable.records ax.unavailable.slow ax.unavailable.gone ax.unavailable.damaged
+    ax.unavailable.locked ax.delay ax.paging"
+readonly DRIVER_CHECKS="launch.searchFocused keyboard.typed keyboard.firstQueryNoPointer
+    voiceover.resultsNameTheirDictionary keyboard.results keyboard.entry keyboard.linkFollowed voiceover.linkFocused
+    keyboard.back
+    keyboard.forwardAndOrigin keyboard.searchCommand keyboard.scope voiceover.scopeVisible keyboard.scopeAll
+    keyboard.suggestion driver.ran"
+lookup_stage() {
+    local results="$home/results/lookup" work="$reports/lookup" access
+    rm -rf "$results" "$work"
+    mkdir -p "$results" "$work"
+    access=$("$kit/lookup/keys" access 2>&1 || true)
+    if ! grep -q '"accessibility":true' <<<"$access" || ! grep -q '"postEvents":true' <<<"$access"; then
+        flunk "lookup: this SSH session may not post keys or read the window ($access): grant Accessibility to sshd-keygen-wrapper on the E2E Mac; nothing was driven"
+        return 0
+    fi
+    pass "lookup: this session may post keys and read the window ($access)"
+    if is_running "$exe"; then
+        flunk "lookup: XDict is already running (pid ${PIDS[*]}), so the window driven would not be this run's"
+        return 0
+    fi
+    # Windows of an earlier session are not restored: the window driven is the one this launch opens.
+    if [ -d "$home/corpus/ldoce" ]; then
+        open -n --stdout "$work/app.out" --stderr "$work/app.err" "$app" --args -ApplePersistenceIgnoreState YES \
+            --lookup-window "$work" --fixtures "$home/fixtures/lookup" --corpus "$home/corpus" \
+            || { flunk "lookup: the app could not be started"; return 0; }
+    else
+        flunk "lookup: LDOCE's internal keys not measured — no corpus on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac)"
+        open -n --stdout "$work/app.out" --stderr "$work/app.err" "$app" --args -ApplePersistenceIgnoreState YES \
+            --lookup-window "$work" --fixtures "$home/fixtures/lookup" || { flunk "lookup: the app could not be started"; return 0; }
+    fi
+    if python3 -I "$kit/lookup/drive.py" "$kit" "$work" "$app" "$work/driver.json" >"$results/drive.log" 2>&1; then
+        echo "      driven: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
+    else
+        flunk "lookup: the driver stopped — $(tail -2 "$results/drive.log" | tr '\n' ' ')"
+    fi
+    for _ in $(seq 1 100); do is_running "$exe" || break; sleep 0.1; done
+    quit_bundle >/dev/null 2>&1 || true
+    if [ -s "$work/findings.json" ]; then
+        findings "$work/findings.json" $LOOKUP_CHECKS
+    else
+        flunk "lookup: the window's scenario wrote no findings ($(head -c 300 "$work/app.err" 2>/dev/null))"
+    fi
+    if [ -s "$work/driver.json" ]; then
+        findings "$work/driver.json" $DRIVER_CHECKS
+    else
+        flunk "lookup: the driver wrote no findings"
+    fi
+    cp "$work"/*.json "$results/" 2>/dev/null || true
+    cp "$work"/commands/ax-*.json "$results/" 2>/dev/null || true
+}
+lookup_stage
 fi
 
 finished=true

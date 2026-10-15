@@ -108,10 +108,11 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     // MARK: - Showing
 
-    /// Shows `reference` from `content`: in the current web view if it is bound to the same dictionary, else in a new
-    /// one. Returns whether the document was handed to WebKit.
+    /// Shows `reference` from `content`, landing at `landing` once it has loaded: in the current web view if it is bound
+    /// to the same dictionary, else in a new one. Returns whether the document was handed to WebKit.
     @discardableResult
-    public func show(_ reference: EntryReference, from content: any EntryContent) async -> Bool {
+    public func show(_ reference: EntryReference, from content: any EntryContent, landing: EntryLanding = .top) async
+        -> Bool {
         _ = view
         if ruleList == nil, environment.confinement.ruleList {
             do {
@@ -147,12 +148,20 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         refusal = nil
         message.isHidden = true
         pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
-        let shown = await pane.show(reference)
+        let shown = await pane.show(reference, landing: landing)
         if !shown, self.pane === pane, pane.reference != reference {
             say(EntrySentences.entryFailed)
         }
         return shown
     }
+
+    /// How far down the shown entry the reader has scrolled, in CSS pixels; nil with none shown (the trail keeps it).
+    public func scrollOffset() async -> Double? {
+        await pane?.scrollOffset()
+    }
+
+    /// The entry the view shows or is loading.
+    public var reference: EntryReference? { pane?.reference }
 
     /// Closes the web view: nothing in flight is answered after this.
     public func closeEntry() {

@@ -23,4 +23,14 @@ if arguments.contains(LibraryCorpusReport.flag) {
 if arguments.contains(LibraryDropReport.flag) {
     LibraryDropReport.run(arguments)
 }
+if arguments.contains(AppHostileReport.flag) {
+    AppHostileReport.run(arguments)
+}
+if arguments.contains(AppCorpusReport.flag) {
+    AppCorpusReport.run(arguments)
+}
+// The real app, driven: it runs as the reader's does, over a library of its own.
+if arguments.contains(LookupWindowReport.flag) {
+    LookupWindowReport.prepare(arguments)
+}
 XDictApp.main()

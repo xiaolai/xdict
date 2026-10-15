@@ -8,7 +8,9 @@ import Foundation
 /// The table, in order:
 /// 1. A download, of any URL: refused.
 /// 2. `about:blank` and `about:srcdoc` (frames the page writes itself, which inherit its policy): allowed.
-/// 3. The document the view itself is loading, in the main frame: allowed, once.
+/// 3. The document the view itself is loading, in the main frame: allowed, once. One it asked for and has since
+///    replaced with another, in the main frame: cancelled, and nothing more — WebKit still asks about a replaced load,
+///    and that question is the view's own, not the page following a link to the entry (`EntryDocumentLoads`).
 /// 4. The shown document's own URL with a fragment, in the main frame: allowed (WebKit scrolls; nothing is fetched).
 /// 5. Anything else under `xdict://d/`: cancelled and **routed** — the core says what it means (a lookup, a sound, a
 ///    remote link it blocked) and the view acts on that. Never loaded as a page, in any frame.
@@ -28,23 +30,30 @@ public enum EntryNavigationPolicy {
         public let targetIsMainFrame: Bool?
         public let kind: Kind
         public let download: Bool
-        public let pendingDocument: URL?
+        public let ownLoad: OwnLoad?
         public let currentDocument: URL?
 
-        public init(url: URL?, targetIsMainFrame: Bool?, kind: Kind, download: Bool, pendingDocument: URL?,
+        public init(url: URL?, targetIsMainFrame: Bool?, kind: Kind, download: Bool, ownLoad: OwnLoad?,
                     currentDocument: URL?) {
             self.url = url
             self.targetIsMainFrame = targetIsMainFrame
             self.kind = kind
             self.download = download
-            self.pendingDocument = pendingDocument
+            self.ownLoad = ownLoad
             self.currentDocument = currentDocument
         }
+    }
+
+    /// Which of the view's own loads a main-frame navigation is: the last one asked for, or one asked for before it.
+    public enum OwnLoad: Sendable {
+        case latest, superseded
     }
 
     public enum Verdict: Equatable, Sendable {
         /// Load the document the view asked for.
         case loadDocument
+        /// Cancel a load the view asked for and has since replaced; nothing else.
+        case dropSuperseded
         case allowFrameOfItsOwn
         case allowSameDocument
         /// Cancel; ask the core what the URL means and act on that.
@@ -56,7 +65,7 @@ public enum EntryNavigationPolicy {
         public var allows: Bool {
             switch self {
             case .loadDocument, .allowFrameOfItsOwn, .allowSameDocument: true
-            case .route, .askReader, .refuse: false
+            case .dropSuperseded, .route, .askReader, .refuse: false
             }
         }
     }
@@ -75,7 +84,11 @@ public enum EntryNavigationPolicy {
         let scheme = url.scheme?.lowercased() ?? ""
         if EntryRoutes.isOwn(url) {
             if facts.targetIsMainFrame == true {
-                if let pending = facts.pendingDocument, text == pending.absoluteString { return .loadDocument }
+                switch facts.ownLoad {
+                case .latest: return .loadDocument
+                case .superseded: return .dropSuperseded
+                case nil: break
+                }
                 if let current = facts.currentDocument, url.fragment != nil, sameDocument(url, current) {
                     return .allowSameDocument
                 }
@@ -105,5 +118,31 @@ public enum EntryNavigationPolicy {
         }
         guard let left = stripped(a), let right = stripped(b) else { return false }
         return left == right
+    }
+}
+
+/// **The documents the view asked WebKit to load whose navigation WebKit has not yet asked about**, in the order asked.
+/// WebKit asks about each load once and in order, even about one a later load has already replaced (a reader moving
+/// through the results faster than WebKit answers): that question is the view's own replaced load, and must be dropped,
+/// not routed as the page going to that entry's URL — which is also a link to its word (the E2E `lookup` stage saw the
+/// replaced `apple` looked up in link mode, 2026-10-15).
+struct EntryDocumentLoads {
+    private var asked: [URL] = []
+
+    mutating func load(_ url: URL) {
+        asked.append(url)
+    }
+
+    /// Whether a main-frame navigation to `url` is one of the view's loads: the last one asked (to show), one asked
+    /// before it (replaced), or none (the page's own).
+    func status(of url: URL) -> EntryNavigationPolicy.OwnLoad? {
+        guard let index = asked.firstIndex(where: { $0.absoluteString == url.absoluteString }) else { return nil }
+        return index == asked.count - 1 ? .latest : .superseded
+    }
+
+    /// WebKit asked about the load of `url`: it, and any load asked before it that WebKit never asked about, are done.
+    mutating func answered(_ url: URL) {
+        guard let index = asked.firstIndex(where: { $0.absoluteString == url.absoluteString }) else { return }
+        asked.removeFirst(index + 1)
     }
 }
