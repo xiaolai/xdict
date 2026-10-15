@@ -4,12 +4,14 @@ import XDictClient
 import XDictEntryView
 import XDictLibrary
 import XDictSearch
+import XDictSpeech
 import XDictUI
 import os
 
 /// The app: the main window (plan-macos-v1 WI-6) — search, results and the entry — opened at launch with its search
-/// field holding the keyboard, more with ⌘N; the library window (WI-5), from the main window or with ⌘⇧L. At launch the
-/// app asks its dictionary service for the core's versions (the E2E `launch` stage's handshake) and reads the library.
+/// field holding the keyboard, more with ⌘N; the library window (WI-5), from the main window or with ⌘⇧L; Settings (⌘,)
+/// with the reader's accent (WI-7). At launch the app asks its dictionary service for the core's versions (the E2E
+/// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AppSetup.reader
@@ -33,6 +35,10 @@ struct XDictApp: App {
                 .task { await LibraryLaunch.once() }
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
+
+        Settings {
+            SpeechSettings()
+        }
     }
 
     static let mainWindow = "main"
@@ -56,19 +62,30 @@ struct XDictApp: App {
     static func windowState() -> SearchWindowState {
         let entry = setup.entryEvents.map { EntryViewController(environment: EntryEnvironment(events: $0)) }
             ?? EntryViewController()
-        return SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString)
+        return SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
+                                 speech: SystemOutput(volume: setup.speechVolume),
+                                 speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
     }
 
     /// Each main window's state as it is made: for the instrument that drives the real app (`--lookup-window`).
     @MainActor static var windowMade: ((SearchWindowState) -> Void)?
 }
 
-/// Where the app keeps its library, how it reaches its service, and who hears its entry views' events: the reader's
-/// own, unless a development instrument runs the real app over a scratch library (`LookupWindowReport.setup`).
+/// Where the app keeps its library, how it reaches its service, who hears its entry views' events, and how loud its
+/// sounds are and where its speech choices are kept: the reader's own, unless a development instrument runs the real
+/// app over a scratch library (`LookupWindowReport.setup`), silently, with choices of its own.
 struct AppSetup: Sendable {
     let libraryDirectory: URL
     let service: ServiceClient
     let entryEvents: (@MainActor @Sendable (EntryEvent) -> Void)?
+    /// 1 for the reader; 0 under an instrument, which still decodes and runs every sound to its end (WI-7).
+    var speechVolume: Float = 1
+    /// The defaults suite the accent is kept in; nil for the reader's own.
+    var speechSuite: String?
+
+    var speechDefaults: UserDefaults {
+        speechSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
+    }
 
     static var reader: AppSetup {
         AppSetup(libraryDirectory: URL.applicationSupportDirectory.appending(path: XDictIdentity.app),

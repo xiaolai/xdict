@@ -7,18 +7,21 @@ wrapper, built from `apps/extension/`, and the native-messaging host the other b
 
 ## Status
 
-**macOS skeleton and harness** (plan-macos-v1 WI-2). XDict.app opens one window that says what its dictionary service
-answered; the service is sandboxed, links the core and answers one call, `versions()`, over NSXPC. WI-3 replaces that
-handshake with the IPC contract, frozen on 2026-10-14 (plan-macos-v1 WI-1, ADR-0009) in `XDictContract`. Every gate below
-runs; iOS is not started.
+**macOS, plan-macos-v1 WI-2 to WI-7** (corrected 2026-10-15: this said the skeleton's one window). XDict.app has its
+library (WI-5), its main window — search, the dictionary's own entry, links and the trail (WI-6) — and the entry's sounds
+and the system voice (WI-7); the sandboxed service answers the IPC contract frozen on 2026-10-14 (WI-1, ADR-0009,
+`XDictContract`). Every gate below runs; lookup from anywhere, setup and the release are WI-8 to WI-10; iOS is not
+started.
 
 | Target | What it is |
 |---|---|
 | `XDictBase` | The bundle identities and the handshake: its `@objc` protocol, its wire value, its client |
 | `XDictContract` | The frozen IPC contract: the NSXPC protocols and interfaces, versioned envelopes, the records and error kinds both sides exchange, files by handle, the identity rule, limits and deadlines. Foundation only; the service converts the core's types into it (`CoreMapping.swift`) |
-| `XDictUI` | The view layer: the launch window, the library window and their sentences |
+| `XDictUI` | The view layer: the main window, the library window, Settings' speech pane and their sentences |
 | `XDictClient` | The app's side of the contract: `ServiceClient` (request ids, deadlines, credits, generations, reconnection, tokens) |
 | `XDictLibrary` | The reader's library (WI-5): packages found in what the reader chose, bookmarks and file ids, imports with cancel and retry, order, names, languages, changed editions and lineage joins; kinds, never sentences |
+| `XDictSearch` | The main window's model (WI-6): a search over every enabled dictionary or one, painted as each answers, paged, the trail; and its pronunciation (WI-7): a `sound://` link's recording fetched and played, or spoken instead with the reason; kinds, never sentences |
+| `XDictSpeech` | Sound and speech (WI-7): the system's voices and the one that speaks a dictionary's declared language in the reader's accent, the accent kept, and the output (`AVAudioFile` and `AVAudioEngine`, `AVSpeechSynthesizer`) behind a seam tests use without a sound |
 | `XDictEntryView` | The entry view and its confinement (WI-4) |
 | `XDictInstruments` | The E2E instruments' scenarios, compiled into the app and run by its development flags |
 | `XDictEntryLab` | A development host of the entry view that links the core; never in XDict.app |
@@ -93,6 +96,16 @@ The stages:
   the folder, sounds, a rewritten file joined and undone, a moved folder relinked); `--library-drop` shows the
   production library window and `dragsource` plus `pointer` drag a dictionary onto it; `--library-corpus` registers the
   owner's 25 against the editions `index_bench` computes here, moves their folder, relaunches, and rewrites one.
+- **`lookup`** (plan-macos-v1 WI-6): `--lookup-window` runs the real app over a library of its own; `drive.py` works its
+  main window by key events alone and reads it through the Accessibility API, and the window's scenario runs through it.
+- **`sound`** (plan-macos-v1 WI-7; `sound.speech`, `sound.notices` and `sound.recordings`, one launch):
+  `--sound-report` shows a production main window whose sounds play at volume 0
+  (decoded, started and run to their end, unheard on the shared E2E Mac) and clicks links in its entries as a reader's
+  clicks are routed: a `.tts` link and the speak button speak, the accent changes the voice, a dictionary declared Chinese
+  speaks with a Chinese voice (every utterance also rendered into a buffer, so a voice that says nothing fails); the
+  library's `sounds` fixture gives a missing, a Speex and an undecodable recording their own notices, in both languages,
+  read off the window by `keys ax`; then recordings of every format the 25 hold, from `entries_corpus`'s sample: mp3,
+  WAV and Ogg Vorbis play to their end, Speex is spoken instead with its notice.
 
 Positive controls: `XDICT_E2E_EXPECTED_VERSIONS=<json> Tools/e2e.sh <host> launch` expects other versions and must fail
 (it records nothing); `XDICT_E2E_SSH=Tools/tests/ssh-to-this-mac Tools/e2e.sh any launch` reaches this Mac and must stop

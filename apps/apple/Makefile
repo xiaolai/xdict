@@ -16,8 +16,10 @@
 #                     the app's library, drops one on its window by real pointer events, and registers, moves and
 #                     relaunches the owner's dictionaries; `lookup` drives the real app's main window by key events
 #                     alone, reads it as VoiceOver does, and runs the main window's scenario through it (`hostile` and
-#                     `entries` also run their checks through the app's own window). T2: with no STAGES, every default
-#                     sub-stage (Tools/e2e-substages.txt), the controls among them. STAGES="hostile lookup.paging"
+#                     `entries` also run their checks through the app's own window); `sound` plays and speaks, at volume
+#                     0, through a main window: a `.tts` link, the speak button, the accent, a Chinese dictionary, the
+#                     notices for missing, Speex and undecodable recordings, and every format the 25 hold. T2: with no
+#                     STAGES, every default sub-stage (Tools/e2e-substages.txt), the controls among them. STAGES="hostile lookup.paging"
 #                     runs only those (a stage means its default sub-stages; `all` adds the extra ones);
 #                     E2E_ONLY=<check>[,<check>] only the sub-stages owning those checks, and records nothing;
 #                     E2E_FAILFAST=1 stops at the first failed sub-stage. A bundle built of this tree is not rebuilt,

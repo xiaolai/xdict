@@ -79,9 +79,11 @@ apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated libr
 apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
 apps/apple/Sources/XDict/ServiceReport.swift        check:service
 apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
+apps/apple/Sources/XDict/SoundReport.swift          check:sound
 
 # --- The product ----------------------------------------------------------------------------------------------------
-apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y
-apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence
-apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick
-apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader
+apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
+apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
+apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound
+apps/apple/Sources/XDictSpeech/*                    sound
+apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader sound

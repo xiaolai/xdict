@@ -6,8 +6,8 @@ import XDictSearch
 
 /// **The main window** (plan-macos-v1 WI-6): the search field and the results in the sidebar, the entry beside them.
 /// Plain macOS: a split view, a toolbar with Back, Forward and the original word (I8) on its leading side and the
-/// dictionaries a typed word is looked up in in its middle (Q1: the scope is always in sight), and the Go, Dictionaries
-/// and View menus for the keyboard (`SearchCommands`).
+/// dictionaries a typed word is looked up in in its middle (Q1: the scope is always in sight), the speak button on its
+/// trailing side (WI-7), and the Go, Dictionaries and View menus for the keyboard (`SearchCommands`).
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
 
@@ -49,6 +49,30 @@ public struct SearchWindow: View {
         ToolbarItem(placement: .principal) {
             ScopePicker(state: state)
         }
+        ToolbarItem(placement: .primaryAction) {
+            PronounceButton(state: state)
+        }
+    }
+}
+
+/// The speak button (WI-7, R8): the shown entry's word, by the system voice in its dictionary's declared language, as
+/// written. Its help says so, and what is worth knowing about the voice that will speak.
+struct PronounceButton: View {
+    let state: SearchWindowState
+
+    var body: some View {
+        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+            .disabled(!state.canPronounce)
+            .help(help)
+            .accessibilityIdentifier("pronounce")
+    }
+
+    /// Two sentences already in the reader's language, joined, so the help is read whole.
+    private var help: Text {
+        guard let word = state.shownWord else { return Text("Pronounce") }
+        let said = String(localized: SpeechSentences.speakHelp(word: word))
+        guard let caveat = state.pronunciation.caveat(for: state.presentedLanguage) else { return Text(verbatim: said) }
+        return Text(verbatim: said + "\n" + String(localized: SpeechSentences.caveat(caveat)))
     }
 }
 
@@ -82,6 +106,7 @@ struct EntryDetail: View {
     var body: some View {
         EntryHost(controller: state.entry)
             .overlay { placeholder }
+            .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }
     }
 
     @ViewBuilder private var placeholder: some View {

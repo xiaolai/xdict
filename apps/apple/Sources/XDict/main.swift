@@ -29,6 +29,9 @@ if arguments.contains(AppHostileReport.flag) {
 if arguments.contains(AppCorpusReport.flag) {
     AppCorpusReport.run(arguments)
 }
+if arguments.contains(SoundReport.flag) {
+    SoundReport.run(arguments)
+}
 // The real app, driven: it runs as the reader's does, over a library of its own.
 if arguments.contains(LookupWindowReport.flag) {
     LookupWindowReport.prepare(arguments)
