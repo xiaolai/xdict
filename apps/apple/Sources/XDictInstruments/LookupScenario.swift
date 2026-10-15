@@ -47,6 +47,8 @@ public final class LookupScenario {
     /// The dictionaries, by their folders in `lookup/`, in the order they are added.
     static let answering = ["alpha", "beta", "records", "damaged", "locked", "gone"]
     static let records = 66_355
+    /// How many times in a row `paging.everyRecord` asks one page before it stops: a failure is retried, not timed.
+    static let pageAttempts = 5
     static let hops = 5
     /// How long a check waits for something that should take well under a second.
     static let step: Duration = .seconds(20)
