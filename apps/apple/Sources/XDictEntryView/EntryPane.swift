@@ -258,6 +258,15 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     }
 
     /// How far down the entry the reader has scrolled, in CSS pixels; nil with no document.
+    /// Opens (or closes) every fold of the entry the way a reader's click would; how many heads were clicked.
+    func expandAll(_ open: Bool) async -> Int {
+        guard !closed, current != nil else { return 0 }
+        let answer = try? await view.callAsyncJavaScript(
+            "return window.__xdictDisclosure ? window.__xdictDisclosure.expand(o) : 0", arguments: ["o": open], in: nil,
+            contentWorld: Self.world)
+        return (answer as? NSNumber)?.intValue ?? 0
+    }
+
     func scrollOffset() async -> Double? {
         guard !closed, current != nil else { return nil }
         return (try? await view.callAsyncJavaScript(EntryScripts.scrollOffset, arguments: [:], in: nil,

@@ -82,8 +82,21 @@ enum GalleryRun {
                     } else {
                         failures.append("\(name) \(mode.name) \(entry.key): no snapshot")
                     }
+                    // After the snapshot: the fold check clicks the page.
+                    let marked = mode.frame.isEmpty ? nil : await marks(controller.webView)
+                    if let marked {
+                        if let leaks = marked["leaks"] as? [Any], !leaks.isEmpty {
+                            failures.append("\(name) \(mode.name) \(entry.key): a dictionary glyph drawn where the core marked one \(leaks)")
+                        }
+                        if let low = marked["labelLowest"] as? Double, low < 4.5 {
+                            failures.append("\(name) \(mode.name) \(entry.key): a label at \(low):1")
+                        }
+                        if let wrong = marked["foldMismatch"] as? [Any], !wrong.isEmpty {
+                            failures.append("\(name) \(mode.name) \(entry.key): the chevron does not match its fold \(wrong)")
+                        }
+                    }
                     rows.append(["dict": name, "kind": kind, "key": entry.key, "mode": mode.name, "image": "images/\(file)",
-                                 "measure": measured ?? NSNull()])
+                                 "measure": measured ?? NSNull(), "marks": marked ?? NSNull()])
                 }
                 controller.closeEntry()
                 window.close()
@@ -146,6 +159,64 @@ enum GalleryRun {
         let value = try? await webView.callAsyncJavaScript("return window.__xdictFrame ? window.__xdictFrame.measure() : null",
                                                            arguments: [:], in: nil, contentWorld: shellWorld)
         return value as? [String: Any]
+    }
+
+    /// The marks, measured (icon sweep §8): every pseudo-element the core marked draws XDict's box or nothing, never
+    /// the dictionary's content or sprite; every label's computed contrast against what is behind it; and each fold
+    /// head (up to eight) clicked, its `aria-expanded` compared with its fold's shown state once the page has answered.
+    static let marksScript = """
+        var leaks = [], marked = 0;
+        document.querySelectorAll('[data-xdict-before],[data-xdict-after]').forEach(function (el) {
+          ['before', 'after'].forEach(function (side) {
+            var mark = el.getAttribute('data-xdict-' + side);
+            if (!mark) return;
+            marked += 1;
+            var ps = getComputedStyle(el, '::' + side), content = ps.content;
+            var ok = (mark === 'marker' || mark === 'lookup') ? (content === '""' || content === "''") : (content === 'none' || content === 'normal');
+            if (!ok || ps.backgroundImage !== 'none') {
+              if (leaks.length < 6) leaks.push([el.tagName.toLowerCase() + '.' + String(el.className).split(' ')[0], side, mark, content, ps.backgroundImage.slice(0, 40)]);
+              else leaks.push(1);
+            }
+          });
+        });
+        var labels = document.querySelectorAll('[data-xdict-role=label]'), lowest = null, labelCount = 0;
+        labels.forEach(function (el) {
+          if (!el.getClientRects().length) return;
+          labelCount += 1;
+          var fg = XDictReadability.parse(getComputedStyle(el).color), bg = null;
+          for (var e = el; e && !bg; e = e.parentElement) {
+            var c = XDictReadability.parse(getComputedStyle(e).backgroundColor);
+            if (c && c[3] >= 0.5) bg = c;
+          }
+          if (!bg) bg = XDictReadability.parse(getComputedStyle(document.documentElement).backgroundColor) || [255, 255, 255, 1];
+          if (fg) { var r = XDictReadability.contrast(fg, bg); if (lowest === null || r < lowest) lowest = r; }
+        });
+        var heads = Array.prototype.filter.call(document.querySelectorAll('[data-xdict-control=disclosure]'),
+          function (h) { return h.getClientRects().length > 0; });
+        var mismatch = [], clicked = 0, stated = 0;
+        function state(h) {
+          var t = XDictDisclosureCore.target(h, function (id) { return document.getElementById(id); });
+          return t ? (t.checkVisibility({ visibilityProperty: true }) ? 'true' : 'false') : null;
+        }
+        heads.forEach(function (h) { if (h.getAttribute('aria-expanded') !== null) stated += 1; });
+        for (var i = 0; i < heads.length && i < 8; i++) {
+          var h = heads[i], href = h.getAttribute('href');
+          if (href !== null && href.charAt(0) !== '#') continue;
+          if (h.getAttribute('aria-expanded') !== state(h)) mismatch.push([i, 'before', h.getAttribute('aria-expanded'), state(h)]);
+          h.click();
+          clicked += 1;
+          await new Promise(function (r) { setTimeout(r, 450); });
+          if (h.getAttribute('aria-expanded') !== state(h)) mismatch.push([i, 'after', h.getAttribute('aria-expanded'), state(h), (h.textContent || '').trim().slice(0, 24)]);
+        }
+        return { marked: marked, leaks: leaks, labels: labelCount,
+                 labelLowest: lowest === null ? null : Math.round(lowest * 100) / 100,
+                 heads: heads.length, stated: stated, clicked: clicked, foldMismatch: mismatch };
+        """
+
+    static func marks(_ webView: WKWebView?) async -> [String: Any]? {
+        guard let webView else { return nil }
+        return (try? await webView.callAsyncJavaScript(marksScript, arguments: [:], in: nil, contentWorld: shellWorld))
+            as? [String: Any]
     }
 
     static func jpeg(_ image: NSImage) -> Data? {
