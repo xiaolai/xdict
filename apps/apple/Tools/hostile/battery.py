@@ -21,7 +21,7 @@ A page reports what it saw into its top document's `data-lab` attribute (`R`); t
 its own, so the entry view's configuration is exactly the production one. It is part of the payload, not a defence.
 **What the verdicts need does not depend on a page script** (2026-10-16): the core's strip list removes the battery's
 scripts, so the lab itself records that a document loaded, and each case's `probe` (lab-world JavaScript returning
-`[[key, value]]`) judges what must work. `scripts` is the case's `<script` tags as written and `scriptsVisible` those
+`[[key, value]]`) judges what must work. `scripts` is the case's script elements as a browser builds them (`script_elements`) and `scriptsVisible` those
 the core reads as markup: fewer served than visible means the core stripped some, an outcome of its own, not a block;
 the rest, behind a comment, the core drops with the comment (S2).
 """
@@ -30,6 +30,7 @@ import base64
 import html
 import json
 import os
+import re
 import struct
 import sys
 
@@ -487,21 +488,43 @@ def contextual(context: str, page: str, resources: dict, c: Ctx) -> tuple:
 CONTEXTS = ["textarea", "srcdoc", "write", "resource"]
 
 
-def visible_scripts(page: str) -> int:
-    """`<script` tags the core reads as markup: those behind `textarea()`'s comment it reads as a comment, which a
-    normalized entry drops whole (S2), so they are never served whatever the strip does."""
+# Elements whose text the HTML tokenizer reads raw, to their own end tag: a browser's (WHATWG raw text and RCDATA), and
+# the core's tag scanner's, which reads `<!--` inside a `<textarea>` as a comment (`textarea()`).
+BROWSER_RAW = ("script", "style", "textarea", "title", "xmp", "iframe", "noembed", "noframes")
+CORE_RAW = ("script", "style")
+TAG = re.compile(r"""<([a-z][a-z0-9-]*)(?:[^>"']|"[^"]*"|'[^']*')*>""")
+
+
+def script_elements(page: str, raw: tuple = BROWSER_RAW) -> int:
+    """Script elements as an HTML tokenizer builds them, not `<script` substrings: a `<script` inside a script's text,
+    a comment or a quoted attribute is no element (2026-10-16: the core writes a kept script's `<script` as
+    `\\x3Cscript`, the same string, which a substring count read as a script stripped)."""
     lower, count, at = page.lower(), 0, 0
-    while True:
-        tag, comment = lower.find("<script", at), lower.find("<!--", at)
-        if tag < 0:
-            return count
-        if 0 <= comment < tag:
-            end = lower.find("-->", comment + 4)
+    while (lt := lower.find("<", at)) >= 0:
+        if lower.startswith("<!--", lt):
+            end = lower.find("-->", lt + 4)
             if end < 0:
                 return count
             at = end + 3
             continue
-        count, at = count + 1, tag + 7
+        tag = TAG.match(lower, lt)
+        if not tag:
+            at = lt + 1
+            continue
+        name, at = tag.group(1), tag.end()
+        count += name == "script"
+        if name in raw:
+            close = lower.find("</" + name, at)
+            if close < 0:
+                return count
+            at = close
+    return count
+
+
+def visible_scripts(page: str) -> int:
+    """Script elements the core reads as markup: those behind `textarea()`'s comment it reads as a comment, which a
+    normalized entry drops whole (S2), so they are never served whatever the strip does."""
+    return script_elements(page, CORE_RAW)
 
 
 def cases() -> list[dict]:
@@ -515,7 +538,7 @@ def cases() -> list[dict]:
                 page, resources = contextual(context, page, resources, c)
             out.append({"id": cid, "payload": pid, "context": context or "byte-zero", "group": group, "wait": wait,
                         "tcp": c.tcp, "udp": c.udp, "exclusive": group == "webrtc", "names": c.names,
-                        "probe": probe, "scripts": page.lower().count("<script"),
+                        "probe": probe, "scripts": script_elements(page),
                         "scriptsVisible": visible_scripts(page),
                         "record": page, "resources": resources})
     assert len(out) < CONTROL["udp"] - TCP0, "the TCP ports would reach the control ports"

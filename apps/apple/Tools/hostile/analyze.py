@@ -30,6 +30,16 @@ CLIENT = re.compile(r"client pid: (\d+) \(([^)]*)\)|PID\[(\d+)\]\(([^)]*)\)")
 DELEGATOR = re.compile(r"delegator pid: (\d+) \(([^)]*)\)")
 
 
+def read_json(path):
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def read_text(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
 def load_jsonl(path):
     out = []
     if not os.path.exists(path):
@@ -79,6 +89,14 @@ def outcome(left, written, visible, served):
     return "stripped" if served < visible else "commented"
 
 
+def served_scripts(page):
+    """The script elements in the loaded document, as the lab first read them (its `scripts` report), or None."""
+    for p in page:
+        if len(p) == 2 and p[0] == "scripts" and str(p[1]).isdigit():
+            return int(p[1])
+    return None
+
+
 def ok_xdict_broken(oks, stripped):
     """What `ok-xdict` lacks: its drawn content always; its scripts' reports only where the core did not strip them."""
     scripted = {"script", "inline", "eval", "function"}
@@ -92,12 +110,12 @@ def runs_of(listed, part):
 
 
 def summarize(d):
-    listed = json.load(open(os.path.join(d, "cases.json")))
-    lab = json.load(open(os.path.join(d, "report.json")))
+    listed = read_json(os.path.join(d, "cases.json"))
+    lab = read_json(os.path.join(d, "report.json"))
     observed = load_jsonl(os.path.join(d, "observed.jsonl"))
-    oracle = json.load(open(os.path.join(d, "oracle.json")))
-    started = int(open(os.path.join(d, "lab.started")).read())
-    ended = int(open(os.path.join(d, "lab.ended")).read())
+    oracle = read_json(os.path.join(d, "oracle.json"))
+    started = int(read_text(os.path.join(d, "lab.started")))
+    ended = int(read_text(os.path.join(d, "lab.ended")))
     token, ctl = listed["token"], listed["control"]
     lines = dns_lines(os.path.join(d, "dns.ndjson"))
 
@@ -149,9 +167,10 @@ def summarize(d):
             leaks.append(f"dns×{sum(dns.values())} {dns_who}")
         broken = None
         oks = {p[1] for p in page if len(p) == 2 and p[0] == "ok"}
-        # Stripped: the core served fewer `<script` tags than the case wrote (its strip list removed them). An outcome
-        # of its own, not a block: what the view's layers do with a live script is the runs with the strip off.
-        written, served = shell.get("scriptsWritten"), shell.get("scriptsServed")
+        # Stripped: the loaded document held fewer script elements than the case wrote (the core's strip list removed
+        # them). An outcome of its own, not a block: what the view's layers do with a live script is the runs with the
+        # strip off. Served is the lab's own count of `document.scripts`, the first time it read a parsed document.
+        written, served = shell.get("scriptsWritten"), served_scripts(page)
         visible = c.get("scriptsVisible")
         stripped = outcome(False, written, visible, served) == "stripped"
         if cid == "ok-xdict":
@@ -220,13 +239,13 @@ def summarize(d):
 def reader(d):
     """The reader-driven run: nothing on the reader entry's own ports and names, the pointer's events seen to arrive,
     each remote question raised and answered by a real click, and the one consented URL the only one opened."""
-    listed = json.load(open(os.path.join(d, "cases.json")))
-    lab = json.load(open(os.path.join(d, "report.json")))
-    driven = json.load(open(os.path.join(d, "steps.json")))
+    listed = read_json(os.path.join(d, "cases.json"))
+    lab = read_json(os.path.join(d, "report.json"))
+    driven = read_json(os.path.join(d, "steps.json"))
     observed = load_jsonl(os.path.join(d, "observed.jsonl"))
-    oracle = json.load(open(os.path.join(d, "oracle.json")))
-    started = int(open(os.path.join(d, "lab.started")).read())
-    ended = int(open(os.path.join(d, "lab.ended")).read())
+    oracle = read_json(os.path.join(d, "oracle.json"))
+    started = int(read_text(os.path.join(d, "lab.started")))
+    ended = int(read_text(os.path.join(d, "lab.ended")))
     ctl, ports = listed["control"], {listed["reader"]["tcp"], listed["reader"]["udp"]}
     lines = dns_lines(os.path.join(d, "dns.ndjson"))
     name_hash = {}
@@ -340,7 +359,7 @@ def scene(s):
 
 
 def reader_verdicts(d):
-    s = json.load(open(os.path.join(d, "summary.json")))
+    s = read_json(os.path.join(d, "summary.json"))
     c = s["observer controls"]
     results = [say(min(c.values()) >= 1, f"every observer caught its deliberate attempt ({c})"),
                say(not s["egress"] and not s["lookups"] and not s["otherWebKitLookups"],
@@ -370,7 +389,7 @@ def faults(res):
 
     def load(name):
         path = os.path.join(res, f"fault-{name}.json")
-        return json.load(open(path)) if os.path.exists(path) else None
+        return read_json(path) if os.path.exists(path) else None
 
     results = []
     control = load("none")
@@ -402,7 +421,7 @@ def binding(res):
     if not os.path.exists(path):
         say(False, "binding: the lab wrote no report")
         return 1
-    s = json.load(open(path))["steps"]
+    s = read_json(path)["steps"]
     results = [
         say(s.get("controlB") == '"B"' and s.get("controlA") == '"A"',
             f"binding: each twin alone shows its own marker (A {s.get('controlA')}, B {s.get('controlB')})"),
@@ -422,7 +441,7 @@ def entries(res, part=None):
     sub-stage: `corpus` the sample's report alone, `persistence` the relaunch's two; None both."""
     def load(name):
         path = os.path.join(res, name)
-        return json.load(open(path)) if os.path.exists(path) else None
+        return read_json(path) if os.path.exists(path) else None
 
     results = []
     if part != "persistence":
@@ -472,12 +491,12 @@ def entries(res, part=None):
 def suite(res, part=None):
     """`part` is one E2E sub-stage's share (`Tools/e2e.sh`): `production` holds the production run alone to its rules;
     `controls` the other runs, the baseline and every layer's probe (none of which reads production). None: all."""
-    listed = json.load(open(os.path.join(res, "cases.json")))
+    listed = read_json(os.path.join(res, "cases.json"))
     production_part = set(listed["productionPart"])
     runs = {}
     for label in runs_of(listed, part):
         path = os.path.join(res, label, "summary.json")
-        runs[label] = json.load(open(path)) if os.path.exists(path) else None
+        runs[label] = read_json(path) if os.path.exists(path) else None
     verdicts = []
 
     def rule(ok, text):
@@ -577,10 +596,10 @@ def matrix(listed, runs):
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
     if command == "runs" and len(sys.argv) in (3, 4):
-        print(" ".join(runs_of(json.load(open(sys.argv[2])), sys.argv[3] if len(sys.argv) == 4 else None)))
+        print(" ".join(runs_of(read_json(sys.argv[2]), sys.argv[3] if len(sys.argv) == 4 else None)))
         return 0
     if command == "off" and len(sys.argv) == 4:
-        listed = json.load(open(sys.argv[2]))
+        listed = read_json(sys.argv[2])
         print(",".join(layer for layer in listed["layers"] if layer not in listed["runs"][sys.argv[3]]))
         return 0
     parts = {"suite": ("production", "controls"), "entries": ("corpus", "persistence")}

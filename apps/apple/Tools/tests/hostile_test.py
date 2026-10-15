@@ -37,6 +37,17 @@ class Battery(unittest.TestCase):
         t = self.cases["script~textarea"]
         self.assertEqual((t["scripts"], t["scriptsVisible"]), (1, 0))
 
+    def test_a_script_holding_script_markup_in_a_string_is_one_element(self):
+        # The core writes a kept script's `<script` as `\x3Cscript`, the same JavaScript string: counted as substrings,
+        # the strip-off run would see one fewer served and call the case stripped (`nav-blob-url`, 2026-10-16).
+        page = '<script>var s="<script>R(1)</" + "script>";</script>'
+        self.assertEqual((battery.script_elements(page), battery.visible_scripts(page)), (1, 1))
+        served = '<script>var s="\\x3Cscript>R(1)</" + "script>";</script>'
+        self.assertEqual(analyze.outcome(False, battery.script_elements(page), battery.visible_scripts(page),
+                                         battery.script_elements(served)), "blocked")
+        blob = self.cases["nav-blob-url"]
+        self.assertEqual((blob["scripts"], blob["scriptsVisible"]), (1, 1))
+
     def test_no_case_reports_through_a_script_of_the_harness(self):
         # The lab's own world says a page loaded; no record carries the old `R('loaded')`.
         for c in self.cases.values():
@@ -70,8 +81,10 @@ class Runs(unittest.TestCase):
                  for i, (cid, visible) in enumerate([("a", 1), ("b", 0), ("ok-xdict", 1)])]
         listed = {"token": "h1", "control": {"http": 47090, "tcp": 47091, "udp": 47390}, "selftestName": "s.invalid",
                   "reader": {"tcp": 1, "udp": 2}, "cases": cases}
-        lab = {"cases": {c["id"]: {"loaded": True, "scriptsWritten": 1, "scriptsServed": served[c["id"]],
-                                   "page": [["ok", k] for k in ("img", "data-img", "css", "audio")]}
+        # Served is what the lab counted in the loaded document (`document.scripts`), the first time it read one.
+        lab = {"cases": {c["id"]: {"loaded": True, "scriptsWritten": 1,
+                                   "page": [["ok", k] for k in ("img", "data-img", "css", "audio")]
+                                   + [["scripts", str(served[c["id"]])], ["scripts", "9"]]}
                          for c in cases}}
         files = {"cases.json": json.dumps(listed), "report.json": json.dumps(lab), "observed.jsonl": "",
                  "oracle.json": json.dumps({"asked": [], "pid": 0}), "lab.started": "0", "lab.ended": "1",
@@ -90,8 +103,9 @@ class Runs(unittest.TestCase):
         self.assertEqual(s["cases"]["ok-xdict"]["broken"], ["eval", "function", "inline", "script"])
 
     def test_the_parts_split_the_runs(self):
-        listed = os.path.join(battery.FIXTURE, "cases.json")
-        out = lambda *a: analyze.runs_of(json.load(open(listed)), *a)
+        with open(os.path.join(battery.FIXTURE, "cases.json")) as f:
+            listed = json.load(f)
+        out = lambda *a: analyze.runs_of(listed, *a)
         self.assertEqual(out("production"), ["shell", "production"])
         self.assertNotIn("production", out("controls"))
         self.assertIn("strip", out("controls"))
