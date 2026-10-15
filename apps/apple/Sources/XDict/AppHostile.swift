@@ -27,7 +27,8 @@ enum AppHostileReport {
         let names: [String]
         /// Lab-world JavaScript that returns `[[key, value]]` (`Tools/hostile/battery.py`); empty for most cases.
         let probe: String
-        /// `<script` tags in the case's record as written, so the run can say whether the core removed any (stripped).
+        /// Script elements in the case's record as a browser builds them; the run compares the loaded document's own
+        /// `document.scripts` (its `scripts` report) to say whether the core removed any (stripped).
         let scripts: Int
 
         /// What the lab reads of the page, from a content world of its own, every 100 ms: the page's own reports
@@ -36,8 +37,11 @@ enum AppHostileReport {
         /// script, so it holds when the core's strip has removed them.
         var readScript: String {
             "var d=document.documentElement;if(!d)return null;var a;try{a=JSON.parse(d.getAttribute('data-lab')||'[]')}"
-                + "catch(e){a=[['data-lab-unreadable',String(e)]]}if(document.readyState!=='loading')"
-                + "a.push(['loaded',document.readyState]);try{var r=(function(){\(probe);return []})()||[];a=a.concat(r)}"
+                + "catch(e){a=[['data-lab-unreadable',String(e)]]}"
+                + "if(document.readyState!=='loading'&&location.href!=='about:blank')"
+                + "{a.push(['loaded',document.readyState]);"
+                + "a.push(['scripts',document.scripts.length])}"
+                + "try{var r=(function(){\(probe);return []})()||[];a=a.concat(r)}"
                 + "catch(e){a.push(['probe-throw',String(e)])}return JSON.stringify(a)"
         }
 
@@ -143,9 +147,6 @@ final class AppHostileRun {
             let rendered = try? await content?.entry(EntryReference(key: test.id))
             records[test.id]?["entryHoldsLiveTarget"] = rendered.map { test.isLive(in: String(decoding: $0.html, as: UTF8.self)) }
                 ?? NSNull()
-            records[test.id]?["scriptsServed"] = rendered.map {
-                String(decoding: $0.html, as: UTF8.self).lowercased().components(separatedBy: "<script").count - 1
-            } ?? NSNull()
             records[test.id]?["scriptsWritten"] = test.scripts
             if test.id.hasSuffix("~resource"), case .found(_, let bytes)? = try? await content?.resource("\(test.id)/doc.html") {
                 records[test.id]?["resourceHoldsLiveTarget"] = test.isLive(in: String(decoding: bytes, as: UTF8.self))
