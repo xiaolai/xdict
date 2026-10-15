@@ -16,8 +16,18 @@
 #                     the app's library, drops one on its window by real pointer events, and registers, moves and
 #                     relaunches the owner's dictionaries; `lookup` drives the real app's main window by key events
 #                     alone, reads it as VoiceOver does, and runs the main window's scenario through it (`hostile` and
-#                     `entries` also run their checks through the app's own window). STAGES="launch" runs only those
-#   make e2e-status   what each stage last did, on which build, of which source tree
+#                     `entries` also run their checks through the app's own window). T2: with no STAGES, every default
+#                     sub-stage (Tools/e2e-substages.txt), the controls among them. STAGES="hostile lookup.paging"
+#                     runs only those (a stage means its default sub-stages; `all` adds the extra ones);
+#                     E2E_ONLY=<check>[,<check>] only the sub-stages owning those checks, and records nothing;
+#                     E2E_FAILFAST=1 stops at the first failed sub-stage. A bundle built of this tree is not rebuilt,
+#                     and is not copied again when the E2E Mac has it
+#   make e2e-quick STAGES=<sub-stages>
+#                     T0: those sub-stages, fail-fast
+#   make e2e-affected [BASE=macos-v1]
+#                     T1: the sub-stages the change since BASE needs (Tools/e2e-affected.sh), or nothing
+#   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`)
+#   make e2e-status   what each sub-stage last did, how long it took, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
 #                     unless every implemented stage last passed fresh on a development bundle of this very source tree,
@@ -28,8 +38,8 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app test test-swift core lint strings e2e e2e-status e2e-evidence e2e-evidence-bootstrap release \
-	release-bootstrap clean
+.PHONY: app test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-status e2e-evidence \
+	e2e-evidence-bootstrap release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO := $(abspath $(APPLE)/../..)
@@ -57,7 +67,7 @@ export XDICT_E2E_CORPUS := $(E2E_CORPUS)
 app: lint test-swift
 	@Tools/build-bundle.sh build
 
-test: lint test-swift
+test: lint test-tools test-swift
 
 core:
 	@Tools/build-core.sh
@@ -87,9 +97,35 @@ strings: core
 
 # **The source tree is read before the bundle is built**, and the run holds it to what it finds when it starts and when
 # it ends: an edit made while `app` built would otherwise be filed against a bundle that does not have it.
+# **A bundle already built of this very tree is not built again** (`.build/XDict.app.source-tree`, written here once the
+# tree is still the same after the build, removed by Tools/build-bundle.sh whenever it publishes another bundle): its
+# lint, tests and build ran when it was made.
 e2e:
 	@[ -n "$(E2E_HOST)" ] || { echo "E2E_HOST_MACOS is not set: put the E2E Mac's SSH name in $(REPO)/local.mk" >&2; exit 1; }
-	@tree=$$(Tools/source-tree.sh) && $(MAKE) app && XDICT_E2E_TREE="$$tree" Tools/e2e.sh "$(E2E_HOST)" $(STAGES)
+	@tree=$$(Tools/source-tree.sh) && \
+	if [ -d .build/XDict.app ] && [ "$$(cat .build/XDict.app.source-tree 2>/dev/null)" = "$$tree" ]; then \
+	  echo "e2e: .build/XDict.app is built of this tree already; not building it again"; \
+	else \
+	  $(MAKE) app && { [ "$$(Tools/source-tree.sh)" != "$$tree" ] || echo "$$tree" >.build/XDict.app.source-tree; }; \
+	fi && \
+	XDICT_E2E_TREE="$$tree" XDICT_E2E_ONLY="$(E2E_ONLY)" XDICT_E2E_FAILFAST="$(E2E_FAILFAST)" \
+	  Tools/e2e.sh "$(E2E_HOST)" $(STAGES)
+
+# T0: the sub-stages named, stopping at the first that fails.
+e2e-quick:
+	@[ -n "$(STAGES)" ] || { echo "e2e-quick: name the sub-stages, STAGES=\"hostile.production lookup.core\"" >&2; exit 1; }
+	@$(MAKE) e2e E2E_FAILFAST=1
+
+# T1: the sub-stages the change since BASE needs (Tools/e2e-affected.map); nothing when it needs none.
+BASE ?= macos-v1
+e2e-affected:
+	@stages=$$(Tools/e2e-affected.sh "$(BASE)" | tr '\n' ' ') || exit 1; \
+	if [ -z "$$stages" ]; then echo "e2e-affected: the change since $(BASE) needs no end-to-end sub-stage"; \
+	else echo "e2e-affected: since $(BASE): $$stages"; $(MAKE) e2e STAGES="$$stages"; fi
+
+# The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
+test-tools:
+	@Tools/tests/e2e-plan-test.sh
 
 e2e-status:
 	@Tools/e2e-status.sh show

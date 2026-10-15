@@ -392,7 +392,7 @@ PY
 publish() {
     local digest=$1
     quit_running
-    rm -f "$BUNDLE_DIGEST"
+    rm -f "$BUNDLE_DIGEST" "$APP.source-tree"   # the tree `make e2e` built it from (Makefile): no longer this bundle
     if [ -e "$APP" ]; then
         swap_into_place || fail "could not swap the new bundle into place; $APP is unchanged"
         rm -rf "$STAGE"
@@ -430,7 +430,7 @@ case "${1:-}" in
         ;;
     clean)
         quit_running
-        rm -rf "$STAGE_ROOT" "$APP" "$BUNDLE_DIGEST"
+        rm -rf "$STAGE_ROOT" "$APP" "$BUNDLE_DIGEST" "$APP.source-tree"
         ;;
     *) fail "usage: $0 build|verify <bundle>|identity|clean" ;;
 esac

@@ -97,3 +97,4 @@ CLAUDE.local.md
 # per-run working state (findings + fix statuses), not authored content.
 .cc-suite/audits/
 # <<< cc-suite <<<
+__pycache__/

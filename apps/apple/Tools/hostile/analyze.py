@@ -3,12 +3,14 @@
 the lab's entry view saw, per case and per run, and holds the runs to the suite's rules.
 
     python3 -I analyze.py run <run-dir>             summary.json on stdout
-    python3 -I analyze.py suite <results-dir>       one PASS or FAIL line per rule, then the matrix; exit 1 on any FAIL
+    python3 -I analyze.py suite <results-dir> [production|controls]
+                                                    one PASS or FAIL line per rule, then the matrix; exit 1 on any FAIL
     python3 -I analyze.py reader <run-dir>          the reader-driven run's facts, as JSON
     python3 -I analyze.py verdicts <run-dir>        the reader-driven run's PASS and FAIL lines
     python3 -I analyze.py faults <results-dir>      the fail-closed runs' PASS and FAIL lines
     python3 -I analyze.py binding <results-dir>     the binding run's PASS and FAIL lines
-    python3 -I analyze.py entries <results-dir>     the real dictionaries' PASS and FAIL lines
+    python3 -I analyze.py entries <results-dir> [corpus|persistence]
+                                                    the real dictionaries' PASS and FAIL lines
     python3 -I analyze.py runs <cases.json>         the run labels, in order
     python3 -I analyze.py off <cases.json> <label>  the layers a run turns off, comma-separated
 
@@ -373,44 +375,46 @@ def binding(res):
     return 0 if all(results) else 1
 
 
-def entries(res):
-    """The owner's dictionaries through the production entry view (plan-macos-v1 WI-4, done-when)."""
+def entries(res, part=None):
+    """The owner's dictionaries through the production entry view (plan-macos-v1 WI-4, done-when). `part`, for one E2E
+    sub-stage: `corpus` the sample's report alone, `persistence` the relaunch's two; None both."""
     def load(name):
         path = os.path.join(res, name)
         return json.load(open(path)) if os.path.exists(path) else None
 
     results = []
-    corpus = load("corpus.json")
-    if corpus is None:
-        results.append(say(False, "the corpus run wrote no report"))
-    else:
-        totals = {k: sum(v.get(k, 0) for v in corpus["dictionaries"].values())
-                  for k in ("entries", "images", "sheets", "notLoaded", "outside")}
-        results.append(say(corpus["rendered"] == corpus["sampled"] and not corpus["failures"],
-                           f"{corpus['rendered']} of {corpus['sampled']} sampled entries of {len(corpus['dictionaries'])} "
-                           f"dictionaries rendered, every image and stylesheet the core resolved loaded, nothing outside "
-                           f"xdict: ({totals}; failures {corpus['failures'][:4]})"))
-        for name in ("oald", "ldoce"):
-            fold = corpus.get("folding", {}).get(name)
-            results.append(say(isinstance(fold, dict) and fold.get("worked") is True,
-                               f"{name}'s folding script opens a section (R5): {fold}"))
-        long = corpus.get("long", {})
-        results.append(say(long.get("finished") is True and long.get("seconds", 99) < 10,
-                           f"LDOCE's hold finishes ({long.get('seconds', -1):.2f} s)"))
-        for query in ("hold", "on", "the"):
-            found = long.get(f"find {query}", {})
-            results.append(say(found.get("visible", -1) == found.get("innerText", -2) and found.get("visible", 0) > 0,
-                               f"find '{query}' in hold counts what the entry's text holds ({found})"))
-        # The width the lab's window settled at, as measured: asked for 360 points, it stops at the view's minimum.
-        narrow = long.get("narrow") or {}
-        width = narrow.get("windowWidth")
-        results.append(say(isinstance(width, (int, float)) and 0 < narrow.get("scrollWidth", 0)
-                           <= narrow.get("clientWidth", 0) + 1,
-                           f"hold in a window at its narrowest, "
-                           f"{f'{width:g} points' if isinstance(width, (int, float)) else 'its width not reported'}, "
-                           f"needs no horizontal scrolling ({narrow})"))
+    if part != "persistence":
+        corpus = load("corpus.json")
+        if corpus is None:
+            results.append(say(False, "the corpus run wrote no report"))
+        else:
+            totals = {k: sum(v.get(k, 0) for v in corpus["dictionaries"].values())
+                      for k in ("entries", "images", "sheets", "notLoaded", "outside")}
+            results.append(say(corpus["rendered"] == corpus["sampled"] and not corpus["failures"],
+                               f"{corpus['rendered']} of {corpus['sampled']} sampled entries of {len(corpus['dictionaries'])} "
+                               f"dictionaries rendered, every image and stylesheet the core resolved loaded, nothing outside "
+                               f"xdict: ({totals}; failures {corpus['failures'][:4]})"))
+            for name in ("oald", "ldoce"):
+                fold = corpus.get("folding", {}).get(name)
+                results.append(say(isinstance(fold, dict) and fold.get("worked") is True,
+                                   f"{name}'s folding script opens a section (R5): {fold}"))
+            long = corpus.get("long", {})
+            results.append(say(long.get("finished") is True and long.get("seconds", 99) < 10,
+                               f"LDOCE's hold finishes ({long.get('seconds', -1):.2f} s)"))
+            for query in ("hold", "on", "the"):
+                found = long.get(f"find {query}", {})
+                results.append(say(found.get("visible", -1) == found.get("innerText", -2) and found.get("visible", 0) > 0,
+                                   f"find '{query}' in hold counts what the entry's text holds ({found})"))
+            # The width the lab's window settled at, as measured: asked for 360 points, it stops at the view's minimum.
+            narrow = long.get("narrow") or {}
+            width = narrow.get("windowWidth")
+            results.append(say(isinstance(width, (int, float)) and 0 < narrow.get("scrollWidth", 0)
+                               <= narrow.get("clientWidth", 0) + 1,
+                               f"hold in a window at its narrowest, "
+                               f"{f'{width:g} points' if isinstance(width, (int, float)) else 'its width not reported'}, "
+                               f"needs no horizontal scrolling ({narrow})"))
     wanted = {"oald": (1.5, "dark", "dark"), "ldoce": (0.8, "original", "light")}
-    for stage in ("persistence-set.json", "persistence-check.json"):
+    for stage in ("persistence-set.json", "persistence-check.json") if part != "corpus" else ():
         r = load(stage)
         if r is None:
             results.append(say(False, f"{stage}: the lab wrote no report"))
@@ -423,10 +427,14 @@ def entries(res):
     return 0 if all(results) else 1
 
 
-def suite(res):
+def suite(res, part=None):
+    """`part` is one E2E sub-stage's share (`Tools/e2e.sh`): `production` holds the production run alone to its rules;
+    `controls` the other runs, the baseline and every layer's probe (none of which reads production). None: all."""
     listed = json.load(open(os.path.join(res, "cases.json")))
     runs = {}
     for label in listed["runs"]:
+        if part is not None and (label == "production") != (part == "production"):
+            continue
         path = os.path.join(res, label, "summary.json")
         runs[label] = json.load(open(path)) if os.path.exists(path) else None
     verdicts = []
@@ -473,7 +481,9 @@ def suite(res):
         live = sum(1 for v in baseline["cases"].values() if v["liveInEntry"] or v["liveInResource"])
         rule(live > 0, f"baseline: {live} cases reached WebKit with a live target the rewriter did not see")
 
-    for layer, probe in listed["probes"].items():
+    for layer, probe in (listed["probes"] if part != "production" else {}).items():
+        if "production" in (probe["run"], probe["against"]):
+            raise SystemExit(f"layer {layer}'s probe reads production: the suite's parts are no longer apart")
         on, off = runs.get(probe["run"]), runs.get(probe["against"])
         if not on or not off:
             rule(False, f"layer {layer}: run {probe['run']} or {probe['against']} missing")
@@ -514,7 +524,10 @@ def main():
         listed = json.load(open(sys.argv[2]))
         print(",".join(layer for layer in listed["layers"] if layer not in listed["runs"][sys.argv[3]]))
         return 0
-    if len(sys.argv) != 3 or command not in ("run", "suite", "reader", "verdicts", "faults", "binding", "entries"):
+    parts = {"suite": ("production", "controls"), "entries": ("corpus", "persistence")}
+    part = sys.argv[3] if len(sys.argv) == 4 and sys.argv[3] in parts.get(command, ()) else None
+    if len(sys.argv) != (3 if part is None else 4) or command not in (
+            "run", "suite", "reader", "verdicts", "faults", "binding", "entries"):
         print(__doc__, file=sys.stderr)
         return 2
     if command == "verdicts":
@@ -524,12 +537,12 @@ def main():
     if command == "binding":
         return binding(sys.argv[2])
     if command == "entries":
-        return entries(sys.argv[2])
+        return entries(sys.argv[2], part)
     if sys.argv[1] in ("run", "reader"):
         summary = (summarize if sys.argv[1] == "run" else reader)(sys.argv[2])
         print(json.dumps(summary, indent=1, ensure_ascii=False))
         return 0
-    return suite(sys.argv[2])
+    return suite(sys.argv[2], part)
 
 
 if __name__ == "__main__":

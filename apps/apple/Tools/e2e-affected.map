@@ -1,0 +1,87 @@
+# **Which end-to-end sub-stages a changed path needs** (`Tools/e2e-affected.sh`). One rule a line:
+#
+#   <pattern>   <what>
+#
+# <pattern> is a path from the repository's root, matched as a shell pattern (`*` crosses `/`). **The first rule that
+# matches decides**, so the specific come before the general. **A path no rule matches selects everything**: an
+# unforeseen file costs a full run, never a missed one.
+#
+# <what> is `none` (no E2E sub-stage reads it), `all`, or sub-stage and stage names (`Tools/e2e-substages.txt`; a stage
+# means its default sub-stages). Prefixed `check:`, the path is a check's own code (its analyzer, verdicts, scenario or
+# instrument), and each sub-stage named also brings its positive control, from the `control` lines.
+#
+#   control <sub-stage> <its positive control>
+
+control hostile.production hostile.controls
+control hostile.app        hostile.controls
+control library.corpus     library.control
+
+# --- What no E2E sub-stage reads: the notes, the other platforms, tests that run only here ---------------------------
+*.md                                                none
+LICENSE                                             none
+dev-docs/*                                          none
+apps/android/*                                      none
+apps/windows/*                                      none
+apps/linux/*                                        none
+apps/web/*                                          none
+apps/extension/*                                    none
+core/xdict-wasm/*                                   none
+core/xdict-ffi/test-*.sh                            none
+core/xdict-ffi/measure-memory.sh                    none
+apps/apple/Tests/*                                  none
+apps/apple/Tools/tests/*                            none
+apps/apple/Tools/e2e-affected.*                     none
+apps/apple/Tools/strings.sh                         none
+apps/apple/Tools/compiler-warnings.py               none
+apps/apple/Tools/release.sh                         none
+apps/apple/.swiftlint.yml                           none
+
+# --- The core: the sample of the owner's dictionaries comes from one of its tests; the rest is in every bundle --------
+core/xdict-core/tests/entries_corpus.rs             entries.quick
+core/xdict-core/examples/index_bench.rs             library.corpus
+core/*/tests/*                                      none
+core/*/benches/*                                    none
+core/*                                              all
+conformance/fixtures/hostile/*                      check:hostile.production hostile.app
+conformance/fixtures/twin-*                         check:hostile.binding
+conformance/*                                       check:service.conformance
+
+# --- The harness: what runs the checks ------------------------------------------------------------------------------
+apps/apple/Tools/hostile/analyze.py                 check:hostile.production hostile.faults hostile.binding reader entries.full entries.persistence entries.lab
+apps/apple/Tools/hostile/battery.py                 check:hostile.production hostile.app
+apps/apple/Tools/hostile/reader.py                  check:reader
+apps/apple/Tools/hostile/pointer.swift              check:reader library.generated
+apps/apple/Tools/hostile/*                          check:hostile.production hostile.app reader
+apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
+apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
+apps/apple/Tools/lookup/*                           check:lookup
+apps/apple/Tools/library/*                          check:library.generated library.corpus
+apps/apple/Tools/build-lab.sh                       hostile reader entries.quick entries.persistence library.generated lookup
+apps/apple/Tools/build-fixtures.sh                  service library.generated lookup
+apps/apple/Tools/*                                  all
+apps/apple/Makefile                                 all
+
+# --- The instruments: each check's own code -------------------------------------------------------------------------
+apps/apple/Sources/XDictInstruments/Lookup*         check:lookup
+apps/apple/Sources/XDictInstruments/TransportHold.swift check:lookup service.recovery
+apps/apple/Sources/XDictInstruments/Library*        check:library.generated library.corpus
+apps/apple/Sources/XDictInstruments/ChangedEdition.swift check:library.generated library.corpus
+apps/apple/Sources/XDictInstruments/Conformance*    check:service.conformance
+apps/apple/Sources/XDictInstruments/Projection*     check:service.conformance
+apps/apple/Sources/XDictInstruments/IdleCheck.swift check:service.idle
+apps/apple/Sources/XDictInstruments/Findings.swift  all
+apps/apple/Sources/XDictInstruments/*               check:service.recovery
+apps/apple/Sources/XDictEntryLab/*                  check:hostile.production hostile.controls hostile.faults hostile.binding reader entries.lab
+apps/apple/Sources/XDict/AppCorpus.swift            check:entries.quick entries.full entries.persistence
+apps/apple/Sources/XDict/AppHostile.swift           check:hostile.app
+apps/apple/Sources/XDict/LookupWindow.swift         check:lookup
+apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated library.corpus
+apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
+apps/apple/Sources/XDict/ServiceReport.swift        check:service
+apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
+
+# --- The product ----------------------------------------------------------------------------------------------------
+apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y
+apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence
+apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick
+apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader
