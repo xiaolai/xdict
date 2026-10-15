@@ -37,6 +37,9 @@ extension EntryReadingFrame {
             // 3. The one marker: a 0.35em dot in the secondary text colour, at the head of the block.
             + "[data-xdict-before=marker]::before,[data-xdict-after=marker]::after{content:\"\" !important;"
             + "display:inline-block !important;width:0.35em !important;height:0.35em !important;"
+            + "padding:0 !important;aspect-ratio:1 !important;box-sizing:content-box !important;"
+            + "min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;"
+            + "line-height:0 !important;"
             + "background-color:var(--xdict-text-2) !important;border-radius:50% !important;"
             + "vertical-align:0.2em !important;position:static !important;float:none !important;"
             + "font-size:inherit !important;border:0 !important;box-shadow:none !important;transform:none !important}"
@@ -48,8 +51,35 @@ extension EntryReadingFrame {
             + "@media (prefers-reduced-motion:reduce){[data-xdict-control=disclosure]::before{transition:none !important}}"
             + "[data-xdict-before=lookup]:dir(rtl)::before,[data-xdict-after=lookup]:dir(rtl)::after,"
             + "[data-xdict-control=disclosure]:dir(rtl)::before{transform:scaleX(-1) !important}"
-            + "[data-xdict-control=disclosure][aria-expanded=true]::before{transform:rotate(90deg) !important}}"
-            // 5. Labels: one style, plain text in the secondary colour, no box (R11).
+            + "[data-xdict-control=disclosure][aria-expanded=true]::before{transform:rotate(90deg) !important}"
+            // A fold head's own vertical spacing goes: consecutive heads sit at the block gap.
+            + "[data-xdict-control=disclosure]{margin-block:0 !important;"
+            + "padding-block:0 !important}"
+            // 5. The speaker: one inline row, the accent tag first, both on the line's baseline, the glyph centred on
+            // the tag; whatever width, height, float or display the dictionary gave its button.
+            + "[data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;"
+            + "width:auto !important;height:auto !important;min-width:0 !important;min-height:0 !important;"
+            + "float:none !important;position:static !important;vertical-align:baseline !important;"
+            + "flex-wrap:nowrap !important;line-height:inherit !important}"
+            + "[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.32em !important}"
+            + "[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 0.35em !important}"
+            // 6. Labels are sized by their text, not by the badge's box the dictionary sized for its drawing.
+            + "[data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist],"
+            + "[data-xdict-role=label][data-xdict-label=frequency],[data-xdict-role=label][data-xdict-label=new]"
+            + "{display:inline !important;width:auto !important;height:auto !important;min-width:0 !important;"
+            + "min-height:0 !important;float:none !important;position:static !important}"
+            // A wrapper holding only labels and the graphics they replaced is sized by the labels, not the drawing.
+            + ":has(> [data-xdict-labelled]):not(:has(> :not([data-xdict-labelled],[data-xdict-role=label])))"
+            + "{width:auto !important;min-width:0 !important;height:auto !important;min-height:0 !important}"
+            // A fold head's wrapper adds no vertical space of its own around it.
+            + ":has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])"
+            + "{margin-block:0 !important;padding-block:0 !important}"
+            // 7. Punctuation the source set against an element stays against it: its inline end spacing goes.
+            + "[data-xdict-hug],[data-xdict-hug] :last-child{margin-inline-end:0 !important;"
+            + "padding-inline-end:0 !important}"
+            // A graphic the core turned into a label stays hidden, whatever display the dictionary gives images.
+            + "[data-xdict-labelled]{display:none !important}}"
+            // 8. Labels: one style, plain text in the secondary colour, no box (R11).
             + "[data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);"
             + "font-weight:var(--xdict-weight-bold);color:var(--xdict-text-2) !important;letter-spacing:0.02em;"
             + "white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em;background:none !important;"
@@ -62,8 +92,6 @@ extension EntryReadingFrame {
             + "[data-xdict-role=sensenum]{font-weight:var(--xdict-weight-bold);font-style:normal;"
             + "font-variant-numeric:lining-nums tabular-nums;background:none !important;border:0 !important;"
             + "border-radius:0 !important;margin-inline-end:0.25em}"
-            // A graphic the core turned into a label stays hidden, whatever display the dictionary gives images.
-            + "[data-xdict-labelled]{display:none !important}"
     }
 }
 
