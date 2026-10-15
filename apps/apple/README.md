@@ -21,6 +21,7 @@ started.
 | `XDictClient` | The app's side of the contract: `ServiceClient` (request ids, deadlines, credits, generations, reconnection, tokens) |
 | `XDictLibrary` | The reader's library (WI-5): packages found in what the reader chose, bookmarks and file ids, imports with cancel and retry, order, names, languages, changed editions and lineage joins; kinds, never sentences |
 | `XDictSearch` | The main window's model (WI-6): a search over every enabled dictionary or one, painted as each answers, paged, the trail; and its pronunciation (WI-7): a `sound://` link's recording fetched and played, or spoken instead with the reason; kinds, never sentences |
+| `XDictAnywhere` | Lookup from anywhere (WI-8): the shortcut (Carbon hot key, the reader's choice kept, clashes by kind), the one Escape claim, the selection read through the Accessibility API, the Service's text, where the panel goes; kinds, never sentences |
 | `XDictSpeech` | Sound and speech (WI-7): the system's voices and the one that speaks a dictionary's declared language in the reader's accent, the accent kept, and the output (`AVAudioFile` and `AVAudioEngine`, `AVSpeechSynthesizer`) behind a seam tests use without a sound |
 | `XDictEntryView` | The entry view and its confinement (WI-4) |
 | `XDictInstruments` | The E2E instruments' scenarios, compiled into the app and run by its development flags |
@@ -106,6 +107,18 @@ The stages:
   library's `sounds` fixture gives a missing, a Speex and an undecodable recording their own notices, in both languages,
   read off the window by `keys ax`; then recordings of every format the 25 hold, from `entries_corpus`'s sample: mp3,
   WAV and Ogg Vorbis play to their end, Speex is spoken instead with its notice.
+
+- **`selection.hosts`, `services.menu`, `panel.expand`, `panel.dismiss`, `panel.deadline`, `menubar.item`,
+  `shortcut.rebind`** (plan-macos-v1 WI-8; one launch, group `anywhere`): `Tools/anywhere/drive.py` resets XDict to a
+  fresh app state (its preferences deleted and the Services cache rebuilt; this is not a fresh account) and starts the
+  app with `--anywhere` over the lookup fixtures. It then works TextEdit, Notes, Safari and Chrome with real
+  selections, keys, clicks, scrolls and context menus (`hands`). The checks: each host's selection reaches the panel by
+  the word; "Look Up in XDict" is found in each host's context menu (directly, under Services, or absent, recorded) and
+  delivers a Unicode phrase; the panel expands into the main window by pointer and by the shortcut, keeping query,
+  dictionary and scroll; after Escape and after a click away the next key lands in TextEdit; the panel is on screen
+  within 1.0 s of the key, with the service working and with it suspended (XiaolaiDict's 0.13 s is recorded for
+  comparison); the menu-bar item looks up; a rebinding survives a relaunch, and a clash is reported with the old
+  binding kept. These checks need Accessibility for the SSH session and for XDict.app itself.
 
 Positive controls: `XDICT_E2E_EXPECTED_VERSIONS=<json> Tools/e2e.sh <host> launch` expects other versions and must fail
 (it records nothing); `XDICT_E2E_SSH=Tools/tests/ssh-to-this-mac Tools/e2e.sh any launch` reaches this Mac and must stop

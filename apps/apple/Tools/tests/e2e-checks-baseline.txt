@@ -154,3 +154,25 @@ sound.corpus.formatsSeen
 sound.corpus.playablePlay
 sound.corpus.speexFallsBack
 sound.corpus.everyClickAnswered
+# added by WI-8: lookup from anywhere, one launch (selection.hosts, services.menu, panel.*, menubar.item,
+# shortcut.rebind, which relaunches); anywhere.access and anywhere.setup are the driver's own
+anywhere.access
+anywhere.setup
+selection.textedit
+selection.safari
+selection.notes
+services.textedit
+services.notes
+services.safari
+services.chrome
+services.unicodeDelivered
+panel.expand.pointer
+panel.expand.keyboard
+panel.escape.nextKeyLands
+panel.clickAway.nextKeyLands
+panel.deadline.appears
+panel.deadline.serviceHung
+menubar.present
+menubar.looksUp
+shortcut.rebindPersists
+shortcut.clashRestores

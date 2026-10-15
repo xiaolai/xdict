@@ -13,8 +13,10 @@ import os
 /// with the reader's accent (WI-7). At launch the app asks its dictionary service for the core's versions (the E2E
 /// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     /// The reader's, unless a development instrument runs the real app over a library of its own.
-    static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AppSetup.reader
+    static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
+        ?? AppSetup.reader
     /// The app's one client of its dictionary service: one connection at a time, made on demand (`ServiceClient`).
     static var service: ServiceClient { setup.service }
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
@@ -37,7 +39,21 @@ struct XDictApp: App {
         .keyboardShortcut("l", modifiers: [.command, .shift])
 
         Settings {
-            SpeechSettings()
+            TabView {
+                Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
+                Tab("Lookup", systemImage: "keyboard") { ShortcutSettings(registrar: LookupAnywhere.shared.registrar) }
+            }
+        }
+
+        // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
+        // `openWindow` is handed to the panel, which expands into a main window.
+        MenuBarExtra {
+            MenuBarMenu(registrar: LookupAnywhere.shared.registrar,
+                        lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
+                        openMain: { MenuBarActions.openMain() },
+                        openLibrary: { MenuBarActions.openLibrary() })
+        } label: {
+            MenuBarLabel()
         }
     }
 
@@ -112,6 +128,7 @@ struct MainWindow: View {
             made.openLibrary = { _ in openWindow(id: XDictApp.libraryWindow) }
             state = made
             XDictApp.windowMade?(made)
+            MainWindows.made(made)
             Task { made.service = await XDictApp.handshake() }
         }
     }
@@ -126,5 +143,50 @@ enum LibraryLaunch {
         guard !started else { return }
         started = true
         await XDictApp.library.start()
+    }
+}
+
+/// Starts lookup from anywhere once the app has finished launching: the shortcut, the Service, the panel.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        MainActor.assumeIsolated {
+            LookupAnywhere.shared.start()
+            Task { await LibraryLaunch.once() }
+        }
+    }
+}
+
+/// The menu-bar item's icon, and the scene actions it hands over.
+struct MenuBarLabel: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Image(systemName: "character.book.closed")
+            .accessibilityLabel(Text(verbatim: "XDict"))
+            .task {
+                LookupAnywhere.shared.openMainWindow = { openWindow(id: XDictApp.mainWindow) }
+                MenuBarActions.open = { openWindow(id: $0) }
+            }
+    }
+}
+
+/// What the menu-bar menu opens, through the label's `openWindow`.
+@MainActor
+enum MenuBarActions {
+    static var open: ((String) -> Void)?
+
+    static func openMain() {
+        NSApp.activate()
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true
+                                                     && $0.isVisible }) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            open?(XDictApp.mainWindow)
+        }
+    }
+
+    static func openLibrary() {
+        NSApp.activate()
+        open?(XDictApp.libraryWindow)
     }
 }

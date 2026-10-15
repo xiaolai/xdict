@@ -286,6 +286,25 @@ public final class SearchModel {
         }
     }
 
+    /// **The place being read, with how far down its entry the reader is** — what the lookup panel hands the main window
+    /// when it expands (plan-macos-v1 WI-8, I5). Nil before anything is shown.
+    public func currentPlace() async -> Visit? {
+        await idle()
+        guard trail.current?.result != nil else { return nil }
+        await leaveCurrent()
+        return trail.current
+    }
+
+    /// **A place handed over from another window** (I5): a new place in this window's trail, its query, scope, entry and
+    /// scroll restored, as Back restores one — so Back from it reaches this window's own places.
+    public func adopt(_ visit: Visit) {
+        navigate { model in
+            await model.leaveCurrent()
+            model.trail.push(visit)
+            model.restore(visit)
+        }
+    }
+
     public var canGoBack: Bool { trail.canGoBack }
     public var canGoForward: Bool { trail.canGoForward }
     public var canReturnToOrigin: Bool { trail.canReturnToOrigin }

@@ -109,3 +109,29 @@
 
 @ sound.recordings default fixtures,sample,corpus group=sound
     sound.corpus.formatsSeen sound.corpus.playablePlay sound.corpus.speexFallsBack sound.corpus.everyClickAnswered
+
+# Lookup from anywhere (plan-macos-v1 WI-8): one launch of the real app (`XDict --anywhere`) over its own library of the
+# lookup fixtures, driven by `Tools/anywhere/drive.py` with real selections, keys, clicks and context menus in TextEdit,
+# Notes, Safari and Chrome, after a fresh app state (XDict's preferences deleted, the Services cache rebuilt; not a
+# fresh account). Every sub-stage needs Accessibility for this SSH session and for XDict.app itself, so the default
+# E2E Mac only. `shortcut.rebind` relaunches the app, so the driver runs it last.
+@ selection.hosts default kit,fixtures group=anywhere
+    anywhere.access anywhere.setup selection.textedit selection.safari selection.notes
+
+@ services.menu default kit,fixtures group=anywhere
+    services.textedit services.notes services.safari services.chrome services.unicodeDelivered
+
+@ panel.expand default kit,fixtures group=anywhere
+    panel.expand.pointer panel.expand.keyboard
+
+@ panel.dismiss default kit,fixtures group=anywhere
+    panel.escape.nextKeyLands panel.clickAway.nextKeyLands
+
+@ panel.deadline default kit,fixtures group=anywhere
+    panel.deadline.appears panel.deadline.serviceHung
+
+@ menubar.item default kit,fixtures group=anywhere
+    menubar.present menubar.looksUp
+
+@ shortcut.rebind default kit,fixtures group=anywhere
+    shortcut.rebindPersists shortcut.clashRestores

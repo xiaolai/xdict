@@ -38,6 +38,8 @@ readonly XPC_PATH=Contents/XPCServices/$SERVICE_ID.xpc
 readonly BUNDLE_DIGEST=.build/$APP_NAME.app.inputs-sha256
 readonly LOCK=.build/bundle.lock
 readonly CATALOG=Strings/Localizable.xcstrings
+# The Service's menu title (Info.plist NSServices): macOS reads its translation from ServicesMenu.strings (plan-macos-v1 WI-8).
+readonly SERVICES_CATALOG=Strings/ServicesMenu.xcstrings
 readonly LANGUAGES="en zh-Hans"
 # What the service must answer: the core's versions, read by `Tools/build-core.sh` through the same binding and archive.
 readonly CORE_VERSIONS=Generated/core-versions.json
@@ -149,8 +151,10 @@ verify_required_files() {
     done
     # A translation that never reached the bundle is a reader still reading English.
     for language in $LANGUAGES; do
-        [ -s "$bundle/Contents/Resources/$language.lproj/Localizable.strings" ] \
-            || { echo "missing: $language.lproj/Localizable.strings"; return 1; }
+        for table in Localizable ServicesMenu; do
+            [ -s "$bundle/Contents/Resources/$language.lproj/$table.strings" ] \
+                || { echo "missing: $language.lproj/$table.strings"; return 1; }
+        done
     done
 }
 
@@ -162,6 +166,12 @@ verify_bundle_metadata() {
         || { echo "the service's CFBundleIdentifier is not $SERVICE_ID"; return 1; }
     [ "$(plist_value "$app_plist" CFBundleExecutable)" = "$APP_NAME" ] \
         || { echo "the app's CFBundleExecutable is not $APP_NAME"; return 1; }
+    # The Service (plan-macos-v1 WI-8): its message is the provider's method, and NSRequiredContext is what lets macOS
+    # offer it in a selection's context menu without the reader enabling it.
+    [ "$(plist_value "$app_plist" NSServices:0:NSMessage)" = lookUpInXDict ] \
+        || { echo "the app declares no NSServices entry for lookUpInXDict"; return 1; }
+    /usr/libexec/PlistBuddy -c 'Print :NSServices:0:NSRequiredContext' "$app_plist" >/dev/null 2>&1 \
+        || { echo "the Service declares no NSRequiredContext"; return 1; }
     # **The keys a service needs to launch at all**: a wrong executable name or a missing XPCService dictionary builds,
     # signs and ships, and then launchd refuses the service with nothing to say why.
     [ "$(plist_value "$service_plist" CFBundleExecutable)" = "$SERVICE" ] \
@@ -338,6 +348,8 @@ assemble() {
     # Translations reach the bundle as compiled tables, one directory per language, read through `Bundle.main`.
     xcrun xcstringstool compile "$CATALOG" --output-directory "$contents/Resources" \
         || fail "the string catalog did not compile"
+    xcrun xcstringstool compile "$SERVICES_CATALOG" --output-directory "$contents/Resources" \
+        || fail "the Services menu's catalog did not compile"
 
     # Inside out: the service, then the app that seals it.
     sign_part Resources/DictionaryService.entitlements "$xpc"

@@ -22,8 +22,8 @@ let package = Package(
 
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
-        .target(name: "XDictUI", dependencies: ["XDictBase", "XDictContract", "XDictEntryView", "XDictLibrary",
-                                                "XDictSearch", "XDictSpeech"]),
+        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictEntryView",
+                                                "XDictLibrary", "XDictSearch", "XDictSpeech"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
         // dictionary looked up on its own and its results painted as they arrive (Q12), paged to every record (Q10);
@@ -48,6 +48,13 @@ let package = Package(
         // dictionary and no wire.
         .target(name: "XDictSpeech", dependencies: ["XDictBase"]),
 
+        // **Lookup from anywhere** (plan-macos-v1 WI-8), moved from XiaolaiDict and re-checked against the MDX-first
+        // model (ADR-0001): the lookup shortcut — the combination, the reader's choice kept, Carbon's exclusive hot key
+        // behind a seam, the one Escape claim, and what registering it answered — the selection read through the
+        // Accessibility API (both dialects, the term less its punctuation, and where it is on screen), the text the
+        // Service is handed, and where the panel goes beside the word. Kinds, never sentences: the view layer words them.
+        .target(name: "XDictAnywhere", dependencies: ["XDictBase"]),
+
         // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
         // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport
         // seam (NSXPC, or a test's fake), and the tokens it sends. No core: it asks the service.
@@ -67,7 +74,7 @@ let package = Package(
         .target(name: "XDictLibrary", dependencies: ["XDictClient", "XDictContract"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
                                                         "XDictUI"]),
 
@@ -103,7 +110,7 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictUITests", dependencies: ["XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
+        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
                                                         "XDictSpeech", "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.
@@ -115,6 +122,9 @@ let package = Package(
         // The voices this Mac lists and the choice among them, the accent kept, and recordings opened as macOS opens them
         // — never played and never spoken: the build Mac makes no sound (the E2E `sound` stage plays and speaks).
         .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech"]),
+        // Lookup from anywhere without a keyboard, a window or another app: Carbon faked (a real global shortcut would
+        // be taken from the reader while the suite ran), the Accessibility API faked, the panel's geometry as numbers.
+        .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere"]),
         // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.

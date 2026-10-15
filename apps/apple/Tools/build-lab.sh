@@ -63,4 +63,8 @@ swiftc -O -warnings-as-errors -o "$KIT/dragsource" Tools/library/dragsource.swif
 mkdir -p "$KIT/lookup"
 swiftc -O -warnings-as-errors -o "$KIT/lookup/keys" Tools/lookup/keys.swift || fail "the keyboard helper did not build"
 cp Tools/lookup/drive.py Tools/lookup/run-app-hostile.sh Tools/lookup/verdicts.py "$KIT/lookup/"
+# Lookup from anywhere's hands in other apps and its driver (plan-macos-v1 WI-8).
+mkdir -p "$KIT/anywhere"
+swiftc -O -warnings-as-errors -o "$KIT/anywhere/hands" Tools/anywhere/hands.swift || fail "the hands helper did not build"
+cp Tools/anywhere/drive.py "$KIT/anywhere/"
 echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"

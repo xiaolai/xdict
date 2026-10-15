@@ -16,7 +16,9 @@ struct TestInventoryTests {
     /// its scenario (2026-10-14, WI-5); `XDictSearchTests` added with the main window, and the view layer's, the entry
     /// view's and the service's raised by its sentences, its landing, Tab to links and replaced loads, and its scenario
     /// and held transport (2026-10-15, WI-6); `XDictSpeechTests` added with sound and speech, and the main window's and the
-    /// view layer's raised by its pronunciation and their sentences (2026-10-15, WI-7).
+    /// view layer's raised by its pronunciation and their sentences (2026-10-15, WI-7); `XDictAnywhereTests` added with
+    /// lookup from anywhere, and the main window's and the view layer's raised by the panel's handover and its sentences
+    /// (2026-10-15, WI-8).
     static let floors = [
         // 8 → 2 (WI-3): the handshake became the contract's `versions`; its tests moved with it, to XDictClientTests
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
@@ -24,9 +26,10 @@ struct TestInventoryTests {
         "XDictClientTests": 20,
         "XDictContractTests": 67,
         "XDictLibraryTests": 52,
-        "XDictSearchTests": 47,
+        "XDictSearchTests": 49,
         "XDictSpeechTests": 31,
-        "XDictUITests": 22,
+        "XDictAnywhereTests": 69,
+        "XDictUITests": 24,
         "XDictEntryViewTests": 43,
         "XDictServiceTests": 44,
         "XDictTests": 35,
