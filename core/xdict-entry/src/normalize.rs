@@ -219,6 +219,8 @@ pub struct Strips {
     pub missing_images: u64,
     /// S14: an image's data moved into its `src`.
     pub base64_images: u64,
+    /// WI-12: control characters, byte-order marks and literal `\n` mended in the text.
+    pub repairs: u64,
 }
 
 impl Strips {
@@ -239,6 +241,7 @@ impl Strips {
         self.arrows += o.arrows;
         self.missing_images += o.missing_images;
         self.base64_images += o.base64_images;
+        self.repairs += o.repairs;
     }
 }
 
