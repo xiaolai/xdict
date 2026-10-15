@@ -25,7 +25,7 @@ const BASE: &str = "xdict://d/";
 const SAMPLE: usize = 400;
 
 fn view() -> View {
-    View { base_url: BASE.into(), max_body_bytes: 64 << 20 }
+    View { base_url: BASE.into(), max_body_bytes: 64 << 20, original_style: false }
 }
 
 /// A folder's package: `X.mdd` before `X.1.mdd` before `X.2.mdd`, every other file a sidecar.
@@ -77,6 +77,9 @@ struct Tally {
     resources: BTreeSet<String>,
     missing: BTreeSet<String>,
     lossy: u64,
+    /// ADR-0010 Q3: entries rendered in "Original style", and the URLs they hold that the reading style's do not.
+    original: usize,
+    original_beyond: usize,
 }
 
 /// Follows one URL through `link()` and, for a resource or sound, `resource()`; a stylesheet's own URLs too.
@@ -178,21 +181,55 @@ fn entries_of_the_corpus() {
             tally.lossy += shown.lossy_bytes;
             sampled.push(serde_json::json!({"dict": name, "key": key, "occurrence": occurrence}));
             *seen.entry(key).or_insert(0) += 1;
-            for url in routes(&shown.html) {
+            let styled = routes(&shown.html);
+            // "Original style" moves nothing but the look: it renders wherever the reading style does, and a URL it
+            // holds beyond the reading style's (a decoration the reading style drops) is still the view's, and still
+            // classified and served as one.
+            match core.entry(dict.clone(), entry.clone(), View { original_style: true, ..view() }) {
+                Ok(original) => {
+                    tally.original += 1;
+                    let mut scratch = Tally::default();
+                    for url in routes(&original.html).into_iter().filter(|u| !styled.contains(u)) {
+                        tally.original_beyond += 1;
+                        follow(
+                            &core,
+                            &dict,
+                            &url,
+                            LinkOrigin::Entry { entry: entry.clone() },
+                            &mut scratch,
+                            &mut failures,
+                        );
+                    }
+                    if original.csp != shown.csp {
+                        failures.push(format!(
+                            "{name}: entry {:?}/{occurrence}: original style changed the CSP",
+                            entry.key
+                        ));
+                    }
+                }
+                Err(e) => failures.push(format!("{name}: entry {:?}/{occurrence} in original style: {e:?}", entry.key)),
+            }
+            for url in styled {
                 follow(&core, &dict, &url, LinkOrigin::Entry { entry: entry.clone() }, &mut tally, &mut failures);
             }
         }
         let missing: Vec<&String> = tally.missing.iter().take(6).collect();
         eprintln!(
             "{name:10} {} entries ({} problems at import); written links {:?}; lossy bytes {}; resources {} named, {} \
-             missing {missing:?}",
+             missing {missing:?}; original style {} entries, {} URLs beyond",
             tally.entries,
             imported.problems.len(),
             tally.written,
             tally.lossy,
             tally.resources.len(),
             tally.missing.len(),
+            tally.original,
+            tally.original_beyond,
         );
+        if tally.original != tally.entries {
+            failures
+                .push(format!("{name}: {} of {} entries rendered in original style", tally.original, tally.entries));
+        }
         for u in &tally.unknown {
             if !oxford_action(&name, u) {
                 failures.push(format!("{name}: an unknown scheme: {u}"));

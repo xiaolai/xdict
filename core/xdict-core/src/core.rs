@@ -513,6 +513,7 @@ impl Core {
                 resource: Some(&holds),
                 is_key: Some(&is_key),
                 strip_off_for_tests: self.strip_off_for_tests,
+                original: view.original_style,
             };
             // Given owned (the record's text, or its expansion), it is freed once it is read.
             let body = match expanded {
@@ -561,12 +562,11 @@ impl Core {
                 if let Some(bytes) = self.find_resource(&opened, name, ceiling)? {
                     let style = if renders(mime) { Some(self.edition_style(&opened)?) } else { None };
                     let style = style.as_ref().map(|s| &s.style);
-                    let bytes =
-                        served(bytes, mime, &view.base_url, travelled.dir(), style, self.strip_off_for_tests, ceiling)
-                            .map_err(|_| CoreError::TooLarge {
-                                limit: Limit::Body,
-                                detail: format!("{name} passes {ceiling} bytes as served, the most it may be"),
-                            })?;
+                    let bytes = served(bytes, mime, &view, travelled.dir(), style, self.strip_off_for_tests, ceiling)
+                        .map_err(|_| CoreError::TooLarge {
+                        limit: Limit::Body,
+                        detail: format!("{name} passes {ceiling} bytes as served, the most it may be"),
+                    })?;
                     return Ok(Resource::Found { mime: mime.into(), path: name.clone(), bytes });
                 }
             }
@@ -1139,7 +1139,7 @@ fn renders(mime: &str) -> bool {
 fn served(
     bytes: Vec<u8>,
     mime: &str,
-    base: &str,
+    view: &View,
     dir: &str,
     style: Option<&Style>,
     strip_off_for_tests: bool,
@@ -1149,10 +1149,11 @@ fn served(
     if bytes.len() > max {
         return Err(xdict_entry::Exceeded);
     }
+    let (base, original) = (view.base_url.as_str(), view.original_style);
     let Ok(text) = std::str::from_utf8(&bytes) else { return Ok(bytes) };
     let rewritten = match mime {
         "text/css" => match style {
-            Some(style) => xdict_entry::css_normalized_within(text, base, dir, style, max)?.0,
+            Some(style) => xdict_entry::css_styled_within(text, base, dir, style, original, max)?.0,
             None => xdict_entry::css_text_within(text, base, dir, max)?,
         },
         // Q6 (the owner, 2026-10-15): only a script that makes something work (a fold, a tab) runs; a tracker's, an
@@ -1165,7 +1166,7 @@ fn served(
         },
         "text/html" => match style {
             Some(style) => {
-                xdict_entry::html_normalized_unstripped_within(text, base, dir, style, strip_off_for_tests, max)?.0
+                xdict_entry::html_styled_within(text, base, dir, style, strip_off_for_tests, original, max)?.0
             }
             None => xdict_entry::html_text_within(text, base, dir, max)?,
         },
@@ -1387,7 +1388,47 @@ mod tests {
     }
 
     fn view() -> View {
-        View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
+        View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20, original_style: false }
+    }
+
+    /// ADR-0010 Q3: "Original style" is the dictionary's own look for one view, and nothing else moves: the entry and
+    /// the sheet it loads keep their declarations, while the strip list, the URL rewrite, the roles and the CSP are
+    /// exactly the reading style's.
+    #[test]
+    fn original_style_keeps_the_dictionarys_look_and_nothing_else() {
+        let sidecar = Location::Source {
+            name: "side.css".into(),
+            source: Arc::new(Fixed(b"body{font-size:14px;margin:0} .p{font-size:12px !important}".to_vec())),
+        };
+        let record = concat!(
+            r#"<style>.q{font-family:Ic;line-height:28px}</style><font color="red">r</font>"#,
+            r#"<script>R('x')</script><a href="javascript:R('y')">j</a><!-- c --><img src="gone.png" alt="g">"#,
+            r#"<a href="http://e.example/">w</a><span class="x">/ˈrʌn/</span>"#
+        );
+        let (core, dict) = opened_with(record, &[], vec![sidecar]);
+        let entry = |original_style: bool| {
+            let at = EntryRef { edition: core_edition(&core, &dict), key: "run".into(), occurrence: 0 };
+            core.entry(dict.clone(), at, View { original_style, ..view() }).unwrap()
+        };
+        let (styled, original) = (entry(false), entry(true));
+        assert!(original.html.contains(".q{font-family:Ic;line-height:28px}"), "{}", original.html);
+        assert!(original.html.contains(r#"<font color="red">"#), "{}", original.html);
+        assert!(!styled.html.contains(".q{font-family:Ic;line-height:28px}"), "{}", styled.html);
+        // The strip list, the rewrite, the roles, the CSP: the same.
+        for gone in ["R('x')", "javascript:", "<!-- c -->", "gone.png", "\"http://e.example/\""] {
+            assert!(!original.html.contains(gone), "{gone} in {}", original.html);
+        }
+        assert!(original.html.contains(r#"data-xdict-role="pron""#), "{}", original.html);
+        assert_eq!(original.csp, styled.csp);
+        let sheet = |original_style: bool| match core
+            .resource(dict.clone(), "side.css".into(), View { original_style, ..view() })
+            .unwrap()
+        {
+            Resource::Found { bytes, .. } => String::from_utf8(bytes).unwrap(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(sheet(true), "body{font-size:14px;margin:0} .p{font-size:12px !important}");
+        assert_ne!(sheet(false), sheet(true));
     }
 
     /// ADR-0010: entries and the sheets they load are normalized by the style the edition's own sheets decide, read
@@ -1612,7 +1653,7 @@ mod tests {
         use xdict_mdx_writer::Entry as W;
         let css = "b { background: url(a.png) }\n".repeat(100);
         let (core, dict) = opened(&[W::bytes("\\big.css", css.as_bytes()), W::bytes("\\big.png", &[7; 4000])], vec![]);
-        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
+        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000, original_style: false };
         let css = core.resource(dict.clone(), "big.css".into(), view.clone());
         assert!(matches!(css, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", css.map(|_| "found"));
         let png = core.resource(dict, "big.png".into(), view);
@@ -1630,7 +1671,7 @@ mod tests {
             source: Arc::new(Counting("b { color: red }\n".repeat(200).into_bytes(), read.clone())),
         };
         let (core, dict) = opened(&[W::bytes("\\gbk.css", &[0xB0; 3000])], vec![sidecar]);
-        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000 };
+        let view = View { base_url: "xdict://d/".into(), max_body_bytes: 2000, original_style: false };
         let gbk = core.resource(dict.clone(), "gbk.css".into(), view.clone());
         assert!(matches!(gbk, Err(CoreError::TooLarge { limit: Limit::Body, .. })), "{:?}", gbk.map(|_| "found"));
         read.store(0, std::sync::atomic::Ordering::SeqCst);

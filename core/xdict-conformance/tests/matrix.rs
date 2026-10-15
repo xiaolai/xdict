@@ -26,7 +26,7 @@ fn every_variant_of_the_matrix_conforms() {
     let variants: Value = serde_json::from_str(&std::fs::read_to_string(dir.join("variants.json")).unwrap()).unwrap();
     let variants = variants.as_array().unwrap();
     assert_eq!(variants.len(), 32, "the matrix's variants");
-    let view = View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 };
+    let view = View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20, original_style: false };
     let mut failures = Vec::new();
 
     for variant in variants {

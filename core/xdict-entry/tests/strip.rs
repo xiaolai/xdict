@@ -2,16 +2,29 @@
 //! applies them while it normalizes an entry. Every entry here is written in the test, no dictionary's.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
-use xdict_entry::{Counts, Style, css_normalized_within, html_normalized_within, script_purpose};
+use xdict_entry::{
+    Counts, Style, css_normalized_within, css_styled_within, html_normalized_within, html_styled_within, script_purpose,
+};
 
 const BASE: &str = "xdict://d/";
 
 fn html(text: &str, style: &Style) -> String {
-    html_normalized_within(text, BASE, "", style, usize::MAX).unwrap().0
+    let (out, counts) = html_normalized_within(text, BASE, "", style, usize::MAX).unwrap();
+    same_strips_in_original_style(text, style, &counts);
+    out
 }
 
 fn counts(text: &str, style: &Style) -> Counts {
-    html_normalized_within(text, BASE, "", style, usize::MAX).unwrap().1
+    let counts = html_normalized_within(text, BASE, "", style, usize::MAX).unwrap().1;
+    same_strips_in_original_style(text, style, &counts);
+    counts
+}
+
+/// ADR-0010 Q3 and ADR-0007 decision 14: "Original style" drops the normalization and nothing of the strip list.
+/// Every case here is also rendered in it, and must strip exactly what the reading style strips.
+fn same_strips_in_original_style(text: &str, style: &Style, normalized: &Counts) {
+    let original = html_styled_within(text, BASE, "", style, false, true, usize::MAX).unwrap().1;
+    assert_eq!(original.strip, normalized.strip, "{text}");
 }
 
 fn plain() -> Style {
@@ -110,6 +123,9 @@ fn s9_an_entry_hidden_until_its_script_runs_is_shown() {
     let s = Style::of_edition([sheet], ["<link href=a.css><w hw=a><b>a</b></w>", "<w><b>b</b></w>"]);
     let out = css_normalized_within(sheet, BASE, "", &s, usize::MAX).unwrap().0;
     assert_eq!(out, "w{float:left} w.js_loaded{display:block} .x{display:none}");
+    // In "Original style" too: S9 is the strip list's, not the reading style's.
+    let original = css_styled_within(sheet, BASE, "", &s, true, usize::MAX).unwrap().0;
+    assert_eq!(original, "w{float:left} w.js_loaded{display:block} .x{display:none}");
 }
 
 /// S10: an element that draws nothing (empty or blank, no id, no rule draws it, no script names it) goes; its

@@ -799,3 +799,30 @@ fn a_text_colour_is_only_a_token() {
     assert_eq!(css(".a{color:var(--xdict-red, #af342f)}", &s), ".a{color:var(--xdict-red, #af342f)}");
     assert_eq!(html(r#"<p style="color:LinkText">x</p>"#, &s), r#"<p style="">x</p>"#);
 }
+
+/// ADR-0010 Q3: in "Original style" a sheet, a `<style>`, a `style=""` and the presentational attributes are left as
+/// the dictionary wrote them: no token, no dropped declaration, no face, no `!important` taken; URLs are still the
+/// view's.
+#[test]
+fn original_style_leaves_the_dictionarys_declarations_as_written() {
+    let s = Style::of_sheets(["body{font-size:14px}"]);
+    let sheet = "body{font-size:14px;margin:0} .p{font-size:12px !important;color:#123456;line-height:28px} \
+                 @font-face{font-family:Q;src:url(q.ttf)} .i:before{content:url(i.png)}";
+    let (out, _) = xdict_entry::css_styled_within(sheet, BASE, "", &s, true, usize::MAX).unwrap();
+    assert_eq!(
+        out,
+        "body{font-size:14px;margin:0} .p{font-size:12px !important;color:#123456;line-height:28px} \
+         @font-face{font-family:Q;src:url(\"xdict://d/r/q.ttf\")} .i:before{content:url(\"xdict://d/r/i.png\")}"
+    );
+    assert_ne!(css(sheet, &s), out, "the reading style does change it");
+    let page = r#"<style>.q{font-family:Ic;color:red}</style><font color="red" size="5">r</font><p style="color:#123456;line-height:28px">p</p><table width="300" border="1"><tr><td>t</td></tr></table>"#;
+    let (html, _) = xdict_entry::html_styled_within(page, BASE, "", &s, false, true, usize::MAX).unwrap();
+    for kept in [
+        ".q{font-family:Ic;color:red}",
+        r#"<font color="red" size="5">"#,
+        r#"style="color:#123456;line-height:28px""#,
+        r#"width="300" border="1">"#,
+    ] {
+        assert!(html.contains(kept), "{kept} in {html}");
+    }
+}

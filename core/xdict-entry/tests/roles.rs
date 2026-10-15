@@ -13,7 +13,7 @@ fn entry(text: &str, key: &str) -> (String, Counts) {
         BASE,
         "",
         &style,
-        &Entry { key, resource: None, is_key: None, strip_off_for_tests: false },
+        &Entry { key, resource: None, is_key: None, strip_off_for_tests: false, original: false },
         usize::MAX,
     )
     .unwrap()
@@ -101,7 +101,7 @@ fn a_remote_recording_speaks_the_word() {
 fn a_missing_image_leaves_its_alt() {
     let style = Style::of_sheets([]);
     let has = |p: &str| p == "here.png";
-    let e = Entry { key: "x", resource: Some(&has), is_key: None, strip_off_for_tests: false };
+    let e = Entry { key: "x", resource: Some(&has), is_key: None, strip_off_for_tests: false, original: false };
     let text = r#"<img src="here.png"><img src="gone.png" alt="a picture">"#;
     let (out, counts) = entry_normalized_within(text, BASE, "", &style, &e, usize::MAX).unwrap();
     assert!(out.contains("here.png") && !out.contains("gone.png") && out.contains("a picture"), "{out}");

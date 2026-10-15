@@ -124,6 +124,11 @@ record! {
         /// The shell's ceiling on one body, within the core's own limit: an entry, or a stylesheet, script or
         /// page it loads, as served rewritten. Images and recordings are held only to the core's limit.
         pub max_body_bytes: u64,
+        /// The reader's "Original style" for this dictionary (ADR-0010 Q3): its entries and the sheets and pages they
+        /// load keep the dictionary's own styles. The URL rewrite, the strip list, the roles and the CSP are the same
+        /// either way (ADR-0007 decision 14). `false` when absent, in every binding.
+        #[cfg_attr(feature = "serde", serde(default))]
+        pub original_style: bool,
     }
 
     /// One entry for the entry view.
