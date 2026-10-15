@@ -64,6 +64,12 @@ def totals(report):
                      "labelLowest": min(lows) if lows else None, "heads": sum(m.get("heads") or 0 for m in ms),
                      "stated": sum(m.get("stated") or 0 for m in ms), "clicked": sum(m.get("clicked") or 0 for m in ms),
                      "mismatch": sum(len(m.get("foldMismatch") or []) for m in ms)}
+        ls = [r["layout"] for r in report["rows"] if r["mode"] == mode and isinstance(r.get("layout"), dict)]
+        out[mode].update({"dotWorst": max([l.get("dotWorst") or 0 for l in ls] or [0]),
+                          "pronOff": sum(l.get("pronOff") or 0 for l in ls), "pronTotal": sum(l.get("pronTotal") or 0 for l in ls),
+                          "labelGapOver": sum(l.get("labelGapOver") or 0 for l in ls),
+                          "foldGapOver": sum(l.get("foldGapOver") or 0 for l in ls),
+                          "spacePunct": sum(l.get("spacePunct") or 0 for l in ls)})
     return out
 
 

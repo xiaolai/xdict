@@ -288,4 +288,29 @@ struct ReadingFrameTests {
         #expect(EntryScripts.disclosureDOM.contains("__xdictDisclosure"))
         #expect(EntryScripts.disclosureDOM.contains("MutationObserver"))
     }
+
+    /// The coordinator's review of oald-long (2026-10-16), as rules in the marks' layer, so no unlayered `!important`
+    /// of the dictionary's outranks them: a round dot whatever box the dictionary gave its pseudo-element; the speaker
+    /// one inline row with its tag first on the baseline; labels sized by their text; punctuation hugged; fold heads at
+    /// the block gap.
+    @Test func theMarksHoldTheirBoxes() throws {
+        let css = EntryReadingFrame.marksCSS
+        let layer = try #require(css.range(of: "@layer xdict-marks{"))
+        let layered = String(css[layer.upperBound...])
+        func inLayer(_ rule: String) -> Bool { layered.contains(rule) }
+        #expect(inLayer("padding:0 !important;aspect-ratio:1 !important;"), "the marker is round")
+        #expect(inLayer("[data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;"
+                        + "width:auto !important;height:auto !important;"))
+        #expect(inLayer("[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;"))
+        #expect(inLayer("[data-xdict-role=label][data-xdict-label=level],"))
+        #expect(inLayer("{display:inline !important;width:auto !important;height:auto !important;"))
+        #expect(inLayer("[data-xdict-hug],[data-xdict-hug] :last-child{margin-inline-end:0 !important;"
+                        + "padding-inline-end:0 !important}"))
+        #expect(inLayer("[data-xdict-control=disclosure]{margin-block:0 !important;"
+                        + "padding-block:0 !important}"))
+        #expect(inLayer(":has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])"
+                        + "{margin-block:0 !important;padding-block:0 !important}"))
+        #expect(inLayer(":has(> [data-xdict-labelled]):not(:has(> :not([data-xdict-labelled],[data-xdict-role=label])))"))
+        #expect(inLayer("[data-xdict-labelled]{display:none !important}"))
+    }
 }

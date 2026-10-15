@@ -250,3 +250,18 @@ fn hostile_icons_stay_linear() {
         assert!(large / small < 10.0, "{name}: {small:.3}s at n, {large:.3}s at 4n");
     }
 }
+
+// 5. Punctuation the source sets against an element stays against it (coordinator's review, 2026-10-16): the element
+// closed right before a `,` `;` or `.` is marked, so the frame drops the inline end spacing a badge's box had.
+
+#[test]
+fn an_element_closed_right_before_punctuation_is_marked_to_hug_it() {
+    let o = out(
+        r#"<p><a href="entry://x"><span class="c">b1</span></a><span class="sep">,</span> <b>z</b> ; <i>w</i>. <u>v</u><img src="a.png">, <em>q</em>&#44;</p>"#,
+        ".c{padding:0 4px;margin:0 4px}",
+    );
+    assert_eq!(o.matches("data-xdict-hug").count(), 2, "the link before `,` and the italic before `.`: {o}");
+    assert!(o.contains("<i data-xdict-hug"), "{o}");
+    assert!(!o.contains("<b data-xdict-hug"), "a space the source wrote stays: {o}");
+    assert!(!o.contains("<u data-xdict-hug"), "an image between is not punctuation: {o}");
+}

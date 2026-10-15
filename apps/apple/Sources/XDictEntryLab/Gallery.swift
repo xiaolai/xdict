@@ -83,6 +83,18 @@ enum GalleryRun {
                         failures.append("\(name) \(mode.name) \(entry.key): no snapshot")
                     }
                     // After the snapshot: the fold check clicks the page.
+                    let layout = mode.frame.isEmpty ? nil : await run(layoutScript, controller.webView)
+                    if let layout {
+                        for (key, limit, what) in [("dotWorst", 0.05, "a marker dot is not round"),
+                                                   ("pronOff", 0.0, "a speaker off its transcription's line"),
+                                                   ("labelGapOver", 0.0, "a label too far from the next text"),
+                                                   ("foldGapOver", 0.0, "fold heads too far apart"),
+                                                   ("spacePunct", 0.0, "a space before punctuation after a label")] {
+                            if let v = layout[key] as? Double, v > limit {
+                                failures.append("\(name) \(mode.name) \(entry.key): \(what) (\(key) \(v))")
+                            }
+                        }
+                    }
                     let marked = mode.frame.isEmpty ? nil : await marks(controller.webView)
                     if let marked {
                         if let leaks = marked["leaks"] as? [Any], !leaks.isEmpty {
@@ -96,7 +108,8 @@ enum GalleryRun {
                         }
                     }
                     rows.append(["dict": name, "kind": kind, "key": entry.key, "mode": mode.name, "image": "images/\(file)",
-                                 "measure": measured ?? NSNull(), "marks": marked ?? NSNull()])
+                                 "measure": measured ?? NSNull(), "marks": marked ?? NSNull(),
+                                 "layout": layout ?? NSNull()])
                 }
                 controller.closeEntry()
                 window.close()
@@ -212,6 +225,143 @@ enum GalleryRun {
                  labelLowest: lowest === null ? null : Math.round(lowest * 100) / 100,
                  heads: heads.length, stated: stated, clicked: clicked, foldMismatch: mismatch };
         """
+
+    /// The marks' layout, measured (coordinator's review of oald-long, 2026-10-16), with samples for diagnosis:
+    /// - `dotWorst`: the largest |width / height − 1| of a marker dot;
+    /// - `pronOff`: speakers whose next transcription is on another line box (the speaker's middle outside its rect);
+    /// - `labelGapOver`: labels that replace a drawing whose next visible text on the same line starts more than the gap token after them;
+    /// - `foldGapOver`: consecutive fold heads (nothing visible between) whose texts are further apart than the line's
+    ///   leading plus the gap token (the list rhythm);
+    /// - `spacePunct`: labels followed by whitespace and then `,` `;` or `.`.
+    static let layoutScript = #"""
+        function probeBox(el) { if (!el) return null; var cs = getComputedStyle(el), r = el.getBoundingClientRect();
+          return [el.tagName.toLowerCase() + '.' + String(el.className), cs.display, cs.width, cs.margin, cs.padding, Math.round(r.left), Math.round(r.right)]; }
+        var gap = parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.5 + 1;
+        function trim(el) { return el ? el.outerHTML.replace(/\s+/g, ' ').slice(0, 300) : ''; }
+        function seen(el) { return el.getClientRects().length > 0; }
+        var dotWorst = 0, dots = [];
+        document.querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]').forEach(function (el) {
+          ['before', 'after'].forEach(function (side) {
+            if (el.getAttribute('data-xdict-' + side) !== 'marker' || !seen(el)) return;
+            var ps = getComputedStyle(el, '::' + side), w = parseFloat(ps.width) + parseFloat(ps.paddingLeft) + parseFloat(ps.paddingRight),
+                h = parseFloat(ps.height) + parseFloat(ps.paddingTop) + parseFloat(ps.paddingBottom);
+            if (!(h > 0)) return;
+            var d = Math.abs(w / h - 1);
+            if (d > dotWorst) { dotWorst = d; dots = [ps.width, ps.height, ps.padding, ps.display, trim(el).slice(0, 120)]; }
+          });
+        });
+        // The next element after `el` in document order matching `sel`, within `el`'s grandparent.
+        function nextIn(el, sel, scope) {
+          var all = scope.querySelectorAll(sel);
+          for (var i = 0; i < all.length; i++) {
+            if (el.compareDocumentPosition(all[i]) & Node.DOCUMENT_POSITION_FOLLOWING) return all[i];
+          }
+          return null;
+        }
+        var pronOff = 0, pronTotal = 0, pron = [];
+        document.querySelectorAll('[data-xdict-control=speaker]').forEach(function (sp) {
+          if (!seen(sp)) return;
+          var scope = sp.parentElement && sp.parentElement.parentElement ? sp.parentElement.parentElement : document.body;
+          // Its transcription: the text after it inside a transcription that holds it, else the next one near it.
+          var ph = null, b = null;
+          if (sp.closest('[data-xdict-phon]')) { var tn = nextText(sp); if (tn && tn.parentElement.closest('[data-xdict-phon]')) ph = tn; }
+          else { var pe = nextIn(sp, '[data-xdict-phon]', scope); if (pe && seen(pe)) ph = pe; }
+          if (!ph) return;
+          if (ph.nodeType === 3) { var tr = document.createRange(); tr.selectNodeContents(ph); b = tr.getClientRects()[0]; } else b = ph.getClientRects()[0];
+          if (!b) return;
+          pronTotal += 1;
+          var a = sp.getBoundingClientRect(), mid = (a.top + a.bottom) / 2;
+          if (mid < b.top || mid > b.bottom) {
+            pronOff += 1;
+            if (pron.length < 3) {
+              var chain = [];
+              for (var e = sp; e && e !== document.body && chain.length < 4; e = e.parentElement) {
+                var cs = getComputedStyle(e); chain.push(e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + ' ' + cs.display + '/' + cs.float + '/' + cs.position);
+              }
+              pron.push([chain, trim(sp.parentElement && sp.parentElement.parentElement)]);
+            }
+          }
+        });
+        function nextText(el) {
+          var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), n = null;
+          w.currentNode = el;
+          while ((n = w.nextNode())) {
+            if (el.contains(n)) continue;
+            if (!/\S/.test(n.nodeValue) || !n.parentElement || !seen(n.parentElement)) continue;
+            return n;
+          }
+          return null;
+        }
+        function between(el, n) {
+          var r = document.createRange(); r.setStartAfter(el); r.setEnd(n, 0); return r.toString();
+        }
+        var labelGapOver = 0, labelGaps = [], spacePunct = 0, punct = [];
+        // The labels that replace a drawing (icon sweep §8.2); a dictionary's own text labels keep its layout.
+        document.querySelectorAll('[data-xdict-role=label]:is([data-xdict-label=level],[data-xdict-label=wordlist],[data-xdict-label=frequency],[data-xdict-label=new])').forEach(function (lb) {
+          if (!seen(lb)) return;
+          var n = nextText(lb);
+          if (!n) return;
+          var r = document.createRange(); r.selectNodeContents(n);
+          var lt = document.createRange(); lt.selectNodeContents(lb);
+          var nr = r.getClientRects()[0], lr = lt.getClientRects(); lr = lr[lr.length - 1];
+          if (!lr) return;
+          if (!nr) return;
+          // A control or image between them (a speaker) is content, not a gap.
+          var mid = document.createRange(); mid.setStartAfter(lb); mid.setEnd(n, 0);
+          var held = Array.prototype.some.call(mid.cloneContents().querySelectorAll('[data-xdict-control],img,svg'), function () { return true; });
+          if (!held && Math.abs(nr.top - lr.top) < lr.height && nr.left - lr.right > gap) {
+            labelGapOver += 1;
+            if (labelGaps.length < 3) labelGaps.push([Math.round(nr.left - lr.right), trim(lb.parentElement), trim(lb.nextElementSibling), probeBox(lb), probeBox(lb.parentElement), probeBox(n.parentElement), n.nodeValue.slice(0, 20)]);
+          }
+        });
+        // Punctuation the source set against the text before it, drawn more than 0.2em away from it.
+        (function () {
+          var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), prev = null, k = 0, n;
+          while ((n = w.nextNode()) && k < 6000) {
+            if (!/\S/.test(n.nodeValue) || !n.parentElement || !seen(n.parentElement)) { if (/\s/.test(n.nodeValue)) prev = null; continue; }
+            k += 1;
+            // A space the dictionary's own sheet draws after the element (`::after{content:" "}`) is the source's.
+            var drawnSpace = prev && /^"\s+"$/.test(getComputedStyle(prev.parentElement, '::after').content);
+            if (prev && !drawnSpace && /^[,;.]/.test(n.nodeValue) && !/\s$/.test(prev.nodeValue)) {
+              var a = document.createRange(); a.selectNodeContents(prev); var ar = a.getClientRects(); ar = ar[ar.length - 1];
+              var c = document.createRange(); c.setStart(n, 0); c.setEnd(n, 1); var cr = c.getClientRects()[0];
+              var em = parseFloat(getComputedStyle(n.parentElement).fontSize);
+              if (ar && cr && Math.abs(cr.top - ar.top) < ar.height && cr.left - ar.right > 0.2 * em) {
+                spacePunct += 1;
+                if (punct.length < 3) { var pe = prev.parentElement, pa2 = getComputedStyle(pe, '::after');
+                  punct.push([Math.round(cr.left - ar.right), prev.nodeValue.slice(-12) + '|' + n.nodeValue.slice(0, 6), trim(n.parentElement.parentElement).slice(0, 200),
+                              probeBox(pe), pa2.content, pa2.width, pa2.margin, getComputedStyle(pe).fontStyle, getComputedStyle(pe).letterSpacing]); }
+              }
+            }
+            prev = /\s$/.test(n.nodeValue) ? null : n;
+          }
+        })();
+        var heads = Array.prototype.filter.call(document.querySelectorAll('[data-xdict-control=disclosure]'), seen);
+        var foldGapOver = 0, folds = [];
+        for (var i = 1; i < heads.length; i++) {
+          var p = heads[i - 1], q = heads[i];
+          // Consecutive: no visible text between the two heads but their folds' hidden text.
+          var t = nextText(p), visibleBetween = false;
+          if (t && (q.compareDocumentPosition(t) & Node.DOCUMENT_POSITION_PRECEDING) && !q.contains(t)) visibleBetween = true;
+          if (visibleBetween) continue;
+          var pr = document.createRange(); pr.selectNodeContents(p); var pa = pr.getClientRects(); pa = pa[pa.length - 1];
+          var qr = document.createRange(); qr.selectNodeContents(q); var qa = qr.getClientRects()[0];
+          if (!pa || !qa) continue;
+          var d = qa.top - pa.bottom, qs = getComputedStyle(q), fs = parseFloat(qs.fontSize);
+          var lead = qs.lineHeight === 'normal' ? 0.2 * fs : parseFloat(qs.lineHeight) - fs;
+          // The list rhythm: the line's own leading plus the gap token between blocks.
+          if (d > lead + gap) { foldGapOver += 1; if (folds.length < 3) folds.push([Math.round(d), trim(p).slice(0, 150)]); }
+        }
+        return { dotWorst: Math.round(dotWorst * 1000) / 1000, dots: dots, pronOff: pronOff, pronTotal: pronTotal, pron: pron,
+                 labelGapOver: labelGapOver, labelGaps: labelGaps, foldGapOver: foldGapOver, folds: folds,
+                 foldHeads: heads.length, spacePunct: spacePunct, punct: punct };
+        """#
+
+    static func run(_ script: String, _ webView: WKWebView?) async -> [String: Any]? {
+        guard let webView else { return nil }
+        return (try? await webView.callAsyncJavaScript(script, arguments: [:], in: nil, contentWorld: shellWorld))
+            as? [String: Any]
+    }
 
     static func marks(_ webView: WKWebView?) async -> [String: Any]? {
         guard let webView else { return nil }

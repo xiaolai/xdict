@@ -601,6 +601,10 @@ pub(crate) struct Roles<'s> {
     glyphs: Vec<icons::Written>,
     /// Whether the strip list's rules this tree owns (S5, S10, S11) apply: always, but in the hostile battery's lab.
     strip: bool,
+    /// The element closed last, while nothing visible has followed it: punctuation written next hugs it.
+    hug_after: Option<u32>,
+    /// Elements closed right before a `,` `;` or `.` (the frame drops their inline end spacing).
+    hugs: Vec<u32>,
 }
 
 /// What the tree decided: its edits, the strip counts it owns, and the roles written.
@@ -658,6 +662,8 @@ impl<'s> Roles<'s> {
             resource: None,
             glyphs: Vec::new(),
             strip: true,
+            hug_after: None,
+            hugs: Vec::new(),
         }
     }
 
@@ -689,6 +695,9 @@ impl<'s> Roles<'s> {
     ) {
         let lower = name.to_ascii_lowercase();
         let void = closed.is_none() && (VOID.contains(&lower.as_str()) || tag.ends_with("/>"));
+        if void || image {
+            self.hug_after = None;
+        }
         if self.stack.len() >= MAX_DEPTH || self.nodes.len() >= MAX_NODES {
             if !void {
                 self.deep += 1;
@@ -816,6 +825,12 @@ impl<'s> Roles<'s> {
         if raw.is_empty() {
             return;
         }
+        if let Some(n) = self.hug_after.take()
+            && raw.starts_with([',', ';', '.'])
+            && self.hugs.len() < MAX_NODES
+        {
+            self.hugs.push(n);
+        }
         if let (Some(at), Some(&top)) = (at, self.stack.last()) {
             let first = self.nodes.get(top as usize).is_some_and(|n| !n.direct);
             icons::written(raw, at, top, first, &mut self.glyphs);
@@ -863,6 +878,7 @@ impl<'s> Roles<'s> {
                 n.text.1 = len;
                 if k == up {
                     n.end = Some((at, after));
+                    self.hug_after = Some(i);
                 }
             }
         }
@@ -897,6 +913,11 @@ impl<'s> Roles<'s> {
         }
         let roles = if self.key.is_some() { t.assign() } else { Vec::new() };
         icons::decide(&self.nodes, &t, &roles, &self.glyphs, self.facts, &mut decided);
+        for &i in &self.hugs {
+            if let Some(n) = self.nodes.get(i as usize) {
+                decided.edits.push((n.attr_at, n.attr_at, " data-xdict-hug".into()));
+            }
+        }
         if self.key.is_some() {
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
