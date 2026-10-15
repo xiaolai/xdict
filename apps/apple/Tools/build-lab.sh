@@ -19,8 +19,15 @@ fail() { echo "build-lab: $*" >&2; exit 1; }
 identity=$(Tools/build-bundle.sh identity) || fail "no signing identity"
 python3 -I Tools/hostile/battery.py --check || fail "conformance/fixtures/hostile is stale: run Tools/hostile/battery.py"
 
-swift build -c release --product "$LAB" >/dev/null || fail "swift build of $LAB failed"
-products=$(swift build -c release --show-bin-path)
+if [ -n "${XDICT_REMOTE_PRODUCTS:-}" ]; then
+    # Built on BUILD_HOST (Tools/remote-build.sh), and only of the tree here now.
+    [ "$(cat "$XDICT_REMOTE_PRODUCTS/source-tree" 2>/dev/null)" = "$(Tools/source-tree.sh)" ] \
+        || fail "$XDICT_REMOTE_PRODUCTS was not built of this source tree: make app"
+    products=$XDICT_REMOTE_PRODUCTS
+else
+    swift build -c release --product "$LAB" >/dev/null || fail "swift build of $LAB failed"
+    products=$(swift build -c release --show-bin-path)
+fi
 [ -x "$products/$LAB" ] || fail "swift build produced no $LAB"
 
 rm -rf "$KIT"

@@ -40,7 +40,7 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-status e2e-evidence \
+.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-status e2e-evidence \
 	e2e-evidence-bootstrap release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -56,6 +56,8 @@ BUILD_NUMBER ?=
 # The notarytool keychain profile: a name, never a credential (XiaolaiDict ADR-0026).
 NOTARY_PROFILE ?= chase-notary
 E2E_HOST ?= $(E2E_HOST_MACOS)
+# Another Mac's SSH name to compile on; unset, this one compiles.
+BUILD_HOST ?=
 # The owner's 25 dictionaries, for the `entries` stage; unset, that stage fails as not measured.
 E2E_CORPUS ?=
 
@@ -65,9 +67,17 @@ export XDICT_BUILD_NUMBER := $(BUILD_NUMBER)
 export XDICT_NOTARY_PROFILE := $(NOTARY_PROFILE)
 export XDICT_E2E_HOST := $(E2E_HOST)
 export XDICT_E2E_CORPUS := $(E2E_CORPUS)
+ifneq ($(BUILD_HOST),)
+export XDICT_REMOTE_PRODUCTS := $(APPLE)/.build/remote-products
+endif
 
-app: lint test-swift
+# BUILD_HOST (local.mk): the lint, tests and release build run there (Tools/remote-build.sh); this Mac assembles and
+# signs what comes back. Unset: everything here, as before.
+app: $(if $(BUILD_HOST),remote-build,lint test-swift)
 	@Tools/build-bundle.sh build
+
+remote-build:
+	@Tools/remote-build.sh "$(BUILD_HOST)"
 
 test: lint test-tools test-swift
 
@@ -128,6 +138,7 @@ e2e-affected:
 # The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
+	@Tools/tests/remote-build-test.sh
 
 e2e-status:
 	@Tools/e2e-status.sh show
