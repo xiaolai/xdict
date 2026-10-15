@@ -243,13 +243,27 @@ extension LookupScenario {
         let first = results("records")
         findings.merge(await stage.checkpoint("paging"))
         let began = ContinuousClock.now
-        var pages = 1
-        while let now = results("records"), now.hasMore, ContinuousClock.now - began < .seconds(300) {
+        // Bounded by progress, not by the clock: a page that fails (on a heavily loaded Mac, one passing the client's
+        // 5 s lookup deadline) is asked again, as the reader's Retry would, and only `pageAttempts` failures in a row at
+        // the same offset end the walk. A page that never comes, or comes short, still fails the check below.
+        var pages = 1, failuresInARow = 0, retried = 0
+        var lastFailure: LookupFailure?
+        while let now = results("records"), now.hasMore {
             let had = now.hits.count
             model.loadMore(records)
             await settle()
-            guard (results("records")?.hits.count ?? 0) > had else { break }
-            pages += 1
+            let after = results("records")
+            if (after?.hits.count ?? 0) > had {
+                pages += 1
+                failuresInARow = 0
+            } else if let failure = after?.moreFailed, failuresInARow + 1 < Self.pageAttempts {
+                lastFailure = failure
+                failuresInARow += 1
+                retried += 1
+            } else {
+                lastFailure = after?.moreFailed ?? lastFailure
+                break
+            }
         }
         let all = results("records")
         let occurrences = all?.hits.map(\.entry.occurrence) ?? []
@@ -260,7 +274,8 @@ extension LookupScenario {
                        "first page \(first?.hits.count ?? 0) of \(first?.total ?? 0); after \(pages) page(s) in "
                        + "\(milliseconds(ContinuousClock.now - began)) ms: \(all?.hits.count ?? 0) loaded, each record once "
                        + "in order: \(inOrder), more: \(all?.hasMore ?? true), keys shown with their record: "
-                       + "\(all?.repeatedKeys.sorted() ?? [])")
+                       + "\(all?.repeatedKeys.sorted() ?? []), pages asked again: \(retried), last failure: "
+                       + "\(lastFailure.map { String(describing: $0) } ?? "none")")
         await search("apple")
     }
 
