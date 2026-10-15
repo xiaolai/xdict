@@ -289,6 +289,8 @@ fn html_out<'s>(
             return out;
         }
         let (before, from) = rest.split_at(at);
+        let before = repaired(before, text.len() - rest.len() == 0, &mut out);
+        let before = before.as_ref();
         if let Some(controls) = &mut out.controls {
             controls.text(before, text.len() - rest.len(), out.text.as_str().len());
         }
@@ -551,8 +553,21 @@ fn html_out<'s>(
             out.append(sheet);
         }
     }
-    out.text.push_str(rest);
+    let tail = repaired(rest, text.len() - rest.len() == 0, &mut out);
+    out.text.push_str(&tail);
     out
+}
+
+/// A run of a normalized entry's text with WI-12's repairs made and counted (`repair.rs`); any other, as it is.
+fn repaired<'t>(run: &'t str, at_start: bool, out: &mut Out<'_>) -> std::borrow::Cow<'t, str> {
+    match out.norm.as_mut() {
+        Some(norm) => {
+            let (text, repairs) = crate::repair::text(run, at_start);
+            norm.counts.strip.repairs += repairs;
+            text
+        }
+        None => std::borrow::Cow::Borrowed(run),
+    }
 }
 
 /// One tag at the start of `from`, written to `out`: the tag's name, what follows it, and whether it is an end

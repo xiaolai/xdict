@@ -10,6 +10,7 @@ mod facts;
 mod images;
 mod normalize;
 mod phon;
+mod repair;
 mod rewrite;
 mod roles;
 mod sheet;
@@ -33,6 +34,12 @@ pub use sheet::StyleSheet;
 pub use strip::script_purpose;
 #[doc(hidden)]
 pub use symbols::census_treatment;
+
+/// How many repairs the render makes in one run of an entry's text (`repair.rs`): what the health check counts as
+/// `text.repaired`. `at_start` says the run begins the record.
+pub fn repairs(run: &str, at_start: bool) -> u64 {
+    repair::text(run, at_start).1
+}
 pub use url::{Block, Link, Path, classify, decode, encode, travelled};
 
 /// A text that would pass the ceiling it was held to: its expansion or rewrite stopped there, before it was all
