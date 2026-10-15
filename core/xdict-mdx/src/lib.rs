@@ -426,6 +426,15 @@ impl File {
         Ok(end.saturating_sub(start))
     }
 
+    /// What reading key `i`'s record decompresses: the decoded size of every block it touches, which a short record
+    /// sharing a block with a large one pays in full.
+    pub fn record_read_size(&self, i: usize) -> Result<u64, Error> {
+        let (start, end) = self.span(i)?;
+        let blocks = &self.index.blocks;
+        let first = blocks.partition_point(|b| b.records_offset + b.len as u64 <= start);
+        Ok(blocks.iter().skip(first).take_while(|b| b.records_offset < end).map(|b| b.len as u64).sum())
+    }
+
     /// Key `i`'s record.
     pub fn record(&self, i: usize) -> Result<Record, Error> {
         self.read_record(i, &mut Kept::default())

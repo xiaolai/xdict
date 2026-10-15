@@ -10,6 +10,7 @@
 //! shell's to ensure (ADR-0007 decision 14, corrected 2026-10-14).
 
 use crate::Exceeded;
+use crate::normalize::{Blocks, Norm, Normalized, finish};
 use crate::url::{
     BLOCKED, Block, ENTRY, Link, Path, RESOURCE, SOUND, encode, encoded_len, is_oxford_lookup, is_remote_scheme,
     names_a_host, preprocess, scheme, tts,
@@ -31,9 +32,25 @@ pub struct Rewritten {
 
 /// Rewritten text as it is written, and the URLs met, when the caller wants them: a view needs only the text,
 /// and an entry of a million links would otherwise hold a million `Written`s it never reads.
-struct Out {
+struct Out<'s> {
     text: Bounded,
     links: Option<Vec<Written>>,
+    /// The normalization applied while it is written (ADR-0010), if any.
+    norm: Option<Norm<'s>>,
+    /// The transcriptions an entry's normalization marks.
+    marker: Option<crate::phon::Marker>,
+    /// The tables an entry's normalization marks (R10).
+    tables: Option<crate::tables::Tables>,
+    /// The speakers an entry's normalization marks (reading-style §5.2).
+    controls: Option<crate::controls::Controls>,
+    /// The entry's tree: its roles (`crate::roles`) and the strip rules that need one.
+    roles: Option<crate::roles::Roles<'s>>,
+    /// Where a start tag written self-closed was closed (S4): its end tag's bytes.
+    closed: Option<(usize, usize)>,
+    /// Open `svg` and `math` elements, inside which `<x/>` is already closed.
+    foreign: u32,
+    /// Whether a package holds a resource, by its path as it travels (S13); `None`: not asked.
+    resource: Option<&'s dyn Fn(&str) -> bool>,
 }
 
 /// Text written under a ceiling: a write that would pass `max` is not made and marks the text exceeded, so a
@@ -68,11 +85,22 @@ impl Bounded {
     }
 }
 
-impl Out {
+impl<'s> Out<'s> {
     /// Room for `capacity` bytes, no more than `max`; nothing is written past `max`.
     fn new(capacity: usize, collect: bool, max: usize) -> Self {
         let text = Bounded { text: String::with_capacity(capacity.min(max)), max, exceeded: false };
-        Self { text, links: collect.then(Vec::new) }
+        Self {
+            text,
+            links: collect.then(Vec::new),
+            norm: None,
+            marker: None,
+            tables: None,
+            controls: None,
+            roles: None,
+            closed: None,
+            foreign: 0,
+            resource: None,
+        }
     }
 
     /// The text, or `Exceeded` if it would have passed its ceiling.
@@ -109,12 +137,20 @@ impl Out {
         }
     }
 
-    fn append(&mut self, other: Out) {
+    fn append(&mut self, other: Out<'_>) {
         self.text.push_str(other.text.as_str());
         self.exceeded_with(&other.text);
+        if let (Some(norm), Some(more)) = (&mut self.norm, other.norm) {
+            norm.absorb(more);
+        }
         if let (Some(links), Some(more)) = (&mut self.links, other.links) {
             links.extend(more);
         }
+    }
+
+    /// The normalization a sheet inside this text applies.
+    fn child_norm(&self) -> Option<Norm<'s>> {
+        self.norm.as_ref().map(Norm::child)
     }
 
     fn done(self) -> Rewritten {
@@ -124,11 +160,11 @@ impl Out {
 
 /// What a literal URL becomes: its new text (`None`: kept as it is), and its meaning (`None`: not a link, as
 /// `data:` is not).
-type Literal = (Option<String>, Option<Link>);
+pub(crate) type Literal = (Option<String>, Option<Link>);
 
 /// [`literal`] held to `room` bytes: a new text longer than that is refused before it is built, from its length
 /// counted first (percent-encoding writes up to three bytes for one).
-fn literal(url: &str, base: &str, dir: &str, room: usize) -> Result<Literal, Exceeded> {
+pub(crate) fn literal(url: &str, base: &str, dir: &str, room: usize) -> Result<Literal, Exceeded> {
     let clean = preprocess(url);
     if clean.is_empty() {
         return Ok((None, None));
@@ -211,29 +247,81 @@ const HREF_ELEMENTS: [&str; 6] = ["a", "area", "link", "base", "image", "use"];
 /// An entry's HTML, its URLs rewritten, and the URLs met. Inline styles and scripts are rewritten as stylesheets
 /// and scripts are.
 pub fn html(text: &str, base: &str) -> Rewritten {
-    html_out(text, base, "", true, usize::MAX).done()
+    html_out(text, base, "", true, usize::MAX, None, None).done()
 }
 
 /// HTML as a view shows it: [`html`] without the URLs met. `dir` is the folder relative URLs resolve against: an
 /// entry's is the package's root (`""`), a page served from the package its own folder.
 pub fn html_text(text: &str, base: &str, dir: &str) -> String {
-    html_out(text, base, dir, false, usize::MAX).text.text
+    html_out(text, base, dir, false, usize::MAX, None, None).text.text
 }
 
 /// [`html_text`] held to `max` bytes: `Exceeded` as soon as the text would pass it, before it is all written.
 pub fn html_text_within(text: &str, base: &str, dir: &str, max: usize) -> Result<String, Exceeded> {
-    html_out(text, base, dir, false, max).bounded()
+    html_out(text, base, dir, false, max, None, None).bounded()
 }
 
-fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out {
+fn html_out<'s>(
+    text: &str,
+    base: &str,
+    dir: &str,
+    collect: bool,
+    max: usize,
+    norm: Option<Norm<'s>>,
+    entry: Option<&crate::normalize::Entry<'s>>,
+) -> Out<'s> {
     let mut out = Out::new(text.len() + text.len() / 8, collect, max);
+    out.marker = norm.as_ref().map(|n| crate::phon::Marker::new(n.style));
+    out.tables = norm.as_ref().map(|_| crate::tables::Tables::default());
+    out.controls = norm.as_ref().map(|_| crate::controls::Controls::default());
+    out.roles = norm.as_ref().map(|n| {
+        crate::roles::Roles::new(&n.style.facts, entry.map(|e| e.key), base, dir)
+            .with_resource(entry.and_then(|e| e.resource))
+            .unstripped(n.strip_off_for_tests)
+    });
+    out.resource = entry.and_then(|e| e.resource);
+    out.norm = norm;
     let mut rest = text;
+    // Links open around the scanner, for images that are controls.
+    let mut links = 0u32;
     while let Some(at) = rest.find('<') {
         if out.text.exceeded {
             return out;
         }
         let (before, from) = rest.split_at(at);
+        if let Some(controls) = &mut out.controls {
+            controls.text(before, text.len() - rest.len(), out.text.as_str().len());
+        }
         out.text.push_str(before);
+        if let Some(marker) = &mut out.marker {
+            marker.text(before);
+        }
+        if let Some(tables) = &mut out.tables {
+            tables.text(before);
+        }
+        if let Some(roles) = &mut out.roles {
+            roles.text(before, out.text.as_str().len().checked_sub(before.len()));
+        }
+        // S12: `<<word>>` (a cross-reference a browser would read as a tag, and lose) becomes a link to the word.
+        if out.norm.as_ref().is_some_and(|n| !n.strip_off_for_tests)
+            && let Some((word, len)) = crate::strip::arrow(from)
+        {
+            let url = format!("entry://{word}");
+            let href = match literal(&url, base, dir, out.room()) {
+                Ok((Some(new), _)) => new,
+                _ => url,
+            };
+            let shown = word.replace('<', "&lt;");
+            out.text.push_str(&format!("<a href=\"{}\">{shown}</a>", href.replace('"', "&quot;")));
+            if let Some(roles) = &mut out.roles {
+                roles.text(word, None);
+            }
+            if let Some(norm) = out.norm.as_mut() {
+                norm.counts.strip.arrows += 1;
+            }
+            rest = from.get(len..).unwrap_or("");
+            continue;
+        }
         if let Some(comment) = from.strip_prefix("<!--") {
             // `<!-->` and `<!--->` close at once, as a browser reads them, and `--!>` closes as `-->` does
             // (HTML's comment end bang state).
@@ -245,8 +333,15 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out
                 first_of(comment, &["-->", "--!>"])
                     .map_or(comment.len(), |(e, which)| e + if which == 0 { 3 } else { 4 })
             };
-            out.text.push_str("<!--");
-            out.text.push_str(comment.get(..end).unwrap_or(comment));
+            // S2: comments go from a normalized entry.
+            if let Some(norm) = out.norm.as_mut()
+                && !norm.strip_off_for_tests
+            {
+                norm.counts.strip.comments += 1;
+            } else {
+                out.text.push_str("<!--");
+                out.text.push_str(comment.get(..end).unwrap_or(comment));
+            }
             rest = comment.get(end..).unwrap_or("");
             continue;
         }
@@ -261,12 +356,157 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out
             rest = from.get(whole..).unwrap_or("");
             continue;
         }
+        // R1: a record's own `<html>` and `<body>` (OED's, in 415 of 957 entries) would merge their attributes into the
+        // page's; the tags go, their content stays.
+        if out.norm.is_some() && page_tag(from) {
+            let whole = tag_source(from).len();
+            rest = from.get(whole..).unwrap_or("");
+            continue;
+        }
+        // S3: a record's `head` is unwrapped (above), its `meta` and `base` dropped, its `title` dropped whole.
+        if let Some(norm) = out.norm.as_mut()
+            && !norm.strip_off_for_tests
+            && (starts_tag(from, "meta") || starts_tag(from, "base") || starts_tag(from, "title"))
+        {
+            norm.counts.strip.wrappers += 1;
+            let source = tag_source(from);
+            let after = from.get(source.len()..).unwrap_or("");
+            rest = if starts_tag(from, "title") {
+                let e = end_tag(after, "title");
+                let closing = after.get(e..).unwrap_or("");
+                closing.get(closing.find('>').map_or(closing.len(), |g| g + 1)..).unwrap_or("")
+            } else {
+                after
+            };
+            continue;
+        }
+        // S1 and Q6: an inline script runs only if it makes something work (a fold, a tab); a tracker's, an ad's, an
+        // audio player's and the rest go whole. A script file is judged when it is served.
+        if let Some(norm) = out.norm.as_mut()
+            && !norm.strip_off_for_tests
+            && starts_tag(from, "script")
+        {
+            let source = tag_source(from);
+            let has_src = crate::phon::attribute_of(source, "src").is_some_and(|s| !s.trim().is_empty());
+            if !has_src {
+                let after = from.get(source.len()..).unwrap_or("");
+                let e = end_tag(after, "script");
+                let body = after.get(..e).unwrap_or("");
+                let purpose = match crate::strip::script_purpose(body) {
+                    Err("other") if norm.style.facts.calls_kept(body) => Ok("calls a kept script"),
+                    p => p,
+                };
+                match purpose {
+                    Ok(_) => norm.counts.strip.scripts_kept += 1,
+                    Err(why) => {
+                        match why {
+                            "tracker" => norm.counts.strip.scripts_tracker += 1,
+                            "audio" => norm.counts.strip.scripts_audio += 1,
+                            _ => norm.counts.strip.scripts_other += 1,
+                        }
+                        let closing = after.get(e..).unwrap_or("");
+                        rest = closing.get(closing.find('>').map_or(closing.len(), |g| g + 1)..).unwrap_or("");
+                        continue;
+                    }
+                }
+            }
+        }
+        // Plain by default: an icon or decorative image goes; one inside a link is a control, left for §5. One that
+        // names a recording (S5) becomes a speaker. A content image is marked for the frame to fit (Q7).
+        let mut image = false;
+        if let Some(norm) = out.norm.as_mut()
+            && starts_tag(from, "img")
+        {
+            let source = tag_source(from);
+            let speaker = ["data-mp3", "data-src-mp3", "data-file", "data-src", "data-audio"]
+                .iter()
+                .any(|a| crate::phon::attribute_of(source, a).is_some_and(crate::strip::recording))
+                || crate::roles::keyed_handler(source);
+            // S13: an image the package does not hold is dropped; its `alt` stays as text. A speaker's image stays: the
+            // speaker is drawn by XDict, the image hidden.
+            if let Some(has) = out.resource
+                && !speaker
+                && !norm.strip_off_for_tests
+                && let Some(src) = crate::phon::attribute_of(source, "src")
+                && let Link::Resource { path } = crate::url::classify(&unescape(src), base, dir)
+                && !has(&path)
+            {
+                norm.counts.strip.missing_images += 1;
+                let alt = crate::phon::attribute_of(source, "alt").unwrap_or("").trim();
+                out.text.push_str(&alt.replace('<', "&lt;"));
+                if let Some(roles) = &mut out.roles {
+                    roles.text(alt, None);
+                }
+                rest = from.get(source.len()..).unwrap_or("");
+                continue;
+            }
+            let judged = crate::images::judge(source);
+            image = links == 0 && !speaker && !matches!(judged, crate::images::Image::Decoration);
+            match (links > 0 || speaker, judged) {
+                (false, crate::images::Image::Decoration) => {
+                    norm.counts.images_dropped += 1;
+                    rest = from.get(source.len()..).unwrap_or("");
+                    continue;
+                }
+                (false, crate::images::Image::Undecided) => {
+                    let src = crate::phon::attribute_of(source, "src").unwrap_or("").to_owned();
+                    if norm.counts.images_undecided.len() < 64 {
+                        norm.counts.images_undecided.insert(src);
+                    }
+                }
+                _ => norm.counts.images_kept += 1,
+            }
+        }
+        let written = out.text.as_str().len();
         let Some((name, after, end)) = tag(from, base, dir, &mut out) else {
             out.text.push('<');
             rest = from.get(1..).unwrap_or("");
             continue;
         };
+        let closed = out.closed.take();
+        let source = from.get(..from.len() - after.len()).unwrap_or("");
+        if let Some(roles) = &mut out.roles {
+            if end {
+                roles.end(&name, written, out.text.as_str().len());
+            } else {
+                let tag_end = closed.map_or(out.text.as_str().len(), |(at, _)| at);
+                roles.start(&name, written, written + 1 + name.len(), tag_end, source, image, closed);
+            }
+        }
+        if out.norm.is_some() && (name.eq_ignore_ascii_case("svg") || name.eq_ignore_ascii_case("math")) {
+            if end {
+                out.foreign = out.foreign.saturating_sub(1);
+            } else if !source.ends_with("/>") {
+                out.foreign = out.foreign.saturating_add(1);
+            }
+        }
+        if let Some(marker) = &mut out.marker {
+            if end {
+                marker.end(&name);
+            } else {
+                marker.start(&name, written + 1 + name.len(), source);
+            }
+        }
+        if let Some(tables) = &mut out.tables {
+            if end {
+                tables.end(&name, out.text.as_str().len());
+            } else {
+                let source = from.get(..from.len() - after.len()).unwrap_or("");
+                tables.start(&name, written, written + 1 + name.len(), source);
+            }
+        }
+        if !end
+            && name.eq_ignore_ascii_case("a")
+            && let Some(controls) = &mut out.controls
+        {
+            let source = from.get(..from.len() - after.len()).unwrap_or("");
+            let content = (text.len() - after.len(), out.text.as_str().len());
+            controls.link(source, after, written + 1 + name.len(), content, base, dir);
+        }
         rest = after;
+        if name.eq_ignore_ascii_case("a") {
+            links = if end { links.saturating_sub(1) } else { links.saturating_add(1) };
+        }
         // Only a script's and a style's text are read as raw text. A tag scanner cannot know the tree builder's
         // context, and taking `textarea`, `title`, `noscript` and the rest for raw text hides the markup after
         // them wherever a browser does not (in a template's column group, a frameset, inside `svg`); reading them
@@ -282,7 +522,7 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out
             let text = out.fitting(text);
             out.text.push_str(&text);
         } else {
-            let sheet = css_out(body, base, dir, out.collects(), out.room());
+            let sheet = css_out(body, base, dir, out.collects(), out.room(), out.child_norm(), None);
             out.append(sheet);
         }
     }
@@ -293,7 +533,7 @@ fn html_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out
 /// One tag at the start of `from`, written to `out`: the tag's name, what follows it, and whether it is an end
 /// tag. A start tag's attributes are rewritten; an end tag's, which a browser ignores, are read only to find
 /// where it ends. `None` if `from` does not start a tag (`a < b`).
-fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(String, &'a str, bool)> {
+fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(String, &'a str, bool)> {
     let inner = from.strip_prefix('<')?;
     let (end, inner) = match inner.strip_prefix('/') {
         Some(inner) => (true, inner),
@@ -301,43 +541,165 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
     };
     // A name starts with a letter and runs to whitespace, `/` or `>` (HTML's tag open and tag name states):
     // `<script.foo>` names no script.
-    let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
-    if name_len == 0 || !inner.starts_with(|c: char| c.is_ascii_alphabetic()) {
+    // The first character is checked before the name's end is looked for: `<<<<…` would otherwise scan to the end
+    // of the entry at every `<`.
+    if !inner.starts_with(|c: char| c.is_ascii_alphabetic()) {
         return None;
     }
+    let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
     let name = inner.get(..name_len)?.to_owned();
+    // Presentational attributes (R22) become declarations, put before the element's own `style`, which follows them,
+    // or added as one; they and the ones dropped outright are not written.
+    let normalizing = !end && out.norm.is_some();
+    // The strip list's repairs too (S4, S14): off with the rest in the hostile battery's lab.
+    let stripping = normalizing && out.norm.as_ref().is_some_and(|n| !n.strip_off_for_tests);
+    let mut absorbed = if normalizing { presentational(&name, from, out) } else { None };
+    let has_style = absorbed.is_some() && crate::phon::attribute_of(tag_source(from), "style").is_some();
+    // S14: an image whose data is in another attribute, with an empty `src`, takes it as its `src`.
+    let carrier = if stripping && name.eq_ignore_ascii_case("img") {
+        let source = tag_source(from);
+        let empty = crate::phon::attribute_of(source, "src").is_none_or(|v| v.trim().is_empty());
+        ["base64", "data-src", "data-original"]
+            .into_iter()
+            .find(|a| {
+                crate::phon::attribute_of(source, a)
+                    .is_some_and(|v| v.trim_start().get(..11).is_some_and(|p| p.eq_ignore_ascii_case("data:image/")))
+            })
+            .filter(|_| empty)
+    } else {
+        None
+    };
+    // S4: `<x/>` on an element that is not void, outside SVG and MathML, is closed as its author meant.
+    let closable = stripping
+        && out.foreign == 0
+        && !crate::roles::void(&name)
+        && !name.eq_ignore_ascii_case("svg")
+        && !name.eq_ignore_ascii_case("math");
+    let mut self_closed = false;
     out.text.push_str(if end { "</" } else { "<" });
     out.text.push_str(&name);
     let mut rest = inner.get(name_len..)?;
     loop {
         let spaces = rest.len() - rest.trim_ascii_start().len();
+        let spaced = out.text.as_str().len();
         out.text.push_str(rest.get(..spaces)?);
         rest = rest.get(spaces..)?;
+        if !has_style
+            && (rest.is_empty() || rest.starts_with(['>', '/']))
+            && let Some(decls) = absorbed.take()
+        {
+            out.text.push_str(&format!(" style=\"{}\"", decls.replace('"', "&quot;")));
+        }
         if rest.is_empty() {
             return Some((name, rest, end));
         }
         if let Some(after) = rest.strip_prefix('>') {
             out.text.push('>');
+            if self_closed {
+                let at = out.text.as_str().len();
+                out.text.push_str(&format!("</{name}>"));
+                out.closed = Some((at, out.text.as_str().len()));
+                if let Some(norm) = out.norm.as_mut() {
+                    norm.counts.strip.self_closed += 1;
+                }
+            }
             return Some((name, after, end));
         }
         if let Some(after) = rest.strip_prefix('/') {
-            out.text.push('/');
+            if closable && after.trim_ascii_start().starts_with('>') {
+                self_closed = true;
+            } else {
+                out.text.push('/');
+            }
             rest = after;
             continue;
         }
         let attr_len =
             rest.find(|c: char| c.is_ascii_whitespace() || matches!(c, '=' | '>' | '/')).unwrap_or(rest.len());
         let attr = rest.get(..attr_len)?;
-        out.text.push_str(attr);
         rest = rest.get(attr_len..)?;
         let before_eq = rest.len() - rest.trim_ascii_start().len();
-        let Some(after_eq) = rest.trim_ascii_start().strip_prefix('=') else { continue };
+        let Some(after_eq) = rest.trim_ascii_start().strip_prefix('=') else {
+            if normalizing && skips(&name, attr, None, out) {
+                out.text.text.truncate(spaced);
+            } else {
+                out.text.push_str(attr);
+            }
+            continue;
+        };
+        let value_from = after_eq.trim_ascii_start();
+        let (quote, value, after) = attribute_value(value_from)?;
+        let lower_attr = attr.to_ascii_lowercase();
+        if normalizing {
+            let link = name.eq_ignore_ascii_case("a") || name.eq_ignore_ascii_case("area");
+            let strip_off_for_tests = out.norm.as_ref().is_some_and(|n| n.strip_off_for_tests);
+            let strip = out.norm.as_mut().map(|n| &mut n.counts.strip);
+            let dropped = if !strip_off_for_tests && link && lower_attr == "href" && crate::strip::javascript_url(value)
+            {
+                // S6: a `javascript:` link does nothing; its text stays.
+                if let Some(s) = strip {
+                    s.javascript_links += 1;
+                }
+                true
+            } else if !strip_off_for_tests
+                && lower_attr.starts_with("on")
+                && crate::strip::audio_handler(&unescape(value))
+            {
+                // Q6: a handler that only plays audio goes; the recording is a sound link (S5).
+                if let Some(s) = strip {
+                    s.audio_handlers += 1;
+                }
+                true
+            } else {
+                carrier.is_some() && lower_attr == "src"
+            };
+            if dropped {
+                out.text.text.truncate(spaced);
+                rest = after;
+                continue;
+            }
+        }
+        let attr = if carrier == Some(lower_attr.as_str()) {
+            if let Some(n) = out.norm.as_mut() {
+                n.counts.strip.base64_images += 1;
+            }
+            "src"
+        } else {
+            attr
+        };
+        if normalizing && skips(&name, attr, Some(value), out) {
+            // The attribute goes with the space before it.
+            out.text.text.truncate(spaced);
+            rest = after;
+            continue;
+        }
+        out.text.push_str(attr);
         out.text.push_str(rest.get(..before_eq)?);
         out.text.push('=');
-        let value_from = after_eq.trim_ascii_start();
         out.text.push_str(after_eq.get(..after_eq.len() - value_from.len())?);
-        let (quote, value, after) = attribute_value(value_from)?;
-        let new = if end { value.to_owned() } else { attribute(&name, attr, value, quote, base, dir, out) };
+        let prefixed;
+        // An `<hr>`'s gap goes after its own style is normalized, which drops what would draw a line (Q9).
+        let mut gap = None;
+        let value_in = match absorbed.take_if(|_| has_style && attr.eq_ignore_ascii_case("style")) {
+            Some(decls) => {
+                let rest = match decls.strip_prefix(crate::normalize::RULE_GAP) {
+                    Some(rest) => {
+                        gap = Some(crate::normalize::RULE_GAP);
+                        rest.trim_start_matches(';')
+                    }
+                    None => decls.as_str(),
+                };
+                prefixed = if rest.is_empty() { value.to_owned() } else { format!("{rest};{value}") };
+                prefixed.as_str()
+            }
+            None => value,
+        };
+        let new = if end { value.to_owned() } else { attribute(&name, attr, value_in, quote, base, dir, out) };
+        let new = match gap {
+            Some(gap) if new.trim().is_empty() => gap.to_owned(),
+            Some(gap) => format!("{gap};{new}"),
+            None => new,
+        };
         // Written as found unless it changed; a changed value is quoted.
         let q = if new == value { quote } else { Some(quote.unwrap_or('"')) };
         out.text.extend(q);
@@ -345,6 +707,61 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out) -> Option<(Strin
         out.text.extend(q);
         rest = after;
     }
+}
+
+/// Whether `from` starts a start tag `name` (ASCII, lower case).
+fn starts_tag(from: &str, name: &str) -> bool {
+    let inner = from.strip_prefix('<').unwrap_or("");
+    inner.get(..name.len()).is_some_and(|w| w.eq_ignore_ascii_case(name))
+        && inner.as_bytes().get(name.len()).is_none_or(|b| b.is_ascii_whitespace() || matches!(b, b'>' | b'/'))
+}
+
+/// Whether `from` starts an `<html>`, `<head>` or `<body>` tag, start or end (R1, S3).
+fn page_tag(from: &str) -> bool {
+    let inner = from.strip_prefix("</").or_else(|| from.strip_prefix('<')).unwrap_or("");
+    ["html", "body", "head"].iter().any(|n| {
+        inner.get(..n.len()).is_some_and(|w| w.eq_ignore_ascii_case(n))
+            && inner.as_bytes().get(n.len()).is_none_or(|b| b.is_ascii_whitespace() || matches!(b, b'>' | b'/'))
+    })
+}
+
+/// A start tag's source up to its first `>`, for reading its attributes ahead.
+fn tag_source(from: &str) -> &str {
+    from.get(..from.find('>').map_or(from.len(), |e| e + 1)).unwrap_or(from)
+}
+
+/// The attributes R22 reads into a style.
+const PRESENTATIONAL: [&str; 5] = ["bgcolor", "color", "size", "face", "align"];
+
+/// The declarations a start tag's presentational attributes become, `;`-joined.
+fn presentational(element: &str, from: &str, out: &Out<'_>) -> Option<String> {
+    let style = out.norm.as_ref()?.style;
+    let source = tag_source(from);
+    let decls: Vec<String> = PRESENTATIONAL
+        .iter()
+        .filter_map(|n| {
+            crate::phon::attribute_of(source, n).and_then(|v| crate::normalize::presentational(element, n, v, style))
+        })
+        .filter(|d| !d.is_empty())
+        .collect();
+    // Q9: a rule is a gap, never a line; its own style's lines are dropped (`normalize`, `Facts::rule`).
+    let decls: Vec<String> = if element.eq_ignore_ascii_case("hr") {
+        std::iter::once(crate::normalize::RULE_GAP.to_owned()).chain(decls).collect()
+    } else {
+        decls
+    };
+    (!decls.is_empty()).then(|| decls.join(";"))
+}
+
+/// Whether a start tag's attribute is not written: dropped (R10, R11, R22), or read into its style.
+fn skips(element: &str, attr: &str, value: Option<&str>, out: &Out<'_>) -> bool {
+    let lower = attr.to_ascii_lowercase();
+    if crate::normalize::dropped_attribute(element, &lower) {
+        return true;
+    }
+    let (Some(norm), Some(value)) = (out.norm.as_ref(), value) else { return false };
+    PRESENTATIONAL.contains(&lower.as_str())
+        && crate::normalize::presentational(element, &lower, &unescape(value), norm.style).is_some()
 }
 
 /// An attribute's value as HTML delimits it: its quote, the value as written, and what follows it.
@@ -372,7 +789,7 @@ fn attribute(
     quote: Option<char>,
     base: &str,
     dir: &str,
-    out: &mut Out,
+    out: &mut Out<'_>,
 ) -> String {
     let lower = name.to_ascii_lowercase();
     let local = element.rsplit(':').next().unwrap_or(element).to_ascii_lowercase();
@@ -395,8 +812,13 @@ fn attribute(
     match lower.as_str() {
         "style" => {
             let decoded = unescape(value);
-            let Out { text, links } = css_out(&decoded, base, dir, out.collects(), out.room());
+            let child = out.child_norm();
+            let Out { text, links, norm, .. } =
+                css_out(&decoded, base, dir, out.collects(), out.room(), child, Some(element));
             out.exceeded_with(&text);
+            if let (Some(all), Some(more)) = (&mut out.norm, norm) {
+                all.absorb(more);
+            }
             if let (Some(all), Some(more)) = (&mut out.links, links) {
                 all.extend(more);
             }
@@ -415,7 +837,7 @@ fn attribute(
 
 /// `text` as an attribute value delimited by `quote` (`"` for an unquoted value, which is quoted when it
 /// changes), within the room `out` has left; nothing, and `out` exceeded, when it would not fit.
-fn escaped_in(text: &str, quote: Option<char>, out: &mut Out) -> String {
+fn escaped_in(text: &str, quote: Option<char>, out: &mut Out<'_>) -> String {
     let escaped = escaped(text, quote.unwrap_or('"'), out.room());
     out.fitting(escaped)
 }
@@ -432,7 +854,7 @@ fn escaped(text: &str, quote: char, max: usize) -> Option<String> {
 /// A `srcset`'s candidates (HTML's "parse a srcset attribute": a URL is a run of anything but ASCII whitespace,
 /// trailing commas end it; a descriptor runs to the next comma), each URL rewritten, written back
 /// `url descriptor, …`.
-fn srcset(value: &str, base: &str, dir: &str, out: &mut Out) -> Option<String> {
+fn srcset(value: &str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<String> {
     let max = out.room();
     let mut written = String::new();
     let mut rest = value;
@@ -538,25 +960,190 @@ fn reference(after: &str, out: &mut String) -> Option<usize> {
 
 /// A stylesheet's `url(…)` and `@import "…"` rewritten, and the URLs met; `dir` is the stylesheet's own directory.
 pub fn css(text: &str, base: &str, dir: &str) -> Rewritten {
-    css_out(text, base, dir, true, usize::MAX).done()
+    css_out(text, base, dir, true, usize::MAX, None, None).done()
 }
 
 /// A stylesheet rewritten, as a view loads it: [`css`] without the URLs met.
 pub fn css_text(text: &str, base: &str, dir: &str) -> String {
-    css_out(text, base, dir, false, usize::MAX).text.text
+    css_out(text, base, dir, false, usize::MAX, None, None).text.text
 }
 
 /// [`css_text`] held to `max` bytes: `Exceeded` as soon as the text would pass it, before it is all written.
 pub fn css_text_within(text: &str, base: &str, dir: &str, max: usize) -> Result<String, Exceeded> {
-    css_out(text, base, dir, false, max).bounded()
+    css_out(text, base, dir, false, max, None, None).bounded()
 }
 
-fn css_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out {
+/// A sheet rewritten and normalized by `norm` (ADR-0010); `inline` names the element of a `style=""`.
+pub(crate) fn normalized(
+    text: &str,
+    base: &str,
+    dir: &str,
+    max: usize,
+    norm: Norm<'_>,
+    inline: Option<&str>,
+) -> Normalized {
+    let out = css_out(text, base, dir, false, max, Some(norm), inline);
+    let norm = out.norm;
+    let text = if out.text.exceeded { Err(Exceeded) } else { Ok(out.text.text) };
+    let (counts, rules) = norm.map(|n| (n.counts, n.rules)).unwrap_or_default();
+    Normalized { text, counts, rules }
+}
+
+/// An entry's HTML rewritten, its sheets normalized by `norm`. `text`, when owned, is freed once it is read: the
+/// roles' tree is decided and the edits made without it.
+pub(crate) fn normalized_html<'s>(
+    text: std::borrow::Cow<'_, str>,
+    base: &str,
+    dir: &str,
+    max: usize,
+    norm: Norm<'s>,
+    entry: Option<&crate::normalize::Entry<'s>>,
+) -> Normalized {
+    let mut out = html_out(&text, base, dir, false, max, Some(norm), entry);
+    drop(text);
+    let roles = out.roles.take();
+    let norm = out.norm;
+    let (counts, rules) = norm.map(|n| (n.counts, n.rules)).unwrap_or_default();
+    let mut counts = counts;
+    let mut edits: Vec<crate::roles::Edit> = Vec::new();
+    let insert = |(at, s): (usize, String)| (at, at, s);
+    if let Some(tables) = out.tables.take() {
+        let (marks, data, layout) = tables.finish();
+        counts.data_tables += data;
+        counts.layout_tables += layout;
+        edits.extend(marks.into_iter().map(insert));
+    }
+    if let Some(controls) = out.controls.take() {
+        edits.extend(controls.inserts.into_iter().map(insert));
+        edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
+    }
+    if let Some(roles) = roles {
+        let decided = roles.finish();
+        counts.strip.audio_links += decided.audio_links;
+        counts.strip.empty += decided.empty;
+        counts.strip.hidden_duplicates += decided.hidden_duplicates;
+        for (k, v) in decided.roles {
+            *counts.roles.entry(k).or_default() += v;
+        }
+        for (k, v) in decided.icons {
+            *counts.icons.entry(k).or_default() += v;
+        }
+        edits.extend(decided.edits);
+    }
+    if let Some(marker) = out.marker.take() {
+        let (marks, found) = marker.finish();
+        counts.transcriptions.add(&found);
+        edits.extend(marks.into_iter().map(insert));
+    }
+    // By position; at one position insertions first, in the order they were made, then what is removed.
+    edits.sort_by_key(|(at, until, _)| (*at, until > at));
+    let text = if out.text.exceeded { Err(Exceeded) } else { marked(out.text.text, &edits, max) };
+    Normalized { text, counts, rules }
+}
+
+/// `text` with each edit made (sorted), in one pass: an insertion inside bytes another edit removes is not made.
+/// `Exceeded` past `max`.
+/// Made in `text`'s own buffer, from the end back, when no edit lands before the text it moves has been read: every
+/// prefix of the edits grows the text or keeps its length. Otherwise in a copy ([`marked_copied`]).
+fn marked(text: String, edits: &[crate::roles::Edit], max: usize) -> Result<String, Exceeded> {
+    let extra: usize = edits.iter().map(|(_, _, s)| s.len()).sum();
+    if text.len().saturating_add(extra) > max {
+        return Err(Exceeded);
+    }
+    // The edits as made: an insertion inside removed bytes is dropped and extends the removal, as in the copy.
+    let mut made: Vec<(usize, usize, &str)> = Vec::with_capacity(edits.len());
+    let mut from = 0;
+    for (at, until, insert) in edits {
+        if *at < from {
+            from = from.max(*until);
+            if let Some(last) = made.last_mut() {
+                last.1 = from;
+            }
+            continue;
+        }
+        if !text.is_char_boundary(*at) || *at > text.len() {
+            return Err(Exceeded);
+        }
+        from = (*until).max(*at);
+        made.push((*at, from, insert));
+    }
+    if !text.is_char_boundary(from) && from <= text.len() {
+        return Err(Exceeded);
+    }
+    let mut grown = 0isize;
+    let mut in_place = true;
+    for (at, until, insert) in &made {
+        grown += insert.len() as isize - (until.min(&text.len()) - at) as isize;
+        in_place &= grown >= 0;
+    }
+    if !in_place {
+        return marked_copied(&text, edits, max);
+    }
+    let len = text.len();
+    let total = len + grown.unsigned_abs();
+    let mut bytes = text.into_bytes();
+    bytes.resize(total, 0);
+    let (mut read_end, mut write_end) = (len, total);
+    for (at, until, insert) in made.iter().rev() {
+        let until = (*until).min(len);
+        let kept = read_end.saturating_sub(until);
+        bytes.copy_within(until..read_end.max(until), write_end - kept);
+        write_end -= kept;
+        let to = bytes.get_mut(write_end - insert.len()..write_end).ok_or(Exceeded)?;
+        to.copy_from_slice(insert.as_bytes());
+        write_end -= insert.len();
+        read_end = *at;
+    }
+    String::from_utf8(bytes).map_err(|_| Exceeded)
+}
+
+/// [`marked`] into a new string.
+fn marked_copied(text: &str, edits: &[crate::roles::Edit], max: usize) -> Result<String, Exceeded> {
+    let extra: usize = edits.iter().map(|(_, _, s)| s.len()).sum();
+    if text.len().saturating_add(extra) > max {
+        return Err(Exceeded);
+    }
+    let mut out = String::with_capacity(text.len() + extra);
+    let mut from = 0;
+    for (at, until, insert) in edits {
+        if *at < from {
+            from = from.max(*until);
+            continue;
+        }
+        out.push_str(text.get(from..*at).ok_or(Exceeded)?);
+        out.push_str(insert);
+        from = (*until).max(*at);
+    }
+    out.push_str(text.get(from..).unwrap_or(""));
+    Ok(out)
+}
+
+/// HTML's character references decoded, for the marking.
+pub(crate) fn unescaped_html(text: &str) -> String {
+    unescape(text)
+}
+
+/// CSS's escapes decoded, for the normalization.
+pub(crate) fn unescaped(written: &str) -> String {
+    css_unescape(written)
+}
+
+fn css_out<'s>(
+    text: &str,
+    base: &str,
+    dir: &str,
+    collect: bool,
+    max: usize,
+    norm: Option<Norm<'s>>,
+    inline: Option<&str>,
+) -> Out<'s> {
     // Read as CSS's tokeniser reads it (css-syntax §4), so that what is a URL here is what a browser fetches:
     // comments and strings are text, an escaped character is part of a name, `url(` is a function whose name
     // decodes to `url`, and an image function's strings are images.
-    let out = Out::new(text.len(), collect, max);
-    let mut css = Css { text, base, dir, out, i: 0, copied: 0, parens: Vec::new() };
+    let mut out = Out::new(text.len(), collect, max);
+    let blocks = norm.is_some().then(|| Blocks::new(inline));
+    out.norm = norm;
+    let mut css = Css { text, base, dir, out, i: 0, copied: 0, parens: Vec::new(), blocks };
     let mut importing = false;
     while let Some(&b) = text.as_bytes().get(css.i) {
         if css.out.text.exceeded {
@@ -576,6 +1163,10 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out 
                 false
             }
             b'@' => css.at_keyword(),
+            b'{' | b'}' | b';' if css.blocks.is_some() && css.parens.is_empty() => {
+                css.structure(b);
+                false
+            }
             _ if b.is_ascii_digit() || starts_name(text, css.i) => {
                 css.name(b.is_ascii_digit());
                 false
@@ -587,22 +1178,67 @@ fn css_out(text: &str, base: &str, dir: &str, collect: bool, max: usize) -> Out 
         };
     }
     css.out.text.push_str(text.get(css.copied..).unwrap_or(""));
+    css.copied = text.len();
+    while let Some(frame) = css.blocks.as_mut().and_then(Blocks::rest) {
+        css.finish(frame);
+    }
     css.out
 }
 
 /// A stylesheet being rewritten: where it is read (`i`), how much of `text` is written to `out` (`copied`), and
 /// for each open parenthesis whether its function fetches its strings.
-struct Css<'a> {
+struct Css<'a, 's> {
     text: &'a str,
     base: &'a str,
     dir: &'a str,
-    out: Out,
+    out: Out<'s>,
     i: usize,
     copied: usize,
     parens: Vec<bool>,
+    /// The blocks met, when the sheet is normalized.
+    blocks: Option<Blocks<'a>>,
 }
 
-impl Css<'_> {
+impl Css<'_, '_> {
+    /// A `{`, `;` or `}` outside strings, comments and parentheses: the text before it written, and the block it
+    /// opens, separates or closes followed.
+    fn structure(&mut self, b: u8) {
+        self.out.text.push_str(self.text.get(self.copied..self.i).unwrap_or(""));
+        self.copied = self.i;
+        let at = self.i;
+        self.i += 1;
+        let written = self.out.text.as_str().len();
+        let Some(blocks) = &mut self.blocks else { return };
+        match b {
+            b'{' => {
+                self.out.text.push('{');
+                self.copied = self.i;
+                let start = self.out.text.as_str().len();
+                blocks.open(self.text, at, start);
+            }
+            b';' => blocks.separator(at, written),
+            _ => {
+                if let Some(frame) = blocks.close(at) {
+                    self.finish(frame);
+                }
+            }
+        }
+    }
+
+    /// A block closed (or left open at the end), its body normalized in place.
+    fn finish(&mut self, frame: crate::normalize::Frame) {
+        if self.out.text.exceeded {
+            return;
+        }
+        let (Some(blocks), Some(norm)) = (&self.blocks, &mut self.out.norm) else { return };
+        let Some(body) = self.out.text.text.get(frame.start..) else { return };
+        let text = self.text;
+        if let Some(new) = finish(body, &frame, || blocks.selector(text, &frame), norm) {
+            self.out.text.text.truncate(frame.start);
+            self.out.text.push_str(&new);
+        }
+    }
+
     /// A comment: text, read past its `*/`.
     fn comment(&mut self) {
         self.i = self.text.get(self.i + 2..).and_then(|r| r.find("*/")).map_or(self.text.len(), |e| self.i + 2 + e + 2);
@@ -689,7 +1325,7 @@ fn quoted(text: &str, at: usize, quote: char) -> (&str, usize) {
 const IMAGE_FUNCTIONS: [&str; 3] = ["image-set", "-webkit-image-set", "image"];
 
 /// A URL a stylesheet wrote (`written`, its escapes undecoded), rewritten and written between `quote`s.
-fn write_url(out: &mut Out, written: &str, quote: char, base: &str, dir: &str) {
+fn write_url(out: &mut Out<'_>, written: &str, quote: char, base: &str, dir: &str) {
     let value = css_unescape(written);
     let Ok((to, link)) = literal(&value, base, dir, out.room().saturating_sub(2)) else {
         out.text.exceeded = true;
@@ -883,6 +1519,45 @@ mod tests {
     use super::*;
 
     const BASE: &str = "xdict://d/";
+
+    /// The edits are made in the body's own buffer when it has room: a second copy of a 50 MiB entry was the largest
+    /// part of what the roles added to `entry()`'s peak (70 MiB).
+    #[test]
+    fn edits_are_made_in_place() {
+        let mut text = String::with_capacity(4096);
+        text.push_str("<p>one</p><p>two</p><p>three</p>");
+        let at = text.as_ptr();
+        let edits = vec![(2, 2, " a=\"1\"".to_owned()), (12, 12, " b".to_owned()), (23, 23, "!".to_owned())];
+        let out = marked(text, &edits, usize::MAX);
+        assert_eq!(out.as_deref(), Ok("<p a=\"1\">one</p><p b>two</p><p>!three</p>"));
+        assert_eq!(out.map(|o| o.as_ptr()), Ok(at), "the edits were made in a copy");
+    }
+
+    /// In place or not, the edits come out as the copying pass makes them: insertions, removals, an insertion inside
+    /// removed bytes (not made, and extending the removal), and removals that shrink the text before it grows.
+    #[test]
+    fn edits_in_place_agree_with_the_copying_pass() {
+        let text = "<a>alpha</a><b>beta</b><c>gamma</c><d>delta</d>";
+        let cases: Vec<Vec<crate::roles::Edit>> = vec![
+            vec![],
+            vec![(0, 0, "X".into()), (text.len(), text.len(), "Y".into())],
+            vec![(3, 8, String::new()), (15, 15, "[ins]".into())],
+            vec![(3, 8, "Z".into()), (5, 5, "skipped".into()), (6, 10, "w".into()), (20, 20, "++".into())],
+            vec![(0, 12, String::new()), (12, 12, "a very long insertion that grows it".into())],
+            vec![(1, 1, "long insertion first".into()), (3, 20, String::new()), (30, 40, "-".into())],
+            vec![(0, text.len(), "all".into())],
+        ];
+        for edits in cases {
+            let mut sorted = edits.clone();
+            sorted.sort_by_key(|(at, until, _)| (*at, until > at));
+            let copied = marked_copied(text, &sorted, usize::MAX);
+            assert_eq!(marked(text.to_owned(), &sorted, usize::MAX), copied, "{sorted:?}");
+            let mut roomy = String::with_capacity(1024);
+            roomy.push_str(text);
+            assert_eq!(marked(roomy, &sorted, usize::MAX), copied, "{sorted:?}");
+        }
+        assert_eq!(marked(text.to_owned(), &[(1, 1, "xx".into())], text.len() + 1), Err(Exceeded));
+    }
 
     #[test]
     fn every_link_form_is_rewritten_under_the_base() {
@@ -1328,6 +2003,15 @@ mod tests {
         assert!(r.text.contains("xdict://d/blocked/"), "{}", r.text);
         let r = html("<!--x--!-><img src=https://example.com/a>-->", BASE);
         assert!(!r.text.contains("blocked"), "`--!-` does not end it: {}", r.text);
+    }
+
+    /// A run of `<` that opens no tag is read once: each `<` looked for its tag's name to the end of the entry.
+    #[test]
+    fn a_run_of_angle_brackets_is_linear() {
+        let started = std::time::Instant::now();
+        let text = "<<".repeat(200_000);
+        assert_eq!(html(&text, BASE).text, text);
+        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
     }
 
     /// Each match is found once: searching the rest for every needle at every match made a large script or

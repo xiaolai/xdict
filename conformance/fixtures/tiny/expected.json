@@ -282,7 +282,7 @@
           "key": "run",
           "occurrence": 1
         },
-        "html": "<b>run</b> (noun) an act of running",
+        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\">run</b> (noun) an act of running",
         "lossyBytes": 0
       },
       "cspContains": "connect-src 'none'"
@@ -297,7 +297,7 @@
           "key": "run",
           "occurrence": 0
         },
-        "html": "<link rel=\"stylesheet\" href=\"xdict://d/r/tiny.css\"><b>run</b> to move fast <a href=\"xdict://d/sound/run.mp3\">play</a>",
+        "html": "<!DOCTYPE html><link rel=\"stylesheet\" href=\"xdict://d/r/tiny.css\"><b data-xdict-role=\"headword\">run</b> to move fast <a data-xdict-control=\"speaker\" data-xdict-control-mode=\"prefix\" data-xdict-role=\"audio\" href=\"xdict://d/sound/run.mp3\"><span data-xdict-icon=\"speaker\" aria-hidden=\"true\"></span>play</a>",
         "lossyBytes": 0
       }
     },
@@ -420,7 +420,7 @@
         "type": "found",
         "path": "tiny.css",
         "mime": "text/css",
-        "text": "body { color: black }"
+        "text": ".tiny { color: var(--xdict-text, #1d1d1f) !important }"
       }
     },
     {
@@ -452,7 +452,7 @@
     },
     "sidecar": {
       "name": "tiny.css",
-      "text": "body { color: red }"
+      "text": ".tiny { color: red !important }"
     },
     "import": {
       "edition": "mdx-sha256-v1:c425b0ffa2084c082d4d0f3b432615bf9a4647d3530ab27303ca1c701d42192d"
@@ -464,12 +464,12 @@
     "resourceFromPath": {
       "type": "found",
       "path": "tiny.css",
-      "text": "body { color: black }"
+      "text": ".tiny { color: var(--xdict-text, #1d1d1f) !important }"
     },
     "resourceFromSource": {
       "type": "found",
       "path": "tiny.css",
-      "text": "body { color: red }"
+      "text": ".tiny { color: var(--xdict-red, #af342f) !important }"
     },
     "shortRead": {
       "error": {

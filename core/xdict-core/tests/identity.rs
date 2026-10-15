@@ -37,6 +37,7 @@ fn core(data: &Scratch, cache: &str) -> Core {
         data_dir: Some(data.join("data").to_string_lossy().into()),
         cache_dir: Some(data.join(cache).to_string_lossy().into()),
         entropy: vec![],
+        strip_off_for_tests: false,
     };
     Core::new(config).unwrap()
 }
@@ -349,6 +350,72 @@ fn open_reads_headers_only() {
     ready(core.open(package).unwrap());
     let opened = read.load(Ordering::SeqCst);
     assert!(opened < 8 * 1024, "open read {opened} bytes of {} (two headers are about 2 KB)", size + mdd_size);
+}
+
+/// A sheet or script past the reading style's budget (32 MiB) is passed over from its declared size, not read and
+/// then dropped: reading the memory fixture's 44 MiB sheet only to skip it raised `resource()`'s peak by 40%.
+#[test]
+fn style_skips_a_sheet_past_its_budget_unread() {
+    let dir = Scratch::new("style-budget");
+    let big = writer::write(&Spec::mdx(), &[W::text("word", "<b>word</b>")]).unwrap();
+    // Incompressible, so the bytes read are the sheet's own: a comment of pseudo-random letters.
+    let mut x = 1u32;
+    let noise: String = (0..33 << 20)
+        .map(|_| {
+            x = x.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            char::from(b'a' + (x >> 24) as u8 % 26)
+        })
+        .collect();
+    let sheet = format!("/* {noise} */ b {{ color: red }}");
+    let script = format!("/* {noise} */ function fold() {{}}");
+    let resources = [W::bytes("\\big.css", sheet.as_bytes()), W::bytes("\\big.js", script.as_bytes())];
+    let mdd = writer::write(&Spec::mdd(), &resources).unwrap();
+    let read = Arc::new(AtomicU64::new(0));
+    let package = Package {
+        mdx: Location::Source { name: "big.mdx".into(), source: Arc::new(Counting { bytes: big, read: read.clone() }) },
+        mdd: vec![Location::Source {
+            name: "big.mdd".into(),
+            source: Arc::new(Counting { bytes: mdd, read: read.clone() }),
+        }],
+        sidecars: vec![],
+    };
+    let core = core(&dir, "cache");
+    core.import(package.clone(), &NoProgress).unwrap();
+    let (dict, _) = ready(core.open(package).unwrap());
+    read.store(0, Ordering::SeqCst);
+    let report = core.style_report(dict).unwrap();
+    let styled = read.load(Ordering::SeqCst);
+    assert!(report.edition.skipped.iter().any(|s| s.starts_with("big.css: ")), "{:?}", report.edition.skipped);
+    assert!(styled < 1 << 20, "the reading style read {styled} bytes to skip a sheet");
+}
+
+/// The reading style's sample passes over an entry whose read would decompress a block past its bound: the memory
+/// fixture's `small` shares a block with a 50 MiB entry, and sampling it raised `resource()`'s peak.
+#[test]
+fn style_sample_skips_an_entry_in_a_huge_block() {
+    let dir = Scratch::new("style-block");
+    let mut x = 7u32;
+    let noise: String = (0..8 << 20)
+        .map(|_| {
+            x = x.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            char::from(b'a' + (x >> 24) as u8 % 26)
+        })
+        .collect();
+    let entries = [W::text("big", &noise), W::text("small", "<b>small</b>")];
+    let big = writer::write(&Spec { block_size: 16 << 20, ..Spec::mdx() }, &entries).unwrap();
+    let read = Arc::new(AtomicU64::new(0));
+    let package = Package {
+        mdx: Location::Source { name: "big.mdx".into(), source: Arc::new(Counting { bytes: big, read: read.clone() }) },
+        mdd: vec![],
+        sidecars: vec![],
+    };
+    let core = core(&dir, "cache");
+    core.import(package.clone(), &NoProgress).unwrap();
+    let (dict, _) = ready(core.open(package).unwrap());
+    read.store(0, Ordering::SeqCst);
+    core.style_report(dict).unwrap();
+    let styled = read.load(Ordering::SeqCst);
+    assert!(styled < 1 << 20, "the reading style's sample read {styled} bytes");
 }
 
 /// Codex objection 9: a progress callback cancels the import by its answer, and may call back into the core

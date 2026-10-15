@@ -979,6 +979,9 @@ dependencies = [
 [[package]]
 name = "xdict-entry"
 version = "0.0.1"
+dependencies = [
+ "unicode-normalization",
+]
 
 [[package]]
 name = "xdict-ffi"

@@ -59,3 +59,14 @@ web_binding() {
     cargo build -q --release -p xdict-wasm --target wasm32-unknown-unknown
     wasm-bindgen --target web --out-dir "$1" "$target/wasm32-unknown-unknown/release/xdict_wasm.wasm"
 }
+
+# A memory step's line ("…, N MiB after; …") held to $2 MiB: its peak past that is reported and returns 1. The
+# budgets are what was measured on an Apple-silicon Mac on 2026-10-16, plus about 2%. They sit above the
+# 2026-10-14 baseline (aa67039: Swift entry 369, refused 224; Worker entry 481, refused 333) by what the roles' tree
+# holds per element followed (a 160-byte node, its name, its children, and the icon rules' detail where an element
+# has any), about 18 MiB for the fixture's 65,536 elements.
+within() {
+    after=$(printf '%s\n' "$1" | sed -n 's/.* \([0-9][0-9]*\) MiB after.*/\1/p')
+    [ -n "$after" ] || { echo "no peak in: $1" >&2; return 1; }
+    [ "$after" -le "$2" ] || { echo "over budget: $after MiB, the most is $2 MiB" >&2; return 1; }
+}

@@ -277,3 +277,165 @@ fn stylesheets_of_the_wider_set() {
     assert!(with_sheet > 0, "no file with a StyleSheet was found: not measured");
     assert!(failures.is_empty(), "{} failures:\n{}", failures.len(), failures.join("\n"));
 }
+
+/// ADR-0010's reading style measured on real dictionaries: `XDICT_MDX_CORPUS=<the 25> XDICT_STYLE_OUT=<file.json>`.
+/// For each dictionary: its base size and where it came from, the fonts kept and why, what normalizing its own
+/// sheets changed, and, over the same sample of entries as `entries_of_the_corpus`, what normalizing them changed
+/// and the transcriptions marked: how many, by delimiter system, and every non-ASCII character inside them.
+#[test]
+fn reading_style_of_the_corpus() {
+    let (Ok(dirs), Ok(out)) = (std::env::var("XDICT_MDX_CORPUS"), std::env::var("XDICT_STYLE_OUT")) else {
+        eprintln!("not measured: XDICT_MDX_CORPUS or XDICT_STYLE_OUT is unset");
+        return;
+    };
+    let cache = std::env::temp_dir().join(format!("xdict-style-{}", std::process::id()));
+    let core = Core::new(Config {
+        client_protocol: PROTOCOL,
+        cache_dir: Some(cache.to_string_lossy().into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let mut folders: Vec<PathBuf> = std::env::split_paths(&dirs)
+        .flat_map(|d| std::fs::read_dir(d).unwrap().map(|e| e.unwrap().path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    folders.sort();
+    let mut all = Vec::new();
+    for folder in folders {
+        let Some((mdx_path, package)) = package(&folder) else { continue };
+        let name = folder.file_name().unwrap().to_string_lossy().into_owned();
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("{name}: not open") };
+        let started = std::time::Instant::now();
+        let report = core.style_report(dict.clone()).unwrap();
+        let style_ms = started.elapsed().as_millis();
+        let style = &report.edition.style;
+        let file = File::open(&mdx_path).unwrap();
+        let sheet = xdict_entry::StyleSheet::parse(&file.header().stylesheet);
+        let step = (file.len() / SAMPLE).max(1);
+        let (mut entries, mut counts) = (0u64, xdict_entry::Counts::default());
+        for i in (0..file.len()).step_by(step) {
+            let record = file.record(i).unwrap();
+            let text = String::from_utf8_lossy(&record.data);
+            if text.trim_start().starts_with("@@@LINK=") {
+                continue;
+            }
+            let expanded = sheet.apply(&text);
+            let (_, c) = xdict_entry::html_normalized_within(&expanded, BASE, "", style, usize::MAX).unwrap();
+            counts.add(c);
+            entries += 1;
+        }
+        let c = |c: &xdict_entry::Counts| {
+            serde_json::json!({"important": c.important, "page": c.page, "fontFamily": c.family,
+                "fontSize": c.size, "lineHeight": c.line_height, "colour": c.colour, "weight": c.weight,
+                "space": c.space, "dropped": c.dropped, "dataTables": c.data_tables, "layoutTables": c.layout_tables,
+                "imagesDropped": c.images_dropped, "imagesKept": c.images_kept, "imagesUndecided": c.images_undecided})
+        };
+        let base_from = match &style.base().from {
+            xdict_entry::BaseFrom::Page { selector } => format!("page: {selector}"),
+            xdict_entry::BaseFrom::Prose { weight } => format!("prose: {weight} selectors"),
+            xdict_entry::BaseFrom::Text { chars, share } => format!("text: {chars} chars, {:.0}%", share * 100.0),
+            xdict_entry::BaseFrom::Default => "default".to_owned(),
+        };
+        let t = &counts.transcriptions;
+        let row = serde_json::json!({
+            "dictionary": name,
+            "sheets": report.edition.sheets,
+            "skipped": report.edition.skipped,
+            "styleMs": style_ms,
+            "basePx": (style.base().px * 100.0).round() / 100.0,
+            "baseFrom": base_from,
+            "kept": style.kept().iter().map(|k| serde_json::json!({
+                "family": k.family, "reason": k.reason.as_str(), "selector": k.selector})).collect::<Vec<_>>(),
+            "sheetChanges": c(&report.counts),
+            "entriesSampled": entries,
+            "entryChanges": c(&counts),
+            "transcriptions": {
+                "marked": t.marked,
+                "systems": t.systems,
+                "characters": t.characters.iter().collect::<String>(),
+                "codepoints": t.characters.iter().map(|ch| format!("U+{:04X}", u32::from(*ch))).collect::<Vec<_>>(),
+            },
+        });
+        eprintln!(
+            "{name}: base {} ({base_from}), kept {}, marked {} {:?}",
+            style.base().px,
+            style.kept().len(),
+            t.marked,
+            t.systems
+        );
+        all.push(row);
+    }
+    std::fs::write(&out, serde_json::to_string_pretty(&all).unwrap()).unwrap();
+    assert!(!all.is_empty(), "no dictionary found: not measured");
+}
+
+/// For diagnosis: `XDICT_MDX_CORPUS=<the 25> XDICT_DUMP_DIR=<dir> [XDICT_DUMP_ONLY=<dict,…>]` writes, per dictionary,
+/// a sample of raw records (`<dict>.raw.html`), the same entries as the core serves them (`<dict>.core.html`), and its
+/// sheets as served (`<dict>.<sheet>`).
+#[test]
+fn dump_for_diagnosis() {
+    let (Ok(dirs), Ok(out)) = (std::env::var("XDICT_MDX_CORPUS"), std::env::var("XDICT_DUMP_DIR")) else {
+        eprintln!("not measured: XDICT_MDX_CORPUS or XDICT_DUMP_DIR is unset");
+        return;
+    };
+    let only: Vec<String> =
+        std::env::var("XDICT_DUMP_ONLY").map(|o| o.split(',').map(str::to_owned).collect()).unwrap_or_default();
+    let out = PathBuf::from(out);
+    std::fs::create_dir_all(&out).unwrap();
+    let cache = std::env::temp_dir().join(format!("xdict-dump-{}", std::process::id()));
+    let core = Core::new(Config {
+        client_protocol: PROTOCOL,
+        cache_dir: Some(cache.to_string_lossy().into()),
+        ..Config::default()
+    })
+    .unwrap();
+    let mut folders: Vec<PathBuf> = std::env::split_paths(&dirs)
+        .flat_map(|d| std::fs::read_dir(d).unwrap().map(|e| e.unwrap().path()))
+        .filter(|p| p.is_dir())
+        .collect();
+    folders.sort();
+    for folder in folders {
+        let name = folder.file_name().unwrap().to_string_lossy().into_owned();
+        if !only.is_empty() && !only.contains(&name) {
+            continue;
+        }
+        let Some((mdx_path, package)) = package(&folder) else { continue };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, edition, .. } = core.open(package).unwrap() else { panic!("{name}: not open") };
+        let file = File::open(&mdx_path).unwrap();
+        let step = (file.len() / 40).max(1);
+        let (mut raw, mut served) = (String::new(), String::new());
+        // `XDICT_DUMP_KEY=<key>` dumps that key's records instead of the sample.
+        let wanted: Vec<usize> = match std::env::var("XDICT_DUMP_KEY") {
+            Ok(k) => file.find(&k).unwrap().to_vec(),
+            Err(_) => (0..file.len()).step_by(step).collect(),
+        };
+        for i in wanted {
+            let key = file.key(i).unwrap().into_owned();
+            let record = file.record(i).unwrap();
+            let text = String::from_utf8_lossy(&record.data).into_owned();
+            if text.trim_start().starts_with("@@@LINK=") {
+                continue;
+            }
+            let occurrence = file.find(&key).unwrap().iter().filter(|&&j| file.key(j).unwrap() == key && j < i).count();
+            let entry = EntryRef { edition: edition.clone(), key: key.clone(), occurrence: occurrence as u32 };
+            raw.push_str(&format!("\n<!-- ENTRY {key} -->\n{text}"));
+            if let Ok(shown) = core.entry(dict.clone(), entry, view()) {
+                served.push_str(&format!("\n<!-- ENTRY {key} -->\n{}", shown.html));
+            }
+        }
+        std::fs::write(out.join(format!("{name}.raw.html")), raw).unwrap();
+        std::fs::write(out.join(format!("{name}.core.html")), served).unwrap();
+        let report = core.style_report(dict.clone()).unwrap();
+        // `XDICT_DUMP_RESOURCES=<path,…>` dumps those resources as served too (a script, an image).
+        let more: Vec<String> = std::env::var("XDICT_DUMP_RESOURCES")
+            .map(|r| r.split(',').map(str::to_owned).collect())
+            .unwrap_or_default();
+        for sheet in report.edition.sheets.iter().chain(&more) {
+            if let Ok(Resource::Found { bytes, .. }) = core.resource(dict.clone(), sheet.clone(), view()) {
+                std::fs::write(out.join(format!("{name}.{}", sheet.replace('/', "_"))), bytes).unwrap();
+            }
+        }
+    }
+}

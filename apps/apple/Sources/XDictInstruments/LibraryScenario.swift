@@ -93,7 +93,7 @@ public struct LibraryScenario {
                        + "c.bin \(third?.text ?? "none")")
         let sidecars = vol?.files.filter { $0.role == .sidecar }.map(\.fileName) ?? []
         let css = await resource(dict, "vol.css")
-        findings.check("folder.sidecarFound", sidecars == ["vol.css"] && css?.text == "body { color: black }\n",
+        findings.check("folder.sidecarFound", sidecars == ["vol.css"] && css?.text == ".vol { float: left }\n",
                        "sidecars \(sidecars); vol.css \(css.map { "\($0.resource)" } ?? "none")")
 
         let gap = await add(library, "gap", &findings)

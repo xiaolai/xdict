@@ -100,7 +100,7 @@
         "occurrence": 0
       },
       "result": {
-        "html": "<b>run</b> to move",
+        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\">run</b> to move",
         "lossyBytes": 0
       }
     },
@@ -110,7 +110,7 @@
         "occurrence": 0
       },
       "result": {
-        "html": "$gloss",
+        "html": "<!DOCTYPE html>$gloss",
         "lossyBytes": 0
       }
     }
