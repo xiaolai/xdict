@@ -8,11 +8,12 @@ import XDictEntryView
 /// and a drop target beside it, waiting for a person's hands — here a helper posting real pointer events
 /// (`Tools/hostile/pointer.swift`). The stage asks through a directory of command files and reads the answers back:
 ///
-///   <commands>/<n>.json  {"op": "targets" | "prompt" | "state" | "answer-prompt" | "quit", …}
+///   <commands>/<n>.json  {"op": "targets" | "prompt" | "state" | "focus" | "front" | "deselect" | "scroll" | "quit"}
 ///   <commands>/<n>.out.json  the answer
 ///
 /// `targets` gives each element's centre in global display coordinates (origin top left, as `CGEvent` takes them);
-/// `prompt` the consent prompt's buttons, when one is up; `state` everything recorded so far. Nothing here clicks.
+/// `prompt` the consent prompt's buttons, when one is up; `state` everything recorded so far; `focus` whether the lab
+/// is active and its reader window key (`FocusLog`); `front` brings the lab forward. Nothing here clicks.
 @MainActor
 final class ReaderRun {
     private let options: LabOptions
@@ -24,6 +25,7 @@ final class ReaderRun {
     private let drop = DropTarget()
     private var dropWindow: NSWindow?
     private var handled: Set<String> = []
+    private let focus = FocusLog()
 
     init(options: LabOptions, content: CoreContent) {
         self.options = options
@@ -39,6 +41,7 @@ final class ReaderRun {
             events: { [weak self] in self?.log.note($0) })
         let controller = EntryViewController(environment: environment)
         self.controller = controller
+        focus.start()
         NSApp.activate()
         window = labWindow("reader", frame: NSRect(x: 160, y: 160, width: 720, height: 640), view: controller.view)
         window?.makeKeyAndOrderFront(nil)
@@ -79,6 +82,16 @@ final class ReaderRun {
         case "targets": return await targets()
         case "prompt": return prompt()
         case "state", "quit": return await state()
+        case "focus": return FocusLog.focus(of: window)
+        case "front":
+            // What a hand does before it clicks, done by the lab: its windows ordered above every other application's
+            // and the lab asked to be active. The system may decline the asking while another application is active;
+            // `reader.py` waits for the outcome, asks LaunchServices if it must, and names what stood in the way.
+            dropWindow?.orderFrontRegardless()
+            window?.orderFrontRegardless()
+            window?.makeKeyAndOrderFront(nil)
+            NSApp.activate()
+            return FocusLog.focus(of: window)
         case "deselect":
             // A selection left by an earlier click would be what a drag carries, not the element under the pointer.
             _ = await labEvaluate(controller?.webView, "window.getSelection().removeAllRanges(); return true")
@@ -131,6 +144,7 @@ final class ReaderRun {
             "mode": "reader", "pid": Int(ProcessInfo.processInfo.processIdentifier),
             "events": log.described, "opened": opener.opened, "drops": drop.received,
             "promptPresented": controller?.presentedPrompt != nil,
+            "focus": FocusLog.focus(of: window), "timeline": focus.timeline,
             "url": controller?.webView?.url?.absoluteString ?? "",
             "networkPid": controller?.webView.map { HostileRun.pid($0, "_networkProcessIdentifier") } ?? NSNull(),
             "webPid": controller?.webView.map { HostileRun.pid($0, "_webProcessIdentifier") } ?? NSNull(),

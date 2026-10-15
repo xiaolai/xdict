@@ -158,7 +158,8 @@ enum CorpusRun {
     }
 
     /// LDOCE's *hold* (625 KB): how long it takes to finish, find's count against a count over the entry's own text, and
-    /// whether a 360-point window needs horizontal scrolling.
+    /// whether the window at its narrowest needs horizontal scrolling. It is asked for 360 points and stops at the
+    /// entry view's own minimum (421 points, WI-6), so the width it settled at is measured and reported, never assumed.
     static func long(root: URL, core: LabCore) async throws -> [String: Any] {
         let folder = root.appending(path: "ldoce")
         guard FileManager.default.fileExists(atPath: folder.path) else { return ["absent": true] }
@@ -186,10 +187,12 @@ enum CorpusRun {
         }
         window.setContentSize(NSSize(width: 360, height: 700))
         try await Task.sleep(for: .milliseconds(800))
-        report["narrow"] = await labEvaluate(controller.webView, """
+        var narrow = await labEvaluate(controller.webView, """
             return { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth,
                      scrollHeight: document.documentElement.scrollHeight }
-            """) ?? NSNull()
+            """) as? [String: Any] ?? [:]
+        narrow["windowWidth"] = Double(window.contentLayoutRect.width)
+        report["narrow"] = narrow
         return report
     }
 

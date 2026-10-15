@@ -667,6 +667,9 @@ reader_stage() {
         return 0
     fi
     pass "reader: this session may post events ($access)"
+    # The screen before the lab started, kept with the run: the frontmost application, the session, the display.
+    "$kit/pointer" screen >"$results/screen-before.json" 2>&1 || true
+    echo "      before the lab: $(head -c 400 "$results/screen-before.json")"
     if ! "$kit/run-hostile.sh" "$kit" "$results" reader reader >"$results/run.log" 2>&1; then
         flunk "reader: the run did not happen as described — $(tail -2 "$results/run.log" | tr '\n' ' ')"
         return 0

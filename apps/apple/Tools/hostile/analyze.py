@@ -237,12 +237,27 @@ def reader(d):
         "each drag delivered a drop": {s["step"]: len(s.get("dropped", [])) for s in steps
                                        if s["step"].startswith("drag ")},
         "access": driven.get("access"),
+        # Where the lab had lost the front between steps and was brought back before the hand moved (`reader.py`'s
+        # `hold`), and what had stood in the way: shown, never silent.
+        "refocused": {s["step"]: s["refocused"] for s in steps if s.get("refocused")},
     }
     # WebKit drags no SVG image out of a web view (measured 2026-10-14): those drags are made, watched, and not expected
     # to deliver; a raster image, a link and an image in a link must.
     must = {"drag img-data", "drag img-raster", "drag link-image", "drag link-remote"}
     delivered = checks["each drag delivered a drop"]
     checks["every drag delivered a drop"] = must <= set(delivered) and all(delivered[s] > 0 for s in must)
+    # A failed assertion carries the scene of the step it rests on, so a run that went wrong says why.
+    rests_on = [("the plain click raised the question", "click link-remote none"),
+                ("it was answered by a click on Cancel", "click link-remote none"),
+                ("the placeholder's yes opened its URL alone", "click img-remote placeholder"),
+                ("the link to an entry was routed as a lookup", "click link-entry")]
+    checks["why"] = {k: scene(find(n)) for k, n in rests_on if checks[k] is not True}
+    failed = [n for n in ["link-remote", "img-remote", "img-local", "link-image"]
+              if not said(find(f"context menu {n}"), "menuFiltered")]
+    if failed:
+        checks["why"]["the context menu was filtered"] = "; ".join(f"{n}: {scene(find(f'context menu {n}'))}"
+                                                                   for n in failed)
+    checks["why"]["drags"] = {n: scene(find(n)) for n in sorted(must) if delivered.get(n, 0) == 0}
     c = checks["observer controls"]
     checks["pass"] = (min(c.values()) >= 1 and not checks["egress"] and not checks["lookups"]
                       and not checks["otherWebKitLookups"] and checks["the plain click raised the question"]
@@ -257,6 +272,29 @@ def say(ok, text):
     return ok
 
 
+def scene(s):
+    """Why a step's event may not have landed, from what `reader.py` recorded around it: the lab's focus before and
+    after, the session and display, the frontmost application, the windows over the point, and the button and key events
+    and activations the lab saw while the step ran."""
+    if not s:
+        return "the step never ran"
+    if "before" not in s:
+        return "the step recorded no scene"
+    lab, scr = s["before"].get("lab", {}), s["before"].get("screen", {})
+    after = s.get("after") or {}
+    front = scr.get("frontmost", {})
+    over = [[f"{w.get('owner')}({w.get('pid')}) layer {w.get('layer')}" for w in at][:4] for at in scr.get("at") or []]
+    got = [f"{e['what']}" + (f" in {e['window']} active={e.get('active')} key={e.get('key')}" if "active" in e
+                             else f" {e.get('window') or e.get('app', '')}") for e in s.get("received", [])]
+    return (f"before it: lab active {lab.get('active')}, reader key {lab.get('key')}, "
+            f"unoccluded {lab.get('unoccluded')}, key window {lab.get('keyWindow')!r}; "
+            f"frontmost {front.get('name')!r} pid {front.get('pid')}; locked {scr.get('locked')}, "
+            f"display asleep {scr.get('displayAsleep')}; over each point {over}; "
+            f"during it the lab saw {got or 'no button, key or focus event'}; "
+            f"after it: lab active {after.get('active')}, reader key {after.get('key')}"
+            + (f"; {scr['error']}" if "error" in scr else ""))
+
+
 def reader_verdicts(d):
     s = json.load(open(os.path.join(d, "summary.json")))
     c = s["observer controls"]
@@ -264,12 +302,19 @@ def reader_verdicts(d):
                say(not s["egress"] and not s["lookups"] and not s["otherWebKitLookups"],
                    f"nothing left on any observer (egress {len(s['egress'])}, lookups {s['lookups']}, "
                    f"other WebKit lookups {s['otherWebKitLookups'][:3]})")]
+    why = s.get("why", {})
     for key in ["the plain click raised the question", "it was answered by a click on Cancel",
                 "nothing opened before the one yes", "the placeholder's yes opened its URL alone",
                 "the link to an entry was routed as a lookup", "the context menu was filtered"]:
-        results.append(say(s[key] is True, key))
+        results.append(say(s[key] is True, key + ("" if s[key] is True or key not in why else f" — {why[key]}")))
+    drags = s.get("each drag delivered a drop")
     results.append(say(s.get("every drag delivered a drop") is True,
-                       f"every drag of a link or a raster image out of the view delivered a drop ({s.get('each drag delivered a drop')})"))
+                       f"every drag of a link or a raster image out of the view delivered a drop ({drags})"
+                       + "".join(f" — {n}: {w}" for n, w in why.get("drags", {}).items())))
+    for name, fixed in s.get("refocused", {}).items():
+        how = " (LaunchServices asked)" if fixed.get("launchServices") else ""
+        print(f"NOTE  before {name!r} the lab was brought back to the front in {fixed.get('took')} s{how}: "
+              f"{'; '.join(fixed.get('found', []))}")
     print(f"NOTE  opened at the end: {s['opened at the end']}")
     print(f"NOTE  downloads: {s['downloads']}")
     print(f"NOTE  drops: {[(d.get('types', [])[:3], d.get('url', '')[:80], d.get('promises')) for d in s['drops']]}")
@@ -356,9 +401,14 @@ def entries(res):
             found = long.get(f"find {query}", {})
             results.append(say(found.get("visible", -1) == found.get("innerText", -2) and found.get("visible", 0) > 0,
                                f"find '{query}' in hold counts what the entry's text holds ({found})"))
+        # The width the lab's window settled at, as measured: asked for 360 points, it stops at the view's minimum.
         narrow = long.get("narrow") or {}
-        results.append(say(0 < narrow.get("scrollWidth", 0) <= narrow.get("clientWidth", 0) + 1,
-                           f"hold in a 360-point window needs no horizontal scrolling ({narrow})"))
+        width = narrow.get("windowWidth")
+        results.append(say(isinstance(width, (int, float)) and 0 < narrow.get("scrollWidth", 0)
+                           <= narrow.get("clientWidth", 0) + 1,
+                           f"hold in a window at its narrowest, "
+                           f"{f'{width:g} points' if isinstance(width, (int, float)) else 'its width not reported'}, "
+                           f"needs no horizontal scrolling ({narrow})"))
     wanted = {"oald": (1.5, "dark", "dark"), "ldoce": (0.8, "original", "light")}
     for stage in ("persistence-set.json", "persistence-check.json"):
         r = load(stage)
