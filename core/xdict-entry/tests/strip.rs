@@ -146,7 +146,8 @@ fn s11_hidden_duplicates_go() {
 fn s12_double_angle_references_become_links() {
     let s = plain();
     assert_eq!(html("see ↑<<an>> and", &s), r#"see ↑<a href="xdict://d/entry/an">an</a> and"#);
-    assert_eq!(html("<<b>x</b>", &s), "<<b>x</b>", "a tag after `<` is a tag");
+    // The first `<` starts no tag: it is text, written `&lt;` so no removal can join it to what follows.
+    assert_eq!(html("<<b>x</b>", &s), "&lt;<b>x</b>", "a tag after `<` is a tag");
 }
 
 /// S14: an image whose data arrives in another attribute gets it as its `src`.
