@@ -55,9 +55,10 @@ apps/apple/Tools/hostile/*                          check:hostile.production hos
 apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
 apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
 apps/apple/Tools/lookup/*                           check:lookup
+apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
 apps/apple/Tools/library/*                          check:library.generated library.corpus
-apps/apple/Tools/build-lab.sh                       hostile reader entries.quick entries.persistence library.generated lookup
-apps/apple/Tools/build-fixtures.sh                  service library.generated lookup
+apps/apple/Tools/build-lab.sh                       hostile reader entries.quick entries.persistence library.generated lookup selection services panel menubar shortcut
+apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut
 apps/apple/Tools/*                                  all
 apps/apple/Makefile                                 all
 
@@ -80,10 +81,13 @@ apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
 apps/apple/Sources/XDict/ServiceReport.swift        check:service
 apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
 apps/apple/Sources/XDict/SoundReport.swift          check:sound
+apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services panel menubar shortcut
+apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
 
 # --- The product ----------------------------------------------------------------------------------------------------
 apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
 apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
-apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound
+apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
-apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader sound
+apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
+apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader sound selection services panel menubar shortcut

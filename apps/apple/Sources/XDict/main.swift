@@ -36,4 +36,7 @@ if arguments.contains(SoundReport.flag) {
 if arguments.contains(LookupWindowReport.flag) {
     LookupWindowReport.prepare(arguments)
 }
+if arguments.contains(AnywhereReport.flag) {
+    AnywhereReport.prepare(arguments)
+}
 XDictApp.main()

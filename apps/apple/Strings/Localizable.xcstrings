@@ -17,6 +17,166 @@
         }
       }
     },
+    "%@ did not answer when asked for its selection. Try again in a moment." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ did not answer when asked for its selection. Try again in a moment."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 没有回应对其选中内容的请求。请稍后再试。"
+          }
+        }
+      }
+    },
+    "%@ has no ⌘, ⌃ or ⌥, so it would fire while you type. Choose another combination." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ has no ⌘, ⌃ or ⌥, so it would fire while you type. Choose another combination."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 不含 ⌘、⌃ 或 ⌥，打字时会被误触发。请换一个组合。"
+          }
+        }
+      }
+    },
+    "%@ is a standard command other apps rely on. Choose another combination." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is a standard command other apps rely on. Choose another combination."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 是其他 App 依赖的标准命令。请换一个组合。"
+          }
+        }
+      }
+    },
+    "%@ is unavailable. %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is unavailable. %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 不可用。%2$@"
+          }
+        }
+      }
+    },
+    "%@ is unavailable. %@ Still using %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is unavailable. %2$@ Still using %3$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 不可用。%2$@仍在使用 %3$@。"
+          }
+        }
+      }
+    },
+    "%@ is unavailable. %@ The previous shortcut could not be put back either, so no shortcut is set." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is unavailable. %2$@ The previous shortcut could not be put back either, so no shortcut is set."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 不可用。%2$@原来的快捷键也无法恢复，因此目前没有设置快捷键。"
+          }
+        }
+      }
+    },
+    "%@ quit before its selection could be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ quit before its selection could be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 在读取其选中内容之前已退出。"
+          }
+        }
+      }
+    },
+    "%@ refused to share its selection. If the screen is locked, unlock it and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ refused to share its selection. If the screen is locked, unlock it and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 拒绝共享其选中内容。如果屏幕已锁定，请解锁后再试。"
+          }
+        }
+      }
+    },
+    "%@ works now but could not be saved, so it will not survive a restart." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ works now but could not be saved, so it will not survive a restart."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 现在可用，但未能保存，重新启动后将失效。"
+          }
+        }
+      }
+    },
+    "%@'s window is too large to search for a selection (over %lld elements). Select the word again and try once more." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@'s window is too large to search for a selection (over %2$lld elements). Select the word again and try once more."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 的窗口太大，无法从中查找选中内容（超过 %2$lld 个元素）。请重新选中该词再试一次。"
+          }
+        }
+      }
+    },
     "%@, %@" : {
       "localizations" : {
         "en" : {
@@ -337,6 +497,22 @@
         }
       }
     },
+    "Another app has claimed this shortcut." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another app has claimed this shortcut."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "另一个 App 已占用此快捷键。"
+          }
+        }
+      }
+    },
     "Asking the dictionary service…" : {
       "localizations" : {
         "en" : {
@@ -465,6 +641,22 @@
         }
       }
     },
+    "Click, then type the combination to use" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Click, then type the combination to use"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点按，然后键入要使用的组合键"
+          }
+        }
+      }
+    },
     "Dark" : {
       "localizations" : {
         "en" : {
@@ -503,6 +695,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典"
+          }
+        }
+      }
+    },
+    "Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary"
           }
         },
         "zh-Hans" : {
@@ -1057,6 +1265,22 @@
         }
       }
     },
+    "Library…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Library…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词库…"
+          }
+        }
+      }
+    },
     "Look Up" : {
       "localizations" : {
         "en" : {
@@ -1069,6 +1293,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询"
+          }
+        }
+      }
+    },
+    "Look Up Selection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up Selection"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询所选内容"
+          }
+        }
+      }
+    },
+    "Look Up Selection (%@)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up Selection (%@)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询所选内容（%@）"
           }
         }
       }
@@ -1101,6 +1357,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在所有词典中查询“%@”"
+          }
+        }
+      }
+    },
+    "Look up the selection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look up the selection"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询所选内容"
+          }
+        }
+      }
+    },
+    "Lookup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询"
           }
         }
       }
@@ -1281,6 +1569,22 @@
         }
       }
     },
+    "No app is in front, so there is no selection to look up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No app is in front, so there is no selection to look up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "前台没有 App，因此没有可查询的选中内容。"
+          }
+        }
+      }
+    },
     "No dictionary (.mdx) was found for “%@”." : {
       "localizations" : {
         "en" : {
@@ -1377,6 +1681,22 @@
         }
       }
     },
+    "None of your dictionaries has this word." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of your dictionaries has this word."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的词典中都没有这个词。"
+          }
+        }
+      }
+    },
     "Not Set" : {
       "localizations" : {
         "en" : {
@@ -1389,6 +1709,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未设置"
+          }
+        }
+      }
+    },
+    "Nothing is selected in %@, or %@ does not share its selection. Select a word and try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing is selected in %1$@, or %2$@ does not share its selection. Select a word and try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 中没有选中内容，或 %1$@ 不共享其选中内容。请选中一个词后再试。"
+          }
+        }
+      }
+    },
+    "Nothing to Look Up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing to Look Up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可查询的内容"
           }
         }
       }
@@ -1457,6 +1809,22 @@
         }
       }
     },
+    "Open Accessibility Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Accessibility Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开辅助功能设置"
+          }
+        }
+      }
+    },
     "Open Again" : {
       "localizations" : {
         "en" : {
@@ -1505,6 +1873,22 @@
         }
       }
     },
+    "Open XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 XDict"
+          }
+        }
+      }
+    },
     "Open in Browser" : {
       "localizations" : {
         "en" : {
@@ -1517,6 +1901,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在浏览器中打开"
+          }
+        }
+      }
+    },
+    "Open in XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 XDict 中打开"
+          }
+        }
+      }
+    },
+    "Open in XDict (or press %@ again)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open in XDict (or press %@ again)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 XDict 中打开（或再按一次 %@）"
           }
         }
       }
@@ -1633,6 +2049,22 @@
         }
       }
     },
+    "Quit XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quit XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出 XDict"
+          }
+        }
+      }
+    },
     "Reached from %@" : {
       "localizations" : {
         "en" : {
@@ -1645,6 +2077,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "经由 %@ 到达"
+          }
+        }
+      }
+    },
+    "Reading the selection in %@ took too long. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading the selection in %@ took too long. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取 %@ 中的选中内容耗时过长。请再试一次。"
           }
         }
       }
@@ -1857,6 +2305,38 @@
         }
       }
     },
+    "Select a word in any app and press the shortcut: its entry opens in a panel beside it. Press Escape or click elsewhere to close the panel, or the shortcut again to open it in XDict. You can also choose Look Up in XDict when you Control-click a selection." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a word in any app and press the shortcut: its entry opens in a panel beside it. Press Escape or click elsewhere to close the panel, or the shortcut again to open it in XDict. You can also choose Look Up in XDict when you Control-click a selection."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在任意 App 中选中一个词并按下快捷键，词条会在它旁边的面板中打开。按 Esc 键或点按别处可关闭面板，再按一次快捷键则在 XDict 中打开。按住 Control 键点按所选内容时，也可以选取“在 XDict 中查询”。"
+          }
+        }
+      }
+    },
+    "Settings…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置…"
+          }
+        }
+      }
+    },
     "Show %llu More" : {
       "localizations" : {
         "en" : {
@@ -1885,6 +2365,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在词库中显示"
+          }
+        }
+      }
+    },
+    "Speech" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语音"
           }
         }
       }
@@ -2081,6 +2577,22 @@
         }
       }
     },
+    "The entry shown, and every other result" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The entry shown, and every other result"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前显示的词条，以及其他所有结果"
+          }
+        }
+      }
+    },
     "The file changed while XDict was reading it. Try again." : {
       "localizations" : {
         "en" : {
@@ -2129,6 +2641,54 @@
         }
       }
     },
+    "The lookup in %@ was replaced by a newer one." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The lookup in %@ was replaced by a newer one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 中的查询已被更新的查询取代。"
+          }
+        }
+      }
+    },
+    "The selection in %@ has no word in it, only spaces or punctuation." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selection in %@ has no word in it, only spaces or punctuation."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 中的选中内容没有词语，只有空格或标点。"
+          }
+        }
+      }
+    },
+    "The selection in %@ is %lld characters long, more than XDict looks up at once. Select a word or a phrase." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selection in %1$@ is %2$lld characters long, more than XDict looks up at once. Select a word or a phrase."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ 中的选中内容长 %2$lld 个字符，超过了 XDict 一次能查询的长度。请选中一个词或短语。"
+          }
+        }
+      }
+    },
     "The sound output did not start, so this recording (%@) could not be played." : {
       "localizations" : {
         "en" : {
@@ -2141,6 +2701,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "声音输出未能启动，这段录音（%@）无法播放。"
+          }
+        }
+      }
+    },
+    "The system would not register this shortcut (error %@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system would not register this shortcut (error %@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统未能注册此快捷键（错误 %@）。"
           }
         }
       }
@@ -2465,6 +3041,22 @@
         }
       }
     },
+    "This shortcut could not be released earlier. Quit and reopen XDict to free it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This shortcut could not be released earlier. Quit and reopen XDict to free it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此快捷键先前未能释放。请退出并重新打开 XDict 以释放它。"
+          }
+        }
+      }
+    },
     "Title" : {
       "localizations" : {
         "en" : {
@@ -2477,6 +3069,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "标题"
+          }
+        }
+      }
+    },
+    "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要查询所选内容，请在 macOS 刚刚显示的请求中允许 XDict，或在“系统设置 › 隐私与安全性 › 辅助功能”中打开 XDict；授权后查询会自动继续。"
           }
         }
       }
@@ -2509,6 +3117,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "输入一个词，然后按回车键。"
+          }
+        }
+      }
+    },
+    "Type the new shortcut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type the new shortcut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "键入新的快捷键"
           }
         }
       }
@@ -2577,6 +3201,22 @@
         }
       }
     },
+    "XDict already uses this shortcut for something else." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict already uses this shortcut for something else."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 已将此快捷键用于其他功能。"
+          }
+        }
+      }
+    },
     "XDict could not tell this dictionary's languages from its file name. Which are they?" : {
       "localizations" : {
         "en" : {
@@ -2605,6 +3245,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 根据文件名推测了这些语言。是否正确？"
+          }
+        }
+      }
+    },
+    "XDict may not read the selection in %@: Accessibility is turned off for XDict." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict may not read the selection in %@: Accessibility is turned off for XDict."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 无法读取 %@ 中的选中内容：XDict 的辅助功能权限已关闭。"
           }
         }
       }

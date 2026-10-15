@@ -1139,6 +1139,38 @@ substage_sound() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# **Lookup from anywhere** (plan-macos-v1 WI-8, done-when), one launch for `selection.hosts`, `services.menu`,
+# `panel.*`, `menubar.item` and `shortcut.rebind`: `Tools/anywhere/drive.py` gives XDict a fresh app state (its
+# preferences deleted, the Services cache rebuilt; not a fresh account), starts the real app with `--anywhere` over the
+# lookup fixtures, and works TextEdit, Notes, Safari and Chrome with real selections, keys, clicks and context menus
+# (`hands`), reading what XDict did from the app. Needs Accessibility for this SSH session (`anywhere.access`) and for
+# XDict.app itself (`anywhere.setup`).
+substage_anywhere() {
+    local results="$home/results/anywhere" work="$reports/anywhere" member asked_subs=()
+    rm -rf "$results" "$work"
+    mkdir -p "$results" "$work"
+    for member in "${members[@]}"; do asked "$member" && asked_subs+=("$member"); done
+    if is_running "$exe"; then
+        flunk - "anywhere: XDict is already running (pid ${PIDS[*]}), so the app driven would not be this run's"
+        return 0
+    fi
+    if python3 -I "$kit/anywhere/drive.py" "$kit" "$work" "$app" "$home/fixtures/lookup" "$work/driver.json" \
+        ${asked_subs[@]+"${asked_subs[@]}"} >"$results/drive.log" 2>&1; then
+        echo "      driven: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
+    else
+        flunk - "anywhere: the driver stopped — $(tail -2 "$results/drive.log" | tr '\n' ' ')"
+    fi
+    quit_bundle >/dev/null 2>&1 || true
+    if [ -s "$work/driver.json" ]; then
+        findings "$work/driver.json"
+        echo "      facts: $(plutil -extract facts json -o - "$work/driver.json" 2>/dev/null | head -c 1500)"
+    else
+        flunk - "anywhere: the driver wrote no findings ($(tail -c 300 "$results/drive.log" 2>/dev/null))"
+    fi
+    cp "$work"/*.json "$work"/*.jsonl "$results/" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # **The run**: each sub-stage asked for, in the plan's order; a group's launch once, for all of its sub-stages asked.
 # Each is timed (`TIME` lines, for the recorder), and each fails by name for a check it never reported.
 ran_groups=" "

@@ -38,11 +38,18 @@ struct ModuleBoundaryTests {
         // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
         "XDictSpeech": ["AVFAudio", "Foundation", "os"],
         "XDictSpeechTests": ["AVFAudio", "Foundation", "Testing"],
+        // Lookup from anywhere (WI-8): Carbon's hot keys, the Accessibility API, the front app and the window list
+        // (`AppKit`, `CoreGraphics`), the shortcut's state the Settings field observes, its log.
+        "XDictAnywhere": ["AppKit", "ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation",
+                          "os"],
+        "XDictAnywhereTests": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
         // main window's instruments read the entry's page in a content world of their own (`InstrumentPage`, WI-6).
-        "XDict": ["AppKit", "Foundation", "SwiftUI", "WebKit", "os"],
+        // `ApplicationServices`: the lookup-anywhere instrument says whether the app may read other apps
+        // (`AXIsProcessTrusted`); `Observation`: the panel's state (plan-macos-v1 WI-8).
+        "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
         // `Security` reads the service's own signature for the client requirement (`ClientCheck`).
@@ -59,7 +66,7 @@ struct ModuleBoundaryTests {
         "XDictTestSupport": ["Foundation"],
         "XDictBaseTests": ["Foundation", "Testing"],
         "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
-        "XDictUITests": ["Foundation", "Testing"],
+        "XDictUITests": ["Carbon.HIToolbox", "Foundation", "Testing"],
         // WebKit's preferences and rule-list store, never a web view; JavaScriptCore for the shell's scripts.
         "XDictEntryViewTests": ["AppKit", "Foundation", "JavaScriptCore", "Testing", "WebKit"],
         "XDictServiceTests": ["Foundation", "Synchronization", "Testing"],

@@ -1,0 +1,23 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "Look Up in XDict" : {
+      "comment" : "The Service's title in a selection's context menu and the Services menu (Info.plist NSServices NSMenuItem). macOS reads it from ServicesMenu.strings.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up in XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 XDict 中查询"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}
