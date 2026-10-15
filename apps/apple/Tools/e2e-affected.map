@@ -56,6 +56,7 @@ apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
 apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
 apps/apple/Tools/lookup/*                           check:lookup
 apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
+apps/apple/Tools/library/health-expected.json       check:library.health
 apps/apple/Tools/library/*                          check:library.generated library.corpus
 apps/apple/Tools/build-lab.sh                       hostile reader entries.quick entries.persistence library.generated lookup selection services panel menubar shortcut
 apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut
@@ -65,6 +66,7 @@ apps/apple/Makefile                                 all
 # --- The instruments: each check's own code -------------------------------------------------------------------------
 apps/apple/Sources/XDictInstruments/Lookup*         check:lookup
 apps/apple/Sources/XDictInstruments/TransportHold.swift check:lookup service.recovery
+apps/apple/Sources/XDictInstruments/LibraryHealth.swift check:library.health
 apps/apple/Sources/XDictInstruments/Library*        check:library.generated library.corpus
 apps/apple/Sources/XDictInstruments/ChangedEdition.swift check:library.generated library.corpus
 apps/apple/Sources/XDictInstruments/Conformance*    check:service.conformance
@@ -76,7 +78,7 @@ apps/apple/Sources/XDictEntryLab/*                  check:hostile.production hos
 apps/apple/Sources/XDict/AppCorpus.swift            check:entries.quick entries.full entries.persistence
 apps/apple/Sources/XDict/AppHostile.swift           check:hostile.app
 apps/apple/Sources/XDict/LookupWindow.swift         check:lookup
-apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated library.corpus
+apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated library.corpus library.health
 apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
 apps/apple/Sources/XDict/ServiceReport.swift        check:service
 apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
@@ -90,4 +92,4 @@ apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
 apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
-apps/apple/Sources/XDictUI/*                        lookup library.generated hostile.app entries.quick reader sound selection services panel menubar shortcut
+apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut

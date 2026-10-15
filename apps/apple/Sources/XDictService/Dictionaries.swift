@@ -107,6 +107,10 @@ final class Dictionaries: Sendable {
                 return (.answer(.lineage(LineageId(rawValue: split))), nil)
             case .lineageOf(let edition):
                 return (.answer(.lineage(try core.lineageOf(edition: edition.rawValue).map(LineageId.init(rawValue:)))), nil)
+            // WI-12: every record read once, then kept beside the index; `progress` reports and cancels it.
+            case .health(let dict):
+                let health = try core.health(dict: dict.rawValue, progress: progress)
+                return (.answer(.health(XDictContract.Health(health))), nil)
             // `cancel` is the connection's, never the core's (`ConnectionSession`).
             case .cancel:
                 return (.failure(.refused(.unsupportedOperation)), nil)

@@ -71,9 +71,10 @@ struct EnvelopeTests {
     /// And the other way: a reply from a service of another version is a mismatch to the client, whatever it says.
     @Test func aReplyOfAnotherVersionIsAMismatch() {
         let request = Fixtures.request(.versions, id: 5)
-        let future = Data(#"{"contract":3,"id":5,"outcome":{"brandNew":{}}}"#.utf8)
+        let next = Contract.version + 1
+        let future = Data(#"{"contract":\#(next),"id":5,"outcome":{"brandNew":{}}}"#.utf8)
         #expect(Response.read(future, payload: nil, answering: request)
-                == .failure(.contractMismatch(service: 3, client: Contract.version)))
+                == .failure(.contractMismatch(service: next, client: Contract.version)))
     }
 
     @Test func anEventOfAnotherVersionIsAMismatch() {

@@ -321,6 +321,214 @@
         }
       }
     },
+    "%llu cross-references point to words this dictionary does not have." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu cross-references point to words this dictionary does not have."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处互见指向本词典没有的词。"
+          }
+        }
+      }
+    },
+    "%llu entries are empty." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries are empty."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条是空的。"
+          }
+        }
+      }
+    },
+    "%llu entries are larger than 1 MB and may be slow to show." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries are larger than 1 MB and may be slow to show."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条大于 1 MB，显示时可能较慢。"
+          }
+        }
+      }
+    },
+    "%llu entries are stored twice under the same headword." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries are stored twice under the same headword."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条在同一词头下存了两遍。"
+          }
+        }
+      }
+    },
+    "%llu entries hold bytes that are not text in the dictionary’s encoding." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries hold bytes that are not text in the dictionary’s encoding."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条含有按词典的编码无法读成文字的字节。"
+          }
+        }
+      }
+    },
+    "%llu entries redirect to an entry that does not exist, or back to themselves." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries redirect to an entry that does not exist, or back to themselves."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条跳转到不存在的词条，或跳回自身。"
+          }
+        }
+      }
+    },
+    "%llu entries show style rules as text. This is in the dictionary file itself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu entries show style rules as text. This is in the dictionary file itself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词条把样式规则显示成了文字。问题出在词典文件本身。"
+          }
+        }
+      }
+    },
+    "%llu headwords hold extra spaces, invisible characters or HTML code." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu headwords hold extra spaces, invisible characters or HTML code."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个词头含有多余的空格、不可见字符或 HTML 代码。"
+          }
+        }
+      }
+    },
+    "%llu pictures are not among the dictionary’s files." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu pictures are not among the dictionary’s files."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 张图片不在词典的文件里。"
+          }
+        }
+      }
+    },
+    "%llu places show HTML code as text. This is in the dictionary file itself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu places show HTML code as text. This is in the dictionary file itself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处把 HTML 代码显示成了文字。问题出在词典文件本身。"
+          }
+        }
+      }
+    },
+    "%llu places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the dictionary file itself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the dictionary file itself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处把“-->”之类的注释符号显示成了文字，或把文字藏进了残缺的注释。问题出在词典文件本身。"
+          }
+        }
+      }
+    },
+    "%llu places show garbled characters: their text was encoded twice when the dictionary was made." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu places show garbled characters: their text was encoded twice when the dictionary was made."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处显示为乱码：制作词典时这些文字被编码了两次。"
+          }
+        }
+      }
+    },
+    "%llu pronunciations point to sound files that are not here. Add the dictionary’s .mdd file." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu pronunciations point to sound files that are not here. Add the dictionary’s .mdd file."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 个发音指向不在这里的声音文件。请加入词典的 .mdd 文件。"
+          }
+        }
+      }
+    },
     "%llu results" : {
       "localizations" : {
         "en" : {
@@ -637,6 +845,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请检查拼写，或试试这个词更短的形式。"
+          }
+        }
+      }
+    },
+    "Checked all %llu entries." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checked all %llu entries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已检查全部 %llu 个词条。"
+          }
+        }
+      }
+    },
+    "Checking entries… %lld%%" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Checking entries… %lld%%"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在检查词条…… %lld%%"
           }
         }
       }
@@ -1101,6 +1341,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前往"
+          }
+        }
+      }
+    },
+    "Health" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Health"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "健康状况"
+          }
+        }
+      }
+    },
+    "Healthy. Checked all %llu entries." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Healthy. Checked all %llu entries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "状况良好。已检查全部 %llu 个词条。"
           }
         }
       }
@@ -2481,6 +2753,22 @@
         }
       }
     },
+    "The check could not finish. It runs again when the dictionary next opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The check could not finish. It runs again when the dictionary next opens."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检查未能完成。下次打开这部词典时会重新检查。"
+          }
+        }
+      }
+    },
     "The dictionaries a typed word is looked up in" : {
       "localizations" : {
         "en" : {
@@ -3299,6 +3587,22 @@
         }
       }
     },
+    "XDict cleans up %llu stray control characters and line breaks when it shows these entries." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict cleans up %llu stray control characters and line breaks when it shows these entries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示这些词条时，XDict 会清理 %llu 个多余的控制字符和换行符。"
+          }
+        }
+      }
+    },
     "XDict could not tell this dictionary's languages from its file name. Which are they?" : {
       "localizations" : {
         "en" : {
@@ -3551,6 +3855,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”不是词典文件（.mdx 或 .mdd）。"
+          }
+        }
+      }
+    },
+    "“%@” is not in this dictionary’s folder, but its entries use it %llu times, so they may look unstyled or not work. Put the file next to the .mdx to fix this." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@” is not in this dictionary’s folder, but its entries use it %2$llu times, so they may look unstyled or not work. Put the file next to the .mdx to fix this."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@”不在这部词典的文件夹里，但词条用到它 %2$llu 次，因此可能缺少样式或无法正常工作。把这个文件放到 .mdx 旁边即可解决。"
           }
         }
       }

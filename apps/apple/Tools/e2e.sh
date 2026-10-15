@@ -303,6 +303,9 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
     [ "${#folders[@]}" -gt 0 ] || fail "no dictionary folder in $corpus"
     echo "${#folders[@]} dictionaries"
     to_host --delete "${folders[@]}" "$host:$REMOTE_DIR/corpus/" || fail "could not copy the corpus"
+    # What the core's own corpus test found for each of them (WI-12): counts and file names, no dictionary content.
+    to_host Tools/library/health-expected.json "$host:$REMOTE_DIR/health-expected.json" \
+        || fail "could not copy the health check's expectations"
 fi
 
 # ---------------------------------------------------------------------------------------------------------------------
@@ -1009,6 +1012,28 @@ substage_library_control() {
         flunk library.control.missingWithoutRelinking "library: with relinking off, relaunch.foundWhereMoved was ${found:-not reported}, so the check cannot see a dictionary lost"
     fi
     library_keep
+}
+
+# **The health check (WI-12)**: the 25 on a clone of their own, in a library of its own, imported and opened by the app,
+# then checked in the background by its service; what each tells the reader is what the core's corpus test found
+# (`Tools/library/health-expected.json`), and a second library over the same files is answered from the kept reports.
+substage_library_health() {
+    if [ ! -d "$home/corpus" ] || [ ! -s "$home/health-expected.json" ]; then
+        flunk - "$STAGE: the 25 not measured — no corpus on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac)"
+        return 0
+    fi
+    rm -rf "$reports/corpus-h" "$reports/library-health"
+    cp -cR "$home/corpus" "$reports/corpus-h" || { flunk - "$STAGE: the corpus could not be cloned"; return 0; }
+    if report --library-corpus 3000 health "$reports/corpus-h" --library-dir "$reports/library-health" \
+        --expected "$home/health-expected.json" >/dev/null; then
+        cp "$reports/library-corpus.json" "$reports/library-corpus-health.json"
+        findings "$reports/library-corpus-health.json"
+        echo "      facts: $(plutil -extract facts json -o - "$reports/library-corpus-health.json" 2>/dev/null | head -c 300)"
+    else
+        flunk - "$STAGE: the health launch wrote nothing ($(head -c 300 "$reports/library-corpus.err" 2>/dev/null))"
+    fi
+    library_keep
+    rm -rf "$reports/corpus-h"
 }
 
 # ---------------------------------------------------------------------------------------------------------------------

@@ -141,6 +141,21 @@ struct ServiceClientRecoveryTests {
         #expect(cancelled, "the silent import was not cancelled")
     }
 
+    /// A health check (WI-12) is bounded as an import is: silent past `importSilence`, it answers `timedOut` and is
+    /// cancelled in the service; a deadline would end OED's, which reads 706,524 records.
+    @Test func aSilentHealthCheckIsCancelled() async throws {
+        let service = FakeTransport { request, _ in
+            if case .cancel = request.operation { return .reply(.cancellation(.stopping), to: request) }
+            return .silent
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options())
+        let dict = DictId(rawValue: "0000000100000001")
+        let ticket = await client.submitHealth(dict, progress: nil)
+        #expect(await ticket.outcome() == .failure(.wire(.timedOut(deadline: .milliseconds(60)))))
+        let cancelled = await Self.waitUntil { service.sent.contains { $0.request.operation == .cancel(request: 1) } }
+        #expect(cancelled, "the silent health check was not cancelled")
+    }
+
     /// A payload over its ceiling is refused before anything sees it (`Response.read`, Codex objection 9).
     @Test func aPayloadOverItsCeilingIsRefused() async {
         let service = FakeTransport { request, _ in

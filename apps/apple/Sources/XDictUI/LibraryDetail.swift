@@ -27,6 +27,7 @@ struct LibraryDetail: View {
             }
             languages
             about
+            health
             if !entry.notes.isEmpty {
                 Section("Problems") {
                     ForEach(Array(entry.notes.enumerated()), id: \.offset) { _, note in
@@ -46,6 +47,34 @@ struct LibraryDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// What the health check found (WI-12): where it is, then one sentence per finding, each opening to its places.
+    @ViewBuilder private var health: some View {
+        if let state = library.health[entry.id] {
+            Section("Health") {
+                Text(LibrarySentences.healthStatus(state)).textSelection(.enabled)
+                if case .checked(let report) = state {
+                    ForEach(Array(report.findings.enumerated()), id: \.offset) { _, finding in
+                        if finding.examples.isEmpty {
+                            Text(LibrarySentences.health(finding)).textSelection(.enabled)
+                        } else {
+                            DisclosureGroup {
+                                ForEach(Array(finding.examples.enumerated()), id: \.offset) { _, example in
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(verbatim: example.key).font(.callout.bold())
+                                        Text(verbatim: example.text).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                    }
+                                    .textSelection(.enabled)
+                                }
+                            } label: {
+                                Text(LibrarySentences.health(finding))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func joinQuestion(_ offer: JoinOffer) -> some View {

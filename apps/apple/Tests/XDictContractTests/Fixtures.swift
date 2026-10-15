@@ -57,9 +57,10 @@ enum Fixtures {
         .joinLineage(edition: edition, lineage: lineage),
         .splitLineage(edition: edition, newLineage: newLineage),
         .lineageOf(edition: edition),
+        .health(dict: dict),
     ]
 
-    static let operationCases = 13
+    static let operationCases = 14
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -75,6 +76,7 @@ enum Fixtures {
         case .joinLineage: 10
         case .splitLineage: 11
         case .lineageOf: 12
+        case .health: 13
         }
     }
 
@@ -121,9 +123,16 @@ enum Fixtures {
         .resource(.missing(path: "images/none.png")),
         .lineage(lineage),
         .lineage(nil),
+        .health(health),
     ]
 
-    static let answerCases = 11
+    static let health = Health(version: 1, entries: 706_524, findings: [
+        HealthFinding(kind: .missingFile, count: 609_710, name: "oed.css",
+                      examples: [HealthExample(key: "abandon", text: "<link href=\"OED.css\">")]),
+        HealthFinding(kind: .repaired, count: 764, name: nil, examples: []),
+    ], classes: [HealthClass(name: "text.repaired", count: 764)])
+
+    static let answerCases = 12
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -137,6 +146,7 @@ enum Fixtures {
         case .link: 8
         case .resource: 9
         case .lineage: 10
+        case .health: 11
         }
     }
 

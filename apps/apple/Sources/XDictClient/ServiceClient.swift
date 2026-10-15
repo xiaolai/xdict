@@ -204,8 +204,16 @@ public actor ServiceClient {
         }
     }
 
-    /// Stops the import `ticket` names: one not yet sent never is; one running stops at its next progress report and
-    /// answers `cancelled`.
+    /// Checks an open dictionary's edition (WI-12); `progress` hears records checked of all. Like an import it has no
+    /// deadline, ends after `importSilence` without a report, and stops by `cancelImport`.
+    public func submitHealth(_ dict: DictId, progress: (@Sendable (UInt64, UInt64) -> Void)? = nil) -> CallTicket {
+        let call = makeCall(.health(dict: dict), caller: nil, package: nil, progress: progress)
+        enqueue(call)
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
+    /// Stops the import or health check `ticket` names: one not yet sent never is; one running stops at its next
+    /// progress report and answers `cancelled`.
     public func cancelImport(_ ticket: CallTicket) async -> Result<Cancellation, ClientFailure> {
         if let index = queue.firstIndex(where: { $0.number == ticket.number }) {
             let call = queue.remove(at: index)
@@ -358,7 +366,7 @@ public actor ServiceClient {
         link.connection.send(envelope, files: files) { [weak self] exchange in
             Task { await self?.received(exchange, request: id, link: number) }
         }
-        if case .importPackage = operation {
+        if operation.reportsProgress {
             armSilence(entry, id: id, link: number)
         } else if let deadline = options.deadline(operation, !link.answered) {
             entry.deadline = deadline
@@ -484,7 +492,7 @@ public actor ServiceClient {
         // The call stays in flight on the link: its credit is counted until its reply or the connection's end.
         finish(entry.call, .failure(.wire(.timedOut(deadline: deadline))))
         watch?(.timedOut(call: entry.call.number, request: id, link: number))
-        if case .importPackage = entry.request.operation {
+        if entry.request.operation.reportsProgress {
             send(makeCall(.cancel(request: id), caller: nil, package: nil, progress: nil), on: link)
         } else if Deadlines.abandonsConnectionOnExpiry(entry.request.operation) {
             abandon(link)

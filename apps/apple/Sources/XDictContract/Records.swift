@@ -250,3 +250,70 @@ public enum Resource: Codable, Hashable, Sendable {
     case found(path: String, mime: String)
     case missing(path: String)
 }
+
+// MARK: - Health (plan-macos-v1 WI-12; contract 3)
+
+/// What the core's health check found in an edition: what the reader is told, and every class it counts.
+public struct Health: Codable, Hashable, Sendable {
+    /// The checker's version.
+    public let version: UInt32
+    /// Entries checked: every record of the edition.
+    public let entries: UInt64
+    /// Most actionable first; empty when there is nothing to say.
+    public let findings: [HealthFinding]
+    /// Every class counted, by its census name: kept for the record, never shown.
+    public let classes: [HealthClass]
+
+    public init(version: UInt32, entries: UInt64, findings: [HealthFinding], classes: [HealthClass]) {
+        self.version = version
+        self.entries = entries
+        self.findings = findings
+        self.classes = classes
+    }
+}
+
+/// One thing the reader is told about an edition.
+public struct HealthFinding: Codable, Hashable, Sendable {
+    public let kind: FindingKind
+    /// References, entries or characters, as the kind says.
+    public let count: UInt64
+    /// The file a `missingFile` names.
+    public let name: String?
+    /// Up to three places, as the dictionary has them.
+    public let examples: [HealthExample]
+
+    public init(kind: FindingKind, count: UInt64, name: String?, examples: [HealthExample]) {
+        self.kind = kind
+        self.count = count
+        self.name = name
+        self.examples = examples
+    }
+}
+
+/// One place a finding was met: its entry's key and up to 120 characters around it.
+public struct HealthExample: Codable, Hashable, Sendable {
+    public let key: String
+    public let text: String
+
+    public init(key: String, text: String) {
+        self.key = key
+        self.text = text
+    }
+}
+
+/// One class the check counts, by its census name.
+public struct HealthClass: Codable, Hashable, Sendable {
+    public let name: String
+    public let count: UInt64
+
+    public init(name: String, count: UInt64) {
+        self.name = name
+        self.count = count
+    }
+}
+
+/// What a finding is about (`xdict-core`'s `FindingKind`).
+public enum FindingKind: String, Codable, Hashable, Sendable, CaseIterable {
+    case missingFile, missingSounds, missingImages, missingWords, codeAsText, commentMarks, styleAsText, brokenRedirects
+    case doubleEncoded, undecodable, emptyEntries, hugeEntries, repeatedEntries, oddHeadwords, repaired
+}

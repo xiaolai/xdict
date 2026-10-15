@@ -26,6 +26,16 @@ public enum EntryPhase: Hashable, Sendable {
     case outsideItsFolder(fileName: String)
 }
 
+/// Where one dictionary's health check is (WI-12), this session: the core keeps the report per edition, so a relaunch
+/// asks again and is answered at once.
+public enum HealthState: Hashable, Sendable {
+    /// Records checked of all.
+    case checking(done: UInt64, total: UInt64)
+    case checked(Health)
+    /// The check could not finish (the service failed, or the file changed); asked again at the next open.
+    case unavailable
+}
+
 /// Something the reader should be told once, not kept with any dictionary.
 public enum LibraryNotice: Hashable, Sendable {
     case finder(FinderProblem)
@@ -72,6 +82,8 @@ public final class Library {
     public private(set) var entries: [LibraryEntry] = []
     public private(set) var phases: [UUID: EntryPhase] = [:]
     public private(set) var notices: [LibraryNotice] = []
+    /// Each open dictionary's health check (WI-12), run one at a time after it opens, below the reader's own calls.
+    public private(set) var health: [UUID: HealthState] = [:]
     /// Why the stored library could not be read: until it can, nothing is added and nothing is saved.
     public private(set) var unreadable: LibraryStoreError?
 
@@ -88,6 +100,9 @@ public final class Library {
     @ObservationIgnored private var running: Running?
     @ObservationIgnored private var busy = 0
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
+    /// Dictionaries waiting for their health check, and the one being checked.
+    @ObservationIgnored private var checks: [UUID] = []
+    @ObservationIgnored private var checking: (id: UUID, dict: DictId, job: HealthJob?)?
 
     /// The import under way: its entry, and the service's job once it has one.
     private final class Running {
@@ -392,6 +407,7 @@ public final class Library {
                 log.error("an open answered edition \(edition.rawValue, privacy: .public), not the one imported")
             }
             set(id, .ready)
+            check(id)
         case .success(.needsImport(let reason)):
             log.info("dictionary \(id, privacy: .public) needs an import: \(reason.rawValue, privacy: .public)")
             if let old = handles.removeValue(forKey: id) { _ = await backend.close(old) }
@@ -429,6 +445,7 @@ public final class Library {
     public func remove(_ id: UUID) async {
         guard index(id) != nil else { return }
         await cancelImport(id)
+        await stopCheck(id)
         queue.removeAll { $0 == id }
         if let dict = handles[id] { _ = await backend.close(dict) }
         forget(id)
@@ -439,6 +456,64 @@ public final class Library {
         entries.removeAll { $0.id == id }
         handles[id] = nil
         phases[id] = nil
+        health[id] = nil
+    }
+
+    // MARK: - Health (WI-12)
+
+    /// Queues a check of the dictionary `id`, open now; one already checked this session is not asked again.
+    private func check(_ id: UUID) {
+        if case .checked = health[id] { return }
+        guard !checks.contains(id), checking?.id != id else { return }
+        checks.append(id)
+        health[id] = .checking(done: 0, total: 0)
+        runChecks()
+    }
+
+    private func runChecks() {
+        guard checking == nil else { return }
+        while let id = checks.first {
+            checks.removeFirst()
+            guard let dict = handle(id) else {
+                health[id] = nil
+                continue
+            }
+            checking = (id, dict, nil)
+            Task { await runCheck(id, dict) }
+            return
+        }
+    }
+
+    private func runCheck(_ id: UUID, _ dict: DictId) async {
+        let job = await backend.beginHealth(dict) { [weak self] done, total in
+            Task { @MainActor in
+                guard let self, self.checking?.id == id, case .checking = self.health[id] else { return }
+                self.health[id] = .checking(done: done, total: total)
+            }
+        }
+        guard checking?.id == id else { return await job.cancel() }
+        checking?.job = job
+        let outcome = await job.outcome()
+        if checking?.id == id, index(id) != nil {
+            switch outcome {
+            case .success(let report): health[id] = .checked(report)
+            case .failure(let failure):
+                log.error("the health check of \(id, privacy: .public) did not finish: \(String(describing: failure), privacy: .public)")
+                health[id] = .unavailable
+            }
+        }
+        if checking?.id == id { checking = nil }
+        runChecks()
+    }
+
+    /// Stops the dictionary's check, queued or running, and forgets it.
+    private func stopCheck(_ id: UUID) async {
+        checks.removeAll { $0 == id }
+        health[id] = nil
+        guard let running = checking, running.id == id else { return }
+        checking = nil
+        await running.job?.cancel()
+        runChecks()
     }
 
     /// Moves dictionaries as a list's drag does: `offsets` taken out, put back before `toOffset`.

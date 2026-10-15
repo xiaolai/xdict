@@ -60,7 +60,7 @@ public enum Limits {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage: return nil
+             .lineage, .health: return nil
         }
     }
 
@@ -142,12 +142,12 @@ public enum Deadlines {
     /// WI-2's handshake deadline, kept until WI-3 measures it.
     public static let coldStart: Duration = .seconds(10)
 
-    /// **60 s without a progress event ends an import** (it has no deadline of its own: a 745 MB file is legitimately
-    /// slow). The core reports per 4 MiB chunk while it hashes; its silent stretches are index builds, and TLD's whole
+    /// **60 s without a progress event ends an import or a health check** (neither has a deadline of its own: a 745 MB
+    /// file is legitimately slow; a check reports every 4,096 records, OED's 706,524 in under a few seconds each). The core reports per 4 MiB chunk while it hashes; its silent stretches are index builds, and TLD's whole
     /// import (4.4 M keys) took 1.06 s (`measurements/2026-10-13-index-baseline`).
     public static let importSilence: Duration = .seconds(60)
 
-    /// `operation`'s deadline, raised to `coldStart` on a fresh connection; nil for an import.
+    /// `operation`'s deadline, raised to `coldStart` on a fresh connection; nil for an import or a health check.
     public static func deadline(for operation: ServiceOperation, onFreshConnection: Bool) -> Duration? {
         guard let warm = warm(operation) else { return nil }
         return onFreshConnection ? max(warm, coldStart) : warm
@@ -175,7 +175,8 @@ public enum Deadlines {
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.
         case .resource: .seconds(15)
-        case .importPackage: nil
+        // Bounded by silence between progress events, not by a deadline (`importSilence`).
+        case .importPackage, .health: nil
         }
     }
 }

@@ -29,6 +29,18 @@ public struct ImportJob: Sendable {
     }
 }
 
+/// A health check under way (WI-12): its outcome, awaited, and how to stop it.
+public struct HealthJob: Sendable {
+    public let outcome: @Sendable () async -> Result<Health, ClientFailure>
+    public let cancel: @Sendable () async -> Void
+
+    public init(outcome: @escaping @Sendable () async -> Result<Health, ClientFailure>,
+                cancel: @escaping @Sendable () async -> Void) {
+        self.outcome = outcome
+        self.cancel = cancel
+    }
+}
+
 /// **What the library asks of the dictionary service**: `ServiceClient` in the app, a fake in the library's own tests.
 public protocol LibraryBackend: Sendable {
     func beginImport(_ package: DictionaryPackage, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async
@@ -37,6 +49,8 @@ public protocol LibraryBackend: Sendable {
     func close(_ dict: DictId) async -> ClientOutcome
     /// A join, a split, or the lineage an edition has; for a join or a split, the lineage the edition now has.
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure>
+    /// Checks an open dictionary's edition (WI-12); `progress` hears records checked of all.
+    func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> HealthJob
 }
 
 extension ServiceClient: LibraryBackend {
@@ -49,6 +63,18 @@ extension ServiceClient: LibraryBackend {
                     return .failure(.wire(.undecodable(detail: "not imported")))
                 }
                 return .success(imported)
+            }
+        }, cancel: { [self] in _ = await cancelImport(ticket) })
+    }
+
+    public func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) -> HealthJob {
+        let ticket = submitHealth(dict, progress: progress)
+        return HealthJob(outcome: {
+            await ticket.outcome().flatMap { delivered in
+                guard case .health(let health) = delivered.answer else {
+                    return .failure(.wire(.undecodable(detail: "not a health report")))
+                }
+                return .success(health)
             }
         }, cancel: { [self] in _ = await cancelImport(ticket) })
     }

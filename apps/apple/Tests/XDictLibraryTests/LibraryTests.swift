@@ -44,6 +44,38 @@ struct LibraryTests {
         #expect(reloaded.entries == library.entries)
     }
 
+    /// WI-12: a dictionary that opens is checked in the background, and what the check found is kept for the reader.
+    @Test func aDictionaryThatOpensIsCheckedAndItsFindingsKept() async throws {
+        try dir.files("a.mdx")
+        let found = Health(version: 1, entries: 9, findings: [HealthFinding(kind: .missingSounds, count: 3, name: nil,
+                                                                            examples: [])], classes: [])
+        await backend.setHealthAnswer(found)
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        for _ in 0..<500 where library.health[id] != .checked(found) { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(library.health[id] == .checked(found))
+        #expect(await backend.checked == [dict])
+    }
+
+    /// A dictionary removed while its check runs has its check cancelled, and nothing is kept for it.
+    @Test func removingADictionaryCancelsItsCheck() async throws {
+        try dir.files("a.mdx")
+        await backend.holdChecks()
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        for _ in 0..<500 where await backend.heldCheckCount == 0 { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(library.health[id].map { if case .checking = $0 { true } else { false } } == true)
+        await library.remove(id)
+        #expect(await backend.checksCancelled == [dict])
+        #expect(library.health[id] == nil)
+    }
+
     @Test func cancelThenRetryCompletes() async throws {
         try dir.files("a.mdx")
         let library = library()
