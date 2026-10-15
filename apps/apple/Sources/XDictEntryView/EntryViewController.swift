@@ -14,6 +14,9 @@ public struct EntryEnvironment {
     public var events: @MainActor (EntryEvent) -> Void
     /// A new window's web view, asked for only when `confinement.refusesNewWindows` is off (the lab's control).
     public var newWindow: (@MainActor (WKWebViewConfiguration, WKNavigationAction) -> WKWebView?)?
+    /// The reading frame's layers (`EntryReadingFrame`): all of them in XDict; the lab's gallery turns them off to show
+    /// the dictionary as it styles itself.
+    public var readingFrame: EntryReadingFrame = .all
 
     public init(preferences: EntryPreferences = EntryPreferences(), opener: any EntryURLOpener = WorkspaceOpener(),
                 confinement: EntryConfinement = .production,
@@ -55,9 +58,13 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private var pane: EntryPane?
     private var ruleList: Result<WKContentRuleList, EntryRefusal>?
     private let gate = RemoteOpenGate()
-    private let container = NSView()
+    let container = NSView()
     private let message = NSTextField(wrappingLabelWithString: "")
     private let findBar = EntryFindBar()
+    /// The entry's top: the pane's while the find bar is hidden, the bar's bottom while it is shown. A hidden view keeps
+    /// its height in Auto Layout, so the bar must leave the chain, not merely hide (a 36 pt band otherwise).
+    private var entryBelowPane: NSLayoutConstraint?
+    private var entryBelowFind: NSLayoutConstraint?
 
     /// Why nothing is rendered, while that is so.
     public private(set) var refusal: EntryRefusal?
@@ -91,11 +98,14 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             view.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(view)
         }
+        let belowPane = container.topAnchor.constraint(equalTo: root.topAnchor)
+        entryBelowPane = belowPane
+        entryBelowFind = container.topAnchor.constraint(equalTo: findBar.bottomAnchor)
         NSLayoutConstraint.activate([
+            belowPane,
             findBar.topAnchor.constraint(equalTo: root.topAnchor),
             findBar.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             findBar.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            container.topAnchor.constraint(equalTo: findBar.bottomAnchor),
             container.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             container.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -128,6 +138,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         if pane == nil {
             let scheme = currentScheme(for: content.binding.dictionary)
             switch EntryPane.open(content: content, confinement: environment.confinement, scheme: scheme,
+                                  frame: currentFrame(for: content.binding.dictionary),
                                   ruleList: ruleList, switches: environment.switches, host: self) {
             case .failure(let why):
                 refuse(why)
@@ -210,6 +221,22 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         applyPreferences()
     }
 
+    /// Whether this dictionary is shown in its own style, without the reading frame (ADR-0010 Q3).
+    public var originalStyle: Bool {
+        guard let binding = pane?.binding else { return false }
+        return environment.preferences.originalStyle(for: binding.dictionary)
+    }
+
+    public func setOriginalStyle(_ original: Bool) {
+        guard let pane else { return }
+        environment.preferences.setOriginalStyle(original, for: pane.binding.dictionary)
+        applyPreferences()
+    }
+
+    private func currentFrame(for dictionary: String) -> EntryReadingFrame {
+        environment.readingFrame.applied(originalStyle: environment.preferences.originalStyle(for: dictionary))
+    }
+
     private func currentScheme(for dictionary: String) -> EntryColourScheme {
         let dark = view.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
         return environment.preferences.theme(for: dictionary).scheme(appIsDark: dark)
@@ -218,18 +245,27 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private func applyPreferences() {
         guard let pane else { return }
         pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
+        pane.setFrame(currentFrame(for: pane.binding.dictionary))
         pane.setScheme(currentScheme(for: pane.binding.dictionary))
     }
 
     // MARK: - Find (R3)
 
+    private func setFindShown(_ shown: Bool) {
+        findBar.isHidden = !shown
+        // The one that goes is deactivated first, so the two never hold at once.
+        let (on, off) = shown ? (entryBelowFind, entryBelowPane) : (entryBelowPane, entryBelowFind)
+        off?.isActive = false
+        on?.isActive = true
+    }
+
     public func showFind() {
-        findBar.isHidden = false
+        setFindShown(true)
         view.window?.makeFirstResponder(findBar.field)
     }
 
     public func hideFind() {
-        findBar.isHidden = true
+        setFindShown(false)
         Task { await pane?.clearFind() }
         if let webView = pane?.view { view.window?.makeFirstResponder(webView) }
     }

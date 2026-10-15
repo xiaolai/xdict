@@ -283,12 +283,17 @@ final class SoundRun {
         var playback: Playback?
         var utterance: Utterance?
         var finished = false
+        /// The click's path, for a click nothing answered: whether the page's own handler cancelled it, and what the
+        /// entry view did with it (its navigation and routing events since the click), so an unanswered click says
+        /// whether it reached the router at all.
+        var trace: [String] = []
 
         var describe: String {
             let notice = notice.map { "\($0)" } ?? "no notice"
             let playback = playback.map { "played \(String(format: "%.2f", $0.duration)) s \($0.format) playing \($0.isPlaying)" }
             let said = utterance.map { "said “\($0.text)” by \($0.voiceName) \($0.language) [\($0.voiceIdentifier)]" }
-            return ([notice] + [playback, said].compactMap { $0 } + ["to the end \(finished)"]).joined(separator: ", ")
+            let path = trace.isEmpty ? nil : "path: " + trace.joined(separator: " | ")
+            return ([notice] + [playback, said, path].compactMap { $0 } + ["to the end \(finished)"]).joined(separator: ", ")
         }
 
         /// The click's verdict, as the checks count it.
@@ -323,12 +328,23 @@ final class SoundRun {
     }
 
     private func clickExisting(href: String, in window: InstrumentWindow) async -> Heard {
-        await awaitSound {
-            _ = await InstrumentPage.evaluate(window.state.entry.webView, """
+        var dom = "not clicked"
+        let since = window.log.events.count
+        var heard = await awaitSound {
+            // A cancelable click, as `click()` makes one, dispatched so that whether the page cancelled it is known.
+            let answer = await InstrumentPage.evaluate(window.state.entry.webView, """
                 var a = Array.from(document.querySelectorAll('a')).find(function (e) { return e.getAttribute('href') === href; });
-                if (a) a.click(); return !!a;
+                if (!a) return 'no such link';
+                var e = new MouseEvent('click', {bubbles: true, cancelable: true, view: window});
+                var went = a.dispatchEvent(e);
+                return 'clicked, ' + (went ? 'not cancelled' : 'cancelled by the page');
                 """, ["href": href])
+            dom = answer as? String ?? "no answer from the page"
         }
+        if heard.notice == nil {
+            heard.trace = ["dom: \(dom)"] + window.log.events.dropFirst(since).map { "\($0.event)".prefix(200).description }
+        }
+        return heard
     }
 
     /// The entry's own recording links, as written in its page.

@@ -12,6 +12,21 @@ struct HostileCase: Decodable {
     let tcp: Int
     let udp: Int
     let names: [String]
+    /// Lab-world JavaScript that returns `[[key, value]]` (`Tools/hostile/battery.py`); empty for most cases.
+    let probe: String
+    /// `<script` tags in the case's record as written, so the run can say whether the core removed any (stripped).
+    let scripts: Int
+
+    /// What the lab reads of the page, from a content world of its own, every 100 ms: the page's own reports
+    /// (`data-lab`, the battery's `R()`, which only a page whose scripts run can write), that the document loaded,
+    /// and the case's `probe`, which judges what must work (an image drawn, a sheet applied) without any page
+    /// script, so it holds when the core's strip has removed them.
+    var readScript: String {
+        "var d=document.documentElement;if(!d)return null;var a;try{a=JSON.parse(d.getAttribute('data-lab')||'[]')}"
+            + "catch(e){a=[['data-lab-unreadable',String(e)]]}if(document.readyState!=='loading')"
+            + "a.push(['loaded',document.readyState]);try{var r=(function(){\(probe);return []})()||[];a=a.concat(r)}"
+            + "catch(e){a.push(['probe-throw',String(e)])}return JSON.stringify(a)"
+    }
 
     /// Whether `html` still holds one of this case's own targets: the core's rewriter did not see it, so the view's
     /// layers are what stand between it and the network.
@@ -44,6 +59,8 @@ final class HostileRun {
     private let opener = RecordingOpener()
     private var records: [String: [String: Any]] = [:]
     private var pages: [String: [[String]]] = [:]
+    /// Each case's `readScript`, by id.
+    private var readScripts: [String: String] = [:]
     private var controllers: [String: EntryViewController] = [:]
     private var windows: [String: [NSWindow]] = [:]
     private var switches: [String: Bool]?
@@ -85,12 +102,17 @@ final class HostileRun {
         let controller = EntryViewController(environment: environment(for: test.id))
         controllers[test.id] = controller
         records[test.id] = ["start": Date().timeIntervalSince1970, "events": [[String: Any]]()]
+        readScripts[test.id] = test.readScript
         let frame = NSRect(x: 40 + (slot % 4) * 330, y: 140, width: 320, height: 260)
         windows[test.id] = [labWindow(test.id, frame: frame, view: controller.view)]
         Task { @MainActor in
             let rendered = try? await content.entry(EntryReference(key: test.id))
             records[test.id]?["entryHoldsLiveTarget"] = rendered.map { test.isLive(in: String(decoding: $0.html, as: UTF8.self)) }
                 ?? NSNull()
+            records[test.id]?["scriptsServed"] = rendered.map {
+                String(decoding: $0.html, as: UTF8.self).lowercased().components(separatedBy: "<script").count - 1
+            } ?? NSNull()
+            records[test.id]?["scriptsWritten"] = test.scripts
             if test.id.hasSuffix("~resource"), case .found(_, let bytes)? = try? await content.resource("\(test.id)/doc.html") {
                 records[test.id]?["resourceHoldsLiveTarget"] = test.isLive(in: String(decoding: bytes, as: UTF8.self))
             }
@@ -120,7 +142,7 @@ final class HostileRun {
     }
 
     private func read(_ id: String, from webView: WKWebView) async {
-        let script = "return document.documentElement ? document.documentElement.getAttribute('data-lab') : null"
+        guard let script = readScripts[id] else { return }
         guard let value = try? await webView.callAsyncJavaScript(script, arguments: [:], in: nil,
                                                                   contentWorld: Self.labWorld) as? String,
               let data = value.data(using: .utf8),

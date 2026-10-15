@@ -35,8 +35,10 @@ def hostile(d):
     rule(not s["stray"], f"app: no observer event outside the battery's ports ({len(s['stray'])})")
     rule(s["opened"] == [], f"app: nothing was opened in a browser ({s['opened']})")
     left = {cid: v["leaks"] for cid, v in s["cases"].items() if v["left"]}
+    o = s.get("outcomes", {})
     rule(not left, f"app: nothing left, on any observer, from any of {len(s['cases'])} cases "
-                   f"({left if left else 'zero http, tcp, udp, dns, mdns'})")
+                   f"({left if left else 'zero http, tcp, udp, dns, mdns'}; stripped {o.get('stripped')}, "
+                   f"commented {o.get('commented')}, blocked {o.get('blocked')})")
     rule(not s["webkitOtherLookups"], f"app: no other lookup by the app's WebKit ({s['webkitOtherLookups'][:3]})")
     rule((s["confinement"] or {}).get("production") is True and not s["disabled"],
          "app: the confinement is the production one, nothing off")

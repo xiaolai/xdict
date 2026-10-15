@@ -734,8 +734,7 @@ hostile_runs() {
 hostile_suite() {
     local part=$1 labels
     hostile_prepare
-    labels=$(python3 -I "$kit/analyze.py" runs "$kit/cases.json" | tr ' ' '\n' | grep . \
-        | if [ "$part" = production ]; then grep -x production; else grep -vx production; fi || true)
+    labels=$(python3 -I "$kit/analyze.py" runs "$kit/cases.json" "$part" | tr ' ' '\n' | grep . || true)
     [ -n "$labels" ] || { flunk - "hostile: cases.json lists no $part run"; return 0; }
     # shellcheck disable=SC2086 # labels, split on purpose
     hostile_runs $labels

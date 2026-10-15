@@ -5,6 +5,10 @@ import Foundation
 /// readability rule (R4), and a reader's click on a blocked image's placeholder. Each pure part is its own object with
 /// no DOM, so `swift test` runs it in JavaScriptCore without a web view.
 enum EntryScripts {
+    /// The reading inset every entry gets, whatever its CSS: many MDict stylesheets say `body{margin:0}`, as GoldenDict
+    /// pads its articles itself. On the root and `!important`, so neither a body margin nor a plain `html{padding:0}`
+    /// removes it; the dictionary's full-width rows end at it like a page margin, and the scroller stays at the edge.
+    static let readingInset = "html{padding:8px 14px !important;box-sizing:border-box}"
     /// Find's matching, with no DOM: whitespace in the query matches any run of whitespace, letters match whatever
     /// their case (Unicode simple folding), everything else as written.
     static let findCore = #"""
@@ -155,11 +159,11 @@ enum EntryScripts {
         })();
         """#
 
-    /// The readability rule, with no DOM: WCAG's contrast ratio, and what replaces a colour that falls below it.
+    /// Contrast arithmetic, with no DOM: WCAG's contrast ratio, for the gallery's measurement (`frameDOM`'s `measure`).
+    /// It corrects nothing: the palette's tokens read on every surface by construction (`colour.rs`).
     static let readabilityCore = #"""
         var XDictReadability = (function () {
           'use strict';
-          var MINIMUM = 3;
           function parse(css) {
             var m = /^rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:\s*[,\/]\s*([\d.]+)(%?))?\s*\)$/.exec(String(css).trim());
             if (!m) return null;
@@ -172,26 +176,23 @@ enum EntryScripts {
             var x = luminance(a), y = luminance(b);
             return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
           }
-          function readable(fg, bg) { return contrast(fg, bg) >= MINIMUM; }
-          function replacement(bg) {
-            return contrast([255, 255, 255], bg) >= contrast([0, 0, 0], bg) ? 'rgb(255, 255, 255)' : 'rgb(0, 0, 0)';
-          }
-          return { minimum: MINIMUM, parse: parse, contrast: contrast, readable: readable, replacement: replacement };
+          return { parse: parse, contrast: contrast };
         })();
         """#
 
-    /// The page drawn light or dark (`EntryColourScheme`); dark keeps each of the dictionary's colours unless it reads
-    /// below 3:1 against what it is drawn on. Run at document start with the scheme baked in, so nothing flashes, then
-    /// once the document is parsed and again for whatever a folding script adds.
-    static func appearance(_ scheme: EntryColourScheme) -> String {
-        """
+    /// The page drawn light or dark (`EntryColourScheme`), at document start with the scheme baked in so nothing
+    /// flashes; then the frame, and the guard over the colours the page's own scripts write (`colourGuard`). No colour
+    /// is corrected here: the core and the palette own colour (ADR-0010).
+    static func appearance(_ scheme: EntryColourScheme, frame: EntryReadingFrame = .all,
+                           labels: EntryReadingFrame.SpeakerLabels = .localized) -> String {
+        frameCore + "\n" + frameDOM(frame, scheme: scheme, labels: labels) + "\n" + colourCore + "\n" + colourGuard + "\n"
+            + """
         (function () {
           'use strict';
           var mode = '\(scheme.rawValue)';
-          var DARK = [30, 30, 30, 1], LIGHT = [255, 255, 255, 1];
-          var css = mode === 'dark'
+          var css = (mode === 'dark'
             ? 'html{color-scheme:dark;background-color:rgb(30,30,30);color:rgb(230,230,230)}'
-            : 'html{color-scheme:light;background-color:rgb(255,255,255)}';
+            : 'html{color-scheme:light;background-color:rgb(255,255,255)}') + '\(readingInset)';
           function install() {
             var s = document.getElementById('xdict-appearance-style');
             if (!s) {
@@ -201,51 +202,10 @@ enum EntryScripts {
             }
             s.textContent = css;
           }
-          function background(el) {
-            for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
-              var cs = getComputedStyle(e);
-              if (cs.backgroundImage && cs.backgroundImage !== 'none') return null;
-              var c = XDictReadability.parse(cs.backgroundColor);
-              if (c === null) return null;
-              if (c[3] >= 0.5) return c;
-            }
-            return mode === 'dark' ? DARK : LIGHT;
-          }
-          var recoloured = 0;
-          function check(root) {
-            if (mode !== 'dark' || !root || root.nodeType !== 1) return;
-            var walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);
-            for (var el = root; el; el = walker.nextNode()) {
-              var text = false;
-              for (var c = el.firstChild; c; c = c.nextSibling) {
-                if (c.nodeType === 3 && /\\S/.test(c.nodeValue)) { text = true; break; }
-              }
-              if (!text) continue;
-              var fg = XDictReadability.parse(getComputedStyle(el).color), bg = background(el);
-              if (!fg || !bg || XDictReadability.readable(fg, bg)) continue;
-              el.style.setProperty('color', XDictReadability.replacement(bg), 'important');
-              el.setAttribute('data-xdict-recoloured', '');
-              recoloured += 1;
-            }
-          }
           install();
-          var pending = [];
-          function later() {
-            var roots = pending; pending = [];
-            roots.forEach(function (r) { if (r.isConnected) check(r); });
-          }
-          function start() {
-            install();
-            check(document.body);
-            if (mode !== 'dark') return;
-            new MutationObserver(function (records) {
-              records.forEach(function (r) { r.addedNodes.forEach(function (n) { if (n.nodeType === 1) pending.push(n); }); });
-              if (pending.length) setTimeout(later, 50);
-            }).observe(document.documentElement, { childList: true, subtree: true });
-          }
-          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-          else start();
-          window.__xdictAppearance = { mode: mode, recoloured: function () { return recoloured; } };
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, { once: true });
+          else install();
+          window.__xdictAppearance = { mode: mode };
         })();
         """
     }
@@ -273,6 +233,26 @@ enum EntryScripts {
     static let scrollOffset = "return window.scrollY;"
 
     static let handlerName = "xdictEntry"
+
+    /// The shell's scripts, in the order they are installed at document start, before any of the page's.
+    static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame) -> [String] {
+        [findCore, findDOM, readabilityCore, appearance(scheme, frame: frame), placeholderClicks, speakerClicks]
+    }
+
+    /// **A click on XDict's speaker is XDict's** (the core marks it `data-xdict-control="speaker"`): on the window, in
+    /// the capture phase, installed before any page script, so it runs first. It stops the click going further into
+    /// the page, whose own handler would otherwise cancel it and play the recording itself (COBUILD's, from an `addr`
+    /// XDict never serves), and leaves the default alone: the link's navigation, which the router answers. Untrusted
+    /// clicks too: a page's or an instrument's `click()` on a speaker means the same. Every other click is the page's.
+    static let speakerClicks = #"""
+        (function () {
+          'use strict';
+          window.addEventListener('click', function (e) {
+            var t = e.target, c = t && t.closest ? t.closest('a[href][data-xdict-control="speaker"]') : null;
+            if (c) e.stopImmediatePropagation();
+          }, true);
+        })();
+        """#
 
     /// A reader's click on a blocked image's placeholder asks the same question as a remote link. Trusted clicks only:
     /// a script's `click()` or `dispatchEvent` is not the reader. An image inside a link is left to the link.

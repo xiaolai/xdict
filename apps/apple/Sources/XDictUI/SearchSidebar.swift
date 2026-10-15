@@ -115,6 +115,9 @@ struct ResultList: View {
 
 /// A dictionary's name, its edition and how many results it has: every result's source (R11).
 struct SectionHeader: View {
+    /// The rows' own trailing inset in the sidebar's List, so the count ends where a row's highlight does.
+    static let trailingInset: CGFloat = 8
+
     let section: ResultSection
 
     var body: some View {
@@ -133,6 +136,9 @@ struct SectionHeader: View {
                     .foregroundStyle(.secondary)
             }
         }
+        // A List's section header runs to the sidebar's edge, where its rows stop short: without this the count meets
+        // the divider and reads as part of the entry ("1 result purple"; measured 2 pt from the edge, 2026-10-15).
+        .padding(.trailing, Self.trailingInset)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(label))
         .accessibilityIdentifier("section")

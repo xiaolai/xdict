@@ -19,6 +19,11 @@ which mDNSResponder answers itself (spike 3, measured: no upstream query). Nothi
 
 A page reports what it saw into its top document's `data-lab` attribute (`R`); the lab reads it from a content world of
 its own, so the entry view's configuration is exactly the production one. It is part of the payload, not a defence.
+**What the verdicts need does not depend on a page script** (2026-10-16): the core's strip list removes the battery's
+scripts, so the lab itself records that a document loaded, and each case's `probe` (lab-world JavaScript returning
+`[[key, value]]`) judges what must work. `scripts` is the case's `<script` tags as written and `scriptsVisible` those
+the core reads as markup: fewer served than visible means the core stripped some, an outcome of its own, not a block;
+the rest, behind a comment, the core drops with the comment (S2).
 """
 import argparse
 import base64
@@ -122,8 +127,8 @@ def textarea(inner: str) -> str:
 def payloads() -> list[tuple]:
     out: list[tuple] = []
 
-    def add(cid, group, build, wait=2500, wrap=False):
-        out.append((cid, group, build, wait, wrap))
+    def add(cid, group, build, wait=2500, wrap=False, probe=""):
+        out.append((cid, group, build, wait, wrap, probe))
 
     # ---- ordinary loads -------------------------------------------------------------------------------------------
     add("img", "ordinary", lambda c: (f'<img src="{c.H("img.png")}">', {}), wrap=True)
@@ -136,6 +141,36 @@ def payloads() -> list[tuple]:
         S(f"import('{c.H('dynamic-import.js')}').then(function(){{R('import','ok')}},function(e){{R('import','err '+e)}})"),
         {}))
     add("stylesheet", "ordinary", lambda c: (f'<link rel="stylesheet" href="{c.H("style.css")}">', {}), wrap=True)
+    # The reading frame's stylesheets are DOM the page can reach: a page that deletes and rewrites them, and the root's
+    # theme, then loads. Its loads are refused as ever; the frame's re-assert is reported (`frame-back`).
+    add("frame-strip", "ordinary", lambda c: (later(
+        "document.querySelectorAll('style[id^=xdict-frame-]').forEach(function(s){s.remove()});"
+        "document.documentElement.setAttribute('data-xdict-theme','hostile');"
+        "var y=document.createElement('style');y.id='xdict-frame-column';y.textContent="
+        f"'body{{background:url(\\'{c.H('frame-bg.png')}\\')}}';document.head.appendChild(y);"
+        f"var i=new Image();i.src='{c.H('frame-img.png')}';"
+        "setTimeout(function(){R('frame-back',document.querySelectorAll('style[id^=xdict-frame-]').length+' '+"
+        "document.documentElement.getAttribute('data-xdict-theme'))},300)"), {}))
+    # A page script that writes random inline colours, backgrounds, borders and shadows in a loop (ODE's `o3.js` writes
+    # `style.color='#000'`), 400 elements a tick, more than the shell's guard maps in one frame: the page ends on palette
+    # tokens with no inline box, its own timers keep running to the end (a guard that fed itself would starve them and
+    # `colour-end` would never come), and its one remote background is refused like any other load. `colour-end` is
+    # non-token colours, inline boxes, the largest gap between ticks (ms, reported, not gated: a lab's view may be
+    # throttled) and the ticks.
+    add("colour-writer", "ordinary", lambda c: (
+        '<div id="cw">' + "".join(f"<span>w{i} </span>" for i in range(400)) + "</div>" + S(
+            "var els=document.querySelectorAll('#cw span'),t0=Date.now(),last=t0,gap=0,n=0;"
+            "function rnd(){return '#'+('00000'+Math.floor(Math.random()*16777216).toString(16)).slice(-6)}"
+            f"els[0].style.backgroundImage=\"url('{c.H('colour-bg.png')}')\";"
+            "function done(){var bad=0,box=0;Array.prototype.forEach.call(els,function(e){var s=e.style;"
+            "if(s.color&&!/^var\\(--xdict-/.test(s.color))bad++;"
+            "if(s.backgroundColor||s.backgroundImage||s.borderTopWidth||s.boxShadow)box++});"
+            "R('colour-end',bad+' '+box+' '+gap+' '+n)}"
+            "function tick(){var now=Date.now();gap=Math.max(gap,now-last);last=now;"
+            "for(var i=0;i<els.length;i++){var s=els[i].style;s.color=rnd();s.background=rnd();"
+            "s.border='2px solid '+rnd();s.boxShadow='0 0 3px '+rnd()}"
+            "n++;if(now-t0<1500)setTimeout(tick,0);else setTimeout(done,2500)}"
+            "setTimeout(tick,0)"), {}), 6000)
     add("css-import", "ordinary", lambda c: (f'<style>@import url("{c.H("import.css")}");</style>', {}), wrap=True)
     add("css-url", "ordinary", lambda c: (
         f'<div style="width:40px;height:40px;background-image:url(\'{c.H("bg.png")}\')"></div>'
@@ -412,13 +447,27 @@ def payloads() -> list[tuple]:
         f'<script src="{c.r("ok.js")}" onerror="R(\'bad\',\'script\')"></script>'
         f'<audio src="{c.r("ok.wav")}" preload="auto" oncanplay="R(\'ok\',\'audio\')" onerror="R(\'bad\',\'audio\')">'
         '</audio>' + S("R('ok','inline');eval(\"R('ok','eval')\");new Function(\"R('ok','function')\")()"),
-        {"ok.svg": OK_SVG, "ok.css": "body{color:rgb(1,2,3)}", "ok.js": "R('ok','script')", "ok.wav": wav()}), 3000)
+        {"ok.svg": OK_SVG, "ok.css": "body{color:rgb(1,2,3)}", "ok.js": "R('ok','script')", "ok.wav": wav()}), 3000,
+        probe=OK_PROBE)
     # A remote image the core rewrote: the shell's placeholder, naming the host, loads; nothing is fetched.
     add("ok-placeholder", "allowed", lambda c: (
         S("") + f'<img id="p" src="https://{c.name("ph")}:{c.tcp}/x.png" '
-        'onload="R(\'ok\',\'placeholder \'+this.naturalWidth)" onerror="R(\'bad\',\'placeholder\')">', {}))
-    add("ok-link-nav", "allowed", lambda c: (later("location.href='xdict://d/entry/landing'"), {}))
+        'onload="R(\'ok\',\'placeholder \'+this.naturalWidth)" onerror="R(\'bad\',\'placeholder\')">', {}),
+        probe="var p=document.getElementById('p');"
+              "return p&&p.complete&&p.naturalWidth>0?[['ok','placeholder '+p.naturalWidth]]:[]")
+    # A link the lab follows itself, once, from its own world: what is proven is the view's routing, not a page script.
+    add("ok-link-nav", "allowed", lambda c: ('<a id="go" href="xdict://d/entry/landing">landing</a>', {}),
+        probe="if(!window.__go){window.__go=1;setTimeout(function(){var g=document.getElementById('go');"
+              "if(g)g.click()},400)}return []")
     return out
+
+
+# What `ok-xdict` must show with no page script: each image drawn, the sheet applied, the recording playable.
+OK_PROBE = ("var r=[],q=function(s){return document.querySelector(s)};"
+            "var i=q('img[src$=\"ok.svg\"]');if(i&&i.complete&&i.naturalWidth>0)r.push(['ok','img']);"
+            "var j=q('img[src^=\"data:\"]');if(j&&j.complete&&j.naturalWidth>0)r.push(['ok','data-img']);"
+            "var l=q('link[href$=\"ok.css\"]');if(l&&l.sheet)r.push(['ok','css']);"
+            "var u=q('audio');if(u&&u.readyState>=3)r.push(['ok','audio']);return r")
 
 
 # The contexts a wrapped payload is repeated in (`wrap=True`), each its own case `<payload>~<context>`.
@@ -438,9 +487,26 @@ def contextual(context: str, page: str, resources: dict, c: Ctx) -> tuple:
 CONTEXTS = ["textarea", "srcdoc", "write", "resource"]
 
 
+def visible_scripts(page: str) -> int:
+    """`<script` tags the core reads as markup: those behind `textarea()`'s comment it reads as a comment, which a
+    normalized entry drops whole (S2), so they are never served whatever the strip does."""
+    lower, count, at = page.lower(), 0, 0
+    while True:
+        tag, comment = lower.find("<script", at), lower.find("<!--", at)
+        if tag < 0:
+            return count
+        if 0 <= comment < tag:
+            end = lower.find("-->", comment + 4)
+            if end < 0:
+                return count
+            at = end + 3
+            continue
+        count, at = count + 1, tag + 7
+
+
 def cases() -> list[dict]:
     out: list[dict] = []
-    for (pid, group, build, wait, wrap) in payloads():
+    for (pid, group, build, wait, wrap, probe) in payloads():
         for context in [None] + (CONTEXTS if wrap else []):
             cid = pid if context is None else f"{pid}~{context}"
             c = Ctx(cid, len(out))
@@ -449,7 +515,9 @@ def cases() -> list[dict]:
                 page, resources = contextual(context, page, resources, c)
             out.append({"id": cid, "payload": pid, "context": context or "byte-zero", "group": group, "wait": wait,
                         "tcp": c.tcp, "udp": c.udp, "exclusive": group == "webrtc", "names": c.names,
-                        "record": page + S("R('loaded',document.readyState)"), "resources": resources})
+                        "probe": probe, "scripts": page.lower().count("<script"),
+                        "scriptsVisible": visible_scripts(page),
+                        "record": page, "resources": resources})
     assert len(out) < CONTROL["udp"] - TCP0, "the TCP ports would reach the control ports"
     ids = [c["id"] for c in out]
     assert len(ids) == len(set(ids)), "duplicate case id"
@@ -462,7 +530,11 @@ def cases() -> list[dict]:
 # turns the rest off), and each layer's probes must leave in `baseline` and be refused in its run. `link-preconnect`
 # is measured beside the navigation table, as spike 3 did (its control is `nav`): without the table the navigation
 # itself leaves, and the preconnect could not be told from it.
-LAYERS = ["csp", "rules", "nav", "popups", "link-preconnect", "peer-connection"]
+# `strip` is the core's whole strip list (S1–S14 and its script rules), not the view's: off in every run but `strip` and `production`,
+# so each of the view's layers is proven against live scripts (the rewriter is compatibility, not the boundary), and
+# `shell` is production with only the strip off: the view's whole confinement, holding against every live script.
+LAYERS = ["csp", "rules", "nav", "popups", "link-preconnect", "peer-connection", "strip"]
+VIEW_LAYERS = [layer for layer in LAYERS if layer != "strip"]
 RUNS = {
     "baseline": [],
     "csp": ["csp"],
@@ -471,8 +543,12 @@ RUNS = {
     "popups": ["popups"],
     "nav+link-preconnect": ["nav", "link-preconnect"],
     "peer-connection": ["peer-connection"],
+    "strip": ["strip"],
+    "shell": VIEW_LAYERS,
     "production": LAYERS,
 }
+# The runs `hostile.production` holds to zero; the rest are `hostile.controls`.
+PRODUCTION_PART = ["shell", "production"]
 PROBES = {
     # The policy header: a connection, a srcdoc document's fetch (inherited), an SVG document under r/ navigated to
     # (the case a shell-written <meta> missed in spike 3), a worker, and markup the rewriter could not see.
@@ -484,6 +560,8 @@ PROBES = {
     "link-preconnect": {"run": "nav+link-preconnect", "against": "nav",
                         "cases": ["anchor-detached", "anchor-click~textarea"]},
     "peer-connection": {"run": "peer-connection", "against": "baseline", "cases": ["rtc-stun", "rtc-turn"]},
+    # The core's strip: an inline script's fetch, location and worker, which the core can see, go with their script.
+    "strip": {"run": "strip", "against": "baseline", "cases": ["fetch", "nav-location", "worker-blob"]},
 }
 
 
@@ -535,7 +613,7 @@ def build() -> tuple[str, str]:
     listed = {
         "comment": "What the hostile stage runs and what it holds each run to (apps/apple/Tools/hostile/battery.py).",
         "token": TOKEN, "control": CONTROL, "selftestName": f"selftest-{TOKEN}.invalid",
-        "layers": LAYERS, "runs": RUNS, "probes": PROBES,
+        "layers": LAYERS, "runs": RUNS, "productionPart": PRODUCTION_PART, "probes": PROBES,
         "reader": {"tcp": reader.tcp, "udp": reader.udp, "names": reader.names},
         "cases": [{k: v for k, v in c.items() if k not in ("record", "resources")} for c in all_cases],
     }

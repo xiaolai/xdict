@@ -255,6 +255,23 @@ state = press("up")
 check("keyboard.results", into == "results" and moved == "Beta/apple" and shown(state) == "Alpha/apple",
       f"↓ from the field: the keyboard in {into}; ↓ again shows {moved}; ↑ shows {shown(state)}")
 
+# Where the entry sits, as the screen has it (Alpha's `apple` says `body{margin:0}`, as many MDict stylesheets do): its
+# area starts at the toolbar's bottom, with no band for a hidden find bar, and its first text stands at least 8 pt
+# inside the pane's left edge, whatever the dictionary's CSS (the shell's reading inset).
+geometry = tool("geometry", pid) or {}
+facts["entryGeometry"] = json.dumps(geometry)
+bar, web, text = geometry.get("toolbar"), geometry.get("web"), geometry.get("text")
+if bar and web:
+    band = web["y"] - (bar["y"] + bar["height"])
+    check("ax.entryBelowToolbar", abs(band) <= 1, f"the entry starts {band:g} pt below the toolbar's bottom")
+else:
+    check("ax.entryBelowToolbar", False, f"no toolbar or no entry to measure: {geometry}")
+if web and text:
+    inset = text["x"] - web["x"]
+    check("ax.entryInset", inset >= 8, f"{geometry.get('textValue')!r} starts {inset:g} pt inside the entry's left edge")
+else:
+    check("ax.entryInset", False, f"no entry text to measure: {geometry}")
+
 # Tab into the entry, which lands on its first link (WebKit focuses the first element Tab reaches when the keyboard
 # enters a page; `tabFocusesLinks` makes links such elements); Return follows it in link mode (I7). Should the page
 # itself take the keyboard with no element in it, one more Tab must reach the link: the link must have it before

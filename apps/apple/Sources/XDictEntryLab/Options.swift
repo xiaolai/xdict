@@ -11,7 +11,7 @@ import XDictEntryView
 /// instrument alone; XDict.app has no such flag (`Tools/build-bundle.sh` refuses a bundle whose app carries the text).
 struct LabOptions {
     enum Mode: Equatable {
-        case hostile, faultSwitch(String), binding, reader, corpus
+        case hostile, faultSwitch(String), binding, reader, corpus, gallery
     }
 
     var mode: Mode?
@@ -21,6 +21,7 @@ struct LabOptions {
     var out: URL?
     var commands: URL?
     var sample: URL?
+    var keys: URL?
     var persistence: String?
     var disabled: Set<String> = []
     var concurrency = 4
@@ -36,10 +37,11 @@ struct LabOptions {
           XDictEntryLab --binding <twin-a dir> <twin-b dir> --out <report.json>
           XDictEntryLab --reader <fixture dir> --commands <dir> --out <report.json>
           XDictEntryLab --corpus <dir> --sample <sample.json> --out <report.json> [--persistence set|check]
-        layers: csp, rules, nav, popups, link-preconnect, peer-connection
+          XDictEntryLab --gallery <dir> --sample <sample.json> --out <report.json> [--only dict,…] [--keys <earlier report.json>]
+        layers: csp, rules, nav, popups, link-preconnect, peer-connection, strip (the core's, not the view's)
         """
 
-    static let layers: Set<String> = ["csp", "rules", "nav", "popups", "link-preconnect", "peer-connection"]
+    static let layers: Set<String> = ["csp", "rules", "nav", "popups", "link-preconnect", "peer-connection", "strip"]
     static let faults: Set<String> = ["none", "missing-list", "missing-feature", "missing-setter", "missing-getter",
                                       "ineffective-setter"]
 
@@ -60,10 +62,12 @@ struct LabOptions {
             case "--binding": options.mode = .binding; options.twins = [try path(), try path()]
             case "--reader": options.mode = .reader; options.fixture = try path()
             case "--corpus": options.mode = .corpus; options.fixture = try path()
+            case "--gallery": options.mode = .gallery; options.fixture = try path()
             case "--cases": options.cases = try path()
             case "--out": options.out = try path()
             case "--commands": options.commands = try path()
             case "--sample": options.sample = try path()
+            case "--keys": options.keys = try path()
             case "--persistence": options.persistence = try value()
             case "--disable-layer":
                 options.disabled.formUnion(try value().split(separator: ",").map(String.init))
@@ -90,8 +94,14 @@ struct LabOptions {
         return options
     }
 
-    /// The entry view's confinement with the named layers off: `production` when none is.
+    /// `strip` off: the lab's core applies no strip list (`Config.stripOffForTests`), so the view's own layers are proven
+    /// against scripts, comments and the rest as written. The core's strip is a layer of the battery, never of the view: the app's service makes its
+    /// core without it (`StripTests`).
+    var stripOffForTests: Bool { disabled.contains("strip") }
+
+    /// The entry view's confinement with the named layers off: `production` when none of the view's is.
     var confinement: EntryConfinement {
+        let disabled = disabled.subtracting(["strip"])
         guard !disabled.isEmpty else { return .production }
         var features: [String] = []
         if !disabled.contains("link-preconnect") { features.append("LinkPreconnect") }

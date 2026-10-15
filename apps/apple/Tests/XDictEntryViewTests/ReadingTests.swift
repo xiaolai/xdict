@@ -115,9 +115,37 @@ struct ReadingTests {
         }
     }
 
+    /// XDict's speaker answers whatever the page does with clicks: COBUILD's own script cancels a click on its sound
+    /// links (it plays them itself, from an `addr` XDict never serves), so the click never reached the router and four
+    /// of its recordings went unanswered (E2E 2026-10-16: "clicked, cancelled by the page"). The shell's listener, on
+    /// the window in the capture phase and installed before any page script, stops the click going further into the
+    /// page and leaves its default, the navigation the router answers, alone. Any other click is the page's.
+    @Test func aSpeakersClickIsXDictsNotThePages() throws {
+        #expect(EntryScripts.installed(.light, frame: .all).contains(EntryScripts.speakerClicks))
+        let context = try Self.context("""
+            var listeners = [];
+            var window = { addEventListener: function (type, f, capture) { listeners.push([type, f, capture]); } };
+            var document = window;
+            function click(isSpeaker) {
+              var e = { stopped: false, prevented: false, isTrusted: true,
+                target: { closest: function (s) { return isSpeaker && s.indexOf('data-xdict-control') >= 0 ? {} : null; } },
+                stopImmediatePropagation: function () { this.stopped = true; },
+                stopPropagation: function () { this.stopped = true; },
+                preventDefault: function () { this.prevented = true; } };
+              listeners.forEach(function (l) { if (l[0] === 'click') l[1](e); });
+              return [e.stopped, e.prevented];
+            }
+            """, EntryScripts.speakerClicks)
+        #expect(context.evaluateScript("JSON.stringify(listeners.map(function (l) { return [l[0], l[2]]; }))")?.toString()
+                == #"[["click",true]]"#)
+        #expect(context.evaluateScript("JSON.stringify(click(true))")?.toString() == "[true,false]")
+        #expect(context.evaluateScript("JSON.stringify(click(false))")?.toString() == "[false,false]")
+    }
+
     @Test func noShellScriptMakesARequestOrChangesTheURL() {
         let all = [EntryScripts.findCore, EntryScripts.findDOM, EntryScripts.readabilityCore,
-                   EntryScripts.appearance(.dark), EntryScripts.placeholderClicks].joined(separator: "\n")
+                   EntryScripts.appearance(.dark), EntryScripts.placeholderClicks, EntryScripts.speakerClicks]
+            .joined(separator: "\n")
         for word in ["fetch(", "XMLHttpRequest", "WebSocket", "EventSource", "sendBeacon", "location", "window.open",
                      "import(", "Worker(", ".src =", ".href =", "RTCPeerConnection"] {
             #expect(!all.contains(word), "a shell script uses \(word)")
@@ -126,15 +154,11 @@ struct ReadingTests {
 
     // MARK: - Readability (R4)
 
-    @Test func aColourBelowThreeToOneIsReplacedByWhicheverReads() throws {
+    /// The gallery's contrast arithmetic: a measurement, nothing on the page is corrected by it.
+    @Test func contrastIsWCAGs() throws {
         let context = try Self.context(EntryScripts.readabilityCore)
         func run(_ expression: String) -> JSValue? { context.evaluateScript(expression) }
         #expect(run("XDictReadability.contrast([0,0,0],[255,255,255])")?.toDouble() ?? 0 > 20.9)
-        #expect(run("XDictReadability.readable([0,0,0],[30,30,30])")?.toBool() == false, "black on dark is unreadable")
-        #expect(run("XDictReadability.readable([0,0,139],[30,30,30])")?.toBool() == false, "dark blue on dark")
-        #expect(run("XDictReadability.readable([255,0,0],[30,30,30])")?.toBool() == true, "a dictionary's red is kept")
-        #expect(run("XDictReadability.replacement([30,30,30,1])")?.toString() == "rgb(255, 255, 255)")
-        #expect(run("XDictReadability.replacement([250,250,250,1])")?.toString() == "rgb(0, 0, 0)")
         #expect(run("XDictReadability.parse('rgba(1, 2, 3, 0.5)').join()")?.toString() == "1,2,3,0.5")
         #expect(run("XDictReadability.parse('rgb(1 2 3 / 50%)').join()")?.toString() == "1,2,3,0.5")
         #expect(run("XDictReadability.parse('color(srgb 1 0 0)')")?.isNull == true, "an unknown form is left alone")

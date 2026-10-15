@@ -20,6 +20,13 @@ public enum EntrySentences {
         }
     }
 
+    /// A speaker's VoiceOver name (reading-style §5.2): verb first, the same whatever the playing state.
+    public static let speakerUK = LocalizedStringResource("Play British pronunciation")
+    public static let speakerUS = LocalizedStringResource("Play American pronunciation")
+    public static let speakerOther = LocalizedStringResource("Play recording")
+    /// The accent tag drawn after a speaker's glyph.
+    public static let accentTagUK = LocalizedStringResource("UK", comment: "Accent tag after a speaker: British")
+    public static let accentTagUS = LocalizedStringResource("US", comment: "Accent tag after a speaker: American")
     public static let entryFailed = LocalizedStringResource("This entry could not be shown.")
     public static let ready = LocalizedStringResource("Entries are shown confined: nothing in them reaches the internet.")
 

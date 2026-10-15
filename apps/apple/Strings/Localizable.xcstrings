@@ -1969,6 +1969,54 @@
         }
       }
     },
+    "Play American pronunciation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play American pronunciation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放美式发音"
+          }
+        }
+      }
+    },
+    "Play British pronunciation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play British pronunciation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放英式发音"
+          }
+        }
+      }
+    },
+    "Play recording" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Play recording"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放录音"
+          }
+        }
+      }
+    },
     "Playing the dictionary's own recording." : {
       "localizations" : {
         "en" : {
@@ -3133,6 +3181,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "键入新的快捷键"
+          }
+        }
+      }
+    },
+    "UK" : {
+      "comment" : "Accent tag after a speaker: British",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "UK"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "英"
+          }
+        }
+      }
+    },
+    "US" : {
+      "comment" : "Accent tag after a speaker: American",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "US"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "美"
           }
         }
       }
