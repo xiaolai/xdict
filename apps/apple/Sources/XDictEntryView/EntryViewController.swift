@@ -171,6 +171,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         await pane?.scrollOffset()
     }
 
+    /// "Expand All" and "Collapse All" (ADR-0010 Q4): every fold of the shown entry, as the reader's clicks would.
+    @discardableResult
+    public func expandAll(_ open: Bool = true) -> Task<Int, Never> {
+        Task { @MainActor in await pane?.expandAll(open) ?? 0 }
+    }
+
     /// The entry the view shows or is loading.
     public var reference: EntryReference? { pane?.reference }
 

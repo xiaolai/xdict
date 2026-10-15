@@ -107,6 +107,7 @@ struct ReadingTests {
     @Test func theDocumentScriptsParse() throws {
         let context = try Self.context("var parsed = [];")
         for (name, source) in [("findDOM", EntryScripts.findDOM), ("placeholderClicks", EntryScripts.placeholderClicks),
+                               ("disclosureDOM", EntryScripts.disclosureDOM),
                                ("appearance light", EntryScripts.appearance(.light)),
                                ("appearance dark", EntryScripts.appearance(.dark))] {
             context.setObject(source, forKeyedSubscript: "source" as NSString)

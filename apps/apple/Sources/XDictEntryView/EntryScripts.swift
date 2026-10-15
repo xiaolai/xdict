@@ -236,7 +236,8 @@ enum EntryScripts {
 
     /// The shell's scripts, in the order they are installed at document start, before any of the page's.
     static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame) -> [String] {
-        [findCore, findDOM, readabilityCore, appearance(scheme, frame: frame), placeholderClicks, speakerClicks]
+        [findCore, findDOM, readabilityCore, appearance(scheme, frame: frame), placeholderClicks, speakerClicks,
+         disclosureCore, disclosureDOM]
     }
 
     /// **A click on XDict's speaker is XDict's** (the core marks it `data-xdict-control="speaker"`): on the window, in

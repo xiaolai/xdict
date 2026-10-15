@@ -65,6 +65,10 @@ public struct SearchCommands: Commands {
             Button("Actual Size") { window?.entry.resetZoom() }
                 .keyboardShortcut("0")
                 .disabled(window?.entry.webView == nil)
+            Button("Expand All") { window?.entry.expandAll(true) }
+                .disabled(window?.entry.webView == nil)
+            Button("Collapse All") { window?.entry.expandAll(false) }
+                .disabled(window?.entry.webView == nil)
             Menu("Entry Appearance") {
                 ForEach(EntryTheme.allCases, id: \.self) { theme in
                     Button(EntrySentences.theme(theme)) { window?.entry.setTheme(theme) }

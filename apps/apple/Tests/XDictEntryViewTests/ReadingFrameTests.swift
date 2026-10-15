@@ -161,4 +161,131 @@ struct ReadingFrameTests {
             }
         }
     }
+
+    // MARK: - XDict's marks (icon sweep §8): the core marks, the frame draws.
+
+    /// Every `var(--xdict-…)` the marks use is a token the frame defines, and no colour is written as a literal.
+    @Test func theMarksUseTokensOnly() throws {
+        let css = EntryReadingFrame.marksCSS
+        let defined = Set(EntryReadingFrame.tokens.map(\.0) + EntryReadingFrame.colours.map(\.0))
+        let used = try Regex(#"var\(--xdict-([a-z0-9-]+)\)"#)
+        var names: [String] = []
+        for match in css.matches(of: used) { names.append(String(css[match.range]).dropFirst(12).dropLast().description) }
+        #expect(!names.isEmpty)
+        for name in names { #expect(defined.contains(name), "\(name)") }
+        #expect(!css.contains("rgb("))
+        #expect(css.range(of: #"#[0-9a-fA-F]{3,6}\b"#, options: .regularExpression) == nil)
+        #expect(!css.contains("url(http"))
+    }
+
+    /// Each rule of §8 exists: the disclosure chevron turned by `aria-expanded`, the lookup arrow on either side, the
+    /// one marker, the labels, plain sense numbers, and hidden graphics kept hidden.
+    @Test func eachMarkHasItsRule() {
+        let css = EntryReadingFrame.marksCSS
+        #expect(css.contains("[data-xdict-control=disclosure]::before{content:\"\" !important;"))
+        #expect(css.contains("[data-xdict-control=disclosure][aria-expanded=true]::before{transform:rotate(90deg) !important}"))
+        #expect(css.hasPrefix("@layer xdict-marks{[data-xdict-before]::before"), "layered, so no unlayered !important outranks it")
+        #expect(css.contains("[data-xdict-before=lookup]::before,[data-xdict-after=lookup]::after{content:\"\" !important;"))
+        #expect(css.contains("[data-xdict-before=marker]::before,[data-xdict-after=marker]::after{content:\"\" !important;"))
+        #expect(css.contains("background-color:var(--xdict-text-2) !important;border-radius:50%"))
+        #expect(css.contains("[data-xdict-role=label]{"))
+        for kind in ["level", "wordlist", "frequency", "new"] {
+            #expect(css.contains("[data-xdict-role=label][data-xdict-label=\(kind)]"), "\(kind)")
+        }
+        #expect(css.contains("[data-xdict-role=sensenum]{"))
+        #expect(css.contains("[data-xdict-labelled]{display:none !important}"))
+        #expect(css.contains(":dir(rtl)"))
+        #expect(EntryScripts.appearance(.light, frame: .all).contains("[data-xdict-role=label]"))
+        #expect(!EntryScripts.appearance(.light, frame: []).contains("[data-xdict-role=label]"))
+    }
+
+    /// Where the core marked a pseudo-element, the dictionary's `content` is cleared first, background drawings with
+    /// it, and only XDict's empty box is drawn after; `drop` draws nothing at all.
+    @Test func noDictionaryContentSurvivesOnAMarkedElement() {
+        let css = EntryReadingFrame.marksCSS
+        let clear = "[data-xdict-before]::before,[data-xdict-after]::after{content:none !important;"
+            + "background-image:none !important"
+        let clearAt = css.range(of: clear)
+        #expect(clearAt != nil)
+        for drawn in ["[data-xdict-before=lookup]::before", "[data-xdict-before=marker]::before",
+                      "[data-xdict-control=disclosure]::before{"] {
+            let at = css.range(of: drawn)
+            #expect(at != nil, "\(drawn)")
+            if let at, let clearAt { #expect(clearAt.lowerBound < at.lowerBound, "\(drawn) comes after the clearing") }
+        }
+        #expect(!css.contains("=drop]"))
+        // XDict's own drawings are the only content written, and they are empty boxes painted by a mask or a fill.
+        let contents = css.components(separatedBy: "content:").dropFirst().map { String($0.prefix(while: { $0 != ";" && $0 != "}" })) }
+        for value in contents { #expect(value == "none !important" || value == "\"\" !important", "\(value)") }
+        // The generic controls' layout leaves a fold head's own block alone.
+        #expect(EntryReadingFrame.controlsCSS().contains("[data-xdict-control]:not([data-xdict-control=disclosure]){"))
+    }
+
+    static func disclosure() throws -> JSContext {
+        let context = try #require(JSContext())
+        context.exceptionHandler = { _, exception in Issue.record("JS: \(exception?.toString() ?? "?")") }
+        context.evaluateScript(EntryScripts.disclosureCore)
+        // A minimal element: attributes, a sibling and a parent, and whether it is shown.
+        context.evaluateScript("""
+            function El(shown) { this.attrs = {}; this.shown = shown; this.nextElementSibling = null; this.parentElement = null; }
+            El.prototype.getAttribute = function (n) { return n in this.attrs ? this.attrs[n] : null; };
+            El.prototype.setAttribute = function (n, v) { this.attrs[n] = String(v); };
+            var byId = {}; function find(id) { return byId[id] || null; }
+            function shown(e) { return e.shown; }
+            """)
+        return context
+    }
+
+    /// The chevron follows the fold: `aria-expanded` is the computed state of the element the head controls (named by
+    /// `aria-controls`, else the next element after the head or after its wrapper), set only when it changes.
+    @Test func theDisclosureStateFollowsAToggledElement() throws {
+        let context = try Self.disclosure()
+        func run(_ js: String) -> String? { context.evaluateScript(js)?.toString() }
+        _ = run("""
+            var head = new El(true), body = new El(false); head.nextElementSibling = body;
+            var wrapped = new El(true), wrapper = new El(true), after = new El(true);
+            wrapped.parentElement = wrapper; wrapper.nextElementSibling = after;
+            var named = new El(true), far = new El(false); named.setAttribute('aria-controls', 'x'); byId.x = far;
+            named.nextElementSibling = new El(true);
+            var alone = new El(true);
+            var all = [head, wrapped, named, alone];
+            """)
+        #expect(run("XDictDisclosureCore.sync(all, find, shown)") == "3")
+        #expect(run("head.getAttribute('aria-expanded')") == "false")
+        #expect(run("wrapped.getAttribute('aria-expanded')") == "true")
+        #expect(run("named.getAttribute('aria-expanded')") == "false", "aria-controls wins over the sibling")
+        #expect(run("alone.getAttribute('aria-expanded')") == "null", "no folded element: no state claimed")
+        // The dictionary's own script opens the fold: the state follows; nothing else is written.
+        _ = run("body.shown = true; far.shown = true;")
+        #expect(run("XDictDisclosureCore.sync(all, find, shown)") == "2")
+        #expect(run("head.getAttribute('aria-expanded')") == "true")
+        #expect(run("named.getAttribute('aria-expanded')") == "true")
+        #expect(run("XDictDisclosureCore.sync(all, find, shown)") == "0", "unchanged state writes nothing")
+        _ = run("body.shown = false;")
+        #expect(run("XDictDisclosureCore.sync(all, find, shown)") == "1")
+        #expect(run("head.getAttribute('aria-expanded')") == "false")
+    }
+
+    /// The work is bounded: a page with more fold heads than the cap syncs the cap and no more.
+    @Test func theDisclosureWorkIsBounded() throws {
+        let context = try Self.disclosure()
+        let max = try #require(context.evaluateScript("XDictDisclosureCore.MAX")?.toInt32())
+        #expect(max > 0)
+        let synced = context.evaluateScript("""
+            var many = []; for (var i = 0; i < \(max) + 50; i++) { var h = new El(true); h.nextElementSibling = new El(true); many.push(h); }
+            XDictDisclosureCore.sync(many, find, shown)
+            """)?.toInt32()
+        #expect(synced == max)
+    }
+
+    /// The disclosure scripts are the shell's in every view, Original style included, so "Expand All" works there too.
+    @Test func theDisclosureScriptsAreInstalled() {
+        for frame in [EntryReadingFrame.all, []] {
+            let installed = EntryScripts.installed(.light, frame: frame)
+            #expect(installed.contains(EntryScripts.disclosureCore))
+            #expect(installed.contains(EntryScripts.disclosureDOM))
+        }
+        #expect(EntryScripts.disclosureDOM.contains("__xdictDisclosure"))
+        #expect(EntryScripts.disclosureDOM.contains("MutationObserver"))
+    }
 }

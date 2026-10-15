@@ -109,8 +109,11 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "<path d='M12.4 3a6.6 6.6 0 0 1 0 10' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/>"
         + "</svg>"
 
-    static var speakerMask: String {
-        let encoded = speakerSVG.replacingOccurrences(of: "%", with: "%25").replacingOccurrences(of: "<", with: "%3C")
+    static var speakerMask: String { mask(speakerSVG) }
+
+    /// An inline SVG as a CSS `url()` of a `data:` URL.
+    static func mask(_ svg: String) -> String {
+        let encoded = svg.replacingOccurrences(of: "%", with: "%25").replacingOccurrences(of: "<", with: "%3C")
             .replacingOccurrences(of: ">", with: "%3E").replacingOccurrences(of: "#", with: "%23")
         return "url(\"data:image/svg+xml,\(encoded)\")"
     }
@@ -123,8 +126,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         return "[data-xdict-control-mode=replace]>:not([data-xdict-icon]):not([data-xdict-tag]){display:none !important}"
             + "[data-xdict-control-mode=prefix]>img,[data-xdict-control-mode=prefix]>:empty:not([data-xdict-icon]):not([data-xdict-tag]){display:none !important}"
             + "[data-xdict-control]::before,[data-xdict-control]::after{content:none !important}"
-            + "[data-xdict-control]{background-image:none !important;color:var(--xdict-link);text-decoration:none;"
-            + "cursor:pointer;display:inline-flex;align-items:baseline;gap:0.15em;"
+            + "[data-xdict-control]{background-image:none !important;cursor:pointer}"
+            // A fold head is often a block (a heading, a box's title): it keeps its own layout and colour.
+            + "[data-xdict-control]:not([data-xdict-control=disclosure]){color:var(--xdict-link);text-decoration:none;"
+            + "display:inline-flex;align-items:baseline;gap:0.15em;"
             + "padding:calc((var(--xdict-hit) - 1em) / 2);margin:calc((var(--xdict-hit) - 1em) / -2);"
             + "border-radius:var(--xdict-radius)}"
             + "[data-xdict-control]:focus-visible{outline:2px solid var(--xdict-link);outline-offset:0}"
@@ -195,7 +200,8 @@ extension EntryScripts {
     static func frameDOM(_ frame: EntryReadingFrame, scheme: EntryColourScheme,
                          labels: EntryReadingFrame.SpeakerLabels) -> String {
         let column = frame.contains(.column)
-            ? EntryReadingFrame.columnCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag) : ""
+            ? EntryReadingFrame.columnCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
+                + EntryReadingFrame.marksCSS : ""
         let names = ["uk": labels.uk, "us": labels.us, "other": labels.other]
         let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["link", "phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
         let namesJSON = (try? JSONSerialization.data(withJSONObject: frame.contains(.column) ? names : [:], options: [.sortedKeys]))
