@@ -13,7 +13,8 @@
   "nav",
   "popups",
   "link-preconnect",
-  "peer-connection"
+  "peer-connection",
+  "strip"
  ],
  "runs": {
   "baseline": [],
@@ -36,15 +37,31 @@
   "peer-connection": [
    "peer-connection"
   ],
-  "production": [
+  "strip": [
+   "strip"
+  ],
+  "shell": [
    "csp",
    "rules",
    "nav",
    "popups",
    "link-preconnect",
    "peer-connection"
+  ],
+  "production": [
+   "csp",
+   "rules",
+   "nav",
+   "popups",
+   "link-preconnect",
+   "peer-connection",
+   "strip"
   ]
  },
+ "productionPart": [
+  "shell",
+  "production"
+ ],
  "probes": {
   "csp": {
    "run": "csp",
@@ -97,11 +114,20 @@
     "rtc-stun",
     "rtc-turn"
    ]
+  },
+  "strip": {
+   "run": "strip",
+   "against": "baseline",
+   "cases": [
+    "fetch",
+    "nav-location",
+    "worker-blob"
+   ]
   }
  },
  "reader": {
-  "tcp": 47293,
-  "udp": 47593,
+  "tcp": 47295,
+  "udp": 47595,
   "names": [
    "rl-reader-h1.invalid",
    "ri-reader-h1.invalid"
@@ -117,7 +143,10 @@
    "tcp": 47100,
    "udp": 47400,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img~textarea",
@@ -128,7 +157,10 @@
    "tcp": 47101,
    "udp": 47401,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img~srcdoc",
@@ -139,7 +171,10 @@
    "tcp": 47102,
    "udp": 47402,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img~write",
@@ -150,7 +185,10 @@
    "tcp": 47103,
    "udp": 47403,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "img~resource",
@@ -161,7 +199,10 @@
    "tcp": 47104,
    "udp": 47404,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-srcset",
@@ -172,7 +213,10 @@
    "tcp": 47105,
    "udp": 47405,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-srcset~textarea",
@@ -183,7 +227,10 @@
    "tcp": 47106,
    "udp": 47406,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-srcset~srcdoc",
@@ -194,7 +241,10 @@
    "tcp": 47107,
    "udp": 47407,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-srcset~write",
@@ -205,7 +255,10 @@
    "tcp": 47108,
    "udp": 47408,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "img-srcset~resource",
@@ -216,7 +269,10 @@
    "tcp": 47109,
    "udp": 47409,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "script",
@@ -227,7 +283,10 @@
    "tcp": 47110,
    "udp": 47410,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "script~textarea",
@@ -238,7 +297,10 @@
    "tcp": 47111,
    "udp": 47411,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "script~srcdoc",
@@ -249,7 +311,10 @@
    "tcp": 47112,
    "udp": 47412,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "script~write",
@@ -260,7 +325,10 @@
    "tcp": 47113,
    "udp": 47413,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "script~resource",
@@ -271,7 +339,10 @@
    "tcp": 47114,
    "udp": 47414,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "script-module",
@@ -282,7 +353,10 @@
    "tcp": 47115,
    "udp": 47415,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 2,
+   "scriptsVisible": 2
   },
   {
    "id": "stylesheet",
@@ -293,7 +367,10 @@
    "tcp": 47116,
    "udp": 47416,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "stylesheet~textarea",
@@ -304,7 +381,10 @@
    "tcp": 47117,
    "udp": 47417,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "stylesheet~srcdoc",
@@ -315,7 +395,10 @@
    "tcp": 47118,
    "udp": 47418,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "stylesheet~write",
@@ -326,7 +409,10 @@
    "tcp": 47119,
    "udp": 47419,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "stylesheet~resource",
@@ -337,7 +423,38 @@
    "tcp": 47120,
    "udp": 47420,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
+  },
+  {
+   "id": "frame-strip",
+   "payload": "frame-strip",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 2500,
+   "tcp": 47121,
+   "udp": 47421,
+   "exclusive": false,
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
+  },
+  {
+   "id": "colour-writer",
+   "payload": "colour-writer",
+   "context": "byte-zero",
+   "group": "ordinary",
+   "wait": 6000,
+   "tcp": 47122,
+   "udp": 47422,
+   "exclusive": false,
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "css-import",
@@ -345,10 +462,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47121,
-   "udp": 47421,
+   "tcp": 47123,
+   "udp": 47423,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-import~textarea",
@@ -356,10 +476,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47122,
-   "udp": 47422,
+   "tcp": 47124,
+   "udp": 47424,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-import~srcdoc",
@@ -367,10 +490,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47123,
-   "udp": 47423,
+   "tcp": 47125,
+   "udp": 47425,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-import~write",
@@ -378,10 +504,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47124,
-   "udp": 47424,
+   "tcp": 47126,
+   "udp": 47426,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "css-import~resource",
@@ -389,10 +518,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47125,
-   "udp": 47425,
+   "tcp": 47127,
+   "udp": 47427,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-url",
@@ -400,10 +532,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47126,
-   "udp": 47426,
+   "tcp": 47128,
+   "udp": 47428,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-url~textarea",
@@ -411,10 +546,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47127,
-   "udp": 47427,
+   "tcp": 47129,
+   "udp": 47429,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-url~srcdoc",
@@ -422,10 +560,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47128,
-   "udp": 47428,
+   "tcp": 47130,
+   "udp": 47430,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "css-url~write",
@@ -433,10 +574,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47129,
-   "udp": 47429,
+   "tcp": 47131,
+   "udp": 47431,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "css-url~resource",
@@ -444,10 +588,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47130,
-   "udp": 47430,
+   "tcp": 47132,
+   "udp": 47432,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "font",
@@ -455,10 +602,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47131,
-   "udp": 47431,
+   "tcp": 47133,
+   "udp": 47433,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "font~textarea",
@@ -466,10 +616,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47132,
-   "udp": 47432,
+   "tcp": 47134,
+   "udp": 47434,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "font~srcdoc",
@@ -477,10 +630,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47133,
-   "udp": 47433,
+   "tcp": 47135,
+   "udp": 47435,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "font~write",
@@ -488,10 +644,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47134,
-   "udp": 47434,
+   "tcp": 47136,
+   "udp": 47436,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "font~resource",
@@ -499,10 +658,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47135,
-   "udp": 47435,
+   "tcp": 47137,
+   "udp": 47437,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "fetch",
@@ -510,10 +672,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47136,
-   "udp": 47436,
+   "tcp": 47138,
+   "udp": 47438,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "xhr",
@@ -521,10 +686,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47137,
-   "udp": 47437,
+   "tcp": 47139,
+   "udp": 47439,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "fetch-keepalive",
@@ -532,10 +700,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47138,
-   "udp": 47438,
+   "tcp": 47140,
+   "udp": 47440,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "beacon",
@@ -543,10 +714,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47139,
-   "udp": 47439,
+   "tcp": 47141,
+   "udp": 47441,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "eventsource",
@@ -554,10 +728,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47140,
-   "udp": 47440,
+   "tcp": 47142,
+   "udp": 47442,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "websocket",
@@ -565,10 +742,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47141,
-   "udp": 47441,
+   "tcp": 47143,
+   "udp": 47443,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "webtransport",
@@ -576,10 +756,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 3500,
-   "tcp": 47142,
-   "udp": 47442,
+   "tcp": 47144,
+   "udp": 47444,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "object-embed",
@@ -587,10 +770,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47143,
-   "udp": 47443,
+   "tcp": 47145,
+   "udp": 47445,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "object-embed~textarea",
@@ -598,10 +784,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47144,
-   "udp": 47444,
+   "tcp": 47146,
+   "udp": 47446,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "object-embed~srcdoc",
@@ -609,10 +798,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47145,
-   "udp": 47445,
+   "tcp": 47147,
+   "udp": 47447,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "object-embed~write",
@@ -620,10 +812,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47146,
-   "udp": 47446,
+   "tcp": 47148,
+   "udp": 47448,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "object-embed~resource",
@@ -631,10 +826,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47147,
-   "udp": 47447,
+   "tcp": 47149,
+   "udp": 47449,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "misc-tags",
@@ -642,10 +840,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47148,
-   "udp": 47448,
+   "tcp": 47150,
+   "udp": 47450,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "misc-tags~textarea",
@@ -653,10 +854,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47149,
-   "udp": 47449,
+   "tcp": 47151,
+   "udp": 47451,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "misc-tags~srcdoc",
@@ -664,10 +868,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47150,
-   "udp": 47450,
+   "tcp": 47152,
+   "udp": 47452,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "misc-tags~write",
@@ -675,10 +882,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47151,
-   "udp": 47451,
+   "tcp": 47153,
+   "udp": 47453,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "misc-tags~resource",
@@ -686,10 +896,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47152,
-   "udp": 47452,
+   "tcp": 47154,
+   "udp": 47454,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preload",
@@ -697,10 +910,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47153,
-   "udp": 47453,
+   "tcp": 47155,
+   "udp": 47455,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preload~textarea",
@@ -708,10 +924,13 @@
    "context": "textarea",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47154,
-   "udp": 47454,
+   "tcp": 47156,
+   "udp": 47456,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preload~srcdoc",
@@ -719,10 +938,13 @@
    "context": "srcdoc",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47155,
-   "udp": 47455,
+   "tcp": 47157,
+   "udp": 47457,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preload~write",
@@ -730,10 +952,13 @@
    "context": "write",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47156,
-   "udp": 47456,
+   "tcp": 47158,
+   "udp": 47458,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "preload~resource",
@@ -741,10 +966,13 @@
    "context": "resource",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47157,
-   "udp": 47457,
+   "tcp": 47159,
+   "udp": 47459,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "prefetch",
@@ -752,10 +980,13 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47158,
-   "udp": 47458,
+   "tcp": 47160,
+   "udp": 47460,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "speculation-rules",
@@ -763,10 +994,13 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47159,
-   "udp": 47459,
+   "tcp": 47161,
+   "udp": 47461,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "preconnect",
@@ -774,10 +1008,13 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47160,
-   "udp": 47460,
+   "tcp": 47162,
+   "udp": 47462,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect~textarea",
@@ -785,10 +1022,13 @@
    "context": "textarea",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47161,
-   "udp": 47461,
+   "tcp": 47163,
+   "udp": 47463,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect~srcdoc",
@@ -796,10 +1036,13 @@
    "context": "srcdoc",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47162,
-   "udp": 47462,
+   "tcp": 47164,
+   "udp": 47464,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect~write",
@@ -807,10 +1050,13 @@
    "context": "write",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47163,
-   "udp": 47463,
+   "tcp": 47165,
+   "udp": 47465,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "preconnect~resource",
@@ -818,10 +1064,13 @@
    "context": "resource",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47164,
-   "udp": 47464,
+   "tcp": 47166,
+   "udp": 47466,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect-name",
@@ -829,12 +1078,15 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47165,
-   "udp": 47465,
+   "tcp": 47167,
+   "udp": 47467,
    "exclusive": false,
    "names": [
     "pc-preconnect-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect-name~textarea",
@@ -842,12 +1094,15 @@
    "context": "textarea",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47166,
-   "udp": 47466,
+   "tcp": 47168,
+   "udp": 47468,
    "exclusive": false,
    "names": [
     "pc-preconnect-name-textarea-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect-name~srcdoc",
@@ -855,12 +1110,15 @@
    "context": "srcdoc",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47167,
-   "udp": 47467,
+   "tcp": 47169,
+   "udp": 47469,
    "exclusive": false,
    "names": [
     "pc-preconnect-name-srcdoc-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "preconnect-name~write",
@@ -868,12 +1126,15 @@
    "context": "write",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47168,
-   "udp": 47468,
+   "tcp": 47170,
+   "udp": 47470,
    "exclusive": false,
    "names": [
     "pc-preconnect-name-write-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "preconnect-name~resource",
@@ -881,12 +1142,15 @@
    "context": "resource",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47169,
-   "udp": 47469,
+   "tcp": 47171,
+   "udp": 47471,
    "exclusive": false,
    "names": [
     "pc-preconnect-name-resource-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-prefetch",
@@ -894,13 +1158,16 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47170,
-   "udp": 47470,
+   "tcp": 47172,
+   "udp": 47472,
    "exclusive": false,
    "names": [
     "dp-dns-prefetch-h1.invalid",
     "dq-dns-prefetch-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-prefetch~textarea",
@@ -908,13 +1175,16 @@
    "context": "textarea",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47171,
-   "udp": 47471,
+   "tcp": 47173,
+   "udp": 47473,
    "exclusive": false,
    "names": [
     "dp-dns-prefetch-textarea-h1.invalid",
     "dq-dns-prefetch-textarea-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-prefetch~srcdoc",
@@ -922,13 +1192,16 @@
    "context": "srcdoc",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47172,
-   "udp": 47472,
+   "tcp": 47174,
+   "udp": 47474,
    "exclusive": false,
    "names": [
     "dp-dns-prefetch-srcdoc-h1.invalid",
     "dq-dns-prefetch-srcdoc-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-prefetch~write",
@@ -936,13 +1209,16 @@
    "context": "write",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47173,
-   "udp": 47473,
+   "tcp": 47175,
+   "udp": 47475,
    "exclusive": false,
    "names": [
     "dp-dns-prefetch-write-h1.invalid",
     "dq-dns-prefetch-write-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "dns-prefetch~resource",
@@ -950,13 +1226,16 @@
    "context": "resource",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47174,
-   "udp": 47474,
+   "tcp": 47176,
+   "udp": 47476,
    "exclusive": false,
    "names": [
     "dp-dns-prefetch-resource-h1.invalid",
     "dq-dns-prefetch-resource-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-anchor",
@@ -964,12 +1243,15 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47175,
-   "udp": 47475,
+   "tcp": 47177,
+   "udp": 47477,
    "exclusive": false,
    "names": [
     "da-dns-anchor-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-anchor~textarea",
@@ -977,12 +1259,15 @@
    "context": "textarea",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47176,
-   "udp": 47476,
+   "tcp": 47178,
+   "udp": 47478,
    "exclusive": false,
    "names": [
     "da-dns-anchor-textarea-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-anchor~srcdoc",
@@ -990,12 +1275,15 @@
    "context": "srcdoc",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47177,
-   "udp": 47477,
+   "tcp": 47179,
+   "udp": 47479,
    "exclusive": false,
    "names": [
     "da-dns-anchor-srcdoc-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "dns-anchor~write",
@@ -1003,12 +1291,15 @@
    "context": "write",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47178,
-   "udp": 47478,
+   "tcp": 47180,
+   "udp": 47480,
    "exclusive": false,
    "names": [
     "da-dns-anchor-write-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "dns-anchor~resource",
@@ -1016,12 +1307,15 @@
    "context": "resource",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47179,
-   "udp": 47479,
+   "tcp": 47181,
+   "udp": 47481,
    "exclusive": false,
    "names": [
     "da-dns-anchor-resource-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-name",
@@ -1029,12 +1323,15 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47180,
-   "udp": 47480,
+   "tcp": 47182,
+   "udp": 47482,
    "exclusive": false,
    "names": [
     "im-img-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-name~textarea",
@@ -1042,12 +1339,15 @@
    "context": "textarea",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47181,
-   "udp": 47481,
+   "tcp": 47183,
+   "udp": 47483,
    "exclusive": false,
    "names": [
     "im-img-name-textarea-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-name~srcdoc",
@@ -1055,12 +1355,15 @@
    "context": "srcdoc",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47182,
-   "udp": 47482,
+   "tcp": 47184,
+   "udp": 47484,
    "exclusive": false,
    "names": [
     "im-img-name-srcdoc-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "img-name~write",
@@ -1068,12 +1371,15 @@
    "context": "write",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47183,
-   "udp": 47483,
+   "tcp": 47185,
+   "udp": 47485,
    "exclusive": false,
    "names": [
     "im-img-name-write-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "img-name~resource",
@@ -1081,12 +1387,15 @@
    "context": "resource",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47184,
-   "udp": 47484,
+   "tcp": 47186,
+   "udp": 47486,
    "exclusive": false,
    "names": [
     "im-img-name-resource-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "fetch-name",
@@ -1094,12 +1403,15 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47185,
-   "udp": 47485,
+   "tcp": 47187,
+   "udp": 47487,
    "exclusive": false,
    "names": [
     "fe-fetch-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "websocket-name",
@@ -1107,12 +1419,15 @@
    "context": "byte-zero",
    "group": "speculative",
    "wait": 2500,
-   "tcp": 47186,
-   "udp": 47486,
+   "tcp": 47188,
+   "udp": 47488,
    "exclusive": false,
    "names": [
     "ws-websocket-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "ping",
@@ -1120,10 +1435,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47187,
-   "udp": 47487,
+   "tcp": 47189,
+   "udp": 47489,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "ping~textarea",
@@ -1131,10 +1449,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47188,
-   "udp": 47488,
+   "tcp": 47190,
+   "udp": 47490,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "ping~srcdoc",
@@ -1142,10 +1463,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47189,
-   "udp": 47489,
+   "tcp": 47191,
+   "udp": 47491,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "ping~write",
@@ -1153,10 +1477,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47190,
-   "udp": 47490,
+   "tcp": 47192,
+   "udp": 47492,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "ping~resource",
@@ -1164,10 +1491,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47191,
-   "udp": 47491,
+   "tcp": 47193,
+   "udp": 47493,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "csp-report-meta",
@@ -1175,10 +1505,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47192,
-   "udp": 47492,
+   "tcp": 47194,
+   "udp": 47494,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "audio",
@@ -1186,10 +1519,13 @@
    "context": "byte-zero",
    "group": "media",
    "wait": 3000,
-   "tcp": 47193,
-   "udp": 47493,
+   "tcp": 47195,
+   "udp": 47495,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "audio~textarea",
@@ -1197,10 +1533,13 @@
    "context": "textarea",
    "group": "media",
    "wait": 3000,
-   "tcp": 47194,
-   "udp": 47494,
+   "tcp": 47196,
+   "udp": 47496,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "audio~srcdoc",
@@ -1208,10 +1547,13 @@
    "context": "srcdoc",
    "group": "media",
    "wait": 3000,
-   "tcp": 47195,
-   "udp": 47495,
+   "tcp": 47197,
+   "udp": 47497,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "audio~write",
@@ -1219,10 +1561,13 @@
    "context": "write",
    "group": "media",
    "wait": 3000,
-   "tcp": 47196,
-   "udp": 47496,
+   "tcp": 47198,
+   "udp": 47498,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "audio~resource",
@@ -1230,10 +1575,13 @@
    "context": "resource",
    "group": "media",
    "wait": 3000,
-   "tcp": 47197,
-   "udp": 47497,
+   "tcp": 47199,
+   "udp": 47499,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "video",
@@ -1241,10 +1589,13 @@
    "context": "byte-zero",
    "group": "media",
    "wait": 3000,
-   "tcp": 47198,
-   "udp": 47498,
+   "tcp": 47200,
+   "udp": 47500,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "video~textarea",
@@ -1252,10 +1603,13 @@
    "context": "textarea",
    "group": "media",
    "wait": 3000,
-   "tcp": 47199,
-   "udp": 47499,
+   "tcp": 47201,
+   "udp": 47501,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "video~srcdoc",
@@ -1263,10 +1617,13 @@
    "context": "srcdoc",
    "group": "media",
    "wait": 3000,
-   "tcp": 47200,
-   "udp": 47500,
+   "tcp": 47202,
+   "udp": 47502,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "video~write",
@@ -1274,10 +1631,13 @@
    "context": "write",
    "group": "media",
    "wait": 3000,
-   "tcp": 47201,
-   "udp": 47501,
+   "tcp": 47203,
+   "udp": 47503,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "video~resource",
@@ -1285,10 +1645,13 @@
    "context": "resource",
    "group": "media",
    "wait": 3000,
-   "tcp": 47202,
-   "udp": 47502,
+   "tcp": 47204,
+   "udp": 47504,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "hls",
@@ -1296,10 +1659,13 @@
    "context": "byte-zero",
    "group": "media",
    "wait": 3500,
-   "tcp": 47203,
-   "udp": 47503,
+   "tcp": 47205,
+   "udp": 47505,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "media-js",
@@ -1307,10 +1673,13 @@
    "context": "byte-zero",
    "group": "media",
    "wait": 3000,
-   "tcp": 47204,
-   "udp": 47504,
+   "tcp": 47206,
+   "udp": 47506,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "iframe-url",
@@ -1318,10 +1687,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47205,
-   "udp": 47505,
+   "tcp": 47207,
+   "udp": 47507,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-url~textarea",
@@ -1329,10 +1701,13 @@
    "context": "textarea",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47206,
-   "udp": 47506,
+   "tcp": 47208,
+   "udp": 47508,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-url~srcdoc",
@@ -1340,10 +1715,13 @@
    "context": "srcdoc",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47207,
-   "udp": 47507,
+   "tcp": 47209,
+   "udp": 47509,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-url~write",
@@ -1351,10 +1729,13 @@
    "context": "write",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47208,
-   "udp": 47508,
+   "tcp": 47210,
+   "udp": 47510,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "iframe-url~resource",
@@ -1362,10 +1743,13 @@
    "context": "resource",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47209,
-   "udp": 47509,
+   "tcp": 47211,
+   "udp": 47511,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc",
@@ -1373,10 +1757,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47210,
-   "udp": 47510,
+   "tcp": 47212,
+   "udp": 47512,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc-fetch",
@@ -1384,10 +1771,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47211,
-   "udp": 47511,
+   "tcp": 47213,
+   "udp": 47513,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc-nav",
@@ -1395,10 +1785,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47212,
-   "udp": 47512,
+   "tcp": 47214,
+   "udp": 47514,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc-top",
@@ -1406,10 +1799,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47213,
-   "udp": 47513,
+   "tcp": 47215,
+   "udp": 47515,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc-refresh",
@@ -1417,10 +1813,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47214,
-   "udp": 47514,
+   "tcp": 47216,
+   "udp": 47516,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-srcdoc-scripted",
@@ -1428,10 +1827,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47215,
-   "udp": 47515,
+   "tcp": 47217,
+   "udp": 47517,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "iframe-blank-write",
@@ -1439,10 +1841,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47216,
-   "udp": 47516,
+   "tcp": 47218,
+   "udp": 47518,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "iframe-data",
@@ -1450,10 +1855,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47217,
-   "udp": 47517,
+   "tcp": 47219,
+   "udp": 47519,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "iframe-blob",
@@ -1461,10 +1869,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47218,
-   "udp": 47518,
+   "tcp": 47220,
+   "udp": 47520,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "iframe-xdict",
@@ -1472,10 +1883,13 @@
    "context": "byte-zero",
    "group": "frames",
    "wait": 2500,
-   "tcp": 47219,
-   "udp": 47519,
+   "tcp": 47221,
+   "udp": 47521,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "worker-xdict",
@@ -1483,10 +1897,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47220,
-   "udp": 47520,
+   "tcp": 47222,
+   "udp": 47522,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "worker-blob",
@@ -1494,10 +1911,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47221,
-   "udp": 47521,
+   "tcp": 47223,
+   "udp": 47523,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "worker-data",
@@ -1505,10 +1925,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47222,
-   "udp": 47522,
+   "tcp": 47224,
+   "udp": 47524,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "worker-http",
@@ -1516,10 +1939,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47223,
-   "udp": 47523,
+   "tcp": 47225,
+   "udp": 47525,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "sharedworker-xdict",
@@ -1527,10 +1953,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47224,
-   "udp": 47524,
+   "tcp": 47226,
+   "udp": 47526,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "sharedworker-blob",
@@ -1538,10 +1967,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47225,
-   "udp": 47525,
+   "tcp": 47227,
+   "udp": 47527,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "serviceworker",
@@ -1549,10 +1981,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47226,
-   "udp": 47526,
+   "tcp": 47228,
+   "udp": 47528,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "audioworklet",
@@ -1560,10 +1995,13 @@
    "context": "byte-zero",
    "group": "workers",
    "wait": 2500,
-   "tcp": 47227,
-   "udp": 47527,
+   "tcp": 47229,
+   "udp": 47529,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "meta-refresh",
@@ -1571,10 +2009,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47228,
-   "udp": 47528,
+   "tcp": 47230,
+   "udp": 47530,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "meta-refresh~textarea",
@@ -1582,10 +2023,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47229,
-   "udp": 47529,
+   "tcp": 47231,
+   "udp": 47531,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "meta-refresh~srcdoc",
@@ -1593,10 +2037,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47230,
-   "udp": 47530,
+   "tcp": 47232,
+   "udp": 47532,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "meta-refresh~write",
@@ -1604,10 +2051,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47231,
-   "udp": 47531,
+   "tcp": 47233,
+   "udp": 47533,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "meta-refresh~resource",
@@ -1615,10 +2065,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47232,
-   "udp": 47532,
+   "tcp": 47234,
+   "udp": 47534,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "nav-location",
@@ -1626,10 +2079,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47233,
-   "udp": 47533,
+   "tcp": 47235,
+   "udp": 47535,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "nav-api",
@@ -1637,10 +2093,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47234,
-   "udp": 47534,
+   "tcp": 47236,
+   "udp": 47536,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "window-open",
@@ -1648,10 +2107,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47235,
-   "udp": 47535,
+   "tcp": 47237,
+   "udp": 47537,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "window-open-blank-write",
@@ -1659,10 +2121,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47236,
-   "udp": 47536,
+   "tcp": 47238,
+   "udp": 47538,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "form-post",
@@ -1670,10 +2135,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47237,
-   "udp": 47537,
+   "tcp": 47239,
+   "udp": 47539,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "form-post~textarea",
@@ -1681,10 +2149,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47238,
-   "udp": 47538,
+   "tcp": 47240,
+   "udp": 47540,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "form-post~srcdoc",
@@ -1692,10 +2163,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47239,
-   "udp": 47539,
+   "tcp": 47241,
+   "udp": 47541,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "form-post~write",
@@ -1703,10 +2177,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47240,
-   "udp": 47540,
+   "tcp": 47242,
+   "udp": 47542,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "form-post~resource",
@@ -1714,10 +2191,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47241,
-   "udp": 47541,
+   "tcp": 47243,
+   "udp": 47543,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "form-blank",
@@ -1725,10 +2205,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47242,
-   "udp": 47542,
+   "tcp": 47244,
+   "udp": 47544,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-click",
@@ -1736,10 +2219,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47243,
-   "udp": 47543,
+   "tcp": 47245,
+   "udp": 47545,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-click~textarea",
@@ -1747,10 +2233,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47244,
-   "udp": 47544,
+   "tcp": 47246,
+   "udp": 47546,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click~srcdoc",
@@ -1758,10 +2247,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47245,
-   "udp": 47545,
+   "tcp": 47247,
+   "udp": 47547,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click~write",
@@ -1769,10 +2261,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47246,
-   "udp": 47546,
+   "tcp": 47248,
+   "udp": 47548,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-click~resource",
@@ -1780,10 +2275,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47247,
-   "udp": 47547,
+   "tcp": 47249,
+   "udp": 47549,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click-name",
@@ -1791,12 +2289,15 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47248,
-   "udp": 47548,
+   "tcp": 47250,
+   "udp": 47550,
    "exclusive": false,
    "names": [
     "an-anchor-click-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-click-name~textarea",
@@ -1804,12 +2305,15 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47249,
-   "udp": 47549,
+   "tcp": 47251,
+   "udp": 47551,
    "exclusive": false,
    "names": [
     "an-anchor-click-name-textarea-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click-name~srcdoc",
@@ -1817,12 +2321,15 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47250,
-   "udp": 47550,
+   "tcp": 47252,
+   "udp": 47552,
    "exclusive": false,
    "names": [
     "an-anchor-click-name-srcdoc-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click-name~write",
@@ -1830,12 +2337,15 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47251,
-   "udp": 47551,
+   "tcp": 47253,
+   "udp": 47553,
    "exclusive": false,
    "names": [
     "an-anchor-click-name-write-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-click-name~resource",
@@ -1843,12 +2353,15 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47252,
-   "udp": 47552,
+   "tcp": 47254,
+   "udp": 47554,
    "exclusive": false,
    "names": [
     "an-anchor-click-name-resource-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-click-https",
@@ -1856,10 +2369,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47253,
-   "udp": 47553,
+   "tcp": 47255,
+   "udp": 47555,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-detached",
@@ -1867,10 +2383,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47254,
-   "udp": 47554,
+   "tcp": 47256,
+   "udp": 47556,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-in-srcdoc",
@@ -1878,10 +2397,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47255,
-   "udp": 47555,
+   "tcp": 47257,
+   "udp": 47557,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-top-from-srcdoc",
@@ -1889,10 +2411,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47256,
-   "udp": 47556,
+   "tcp": 47258,
+   "udp": 47558,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-in-blank-frame",
@@ -1900,10 +2425,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47257,
-   "udp": 47557,
+   "tcp": 47259,
+   "udp": 47559,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-blank",
@@ -1911,10 +2439,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47258,
-   "udp": 47558,
+   "tcp": 47260,
+   "udp": 47560,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-blank~textarea",
@@ -1922,10 +2453,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47259,
-   "udp": 47559,
+   "tcp": 47261,
+   "udp": 47561,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-blank~srcdoc",
@@ -1933,10 +2467,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47260,
-   "udp": 47560,
+   "tcp": 47262,
+   "udp": 47562,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-blank~write",
@@ -1944,10 +2481,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47261,
-   "udp": 47561,
+   "tcp": 47263,
+   "udp": 47563,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-blank~resource",
@@ -1955,10 +2495,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47262,
-   "udp": 47562,
+   "tcp": 47264,
+   "udp": 47564,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-download",
@@ -1966,10 +2509,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47263,
-   "udp": 47563,
+   "tcp": 47265,
+   "udp": 47565,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-download~textarea",
@@ -1977,10 +2523,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47264,
-   "udp": 47564,
+   "tcp": 47266,
+   "udp": 47566,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-download~srcdoc",
@@ -1988,10 +2537,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47265,
-   "udp": 47565,
+   "tcp": 47267,
+   "udp": 47567,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "anchor-download~write",
@@ -1999,10 +2551,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47266,
-   "udp": 47566,
+   "tcp": 47268,
+   "udp": 47568,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "anchor-download~resource",
@@ -2010,10 +2565,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47267,
-   "udp": 47567,
+   "tcp": 47269,
+   "udp": 47569,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "nav-data-url",
@@ -2021,10 +2579,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47268,
-   "udp": 47568,
+   "tcp": 47270,
+   "udp": 47570,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "nav-blob-url",
@@ -2032,10 +2593,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47269,
-   "udp": 47569,
+   "tcp": 47271,
+   "udp": 47571,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 2,
+   "scriptsVisible": 2
   },
   {
    "id": "nav-svg-doc",
@@ -2043,10 +2607,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47270,
-   "udp": 47570,
+   "tcp": 47272,
+   "udp": 47572,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "nav-xdict-html",
@@ -2054,10 +2621,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47271,
-   "udp": 47571,
+   "tcp": 47273,
+   "udp": 47573,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "base-href",
@@ -2065,10 +2635,13 @@
    "context": "byte-zero",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47272,
-   "udp": 47572,
+   "tcp": 47274,
+   "udp": 47574,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "base-href~textarea",
@@ -2076,10 +2649,13 @@
    "context": "textarea",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47273,
-   "udp": 47573,
+   "tcp": 47275,
+   "udp": 47575,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 0
   },
   {
    "id": "base-href~srcdoc",
@@ -2087,10 +2663,13 @@
    "context": "srcdoc",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47274,
-   "udp": 47574,
+   "tcp": 47276,
+   "udp": 47576,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "base-href~write",
@@ -2098,10 +2677,13 @@
    "context": "write",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47275,
-   "udp": 47575,
+   "tcp": 47277,
+   "udp": 47577,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "base-href~resource",
@@ -2109,10 +2691,13 @@
    "context": "resource",
    "group": "navigation",
    "wait": 2500,
-   "tcp": 47276,
-   "udp": 47576,
+   "tcp": 47278,
+   "udp": 47578,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "svg-image",
@@ -2120,10 +2705,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47277,
-   "udp": 47577,
+   "tcp": 47279,
+   "udp": 47579,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "svg-cdata",
@@ -2131,10 +2719,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47278,
-   "udp": 47578,
+   "tcp": 47280,
+   "udp": 47580,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "svg-use",
@@ -2142,10 +2733,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47279,
-   "udp": 47579,
+   "tcp": 47281,
+   "udp": 47581,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "svg-feimage",
@@ -2153,10 +2747,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47280,
-   "udp": 47580,
+   "tcp": 47282,
+   "udp": 47582,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "svg-a-click",
@@ -2164,10 +2761,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47281,
-   "udp": 47581,
+   "tcp": 47283,
+   "udp": 47583,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "smil-set-image",
@@ -2175,10 +2775,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47282,
-   "udp": 47582,
+   "tcp": 47284,
+   "udp": 47584,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "smil-animate-a",
@@ -2186,10 +2789,13 @@
    "context": "byte-zero",
    "group": "svg",
    "wait": 2500,
-   "tcp": 47283,
-   "udp": 47583,
+   "tcp": 47285,
+   "udp": 47585,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "textarea-comment",
@@ -2197,10 +2803,13 @@
    "context": "byte-zero",
    "group": "ordinary",
    "wait": 2500,
-   "tcp": 47284,
-   "udp": 47584,
+   "tcp": 47286,
+   "udp": 47586,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 0,
+   "scriptsVisible": 0
   },
   {
    "id": "rtc-stun",
@@ -2208,10 +2817,13 @@
    "context": "byte-zero",
    "group": "webrtc",
    "wait": 4000,
-   "tcp": 47285,
-   "udp": 47585,
+   "tcp": 47287,
+   "udp": 47587,
    "exclusive": true,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "rtc-stun-name",
@@ -2219,12 +2831,15 @@
    "context": "byte-zero",
    "group": "webrtc",
    "wait": 4000,
-   "tcp": 47286,
-   "udp": 47586,
+   "tcp": 47288,
+   "udp": 47588,
    "exclusive": true,
    "names": [
     "st-rtc-stun-name-h1.invalid"
-   ]
+   ],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "rtc-turn",
@@ -2232,10 +2847,13 @@
    "context": "byte-zero",
    "group": "webrtc",
    "wait": 4000,
-   "tcp": 47287,
-   "udp": 47587,
+   "tcp": 47289,
+   "udp": 47589,
    "exclusive": true,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "rtc-remote-candidate",
@@ -2243,10 +2861,13 @@
    "context": "byte-zero",
    "group": "webrtc",
    "wait": 4500,
-   "tcp": 47288,
-   "udp": 47588,
+   "tcp": 47290,
+   "udp": 47590,
    "exclusive": true,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "rtc-host",
@@ -2254,10 +2875,13 @@
    "context": "byte-zero",
    "group": "webrtc",
    "wait": 4000,
-   "tcp": 47289,
-   "udp": 47589,
+   "tcp": 47291,
+   "udp": 47591,
    "exclusive": true,
-   "names": []
+   "names": [],
+   "probe": "",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "ok-xdict",
@@ -2265,10 +2889,13 @@
    "context": "byte-zero",
    "group": "allowed",
    "wait": 3000,
-   "tcp": 47290,
-   "udp": 47590,
+   "tcp": 47292,
+   "udp": 47592,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "var r=[],q=function(s){return document.querySelector(s)};var i=q('img[src$=\"ok.svg\"]');if(i&&i.complete&&i.naturalWidth>0)r.push(['ok','img']);var j=q('img[src^=\"data:\"]');if(j&&j.complete&&j.naturalWidth>0)r.push(['ok','data-img']);var l=q('link[href$=\"ok.css\"]');if(l&&l.sheet)r.push(['ok','css']);var u=q('audio');if(u&&u.readyState>=3)r.push(['ok','audio']);return r",
+   "scripts": 3,
+   "scriptsVisible": 3
   },
   {
    "id": "ok-placeholder",
@@ -2276,12 +2903,15 @@
    "context": "byte-zero",
    "group": "allowed",
    "wait": 2500,
-   "tcp": 47291,
-   "udp": 47591,
+   "tcp": 47293,
+   "udp": 47593,
    "exclusive": false,
    "names": [
     "ph-ok-placeholder-h1.invalid"
-   ]
+   ],
+   "probe": "var p=document.getElementById('p');return p&&p.complete&&p.naturalWidth>0?[['ok','placeholder '+p.naturalWidth]]:[]",
+   "scripts": 1,
+   "scriptsVisible": 1
   },
   {
    "id": "ok-link-nav",
@@ -2289,10 +2919,13 @@
    "context": "byte-zero",
    "group": "allowed",
    "wait": 2500,
-   "tcp": 47292,
-   "udp": 47592,
+   "tcp": 47294,
+   "udp": 47594,
    "exclusive": false,
-   "names": []
+   "names": [],
+   "probe": "if(!window.__go){window.__go=1;setTimeout(function(){var g=document.getElementById('go');if(g)g.click()},400)}return []",
+   "scripts": 0,
+   "scriptsVisible": 0
   }
  ]
 }

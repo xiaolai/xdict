@@ -139,6 +139,7 @@ e2e-affected:
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/remote-build-test.sh
+	@python3 -I Tools/tests/hostile_test.py
 
 e2e-status:
 	@Tools/e2e-status.sh show

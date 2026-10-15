@@ -36,7 +36,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
     private func run() async throws {
         guard let out = options.out else { throw LabFailure(description: "--out is missing") }
         let cache = FileManager.default.temporaryDirectory.appending(path: "xdict-lab-core-\(ProcessInfo.processInfo.processIdentifier)")
-        let core = try LabCore(cache: cache)
+        let core = try LabCore(cache: cache, stripOffForTests: options.stripOffForTests)
         switch options.mode {
         case .hostile:
             guard let fixture = options.fixture, let casesFile = options.cases else {
@@ -60,6 +60,9 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
             try await run.start()
         case .corpus:
             try Report.write(try await CorpusRun.run(options: options, core: core), to: out)
+            exit(0)
+        case .gallery:
+            try Report.write(try await GalleryRun.run(options: options, core: core), to: out)
             exit(0)
         case nil:
             throw LabFailure(description: "no mode")

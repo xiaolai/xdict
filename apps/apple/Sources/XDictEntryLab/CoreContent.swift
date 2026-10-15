@@ -13,10 +13,10 @@ struct LabFailure: Error, CustomStringConvertible {
 final class LabCore: @unchecked Sendable {
     let core: Core
 
-    init(cache: URL) throws {
+    init(cache: URL, stripOffForTests: Bool) throws {
         try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
         core = try Core(config: Config(dataDir: cache.path, cacheDir: cache.path, clientProtocol: versions().protocol,
-                                       entropy: Data()))
+                                       entropy: Data(), stripOffForTests: stripOffForTests))
     }
 
     /// A folder as a package, as `entries_corpus` reads one: its MDX, its MDD volumes in order (`X.mdd`, `X.1.mdd`, …),

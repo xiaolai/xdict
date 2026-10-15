@@ -64,6 +64,7 @@
     launch.searchFocused keyboard.typed keyboard.firstQueryNoPointer voiceover.resultsNameTheirDictionary
     keyboard.results keyboard.entry keyboard.linkFollowed voiceover.linkFocused keyboard.back keyboard.forwardAndOrigin
     keyboard.searchCommand keyboard.scope voiceover.scopeVisible keyboard.scopeAll keyboard.suggestion driver.ran
+    ax.entryBelowToolbar ax.entryInset
 
 @ lookup.paging default kit,fixtures,corpus group=lookup
     paging.everyRecord ax.paging

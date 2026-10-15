@@ -11,6 +11,8 @@
 //                               texts, depth); an entry's web content is not descended into
 //   keys web <pid>              the shown entry as read: how many elements, its links (and which has the keyboard),
 //                               and the app's focused element read after it
+//   keys geometry <pid>         frames (screen points, top-left origin) of the main window, its toolbar, the entry's
+//                               web area and the entry's first text
 //
 // **The grant it needs** (as `Tools/hostile/pointer.swift`): a command started over SSH is judged by TCC as its
 // session's responsible process, `sshd-keygen-wrapper`, which needs Accessibility to post events and to read another
@@ -199,5 +201,46 @@ if command == "web" {
     walk(web, 0)
     let focused: Any = element(attribute(app, kAXFocusedUIElementAttribute)).map(describe) ?? NSNull()
     emit(["web": ["elements": count, "links": links], "focused": focused])
+}
+/// An element's frame in screen points (top-left origin), or nil when it has none.
+func frame(_ element: AXUIElement) -> [String: Double]? {
+    guard let position = attribute(element, kAXPositionAttribute), let size = attribute(element, kAXSizeAttribute),
+          CFGetTypeID(position) == AXValueGetTypeID(), CFGetTypeID(size) == AXValueGetTypeID() else { return nil }
+    var point = CGPoint.zero
+    var extent = CGSize.zero
+    // Checked by type above, so the casts cannot fail.
+    guard AXValueGetValue(position as! AXValue, .cgPoint, &point),
+          AXValueGetValue(size as! AXValue, .cgSize, &extent) else { return nil }
+    return ["x": point.x, "y": point.y, "width": extent.width, "height": extent.height]
+}
+
+// The main window's toolbar, entry and the entry's first text, as frames: where the entry starts and how far its text
+// stands from the pane's edge.
+if command == "geometry" {
+    let app = application(arguments.dropFirst().first)
+    guard let main = element(attribute(app, kAXMainWindowAttribute)) else {
+        emit(["why": "the app has no main window"])
+    }
+    func first(in element: AXUIElement, _ depth: Int, _ match: (AXUIElement) -> Bool) -> AXUIElement? {
+        if match(element) { return element }
+        guard depth < 60 else { return nil }
+        for child in children(element) {
+            if let found = first(in: child, depth + 1, match) { return found }
+        }
+        return nil
+    }
+    let toolbar = first(in: main, 0) { string($0, kAXRoleAttribute) == "AXToolbar" }
+    let web = first(in: main, 0) { string($0, kAXRoleAttribute) == "AXWebArea" }
+    let text = web.flatMap { area in
+        first(in: area, 0) {
+            string($0, kAXRoleAttribute) == "AXStaticText" && !(string($0, kAXValueAttribute) ?? "").isEmpty
+        }
+    }
+    var found: [String: Any] = [:]
+    for (name, item) in [("window", main), ("toolbar", toolbar), ("web", web), ("text", text)] {
+        found[name] = item.flatMap(frame) ?? NSNull()
+    }
+    found["textValue"] = text.flatMap { string($0, kAXValueAttribute) } ?? NSNull()
+    emit(found)
 }
 die("no command \(command)", 2)

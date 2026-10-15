@@ -69,6 +69,28 @@ def dns_lines(path):
     return out
 
 
+def outcome(left, written, visible, served):
+    """What became of a case: it `left`; the core `stripped` a script it saw (its strip list); the core dropped the
+    script with the comment it sat in (`commented`, S2: the core read it as a comment); or nothing left (`blocked`)."""
+    if left:
+        return "left"
+    if not all(isinstance(n, int) for n in (written, visible, served)) or served >= written:
+        return "blocked"
+    return "stripped" if served < visible else "commented"
+
+
+def ok_xdict_broken(oks, stripped):
+    """What `ok-xdict` lacks: its drawn content always; its scripts' reports only where the core did not strip them."""
+    scripted = {"script", "inline", "eval", "function"}
+    return sorted(({"data-img", "img", "css", "audio"} | (set() if stripped else scripted)) - set(oks))
+
+
+def runs_of(listed, part):
+    """The run labels of `part` (`production`: those held to zero; `controls`: the rest; None: all), in order."""
+    held = set(listed["productionPart"])
+    return [r for r in listed["runs"] if part is None or (r in held) == (part == "production")]
+
+
 def summarize(d):
     listed = json.load(open(os.path.join(d, "cases.json")))
     lab = json.load(open(os.path.join(d, "report.json")))
@@ -127,17 +149,34 @@ def summarize(d):
             leaks.append(f"dns×{sum(dns.values())} {dns_who}")
         broken = None
         oks = {p[1] for p in page if len(p) == 2 and p[0] == "ok"}
+        # Stripped: the core served fewer `<script` tags than the case wrote (its strip list removed them). An outcome
+        # of its own, not a block: what the view's layers do with a live script is the runs with the strip off.
+        written, served = shell.get("scriptsWritten"), shell.get("scriptsServed")
+        visible = c.get("scriptsVisible")
+        stripped = outcome(False, written, visible, served) == "stripped"
         if cid == "ok-xdict":
-            need = {"script", "inline", "eval", "function", "data-img", "img", "css", "audio"}
-            broken = sorted(need - oks)
+            # Its scripts report `script`, `inline`, `eval` and `function`; under the strip they are expected gone.
+            broken = ok_xdict_broken(oks, stripped)
         elif cid == "ok-placeholder":
             broken = [] if any(str(o).startswith("placeholder ") and not str(o).endswith(" 0") for o in oks) \
                 else ["placeholder"]
+        elif cid == "frame-strip":
+            # The reading frame put itself back: its three stylesheets and the theme the shell set, not the page's.
+            back = [p[1] for p in page if len(p) == 2 and p[0] == "frame-back"]
+            broken = [] if back and re.fullmatch(r"3 (light|dark)", str(back[-1])) else [f"frame-back {back}"]
+        elif cid == "colour-writer":
+            # Every colour the loop wrote ends a token and no inline box survives; that the page's own report came at
+            # all, after its loop, is the bound on the guard's work.
+            end = [p[1] for p in page if len(p) == 2 and p[0] == "colour-end"]
+            m = re.fullmatch(r"0 0 (\d+) (\d+)", str(end[-1])) if end else None
+            broken = [] if m and int(m.group(2)) >= 3 else [f"colour-end {end}"]
         elif cid == "ok-link-nav":
             broken = [] if any("linkRouted" in e and '"lookup"' in e for e in events) else ["routed lookup"]
         cases[cid] = {
             "payload": c["payload"], "context": c["context"], "group": c["group"],
             "loaded": bool(shell.get("loaded")), "left": bool(leaks), "leaks": leaks, "broken": broken,
+            "stripped": stripped, "outcome": outcome(bool(leaks), written, visible, served),
+            "scriptsWritten": written, "scriptsVisible": visible, "scriptsServed": served,
             "http": http, "tcpAccept": tcp_accept, "tcpIdle": tcp_idle, "udp": udp, "dns": dns, "dnsClients": dns_who,
             "liveInEntry": shell.get("entryHoldsLiveTarget"), "liveInResource": shell.get("resourceHoldsLiveTarget"),
             "refusal": shell.get("refusal"), "page": [": ".join(str(x) for x in p) for p in page][:40],
@@ -170,6 +209,9 @@ def summarize(d):
         "switchesReadBack": lab.get("switchesReadBack"), "opened": lab.get("opened"), "os": lab.get("os"),
         "webkit": lab.get("webkit"), "controls": controls, "cases": cases,
         "notLoaded": sorted(cid for cid, v in cases.items() if not v["loaded"]),
+        # What became of each case: it left, the core stripped its script, or the view blocked it (nothing left).
+        "outcomes": {k: sum(1 for v in cases.values() if v["outcome"] == k)
+                     for k in ("left", "stripped", "commented", "blocked")},
         "notReported": sorted(set(cases) - set(labcases)),
         "stray": stray, "webkitOtherLookups": [f"{ts} {w} {h} {what}" for (ts, w, h, what) in other],
     }
@@ -431,10 +473,9 @@ def suite(res, part=None):
     """`part` is one E2E sub-stage's share (`Tools/e2e.sh`): `production` holds the production run alone to its rules;
     `controls` the other runs, the baseline and every layer's probe (none of which reads production). None: all."""
     listed = json.load(open(os.path.join(res, "cases.json")))
+    production_part = set(listed["productionPart"])
     runs = {}
-    for label in listed["runs"]:
-        if part is not None and (label == "production") != (part == "production"):
-            continue
+    for label in runs_of(listed, part):
         path = os.path.join(res, label, "summary.json")
         runs[label] = json.load(open(path)) if os.path.exists(path) else None
     verdicts = []
@@ -458,11 +499,26 @@ def suite(res, part=None):
         rule(sorted(s["disabled"] or []) == wanted_off, f"{label}: the lab ran with exactly {wanted_off or 'nothing'} off")
         rule(s["opened"] == [], f"{label}: nothing was opened in a browser ({s['opened']})")
 
+    for label in ("shell", "production"):
+        held = runs.get(label)
+        if not held:
+            continue
+        left = {cid: v["leaks"] for cid, v in held["cases"].items() if v["left"]}
+        o = held.get("outcomes", {})
+        rule(not left, f"{label}: nothing left, on any observer, from any of {len(held['cases'])} cases "
+                       f"({left if left else 'zero http, tcp, udp, dns, mdns'}; stripped {o.get('stripped')}, "
+                       f"commented {o.get('commented')}, blocked {o.get('blocked')})")
+    shell = runs.get("shell")
+    if shell:
+        # The page scripts that attack the frame run here, where the strip is off: in production they are stripped.
+        broken = shell["cases"].get("colour-writer", {}).get("broken")
+        rule(broken == [], f"shell: a script's colours end as tokens, with bounded work ({broken})")
+        broken = shell["cases"].get("frame-strip", {}).get("broken")
+        rule(broken == [], f"shell: the reading frame puts itself back after a page removes it ({broken})")
+        broken = shell["cases"].get("ok-xdict", {}).get("broken")
+        rule(broken == [], f"shell: allowed content works with its scripts live: ok-xdict (missing {broken})")
     production = runs.get("production")
     if production:
-        left = {cid: v["leaks"] for cid, v in production["cases"].items() if v["left"]}
-        rule(not left, f"production: nothing left, on any observer, from any of {len(production['cases'])} cases "
-                       f"({left if left else 'zero http, tcp, udp, dns, mdns'})")
         rule(not production["webkitOtherLookups"],
              f"production: no other lookup by the lab's WebKit ({production['webkitOtherLookups'][:3]})")
         rule((production["confinement"] or {}).get("production") is True, "production: the confinement is the app's")
@@ -471,6 +527,9 @@ def suite(res, part=None):
         for cid in ("ok-xdict", "ok-placeholder", "ok-link-nav"):
             broken = production["cases"].get(cid, {}).get("broken")
             rule(broken == [], f"production: allowed content works: {cid} (missing {broken})")
+        ok = production["cases"].get("ok-xdict", {})
+        rule(ok.get("stripped") is True, f"production: ok-xdict's scripts are stripped, not run "
+                                         f"({ok.get('scriptsServed')} of {ok.get('scriptsWritten')} served)")
 
     baseline = runs.get("baseline")
     if baseline:
@@ -482,7 +541,7 @@ def suite(res, part=None):
         rule(live > 0, f"baseline: {live} cases reached WebKit with a live target the rewriter did not see")
 
     for layer, probe in (listed["probes"] if part != "production" else {}).items():
-        if "production" in (probe["run"], probe["against"]):
+        if production_part & {probe["run"], probe["against"]}:
             raise SystemExit(f"layer {layer}'s probe reads production: the suite's parts are no longer apart")
         on, off = runs.get(probe["run"]), runs.get(probe["against"])
         if not on or not off:
@@ -510,15 +569,15 @@ def matrix(listed, runs):
         for label in labels:
             v = runs[label]["cases"].get(c["id"], {})
             cells.append("**LEFT** " + ",".join(sorted({x.split("×")[0].split(":")[0] for x in v["leaks"]}))
-                         if v.get("left") else ("void" if not v.get("loaded") else "·"))
+                         if v.get("left") else ("void" if not v.get("loaded") else v["outcome"] if v.get("outcome") in ("stripped", "commented") else "·"))
         rows.append(f"| {c['id']} | {c['context']} | " + " | ".join(cells) + " |")
     return "\n".join(rows)
 
 
 def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
-    if command == "runs" and len(sys.argv) == 3:
-        print(" ".join(json.load(open(sys.argv[2]))["runs"]))
+    if command == "runs" and len(sys.argv) in (3, 4):
+        print(" ".join(runs_of(json.load(open(sys.argv[2])), sys.argv[3] if len(sys.argv) == 4 else None)))
         return 0
     if command == "off" and len(sys.argv) == 4:
         listed = json.load(open(sys.argv[2]))
