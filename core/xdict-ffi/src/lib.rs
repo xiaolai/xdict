@@ -98,6 +98,8 @@ pub struct Hit {
 pub struct View {
     pub base_url: String,
     pub max_body_bytes: u64,
+    #[uniffi(default = false)]
+    pub original_style: bool,
 }
 
 #[uniffi::remote(Record)]

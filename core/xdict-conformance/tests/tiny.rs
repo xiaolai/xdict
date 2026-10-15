@@ -84,7 +84,10 @@ fn the_tiny_dictionary_conforms() {
     let view = |max: Option<u64>| View {
         base_url: x["view"]["baseUrl"].as_str().unwrap().into(),
         max_body_bytes: max.unwrap_or(x["view"]["maxBodyBytes"].as_u64().unwrap()),
+        original_style: false,
     };
+    // ADR-0010 Q3: a case may ask for the dictionary's own style.
+    let styled = |case: &Value| View { original_style: case["originalStyle"].as_bool().unwrap_or(false), ..view(None) };
     let mut failures = Vec::new();
     let mut check = |name: &str, expected: &Value, actual: Value| {
         if let Err(e) = subset(expected, &actual, name) {
@@ -156,7 +159,7 @@ fn the_tiny_dictionary_conforms() {
         check(&format!("links[{i}]"), &case["link"], outcome(got));
     }
     for (i, case) in x["resources"].as_array().unwrap().iter().enumerate() {
-        let got = core.resource(dict.clone(), case["path"].as_str().unwrap().into(), view(None));
+        let got = core.resource(dict.clone(), case["path"].as_str().unwrap().into(), styled(case));
         check(&format!("resources[{i}]"), &case["resource"], outcome(got));
     }
     check("health", &x["health"], outcome(core.health(dict.clone(), &NoProgress)));

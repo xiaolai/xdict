@@ -306,6 +306,7 @@ impl Style {
                 counts: Counts::default(),
                 rules: Some(Vec::new()),
                 strip_off_for_tests: false,
+                original: false,
             };
             let out = crate::rewrite::normalized(sheet, "", "", usize::MAX, norm, None);
             let more = out.rules.unwrap_or_default();
@@ -435,7 +436,20 @@ pub fn css_normalized_within(
     style: &Style,
     max: usize,
 ) -> Result<(String, Counts), Exceeded> {
-    let norm = Norm { style, counts: Counts::default(), rules: None, strip_off_for_tests: false };
+    css_styled_within(text, base, dir, style, false, max)
+}
+
+/// [`css_normalized_within`], or, when `original` (the reader's "Original style", ADR-0010 Q3), the sheet as the
+/// dictionary wrote it: rewritten and stripped exactly as a normalized one is, its declarations left as they are.
+pub fn css_styled_within(
+    text: &str,
+    base: &str,
+    dir: &str,
+    style: &Style,
+    original: bool,
+    max: usize,
+) -> Result<(String, Counts), Exceeded> {
+    let norm = Norm { style, counts: Counts::default(), rules: None, strip_off_for_tests: false, original };
     let out = crate::rewrite::normalized(text, base, dir, max, norm, None);
     Ok((out.text?, out.counts))
 }
@@ -462,7 +476,21 @@ pub fn html_normalized_unstripped_within(
     strip_off_for_tests: bool,
     max: usize,
 ) -> Result<(String, Counts), Exceeded> {
-    let norm = Norm { style, counts: Counts::default(), rules: None, strip_off_for_tests };
+    html_styled_within(text, base, dir, style, strip_off_for_tests, false, max)
+}
+
+/// [`html_normalized_unstripped_within`], or, when `original` (ADR-0010 Q3), with the dictionary's own styles and
+/// presentational attributes left as they are: rewritten and stripped exactly as a normalized page is.
+pub fn html_styled_within(
+    text: &str,
+    base: &str,
+    dir: &str,
+    style: &Style,
+    strip_off_for_tests: bool,
+    original: bool,
+    max: usize,
+) -> Result<(String, Counts), Exceeded> {
+    let norm = Norm { style, counts: Counts::default(), rules: None, strip_off_for_tests, original };
     let out = crate::rewrite::normalized_html(text.into(), base, dir, max, norm, None);
     Ok((out.text?, out.counts))
 }
@@ -479,6 +507,9 @@ pub struct Entry<'a> {
     pub is_key: Option<&'a dyn Fn(&str) -> bool>,
     /// The strip list (S1–S14) off: the hostile battery's lab only (`Config::strip_off_for_tests`).
     pub strip_off_for_tests: bool,
+    /// The reader's "Original style" for this dictionary (ADR-0010 Q3): the dictionary's own styles, presentational
+    /// attributes, faces and decorations kept. The rewrite, the strip list and the roles apply as they always do.
+    pub original: bool,
 }
 
 /// An entry as [`html_normalized_within`] writes it, with XDict's roles marked (`data-xdict-role`,
@@ -492,7 +523,13 @@ pub fn entry_normalized_within<'a, 't>(
     entry: &Entry<'a>,
     max: usize,
 ) -> Result<(String, Counts), Exceeded> {
-    let norm = Norm { style, counts: Counts::default(), rules: None, strip_off_for_tests: entry.strip_off_for_tests };
+    let norm = Norm {
+        style,
+        counts: Counts::default(),
+        rules: None,
+        strip_off_for_tests: entry.strip_off_for_tests,
+        original: entry.original,
+    };
     let out = crate::rewrite::normalized_html(text.into(), base, dir, max, norm, Some(entry));
     Ok((out.text?, out.counts))
 }
@@ -511,6 +548,8 @@ pub(crate) struct Norm<'s> {
     pub(crate) rules: Option<Vec<Rule>>,
     /// The strip list off (S1–S14, Q6's scripts and audio handlers): [`Entry::strip_off_for_tests`].
     pub(crate) strip_off_for_tests: bool,
+    /// The dictionary's own look kept: [`Entry::original`].
+    pub(crate) original: bool,
 }
 
 impl<'s> Norm<'s> {
@@ -521,6 +560,7 @@ impl<'s> Norm<'s> {
             counts: Counts::default(),
             rules: self.rules.as_ref().map(|_| Vec::new()),
             strip_off_for_tests: self.strip_off_for_tests,
+            original: self.original,
         }
     }
 
@@ -793,6 +833,9 @@ pub(crate) fn finish(
         let decls = decls.iter().flatten().map(|d| (d.name.clone(), d.value.trim().to_owned())).collect();
         rules.push(Rule { selector: selector.clone(), face, page, decls, grouped: frame.grouped });
     }
+    if norm.original {
+        return revealed(&pieces, &decls, &selector, page, norm);
+    }
     let style = norm.style;
     let counts = &mut norm.counts;
     if face {
@@ -828,9 +871,7 @@ pub(crate) fn finish(
             *counts.icons.entry("glyph-dropped".into()).or_default() += 1;
         }
         // S9: the element that wraps every entry, hidden until the dictionary's script runs, is shown.
-        let hides = (decl.name == "display" && decl.value.trim().eq_ignore_ascii_case("none"))
-            || (decl.name == "visibility" && decl.value.trim().eq_ignore_ascii_case("hidden"));
-        if hides && !page && style.facts.reveals(&selector) {
+        if !page && reveals(decl, &selector, style) {
             counts.strip.revealed += 1;
             changed = true;
             continue;
@@ -909,6 +950,38 @@ pub(crate) fn finish(
         changed = true;
     }
     changed.then(|| out.join(";"))
+}
+
+/// A block's declarations in "Original style" (ADR-0010 Q3): as written, but for what the strip list takes (S9), which
+/// is the same in either style.
+fn revealed(
+    pieces: &[&str],
+    decls: &[Option<Decl<'_>>],
+    selector: &str,
+    page: bool,
+    norm: &mut Norm<'_>,
+) -> Option<String> {
+    let mut changed = false;
+    let mut out: Vec<&str> = Vec::with_capacity(pieces.len());
+    for (piece, decl) in pieces.iter().zip(decls) {
+        if let Some(decl) = decl
+            && !page
+            && reveals(decl, selector, norm.style)
+        {
+            norm.counts.strip.revealed += 1;
+            changed = true;
+            continue;
+        }
+        out.push(piece);
+    }
+    changed.then(|| out.join(";"))
+}
+
+/// S9: a declaration that hides the element wrapping every entry, until the dictionary's script shows it.
+fn reveals(decl: &Decl<'_>, selector: &str, style: &Style) -> bool {
+    let hides = (decl.name == "display" && decl.value.trim().eq_ignore_ascii_case("none"))
+        || (decl.name == "visibility" && decl.value.trim().eq_ignore_ascii_case("hidden"));
+    hides && style.facts.reveals(selector)
 }
 
 /// One declaration as written: up to its `:`, its value (`!important` taken off), and the space after it.

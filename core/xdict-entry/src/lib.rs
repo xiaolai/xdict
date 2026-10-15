@@ -22,7 +22,8 @@ mod url;
 pub use calibrate::{file_name, linked_sheets};
 pub use normalize::{
     Base, BaseFrom, Counts, Entry, Kept, KeptReason, STYLE, Strips, Style, TOKENS, css_normalized_within,
-    entry_normalized_within, html_normalized_unstripped_within, html_normalized_within,
+    css_styled_within, entry_normalized_within, html_normalized_unstripped_within, html_normalized_within,
+    html_styled_within,
 };
 pub use phon::Transcriptions;
 pub use rewrite::{

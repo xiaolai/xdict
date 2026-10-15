@@ -128,7 +128,7 @@ x.entries.forEach((c: any, i: number) => {
 });
 const origin = { type: 'entry' as const, entry: { edition: imported.edition, key: 'run', occurrence: 0 } };
 x.links.forEach((c: any, i: number) => check(`links[${i}]`, c.link, outcome(() => core.link(dict, c.url, origin, view()))));
-x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, outcome(() => core.resource(dict, c.path, view()))));
+x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, outcome(() => core.resource(dict, c.path, { ...view(), originalStyle: c.originalStyle === true }))));
 check("health", x.health, outcome(() => core.health(dict, undefined)));
 
 const b = x.byteSource;

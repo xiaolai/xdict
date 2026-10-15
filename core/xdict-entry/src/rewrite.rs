@@ -457,7 +457,8 @@ fn html_out<'s>(
             let judged = crate::images::judge(source);
             image = links == 0 && !speaker && !matches!(judged, crate::images::Image::Decoration);
             match (links > 0 || speaker, judged) {
-                (false, crate::images::Image::Decoration) => {
+                // "Original style" keeps the dictionary's decorations (ADR-0010 Q3).
+                (false, crate::images::Image::Decoration) if !norm.original => {
                     norm.counts.images_dropped += 1;
                     rest = from.get(source.len()..).unwrap_or("");
                     continue;
@@ -778,7 +779,7 @@ const PRESENTATIONAL: [&str; 5] = ["bgcolor", "color", "size", "face", "align"];
 
 /// The declarations a start tag's presentational attributes become, `;`-joined.
 fn presentational(element: &str, from: &str, out: &Out<'_>) -> Option<String> {
-    let style = out.norm.as_ref()?.style;
+    let style = out.norm.as_ref().filter(|n| !n.original)?.style;
     let source = tag_source(from);
     let decls: Vec<String> = PRESENTATIONAL
         .iter()
@@ -798,6 +799,9 @@ fn presentational(element: &str, from: &str, out: &Out<'_>) -> Option<String> {
 
 /// Whether a start tag's attribute is not written: dropped (R10, R11, R22), or read into its style.
 fn skips(element: &str, attr: &str, value: Option<&str>, out: &Out<'_>) -> bool {
+    if out.norm.as_ref().is_some_and(|n| n.original) {
+        return false;
+    }
     let lower = attr.to_ascii_lowercase();
     if crate::normalize::dropped_attribute(element, &lower) {
         return true;
@@ -1045,6 +1049,7 @@ pub(crate) fn normalized_html<'s>(
     let mut out = html_out(&text, base, dir, false, max, Some(norm), entry);
     drop(text);
     let roles = out.roles.take();
+    let original = out.norm.as_ref().is_some_and(|n| n.original);
     let norm = out.norm;
     let (counts, rules) = norm.map(|n| (n.counts, n.rules)).unwrap_or_default();
     let mut counts = counts;
@@ -1058,7 +1063,10 @@ pub(crate) fn normalized_html<'s>(
     }
     if let Some(controls) = out.controls.take() {
         edits.extend(controls.inserts.into_iter().map(insert));
-        edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
+        // The dictionary's own glyphs inside a speaker go only where XDict draws the speaker (not "Original style").
+        if !original {
+            edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
+        }
     }
     let mut headwords = Vec::new();
     if let Some(roles) = roles {

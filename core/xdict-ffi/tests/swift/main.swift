@@ -328,7 +328,11 @@ for (i, c) in (x["links"] as! [[String: Any]]).enumerated() {
     check("links[\(i)]", c["link"], outcome { j(try core.link(dict: dict, url: c["url"] as! String, origin: origin, view: view())) })
 }
 for (i, c) in (x["resources"] as! [[String: Any]]).enumerated() {
-    check("resources[\(i)]", c["resource"], outcome { j(try core.resource(dict: dict, path: c["path"] as! String, view: view())) })
+    check("resources[\(i)]", c["resource"], outcome {
+        var styled = view()
+        styled.originalStyle = (c["originalStyle"] as? Bool) ?? false
+        return j(try core.resource(dict: dict, path: c["path"] as! String, view: styled))
+    })
 }
 check("health", x["health"], outcome { j(try core.health(dict: dict, progress: nil)) })
 

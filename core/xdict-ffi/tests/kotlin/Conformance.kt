@@ -215,7 +215,7 @@ fun main(args: Array<String>) {
     }
     val origin = LinkOrigin.Entry(EntryRef(imported.edition, "run", 0u))
     list(x["links"]).forEachIndexed { n, c -> check("links[$n]", c["link"], outcome { j(core.link(dict, c["url"] as String, origin, view())) }) }
-    list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view())) }) }
+    list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view().copy(originalStyle = c["originalStyle"] == true))) }) }
     check("health", x["health"], outcome { j(core.health(dict, null)) })
 
     val b = obj(x["byteSource"])

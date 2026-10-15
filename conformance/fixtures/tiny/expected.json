@@ -436,6 +436,16 @@
       }
     },
     {
+      "path": "tiny.css",
+      "originalStyle": true,
+      "resource": {
+        "type": "found",
+        "path": "tiny.css",
+        "mime": "text/css",
+        "text": ".tiny { color: black !important }"
+      }
+    },
+    {
       "path": "run.mp3",
       "resource": {
         "type": "found",
