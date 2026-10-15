@@ -554,8 +554,9 @@ impl File {
 }
 
 /// Decompressed record blocks kept between reads, most recent first: the blocks of the record read last, always,
-/// and then older ones while all of them together stay within [`limits::BLOCK_BYTES`]: never more than the larger
-/// of one record's blocks, which reading it needs anyway, and that bound.
+/// and then older ones while all of them together stay within [`limits::BLOCK_BYTES`] and number fewer than
+/// [`Kept::MOST_BLOCKS`]: never more than the larger of one record's blocks, which reading it needs anyway, and
+/// those bounds.
 #[derive(Default)]
 pub struct Kept {
     /// The file whose blocks these are, by [`File`]'s id; none until a file reads through it.
@@ -564,10 +565,16 @@ pub struct Kept {
 }
 
 impl Kept {
+    /// The most blocks kept with those of the record read last. Every read takes and rebuilds the list, so bytes
+    /// alone did not bound it where blocks are small: the lookup fixture's 66,355 records in 64-byte blocks held
+    /// thousands, and reading them took 4.2 s, in the square of their number (2026-10-15). A redirect's targets,
+    /// read one by one (what the list is for), lie in a few recent blocks.
+    const MOST_BLOCKS: usize = 64;
+
     fn keep(&mut self, mut touched: Vec<(usize, Vec<u8>)>, older: Vec<(usize, Vec<u8>)>) {
         let mut held: u64 = touched.iter().map(|(_, b)| b.len() as u64).sum();
         for (index, block) in older {
-            if held + block.len() as u64 > limits::BLOCK_BYTES {
+            if touched.len() >= Self::MOST_BLOCKS || held + block.len() as u64 > limits::BLOCK_BYTES {
                 break;
             }
             held += block.len() as u64;
@@ -622,6 +629,26 @@ pub(crate) fn read_u32(source: &dyn Source, at: &mut u64, what: &str) -> Result<
 mod tests {
     use super::*;
     use xdict_mdx_writer::{self as writer, Entry, Spec};
+
+    /// Blocks kept between reads are few in number as well as in bytes: every read takes and rebuilds the list, so a
+    /// walk through small blocks that kept all it touched cost time in its square (the lookup fixture's 66,355
+    /// records in 64-byte blocks: 4.2 s to read, 2 s a page of `EC`, past the client's deadline on a loaded Mac).
+    #[test]
+    fn a_long_walk_keeps_a_bounded_number_of_blocks() {
+        let entries: Vec<Entry> = (0..2_000).map(|i| Entry::text("EC", &format!("record {i}"))).collect();
+        let file = File::from_source(Box::new(writer::write(&Spec::mdx(), &entries).unwrap()), None).unwrap();
+        let keys = file.find("EC").unwrap();
+        assert!(file.index.blocks.len() > 4 * Kept::MOST_BLOCKS, "{} blocks: too few to tell", file.index.blocks.len());
+        let mut kept = Kept::default();
+        let mut read = 0;
+        file.for_each_record_kept(&keys, &mut Budget::new(u64::MAX, usize::MAX), &mut kept, |_, _| {
+            read += 1;
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(read, keys.len());
+        assert!(kept.blocks.len() <= Kept::MOST_BLOCKS, "{} blocks kept", kept.blocks.len());
+    }
 
     /// Many keys may lead to one record; what a lookup returns is bounded all the same.
     #[test]
