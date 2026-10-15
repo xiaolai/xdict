@@ -289,3 +289,79 @@ record! {
         NoIdentity,
     }
 }
+
+record! {
+    /// What the health check found in an edition (plan-macos-v1 WI-12): the problems a reader is told of, each
+    /// one sentence in the shell, and every class the check counts. Kept per edition beside its index.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Health {
+        /// The checker's version ([`crate::HEALTH`]).
+        pub version: u32,
+        /// Entries checked: every record of the edition.
+        pub entries: u64,
+        /// What the reader is told, most actionable first; empty when there is nothing to say.
+        pub findings: Vec<HealthFinding>,
+        /// Every class counted, by its census name, for the record: most are never shown.
+        pub classes: Vec<HealthClass>,
+    }
+
+    /// One thing the reader is told about an edition.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct HealthFinding {
+        pub kind: FindingKind,
+        /// How many places: references, entries or characters, as the kind says.
+        pub count: u64,
+        /// The file a `MissingFile` names.
+        pub name: Option<String>,
+        /// Up to three places, as the dictionary has them.
+        pub examples: Vec<HealthExample>,
+    }
+
+    /// One place a finding was met: the entry's key and up to 120 characters around it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct HealthExample {
+        pub key: String,
+        pub text: String,
+    }
+
+    /// One class the check counts, by its census name.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct HealthClass {
+        pub name: String,
+        pub count: u64,
+    }
+
+    /// What a finding is about (`dev-docs/measurements/2026-10-15-mdx-health/`, "Disposition").
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum FindingKind {
+        /// A stylesheet or script the entries link is not in the package: `count` references to `name`.
+        MissingFile,
+        /// Recordings the entries play are not in the package.
+        MissingSounds,
+        /// Pictures the entries show are not in the package.
+        MissingImages,
+        /// Cross-references name words the edition does not have, even folded.
+        MissingWords,
+        /// HTML written as text (`&lt;i&gt;`), shown as code.
+        CodeAsText,
+        /// Comment marks shown as text (`-->`, `<--`) or a broken comment hiding text: reported, never mended.
+        CommentMarks,
+        /// Style rules shown as text, or a style left open.
+        StyleAsText,
+        /// Redirects (`@@@LINK=`) that reach no entry: missing, looping, or too deep.
+        BrokenRedirects,
+        /// Text encoded twice (`â€™`).
+        DoubleEncoded,
+        /// Bytes that are not text in the edition's encoding.
+        Undecodable,
+        EmptyEntries,
+        /// Entries over 1 MiB.
+        HugeEntries,
+        /// The same entry stored twice under one key.
+        RepeatedEntries,
+        /// Keys with edge spaces, invisible characters or HTML.
+        OddHeadwords,
+        /// What XDict mends as it shows the entries: control characters, stray byte-order marks, literal `\n`.
+        Repaired,
+    }
+}

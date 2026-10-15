@@ -503,6 +503,18 @@ impl Core {
         }
     }
 
+    /// The edition's health report (WI-12): checked once and kept with its indexes; `progress` as for an import.
+    pub fn health(&self, dict: &str, progress: Option<JsProgress>) -> Reply {
+        let progress = match progress {
+            Some(p) => {
+                Some(PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("checks")))?)
+            }
+            None => None,
+        };
+        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        watched_reply(|| self.0.health(dict.into(), &progress))
+    }
+
     #[wasm_bindgen(js_name = joinLineage)]
     pub fn join_lineage(&self, edition: &str, lineage: &str) -> Reply {
         reply(self.0.join_lineage(edition.into(), lineage.into()))

@@ -45,6 +45,17 @@ export type Link =
   | { type: 'speak'; text: string }
   | { type: 'anchor'; name: string }
   | { type: 'blocked'; why: BlockReason };
+export type FindingKind =
+  | 'missingFile' | 'missingSounds' | 'missingImages' | 'missingWords' | 'codeAsText' | 'commentMarks' | 'styleAsText'
+  | 'brokenRedirects' | 'doubleEncoded' | 'undecodable' | 'emptyEntries' | 'hugeEntries' | 'repeatedEntries'
+  | 'oddHeadwords' | 'repaired';
+export type HealthFinding = {
+  kind: FindingKind;
+  count: number;
+  name: string | null;
+  examples: { key: string; text: string }[];
+};
+export type Health = { version: number; entries: number; findings: HealthFinding[]; classes: { name: string; count: number }[] };
 export type Resource =
   | { type: 'found'; path: string; mime: string; bytes: Uint8Array }
   | { type: 'missing'; path: string };
@@ -107,6 +118,7 @@ interface GlueCore {
   joinLineage(edition: string, lineage: string): string;
   splitLineage(edition: string, newLineage: string): string;
   lineageOf(edition: string): string;
+  health(dict: string, progress?: { progress(done: number, total: number): boolean }): string;
   selfTestPanic(): string;
 }
 
@@ -276,6 +288,12 @@ export class XDictCore {
         reply.free();
       }
     });
+  }
+
+  /** The edition's health report (WI-12): checked once and kept with its indexes; `progress` as for an import. */
+  health(dict: string, progress?: (done: number, total: number) => boolean): Health {
+    const watcher = progress ? { progress } : undefined;
+    return this.call(() => this.inner.health(dict, watcher));
   }
 
   /** Joins an edition to a lineage the registry holds, as the reader asked; answers the lineage it now has. */

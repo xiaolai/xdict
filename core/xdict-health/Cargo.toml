@@ -1,0 +1,19 @@
+[package]
+name = "xdict-health"
+description = "What an edition carries that a reader would see as damage: the import health check (WI-12)"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xdict-entry = { path = "../xdict-entry" }
+xdict-mdx = { path = "../xdict-mdx" }
+
+[dev-dependencies]
+xdict-lookup = { path = "../xdict-lookup" }
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
+[lints]
+workspace = true

@@ -71,6 +71,36 @@ func j(_ p: Page) -> [String: Any] {
 
 func j(_ e: Entry) -> [String: Any] { ["entry": j(e.entry), "html": e.html, "csp": e.csp, "lossyBytes": e.lossyBytes] }
 
+func j(_ h: Health) -> [String: Any] {
+    ["version": h.version, "entries": h.entries, "findings": h.findings.map(j), "classes": h.classes.map(j)]
+}
+
+func j(_ f: HealthFinding) -> [String: Any] {
+    ["kind": j(f.kind), "count": f.count, "name": f.name ?? NSNull(), "examples": f.examples.map { ["key": $0.key, "text": $0.text] }]
+}
+
+func j(_ c: HealthClass) -> [String: Any] { ["name": c.name, "count": c.count] }
+
+func j(_ k: FindingKind) -> String {
+    switch k {
+    case .missingFile: return "missingFile"
+    case .missingSounds: return "missingSounds"
+    case .missingImages: return "missingImages"
+    case .missingWords: return "missingWords"
+    case .codeAsText: return "codeAsText"
+    case .commentMarks: return "commentMarks"
+    case .styleAsText: return "styleAsText"
+    case .brokenRedirects: return "brokenRedirects"
+    case .doubleEncoded: return "doubleEncoded"
+    case .undecodable: return "undecodable"
+    case .emptyEntries: return "emptyEntries"
+    case .hugeEntries: return "hugeEntries"
+    case .repeatedEntries: return "repeatedEntries"
+    case .oddHeadwords: return "oddHeadwords"
+    case .repaired: return "repaired"
+    }
+}
+
 func j(_ b: BlockReason) -> [String: Any] {
     switch b {
     case let .remote(url): return ["type": "remote", "url": url]
@@ -300,6 +330,7 @@ for (i, c) in (x["links"] as! [[String: Any]]).enumerated() {
 for (i, c) in (x["resources"] as! [[String: Any]]).enumerated() {
     check("resources[\(i)]", c["resource"], outcome { j(try core.resource(dict: dict, path: c["path"] as! String, view: view())) })
 }
+check("health", x["health"], outcome { j(try core.health(dict: dict, progress: nil)) })
 
 let b = x["byteSource"] as! [String: Any]
 let mdx = try Data(contentsOf: dir.appendingPathComponent("tiny.mdx"))

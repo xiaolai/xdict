@@ -83,6 +83,9 @@ fun j(r: Resource): Map<String, Any?> = when (r) {
     is Resource.Found -> mapOf("type" to "found", "path" to r.path, "mime" to r.mime, "text" to String(r.bytes, Charsets.UTF_8))
     is Resource.Missing -> mapOf("type" to "missing", "path" to r.path)
 }
+fun j(k: FindingKind): String = k.name.lowercase().split('_').mapIndexed { n, w -> if (n == 0) w else w.replaceFirstChar { it.uppercase() } }.joinToString("")
+fun j(f: HealthFinding) = mapOf("kind" to j(f.kind), "count" to f.count, "name" to f.name, "examples" to f.examples.map { mapOf("key" to it.key, "text" to it.text) })
+fun j(h: Health) = mapOf("version" to h.version, "entries" to h.entries, "findings" to h.findings.map { j(it) }, "classes" to h.classes.map { mapOf("name" to it.name, "count" to it.count) })
 fun j(f: Feature): Map<String, Any?> = when (f) {
     is Feature.FormatVersion -> mapOf("type" to "formatVersion", "version" to f.version)
     is Feature.ResourceLibraryV3 -> mapOf("type" to "resourceLibraryV3")
@@ -213,6 +216,7 @@ fun main(args: Array<String>) {
     val origin = LinkOrigin.Entry(EntryRef(imported.edition, "run", 0u))
     list(x["links"]).forEachIndexed { n, c -> check("links[$n]", c["link"], outcome { j(core.link(dict, c["url"] as String, origin, view())) }) }
     list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view())) }) }
+    check("health", x["health"], outcome { j(core.health(dict, null)) })
 
     val b = obj(x["byteSource"])
     val mdx = File(dir, "tiny.mdx").readBytes()

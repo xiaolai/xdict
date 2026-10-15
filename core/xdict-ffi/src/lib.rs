@@ -12,9 +12,9 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, Hit, HitProblem, How,
-    ImportReason, Imported, IoKind, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page, Problem,
-    Resource, Versions, View,
+    BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, FindingKind, Health, HealthClass,
+    HealthExample, HealthFinding, Hit, HitProblem, How, ImportReason, Imported, IoKind, Limit, Link, LinkOrigin,
+    LookupOptions, MatchMode, Missing, Opened, Page, Problem, Resource, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -106,6 +106,53 @@ pub struct Entry {
     pub html: String,
     pub csp: String,
     pub lossy_bytes: u64,
+}
+
+#[uniffi::remote(Record)]
+pub struct Health {
+    pub version: u32,
+    pub entries: u64,
+    pub findings: Vec<HealthFinding>,
+    pub classes: Vec<HealthClass>,
+}
+
+#[uniffi::remote(Record)]
+pub struct HealthFinding {
+    pub kind: FindingKind,
+    pub count: u64,
+    pub name: Option<String>,
+    pub examples: Vec<HealthExample>,
+}
+
+#[uniffi::remote(Record)]
+pub struct HealthExample {
+    pub key: String,
+    pub text: String,
+}
+
+#[uniffi::remote(Record)]
+pub struct HealthClass {
+    pub name: String,
+    pub count: u64,
+}
+
+#[uniffi::remote(Enum)]
+pub enum FindingKind {
+    MissingFile,
+    MissingSounds,
+    MissingImages,
+    MissingWords,
+    CodeAsText,
+    CommentMarks,
+    StyleAsText,
+    BrokenRedirects,
+    DoubleEncoded,
+    Undecodable,
+    EmptyEntries,
+    HugeEntries,
+    RepeatedEntries,
+    OddHeadwords,
+    Repaired,
 }
 
 #[uniffi::remote(Enum)]
@@ -357,6 +404,14 @@ impl Core {
 
     pub fn resource(&self, dict: String, path: String, view: View) -> Result<Resource, CoreError> {
         self.0.resource(dict, path, view)
+    }
+
+    /// The edition's health report (WI-12): checked once and kept with its index; `progress` as for an import.
+    pub fn health(&self, dict: String, progress: Option<Arc<dyn Progress>>) -> Result<Health, CoreError> {
+        match progress {
+            Some(progress) => self.0.health(dict, &Watcher(progress)),
+            None => self.0.health(dict, &core::NoProgress),
+        }
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

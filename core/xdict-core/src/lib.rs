@@ -7,6 +7,7 @@
 
 mod core;
 mod error;
+mod health;
 mod source;
 mod store;
 mod types;
@@ -16,6 +17,7 @@ pub use crate::core::{
     PROTOCOL, STYLE, StyleReport,
 };
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
+pub use health::HEALTH;
 pub use source::{ByteSource, MAX_TRANSFER};
 pub use store::IndexStorage;
 pub use types::*;
