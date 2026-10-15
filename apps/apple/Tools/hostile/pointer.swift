@@ -3,6 +3,7 @@
 // helpers (`Tools/e2e/drag-card.swift`, `keys.swift`, `session-access.swift`).
 //
 //   pointer access                         {"accessibility": …, "postEvents": …}: asked of APIs that never prompt
+//   pointer screen [<x> <y>]…              the session, display, frontmost app, and the window at each point
 //   pointer move <x> <y>                   hover (global display points, origin top left)
 //   pointer click <x> <y> [mods] [button]  mods: none, cmd, opt, shift, ctrl (joined with +); button: left, right
 //   pointer drag <x1> <y1> <x2> <y2>       press, move in steps, release
@@ -24,10 +25,60 @@ func die(_ message: String, _ status: Int32 = 1) -> Never {
 let arguments = Array(CommandLine.arguments.dropFirst())
 guard let command = arguments.first else { die("usage: pointer access|move|click|drag|key …", 2) }
 
-if command == "access" {
-    let report: [String: Any] = ["accessibility": AXIsProcessTrusted(), "postEvents": CGPreflightPostEventAccess()]
-    guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]) else { die("no report") }
+func printJSON(_ object: Any) {
+    guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else {
+        die("no report")
+    }
     print(String(decoding: data, as: UTF8.self))
+}
+
+if command == "access" {
+    printJSON(["accessibility": AXIsProcessTrusted(), "postEvents": CGPreflightPostEventAccess()])
+    exit(0)
+}
+
+/// **What a hand would meet**, for a step that went wrong to say why: the session (locked, on the console), the display
+/// (asleep), the frontmost application, where the pointer is, and the on-screen windows over each point given, front
+/// to back as `CGWindowListCopyWindowInfo` orders them: owner pid and name, layer and bounds (titles need Screen
+/// Recording, so none are asked for). Every window, not the first: the system keeps transparent full-screen windows
+/// above the normal layer (Notification Center's, layer 21) that events pass through, so the first is not the one a
+/// click meets.
+func screen(_ points: [CGPoint]) -> [String: Any] {
+    let session = CGSessionCopyCurrentDictionary() as? [String: Any] ?? [:]
+    let front = NSWorkspace.shared.frontmostApplication
+    let onScreen = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+        as? [[String: Any]] ?? []
+    func windows(at point: CGPoint) -> [[String: Any]] {
+        onScreen.compactMap { info in
+            guard let bounds = info[kCGWindowBounds as String] as? [String: Any],
+                  let frame = CGRect(dictionaryRepresentation: bounds as CFDictionary), frame.contains(point)
+            else { return nil }
+            return ["pid": info[kCGWindowOwnerPID as String] as? Int ?? -1,
+                    "owner": info[kCGWindowOwnerName as String] as? String ?? "",
+                    "layer": info[kCGWindowLayer as String] as? Int ?? 0,
+                    "alpha": info[kCGWindowAlpha as String] as? Double ?? 1,
+                    "bounds": [frame.minX, frame.minY, frame.width, frame.height].map { Double($0) }]
+        }
+    }
+    let cursor = CGEvent(source: nil)?.location ?? .zero
+    return [
+        "locked": session["CGSSessionScreenIsLocked"] as? Bool ?? false,
+        "onConsole": session[kCGSessionOnConsoleKey as String] as? Bool ?? false,
+        "displayAsleep": CGDisplayIsAsleep(CGMainDisplayID()) != 0,
+        "frontmost": ["pid": Int(front?.processIdentifier ?? -1), "name": front?.localizedName ?? "",
+                      "bundle": front?.bundleIdentifier ?? ""],
+        "cursor": [Double(cursor.x), Double(cursor.y)],
+        "at": points.map { windows(at: $0) },
+    ]
+}
+
+if command == "screen" {
+    // pointer screen [<x> <y>]…: asks nothing that prompts, posts nothing.
+    let numbers = arguments.dropFirst().compactMap(Double.init)
+    guard numbers.count == arguments.count - 1, numbers.count.isMultiple(of: 2) else {
+        die("screen takes x y pairs", 2)
+    }
+    printJSON(screen(stride(from: 0, to: numbers.count, by: 2).map { CGPoint(x: numbers[$0], y: numbers[$0 + 1]) }))
     exit(0)
 }
 guard CGPreflightPostEventAccess() else { die("this session may not post events (Accessibility is not granted)") }
