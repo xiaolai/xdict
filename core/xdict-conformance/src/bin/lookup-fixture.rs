@@ -1,8 +1,8 @@
 //! `lookup-fixture <out-dir>`: the dictionaries the macOS main window's checks look words up in (plan-macos-v1 WI-6),
 //! written by the core's own MDX writer, so no dictionary content enters the repository. Each folder is one dictionary:
 //!
-//! - `alpha/`: `apple` (whose first link names `banana`), `banana`, `abbe` and `abbé` both (the exact one leads, with
-//!   its reason), a phrase key `take off` beside `take` and `take on`, 120 internal keys `@take_box_000`… (a shape is
+//! - `alpha/`: `apple` (whose first link names `banana`, and whose own CSS says `body{margin:0}`), `banana`, `abbe`
+//!   and `abbé` both (the exact one leads, with its reason), a phrase key `take off` beside `take` and `take on`, 120 internal keys `@take_box_000`… (a shape is
 //!   internal only as a pattern of the file: ADR-0007 decision 16), whose folded forms begin as `take` does, and
 //!   `hop0`…`hop5`, tall entries each linking to the next: a trail.
 //! - `beta/`: `abbé` alone (reader mode finds it typed `abbe`, link mode does not), `apple`, and `see-abbe`, whose link
@@ -45,7 +45,10 @@ fn hop(n: usize) -> Entry {
 
 fn write_all(out: &Path) -> Result<(), String> {
     let mut alpha = vec![
-        Entry::text("apple", "<b>apple</b> in Alpha. See <a href=\"entry://banana\">banana</a>."),
+        Entry::text(
+            "apple",
+            "<style>body{margin:0}</style><b>apple</b> in Alpha. See <a href=\"entry://banana\">banana</a>.",
+        ),
         Entry::text("banana", "<b>banana</b> in Alpha, reached from apple."),
         Entry::text("abbe", "<b>abbe</b>, written without its accent."),
         Entry::text("abbé", "<b>abbé</b>, written with its accent."),

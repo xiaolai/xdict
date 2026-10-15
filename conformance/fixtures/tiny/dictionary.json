@@ -18,7 +18,7 @@
     { "name": "tiny.mdd", "entries": [["\\run.mp3", "ID3 not really audio"]] }
   ],
   "sidecars": [
-    { "name": "tiny.css", "text": "body { color: black }" }
+    { "name": "tiny.css", "text": ".tiny { color: black !important }" }
   ],
   "defective": [
     { "name": "tiny-v4.mdx", "defect": "unknownFormatVersion" },

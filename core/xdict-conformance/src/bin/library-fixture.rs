@@ -74,7 +74,7 @@ fn write_all(out: &Path) -> Result<(), String> {
         &[Entry::bytes("\\b.bin", b"volume 1"), Entry::bytes("\\shared.bin", b"shared from volume 1")],
     )?;
     file(&vol.join("vol.2.mdd"), &mdd, &[Entry::bytes("\\c.bin", b"volume 2")])?;
-    plain(&vol.join("vol.css"), b"body { color: black }\n")?;
+    plain(&vol.join("vol.css"), b".vol { float: left }\n")?;
 
     let gap = out.join("gap");
     file(&gap.join("gap.mdx"), &titled("Gap"), &[Entry::text("gap", "a dictionary missing its second volume")])?;

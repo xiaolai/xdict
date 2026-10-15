@@ -193,6 +193,7 @@ fn main() {
                 data_dir: Some(scratch.join("data").to_string_lossy().into()),
                 cache_dir: Some(scratch.join("cache").to_string_lossy().into()),
                 entropy: vec![],
+                strip_off_for_tests: false,
             };
             let core = xdict_core::Core::new(config).unwrap();
             let packages = packages(&args[2..]);

@@ -25,6 +25,8 @@ pub struct Config {
     pub cache_dir: Option<String>,
     pub client_protocol: u32,
     pub entropy: Vec<u8>,
+    #[uniffi(default = false)]
+    pub strip_off_for_tests: bool,
 }
 
 #[uniffi::remote(Record)]

@@ -353,3 +353,20 @@ fn blocks_kept_for_one_file_are_not_read_as_another_files() {
     assert_eq!(read(&b, &mut kept), ["the second file's"]);
     assert_eq!(read(&a, &mut kept), ["the first file's"]);
 }
+
+/// What reading a record decompresses is every block it touches, however small the record: a short entry that
+/// shares a block with a 1 MiB one costs the whole block.
+#[test]
+fn a_records_read_cost_is_the_blocks_it_touches() {
+    let long = "x".repeat(1 << 20);
+    let entries = [Entry::text("big", &long), Entry::text("small", "short")];
+    let (_s, file) = open(&Spec { block_size: 4 << 20, ..Spec::mdx() }, &entries);
+    let file = file.unwrap();
+    let small = *file.find("small").unwrap().first().unwrap();
+    assert!(file.record_size(small).unwrap() < 16);
+    assert!(file.record_read_size(small).unwrap() > 1 << 20);
+    let (_s, apart) = open(&Spec { block_size: 1024, ..Spec::mdx() }, &entries);
+    let apart = apart.unwrap();
+    let small = *apart.find("small").unwrap().first().unwrap();
+    assert!(apart.record_read_size(small).unwrap() < 1 << 20);
+}

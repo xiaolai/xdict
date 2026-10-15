@@ -37,6 +37,13 @@ record! {
         /// Random bytes for handles and lineage ids, where the core has no random source of its own (the
         /// Web). Empty natively.
         pub entropy: Vec<u8>,
+        /// **Test-only**: the strip list (`dev-docs/element-sweep.md` §2.4, S1–S14, and Q6's script rules) is not
+        /// applied to entries or the pages and scripts they load: comments, scripts, `javascript:` links and the rest
+        /// stay as written. Only the hostile battery's lab sets it, so that its layer runs prove the shell's own
+        /// layers against what the rewriter would have removed (it is compatibility, not the boundary: ADR-0007
+        /// decision 14). No shell sets it; `false` when absent, in every binding.
+        #[cfg_attr(feature = "serde", serde(default))]
+        pub strip_off_for_tests: bool,
     }
 
     /// The versions a shell may need to compare, each separately (ADR-0007 decision 11).

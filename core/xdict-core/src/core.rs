@@ -6,9 +6,9 @@
 use std::collections::HashMap;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
-use xdict_entry::StyleSheet;
+use xdict_entry::{Style, StyleSheet};
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
@@ -51,6 +51,8 @@ const IMPORT_CHUNK: u64 = CHUNK;
 
 pub struct Core {
     nonce: u32,
+    /// [`Config::strip_off_for_tests`]: the hostile battery's lab only.
+    strip_off_for_tests: bool,
     state: Mutex<State>,
     indexes: Box<dyn IndexStore>,
     registry: Box<dyn Registry>,
@@ -73,6 +75,38 @@ struct Dict {
     sidecars: Vec<(String, Result<OpenedSource, CoreError>)>,
     /// The MDX header's compact styles, applied to every entry.
     sheet: StyleSheet,
+    /// What the edition's sheets decide for its reading style (ADR-0010), read once, on first use.
+    style: OnceLock<Arc<EditionStyle>>,
+}
+
+/// The version of the reading style's rules (ADR-0010): raised with any change to what normalization writes.
+pub const STYLE: u32 = xdict_entry::STYLE;
+/// The most sheets an edition's style is read from, and the most bytes in all.
+const STYLE_SHEETS: usize = 256;
+const STYLE_BYTES: usize = 32 << 20;
+/// The entries an edition's base size is measured on, and the largest record read for it.
+const CALIBRATION_ENTRIES: usize = 64;
+const CALIBRATION_BYTES: u64 = 256 << 10;
+/// The most a sampled entry's read may decompress: a short entry in a block shared with a huge one is passed over.
+const CALIBRATION_BLOCK_BYTES: u64 = 8 << 20;
+
+/// An edition's reading style and the sheets it was read from.
+#[derive(Debug, Clone)]
+pub struct EditionStyle {
+    pub style: Style,
+    /// The sheets read, by path.
+    pub sheets: Vec<String>,
+    /// Sheets not read, and why: never passed over silently.
+    pub skipped: Vec<String>,
+}
+
+/// What the normalization does to one edition, for the gallery and the About pane (ADR-0010).
+#[derive(Debug, Clone)]
+pub struct StyleReport {
+    pub version: u32,
+    pub edition: EditionStyle,
+    /// What normalizing the edition's own sheets changed.
+    pub counts: xdict_entry::Counts,
 }
 
 impl Core {
@@ -108,7 +142,13 @@ impl Core {
                 Some(dir) => Box::new(FileRegistry::open(dir).map_err(registry_error)?),
                 None => Box::new(MemoryRegistry::default()),
             };
-            Ok(Self { nonce, state: Mutex::new(state), indexes, registry })
+            Ok(Self {
+                nonce,
+                strip_off_for_tests: config.strip_off_for_tests,
+                state: Mutex::new(state),
+                indexes,
+                registry,
+            })
         })
     }
 
@@ -284,7 +324,8 @@ impl Core {
             let sidecars = package.sidecars.iter().map(|s| (s.name().to_owned(), OpenedSource::open(s))).collect();
             let info = info(&mdx);
             let sheet = StyleSheet::parse(&mdx.header().stylesheet);
-            let dict = Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars, sheet };
+            let dict =
+                Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars, sheet, style: OnceLock::new() };
             let mut state = self.lock()?;
             let handle = state.next_handle;
             state.next_handle = handle.checked_add(1).ok_or_else(|| CoreError::internal("handles exhausted"))?;
@@ -449,7 +490,10 @@ impl Core {
             }
             let record = opened.mdx.record(i)?;
             opened.mdx_source.unchanged()?;
-            let text = String::from_utf8_lossy(&record.data);
+            // The record's bytes become the text, not a copy of them.
+            let lossy = record.lossy;
+            let text =
+                String::from_utf8(record.data).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
             // Expanded and rewritten within the view's ceiling: a small record of many style markers, or of many
             // short links, would otherwise be written whole before it could be refused.
             let max = usize::try_from(view.max_body_bytes).unwrap_or(usize::MAX);
@@ -458,8 +502,24 @@ impl Core {
                 detail: format!("the entry passes {} bytes expanded and rewritten, the view's ceiling", max),
             };
             let expanded = opened.sheet.apply_within(&text, max).map_err(too_large)?;
-            let html = xdict_entry::html_text_within(&expanded, &view.base_url, "", max).map_err(too_large)?;
-            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: record.lossy })
+            let style = self.edition_style(&opened)?;
+            // The key finds the headword (the roles, element-sweep §2.1); the package says which images it holds (S13).
+            let holds = |path: &str| self.holds(&opened, path);
+            let context = xdict_entry::Entry {
+                key: &entry.key,
+                resource: Some(&holds),
+                strip_off_for_tests: self.strip_off_for_tests,
+            };
+            // Given owned (the record's text, or its expansion), it is freed once it is read.
+            let body = match expanded {
+                std::borrow::Cow::Owned(expanded) => expanded,
+                std::borrow::Cow::Borrowed(_) => text,
+            };
+            let (html, _) = xdict_entry::entry_normalized_within(body, &view.base_url, "", &style.style, &context, max)
+                .map_err(too_large)?;
+            // Q6 (ADR-0010, the owner's answers): every entry renders in standards mode.
+            let html = with_doctype(html, max).map_err(too_large)?;
+            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: lossy })
         })
     }
 
@@ -495,12 +555,14 @@ impl Core {
                 let ceiling =
                     if renders(mime) { view.max_body_bytes.min(MAX_RESOURCE_BYTES) } else { MAX_RESOURCE_BYTES };
                 if let Some(bytes) = self.find_resource(&opened, name, ceiling)? {
-                    let bytes = served(bytes, mime, &view.base_url, travelled.dir(), ceiling).map_err(|_| {
-                        CoreError::TooLarge {
-                            limit: Limit::Body,
-                            detail: format!("{name} passes {ceiling} bytes as served, the most it may be"),
-                        }
-                    })?;
+                    let style = if renders(mime) { Some(self.edition_style(&opened)?) } else { None };
+                    let style = style.as_ref().map(|s| &s.style);
+                    let bytes =
+                        served(bytes, mime, &view.base_url, travelled.dir(), style, self.strip_off_for_tests, ceiling)
+                            .map_err(|_| CoreError::TooLarge {
+                                limit: Limit::Body,
+                                detail: format!("{name} passes {ceiling} bytes as served, the most it may be"),
+                            })?;
                     return Ok(Resource::Found { mime: mime.into(), path: name.clone(), bytes });
                 }
             }
@@ -510,6 +572,167 @@ impl Core {
 
     /// A resource's bytes by its resolved path: a sidecar of that name, else the first volume that holds it.
     /// One larger than `ceiling` is refused from its declared size, before it is read.
+    /// The edition's reading style, read from its sheets on first use: the sidecars' `.css`, then the volumes'.
+    fn edition_style(&self, opened: &Dict) -> Result<Arc<EditionStyle>, CoreError> {
+        if let Some(style) = opened.style.get() {
+            return Ok(Arc::clone(style));
+        }
+        let mut paths: Vec<String> = Vec::new();
+        for (name, _) in &opened.sidecars {
+            if name.to_ascii_lowercase().ends_with(".css") {
+                paths.push(name.clone());
+            }
+        }
+        for (check, volume) in &opened.mdd {
+            check.unchanged()?;
+            for key in volume.keys() {
+                let key = key?;
+                if key.to_ascii_lowercase().ends_with(".css") {
+                    let path = key.trim_start_matches('\\').replace('\\', "/");
+                    if !paths.iter().any(|p| p.eq_ignore_ascii_case(&path)) {
+                        paths.push(path);
+                    }
+                }
+            }
+        }
+        let (mut texts, mut sheets, mut skipped, mut total) = (Vec::new(), Vec::new(), Vec::new(), 0usize);
+        for path in paths {
+            if sheets.len() >= STYLE_SHEETS {
+                skipped.push(format!("{path}: past the first {STYLE_SHEETS} sheets"));
+                continue;
+            }
+            // What is left of the budget is the ceiling: a sheet past it is passed over from its declared size,
+            // unread (reading 44 MiB only to drop it raised `resource()`'s peak by 40%).
+            let room = STYLE_BYTES.saturating_sub(total);
+            match self.find_resource(opened, &path, room as u64) {
+                Ok(Some(bytes)) => {
+                    total += bytes.len();
+                    // Valid UTF-8, the usual case, is taken as it is, not copied.
+                    texts.push(
+                        String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned()),
+                    );
+                    sheets.push(path);
+                }
+                Err(CoreError::TooLarge { detail, .. }) => {
+                    skipped.push(format!("{path}: past the {STYLE_BYTES} bytes read ({detail})"));
+                }
+                Ok(None) => skipped.push(format!("{path}: not found")),
+                Err(e @ CoreError::SourceChanged { .. }) => return Err(e),
+                Err(e) => skipped.push(format!("{path}: {e}")),
+            }
+        }
+        // The base is measured on a fixed, evenly spaced sample of the edition's entries (ADR-0010 d.4): the same
+        // whichever entry is opened first. A record too large or unreadable is passed over.
+        let mut entries = Vec::new();
+        let count = opened.mdx.len();
+        let step = (count / CALIBRATION_ENTRIES).max(1);
+        for i in (0..count).step_by(step).take(CALIBRATION_ENTRIES) {
+            if opened.mdx.record_size(i).is_ok_and(|n| n <= CALIBRATION_BYTES)
+                && opened.mdx.record_read_size(i).is_ok_and(|n| n <= CALIBRATION_BLOCK_BYTES)
+                && let Ok(record) = opened.mdx.record(i)
+            {
+                let text = String::from_utf8_lossy(&record.data);
+                if !text.trim_start().starts_with("@@@LINK=") {
+                    entries.push(opened.sheet.apply(&text).into_owned());
+                }
+            }
+        }
+        opened.mdx_source.unchanged()?;
+        // The base is measured under the sheets the sample links; if it links none, under all of them.
+        let names: std::collections::HashSet<String> =
+            entries.iter().flat_map(|e| xdict_entry::linked_sheets(e)).collect();
+        let linked: Vec<bool> = sheets.iter().map(|p| names.contains(&xdict_entry::file_name(p))).collect();
+        let any = linked.iter().any(|l| *l);
+        let mut style = Style::of_linked_edition(
+            texts.iter().map(String::as_str).zip(linked.iter().map(|l| *l || !any)),
+            entries.iter().map(String::as_str),
+        );
+        // The names the edition's kept scripts use, so that an element one of them fills is never taken for one that
+        // draws nothing (S10): its script files and the sample's inline scripts.
+        let scripts = self.edition_scripts(opened)?;
+        style.add_scripts(scripts.iter().map(String::as_str));
+        style.add_inline_scripts(entries.iter().map(String::as_str));
+        let made = Arc::new(EditionStyle { style, sheets, skipped });
+        Ok(Arc::clone(opened.style.get_or_init(|| made)))
+    }
+
+    /// The text of an edition's scripts that run (Q6): the sidecars' `.js`, then the volumes', within
+    /// [`STYLE_BYTES`] together.
+    fn edition_scripts(&self, opened: &Dict) -> Result<Vec<String>, CoreError> {
+        let mut paths: Vec<String> = Vec::new();
+        for (name, _) in &opened.sidecars {
+            if name.to_ascii_lowercase().ends_with(".js") {
+                paths.push(name.clone());
+            }
+        }
+        for (check, volume) in &opened.mdd {
+            check.unchanged()?;
+            for key in volume.keys() {
+                let key = key?;
+                if key.to_ascii_lowercase().ends_with(".js") {
+                    let path = key.trim_start_matches('\\').replace('\\', "/");
+                    if !paths.iter().any(|p| p.eq_ignore_ascii_case(&path)) {
+                        paths.push(path);
+                    }
+                }
+            }
+        }
+        let (mut texts, mut total) = (Vec::new(), 0usize);
+        for path in paths.into_iter().take(STYLE_SHEETS) {
+            // As for sheets: one past what is left of the budget is passed over from its declared size, unread.
+            match self.find_resource(opened, &path, STYLE_BYTES.saturating_sub(total) as u64) {
+                Ok(Some(bytes)) => {
+                    total += bytes.len();
+                    let text =
+                        String::from_utf8(bytes).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+                    if xdict_entry::script_purpose(&text).is_ok() {
+                        texts.push(text);
+                    }
+                }
+                Err(e @ CoreError::SourceChanged { .. }) => return Err(e),
+                _ => {}
+            }
+        }
+        Ok(texts)
+    }
+
+    /// What the reading style does to an open dictionary: its base size, the fonts it keeps and why, and what
+    /// normalizing its own sheets changed (ADR-0010).
+    pub fn style_report(&self, dict: String) -> Result<StyleReport, CoreError> {
+        guard(|| {
+            let opened = self.dict(&dict)?;
+            let edition = self.edition_style(&opened)?;
+            let mut counts = xdict_entry::Counts::default();
+            for path in &edition.sheets {
+                if let Some(bytes) = self.find_resource(&opened, path, MAX_RESOURCE_BYTES)? {
+                    let text = String::from_utf8_lossy(&bytes);
+                    let (_, c) = xdict_entry::css_normalized_within(&text, "", "", &edition.style, usize::MAX)
+                        .map_err(|_| CoreError::internal("an unbounded normalization was refused"))?;
+                    counts.add(c);
+                }
+            }
+            Ok(StyleReport { version: STYLE, edition: (*edition).clone(), counts })
+        })
+    }
+
+    /// Whether the package holds a resource, by its path as it travels, as [`Self::resource`] would find it: a
+    /// sidecar, or a key in a volume. Nothing is read. A volume that cannot answer counts as holding it, so an
+    /// image is never dropped on an error (S13).
+    fn holds(&self, opened: &Dict, path: &str) -> bool {
+        let travelled = xdict_entry::travelled(path);
+        let resolved = travelled.resolved();
+        let mut tries = vec![resolved.to_owned()];
+        if let Some(cut) = resolved.find(['?', '#']).and_then(|at| resolved.get(..at)) {
+            tries.push(cut.to_owned());
+        }
+        tries.iter().any(|name| {
+            opened.sidecars.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) || {
+                let key = format!("\\{}", name.replace('/', "\\"));
+                opened.mdd.iter().any(|(_, volume)| volume.find(&key).map_or(true, |found| !found.is_empty()))
+            }
+        })
+    }
+
     fn find_resource(&self, opened: &Dict, path: &str, ceiling: u64) -> Result<Option<Vec<u8>>, CoreError> {
         for (name, sidecar) in &opened.sidecars {
             if name.eq_ignore_ascii_case(path) {
@@ -813,6 +1036,21 @@ fn volume_records(
     Ok((records, problems))
 }
 
+/// An entry with a doctype, so it renders in standards mode; one it already has is kept.
+fn with_doctype(html: String, max: usize) -> Result<String, xdict_entry::Exceeded> {
+    const DOCTYPE: &str = "<!DOCTYPE html>";
+    let has = html.trim_start().get(..9).is_some_and(|w| w.eq_ignore_ascii_case("<!doctype"));
+    if has {
+        return Ok(html);
+    }
+    if html.len().saturating_add(DOCTYPE.len()) > max {
+        return Err(xdict_entry::Exceeded);
+    }
+    let mut html = html;
+    html.insert_str(0, DOCTYPE);
+    Ok(html)
+}
+
 /// Whether a resource of this type is a body the view renders: a stylesheet, script or page.
 fn renders(mime: &str) -> bool {
     matches!(mime, "text/css" | "text/javascript" | "text/html")
@@ -821,16 +1059,39 @@ fn renders(mime: &str) -> bool {
 /// A resource as the view gets it: a stylesheet, script or page rewritten for the view, resolving against the
 /// resource's own directory; anything else, and text that is not UTF-8, as stored. `Exceeded` as soon as it would
 /// pass `ceiling`, before a rewrite is all written.
-fn served(bytes: Vec<u8>, mime: &str, base: &str, dir: &str, ceiling: u64) -> Result<Vec<u8>, xdict_entry::Exceeded> {
+fn served(
+    bytes: Vec<u8>,
+    mime: &str,
+    base: &str,
+    dir: &str,
+    style: Option<&Style>,
+    strip_off_for_tests: bool,
+    ceiling: u64,
+) -> Result<Vec<u8>, xdict_entry::Exceeded> {
     let max = usize::try_from(ceiling).unwrap_or(usize::MAX);
     if bytes.len() > max {
         return Err(xdict_entry::Exceeded);
     }
     let Ok(text) = std::str::from_utf8(&bytes) else { return Ok(bytes) };
     let rewritten = match mime {
-        "text/css" => xdict_entry::css_text_within(text, base, dir, max)?,
-        "text/javascript" => xdict_entry::script_text_within(text, base, max)?,
-        "text/html" => xdict_entry::html_text_within(text, base, dir, max)?,
+        "text/css" => match style {
+            Some(style) => xdict_entry::css_normalized_within(text, base, dir, style, max)?.0,
+            None => xdict_entry::css_text_within(text, base, dir, max)?,
+        },
+        // Q6 (the owner, 2026-10-15): only a script that makes something work (a fold, a tab) runs; a tracker's, an
+        // audio player's and the rest are served empty.
+        "text/javascript" => match style.map(|_| xdict_entry::script_purpose(text)) {
+            Some(Err(why)) if !strip_off_for_tests => {
+                format!("/* XDict does not run this script ({why}): only scripts that make something work do. */")
+            }
+            _ => xdict_entry::script_text_within(text, base, max)?,
+        },
+        "text/html" => match style {
+            Some(style) => {
+                xdict_entry::html_normalized_unstripped_within(text, base, dir, style, strip_off_for_tests, max)?.0
+            }
+            None => xdict_entry::html_text_within(text, base, dir, max)?,
+        },
         _ => return Ok(bytes),
     };
     Ok(rewritten.into_bytes())
@@ -922,6 +1183,20 @@ impl SplitMix {
 mod tests {
     use super::*;
 
+    /// The doctype is written into the body's own buffer when it has room, not into a copy of it: the copy of a
+    /// 70 MiB body was `entry()`'s peak.
+    #[test]
+    fn the_doctype_is_added_in_place() {
+        let mut html = String::with_capacity(1024);
+        html.push_str("<p>x</p>");
+        let at = html.as_ptr();
+        let out = with_doctype(html, usize::MAX).unwrap();
+        assert_eq!(out, "<!DOCTYPE html><p>x</p>");
+        assert_eq!(out.as_ptr(), at);
+        assert!(with_doctype("<p>x</p>".into(), 20).is_err());
+        assert_eq!(with_doctype(" <!doctype html><p>".into(), 0).unwrap(), " <!doctype html><p>");
+    }
+
     /// A CSP source expression cannot be a bare path: under a path-only base (the Web, where the entry has an
     /// origin of its own) the policy names the entry's own origin; under a scheme's base, that base.
     #[test]
@@ -974,11 +1249,16 @@ mod tests {
     /// A core with `run` open in a one-entry dictionary, its volume holding `mdd` (none when empty) and its
     /// sidecars `sidecars`: the setup the resource tests share.
     fn opened(mdd: &[xdict_mdx_writer::Entry], sidecars: Vec<Location>) -> (Core, String) {
+        opened_with("to run", mdd, sidecars)
+    }
+
+    /// [`opened`], `run`'s record being `record`.
+    fn opened_with(record: &str, mdd: &[xdict_mdx_writer::Entry], sidecars: Vec<Location>) -> (Core, String) {
         use xdict_mdx_writer::{Entry as W, Spec, write};
         let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
         let source =
             |name: &str, bytes: Vec<u8>| Location::Source { name: name.into(), source: Arc::new(Fixed(bytes)) };
-        let mdx = source("a.mdx", write(&Spec::mdx(), &[W::text("run", "to run")]).unwrap());
+        let mdx = source("a.mdx", write(&Spec::mdx(), &[W::text("run", record)]).unwrap());
         let mdd = if mdd.is_empty() { vec![] } else { vec![source("a.mdd", write(&Spec::mdd(), mdd).unwrap())] };
         let package = Package { mdx, mdd, sidecars };
         core.import(package.clone(), &NoProgress).unwrap();
@@ -988,6 +1268,102 @@ mod tests {
 
     fn view() -> View {
         View { base_url: "xdict://d/".into(), max_body_bytes: 1 << 20 }
+    }
+
+    /// ADR-0010: entries and the sheets they load are normalized by the style the edition's own sheets decide, read
+    /// from the sidecars and the volumes alike, and reported.
+    #[test]
+    fn entries_and_sheets_are_normalized_by_the_editions_style() {
+        use xdict_mdx_writer::Entry as W;
+        let sidecar = Location::Source {
+            name: "side.css".into(),
+            source: Arc::new(Fixed(b"body{font-size:14px;margin:0} .p{font-size:12px !important}".to_vec())),
+        };
+        let icons = br#"@font-face{font-family:Ic;src:url(i.ttf)} .i:before{font-family:Ic;content:"\e900"}"#;
+        let record = r#"<style>.q{font-family:Ic;line-height:28px}</style><span class="x">/ˈrʌn/</span>"#;
+        let (core, dict) = opened_with(record, &[W::bytes("\\in\\icons.css", icons)], vec![sidecar]);
+        let entry = core
+            .entry(
+                dict.clone(),
+                EntryRef { edition: core_edition(&core, &dict), key: "run".into(), occurrence: 0 },
+                view(),
+            )
+            .unwrap();
+        // Q6: standards mode; R3: an icon face only where it draws; R5: line heights are the frame's.
+        assert!(entry.html.starts_with("<!DOCTYPE html>"), "{}", entry.html);
+        assert!(entry.html.contains(".q{font-family:var(--xdict-font)}"), "{}", entry.html);
+        assert!(
+            entry
+                .html
+                .contains(r#"<span data-xdict-role="pron" data-xdict-phon data-xdict-phon-system="slash" class="x">"#),
+            "{}",
+            entry.html
+        );
+        let Resource::Found { bytes, .. } = core.resource(dict.clone(), "side.css".into(), view()).unwrap() else {
+            panic!("missing")
+        };
+        assert_eq!(String::from_utf8(bytes).unwrap(), "body{} .p{font-size:var(--xdict-fs-s, 0.875rem) !important}");
+        let report = core.style_report(dict).unwrap();
+        assert_eq!(report.version, STYLE);
+        assert_eq!(report.edition.style.base().px, 14.0);
+        assert_eq!(report.edition.sheets, ["side.css", "in/icons.css"]);
+        let kept = report.edition.style.kept();
+        assert_eq!((kept[0].family.as_str(), kept[0].reason), ("Ic", xdict_entry::KeptReason::PrivateUse));
+        assert_eq!((report.counts.page, report.counts.important, report.counts.size), (2, 0, 1));
+    }
+
+    /// The strip list (S1–S14) applies unless a core is made with `strip_off_for_tests`, which only the
+    /// hostile battery's lab sets, so that its layer runs prove the shell's own layers against live scripts (the
+    /// rewriter is compatibility, not the boundary). A core made by default strips.
+    #[test]
+    fn the_strip_list_applies_unless_the_core_is_made_without_it() {
+        use xdict_mdx_writer::{Entry as W, Spec, write};
+        let record = concat!(
+            r#"<script>R('x')</script><a href="javascript:R('y')">j</a>"#,
+            r#"<!-- c --><title>t</title><img src="gone.png" alt="g"><span></span>"#
+        );
+        let render = |strip_off_for_tests: bool| {
+            let config =
+                Config { client_protocol: PROTOCOL, entropy: vec![1; 16], strip_off_for_tests, ..Config::default() };
+            let core = Core::new(config).unwrap();
+            let source = Location::Source {
+                name: "a.mdx".into(),
+                source: Arc::new(Fixed(write(&Spec::mdx(), &[W::text("run", record)]).unwrap())),
+            };
+            let mdd = write(
+                &Spec::mdd(),
+                &[W::bytes("\\doc.html", b"<script>R('z')</script>"), W::bytes("\\a.js", b"R('w')")],
+            )
+            .unwrap();
+            let mdd = Location::Source { name: "a.mdd".into(), source: Arc::new(Fixed(mdd)) };
+            let package = Package { mdx: source, mdd: vec![mdd], sidecars: vec![] };
+            core.import(package.clone(), &NoProgress).unwrap();
+            let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+            let entry = EntryRef { edition: core_edition(&core, &dict), key: "run".into(), occurrence: 0 };
+            let served = |path: &str| match core.resource(dict.clone(), path.into(), view()).unwrap() {
+                Resource::Found { bytes, .. } => String::from_utf8(bytes).unwrap(),
+                other => panic!("{path}: {other:?}"),
+            };
+            let (doc, js) = (served("doc.html"), served("a.js"));
+            (core.entry(dict.clone(), entry, view()).unwrap().html, doc, js)
+        };
+        let (entry, doc, js) = render(false);
+        assert!(!entry.contains("R('x')") && !entry.contains("javascript:"), "{entry}");
+        // S2 comments, S3 a title, S13 an image the package lacks: the strip list's other removals.
+        assert!(!entry.contains("<!-- c -->") && !entry.contains("<title>") && !entry.contains("gone.png"), "{entry}");
+        assert!(!doc.contains("R('z')") && !js.contains("R('w')"), "{doc} {js}");
+        let (entry, doc, js) = render(true);
+        assert!(entry.contains("<script>R('x')</script>") && entry.contains("javascript:R('y')"), "{entry}");
+        assert!(
+            entry.contains("<!-- c -->") && entry.contains("<title>t</title>") && entry.contains("gone.png"),
+            "{entry}"
+        );
+        assert!(doc.contains("R('z')") && js.contains("R('w')"), "{doc} {js}");
+        assert!(!Config::default().strip_off_for_tests);
+    }
+
+    fn core_edition(core: &Core, dict: &str) -> String {
+        core.dict(dict).unwrap().edition.clone()
     }
 
     /// Suggestions are bounded as a page is: a shell asking for more than [`MAX_SUGGEST`] is refused before any key

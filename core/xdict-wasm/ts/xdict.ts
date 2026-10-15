@@ -8,7 +8,14 @@
 export type CoreError = { type: string; detail?: string; [field: string]: unknown };
 /** A file's identity. Bigints, because nanosecond times pass 2^53, where a number would round them. */
 export type FileIdentity = { device: bigint; inode: bigint; size: bigint; mtimeNs: bigint; ctimeNs: bigint };
-export type Config = { dataDir: string | null; cacheDir: string | null; clientProtocol: number; entropy: number[] };
+export type Config = {
+  dataDir: string | null;
+  cacheDir: string | null;
+  clientProtocol: number;
+  entropy: number[];
+  /** Test-only (the hostile battery's lab): keep every script. Absent: false. */
+  stripOffForTests?: boolean;
+};
 export type Versions = { protocol: number; core: string; indexFormat: number; normalization: number };
 export type DictInfo = { title: string; description: string; formatVersion: string; keys: number };
 export type Problem = { type: 'volumeUnreadable'; name: string; error: CoreError };
