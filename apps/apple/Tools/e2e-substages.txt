@@ -1,0 +1,101 @@
+# **The only list of the end-to-end sub-stages and the checks each owns** (`Tools/e2e.sh`, `Tools/e2e-plan.sh`).
+#
+#   @ <sub-stage> <default|extra> <needs> [group=<name>]
+#       <check> <check> …
+#
+# A sub-stage is `<stage>.<part>`, or a bare stage that has no parts (`launch`, `reader`). The order here is the order
+# they run in: cheapest first, as measured by the last full run. `default` sub-stages are what a bare stage name, a run
+# with no STAGES, and a release (`Tools/e2e-status.sh require-fresh`) mean; `extra` ones run only when named.
+#
+# <needs>, comma separated or `-`: `kit` the entry view's kit (Tools/build-lab.sh), `fixtures` Tools/build-fixtures.sh's
+# dictionaries, `sample` entries_corpus's sample of the owner's dictionaries, `editions` index_bench's editions of them,
+# `corpus` the owner's dictionaries themselves. A `group` is one launch that serves several sub-stages (the lookup
+# window): it runs once for whichever of them are asked, and each check is still recorded under its own sub-stage.
+#
+# **Every check belongs to exactly one sub-stage**: the run records a check under the sub-stage named here, whichever
+# launch reported it, and a sub-stage that never reported one of its checks fails. `Tools/tests/e2e-plan-test.sh` holds
+# this list to `Tools/tests/e2e-checks-baseline.txt`, the checks of the full run before the stages were split.
+#
+# Instrument checks are the names in their `Findings`; the shell's own assertions are named here; the analyzers'
+# verdicts (`Tools/hostile/analyze.py`, `Tools/lookup/verdicts.py`) are one check per analysis, every line of it
+# recorded under that name.
+
+@ launch default -
+    launch.startedByLaunchServices launch.knownAsBundle launch.stillRunning launch.serviceFromBundle
+    launch.handshakeVersions launch.entryViewReady launch.handshakeParent launch.quitsOnTerm
+
+@ service.conformance default fixtures
+    conformance.tiny conformance.matrix
+
+@ hostile.binding default kit
+    hostile.binding
+
+@ hostile.faults default kit
+    hostile.faults
+
+@ library.generated default kit,fixtures
+    file.registered folder.registered folder.volumesInOrder folder.sidecarFound gap.missingVolumeReported
+    cancel.cancelledWhileRunning retry.completed lookup.answeredDuringImport languages.statedNotAsked
+    languages.guessAsked languages.editPersists refusal.resourceLibraryV3 refusal.registrationCode refusal.damaged
+    escape.refused sounds.toldApart changed.newEdition changed.notJoinedUnasked changed.joined changed.persists
+    changed.undone relink.followsAMove relink.controlWithoutRelinking sentence.resourceLibraryV3
+    sentence.registrationCode sentence.damaged drop.registered
+
+@ service.recovery default fixtures
+    refusal.noHandle refusal.pipe refusal.writable refusal.otherFile refusal.control refusal.missingToken
+    supersede.lateReply supersede.queuedNeverSent stall.timedOut stall.newConnection stall.answeredWhileTheStalledRun
+    kill.typedError kill.nextLookupSucceeds service.connect.inside service.connect.outside service.clientRequirement
+
+@ reader default kit
+    reader.access reader.verdicts
+
+@ hostile.production default kit
+    hostile.suite.production
+
+@ lookup.core default kit,fixtures,corpus group=lookup
+    lookup.access setup.library scope.changesResults order.followsTheLibrary folding.exactLeads folding.readerModeOnly
+    phrase.resolvesIntact phrase.suggested internal.neverSuggested internal.ldoce unavailable.toldApart
+    unavailable.indexingEnds delay.othersNotHeld delay.entryKeepsTheOrder link.followedInLinkMode
+    trail.backReturnsExactly trail.forwardReturnsExactly trail.originInOneStep entry.supersededLoadIsNoLink
+
+@ lookup.a11y default kit,fixtures,corpus group=lookup
+    ax.scope ax.order ax.folding ax.suggestions ax.unavailable.records ax.unavailable.slow ax.unavailable.gone
+    ax.unavailable.damaged ax.unavailable.locked ax.delay
+    launch.searchFocused keyboard.typed keyboard.firstQueryNoPointer voiceover.resultsNameTheirDictionary
+    keyboard.results keyboard.entry keyboard.linkFollowed voiceover.linkFocused keyboard.back keyboard.forwardAndOrigin
+    keyboard.searchCommand keyboard.scope voiceover.scopeVisible keyboard.scopeAll keyboard.suggestion driver.ran
+
+@ lookup.paging default kit,fixtures,corpus group=lookup
+    paging.everyRecord ax.paging
+
+@ service.idle default fixtures
+    idle.exitsWhenQuiet idle.workSpanningTheTimer idle.racingRequestsAnsweredOnce
+
+@ hostile.app default kit
+    hostile.app
+
+@ entries.quick extra kit,sample,corpus
+    entries.app.quick
+
+@ entries.persistence default kit,corpus
+    entries.app.persistence
+
+@ library.corpus default editions,corpus
+    corpus.registered corpus.editions corpus.choicesMade relaunch.everyDictionary relaunch.order
+    relaunch.foundWhereMoved relaunch.answering corpus.changed.newEdition corpus.changed.notJoinedUnasked
+    corpus.changed.joined corpus.changed.persists corpus.changed.undone
+
+@ library.control default editions,corpus
+    library.control.missingWithoutRelinking
+
+@ hostile.controls default kit
+    hostile.suite.controls
+
+@ entries.full default kit,sample,corpus
+    entries.app.corpus
+
+@ entries.lab extra kit,sample,corpus
+    entries.lab
+
+# sound.* — reserved for WI-7's sound stage (another worktree): its sub-stages go here, in cost order, each with its
+# checks; `Tools/e2e.sh` runs `substage_sound_<part>` for `sound.<part>`.

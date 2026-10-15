@@ -131,8 +131,10 @@ public final class LookupScenario {
         return findings
     }
 
-    /// Every check, in an order that leaves each one's state for the next only where it says so.
-    public func run() async -> Findings {
+    /// Every check, in an order that leaves each one's state for the next only where it says so. `pagingToo: false`
+    /// leaves out `paging.everyRecord` (and its checkpoint), the longest check by far, for an E2E run that did not ask
+    /// for it (`Tools/e2e.sh`'s `lookup.paging`); no later check reads what paging leaves but the word it searches last.
+    public func run(pagingToo: Bool = true) async -> Findings {
         var findings = Findings()
         await scope(&findings)
         await order(&findings)
@@ -141,7 +143,11 @@ public final class LookupScenario {
         await internalKeys(&findings)
         await unavailable(&findings)
         await delay(&findings)
-        await paging(&findings)
+        if pagingToo {
+            await paging(&findings)
+        } else {
+            await search("apple")   // where paging leaves the window, so the trail starts as it always does
+        }
         await trail(&findings)
         return findings
     }

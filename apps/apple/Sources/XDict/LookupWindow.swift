@@ -36,11 +36,12 @@ enum LookupWindowReport {
     static func prepare(_ arguments: [String]) {
         guard let work = Instrument.value(after: flag, in: arguments).map(URL.init(fileURLWithPath:)),
               let fixtures = Instrument.value(after: "--fixtures", in: arguments).map(URL.init(fileURLWithPath:)) else {
-            FileHandle.standardError.write(Data("usage: \(flag) <work> --fixtures <lookup> [--corpus <dir>]\n".utf8))
+            FileHandle.standardError.write(Data("usage: \(flag) <work> --fixtures <lookup> [--corpus <dir>] [--no-paging]\n".utf8))
             exit(2)
         }
         let corpus = Instrument.value(after: "--corpus", in: arguments).map(URL.init(fileURLWithPath:))
-        let run = LookupWindowRun(work: work, fixtures: fixtures, corpus: corpus)
+        let run = LookupWindowRun(work: work, fixtures: fixtures, corpus: corpus,
+                                  pagingToo: !arguments.contains("--no-paging"))
         LookupWindowRun.shared = run
         XDictApp.windowMade = { state in run.windowMade(state) }
     }
@@ -56,6 +57,8 @@ final class LookupWindowRun: LookupStage {
     let work: URL
     let fixtures: URL
     let corpus: URL?
+    /// Whether the scenario pages the 66,355 records: `--no-paging` leaves it out, for an E2E run without `lookup.paging`.
+    let pagingToo: Bool
     var commands: URL { work.appending(path: "commands") }
     private var state: SearchWindowState?
     private var scenario: LookupScenario?
@@ -74,10 +77,11 @@ final class LookupWindowRun: LookupStage {
     private var timeline: [String] = []
     private let began = ContinuousClock.now
 
-    init(work: URL, fixtures: URL, corpus: URL?) {
+    init(work: URL, fixtures: URL, corpus: URL?, pagingToo: Bool) {
         self.work = work
         self.fixtures = fixtures
         self.corpus = corpus
+        self.pagingToo = pagingToo
     }
 
     func note(_ event: EntryEvent) {
@@ -169,7 +173,7 @@ final class LookupWindowRun: LookupStage {
         note("the scenario begins")
         var findings = setupFindings
         if setupFindings.passed {
-            findings.merge(await scenario.run())
+            findings.merge(await scenario.run(pagingToo: pagingToo))
             findings.merge(await supersededLoads())
         }
         write(["timeline": timeline], to: work.appending(path: "timeline.json"))
