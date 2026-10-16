@@ -1,0 +1,3 @@
+[data-xdict-phon],
+[data-xdict-phon] :not([data-xdict-control],[data-xdict-control] *,[data-xdict-role=label])
+{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon) !important}

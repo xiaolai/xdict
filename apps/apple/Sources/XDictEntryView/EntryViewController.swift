@@ -17,6 +17,9 @@ public struct EntryEnvironment {
     /// The reading frame's layers (`EntryReadingFrame`): all of them in XDict; the lab's gallery turns them off to show
     /// the dictionary as it styles itself.
     public var readingFrame: EntryReadingFrame = .all
+    /// The reading style's text (`EntryStyle`): `bundled` in XDict; only the lab's gallery gives another, read from its
+    /// `--style-dir`, so a style edit reaches a picture without a rebuild.
+    public var style: EntryStyle = .bundled
 
     public init(preferences: EntryPreferences = EntryPreferences(), opener: any EntryURLOpener = WorkspaceOpener(),
                 confinement: EntryConfinement = .production,
@@ -146,7 +149,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         if pane == nil {
             let scheme = currentScheme(for: content.binding.dictionary)
             switch EntryPane.open(content: content, confinement: environment.confinement, scheme: scheme,
-                                  frame: currentFrame(for: content.binding.dictionary),
+                                  frame: currentFrame(for: content.binding.dictionary), style: environment.style,
                                   ruleList: ruleList, switches: environment.switches, host: self) {
             case .failure(let why):
                 refuse(why)

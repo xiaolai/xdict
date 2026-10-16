@@ -1,0 +1,76 @@
+body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}
+[data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}
+/* The browser's defaults, at zero specificity, so a dictionary's own (normalized) rule still wins. */
+:where(h1){font-size:var(--xdict-fs-xxl);line-height:var(--xdict-leading-tight)}
+:where(h2){font-size:var(--xdict-fs-xl);line-height:var(--xdict-leading-tight)}
+:where(h3){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}
+:where(h4){font-size:var(--xdict-fs-m);line-height:var(--xdict-leading)}
+:where(h5){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
+:where(h6){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}
+:where(small){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
+:where(big){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}
+:where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}
+:where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
+:where(button,input,select,textarea){font:inherit}
+:where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}
+:where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}
+@layer xdict-unify{
+/* The transcription face reaches all of a transcription's text, a speaker wrapping it included; the face */
+/* only, its colour kept. An ASCII-mapped phonetic font (`font:<name>`) keeps its own. */
+[data-xdict-phon]:not([data-xdict-phon-system^='font:']),
+[data-xdict-phon]:not([data-xdict-phon-system^='font:']) :not([data-xdict-tag],[data-xdict-icon])
+{font-family:var(--xdict-font-phon) !important}
+/* The lead (the entry's first headword): one size, face, leading and colour; inside it only weight is the */
+/* dictionary's (a stress mark's). Its colour reaches its descendants too: NOAD's headword text is a coloured */
+/* span inside the lead, MWU's a link (gallery, 2026-10-16), and the 24's stress marks carry no colour of */
+/* their own (the gallery's lead check), so study fix 3's "keep colour" kept only the dictionaries' hues. */
+[data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;
+font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
+font-style:normal !important;color:var(--xdict-text) !important}
+[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,
+[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;
+line-height:inherit !important;color:inherit !important}
+/* A part of speech the edition's markup table names (the core's `data-xdict-sure=pos`): one look in every */
+/* dictionary, its descendants' declarations included, in the lead too. The generic rule's guesses carry no */
+/* `sure` and keep the dictionary's look (precision, not reach, decides: Codex's unification objections 2, 4). */
+[data-xdict-sure=pos][data-xdict-sure],[data-xdict-sure=pos][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])
+/* No slanted CJK: COBUILD's English–Chinese codes carry their Chinese gloss ("VERB 动词"). */
+{font-family:var(--xdict-font) !important;font-style:italic !important;font-synthesis-style:none !important;
+font-weight:normal !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;
+font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-accent) !important;
+background:none !important}
+/* A sense number a markup table names: one face, weight and colour; its size and place stay the dictionary's. */
+[data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])
+{font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
+font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}
+/* An example a markup table names: italic in the body face and the secondary text colour, so the accent stays */
+/* for labels and numbers (owner, 2026-10-16). Its descendants take the face and the slant but keep their own */
+/* colour and weight: a headword the dictionary coloured inside it is the one accent (COBUILD-EC's */
+/* "correlate"). Han text is never slanted: no synthesized oblique, and CJK faces have no italic. */
+[data-xdict-sure=example][data-xdict-sure]{color:var(--xdict-text-2) !important}
+[data-xdict-sure=example][data-xdict-sure],[data-xdict-sure=example][data-xdict-sure] 
+:not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],
+[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;
+font-synthesis-style:none !important}
+/* A section heading a markup table names: one look, bold, 1.125rem, the body face and the body text colour; the */
+/* accent is not for headings (owner, 2026-10-17). Its own text only: a link or a list inside it keeps its look. */
+[data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 
+:not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;
+font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;
+font-weight:var(--xdict-weight-bold) !important;font-style:normal !important;
+color:var(--xdict-text) !important}
+/* A translation a markup table names, a sense's or an example's: upright, in the secondary text colour. */
+[data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}
+[data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] 
+:not([data-xdict-tag],[data-xdict-icon]){font-style:normal !important}
+/* A label's text is the label's, whatever its descendants declared. */
+[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;
+font-family:inherit !important;color:inherit !important;line-height:inherit !important}
+/* A link is the link colour, whatever colour the dictionary gave it (flatten: link stays link). */
+a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-control=disclosure]) 
+:not([data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-link) !important}
+/* ... but a link in the lead is the lead's colour (MWU's headword links to itself). */
+[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]),
+[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label] *)
+{color:inherit !important}
+}

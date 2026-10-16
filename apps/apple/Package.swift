@@ -39,7 +39,8 @@ let package = Package(
         // reader's consent before a remote link leaves, find, zoom and appearance. Its own target because it binds
         // WebKit and AppKit, which nothing else in the view layer does. It gets bytes through `EntryContent`, never the
         // contract's types, so the service's client plugs in without the view knowing the wire (WI-3, WI-6).
-        .target(name: "XDictEntryView", dependencies: ["XDictBase"]),
+        // `Style/` is compiled in as text by Tools/reading-style-gen.py (`EntryStyleFiles.swift`), never read at run time.
+        .target(name: "XDictEntryView", dependencies: ["XDictBase"], exclude: ["Style"]),
 
         // **Sound and speech** (plan-macos-v1 WI-7; `platform-architecture.md` §4a): the system's voices and which one
         // speaks a dictionary's declared language in the reader's accent, the reader's accent kept, and the output where
