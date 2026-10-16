@@ -28,6 +28,8 @@ struct LabOptions {
     /// normalization and the view shows it without the frame, every layer of the confinement as it is.
     var originalStyle = false
     var concurrency = 4
+    /// The gallery shows an even spread of this many sampled entries per dictionary instead of its three chosen.
+    var spread = 0
     var only: Set<String> = []
 
     /// Printed with every mistake on the command line. Its text is also what `Tools/build-bundle.sh` looks for: the
@@ -40,7 +42,7 @@ struct LabOptions {
           XDictEntryLab --binding <twin-a dir> <twin-b dir> --out <report.json>
           XDictEntryLab --reader <fixture dir> --commands <dir> --out <report.json>
           XDictEntryLab --corpus <dir> --sample <sample.json> --out <report.json> [--persistence set|check]
-          XDictEntryLab --gallery <dir> --sample <sample.json> --out <report.json> [--only dict,…] [--keys <earlier report.json>]
+          XDictEntryLab --gallery <dir> --sample <sample.json> --out <report.json> [--only dict,…] [--keys <earlier report.json>] [--spread n]
         layers: csp, rules, nav, popups, link-preconnect, peer-connection, strip (the core's, not the view's)
         """
 
@@ -75,6 +77,7 @@ struct LabOptions {
             case "--disable-layer":
                 options.disabled.formUnion(try value().split(separator: ",").map(String.init))
             case "--original-style": options.originalStyle = true
+            case "--spread": options.spread = max(0, Int(try value()) ?? 0)
             case "--concurrency": options.concurrency = max(1, Int(try value()) ?? 4)
             case "--only": options.only = Set(try value().split(separator: ",").map(String.init))
             default:
