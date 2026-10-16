@@ -8,6 +8,12 @@
 //! descendants' included) up to [`TEXT_CHARS`]; the outermost element whose text qualifies is marked, its
 //! descendants' marks dropped. Marks are insertions recorded by output position and made in one pass at the end,
 //! so the cost is linear in the entry.
+//!
+//! A transcription that is no element of its own (loose text among other content, as CALD's
+//! `—vision … /ˈvɪʒ.<sup>ə</sup>n/`, or delimiters outside the element holding the letters, as OED's
+//! `Brit.<a>sound</a>/<span>ˈdʌɪnə</span>/`) is found by its delimiters: each element scans its own text and
+//! children for `/…/`, `[…]` or `\…\` holding a transcription, and wraps it whole in a `<span>` carrying the same
+//! attributes. An element holding a delimited transcription is never marked whole as undelimited, so a label is never part of a mark.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -47,6 +53,8 @@ impl Transcriptions {
 /// A mark waiting for its ancestors to decide: where it goes, its system, its text.
 struct Mark {
     at: usize,
+    /// Where a wrapping `<span>` ends; `None` when the mark is an element's own attributes.
+    end: Option<usize>,
     system: String,
     text: String,
 }
@@ -60,6 +68,18 @@ struct Open {
     /// Marked by its class, for a phonetic font: its text is not read.
     fixed: bool,
     pending: Vec<Mark>,
+    /// A delimited transcription being read in this element's own content.
+    scan: Option<Scan>,
+    /// Whether it holds a delimited transcription: its own wrap, or a descendant's.
+    delimited: bool,
+}
+
+/// An opening delimiter met in an element's content, and the text since it.
+struct Scan {
+    delimiter: char,
+    at: usize,
+    inner: String,
+    chars: usize,
 }
 
 pub(crate) struct Marker {
@@ -93,6 +113,10 @@ impl Marker {
     pub(crate) fn start(&mut self, name: &str, at: usize, tag: &str) {
         let lower = name.to_ascii_lowercase();
         if VOID.contains(&lower.as_str()) || tag.ends_with("/>") {
+            // A line break or an image ends any transcription being read.
+            if let Some(top) = self.stack.last_mut() {
+                top.scan = None;
+            }
             return;
         }
         if self.stack.len() >= MAX_DEPTH {
@@ -108,7 +132,7 @@ impl Marker {
             .map(|(_, family)| family.clone());
         let fixed = font.is_some();
         if let Some(family) = font {
-            self.commit(Mark { at, system: format!("font:{family}"), text: String::new() });
+            self.commit(Mark { at, end: None, system: format!("font:{family}"), text: String::new() });
         }
         self.stack.push(Open {
             name: lower,
@@ -118,16 +142,23 @@ impl Marker {
             over: false,
             fixed,
             pending: Vec::new(),
+            scan: None,
+            delimited: false,
         });
     }
 
-    /// Text between tags, as written.
-    pub(crate) fn text(&mut self, raw: &str) {
+    /// Text between tags, as written, starting at output position `at`.
+    pub(crate) fn text(&mut self, raw: &str, at: usize) {
         if raw.is_empty() {
             return;
         }
-        if let Some(top) = self.stack.last_mut() {
-            append(top, &crate::rewrite::unescaped_html(raw));
+        let Some(top) = self.stack.last_mut() else { return };
+        append(top, &crate::rewrite::unescaped_html(raw));
+        let mut from = 0;
+        while let Some(c) = raw.get(from..).and_then(|r| r.chars().next()) {
+            let (c, len) = decoded(raw, from).unwrap_or((c, c.len_utf8()));
+            step(top, c, at + from, at + from + len);
+            from += len;
         }
     }
 
@@ -147,13 +178,23 @@ impl Marker {
 
     fn close(&mut self) {
         let Some(open) = self.stack.pop() else { return };
-        let system = (!open.fixed && !open.over).then(|| transcription(&open.text)).flatten();
+        // Undelimited text round a delimited transcription is a label beside it ("Brit./ˈdʌɪnə/"): the inner mark stands.
+        let system = (!open.fixed && !open.over)
+            .then(|| transcription(&open.text))
+            .flatten()
+            .filter(|s| !(open.delimited && *s == "none"));
+        let delimited = open.delimited || system.is_some_and(|s| s != "none");
+        let parent = self.stack.last_mut();
+        if let Some(parent) = parent {
+            parent.delimited |= delimited;
+        }
         let parent = self.stack.last_mut();
         match system {
             Some(system) => {
-                let mark = Mark { at: open.at, system: system.to_owned(), text: open.text.clone() };
+                let mark = Mark { at: open.at, end: None, system: system.to_owned(), text: open.text.clone() };
                 match parent {
                     Some(parent) => {
+                        within(parent, &open);
                         append(parent, &open.text);
                         parent.pending.push(mark);
                     }
@@ -162,6 +203,7 @@ impl Marker {
             }
             None => {
                 if let Some(parent) = parent {
+                    within(parent, &open);
                     if open.fixed || open.over {
                         parent.over = true;
                     } else {
@@ -169,8 +211,14 @@ impl Marker {
                     }
                 }
                 if !open.fixed {
-                    for mark in open.pending {
-                        self.commit(mark);
+                    match self.stack.last_mut() {
+                        // Kept for the parent while it reads a delimited transcription that may wrap them.
+                        Some(parent) if parent.scan.is_some() => parent.pending.extend(open.pending),
+                        _ => {
+                            for mark in open.pending {
+                                self.commit(mark);
+                            }
+                        }
                     }
                 }
             }
@@ -189,13 +237,80 @@ impl Marker {
         while !self.stack.is_empty() {
             self.close();
         }
-        let mut inserts: Vec<(usize, String)> = self
-            .done
-            .into_iter()
-            .map(|m| (m.at, format!(" data-xdict-phon data-xdict-phon-system=\"{}\"", attribute_text(&m.system))))
-            .collect();
-        inserts.sort_by_key(|(at, _)| *at);
-        (inserts, self.found)
+        // At one position a wrap's end goes before anything that starts there.
+        let mut inserts: Vec<(usize, bool, String)> = Vec::with_capacity(self.done.len());
+        for m in self.done {
+            let attributes = format!(" data-xdict-phon data-xdict-phon-system=\"{}\"", attribute_text(&m.system));
+            match m.end {
+                None => inserts.push((m.at, true, attributes)),
+                Some(end) => {
+                    inserts.push((m.at, true, format!("<span{attributes}>")));
+                    inserts.push((end, false, "</span>".to_owned()));
+                }
+            }
+        }
+        inserts.sort_by_key(|(at, starts, _)| (*at, *starts));
+        (inserts.into_iter().map(|(at, _, text)| (at, text)).collect(), self.found)
+    }
+}
+
+/// One character of an element's own text, at output bytes `at..end`: read into, closes or opens a delimited
+/// transcription.
+fn step(open: &mut Open, c: char, at: usize, end: usize) {
+    if let Some(scan) = &mut open.scan {
+        let closer = if scan.delimiter == '[' { ']' } else { scan.delimiter };
+        if c == closer {
+            let text = format!("{}{}{c}", scan.delimiter, scan.inner);
+            if scan.inner.trim() == scan.inner
+                && let Some(system) = transcription(&text).filter(|s| *s != "none")
+            {
+                let from = scan.at;
+                // Marks inside it are dropped: the wrap is the outermost. Pending marks are in order of position.
+                while open.pending.last().is_some_and(|m| m.at >= from) {
+                    open.pending.pop();
+                }
+                open.pending.push(Mark { at: from, end: Some(end), system: system.to_owned(), text });
+                open.scan = None;
+                open.delimited = true;
+                return;
+            }
+        } else if allowed(c) && c != '[' && scan.chars < TEXT_CHARS {
+            scan.inner.push(c);
+            scan.chars += 1;
+            return;
+        }
+        open.scan = None;
+    }
+    if matches!(c, '/' | '[' | '\\') {
+        open.scan = Some(Scan { delimiter: c, at, inner: String::new(), chars: 0 });
+    }
+}
+
+/// A child element closed inside `parent`: its text joins a transcription being read, or ends it.
+fn within(parent: &mut Open, child: &Open) {
+    let Some(scan) = &mut parent.scan else { return };
+    let n = child.text.chars().count();
+    if child.fixed || child.over || !child.text.chars().all(allowed) || scan.chars + n > TEXT_CHARS {
+        parent.scan = None;
+        return;
+    }
+    scan.inner.push_str(&child.text);
+    scan.chars += n;
+}
+
+/// The character an entity at `raw[from..]` stands for, and the entity's length; `None` if none starts there.
+fn decoded(raw: &str, from: usize) -> Option<(char, usize)> {
+    let rest = raw.get(from..)?;
+    if !rest.starts_with('&') {
+        return None;
+    }
+    let semi = rest.get(..rest.len().min(12))?.find(';')?;
+    let entity = rest.get(..=semi)?;
+    let text = crate::rewrite::unescaped_html(entity);
+    let mut chars = text.chars();
+    match (chars.next(), chars.next()) {
+        (Some(c), None) if text != entity => Some((c, entity.len())),
+        _ => None,
     }
 }
 
