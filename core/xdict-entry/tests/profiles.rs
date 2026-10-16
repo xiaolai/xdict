@@ -139,6 +139,22 @@ fn a_known_markup_names_its_headings_sure() {
     assert!(tag_of(&out, "popheader popexa").contains(r#"data-xdict-sure="heading""#), "{out}");
 }
 
+/// A translation the markup's table names is sure (`data-xdict-sure="trans"`), a sense's or an example's, which the
+/// generic rule's role tells apart: ODECN's `div.cn_def` and `p.cn`.
+#[test]
+fn a_known_markup_names_its_translations_sure() {
+    let odecn = ".odecn{margin:0}.pos_inflections{margin:0}.pos{font-style:italic}";
+    let out = render(
+        odecn,
+        r#"<div class="odecn"><span class="hw">will</span> <div class="defs"><span class="num">1</span><div class="en_def">expressing the future tense</div><div class="cn_def">表示一般将来时</div><div class="example"><p class="en">you will regret it when you are older.</p><p class="cn">等你长大些就会后悔的。</p></div></div></div>"#,
+        "will",
+    );
+    assert!(tag_of(&out, "cn_def").contains(r#"data-xdict-sure="trans""#), "{out}");
+    let cn = tag_of(&out, "cn");
+    assert!(cn.contains(r#"data-xdict-role="example-trans""#), "{out}");
+    assert!(cn.contains(r#"data-xdict-sure="trans""#), "{out}");
+}
+
 /// Where a table names no examples (LDOCE's held a translation inside each, below the bar), the generic rule's
 /// examples stand, unsure.
 #[test]
