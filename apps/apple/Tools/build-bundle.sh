@@ -58,6 +58,8 @@ readonly CORE_SYMBOLS='uniffi_xdict_ffi|xdict_core|xdict_mdx|xdict_entry|xdict_l
 # never ships. Its flag is what the app binary must not hold, and what the lab binary must, or the reading saw nothing.
 readonly LAB=XDictEntryLab
 readonly LAB_FLAG=--disable-layer
+# The lab's gallery reads the reading style from a directory (`--style-dir`); the app compiles it in and reads none.
+readonly LAB_STYLE_FLAG=--style-dir
 
 fail() { echo "build-bundle: $*" >&2; exit 1; }
 note() { echo "$*"; }
@@ -231,6 +233,8 @@ verify_no_development_lab() {
     [ -z "$(find "$bundle" -iname "*$LAB*" -print -quit)" ] || { echo "the bundle carries something named $LAB"; return 1; }
     ! LC_ALL=C grep -aqF -- "$LAB_FLAG" "$bundle/Contents/MacOS/$APP_NAME" \
         || { echo "the app binary holds $LAB_FLAG, the development lab's flag"; return 1; }
+    ! LC_ALL=C grep -aqF -- "$LAB_STYLE_FLAG" "$bundle/Contents/MacOS/$APP_NAME" \
+        || { echo "the app binary holds $LAB_STYLE_FLAG: only the lab may read a style from a directory"; return 1; }
 }
 
 # Each binary's signed entitlements, compared whole with its file as JSON (plutil sorts keys and compacts): one more
@@ -350,6 +354,8 @@ assemble() {
     # The control for `verify_no_development_lab`'s flag search: the lab this build made must hold the flag.
     LC_ALL=C grep -aqF -- "$LAB_FLAG" "$products/$LAB" \
         || fail "$products/$LAB does not hold $LAB_FLAG, so a search of the app binary for it would see nothing"
+    LC_ALL=C grep -aqF -- "$LAB_STYLE_FLAG" "$products/$LAB" \
+        || fail "$products/$LAB does not hold $LAB_STYLE_FLAG, so a search of the app binary for it would see nothing"
 
     local contents=$STAGE/Contents xpc=$STAGE/$XPC_PATH number plist
     rm -rf "$STAGE_ROOT"

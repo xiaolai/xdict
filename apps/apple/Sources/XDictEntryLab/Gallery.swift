@@ -44,6 +44,7 @@ enum GalleryRun {
         let sample = try JSONDecoder().decode([SampledEntry].self, from: Data(contentsOf: samplePath))
         let byDict = Dictionary(grouping: sample, by: \.dict)
         let previous = try keys(options.keys, sample: sample)
+        let style = try options.style()
         var rows: [[String: Any]] = []
         var failures: [String] = []
         // Rows the run means to write: the runner holds the report to it, so a run that ends early is not read as done.
@@ -67,6 +68,7 @@ enum GalleryRun {
                 let log = EventLog()
                 var environment = CorpusRun.environment("gallery-\(mode.name)", log: log)
                 environment.readingFrame = mode.frame
+                environment.style = style
                 let controller = EntryViewController(environment: environment)
                 let window = labWindow("\(name) \(mode.name)", frame: NSRect(origin: NSPoint(x: 80, y: 60), size: size),
                                        view: controller.view)
@@ -160,7 +162,7 @@ enum GalleryRun {
                 window.close()
             }
         }
-        return ["mode": "gallery", "rows": rows, "expected": expected, "failures": failures,
+        return ["mode": "gallery", "style": options.styleDir?.path ?? "bundled", "rows": rows, "expected": expected, "failures": failures,
                 "folding": try await CorpusRun.folding(root: root, core: core)]
     }
 

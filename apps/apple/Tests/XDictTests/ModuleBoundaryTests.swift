@@ -177,6 +177,38 @@ struct ModuleBoundaryTests {
         }
     }
 
+    /// **Only the development lab renders with a reading style other than the compiled one** (plan-verification §4.6).
+    /// `EntryStyle(replacing:)` is the one way to make another, and it is `package`, so the compiler lets every target
+    /// here call it; this holds the app to `EntryStyle.bundled`, whose text is in the binary and on no path at run time.
+    @Test func onlyTheLabReplacesTheReadingStyle() throws {
+        var files: [String: [(file: String, text: String)]] = [:]
+        for target in try Manifest.dump().targets.values where target.type != "binary" && target.type != "test" {
+            files[target.name] = try SourceScan.files(under: Manifest.package.appending(path: target.path))
+                .map { ($0.file.lastPathComponent, $0.text) }
+        }
+        #expect(Self.styleProblems(files) == [])
+        // The premise: the lab does replace it, so the search can see the spelling it looks for.
+        #expect(files["XDictEntryLab"]?.contains { SourceScan.codeOnly($0.text).contains("EntryStyle(replacing:") } == true)
+    }
+
+    /// The control: the app or the entry view replacing it is named; a comment or a string naming it is not.
+    @Test func aStyleReplacedOutsideTheLabIsNamed() {
+        let planted = "let s = try EntryStyle(replacing: texts)\n"
+        let innocent = "// EntryStyle(replacing: texts)\nlet s = \"EntryStyle(replacing:\"\n"
+        #expect(Self.styleProblems(["XDict": [("Planted.swift", planted), ("Innocent.swift", innocent)],
+                                    "XDictEntryView": [("View.swift", planted)],
+                                    "XDictEntryLab": [("Lab.swift", planted)]])
+                == ["XDict/Planted.swift replaces the reading style", "XDictEntryView/View.swift replaces the reading style"])
+    }
+
+    static func styleProblems(_ files: [String: [(file: String, text: String)]]) -> [String] {
+        files.sorted(by: { $0.key < $1.key }).flatMap { target, files in
+            target == "XDictEntryLab" ? [] : files.filter {
+                SourceScan.codeOnly($0.text).contains("EntryStyle(replacing:")
+            }.map { "\(target)/\($0.file) replaces the reading style" }
+        }
+    }
+
     // MARK: - The contract
 
     @Test func theContractStandsAlone() throws {

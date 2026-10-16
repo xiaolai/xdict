@@ -31,6 +31,11 @@ struct LabOptions {
     /// The gallery shows an even spread of this many sampled entries per dictionary instead of its three chosen.
     var spread = 0
     var only: Set<String> = []
+    /// **`--style-dir`**: the gallery reads the reading style's files (`EntryStyle.names`) from this directory instead
+    /// of the ones compiled into the entry view, so a style edit reaches a picture without a rebuild
+    /// (`Tools/gallery/hot.sh`). The lab alone reads one; XDict.app compiles its style in, and `Tools/build-bundle.sh`
+    /// refuses an app binary that holds this flag.
+    var styleDir: URL?
 
     /// Printed with every mistake on the command line. Its text is also what `Tools/build-bundle.sh` looks for: the
     /// lab's binary must hold `--disable-layer` (the reading can see it) and the app's must not.
@@ -43,6 +48,7 @@ struct LabOptions {
           XDictEntryLab --reader <fixture dir> --commands <dir> --out <report.json>
           XDictEntryLab --corpus <dir> --sample <sample.json> --out <report.json> [--persistence set|check]
           XDictEntryLab --gallery <dir> --sample <sample.json> --out <report.json> [--only dict,…] [--keys <earlier report.json>] [--spread n]
+                        [--style-dir <dir>]
         layers: csp, rules, nav, popups, link-preconnect, peer-connection, strip (the core's, not the view's)
         """
 
@@ -79,6 +85,7 @@ struct LabOptions {
             case "--original-style": options.originalStyle = true
             case "--spread": options.spread = max(0, Int(try value()) ?? 0)
             case "--concurrency": options.concurrency = max(1, Int(try value()) ?? 4)
+            case "--style-dir": options.styleDir = try path()
             case "--only": options.only = Set(try value().split(separator: ",").map(String.init))
             default:
                 // LaunchServices may add `-psn_…`, and `-NS…`/`-Apple…` pairs; anything else is a mistake.
@@ -95,10 +102,25 @@ struct LabOptions {
         if case .faultSwitch(let fault) = options.mode, !faults.contains(fault) {
             throw LabFailure(description: "no fault called \(fault); the faults are \(faults.sorted())")
         }
+        if options.styleDir != nil, options.mode != .gallery {
+            throw LabFailure(description: "--style-dir is the gallery's alone")
+        }
         guard options.mode != nil, options.out != nil else {
             throw LabFailure(description: "a mode and --out are needed\n\(usage)")
         }
         return options
+    }
+
+    /// The reading style the gallery renders with: the directory's files when `--style-dir` names one, every one of
+    /// `EntryStyle.names` and no other, else the compiled one.
+    func style() throws -> EntryStyle {
+        guard let styleDir else { return .bundled }
+        var texts: [String: String] = [:]
+        for name in try FileManager.default.contentsOfDirectory(atPath: styleDir.path)
+        where name.hasSuffix(".css") || name.hasSuffix(".js") {
+            texts[name] = try String(contentsOf: styleDir.appending(path: name), encoding: .utf8)
+        }
+        return try EntryStyle(replacing: texts)
     }
 
     /// `strip` off: the lab's core applies no strip list (`Config.stripOffForTests`), so the view's own layers are proven
