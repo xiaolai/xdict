@@ -929,6 +929,11 @@ impl<'s> Roles<'s> {
                 }
                 let Some((name, kind)) = role.written() else { continue };
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
+                // The entry's first headword is the lead, the one headword mark precise enough for strong styling
+                // (unification R, 2026-10-16).
+                if *role == Role::Headword && decided.headwords.len() == 1 {
+                    attr.push_str(" data-xdict-lead");
+                }
                 let mut counted = name.to_owned();
                 if let Some((attribute, value)) = kind {
                     attr.push_str(&format!(" {attribute}=\"{value}\""));

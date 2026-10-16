@@ -190,3 +190,17 @@ fn a_key_of_the_edition_written_with_stress_is_not_a_transcription() {
     assert_eq!(marked_in("ˈpɛtl̩", "petal"), 1);
     assert_eq!(marked_in("ˌdaʊn ˈvest", "down"), 1);
 }
+
+/// The entry's first headword is the lead (unification R, 2026-10-16): the one headword mark precise enough for strong
+/// styling (0.92 on the holdout, where headwords as a whole are 0.59). Exactly one, the first in document order.
+#[test]
+fn the_first_headword_is_the_lead() {
+    let two = r#"<div><b class="hw">run</b> <span class="d">to move fast</span></div><div><b class="hw">run</b> <span class="d">to manage</span></div>"#;
+    let (out, _) = entry(two, "run");
+    assert_eq!(out.matches("data-xdict-lead").count(), 1, "{out}");
+    let lead = out.find("data-xdict-lead").unwrap();
+    let first = out.find("data-xdict-role=\"headword\"").unwrap();
+    assert!(out[..lead].rfind('<') == out[..first].rfind('<'), "the lead is not the first headword: {out}");
+    let (none, _) = entry(r#"<p>no headword here at all, only a sentence of prose.</p>"#, "zzz");
+    assert!(!none.contains("data-xdict-lead"), "{none}");
+}

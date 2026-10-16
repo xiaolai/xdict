@@ -1,4 +1,5 @@
-; A text colour as a script or a stylesheet writes it, a tab, and the palette token it becomes (ADR-0010).
+; A text colour as a script or a stylesheet writes it, a tab, and the palette token it becomes (ADR-0010):
+; every chromatic text colour is the one accent (owner, 2026-10-16: flatten).
 ; Read by the core (`core/xdict-entry/src/colour.rs`) and the macOS shell (`ColourGuardTests`), so their mappings cannot drift.
 #000	text
 #000000	text
@@ -11,25 +12,25 @@ rgb(0, 0, 0)	text
 #fff	text
 #fafafa	text
 rgb(255, 255, 255)	text
-#c00000	red
-#ff0000	red
-#8b0000	red-deep
-#d40218	red
-#ff8c00	orange
-#6c3815	orange-deep
-#ffd700	yellow
-#008000	green
-#006400	green-deep
-#32cd32	green
-#008080	teal
-#20b2aa	teal
-#0000ff	blue-deep
-#1a0dab	blue-deep
-#0069b4	blue
-#3f51b5	blue-deep
-#800080	purple-deep
-#9370db	purple
-#ff1493	pink
-#c71585	pink
-rgba(255, 0, 0, 0.5)	red
-#0e01ad	blue-deep
+#c00000	accent
+#ff0000	accent
+#8b0000	accent
+#d40218	accent
+#ff8c00	accent
+#6c3815	accent
+#ffd700	accent
+#008000	accent
+#006400	accent
+#32cd32	accent
+#008080	accent
+#20b2aa	accent
+#0000ff	accent
+#1a0dab	accent
+#0069b4	accent
+#3f51b5	accent
+#800080	accent
+#9370db	accent
+#ff1493	accent
+#c71585	accent
+rgba(255, 0, 0, 0.5)	accent
+#0e01ad	accent
