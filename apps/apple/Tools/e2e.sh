@@ -222,8 +222,11 @@ printf '%s\n' "$only" | tr ',' '\n' | on_host "cat > '$REMOTE_DIR/only'" || fail
 # **The fixtures are written here, by the core's own MDX writer, and shipped with the bundle**: no dictionary content
 # enters the repository or reaches the E2E Mac from anywhere else (Tools/build-fixtures.sh).
 if needs fixtures; then
-    Tools/build-fixtures.sh "$scratch/fixtures" >/dev/null || fail "could not write the fixtures"
-    to_host --delete "$scratch/fixtures/" "$host:$REMOTE_DIR/fixtures/" || fail "could not copy the fixtures"
+    # On the build Mac, never on the Air (Tools/core-on-host.sh).
+    Tools/core-on-host.sh run "$scratch/made" 'apps/apple/Tools/build-fixtures.sh "$OUT/fixtures" >/dev/null' \
+        || fail "could not write the fixtures"
+    [ -d "$scratch/made/fixtures" ] || fail "the fixtures were not written"
+    to_host --delete "$scratch/made/fixtures/" "$host:$REMOTE_DIR/fixtures/" || fail "could not copy the fixtures"
     echo "fixtures written and copied"
 fi
 echo "build $remote_version ($build_mode) installed and verified"
@@ -260,15 +263,28 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
     section "corpus"
     [ -d "$XDICT_E2E_CORPUS" ] || fail "XDICT_E2E_CORPUS is not a folder: $XDICT_E2E_CORPUS"
     corpus=$(cd "$XDICT_E2E_CORPUS" && pwd)
+    # The cargo work on the corpus runs where cargo may run (Tools/core-on-host.sh), on that Mac's own copy of it:
+    # BUILD_CORPUS in local.mk, `<build Mac>:<folder>` (a build Mac that holds the 25), or this Mac's corpus here.
+    cargo_host=$(Tools/core-on-host.sh where) || fail "the corpus's cargo work has nowhere to run"
+    if [ "$cargo_host" = here ]; then cargo_corpus=$corpus
+    else
+        case ${XDICT_BUILD_CORPUS:-} in
+            ?*:?*) export XDICT_BUILD_HOST=${XDICT_BUILD_CORPUS%%:*}; cargo_corpus=${XDICT_BUILD_CORPUS#*:} ;;
+            *) fail "set BUILD_CORPUS in local.mk to <build Mac>:<the 25 dictionaries' folder there>" ;;
+        esac
+    fi
     if needs sample; then
         sample=$(pwd)/.build/entries-sample.json
         if made_of "$sample.source-tree" && [ "$(cat "$sample.corpus" 2>/dev/null)" = "$corpus" ] && [ -s "$sample" ]; then
             echo "entries_corpus's sample of this tree is made already"
         else
             rm -f "$sample.source-tree"
-            (cd ../../core && XDICT_MDX_CORPUS="$corpus" XDICT_ENTRIES_SAMPLE_OUT="$sample" \
-                cargo test -q --release -p xdict-core --test entries_corpus -- --nocapture >"$scratch/entries-corpus.log" 2>&1) \
-                || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/entries-corpus.log")"
+            rm -rf "$scratch/sampled"
+            Tools/core-on-host.sh run "$scratch/sampled" \
+                'cd core && XDICT_MDX_CORPUS="'"$cargo_corpus"'" XDICT_ENTRIES_SAMPLE_OUT="$OUT/sample.json" \
+                cargo test -q --release -p xdict-core --test entries_corpus -- --nocapture >"$OUT/log" 2>&1' \
+                || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/sampled/log" 2>/dev/null)"
+            cp "$scratch/sampled/sample.json" "$sample" 2>/dev/null || fail "entries_corpus wrote no sample"
             [ -s "$sample" ] || fail "entries_corpus wrote no sample"
             printf '%s\n' "$corpus" >"$sample.corpus"
             [ "$source_tree" = - ] || printf '%s\n' "$source_tree" >"$sample.source-tree"
@@ -283,10 +299,14 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
             echo "index_bench's editions of this tree are computed already"
         else
             rm -f "$editions.source-tree"
-            (cd ../../core && cargo run -q --release -p xdict-core --example index_bench -- import-all "$scratch/bench" "$corpus" \
-                >"$scratch/index-bench.log" 2>&1) || fail "index_bench import-all failed: $(tail -3 "$scratch/index-bench.log")"
-            python3 -I Tools/library/editions.py "$scratch/bench/data/registry.json" "$corpus" >"$editions" \
-                || fail "index_bench's registry gave no edition for every dictionary"
+            rm -rf "$scratch/benched"
+            Tools/core-on-host.sh run "$scratch/benched" \
+                'cd core && cargo run -q --release -p xdict-core --example index_bench -- import-all "$OUT/bench" "'"$cargo_corpus"'" \
+                >"$OUT/log" 2>&1 && python3 -I ../apps/apple/Tools/library/editions.py "$OUT/bench/data/registry.json" \
+                "'"$cargo_corpus"'" >"$OUT/editions.json" && rm -rf "$OUT/bench"' \
+                || fail "index_bench gave no edition for every dictionary: $(tail -3 "$scratch/benched/log" 2>/dev/null)"
+            cp "$scratch/benched/editions.json" "$editions" || fail "index_bench's editions did not come back"
+            cp "$scratch/benched/log" "$scratch/index-bench.log"
             printf '%s\n' "$corpus" >"$editions.corpus"
             [ "$source_tree" = - ] || printf '%s\n' "$source_tree" >"$editions.source-tree"
             echo "index_bench: $(tail -1 "$scratch/index-bench.log")"
