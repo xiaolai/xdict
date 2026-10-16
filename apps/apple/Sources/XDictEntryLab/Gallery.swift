@@ -524,7 +524,7 @@ enum GalleryRun {
                  labelGapOver: labelGapOver, labelGaps: labelGaps, foldGapOver: foldGapOver, folds: folds,
                  foldHeads: heads.length, spacePunct: spacePunct, punct: punct,
                  labelTight: labelTight, tight: tight, markerOff: mk[0], markers: mk[1], markerTotal: mk[2],
-                 chevronOff: ch[0], chevrons: ch[1], chevronTotal: ch[2], levelPill: levelPill, pills: pills, pillLabels: pillLabels, hrDrawn: hrDrawn, hrs: hrs, foldSign: foldSign, signs: signs };
+                 chevronOff: ch[0], chevrons: ch[1], chevronTotal: ch[2], levelPill: levelPill, pills: pills, pillLabels: pillLabels, phonFonts: Array.from(new Set(Array.prototype.map.call(document.querySelectorAll("[data-xdict-phon]"), function (e) { return getComputedStyle(e).fontFamily; }))).slice(0, 3), hrDrawn: hrDrawn, hrs: hrs, foldSign: foldSign, signs: signs };
         """#
 
     static func run(_ script: String, _ webView: WKWebView?) async -> [String: Any]? {
