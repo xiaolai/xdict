@@ -127,6 +127,9 @@ struct ReadingFrameTests {
         // The bundled phonetic faces (macos-v1 ab1525f) draw transcriptions in original style too; the colour stays
         // the dictionary's.
         #expect(dark.contains("@font-face"), "the bundled faces")
+        // A label of the dictionary's words keeps its own colour in original style; the reading style greys them all.
+        #expect(!dark.contains(EntryReadingFrame.readingLabelsCSS))
+        #expect(EntryScripts.appearance(.dark, frame: .all).contains(EntryReadingFrame.readingLabelsCSS))
         #expect(dark.contains(EntryReadingFrame.originalPhonCSS))
         #expect(EntryReadingFrame.originalPhonCSS.contains("font-family:var(--xdict-font-phon) !important"))
         #expect(dark.contains("[data-xdict-labelled]{display:none !important}"), "the badges the labels replace, hidden")

@@ -130,7 +130,7 @@ enum GalleryRun {
                         if let leaks = marked["leaks"] as? [Any], !leaks.isEmpty {
                             failures.append("\(name) \(mode.name) \(entry.key): a dictionary glyph drawn where the core marked one \(leaks)")
                         }
-                        if let low = marked["labelLowest"] as? Double, low < 4.5 {
+                        if let low = marked[mode.original ? "drawnLowest" : "labelLowest"] as? Double, low < 4.5 {
                             failures.append("\(name) \(mode.name) \(entry.key): a label at \(low):1")
                         }
                         if let wrong = marked["foldMismatch"] as? [Any], !wrong.isEmpty {
@@ -223,6 +223,7 @@ enum GalleryRun {
           });
         });
         var labels = document.querySelectorAll('[data-xdict-role=label]'), lowest = null, labelCount = 0;
+        var lowestAt = "", drawnLowest = null;
         labels.forEach(function (el) {
           if (!el.getClientRects().length) return;
           labelCount += 1;
@@ -232,7 +233,11 @@ enum GalleryRun {
             if (c && c[3] >= 0.5) bg = c;
           }
           if (!bg) bg = XDictReadability.parse(getComputedStyle(document.documentElement).backgroundColor) || [255, 255, 255, 1];
-          if (fg) { var r = XDictReadability.contrast(fg, bg); if (lowest === null || r < lowest) lowest = r; }
+          // XDict's own labels (those replacing a drawing) are the marks in every style; a label of the dictionary's
+          // words is XDict's only in the reading style (`readingLabelsCSS`), so `drawnLowest` is held in original style.
+          var drawn = el.matches('[data-xdict-label=level],[data-xdict-label=wordlist],[data-xdict-label=frequency],[data-xdict-label=new]');
+          if (fg && drawn) { var rd = XDictReadability.contrast(fg, bg); if (drawnLowest === null || rd < drawnLowest) drawnLowest = rd; }
+          if (fg) { var r = XDictReadability.contrast(fg, bg); if (lowest === null || r < lowest) { lowest = r; lowestAt = el.outerHTML + " IN " + el.parentElement.outerHTML.slice(0, 200) + " BG " + JSON.stringify(bg).replace(/\\s+/g, " ").slice(0, 400); } }
         });
         var heads = Array.prototype.filter.call(document.querySelectorAll('[data-xdict-control=disclosure]'),
           function (h) { return h.getClientRects().length > 0; });
@@ -253,6 +258,8 @@ enum GalleryRun {
         }
         return { marked: marked, leaks: leaks, labels: labelCount,
                  labelLowest: lowest === null ? null : Math.round(lowest * 100) / 100,
+                 labelLowestAt: lowestAt,
+                 drawnLowest: drawnLowest === null ? null : Math.round(drawnLowest * 100) / 100,
                  heads: heads.length, stated: stated, clicked: clicked, foldMismatch: mismatch };
         """
 
