@@ -249,6 +249,18 @@ fn the_lead_is_never_a_link() {
     assert!(out.contains(r##"<a data-xdict-role="headword" href="#LDOCE6_bloody_1">"##), "{out}");
     let strip = &out[..out.find("</div>").unwrap()];
     assert!(!strip.contains("data-xdict-lead"), "a link is the lead: {out}");
+    // MWU: the strip's items hold the links (`<li><a href="#mwu_…">¹finesse (noun)</a></li>`); an item that is only a
+    // link is one too.
+    let mwu = concat!(
+        r##"<ul class="tab multi"><li><a href="#mwu_1"><span class="entry-text"><sup>1</sup>finesse</span>"##,
+        r##"<span class="word-class">(noun)</span></a></li><li><a href="#mwu_2"><span class="entry-text"><sup>2</sup>finesse</span>"##,
+        r##"<span class="word-class">(verb)</span></a></li></ul><div class="main"><div id="mwu_1">"##,
+        r#"<h1 class="hw">fi·nesse</h1><span class="fl">noun</span> refinement or delicacy of workmanship</div></div>"#
+    );
+    let (out, _) = entry(mwu, "finesse");
+    let strip = &out[..out.find("</ul>").unwrap()];
+    assert!(strip.contains("data-xdict-role=\"headword\""), "{out}");
+    assert!(!strip.contains("data-xdict-lead"), "an item that is only a link is the lead: {out}");
 }
 
 /// A space between an inline element and the full stop after it goes (COBUILD's "is called a <b>row</b> ."). Only a

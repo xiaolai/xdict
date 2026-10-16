@@ -1012,8 +1012,21 @@ impl<'s> Roles<'s> {
         decided
     }
 
+    /// Whether the element is a link: it is one, it is in one, or all it holds is one (MWU's `<li><a href=…>`).
+    fn linked(&self, i: usize) -> bool {
+        let only_links = self.nodes.get(i).is_some_and(|n| {
+            !n.direct
+                && n.kids.iter().any(|k| matches!(k, Kid::El(_)))
+                && n.kids.iter().all(|k| match k {
+                    Kid::El(c) => self.nodes.get(*c as usize).is_some_and(|c| c.href),
+                    Kid::Text { blank, .. } => *blank,
+                })
+        });
+        only_links || self.in_link(i)
+    }
+
     /// Whether the element, or one it is in, is a link.
-    fn linked(&self, mut i: usize) -> bool {
+    fn in_link(&self, mut i: usize) -> bool {
         for _ in 0..MAX_DEPTH {
             let Some(node) = self.nodes.get(i) else { return false };
             if node.href {
