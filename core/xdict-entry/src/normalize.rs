@@ -508,7 +508,8 @@ pub struct Entry<'a> {
     /// The strip list (S1–S14) off: the hostile battery's lab only (`Config::strip_off_for_tests`).
     pub strip_off_for_tests: bool,
     /// The reader's "Original style" for this dictionary (ADR-0010 Q3): the dictionary's own styles, presentational
-    /// attributes, faces and decorations kept. The rewrite, the strip list and the roles apply as they always do.
+    /// attributes and faces kept, its type, colour and spacing not normalized. The rewrite, the strip list, the roles and
+    /// every mark of XDict's (labels, speakers, folds, the glyphs and sprites they replace) apply as they always do.
     pub original: bool,
 }
 
@@ -834,7 +835,8 @@ pub(crate) fn finish(
         rules.push(Rule { selector: selector.clone(), face, page, decls, grouped: frame.grouped });
     }
     if norm.original {
-        return revealed(&pieces, &decls, &selector, page, norm);
+        let icon = Facts::of(&decls, &selector, norm.style).icon && pseudo_element(&selector);
+        return marked(&pieces, &decls, &selector, page, icon, norm);
     }
     let style = norm.style;
     let counts = &mut norm.counts;
@@ -952,13 +954,15 @@ pub(crate) fn finish(
     changed.then(|| out.join(";"))
 }
 
-/// A block's declarations in "Original style" (ADR-0010 Q3): as written, but for what the strip list takes (S9), which
-/// is the same in either style.
-fn revealed(
+/// A block's declarations in "Original style" (ADR-0010 Q3): as written, but for what the strip list takes (S9) and
+/// what XDict's marks replace (a CSS image drawn as content, an icon face's glyph), both the same in either style. The
+/// normalization of type, colour and spacing is what original style leaves out.
+fn marked(
     pieces: &[&str],
     decls: &[Option<Decl<'_>>],
     selector: &str,
     page: bool,
+    icon: bool,
     norm: &mut Norm<'_>,
 ) -> Option<String> {
     let mut changed = false;
@@ -969,6 +973,16 @@ fn revealed(
             && reveals(decl, selector, norm.style)
         {
             norm.counts.strip.revealed += 1;
+            changed = true;
+            continue;
+        }
+        if let Some(decl) = decl
+            && decl.name == "content"
+            && (decl.value.to_ascii_lowercase().contains("url(") || icon)
+        {
+            if icon {
+                *norm.counts.icons.entry("glyph-dropped".into()).or_default() += 1;
+            }
             changed = true;
             continue;
         }
