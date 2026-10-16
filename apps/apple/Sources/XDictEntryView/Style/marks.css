@@ -85,6 +85,8 @@ min-height:0 !important;float:none !important;position:static !important}
 [data-xdict-hug] [data-xdict-role=label]:has(+ [data-xdict-labelled]:last-child)
 {margin-inline-end:0 !important;
 padding-inline-end:0 !important}
+/* A bullet the dictionary wrote as text with nothing after it in its block marks nothing (`loneBullets`). */
+[data-xdict-lone-bullet]{display:none !important}
 /* A graphic the core turned into a label stays hidden, whatever display the dictionary gives images. */
 [data-xdict-labelled]{display:none !important}}
 /* 8. Labels: one style, plain text in the secondary colour, no box (R11). */

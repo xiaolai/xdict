@@ -155,6 +155,33 @@ extension GalleryRun {
           li.setAttribute('data-xdict-before', 'marker');
           note('strayMarker', drawn, 1, drawn ? '' : 'none drawn, XDict marker ' + lst + ' <li.' + String(li.className).split(' ')[0] + '>');
         });
+        // No marker on an item with nothing to show. A dictionary's bullet written as text is one when it is all its
+        // block shows (NOAD's "harm": `<div class="m1"><div class="opt">•</div></div>`, a dot alone on the line under
+        // "[with obj.]"); `innerText` reads only what is laid out.
+        var GLYPHS = /^[•◦▪■□●○◆◇‣]+$/;
+        Array.prototype.forEach.call((document.body || document.documentElement).getElementsByTagName('*'), function (e, i) {
+          if (i > 65536 || !/^(block|list-item|flow-root)$/.test(getComputedStyle(e).display) || !e.getClientRects().length) return;
+          var shown = (e.innerText || '').replace(/\s+/g, '');
+          if (!GLYPHS.test(shown) || e.querySelector('img,svg,video,canvas')) return;
+          note('strayMarker', false, 1, 'a bullet with nothing after it "' + shown.slice(0, 4) + '" <' + e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + '>');
+        });
+        // And what XDict marks has text or an image of its own, laid out and visible, beside the dot.
+        Array.prototype.forEach.call((document.body || document.documentElement).querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]'), function (e, i) {
+          if (i > 4096 || !e.getClientRects().length) return;
+          var dot = getComputedStyle(e, e.getAttribute('data-xdict-before') === 'marker' ? '::before' : '::after');
+          if (dot.display === 'none' || dot.content === 'none' || dot.content === 'normal') return;
+          var shown = false, w = document.createTreeWalker(e, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+          for (var x = w.nextNode(); x && !shown; x = w.nextNode()) {
+            if (x.nodeType === 3) {
+              if (!/\S/.test(x.nodeValue) || getComputedStyle(x.parentElement).visibility === 'hidden') continue;
+              var rg = document.createRange(); rg.selectNodeContents(x);
+              shown = Array.prototype.some.call(rg.getClientRects(), function (q) { return q.width > 0 && q.height > 0; });
+            } else if (/^(img|svg|video|canvas)$/i.test(x.tagName)) {
+              var bx = x.getBoundingClientRect(); shown = bx.width > 1 && bx.height > 1;
+            }
+          }
+          note('strayMarker', shown, 1, shown ? '' : 'a marker on an item with nothing shown <' + e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + '>');
+        });
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
         // pronunciations; "banc   bench").
         // The line a text is laid out in: its nearest ancestor that is not plain inline (an inline-block is a box of

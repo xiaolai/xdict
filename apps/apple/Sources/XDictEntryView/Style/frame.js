@@ -187,8 +187,23 @@
       li.setAttribute('data-xdict-before', 'marker');
     });
   }
+  // A bullet the dictionary wrote as text, with nothing after it in its block (NOAD's phrase block opens with
+  // `<div class="m1"><div class="opt">•</div></div>`, a dot alone on a line): it marks nothing, so the reading style
+  // does not draw it. Its block is marked, never removed; `marks.css` hides it. Reading style only.
+  var GLYPHS = /^[\u2022\u25E6\u25AA\u25A0\u25A1\u25CF\u25CB\u25C6\u25C7\u2023]+$/;
+  function loneBullets() {
+    if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
+    var all = document.body.getElementsByTagName('*');
+    for (var i = 0; i < all.length && i < 65536; i++) {
+      var e = all[i];
+      if (e.hasAttribute('data-xdict-lone-bullet') || !/^(block|list-item|flow-root)$/.test(getComputedStyle(e).display)) continue;
+      if (GLYPHS.test((e.innerText || '').replace(/\s+/g, '')) && !e.querySelector('img,svg,video,canvas')) {
+        e.setAttribute('data-xdict-lone-bullet', '');
+      }
+    }
+  }
   install();
-  function start() { install(); name(document); bullets(); spacing(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
   window.addEventListener('load', start, { once: true });
