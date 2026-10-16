@@ -86,6 +86,26 @@ fn a_new_badge_and_a_key_symbol_become_labels() {
 }
 
 #[test]
+fn a_level_written_in_a_drawn_box_becomes_a_label() {
+    // A topic's level pill: the text is the level, the class draws the box (OALD's shape, written here).
+    let pill = r#"<a class="topic" href="x"><span class="topic_name">Education</span> <span class="lvl">b1</span></a>"#;
+    let sheet = ".lvl{background:#666;border-radius:3px;padding:0 2px;color:#fff}";
+    let o = out(pill, sheet);
+    assert!(o.contains(&(label("level", "B1", "B1") + r#"<span hidden data-xdict-labelled class="lvl">"#)), "{o}");
+    assert!(o.contains("Education"), "{o}");
+    let both = out(r#"<span class="cefr"><span class="in">C2</span></span>"#, ".cefr{border:1px solid}");
+    assert!(both.contains(&label("level", "C2", "C2")), "the box may be the token's wrapper: {both}");
+    // Not drawn: the dictionary's text, left as written.
+    let plain = out(r#"<span class="lvl">B1</span>"#, ".lvl{color:red}");
+    assert!(!plain.contains(r#"data-xdict-label="level""#), "a coloured word: {plain}");
+    // Not a level: a word, a longer token, a level inside a phrase.
+    for text in ["Box", "B12", "level B1", "C"] {
+        let o = out(&format!(r#"<span class="lvl">{text}</span>"#), sheet);
+        assert!(!o.contains(r#"data-xdict-label="level""#), "{text}: {o}");
+    }
+}
+
+#[test]
 fn a_control_or_prose_is_never_a_label() {
     let fav = r#"<span class="save_faves"><div class="save_faves_star"><i class="fa fa-star"></i><i class="fa fa-star-o"></i></div></span>"#;
     let sheet = ".fa{font-family:x} .save_faves{width:9px}";
@@ -202,6 +222,57 @@ fn a_fold_control_is_marked_disclosure_and_keeps_its_hook() {
     s.add_scripts(["$('.cc_addon_foldButton').click(function(){ $(this).next().toggle() })"]);
     let (o, _) = entry_with(r#"<div class="cc_addon_foldButton"><div class="vline"></div></div>"#, &s, None);
     assert!(o.starts_with(r#"<div data-xdict-control="disclosure" class="cc_addon_foldButton">"#), "{o}");
+}
+
+#[test]
+fn a_fold_heads_own_sign_goes_where_xdicts_chevron_is_drawn() {
+    // COBUILD's "Trends of …" head: a drawn plus inside the head, its lines boxes with no word (written here).
+    let sheet = ".cc_addon_foldButton{width:9px;height:9px} .vline{background:red;width:1px} .hline{background:red}";
+    let head = r#"<div class="trend" onclick="toggle(this)"><div class="caption"><div class="cc_addon_foldButton"><div class="vline"></div><div class="hline"></div></div><span>Trends</span></div></div>"#;
+    let o = out(head, sheet);
+    assert!(o.contains(r#"data-xdict-control="disclosure""#), "{o}");
+    assert!(o.contains(r#"<div hidden data-xdict-labelled class="cc_addon_foldButton">"#), "{o}");
+    assert!(o.contains("Trends"), "{o}");
+    // A head that is the sign itself keeps its hook; the lines it draws go, the chevron is drawn on it.
+    let mut s = Style::of_sheets([sheet]);
+    s.add_scripts(["$('.cc_addon_foldButton').click(function(){ $(this).next().toggle() })"]);
+    let (o, _) = entry_with(r#"<div class="cc_addon_foldButton"><div class="vline"></div></div>"#, &s, None);
+    assert!(o.starts_with(r#"<div data-xdict-control="disclosure" class="cc_addon_foldButton">"#), "{o}");
+    assert!(o.contains(r#"<div hidden data-xdict-labelled class="vline">"#), "{o}");
+    // A drawn box with words in a head is the dictionary's text, and stays.
+    let o =
+        out(r#"<div class="h" onclick="toggle(this)"><span class="tag">Trends</span></div>"#, ".tag{background:red}");
+    assert!(!o.contains("data-xdict-labelled"), "{o}");
+}
+
+#[test]
+fn a_box_holding_only_speakers_is_marked_to_join_its_transcriptions_line() {
+    // CEPD's shape, written here: the speakers in a block of their own before the transcription.
+    let o = out(
+        r#"<span class="head"><span class="info"><sf><a href="sound://a.spx"><img src="s.png"></a></sf> <sf><a href="sound://b.spx"><img src="s.png"></a></sf></span><span class="pron">ˈæm.i.əl</span></span>"#,
+        ".info{display:block}",
+    );
+    assert!(o.contains(r#"<span data-xdict-speakers="lead" class="info">"#), "{o}");
+    assert!(!o.contains(r#"<span data-xdict-speakers class="head">"#), "a box with words is not: {o}");
+    // CEPD's whole shape: the speakers' box leads its block, the transcription's block follows.
+    let o = out(
+        r#"<span class="block"><sh><span class="info"><a href="sound://a.spx"><img src="s.png"></a></span></sh><span class="body"><ipa>ˈæm.i.əl</ipa></span></span>"#,
+        ".info{display:block} .body{display:block}",
+    );
+    assert!(o.contains(r#"<sh data-xdict-speakers="lead">"#), "{o}");
+    assert!(o.contains(r#"<span data-xdict-speakers class="info">"#), "an inner box is inline: {o}");
+    // Nested boxes of speakers (CEPD's `sense-head` > `sense-info`): every one, or the inner block keeps its own line.
+    let o = out(
+        r#"<b class="h"><span class="info"><a href="sound://a.spx"><img src="s.png"></a></span></b>"#,
+        ".info{display:block}",
+    );
+    assert!(
+        o.contains(r#"<b data-xdict-speakers class="h">"#) && o.contains(r#"<span data-xdict-speakers class="info">"#),
+        "{o}"
+    );
+    // A speaker beside words: the box is the dictionary's text.
+    let o = out(r#"<p class="x">Hello <a href="sound://a.spx"><img src="s.png"></a></p>"#, "");
+    assert!(!o.contains("data-xdict-speakers"), "{o}");
 }
 
 // 5. Empty website links.

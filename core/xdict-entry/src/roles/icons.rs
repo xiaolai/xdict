@@ -225,6 +225,8 @@ enum Meaning {
     LevelList,
     Frequency,
     New,
+    /// A level written as text in a box the dictionary draws: the text is the level.
+    Pill,
 }
 
 fn tokens(a: &Attrs) -> Vec<String> {
@@ -305,7 +307,8 @@ pub(super) fn decide(
     let mut count = BTreeMap::<String, u64>::new();
     let mut done = vec![false; n];
     labels(nodes, t, &mut done, &mut count, decided);
-    let disclosure = disclosures(nodes, facts, &mut count, decided);
+    let disclosure = disclosures(nodes, t, facts, &mut count, decided);
+    speaker_rows(nodes, t, &mut count, decided);
     drawn(nodes, &disclosure, &mut count, decided);
     text(nodes, roles, written, &disclosure, &mut count, decided);
     empty_links(nodes, t, &done, &mut count, decided);
@@ -341,6 +344,10 @@ fn meaning(nodes: &[Node], t: &Tree<'_>, i: usize) -> Option<Meaning> {
     const SKIP: [&str; 9] = ["script", "style", "br", "hr", "html", "body", "head", "meta", "link"];
     if SKIP.contains(&&*node.name) || node.inherit.in_speaker || node.recording.is_some() || node.icon.keyed.is_some() {
         return None;
+    }
+    // A level pill: the element's whole text is a level and the dictionary's rules draw its box. A link keeps its text.
+    if node.drawn && !matches!(&*node.name, "img" | "a") && t.f(i).short.as_deref().and_then(cefr).is_some() {
+        return Some(Meaning::Pill);
     }
     if &*node.name != "img" && !wordless(t, i) {
         return None;
@@ -420,7 +427,7 @@ fn labels(nodes: &[Node], t: &Tree<'_>, done: &mut [bool], count: &mut BTreeMap<
         } else if below.get(i).copied().unwrap_or(false) {
             false
         } else if let Some(m) = meanings.get(i).copied().flatten() {
-            let found = read_labels(node, m);
+            let found = read_labels(node, m, t.f(i).short.as_deref());
             if found.is_empty() {
                 false
             } else {
@@ -445,7 +452,7 @@ fn labels(nodes: &[Node], t: &Tree<'_>, done: &mut [bool], count: &mut BTreeMap<
     }
 }
 
-fn read_labels(node: &Node, m: Meaning) -> Vec<Label> {
+fn read_labels(node: &Node, m: Meaning, text: Option<&str>) -> Vec<Label> {
     let a = &node.icon;
     let toks = tokens(a);
     match m {
@@ -471,6 +478,11 @@ fn read_labels(node: &Node, m: Meaning) -> Vec<Label> {
             let text = max.map_or_else(|| format!("Frequency {value}"), |m| format!("Frequency {value}/{m}"));
             vec![Label { kind: "frequency", value: value.to_string(), max, text }]
         }
+        Meaning::Pill => text
+            .and_then(cefr)
+            .map(|level| Label { kind: "level", value: level.clone(), max: None, text: level })
+            .into_iter()
+            .collect(),
         Meaning::New => vec![Label { kind: "new", value: "new".into(), max: None, text: "New".into() }],
     }
 }
@@ -513,7 +525,13 @@ const NOT_FOLD: [&str; 15] = [
 
 /// §7.3: a clickable whose handler names a fold, and is not about an image, a popup, a tip, a tab, audio, a window or
 /// a pronunciation key; or an element a kept script names by a class that says it folds. Marked `disclosure`.
-fn disclosures(nodes: &[Node], facts: &Facts, count: &mut BTreeMap<String, u64>, decided: &mut Decided) -> Vec<bool> {
+fn disclosures(
+    nodes: &[Node],
+    t: &Tree<'_>,
+    facts: &Facts,
+    count: &mut BTreeMap<String, u64>,
+    decided: &mut Decided,
+) -> Vec<bool> {
     let mut marked = vec![false; nodes.len()];
     for (i, node) in nodes.iter().enumerate().skip(1) {
         if node.inherit.in_speaker || node.recording.is_some() || node.icon.keyed.is_some() || &*node.name == "img" {
@@ -538,7 +556,91 @@ fn disclosures(nodes: &[Node], facts: &Facts, count: &mut BTreeMap<String, u64>,
             }
         }
     }
+    signs(nodes, t, &marked, count, decided);
     marked
+}
+
+/// A box holding speakers and no word (CEPD's `sense-info`) is marked `data-xdict-speakers`: the marks draw it inline,
+/// so its speakers sit on their transcription's line rather than on a line of their own; every such box, nested ones too.
+fn speaker_rows(nodes: &[Node], t: &Tree<'_>, count: &mut BTreeMap<String, u64>, decided: &mut Decided) {
+    let n = nodes.len();
+    let mut holds = vec![false; n];
+    for j in (1..n).rev() {
+        let Some(node) = nodes.get(j) else { continue };
+        let parent = node.parent as usize;
+        let root = node.inherit.in_speaker && !nodes.get(parent).is_some_and(|p| p.inherit.in_speaker);
+        if (root || holds.get(j).copied().unwrap_or(false))
+            && parent != 0
+            && let Some(h) = holds.get_mut(parent)
+        {
+            *h = true;
+        }
+    }
+    let mut marked = vec![false; n];
+    for (i, node) in nodes.iter().enumerate().skip(1) {
+        if node.inherit.in_speaker || !holds.get(i).copied().unwrap_or(false) || !wordless(t, i) {
+            continue;
+        }
+        if let Some(m) = marked.get_mut(i) {
+            *m = true;
+        }
+        // The outermost box leading its parent, with an element after it (CEPD's `sense-head` before its
+        // `sense-body`): `lead`, drawn at the line's start so the next block's first line runs beside it.
+        let parent = node.parent as usize;
+        let first = nodes.get(parent).is_some_and(|p| {
+            p.kids
+                .get(..node.pos as usize)
+                .is_some_and(|before| before.iter().all(|k| matches!(k, Kid::Text { blank: true, .. })))
+        });
+        let lead = !marked.get(parent).copied().unwrap_or(false) && first && t.sibling(i, true).is_some();
+        let mark = if lead { " data-xdict-speakers=\"lead\"" } else { " data-xdict-speakers" };
+        decided.edits.push((node.attr_at, node.attr_at, mark.into()));
+        *count.entry("speakers-row".into()).or_default() += 1;
+    }
+}
+
+/// How far below its fold head a dictionary's own fold sign is looked for.
+const SIGN_DEPTH: usize = 4;
+
+/// A fold head's own sign goes where XDict draws its chevron: a drawn box holding no word inside a head, when the head
+/// is itself wordless (the sign is the head: its lines go) or the box's class names a fold (COBUILD's
+/// `cc_addon_foldButton` inside "Trends of …"). Hidden, not removed: a script's hook stays.
+fn signs(nodes: &[Node], t: &Tree<'_>, marked: &[bool], count: &mut BTreeMap<String, u64>, decided: &mut Decided) {
+    let mut gone = vec![false; nodes.len()];
+    for (j, node) in nodes.iter().enumerate().skip(1) {
+        let parent = node.parent as usize;
+        if gone.get(parent).copied().unwrap_or(false) {
+            if let Some(g) = gone.get_mut(j) {
+                *g = true;
+            }
+            continue;
+        }
+        if marked.get(j).copied().unwrap_or(false) || !node.drawn || &*node.name == "img" || !wordless(t, j) {
+            continue;
+        }
+        let mut at = parent;
+        let mut head = None;
+        for _ in 0..SIGN_DEPTH {
+            if at == 0 {
+                break;
+            }
+            if marked.get(at).copied().unwrap_or(false) {
+                head = Some(at);
+                break;
+            }
+            at = nodes.get(at).map_or(0, |x| x.parent as usize);
+        }
+        let Some(h) = head else { continue };
+        let named =
+            node.icon.classes.iter().any(|c| ["fold", "toggle", "expand", "collaps"].iter().any(|w| c.contains(w)));
+        if wordless(t, h) || named {
+            hide(node, decided);
+            *count.entry("disclosure:sign".into()).or_default() += 1;
+            if let Some(g) = gone.get_mut(j) {
+                *g = true;
+            }
+        }
+    }
 }
 
 fn link_name(link: Option<Lk>) -> &'static str {
