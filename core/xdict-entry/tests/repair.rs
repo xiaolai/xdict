@@ -1,6 +1,7 @@
 //! WI-12's repairs at render (`dev-docs/measurements/2026-10-15-mdx-health/`, "Disposition"): stray control
 //! characters, a byte-order mark past the record's start and a literal `\n` standing for a line break are mended in
-//! an entry's text; nothing else is. Every entry here is written in the test, no dictionary's.
+//! an entry's text, as is small-form CJK punctuation; nothing else is. Every entry here is written in the test, no
+//! dictionary's.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
 use std::time::Instant;
@@ -26,6 +27,16 @@ fn controls_go_from_text() {
     assert_eq!(html("a\tb\nc\rd"), "a\tb\nc\rd");
     assert_eq!(render("<b>x\u{85}y</b>\u{1}").1, 2);
     assert_eq!(render("plain <i>text</i>").1, 0);
+}
+
+/// A small form of CJK punctuation (U+FE50–FE57), which a CNS/Big5 converter wrote for an ordinary comma, is that
+/// punctuation at full size: LDOCE-EC's "书﹐书籍" drew its comma as a dot at the baseline (WI-11, 2026-10-17). Other
+/// compatibility forms stay as written.
+#[test]
+fn small_form_punctuation_is_full_size() {
+    assert_eq!(html("书﹐书籍﹑本子﹔账目﹕好﹖是﹗"), "书，书籍、本子；账目：好？是！");
+    assert_eq!(render("<b>书﹐书籍</b>").1, 1);
+    assert_eq!(html("a﹒b ﹙c﹚"), "a﹒b ﹙c﹚");
 }
 
 /// A C1 control is a Windows-1252 byte read as Latin-1 (a lost dash between two words, curly quotes): it is
