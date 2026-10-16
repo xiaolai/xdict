@@ -31,10 +31,12 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// The page's insets (the reading style's own padding values, written out: original style loads no tokens but the
     /// palette), `contain: layout` (R13: nothing pins itself over the pane), and the paper: white in light, `paper` in
     /// dark, with dark text where the dictionary sets none. The dictionary's own margins and colours stay its own.
+    /// XDict's marks draw with the palette; on the paper they take its light values in dark too.
     static let minimalCSS = "html{padding:1.25rem clamp(0.75rem, 4vw, 2rem) !important;color-scheme:light only;"
         + "color:#1d1d1f;box-sizing:border-box}"
         + ":root[data-xdict-theme=light]{background:#ffffff !important}"
         + ":root[data-xdict-theme=dark]{background:\(paper) !important}"
+        + ":root[data-xdict-theme=dark]{\(colours.map { "--xdict-\($0.0):\($0.1);" }.joined())}"
         + "body{contain:layout !important;overflow-wrap:anywhere}"
 
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
@@ -230,11 +232,14 @@ extension EntryScripts {
                 + EntryReadingFrame.marksCSS : ""
         let names = ["uk": labels.uk, "us": labels.us, "other": labels.other]
         let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["link", "phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
-        let namesJSON = (try? JSONSerialization.data(withJSONObject: frame.contains(.column) ? names : [:], options: [.sortedKeys]))
+        let namesJSON = (try? JSONSerialization.data(withJSONObject: !frame.isDisjoint(with: [.column, .minimal]) ? names : [:], options: [.sortedKeys]))
             .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         let type = frame.contains(.type) ? EntryReadingFrame.typeCSS : ""
-        let minimal = frame.contains(.minimal) ? EntryReadingFrame.minimalCSS : ""
-        let tokens = frame.subtracting([.serif, .minimal]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
+        // "Original style": the minimal frame and XDict's whole marks layer (the owner, 2026-10-16), no column or type.
+        let minimal = frame.contains(.minimal)
+            ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
+                + EntryReadingFrame.marksCSS : ""
+        let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """
             (function () {
