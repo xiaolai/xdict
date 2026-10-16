@@ -1,0 +1,335 @@
+{
+ "crates": {
+  "xdict-conformance": {
+   "deps": [
+    "xdict-mdx-writer"
+   ],
+   "dev": [
+    "xdict-core"
+   ],
+   "dir": "core/xdict-conformance/"
+  },
+  "xdict-core": {
+   "deps": [
+    "xdict-entry",
+    "xdict-health",
+    "xdict-identity",
+    "xdict-lookup",
+    "xdict-mdx",
+    "xdict-mmap"
+   ],
+   "dev": [
+    "xdict-mdx-writer"
+   ],
+   "dir": "core/xdict-core/"
+  },
+  "xdict-entry": {
+   "deps": [],
+   "dev": [],
+   "dir": "core/xdict-entry/"
+  },
+  "xdict-ffi": {
+   "deps": [
+    "xdict-core"
+   ],
+   "dev": [],
+   "dir": "core/xdict-ffi/"
+  },
+  "xdict-health": {
+   "deps": [
+    "xdict-entry",
+    "xdict-lookup",
+    "xdict-mdx"
+   ],
+   "dev": [
+    "xdict-mdx-writer"
+   ],
+   "dir": "core/xdict-health/"
+  },
+  "xdict-identity": {
+   "deps": [
+    "xdict-mdx"
+   ],
+   "dev": [],
+   "dir": "core/xdict-identity/"
+  },
+  "xdict-lookup": {
+   "deps": [
+    "xdict-mdx"
+   ],
+   "dev": [
+    "xdict-mdx-writer"
+   ],
+   "dir": "core/xdict-lookup/"
+  },
+  "xdict-mdx": {
+   "deps": [],
+   "dev": [
+    "xdict-mdx-writer"
+   ],
+   "dir": "core/xdict-mdx/"
+  },
+  "xdict-mdx-writer": {
+   "deps": [],
+   "dev": [],
+   "dir": "core/xdict-mdx-writer/"
+  },
+  "xdict-mmap": {
+   "deps": [],
+   "dev": [],
+   "dir": "core/xdict-mmap/"
+  },
+  "xdict-wasm": {
+   "deps": [
+    "xdict-core"
+   ],
+   "dev": [],
+   "dir": "core/xdict-wasm/"
+  }
+ },
+ "manifests": {
+  "apps/apple/Package.swift": "ec3a0c400ed9faf47fdafb2a3b52bb32479b6670",
+  "core/Cargo.toml": "fc70231c5b417790a5224d56d8b1aff2faa1c2d1",
+  "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
+  "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
+  "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
+  "core/xdict-ffi/Cargo.toml": "063b81ab46c6d9a3b11a5f5aa40f9e85dd08a350",
+  "core/xdict-health/Cargo.toml": "42b7213a18cb38c66a647483ab58e8328fca29ec",
+  "core/xdict-identity/Cargo.toml": "fe9b3bdd505aea5b91e4e19c7ed033d31fc3d18a",
+  "core/xdict-lookup/Cargo.toml": "96edf6336ff7032b686767131bd122b25e76916d",
+  "core/xdict-mdx-writer/Cargo.toml": "1fb57ab7b0dc2fc8714afdd244f8ff989efe7520",
+  "core/xdict-mdx/Cargo.toml": "ac5ac88a5d4fa81f2cac4b7ecc6fdb2443e7e698",
+  "core/xdict-mmap/Cargo.toml": "0eb2755ee029e254c9522c5776deb017f039b881",
+  "core/xdict-wasm/Cargo.toml": "733c1f6f8dc886e31557f124de2ad9d831edff98"
+ },
+ "targets": {
+  "XDict": {
+   "deps": [
+    "XDictAnywhere",
+    "XDictBase",
+    "XDictClient",
+    "XDictContract",
+    "XDictEntryView",
+    "XDictInstruments",
+    "XDictLibrary",
+    "XDictSearch",
+    "XDictSpeech",
+    "XDictUI"
+   ],
+   "dir": "apps/apple/Sources/XDict/",
+   "type": "executable"
+  },
+  "XDictAnywhere": {
+   "deps": [
+    "XDictBase"
+   ],
+   "dir": "apps/apple/Sources/XDictAnywhere/",
+   "type": "regular"
+  },
+  "XDictAnywhereTests": {
+   "deps": [
+    "XDictAnywhere"
+   ],
+   "dir": "apps/apple/Tests/XDictAnywhereTests/",
+   "type": "test"
+  },
+  "XDictBase": {
+   "deps": [],
+   "dir": "apps/apple/Sources/XDictBase/",
+   "type": "regular"
+  },
+  "XDictBaseTests": {
+   "deps": [
+    "XDictBase"
+   ],
+   "dir": "apps/apple/Tests/XDictBaseTests/",
+   "type": "test"
+  },
+  "XDictClient": {
+   "deps": [
+    "XDictBase",
+    "XDictContract"
+   ],
+   "dir": "apps/apple/Sources/XDictClient/",
+   "type": "regular"
+  },
+  "XDictClientTests": {
+   "deps": [
+    "XDictBase",
+    "XDictClient",
+    "XDictContract"
+   ],
+   "dir": "apps/apple/Tests/XDictClientTests/",
+   "type": "test"
+  },
+  "XDictContract": {
+   "deps": [],
+   "dir": "apps/apple/Sources/XDictContract/",
+   "type": "regular"
+  },
+  "XDictContractTests": {
+   "deps": [
+    "XDictContract"
+   ],
+   "dir": "apps/apple/Tests/XDictContractTests/",
+   "type": "test"
+  },
+  "XDictCore": {
+   "deps": [
+    "xdictFFI"
+   ],
+   "dir": "apps/apple/Generated/XDictCore/",
+   "type": "regular"
+  },
+  "XDictEntryLab": {
+   "deps": [
+    "XDictCore",
+    "XDictEntryView"
+   ],
+   "dir": "apps/apple/Sources/XDictEntryLab/",
+   "type": "executable"
+  },
+  "XDictEntryView": {
+   "deps": [
+    "XDictBase"
+   ],
+   "dir": "apps/apple/Sources/XDictEntryView/",
+   "type": "regular"
+  },
+  "XDictEntryViewTests": {
+   "deps": [
+    "XDictEntryView"
+   ],
+   "dir": "apps/apple/Tests/XDictEntryViewTests/",
+   "type": "test"
+  },
+  "XDictInstruments": {
+   "deps": [
+    "XDictClient",
+    "XDictContract",
+    "XDictLibrary",
+    "XDictSearch"
+   ],
+   "dir": "apps/apple/Sources/XDictInstruments/",
+   "type": "regular"
+  },
+  "XDictLibrary": {
+   "deps": [
+    "XDictClient",
+    "XDictContract"
+   ],
+   "dir": "apps/apple/Sources/XDictLibrary/",
+   "type": "regular"
+  },
+  "XDictLibraryTests": {
+   "deps": [
+    "XDictClient",
+    "XDictContract",
+    "XDictLibrary"
+   ],
+   "dir": "apps/apple/Tests/XDictLibraryTests/",
+   "type": "test"
+  },
+  "XDictSearch": {
+   "deps": [
+    "XDictClient",
+    "XDictContract",
+    "XDictEntryView",
+    "XDictLibrary",
+    "XDictSpeech"
+   ],
+   "dir": "apps/apple/Sources/XDictSearch/",
+   "type": "regular"
+  },
+  "XDictSearchTests": {
+   "deps": [
+    "XDictClient",
+    "XDictContract",
+    "XDictEntryView",
+    "XDictLibrary",
+    "XDictSearch",
+    "XDictSpeech"
+   ],
+   "dir": "apps/apple/Tests/XDictSearchTests/",
+   "type": "test"
+  },
+  "XDictService": {
+   "deps": [
+    "XDictBase",
+    "XDictContract",
+    "XDictCore"
+   ],
+   "dir": "apps/apple/Sources/XDictService/",
+   "type": "executable"
+  },
+  "XDictServiceTests": {
+   "deps": [
+    "XDictClient",
+    "XDictContract",
+    "XDictCore",
+    "XDictInstruments",
+    "XDictService"
+   ],
+   "dir": "apps/apple/Tests/XDictServiceTests/",
+   "type": "test"
+  },
+  "XDictSpeech": {
+   "deps": [
+    "XDictBase"
+   ],
+   "dir": "apps/apple/Sources/XDictSpeech/",
+   "type": "regular"
+  },
+  "XDictSpeechTests": {
+   "deps": [
+    "XDictSpeech"
+   ],
+   "dir": "apps/apple/Tests/XDictSpeechTests/",
+   "type": "test"
+  },
+  "XDictTestSupport": {
+   "deps": [],
+   "dir": "apps/apple/Tests/Support/",
+   "type": "regular"
+  },
+  "XDictTests": {
+   "deps": [
+    "XDictTestSupport"
+   ],
+   "dir": "apps/apple/Tests/XDictTests/",
+   "type": "test"
+  },
+  "XDictUI": {
+   "deps": [
+    "XDictAnywhere",
+    "XDictBase",
+    "XDictContract",
+    "XDictEntryView",
+    "XDictLibrary",
+    "XDictSearch",
+    "XDictSpeech"
+   ],
+   "dir": "apps/apple/Sources/XDictUI/",
+   "type": "regular"
+  },
+  "XDictUITests": {
+   "deps": [
+    "XDictAnywhere",
+    "XDictBase",
+    "XDictContract",
+    "XDictLibrary",
+    "XDictSearch",
+    "XDictSpeech",
+    "XDictUI"
+   ],
+   "dir": "apps/apple/Tests/XDictUITests/",
+   "type": "test"
+  },
+  "xdictFFI": {
+   "deps": [],
+   "dir": "apps/apple/Generated/xdictFFI.xcframework/",
+   "type": "binary"
+  }
+ },
+ "version": 1
+}
