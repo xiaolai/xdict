@@ -560,6 +560,8 @@ struct Node {
     void: bool,
     image: bool,
     big_font: bool,
+    /// A box of its own: its sheets' `display`, else its tag's.
+    boxed: bool,
     /// Its markup (element and classes, or its presentation), hashed: elements of the same markup.
     sig: u64,
     /// The role the edition's markup table names it (`profiles`), before its text is checked.
@@ -622,6 +624,11 @@ pub(crate) struct Roles<'s> {
     /// already starts a line, so once text follows in it the break goes, as its blank line would (COBUILD-EC's
     /// `<div><br>【语法信息】…`, WI-11 R8). Alone in its block it is a spacer the dictionary meant, and stays.
     lead_break: Option<(u32, usize, usize)>,
+    /// Inline elements that start a line: after a block, or first in their block. A role among them is written
+    /// `data-xdict-line-start`, so the space a dictionary put before it to part it from a word drops (OALD's *Pima*).
+    line_starts: Vec<u32>,
+    /// Nothing but space written since the last box began or ended: the next inline element starts a line.
+    line_open: bool,
 }
 
 /// What the tree decided: its edits, the strip counts it owns, and the roles written.
@@ -665,6 +672,7 @@ impl<'s> Roles<'s> {
             void: false,
             image: false,
             big_font: false,
+            boxed: true,
             sig: 0,
             profiled: None,
             icon: icons::Attrs::default(),
@@ -689,6 +697,8 @@ impl<'s> Roles<'s> {
             gap: None,
             hugs: Vec::new(),
             lead_break: None,
+            line_starts: Vec::new(),
+            line_open: true,
         }
     }
 
@@ -754,6 +764,17 @@ impl<'s> Roles<'s> {
         let mut props = self.facts.props(&lower, &classes);
         let inline = Props::of(style.split(';').filter_map(|d| d.split_once(':')), true);
         merge(&mut props, &inline);
+        // A box of its own (by its sheets' `display`, else its tag) starts a line; an inline element at a line's
+        // start is one (`line_starts`), and is past it.
+        let boxed = props.inline.map_or_else(|| block_tag(&lower), |i| !i);
+        if boxed || lower == "br" {
+            self.line_open = true;
+        } else if !void {
+            if self.line_open && self.line_starts.len() < MAX_NODES {
+                self.line_starts.push(self.nodes.len() as u32);
+            }
+            self.line_open = false;
+        }
         let up = self.nodes.get(parent as usize).map(|p| p.flags).unwrap_or_default();
         let flags = Flags {
             bold: if matches!(lower.as_str(), "b" | "strong" | "h1" | "h2" | "h3" | "h4" | "h5" | "h6" | "th")
@@ -804,8 +825,11 @@ impl<'s> Roles<'s> {
             || STRUCTURE.contains(&lower.as_str())
             || self.facts.script_named(&lower, custom, &classes);
         let drawn = self.facts.drawn(&lower, &classes);
-        let sig = if !classes.is_empty() {
-            format!("{lower}.{}", classes.join("."))
+        // A frequency or level class marks one word of a markup, not another markup (LDOCE's `hyphenation frequent`
+        // and `hyphenation`, MED's `BASE redword` and `BASE`): the signature leaves it out.
+        let kinds: Vec<&str> = classes.iter().map(String::as_str).filter(|c| !modifier(c)).collect();
+        let sig = if !kinds.is_empty() {
+            format!("{lower}.{}", kinds.join("."))
         } else if custom {
             lower.clone()
         } else {
@@ -843,6 +867,7 @@ impl<'s> Roles<'s> {
             void,
             image,
             big_font: big_font(&style),
+            boxed,
             sig: {
                 use std::hash::{Hash, Hasher};
                 let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -928,6 +953,7 @@ impl<'s> Roles<'s> {
         let Some(&top) = self.stack.last() else { return };
         let Some(node) = self.nodes.get_mut(top as usize) else { return };
         node.direct |= !blank;
+        self.line_open &= blank;
         match node.kids.last_mut() {
             Some(Kid::Text { words: w, blank: b }) => {
                 *w = w.saturating_add(words);
@@ -961,6 +987,9 @@ impl<'s> Roles<'s> {
                 if k == up {
                     n.end = Some((at, after));
                     self.hug_after = Some(i);
+                }
+                if n.boxed {
+                    self.line_open = true;
                 }
             }
         }
@@ -1036,6 +1065,10 @@ impl<'s> Roles<'s> {
                     continue;
                 }
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
+                // Only the short marks a dictionary parts from a word before them: a part of speech, a label.
+                if matches!(role, Role::Pos | Role::Label(_)) && self.line_starts.binary_search(&(i as u32)).is_ok() {
+                    attr.push_str(" data-xdict-line-start");
+                }
                 if let Some(sure) = sure {
                     attr.push_str(&format!(" data-xdict-sure=\"{sure}\""));
                 }
@@ -1217,6 +1250,7 @@ fn merge(into: &mut Props, over: &Props) {
     into.upper = over.upper.or(into.upper);
     into.sup = over.sup.or(into.sup);
     into.none = over.none.or(into.none);
+    into.inline = over.inline.or(into.inline);
 }
 
 /// A tag's attributes, names in lower case and values unquoted, at most [`ATTRIBUTES`] of them.
@@ -2211,6 +2245,17 @@ fn pos_text(t: &str) -> bool {
         || (words.len() <= 3
             && words.iter().all(|w| pos_word(w) || matches!(*w, "and" | "or" | "&" | ""))
             && words.iter().any(|w| pos_word(w)))
+}
+
+/// Whether a class (lower case) only grades the word it marks: its frequency, level or stars (`frequent`, `redword`,
+/// `star3`, `level2`, `ox3000`, `cefr-b1`), not what kind of element it is.
+fn modifier(class: &str) -> bool {
+    const STEMS: &[&str] =
+        &["freq", "frequent", "redword", "star", "stars", "level", "ox3000", "ox5000", "cefr", "band"];
+    let stem = class.trim_end_matches(|c: char| c.is_ascii_digit() || c == '-' || c == '_');
+    STEMS.contains(&class)
+        || STEMS.contains(&stem)
+        || STEMS.iter().any(|s| stem.strip_prefix(s).is_some_and(|r| r.starts_with(['-', '_'])))
 }
 
 fn block_tag(name: &str) -> bool {
