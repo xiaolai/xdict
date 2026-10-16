@@ -274,6 +274,15 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,"
         + "[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;"
         + "line-height:inherit !important;color:inherit !important}"
+        // A part of speech the edition's markup table names (the core's `data-xdict-sure=pos`): one look in every
+        // dictionary, its descendants' declarations included, in the lead too. The generic rule's guesses carry no
+        // `sure` and keep the dictionary's look (precision, not reach, decides: Codex's unification objections 2, 4).
+        + "[data-xdict-sure=pos][data-xdict-sure],[data-xdict-sure=pos][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])"
+        // No slanted CJK: COBUILD's English–Chinese codes carry their Chinese gloss ("VERB 动词").
+        + "{font-family:var(--xdict-font) !important;font-style:italic !important;font-synthesis-style:none !important;"
+        + "font-weight:normal !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
+        + "font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-accent) !important;"
+        + "background:none !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"

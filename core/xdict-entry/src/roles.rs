@@ -19,6 +19,7 @@ use crate::facts::{Facts, Props};
 use crate::url::Link;
 
 mod icons;
+mod profiles;
 
 /// The most elements followed; past it the rest of the entry gets no role.
 const MAX_NODES: usize = 1 << 16;
@@ -561,6 +562,8 @@ struct Node {
     big_font: bool,
     /// Its markup (element and classes, or its presentation), hashed: elements of the same markup.
     sig: u64,
+    /// The edition's markup table names it a part of speech (`profiles`).
+    profiled: bool,
     /// What the icon rules read (`icons`), and what of it is inherited.
     icon: icons::Attrs,
     inherit: icons::Inherited,
@@ -592,6 +595,8 @@ pub(crate) struct Roles<'s> {
     deep: usize,
     buf: String,
     facts: &'s Facts,
+    /// The table of the edition's markup, if one names it (`profiles`).
+    profile: Option<&'static profiles::Profile>,
     key: Option<String>,
     base: String,
     dir: String,
@@ -657,6 +662,7 @@ impl<'s> Roles<'s> {
             image: false,
             big_font: false,
             sig: 0,
+            profiled: false,
             icon: icons::Attrs::default(),
             inherit: icons::Inherited::default(),
         };
@@ -666,6 +672,7 @@ impl<'s> Roles<'s> {
             deep: 0,
             buf: String::new(),
             facts,
+            profile: profiles::of(facts),
             key: key.map(str::to_owned),
             base: base.to_owned(),
             dir: dir.to_owned(),
@@ -794,6 +801,7 @@ impl<'s> Roles<'s> {
         };
         let (icon, inherit) = icons::Attrs::of(&lower, &attrs, &classes, link, self.facts, &self.nodes, &self.stack);
         let pos = self.nodes.get(parent as usize).map_or(0, |p| p.kids.len()) as u32;
+        let profiled = self.profile.is_some_and(|p| p.is_pos(&lower, &classes));
         let id = self.nodes.len() as u32;
         let at = self.buf_at();
         self.nodes.push(Node {
@@ -828,6 +836,7 @@ impl<'s> Roles<'s> {
                 sig.hash(&mut h);
                 h.finish()
             },
+            profiled,
             icon,
             inherit,
         });
@@ -950,7 +959,7 @@ impl<'s> Roles<'s> {
                 n.text.1 = len;
             }
         }
-        let t = Tree::new(&self.nodes, &self.buf, self.key.as_deref());
+        let t = Tree::new(&self.nodes, &self.buf, self.key.as_deref(), self.profile.is_some_and(|p| p.pos_words));
         let mut decided = Decided {
             edits: Vec::new(),
             audio_links: 0,
@@ -992,7 +1001,15 @@ impl<'s> Roles<'s> {
                     decided.headwords.push((node.attr_at, node.end.map_or(usize::MAX, |(at, _)| at)));
                 }
                 let Some((name, kind)) = role.written() else { continue };
+                // Where the edition's markup has a table, its part of speech is the table's, and sure; the generic
+                // rule's guesses are not written there.
+                if *role == Role::Pos && self.profile.is_some() && !node.profiled {
+                    continue;
+                }
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
+                if *role == Role::Pos && node.profiled {
+                    attr.push_str(" data-xdict-sure=\"pos\"");
+                }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
                 // navigation, and the entry's own headword follows it.
@@ -1545,10 +1562,12 @@ struct Tree<'n> {
     nodes: &'n [Node],
     buf: &'n str,
     feat: Vec<Feat>,
+    /// The markup's part-of-speech selector holds other labels too: its elements need the part-of-speech words.
+    pos_words: bool,
 }
 
 impl<'n> Tree<'n> {
-    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>) -> Self {
+    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>, pos_words: bool) -> Self {
         let key_norm = key.map(norm_key).unwrap_or_default();
         let forms = key.map(key_forms).unwrap_or_default();
         let mut order = 0u32;
@@ -1598,7 +1617,7 @@ impl<'n> Tree<'n> {
                 order,
             });
         }
-        Self { nodes, buf, feat }
+        Self { nodes, buf, feat, pos_words }
     }
 
     /// An element's whole text, spaces collapsed, when it is no longer than the rules read.
@@ -1728,6 +1747,18 @@ impl<'n> Tree<'n> {
         let short = |i: usize| f(i).short.as_deref().unwrap_or("");
         let audio = |i: usize| self.node(i).is_some_and(|x| x.audio_attr || (x.pathy && f(i).len == 0));
 
+        // 0. the markup's own part of speech (`profiles`), before any generic rule can take the element. In a link
+        // too: LDOCE's word lists and YHDCD's senses write it inside one (the holdout labels them part of speech).
+        for i in 1..n {
+            let Some(node) = self.node(i) else { continue };
+            if !node.profiled || f(i).len == 0 || f(i).len > 40 {
+                continue;
+            }
+            if self.pos_words && !pos_text(short(i)) {
+                continue;
+            }
+            r.mark(i, Role::Pos);
+        }
         // 1. audio
         let mut covered = 0usize;
         for i in 1..n {
@@ -1861,16 +1892,9 @@ impl<'n> Tree<'n> {
             }
             let lower = t.to_lowercase();
             let low = lower.trim_matches(|c: char| " .,;:()[]{}".contains(c));
-            let low2 = low.trim_end_matches(|c: char| c.is_whitespace() || c == '.');
-            let words: Vec<&str> = low.split(|c: char| c.is_whitespace() || ",/&;".contains(c)).collect();
-            let pos_word = |w: &str| POS_WORDS.contains(&w.trim_matches('.'));
-            let is_pos = POS_WORDS.contains(&low)
-                || POS_WORDS.contains(&low2)
-                || POS_PHRASES.contains(&low)
-                || (words.len() <= 3
-                    && words.iter().all(|w| pos_word(w) || matches!(*w, "and" | "or" | "&" | ""))
-                    && words.iter().any(|w| pos_word(w)));
-            if is_pos
+            // An element the markup's table names was decided in pass 0, whichever way.
+            if pos_text(t)
+                && !node.profiled
                 && node.link != Lk::Lookup
                 && !(d.caps && t.chars().count() > 3 && leads(i) && d.order > 12 && node.flags.bold)
             {
@@ -2097,6 +2121,22 @@ impl<'n> Tree<'n> {
 }
 
 /// An element the browser lays out as a block by default: punctuation after it would start a line of its own.
+/// Whether short text reads as a part of speech: a word or phrase of [`POS_WORDS`] or [`POS_PHRASES`], or up to
+/// three of the words joined by `and`/`or`.
+fn pos_text(t: &str) -> bool {
+    let lower = t.to_lowercase();
+    let low = lower.trim_matches(|c: char| " .,;:()[]{}".contains(c));
+    let low2 = low.trim_end_matches(|c: char| c.is_whitespace() || c == '.');
+    let words: Vec<&str> = low.split(|c: char| c.is_whitespace() || ",/&;".contains(c)).collect();
+    let pos_word = |w: &str| POS_WORDS.contains(&w.trim_matches('.'));
+    POS_WORDS.contains(&low)
+        || POS_WORDS.contains(&low2)
+        || POS_PHRASES.contains(&low)
+        || (words.len() <= 3
+            && words.iter().all(|w| pos_word(w) || matches!(*w, "and" | "or" | "&" | ""))
+            && words.iter().any(|w| pos_word(w)))
+}
+
 fn block_tag(name: &str) -> bool {
     const BLOCKS: &[&str] = &[
         "div",
