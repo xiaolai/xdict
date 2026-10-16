@@ -204,3 +204,24 @@ fn the_first_headword_is_the_lead() {
     let (none, _) = entry(r#"<p>no headword here at all, only a sentence of prose.</p>"#, "zzz");
     assert!(!none.contains("data-xdict-lead"), "{none}");
 }
+
+/// Punctuation alone between two blocks stays with the block before it (OED's "," between its Brit. and U.S.
+/// pronunciation wrappers stood on a line of its own); inside an inline run it is left where it is.
+#[test]
+fn punctuation_between_blocks_stays_with_the_block_before() {
+    let oed = r#"<div class="pw">Brit. /ˈbaŋkə/</div>, <div class="pw">U.S. /ˈbæŋkər/</div><p>a person who keeps a bank</p>"#;
+    let (out, _) = entry(oed, "banker");
+    assert!(out.contains("/ˈbaŋkə/,"), "{out}");
+    assert!(!out.contains("</div>,"), "{out}");
+    let (inline, _) = entry(r#"<p><b>run</b>, <i>verb</i></p>"#, "run");
+    assert!(inline.contains("</b>, <i"), "{inline}");
+}
+
+/// An empty element goes with its blank content (OED's `<span class="ieWhitespace">&nbsp;</span>` left a no-break space
+/// beside the source's own: "banc␣␣␣bench"); one space stays, so words it separated stay apart.
+#[test]
+fn an_empty_element_goes_with_its_blank_content() {
+    let (out, _) = entry("<p><em>banc</em> <span class=\"w\">\u{a0}</span> bench, a<span>\u{a0}</span>b</p>", "banc");
+    assert!(!out.contains('\u{a0}'), "{out:?}");
+    assert!(out.contains("a b"), "{out:?}");
+}

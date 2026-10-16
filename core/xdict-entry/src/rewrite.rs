@@ -446,7 +446,9 @@ fn html_out<'s>(
                 && !has(&path)
             {
                 norm.counts.strip.missing_images += 1;
-                let alt = crate::phon::attribute_of(source, "alt").unwrap_or("").trim();
+                // Inside XDict's speaker the image's words name the button XDict draws (OED's `alt="sound"`): none.
+                let in_speaker = out.controls.as_ref().is_some_and(|c| c.inside(text.len() - from.len()));
+                let alt = if in_speaker { "" } else { crate::phon::attribute_of(source, "alt").unwrap_or("").trim() };
                 out.text.push_str(&alt.replace('<', "&lt;"));
                 if let Some(roles) = &mut out.roles {
                     roles.text(alt, None);

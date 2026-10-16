@@ -76,6 +76,11 @@ impl Controls {
         self.inside_until = source + inner.len();
     }
 
+    /// Whether `source` (a position in the source) is inside the speaker last found.
+    pub(crate) fn inside(&self, source: usize) -> bool {
+        source < self.inside_until
+    }
+
     /// Text between tags, starting at `source` in the source and `written` in the output. Inside a speaker, each
     /// private-use character, raw or as a numeric reference, is the dictionary's icon-font glyph (COBUILD's `icomoon`
     /// U+EA27): XDict does not load that face, so it would draw a missing-glyph box beside XDict's own speaker. It is
