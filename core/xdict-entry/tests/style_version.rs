@@ -9,12 +9,12 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (3, 0x52ae_f242_073d_0427);
+const PINNED: (u32, u64) = (4, 0xe7a3_c0eb_2289_c2d3);
 
 const BASE: &str = "xdict://d/";
 
 /// Inputs shaped to reach each part of the rules, keyed where the roles need a key.
-const SHAPED: [(&str, &str); 10] = [
+const SHAPED: [(&str, &str); 11] = [
     ("", r#"<p style="font-size:18px;color:#f00;font-family:Arial">plain <b>bold</b> <font size="+1">big</font></p>"#),
     ("", r#"<table><tr><td>a</td><td>b</td></tr></table><img src="x.png"><a href="entry://hue#s1">hue</a>"#),
     ("", r#"<span class="phon">/ˈæp(ə)l/</span> <b>[<i>ˈ</i>&#230;pl]</b> <em>\ˈa-pəl\</em>"#),
@@ -32,6 +32,8 @@ const SHAPED: [(&str, &str); 10] = [
         "x",
         r#"<span class="h"><span class="s"><a href="sound://x.mp3"><img src="s.png"></a></span><span>ˈeks</span></span>"#,
     ),
+    // A word list written in a drawn box (STYLE 4: OPAL's pills are labels).
+    ("x", r#"<span class="pill">OPAL W</span> <span class="pill">B2</span>"#),
 ];
 
 /// FNV-1a, 64 bits: stable across platforms and releases, which `DefaultHasher` does not promise.
@@ -123,7 +125,7 @@ fn json_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<S
 
 #[test]
 fn style_is_raised_with_any_change_to_the_output() {
-    let style = Style::of_sheets([".pos{font-style:italic} .hw{font-weight:bold}"]);
+    let style = Style::of_sheets([".pos{font-style:italic} .hw{font-weight:bold} .pill{background:#666}"]);
     let mut digest = 0xcbf2_9ce4_8422_2325;
     let inputs = fixture_entries().into_iter().chain(SHAPED.iter().map(|(k, b)| ((*k).to_owned(), (*b).to_owned())));
     for (key, body) in inputs {
