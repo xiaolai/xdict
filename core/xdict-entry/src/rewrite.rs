@@ -296,7 +296,7 @@ fn html_out<'s>(
         }
         out.text.push_str(before);
         if let Some(marker) = &mut out.marker {
-            marker.text(before);
+            marker.text(before, out.text.as_str().len().saturating_sub(before.len()));
         }
         if let Some(tables) = &mut out.tables {
             tables.text(before);

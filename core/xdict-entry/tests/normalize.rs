@@ -520,6 +520,47 @@ fn transcriptions_are_marked_not_changed() {
     assert_eq!(t.characters.iter().collect::<String>(), "æðŋˈ");
 }
 
+/// A transcription that is no element of its own (loose text beside other content, its delimiters outside the
+/// element holding its letters) is wrapped whole: CALD's `/ˈvɪʒ.<sup>ə</sup>n/`, OED's labelled wrapper.
+#[test]
+fn a_transcription_among_other_content_is_wrapped_whole() {
+    let s = plain();
+    let wrap = |system: &str, inner: &str| {
+        format!(r#"<span data-xdict-phon data-xdict-phon-system="{system}">{inner}</span>"#)
+    };
+    // CALD: the headword, a speaker and the transcription in one element; the superscript only a part of it.
+    assert_eq!(
+        html("<font>—<b>vision</b> <a>uk</a> /ˈvɪʒ.<sup>ə</sup>n/</font>", &s),
+        format!("<font>—<b>vision</b> <a>uk</a> {}</font>", wrap("slash", "/ˈvɪʒ.<sup>ə</sup>n/"))
+    );
+    // OED: a label and a speaker beside the delimiters, the letters in their own element. Only the transcription.
+    assert_eq!(
+        html(r#"<div>Brit.<a>sound</a>/<span class="phonetics">ˈdʌɪnə</span>/</div>"#, &s),
+        format!(r#"<div>Brit.<a>sound</a>{}</div>"#, wrap("slash", r#"/<span class="phonetics">ˈdʌɪnə</span>/"#))
+    );
+    assert_eq!(
+        html(r#"<div>Brit./<span class="phonetics">ˌantimʌɪˈtɒtɪk</span>/</div>"#, &s),
+        format!(r#"<div>Brit.{}</div>"#, wrap("slash", r#"/<span class="phonetics">ˌantimʌɪˈtɒtɪk</span>/"#))
+    );
+    // The delimiters in an element of their own beside the label: that element is the mark, not the label's.
+    assert_eq!(
+        html(r#"<div>Brit.<a>sound</a><span class="sup">/<span>ˌsuːdəʊ</span>/</span></div>"#, &s),
+        r#"<div>Brit.<a>sound</a><span data-xdict-phon data-xdict-phon-system="slash" class="sup">/<span>ˌsuːdəʊ</span>/</span></div>"#
+    );
+    // In prose, two of them, brackets too; entities decoded.
+    assert_eq!(
+        html("<p>say /ˈæpl/ or [ˈ&#230;pl] here</p>", &s),
+        format!("<p>say {} or {} here</p>", wrap("slash", "/ˈæpl/"), wrap("bracket", "[ˈ&#230;pl]"))
+    );
+    // Not transcriptions: no phonetic letter, a broken element between, a stray slash, a word outside the bounds.
+    for kept in ["<p>and/or /apple/ 1/2</p>", "<p>/ˈæ <b>苹</b> pl/</p>", "<p>x / ə/</p>", "<p>/ə 苹果/</p>"] {
+        assert_eq!(html(kept, &s), kept);
+    }
+    let (_, counts) = html_normalized_within("<p>a /ˈæ<i>p</i>l/ b</p>", BASE, "", &s, usize::MAX).unwrap();
+    assert_eq!(counts.transcriptions.marked, 1);
+    assert_eq!(counts.transcriptions.systems.get("slash"), Some(&1));
+}
+
 /// A dictionary drawing IPA over ASCII through its phonetic font is marked with that font and left alone.
 #[test]
 fn a_phonetic_font_marks_its_elements() {
