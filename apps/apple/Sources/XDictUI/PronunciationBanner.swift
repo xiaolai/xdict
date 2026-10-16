@@ -59,8 +59,8 @@ struct PronunciationBanner: View {
             .task(id: shown.serial) {
                 let spoken = lines + (shown.tip.map { [SpeechSentences.caveat($0)] } ?? [])
                 AccessibilityNotification.Announcement(spoken.map { String(localized: $0) }.joined(separator: "\n")).post()
-                // A tip stays long enough to be read and acted on.
-                try? await Task.sleep(for: .seconds(shown.tip == nil ? 6 : 15))
+                guard let after = Self.dismissal(hasTip: shown.tip != nil) else { return }
+                try? await Task.sleep(for: after)
                 dismissed = shown.serial
             }
         }
@@ -73,6 +73,12 @@ struct PronunciationBanner: View {
         case .recording, .speech(.spoken), .fallback(_, .spoken): false
         case .speech, .fallback: true
         }
+    }
+
+    /// When a notice goes by itself: after a few seconds, or, carrying the one-time voice tip, never (the reader closes
+    /// it: it is shown once, and has a button to act on).
+    static func dismissal(hasTip: Bool) -> Duration? {
+        hasTip ? nil : .seconds(6)
     }
 
     static func symbol(_ notice: PronunciationNotice) -> String {

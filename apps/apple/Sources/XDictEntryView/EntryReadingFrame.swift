@@ -20,8 +20,25 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
 
     public static let all: EntryReadingFrame = [.column, .type]
 
+    /// "Original style"'s whole frame (ADR-0010 Q3, `reading-style.md` §6): the page's insets, containment, and a light
+    /// paper under the dictionary. Never with the other layers.
+    public static let minimal = EntryReadingFrame(rawValue: 1 << 3)
+
+    /// The paper an entry in its own style is drawn on in dark: the dictionary's colours assume a white page, so a
+    /// light one, a little dimmer than white.
+    static let paper = "#ecebe6"
+
+    /// The page's insets (the reading style's own padding values, written out: original style loads no tokens but the
+    /// palette), `contain: layout` (R13: nothing pins itself over the pane), and the paper: white in light, `paper` in
+    /// dark, with dark text where the dictionary sets none. The dictionary's own margins and colours stay its own.
+    static let minimalCSS = "html{padding:1.25rem clamp(0.75rem, 4vw, 2rem) !important;color-scheme:light only;"
+        + "color:#1d1d1f;box-sizing:border-box}"
+        + ":root[data-xdict-theme=light]{background:#ffffff !important}"
+        + ":root[data-xdict-theme=dark]{background:\(paper) !important}"
+        + "body{contain:layout !important;overflow-wrap:anywhere}"
+
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
-    public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? [] : self }
+    public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? .minimal : self }
 
     /// **The tokens (§1), in one place.** Names are fixed by the spec; values are the gallery's to tune. Colours per
     /// theme on `:root[data-xdict-theme=…]`, which the appearance script sets.
@@ -216,13 +233,15 @@ extension EntryScripts {
         let namesJSON = (try? JSONSerialization.data(withJSONObject: frame.contains(.column) ? names : [:], options: [.sortedKeys]))
             .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         let type = frame.contains(.type) ? EntryReadingFrame.typeCSS : ""
-        let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
+        let minimal = frame.contains(.minimal) ? EntryReadingFrame.minimalCSS : ""
+        let tokens = frame.subtracting([.serif, .minimal]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """
             (function () {
               'use strict';
               var THEME = '\(scheme.rawValue)', FACE = '\(face)', SHEETS = [['xdict-frame-tokens', \(jsString(tokens))],
-                ['xdict-frame-column', \(jsString(column))], ['xdict-frame-type', \(jsString(type))]];
+                ['xdict-frame-column', \(jsString(column))], ['xdict-frame-type', \(jsString(type))],
+                ['xdict-frame-minimal', \(jsString(minimal))]];
               var ID = /^xdict-frame-/;
               function sheet(id, text) {
                 var s = document.getElementById(id);
