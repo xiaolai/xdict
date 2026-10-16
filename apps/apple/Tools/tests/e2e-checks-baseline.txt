@@ -190,3 +190,9 @@ sound.recordings.offByDefault
 sound.setting.bothLanguages
 # added by unification R (the accent in Settings > Reading)
 entry.accentSwitch
+# added by WI-9 (setup, settings and the Chinese UI)
+setup.rowsLive
+setup.grantCompletesRow
+setup.loginItemRegisters
+setup.choicesPersist
+setup.chineseOnly

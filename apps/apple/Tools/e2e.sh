@@ -1209,6 +1209,40 @@ substage_sound() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# **Setup, settings and the Chinese UI** (plan-macos-v1 WI-9, done-when): the setup board over an empty library of its
+# own, two launches (`SetupReport`). The first reads each row's live state and completes the Accessibility row without
+# relaunch, registers launch at login (and unregisters it), and chooses an accent and the Chinese UI in a defaults suite
+# of the run's own; the second, in Chinese, finds both choices kept and no English word in the board's tree.
+substage_setup() {
+    local work="$reports/setup" suite="ai.xdict.e2e.setup" phase out
+    rm -rf "$work"
+    mkdir -p "$work"
+    defaults delete "$suite" >/dev/null 2>&1 || true
+    if is_running "$exe"; then
+        flunk - "setup: XDict is already running (pid ${PIDS[*]}), so the window read would not be this run's"
+        return 0
+    fi
+    for phase in first second; do
+        out="$work/$phase.json"
+        local language=()
+        [ "$phase" = first ] || language=(-AppleLanguages "(zh-Hans)")
+        open -n --stdout "$work/$phase.out" --stderr "$work/$phase.err" "$app" --args --setup-report "$phase" \
+            --library-dir "$work/library" --suite "$suite" --out "$out" "${language[@]}" \
+            || { flunk - "setup: the app could not be started ($phase)"; return 0; }
+        local waited=0
+        while [ ! -s "$out" ] && [ "$waited" -lt 600 ]; do sleep 0.1; waited=$((waited + 1)); done
+        for _ in $(seq 1 50); do is_running "$exe" || break; sleep 0.1; done
+        quit_bundle >/dev/null 2>&1 || true
+        if [ -s "$out" ]; then
+            findings "$out"
+        else
+            flunk - "setup: the $phase launch wrote no findings within 60 s ($(head -c 300 "$work/$phase.err" 2>/dev/null))"
+        fi
+    done
+    defaults delete "$suite" >/dev/null 2>&1 || true
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # **Lookup from anywhere** (plan-macos-v1 WI-8, done-when), one launch for `selection.hosts`, `services.menu`,
 # `panel.*`, `menubar.item` and `shortcut.rebind`: `Tools/anywhere/drive.py` gives XDict a fresh app state (its
 # preferences deleted, the Services cache rebuilt; not a fresh account), starts the real app with `--anywhere` over the
