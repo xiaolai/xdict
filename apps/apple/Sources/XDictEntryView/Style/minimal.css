@@ -1,0 +1,9 @@
+/* "Original style"'s whole frame: the page's insets (the reading style's own padding values, written out: original */
+/* style loads no tokens but the palette), `contain: layout` (R13), and the paper: white in light, `paper` in dark, */
+/* with dark text where the dictionary sets none. XDict's marks take the palette's light values on the paper. */
+html{padding:1.25rem clamp(0.75rem, 4vw, 2rem) !important;color-scheme:light only;
+color:#1d1d1f;box-sizing:border-box}
+:root[data-xdict-theme=light]{background:#ffffff !important}
+:root[data-xdict-theme=dark]{background:{{paper}} !important}
+:root[data-xdict-theme=dark]{{{light-palette}}}
+body{contain:layout !important;overflow-wrap:break-word}

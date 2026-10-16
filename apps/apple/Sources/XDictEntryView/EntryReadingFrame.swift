@@ -32,21 +32,17 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// palette), `contain: layout` (R13: nothing pins itself over the pane), and the paper: white in light, `paper` in
     /// dark, with dark text where the dictionary sets none. The dictionary's own margins and colours stay its own.
     /// XDict's marks draw with the palette; on the paper they take its light values in dark too.
-    static let minimalCSS = "html{padding:1.25rem clamp(0.75rem, 4vw, 2rem) !important;color-scheme:light only;"
-        + "color:#1d1d1f;box-sizing:border-box}"
-        + ":root[data-xdict-theme=light]{background:#ffffff !important}"
-        + ":root[data-xdict-theme=dark]{background:\(paper) !important}"
-        + ":root[data-xdict-theme=dark]{\(colours.map { "--xdict-\($0.0):\($0.1);" }.joined())}"
-        + "body{contain:layout !important;overflow-wrap:break-word}"
-
+    static var minimalCSS: String { minimalCSS(.bundled) }
+    static func minimalCSS(_ style: EntryStyle) -> String {
+        style.css("minimal.css", ["paper": paper, "light-palette": colours.map { "--xdict-\($0.0):\($0.1);" }.joined()])
+    }
 
     /// In original style transcriptions draw in the bundled phonetic faces too (a dictionary's own IPA font is often
     /// missing); their colour stays the dictionary's.
     /// `!important`, and on the transcription's own elements: a dictionary's font rule on its class (MWU's) outranks
     /// a plain one. XDict's controls and labels inside keep their own face.
-    static let originalPhonCSS = "[data-xdict-phon],"
-        + "[data-xdict-phon] :not([data-xdict-control],[data-xdict-control] *,[data-xdict-role=label])"
-        + "{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon) !important}"
+    static var originalPhonCSS: String { originalPhonCSS(.bundled) }
+    static func originalPhonCSS(_ style: EntryStyle) -> String { style.css("original-phon.css") }
 
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
     public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? .minimal : self }
@@ -151,30 +147,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// column is the measure plus the inline padding. The quirks-mode table reset is undone, so a table's text is the
     /// scale's. Data tables scroll in the core's wrapper; only an unwrapped one scrolls itself. `contain: layout` makes
     /// the body the containing block of a dictionary's `position: fixed`, so nothing pins itself over the pane.
-    static let columnCSS = "html{padding:0 !important;font-size:var(--xdict-base) !important;"
-        + "background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;"
-        + "visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;"
-        + "zoom:1 !important;position:static !important;writing-mode:horizontal-tb !important}"
-        + "body{margin:0 auto !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;"
-        + "max-width:calc(var(--xdict-measure) + 2 * var(--xdict-pad-inline)) !important;width:auto !important;"
-        + "min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word !important;"
-        + "contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;"
-        + "filter:none !important;transform:none !important;zoom:1 !important;position:static !important;"
-        + "float:none !important;writing-mode:horizontal-tb !important}"
-        + "table{font:inherit;line-height:inherit;color:inherit;white-space:inherit;text-align:inherit;"
-        + "border-collapse:collapse}"
-        + "[data-xdict-scroll]{overflow-x:auto;max-width:100%;margin-block:var(--xdict-gap)}"
-        + "[data-xdict-table=data] td,[data-xdict-table=data] th{padding:var(--xdict-cell-pad);vertical-align:top;"
-        + "text-align:start}"
-        // No fills anywhere (owner, 2026-10-15): the header row is told by weight and the space under it.
-        + "[data-xdict-table=data] th,[data-xdict-table=data] thead td{font-weight:var(--xdict-weight-bold);"
-        + "padding-bottom:var(--xdict-space-2)}"
-        + "[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}"
-        + ":not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}"
-        + "img{max-width:100%;height:auto}"
-        // A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE,
-        // #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins.
-        + ":where(a:any-link){color:var(--xdict-link)}"
+    static var columnCSS: String { columnCSS(.bundled) }
+    static func columnCSS(_ style: EntryStyle) -> String { style.css("column.css") }
 
     /// XDict's speaker (§5.5): its own drawing, a speaker with two waves, as an inline SVG mask filled with the text's
     /// colour, so it follows the theme, the link colour and hover. No URL but `data:`, which the policy already allows.
@@ -196,28 +170,9 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// §5.2–5.5: the speaker controls the core marks. The dictionary's drawing stays in the bytes, hidden in `replace`
     /// mode; the glyph is 1em of the text it sits in; the hit target reaches `--xdict-hit` by padding and an equal
     /// negative margin, so the line box does not move; the accent tag is small caps after the glyph.
-    static func controlsCSS(ukTag: String = "UK", usTag: String = "US") -> String {
+    static func controlsCSS(ukTag: String = "UK", usTag: String = "US", style: EntryStyle = .bundled) -> String {
         func quoted(_ s: String) -> String { "\"" + s.replacingOccurrences(of: "\\", with: "").replacingOccurrences(of: "\"", with: "") + "\"" }
-        return "[data-xdict-control-mode=replace]>:not([data-xdict-icon]):not([data-xdict-tag]){display:none !important}"
-            + "[data-xdict-control-mode=prefix]>img,[data-xdict-control-mode=prefix]>:empty:not([data-xdict-icon]):not([data-xdict-tag]){display:none !important}"
-            + "[data-xdict-control]::before,[data-xdict-control]::after{content:none !important}"
-            + "[data-xdict-control]{background-image:none !important;cursor:pointer}"
-            // A fold head is often a block (a heading, a box's title): it keeps its own layout and colour.
-            + "[data-xdict-control]:not([data-xdict-control=disclosure]){color:var(--xdict-link);text-decoration:none;"
-            + "display:inline-flex;align-items:baseline;gap:0.15em;"
-            + "padding:calc((var(--xdict-hit) - 1em) / 2);margin:calc((var(--xdict-hit) - 1em) / -2);"
-            + "border-radius:var(--xdict-radius)}"
-            + "[data-xdict-control]:focus-visible{outline:2px solid var(--xdict-link);outline-offset:0}"
-            + "[data-xdict-icon=speaker]{display:inline-block;width:var(--xdict-icon);height:var(--xdict-icon);"
-            + "vertical-align:-0.15em;background-color:currentColor;-webkit-mask:\(speakerMask) center/contain no-repeat;"
-            + "mask-image:\(speakerMask);mask-size:contain;mask-repeat:no-repeat;mask-position:center}"
-            + "[data-xdict-unavailable]{opacity:0.4;cursor:default}"
-            // In XDict's face even inside a transcription (OALECD's sound links wrap them).
-            + "[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);font-variant-caps:all-small-caps;color:var(--xdict-text-2);"
-            // 0.35em of the text after the tag (0.56em of its own 0.625em): the next speaker or word does not touch it.
-            + "letter-spacing:0.02em;margin-inline-end:0.56em}"
-            + "[data-xdict-accent=uk]>[data-xdict-tag]::before{content:\(quoted(ukTag))}"
-            + "[data-xdict-accent=us]>[data-xdict-tag]::before{content:\(quoted(usTag))}"
+        return style.css("controls.css", ["speaker-mask": speakerMask, "uk-tag": quoted(ukTag), "us-tag": quoted(usTag)])
     }
 
     /// The speakers' VoiceOver names and accent tags, in the reader's language (§5.2: verb first, the same whatever
@@ -242,344 +197,40 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// (owner, 2026-10-16; `dev-docs/artifacts/reading-frame/unify/` §11): what the browser's own sheet sizes and
     /// spaces is put on the scale and the space tokens, and the three strong roles win over their descendants'
     /// normalized declarations from a cascade layer; a transcription keeps its colour.
-    static let typeCSS = "body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}"
-        + "[data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}"
-        // The browser's defaults, at zero specificity, so a dictionary's own (normalized) rule still wins.
-        + ":where(h1){font-size:var(--xdict-fs-xxl);line-height:var(--xdict-leading-tight)}"
-        + ":where(h2){font-size:var(--xdict-fs-xl);line-height:var(--xdict-leading-tight)}"
-        + ":where(h3){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}"
-        + ":where(h4){font-size:var(--xdict-fs-m);line-height:var(--xdict-leading)}"
-        + ":where(h5){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
-        + ":where(h6){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}"
-        + ":where(small){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
-        + ":where(big){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}"
-        + ":where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}"
-        + ":where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
-        + ":where(button,input,select,textarea){font:inherit}"
-        + ":where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}"
-        + ":where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}"
-        + "@layer xdict-unify{"
-        // The transcription face reaches all of a transcription's text, a speaker wrapping it included; the face
-        // only, its colour kept. An ASCII-mapped phonetic font (`font:<name>`) keeps its own.
-        + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']),"
-        + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']) :not([data-xdict-tag],[data-xdict-icon])"
-        + "{font-family:var(--xdict-font-phon) !important}"
-        // The lead (the entry's first headword): one size, face, leading and colour; inside it only weight is the
-        // dictionary's (a stress mark's). Its colour reaches its descendants too: NOAD's headword text is a coloured
-        // span inside the lead, MWU's a link (gallery, 2026-10-16), and the 24's stress marks carry no colour of
-        // their own (the gallery's lead check), so study fix 3's "keep colour" kept only the dictionaries' hues.
-        + "[data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;"
-        + "font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
-        + "font-style:normal !important;color:var(--xdict-text) !important}"
-        + "[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,"
-        + "[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;"
-        + "line-height:inherit !important;color:inherit !important}"
-        // A part of speech the edition's markup table names (the core's `data-xdict-sure=pos`): one look in every
-        // dictionary, its descendants' declarations included, in the lead too. The generic rule's guesses carry no
-        // `sure` and keep the dictionary's look (precision, not reach, decides: Codex's unification objections 2, 4).
-        + "[data-xdict-sure=pos][data-xdict-sure],[data-xdict-sure=pos][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])"
-        // No slanted CJK: COBUILD's English–Chinese codes carry their Chinese gloss ("VERB 动词").
-        + "{font-family:var(--xdict-font) !important;font-style:italic !important;font-synthesis-style:none !important;"
-        + "font-weight:normal !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
-        + "font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-accent) !important;"
-        + "background:none !important}"
-        // A sense number a markup table names: one face, weight and colour; its size and place stay the dictionary's.
-        + "[data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])"
-        + "{font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
-        + "font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}"
-        // An example a markup table names: italic in the body face and the secondary text colour, so the accent stays
-        // for labels and numbers (owner, 2026-10-16). Its descendants take the face and the slant but keep their own
-        // colour and weight: a headword the dictionary coloured inside it is the one accent (COBUILD-EC's
-        // "correlate"). Han text is never slanted: no synthesized oblique, and CJK faces have no italic.
-        + "[data-xdict-sure=example][data-xdict-sure]{color:var(--xdict-text-2) !important}"
-        + "[data-xdict-sure=example][data-xdict-sure],[data-xdict-sure=example][data-xdict-sure] "
-        + ":not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
-        + "[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;"
-        + "font-synthesis-style:none !important}"
-        // A section heading a markup table names: one look, bold, 1.125rem, the body face and the body text colour; the
-        // accent is not for headings (owner, 2026-10-17). Its own text only: a link or a list inside it keeps its look.
-        + "[data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] "
-        + ":not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;"
-        + "font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;"
-        + "font-weight:var(--xdict-weight-bold) !important;font-style:normal !important;"
-        + "color:var(--xdict-text) !important}"
-        // A translation a markup table names, a sense's or an example's: upright, in the secondary text colour.
-        + "[data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}"
-        + "[data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] "
-        + ":not([data-xdict-tag],[data-xdict-icon]){font-style:normal !important}"
-        // A label's text is the label's, whatever its descendants declared.
-        + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
-        + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"
-        // A link is the link colour, whatever colour the dictionary gave it (flatten: link stays link).
-        + "a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-control=disclosure]) "
-        + ":not([data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-link) !important}"
-        // ... but a link in the lead is the lead's colour (MWU's headword links to itself).
-        + "[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]),"
-        + "[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label] *)"
-        + "{color:inherit !important}"
-        + "}"
+    static var typeCSS: String { typeCSS(.bundled) }
+    static func typeCSS(_ style: EntryStyle) -> String { style.css("type.css") }
 }
 
 extension EntryScripts {
     /// The gallery's arithmetic, with no DOM: the entry's dominant text size, the size most of its characters are set
     /// in. A measurement only; nothing on the page is scaled by it.
-    static let frameCore = #"""
-        var XDictFrameCore = (function () {
-          'use strict';
-          function dominant(samples) {
-            var weight = {};
-            samples.forEach(function (s) {
-              if (!(s[0] > 0) || !(s[1] > 0)) return;
-              var b = Math.round(s[0] * 2) / 2;
-              weight[b] = (weight[b] || 0) + s[1];
-            });
-            var best = NaN, most = 0;
-            Object.keys(weight).forEach(function (k) {
-              if (weight[k] > most) { most = weight[k]; best = parseFloat(k); }
-            });
-            return best;
-          }
-          function opaque(css) {
-            var m = /rgba?\(([^)]*)\)/.exec(String(css));
-            if (!m) return false;
-            var p = m[1].split(/[\s,\/]+/).filter(function (x) { return x.length; });
-            return p.length < 4 || parseFloat(p[3]) > 0.05;
-          }
-          return { dominant: dominant, opaque: opaque };
-        })();
-        """#
+    static var frameCore: String { EntryStyle.bundled.script("frame-core.js") }
 
     /// The frame on the page, in the shell's world: the theme attribute, the tokens and the layers' stylesheets, put
     /// back if a page script removes or rewrites them. `__xdictFrame.measure()` reports what the gallery compares.
     static func frameDOM(_ frame: EntryReadingFrame, scheme: EntryColourScheme,
-                         labels: EntryReadingFrame.SpeakerLabels) -> String {
+                         labels: EntryReadingFrame.SpeakerLabels, style: EntryStyle = .bundled) -> String {
+        let controls = EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag, style: style)
         let column = frame.contains(.column)
-            ? EntryReadingFrame.columnCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS + EntryReadingFrame.readingLabelsCSS : ""
+            ? EntryReadingFrame.columnCSS(style) + controls + EntryReadingFrame.marksCSS(style)
+                + EntryReadingFrame.readingLabelsCSS(style) : ""
         let names = ["uk": labels.uk, "us": labels.us, "other": labels.other]
         let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["link", "phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
         let namesJSON = (try? JSONSerialization.data(withJSONObject: !frame.isDisjoint(with: [.column, .minimal]) ? names : [:], options: [.sortedKeys]))
             .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
-        let type = frame.contains(.type) ? EntryReadingFrame.typeCSS : ""
+        let type = frame.contains(.type) ? EntryReadingFrame.typeCSS(style) : ""
         // "Original style": the minimal frame and XDict's whole marks layer (the owner, 2026-10-16), no column or type.
         let minimal = frame.contains(.minimal)
-            ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalPhonCSS : ""
+            ? EntryReadingFrame.minimalCSS(style) + controls + EntryReadingFrame.marksCSS(style)
+                + EntryReadingFrame.originalPhonCSS(style) : ""
         let tokens = frame.subtracting([.serif, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
-        let face = frame.contains(.serif) ? "serif" : "sans"
-        return """
-            (function () {
-              'use strict';
-              var THEME = '\(scheme.rawValue)', FACE = '\(face)', HUE = '\(frame.accent.rawValue)', SHEETS = [['xdict-frame-tokens', \(jsString(tokens))],
-                ['xdict-frame-column', \(jsString(column))], ['xdict-frame-type', \(jsString(type))],
-                ['xdict-frame-minimal', \(jsString(minimal))]];
-              var ID = /^xdict-frame-/;
-              function sheet(id, text) {
-                var s = document.getElementById(id);
-                if (!s) { s = document.createElement('style'); s.id = id; }
-                if (s.textContent !== text) s.textContent = text;
-                // Last in the head. Only another node of the entry's after it moves it: the frame's own sheets
-                // following each other is the settled state, so two of them never chase each other to the end.
-                var parent = document.head || document.documentElement;
-                var after = s.parentNode === parent ? s.nextSibling : parent.firstChild;
-                while (after && ID.test(after.id || '')) after = after.nextSibling;
-                if (s.parentNode !== parent || after !== null) parent.appendChild(s);
-              }
-              function install() {
-                if (!SHEETS.some(function (s) { return s[1]; })) return;
-                var root = document.documentElement;
-                if (root.getAttribute('data-xdict-theme') !== THEME) root.setAttribute('data-xdict-theme', THEME);
-                if (root.getAttribute('data-xdict-face') !== FACE) root.setAttribute('data-xdict-face', FACE);
-                if (root.getAttribute('data-xdict-hue') !== HUE) root.setAttribute('data-xdict-hue', HUE);
-                SHEETS.forEach(function (s) { if (s[1]) sheet(s[0], s[1]); });
-              }
-              // §5.2: each speaker the core marked is a button with a name, set here in the shell's world.
-              var NAMES = \(namesJSON);
-              function name(root) {
-                if (!NAMES.other || !root || !root.querySelectorAll) return;
-                root.querySelectorAll('[data-xdict-control=speaker]').forEach(function (a) {
-                  var label = NAMES[a.getAttribute('data-xdict-accent')] || NAMES.other;
-                  if (a.getAttribute('aria-label') !== label) a.setAttribute('aria-label', label);
-                  if (a.getAttribute('role') !== 'button') a.setAttribute('role', 'button');
-                });
-              }
-              // The palette's values in this theme, as computed colours, for the gallery's check that every text colour
-              // on the page is one of them.
-              var TOKENS = [\(tokenNames)];
-              function palette() {
-                var probe = document.createElement('span'), out = {};
-                (document.body || document.documentElement).appendChild(probe);
-                TOKENS.forEach(function (t) { probe.style.color = 'var(--xdict-' + t + ')'; out[getComputedStyle(probe).color] = t; });
-                probe.remove();
-                return out;
-              }
-              function measure() {
-                var colours = {}, families = {}, prose = 0, proseFramed = 0, below = 0, lowest = null, root = document.documentElement;
-                var samples = [], leading = [], left = Infinity, right = -Infinity, chars = 0, framed = 0;
-                var walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
-                for (var n = walker.nextNode(); n; n = walker.nextNode()) {
-                  var t = n.nodeValue.replace(/\\s+/g, '');
-                  if (!t.length || !n.parentElement) continue;
-                  var r = document.createRange(); r.selectNodeContents(n);
-                  var rects = r.getClientRects();
-                  if (!rects.length) continue;
-                  var pcs = getComputedStyle(n.parentElement);
-                  samples.push([parseFloat(pcs.fontSize), t.length]);
-                  var lh = pcs.lineHeight === 'normal' ? 1.2 : parseFloat(pcs.lineHeight) / parseFloat(pcs.fontSize);
-                  leading.push([Math.round(lh * 20) / 20, t.length]);
-                  chars += t.length;
-                  if (/^-apple-system/.test(pcs.fontFamily)) framed += t.length;
-                  if (!n.parentElement.closest('[data-xdict-phon]')) {
-                    prose += t.length;
-                    if (/^-apple-system|^ui-serif/.test(pcs.fontFamily)) proseFramed += t.length;
-                  }
-                  families[pcs.fontFamily] = (families[pcs.fontFamily] || 0) + t.length;
-                  // Computed contrast, not pixels: the text's colour against the first opaque background behind it.
-                  var fg = XDictReadability.parse(pcs.color), bg = null;
-                  for (var e = n.parentElement; e && !bg; e = e.parentElement) {
-                    var c = XDictReadability.parse(getComputedStyle(e).backgroundColor);
-                    if (c && c[3] >= 0.5) bg = c;
-                  }
-                  if (!bg) bg = XDictReadability.parse(getComputedStyle(root).backgroundColor) || [255, 255, 255, 1];
-                  if (bg[3] < 0.5) bg = [255, 255, 255, 1];
-                  colours[pcs.color] = colours[pcs.color] || { chars: 0, sample: n.nodeValue.trim().slice(0, 30) + ' <'
-                    + n.parentElement.tagName.toLowerCase() + (n.parentElement.className ? '.' + String(n.parentElement.className) : '') + '>' };
-                  colours[pcs.color].chars += t.length;
-                  if (fg) {
-                    var ratio = XDictReadability.contrast(fg, bg);
-                    if (ratio < 4.5) below += t.length;
-                    if (!lowest || ratio < lowest.ratio) {
-                      lowest = { ratio: Math.round(ratio * 100) / 100, colour: pcs.color, background: 'rgb(' + bg.slice(0, 3).join(', ') + ')',
-                                 text: n.nodeValue.trim().slice(0, 40) };
-                    }
-                  }
-                  for (var i = 0; i < rects.length; i++) {
-                    if (rects[i].width < 1) continue;
-                    left = Math.min(left, rects[i].left); right = Math.max(right, rects[i].right);
-                  }
-                }
-                var size = XDictFrameCore.dominant(samples);
-                var body = document.body;
-                // R13's containment, observed: a fixed probe at `right:0` ends at the body's padding box when the body
-                // contains it, at the viewport's right edge otherwise; undecided (null) where the two coincide, as in a
-                // window no wider than the column. (`top:0` cannot tell: the body starts at the viewport's top; nor can
-                // `bottom:0`: a dictionary's `body{height:100%}` ends it at the viewport's bottom.)
-                var contained = null;
-                if (body) {
-                  var probe = document.createElement('div');
-                  probe.style.cssText = 'position:fixed;right:0;top:0;width:1px;height:1px';
-                  body.appendChild(probe);
-                  var bs = getComputedStyle(body), box = body.getBoundingClientRect();
-                  var inner = box.right - parseFloat(bs.borderRightWidth || '0'), view = root.clientWidth;
-                  var at = probe.getBoundingClientRect().right;
-                  probe.remove();
-                  if (Math.abs(inner - view) >= 1) contained = Math.abs(at - inner) < 1;
-                }
-                // What "Plain by default" leaves: elements with a background or a border, and images on the page.
-                var boxes = 0, kinds = {}, all = body ? body.getElementsByTagName('*') : [];
-                for (var j = 0; j < all.length && j < 8000; j++) {
-                  if (all[j].hasAttribute('data-xdict-icon')) continue;   // the frame's own glyph, drawn as a mask
-                  var es = getComputedStyle(all[j]), what = '';
-                  var bg = XDictFrameCore.opaque(es.backgroundColor);
-                  if (bg || es.backgroundImage !== 'none') what = 'background';
-                  else if (['Top', 'Right', 'Bottom', 'Left'].some(function (sd) {
-                    return parseFloat(es['border' + sd + 'Width']) > 0 && es['border' + sd + 'Style'] !== 'none';
-                  })) what = 'border';
-                  if (what) { boxes += 1; var k = what + ' ' + all[j].tagName.toLowerCase() + (all[j].className ? '.' + String(all[j].className).split(' ')[0] : ''); kinds[k] = (kinds[k] || 0) + 1; }
-                }
-                var top = Object.keys(kinds).sort(function (a, b) { return kinds[b] - kinds[a]; }).slice(0, 4)
-                  .map(function (k) { return k + ' ×' + kinds[k]; });
-                var imgs = Array.prototype.filter.call(document.images, function (i) { return i.getClientRects().length > 0; });
-                var faces = Object.keys(families).sort(function (a, b) { return families[b] - families[a]; }).slice(0, 4)
-                  .map(function (f) { return [f, chars ? Math.round(families[f] / chars * 1000) / 1000 : 0]; });
-                var tokens = palette();
-                var nonToken = Object.keys(colours).filter(function (c) { return !tokens[c]; })
-                  .map(function (c) { return [c, colours[c].chars, colours[c].sample]; });
-                return { colours: Object.keys(colours).map(function (c) { return [c, tokens[c] || null, colours[c].chars]; }),
-                         nonToken: nonToken, proseFaceShare: prose ? proseFramed / prose : 1, lowestContrast: lowest, below45Share: chars ? below / chars : 0, families: faces, boxes: boxes, boxKinds: top, images: document.images.length, imagesShown: imgs.length,
-                         leading: XDictFrameCore.dominant(leading),
-                         dominant: size, left: left, right: root.clientWidth - right, width: root.clientWidth,
-                         lineChars: size > 0 ? Math.round((right - left) / (size * 0.5)) : 0,
-                         overflow: root.scrollWidth > root.clientWidth + 1,
-                         bodyMaxWidth: body ? getComputedStyle(body).maxWidth : '',
-                         xdictFontShare: chars ? framed / chars : 0, fixedContained: contained };
-              }
-              // R's inline spacing (coordinator, 2026-10-16): between two words of a line a dictionary's horizontal
-              // margins and padding add up to at most SPACE_CAP of the size, so a line's words are set off alike (MW's
-              // 1.06em before a part of speech; OALECD's region label, four nested boxes with a margin each; COBUILD's
-              // padded links). Nested boxes sharing an edge share the cap: the outermost keeps its spacing first, each
-              // inner one what is left. Blocks keep theirs: there it is indentation. XDict's
-              // controls, tags, icons and marked boxes (a marker's place) are XDict's already. Reading style only.
-              var SPACE_CAP = \(frame.contains(.type) ? "0.25" : "0"), LABEL = '\(frame.contains(.type) ? "[data-xdict-role=label]" : "")';
-              function inline(st) { return st.display === 'inline' || /^inline-/.test(st.display); }
-              function edge(e, first) {
-                var n = first ? e.previousSibling : e.nextSibling;
-                while (n && n.nodeType === 3 && !/\\S/.test(n.nodeValue)) n = first ? n.previousSibling : n.nextSibling;
-                return !n && e.parentElement && inline(getComputedStyle(e.parentElement));
-              }
-              function spacing() {
-                if (!SPACE_CAP || !document.body) return;
-                var all = document.body.getElementsByTagName('*'), mine = '[data-xdict-control],[data-xdict-tag],[data-xdict-icon],[data-xdict-before],[data-xdict-after]';
-                for (var i = 0; i < all.length && i < 65536; i++) {
-                  var e = all[i];
-                  if (e.tagName === 'IMG' || e.closest(mine)) continue;
-                  var st = getComputedStyle(e);
-                  if (!inline(st)) continue;
-                  // A label owns 0.35em after it (icon sweep §8.4), more than a word's set-off.
-                  var outerLabel = e.matches(LABEL) && !(e.parentElement && e.parentElement.closest(LABEL));
-                  var cap = (outerLabel ? Math.max(SPACE_CAP, 0.35) : SPACE_CAP) * parseFloat(st.fontSize);
-                  [['left', true], ['right', false]].forEach(function (side) {
-                    var m = Math.max(0, parseFloat(st.getPropertyValue('margin-' + side[0])));
-                    var p = Math.max(0, parseFloat(st.getPropertyValue('padding-' + side[0])));
-                    // What the boxes around it already put at this edge, the parent first in document order.
-                    var outside = edge(e, side[1]) ? (e.parentElement.__xdictSpace || {})[side[0]] || 0 : 0;
-                    var room = Math.max(0, cap - outside), np = Math.min(p, room), nm = Math.min(m, room - np);
-                    if (np < p - 0.5) e.style.setProperty('padding-' + side[0], np + 'px', 'important');
-                    if (nm < m - 0.5) e.style.setProperty('margin-' + side[0], nm + 'px', 'important');
-                    (e.__xdictSpace = e.__xdictSpace || {})[side[0]] = outside + np + nm;
-                  });
-                }
-              }
-              // The browser's own bullet on a list item (MWU's homograph strip) is XDict's marker, as a bullet the
-              // dictionary draws is (the core marks those). A list the dictionary marks itself, its own ::before
-              // drawing, is left alone, so nothing gets two. Reading style only.
-              function bullets() {
-                // Only once the dictionary's sheets apply (`load`): before, every item reads the browser's default disc,
-                // and COBUILD-EC's examples, which its sheet sets `list-style:none`, got a marker they never show.
-                if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
-                Array.prototype.forEach.call(document.body.getElementsByTagName('li'), function (li, i) {
-                  if (i > 65536 || li.hasAttribute('data-xdict-before') || !li.getClientRects().length) return;
-                  var st = getComputedStyle(li), mk = getComputedStyle(li, '::marker');
-                  if (st.display !== 'list-item' || !/^(disc|circle|square)$/.test(st.listStyleType) || st.listStyleImage !== 'none') return;
-                  if (!(parseFloat(mk.fontSize) > 0) || st.visibility === 'hidden') return;
-                  var own = getComputedStyle(li, '::before').content;
-                  if (own && own !== 'none' && own !== 'normal') return;
-                  li.setAttribute('data-xdict-before', 'marker');
-                });
-              }
-              install();
-              function start() { install(); name(document); bullets(); spacing(); }
-              if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-              else start();
-              window.addEventListener('load', start, { once: true });
-              // A page script can remove or rewrite the frame's stylesheets or the theme; they come back, at most once
-              // per change.
-              new MutationObserver(function (records) {
-                var hit = records.some(function (r) {
-                  if (r.type === 'attributes' && r.target === document.documentElement) return true;
-                  var gone = Array.prototype.some.call(r.removedNodes, function (n) { return ID.test(n.id || ''); });
-                  var t = r.target.nodeType === 1 ? r.target : r.target.parentElement;
-                  return gone || (t && ID.test(t.id || ''));
-                });
-                if (hit) install();
-                records.forEach(function (r) {
-                  Array.prototype.forEach.call(r.addedNodes, function (n) { if (n.nodeType === 1) name(n.parentNode || n); });
-                });
-              }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
-                                                      attributeFilter: ['media', 'disabled', 'id', 'data-xdict-theme', 'data-xdict-face', 'data-xdict-hue'] });
-              window.__xdictFrame = { measure: measure };
-            })();
-            """
+        return style.script("frame.js", [
+            "theme": scheme.rawValue, "face": frame.contains(.serif) ? "serif" : "sans", "hue": frame.accent.rawValue,
+            "sheet-tokens": jsString(tokens), "sheet-column": jsString(column), "sheet-type": jsString(type),
+            "sheet-minimal": jsString(minimal), "names": namesJSON, "token-names": tokenNames,
+            "space-cap": frame.contains(.type) ? "0.25" : "0",
+            "label": frame.contains(.type) ? "[data-xdict-role=label]" : "",
+        ])
     }
 
     /// A JavaScript string literal for `text`, by JSON's own escaping.

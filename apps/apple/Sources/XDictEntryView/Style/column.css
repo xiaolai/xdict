@@ -1,0 +1,24 @@
+html{padding:0 !important;font-size:var(--xdict-base) !important;
+background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
+visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
+zoom:1 !important;position:static !important;writing-mode:horizontal-tb !important}
+body{margin:0 auto !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;
+max-width:calc(var(--xdict-measure) + 2 * var(--xdict-pad-inline)) !important;width:auto !important;
+min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word !important;
+contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;
+filter:none !important;transform:none !important;zoom:1 !important;position:static !important;
+float:none !important;writing-mode:horizontal-tb !important}
+table{font:inherit;line-height:inherit;color:inherit;white-space:inherit;text-align:inherit;
+border-collapse:collapse}
+[data-xdict-scroll]{overflow-x:auto;max-width:100%;margin-block:var(--xdict-gap)}
+[data-xdict-table=data] td,[data-xdict-table=data] th{padding:var(--xdict-cell-pad);vertical-align:top;
+text-align:start}
+/* No fills anywhere (owner, 2026-10-15): the header row is told by weight and the space under it. */
+[data-xdict-table=data] th,[data-xdict-table=data] thead td{font-weight:var(--xdict-weight-bold);
+padding-bottom:var(--xdict-space-2)}
+[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
+:not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
+img{max-width:100%;height:auto}
+/* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
+/* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
+:where(a:any-link){color:var(--xdict-link)}

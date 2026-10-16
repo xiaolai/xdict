@@ -48,6 +48,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private var generation = 0
     private var scheme: EntryColourScheme
     private var frame: EntryReadingFrame
+    private let style: EntryStyle
     private var restartedAfterCrash = false
     private(set) var closed = false
 
@@ -77,7 +78,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     /// A pane for `content`, or the reason none is made. `makeWebView` is called only once the gate has passed, so a
     /// refusal leaves no web view, and nothing can load.
     static func open(content: any EntryContent, confinement: EntryConfinement, scheme: EntryColourScheme,
-                     frame: EntryReadingFrame = .all,
+                     frame: EntryReadingFrame = .all, style: EntryStyle = .bundled,
                      ruleList: Result<WKContentRuleList, EntryRefusal>?,
                      switches: @MainActor (WKPreferences) -> any WebKitFeatureSwitches, host: EntryPaneHost,
                      makeWebView: (WKWebViewConfiguration) -> EntryWebView = { EntryWebView(frame: .zero, configuration: $0) })
@@ -103,7 +104,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         if confinement.ruleList, case .success(let list) = ruleList { controller.add(list) }
         configuration.userContentController = controller
         let pane = EntryPane(content: content, webView: makeWebView(configuration), server: server, handler: handler,
-                             confinement: confinement, scheme: scheme, frame: frame, host: host, readBack: readBack)
+                             confinement: confinement, scheme: scheme, frame: frame, style: style, host: host, readBack: readBack)
         // The one message handler, in the shell's world: the page's world has none to call. Removed in `close`, which
         // breaks the cycle it makes (controller → pane → web view → controller).
         controller.add(pane, contentWorld: world, name: EntryScripts.handlerName)
@@ -112,7 +113,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     private init(content: any EntryContent, webView: EntryWebView, server: EntryResourceServer,
                  handler: EntrySchemeHandler, confinement: EntryConfinement, scheme: EntryColourScheme,
-                 frame: EntryReadingFrame, host: EntryPaneHost, readBack: [String: Bool]) {
+                 frame: EntryReadingFrame, style: EntryStyle, host: EntryPaneHost, readBack: [String: Bool]) {
         self.binding = content.binding
         self.content = content
         self.webView = webView
@@ -121,6 +122,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         self.confinement = confinement
         self.scheme = scheme
         self.frame = frame
+        self.style = style
         self.host = host
         self.switchesReadBack = readBack
         super.init()
@@ -231,7 +233,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private func installScripts() {
         let controller = view.configuration.userContentController
         controller.removeAllUserScripts()
-        for source in EntryScripts.installed(scheme, frame: frame) {
+        for source in EntryScripts.installed(scheme, frame: frame, style: style) {
             controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true, in: Self.world))
         }

@@ -37,6 +37,8 @@ apps/apple/Tools/strings.sh                         none
 apps/apple/Tools/compiler-warnings.py               none
 apps/apple/Tools/release.sh                         none
 apps/apple/Tools/gate-cache.py                      none
+# What it writes, `EntryStyleFiles.swift`, is the entry view's and selects its stages.
+apps/apple/Tools/reading-style-gen.py               none
 apps/apple/Tools/land.sh                            none
 apps/apple/.swiftlint.yml                           none
 
