@@ -52,7 +52,7 @@ extension EntryReadingFrame {
             // The leading dot hangs in a gutter of its own, centred on the first line box, whatever display the item's
             // content has: a block child would otherwise push the text to the line below the dot (COBUILD's examples).
             + "[data-xdict-before=marker]{position:relative !important;padding-inline-start:0.7em !important;"
-            + "text-indent:0 !important}"
+            + "text-indent:0 !important;list-style:none !important}"
             // The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text.
             + "[data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}"
             + "[data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;"

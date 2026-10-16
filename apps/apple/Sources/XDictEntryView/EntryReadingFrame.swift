@@ -507,8 +507,22 @@ extension EntryScripts {
                   });
                 }
               }
+              // The browser's own bullet on a list item (MWU's homograph strip) is XDict's marker, as a bullet the
+              // dictionary draws is (the core marks those). A list the dictionary marks itself, its own ::before
+              // drawing, is left alone, so nothing gets two. Reading style only.
+              function bullets() {
+                if (!SPACE_CAP || !document.body) return;
+                Array.prototype.forEach.call(document.body.getElementsByTagName('li'), function (li, i) {
+                  if (i > 65536 || li.hasAttribute('data-xdict-before')) return;
+                  var st = getComputedStyle(li);
+                  if (st.display !== 'list-item' || !/^(disc|circle|square)$/.test(st.listStyleType) || st.listStyleImage !== 'none') return;
+                  var own = getComputedStyle(li, '::before').content;
+                  if (own && own !== 'none' && own !== 'normal') return;
+                  li.setAttribute('data-xdict-before', 'marker');
+                });
+              }
               install();
-              function start() { install(); name(document); spacing(); }
+              function start() { install(); name(document); bullets(); spacing(); }
               if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
               else start();
               window.addEventListener('load', start, { once: true });
