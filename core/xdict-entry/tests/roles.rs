@@ -233,6 +233,20 @@ fn space_alone_between_two_blocks_goes() {
     assert!(word.contains("</div> two <div"), "{word}");
 }
 
+/// A space between an inline element and the full stop after it goes (COBUILD's "is called a <b>row</b> ."). Only a
+/// lone full stop: an ellipsis, a comma (OED's own "bankier , banquier") and space after a block stay as written.
+#[test]
+fn a_space_before_a_full_stop_after_an_inline_element_goes() {
+    let (out, _) = entry("<div>each line of seats is called a <b>row</b> . <span>next</span></div>", "row");
+    assert!(out.contains("</b>. <span"), "{out}");
+    let (nbsp, _) = entry("<p>called a <b>row</b>\u{a0}.</p>", "row");
+    assert!(nbsp.contains("</b>.</p>"), "{nbsp:?}");
+    let (ellipsis, _) = entry("<p>a <i>row</i> ...of cottages</p>", "row");
+    assert!(ellipsis.contains("</i> ...of"), "{ellipsis}");
+    let (comma, _) = entry("<p><i>bankier</i> , banquier</p>", "banker");
+    assert!(comma.contains("</i> , banquier"), "{comma}");
+}
+
 /// An empty element goes with its blank content (OED's `<span class="ieWhitespace">&nbsp;</span>` left a no-break space
 /// beside the source's own: "banc␣␣␣bench"); one space stays, so words it separated stay apart.
 #[test]

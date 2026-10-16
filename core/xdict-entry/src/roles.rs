@@ -611,7 +611,7 @@ pub(crate) struct Roles<'s> {
     /// Space written right after a block, past any punctuation: where it starts and ends. It goes if a block opens
     /// next, since space alone between two blocks is a line of its own (OED's `&nbsp;` between pronunciations).
     gap: Option<(usize, usize)>,
-    /// Space alone between two blocks, to drop.
+    /// Space to drop: alone between two blocks, or between an inline element and the full stop after it.
     gaps: Vec<(usize, usize)>,
 }
 
@@ -851,6 +851,20 @@ impl<'s> Roles<'s> {
             let rest = raw.get(lead..).unwrap_or("");
             if !rest.is_empty() && crate::rewrite::unescaped_html(rest).chars().all(char::is_whitespace) {
                 self.gap = Some((at + lead, at + raw.len()));
+            }
+        }
+        // A space between an inline element and a lone full stop after it (COBUILD's "a <b>row</b> .") goes, and the
+        // stop hugs the element. Not an ellipsis, not a comma: OED writes "bankier , banquier" on purpose.
+        if !after_block
+            && let (Some(n), Some(at)) = (self.hug_after, at)
+            && self.gaps.len() < MAX_NODES
+        {
+            let rest = raw.trim_start_matches(char::is_whitespace);
+            let space = raw.len() - rest.len();
+            let mut after = rest.chars().skip(1);
+            if space > 0 && rest.starts_with('.') && after.next().is_none_or(char::is_whitespace) {
+                self.gaps.push((at, at + space));
+                self.hugs.push(n);
             }
         }
         if let Some(n) = self.hug_after.take()
