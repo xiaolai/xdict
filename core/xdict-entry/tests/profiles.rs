@@ -139,6 +139,27 @@ fn a_known_markup_names_its_headings_sure() {
     assert!(tag_of(&out, "popheader popexa").contains(r#"data-xdict-sure="heading""#), "{out}");
 }
 
+/// OALD's idioms heading is a section heading; Macmillan's thesaurus title (`span.h2`), a link's label before its
+/// list of linked words, is not marked.
+#[test]
+fn oald_idioms_is_a_heading_and_a_linked_title_is_not() {
+    let oald = ".oup_icons{margin:0}.ox3ksym_a1{margin:0}.pos{font-style:italic}.idioms_heading{color:teal}";
+    let out = render(
+        oald,
+        r#"<div><h1 class="headword">bloody</h1> <span class="def">covered with blood</span> <div class="idioms"><span class="idioms_heading">Idioms</span> <span class="idm">bloody well</span></div></div>"#,
+        "bloody",
+    );
+    assert!(tag_of(&out, "idioms_heading").contains(r#"data-xdict-sure="heading""#), "{out}");
+    let med =
+        ".boxsensefull{margin:0}.base-form{font-weight:bold}.part-of-speech{font-style:italic}.h2{font-weight:bold}";
+    let out = render(
+        med,
+        r#"<div><span class="base-form">flagellation</span> <span class="def">hitting yourself</span> <a href="entry://x"><span class="h2">Religious ceremonies and practices:</span></a><span class="synonyms"><a href="entry://anoint">anoint</a>, <a href="entry://bless">bless</a></span></div>"#,
+        "flagellation",
+    );
+    assert!(!tag_of(&out, "h2").contains("data-xdict-sure"), "{out}");
+}
+
 /// A translation the markup's table names is sure (`data-xdict-sure="trans"`), a sense's or an example's, which the
 /// generic rule's role tells apart: ODECN's `div.cn_def` and `p.cn`.
 #[test]

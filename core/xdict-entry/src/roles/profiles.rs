@@ -110,7 +110,7 @@ pub(crate) const PROFILES: &[Profile] = &[
     Profile {
         signature: &["oup_icons", "ox3ksym_a1", "pos"],
         pos: SPAN_POS,
-        heading: &[(Some("span"), &["box_title"])],
+        heading: &[(Some("span"), &["box_title"]), (Some("span"), &["idioms_heading"])],
         ..NONE
     },
     // ODE 3 with Chinese (ODECN): `div.pos` heads a part-of-speech block, and may hold its inflections too
@@ -168,8 +168,9 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["part-of-speech"])],
         sensenum: &[(Some("div"), &["sense-num"])],
         example: &[(Some("p"), &["example"])],
-        // A thesaurus box's topic, and a block's title ("phrases"). Not `synonyms`, which also holds its word list.
-        heading: &[(Some("span"), &["h2"]), (Some("h2"), &["title"])],
+        // A block's title ("phrases", "derived word"). Not `span.h2`, a thesaurus link's label before its list of linked
+        // words, nor `synonyms`, which holds that list.
+        heading: &[(Some("h2"), &["title"])],
         ..NONE
     },
     // NOAD 3: `p` also holds grammar words (`obj.`). Its sense numbers are unclassed `b`.
