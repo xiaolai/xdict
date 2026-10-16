@@ -30,7 +30,7 @@ struct ReadingFrameTests {
         for name in ["base", "font", "font-cjk", "font-phon", "font-mono", "fs-xs", "fs-s", "fs-m", "fs-l", "fs-xl",
                      "fs-xxl", "fs-min", "fs-max", "leading", "leading-tight", "weight-bold", "space-1", "space-5", "gap",
                      "indent", "indent-max", "measure", "pad-block", "pad-inline", "cell-pad", "radius", "hit", "icon",
-                     "bg", "panel", "text", "text-2", "rule", "link", "phon-colour", "plate", "mark", "mark-current",
+                     "bg", "panel", "text", "text-2", "rule", "accent", "link", "phon-colour", "plate", "mark", "mark-current",
                      "red-deep", "pink-tint"] {
             #expect(css.contains("--xdict-\(name):"), "\(name)")
         }
@@ -159,13 +159,29 @@ struct ReadingFrameTests {
         #expect(css.contains("[data-xdict-control]::before,[data-xdict-control]::after{content:none !important}"))
         #expect(css.contains("[data-xdict-accent=uk]>[data-xdict-tag]::before{content:"))
         #expect(css.contains("calc((var(--xdict-hit) - 1em) / 2)"))
-        #expect(css.contains("[data-xdict-tag]{font-family:var(--xdict-font-text);"))
+        #expect(css.contains("[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);"))
         // A tag ends its control with 0.35em of the text before the next control or word (0.56em of the tag's own
         // 0.625em): MED's `UK` touched the next speaker (icon sweep 2026-10-15, §8.4).
         #expect(css.contains("margin-inline-end:0.56em"))
         #expect(!css.contains("url(http"))
         #expect(EntryScripts.appearance(.light, frame: .all).contains("[data-xdict-icon=speaker]"))
         #expect(!EntryScripts.appearance(.light, frame: []).contains("[data-xdict-icon=speaker]"))
+    }
+
+    /// Unification R (2026-10-16): the transcription face reaches every descendant but a speaker's tag, face only; the
+    /// lead resets size and face inside it, never weight or colour; links are the link colour; the browser's own
+    /// heading sizes and block margins are on the scale and the space tokens.
+    @Test func unificationRsRulesAreInTheTypeLayer() {
+        let css = EntryReadingFrame.typeCSS
+        #expect(css.contains("@layer xdict-unify{"))
+        #expect(css.contains(":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font-phon) !important}"))
+        #expect(!css.contains("phon-colour"), "the transcription keeps its colour")
+        #expect(css.contains("{font-size:inherit !important;font-family:inherit !important;line-height:inherit !important}"))
+        #expect(!css.contains("[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
+            + "[data-xdict-role=label] *,[data-xdict-tag],[data-xdict-icon]){font-weight"))
+        #expect(css.contains("color:var(--xdict-link) !important"))
+        #expect(css.contains(":where(h1){font-size:var(--xdict-fs-xxl);"))
+        #expect(css.contains("{margin-block:var(--xdict-space-4)}"))
     }
 
     /// The speaker's VoiceOver name: verb first, the same whatever the playing state, from the shell's catalog.
