@@ -12,8 +12,9 @@
 //! - **Mark** (border, outline, shadow): its family's foreground; a neutral is `--xdict-rule`.
 //! - **Chip** (a rule that sets both): its text is the accent on a coloured background, `--xdict-text` on a neutral one.
 
-/// The accent, light then dark: the red family's deep tier, so it reads at 4.5:1 wherever the palette's text does.
-const ACCENT: [u32; 2] = [0x901114, 0xfec9c2];
+/// The accent's fallback, light then dark: the teal family's deep tier (the owner's default, 2026-10-16), so it reads
+/// at 4.5:1 wherever the palette's text does. The reader may choose another in Settings; the shell sets the token.
+const ACCENT: [u32; 2] = [0x055959, 0x81ecec];
 
 /// What a colour is used for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -612,7 +613,7 @@ mod tests {
     fn colours_take_their_token() {
         let css = |hex: u32, role: Role| mapped(rgb(hex), role, None);
         for hex in [0xc00000, 0x8b0000, 0x1a0dab, 0x006400, 0x800080, 0xffd700] {
-            assert_eq!(css(hex, Role::Text), "var(--xdict-accent, #901114)", "{hex:06x}");
+            assert_eq!(css(hex, Role::Text), "var(--xdict-accent, #055959)", "{hex:06x}");
         }
         assert_eq!(css(0x000000, Role::Text), "var(--xdict-text, #1d1d1f)");
         assert_eq!(css(0x333333, Role::Text), "var(--xdict-text, #1d1d1f)");
@@ -631,9 +632,9 @@ mod tests {
     #[test]
     fn a_chips_text_follows_its_background() {
         let purple = Some(rgb(0x602090));
-        assert_eq!(mapped(rgb(0xffffff), Role::Text, purple), "var(--xdict-accent, #901114)");
+        assert_eq!(mapped(rgb(0xffffff), Role::Text, purple), "var(--xdict-accent, #055959)");
         assert_eq!(mapped(rgb(0xffff00), Role::Text, Some(rgb(0x808080))), "var(--xdict-text, #1d1d1f)");
-        assert_eq!(mapped(rgb(0xc00000), Role::Text, Some(rgb(0xffffff))), "var(--xdict-accent, #901114)");
+        assert_eq!(mapped(rgb(0xc00000), Role::Text, Some(rgb(0xffffff))), "var(--xdict-accent, #055959)");
     }
 
     #[test]

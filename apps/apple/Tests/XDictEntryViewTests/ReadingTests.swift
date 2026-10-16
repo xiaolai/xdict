@@ -198,6 +198,28 @@ struct ReadingTests {
         #expect(preferences.theme(for: "c") == .matchApp)
     }
 
+    /// The accent (Settings ▸ Reading): teal unless chosen, kept across launches, teal for a value it does not know;
+    /// the reading frame carries it, Original style's does not.
+    @Test func theAccentIsKeptAndCarriedByTheFrame() throws {
+        let suite = "xdict-entry-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = EntryPreferences(defaults: defaults)
+        #expect(preferences.accent() == .teal)
+        preferences.setAccent(.indigo)
+        #expect(EntryPreferences(defaults: defaults).accent() == .indigo)
+        defaults.set("neon", forKey: EntryPreferences.accentKey)
+        #expect(preferences.accent() == .teal)
+        #expect(EntryReadingFrame.all.accent == .teal)
+        #expect(EntryReadingFrame.all.with(accent: .red).accent == .red)
+        #expect(EntryReadingFrame.all.with(accent: .red).with(accent: .teal) == .all)
+        #expect(EntryReadingFrame.all.applied(originalStyle: true).with(accent: .red) == .minimal)
+        let script = EntryScripts.appearance(.dark, frame: EntryReadingFrame.all.with(accent: .indigo))
+        #expect(script.contains("HUE = 'indigo'"))
+        #expect(script.contains(":root[data-xdict-theme=dark][data-xdict-hue=indigo]{--xdict-accent:#c4c1ff}"))
+        #expect(EntryReadingFrame.paletteCSS.contains(":root[data-xdict-theme=light]{") && EntryReadingFrame.paletteCSS.contains("--xdict-accent:#055959;"))
+    }
+
     @Test func zoomStepsWalkTheLadder() {
         #expect(EntryPreferences.step(1.0, up: true) == 1.1)
         #expect(EntryPreferences.step(1.0, up: false) == 0.9)

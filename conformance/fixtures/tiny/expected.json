@@ -504,7 +504,7 @@
     "resourceFromSource": {
       "type": "found",
       "path": "tiny.css",
-      "text": ".tiny { color: var(--xdict-accent, #901114) !important }"
+      "text": ".tiny { color: var(--xdict-accent, #055959) !important }"
     },
     "shortRead": {
       "error": {
