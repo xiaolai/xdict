@@ -137,9 +137,16 @@ extension GalleryRun {
         }
         texts.forEach(function (x, k) {
           var prev = texts[k - 1], next = texts[k + 1];
-          var same = function (a, b) { return a && b && Math.abs(a.top - b.top) < 2 && Math.abs(a.bottom - b.bottom) < 2; };
+          // One line: the two boxes overlap over most of the shorter one's height (faces and sizes differ in a line).
+          var same = function (a, b) {
+            if (!a || !b) return false;
+            var overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+            return overlap > 0.5 * Math.min(a.height, b.height);
+          };
           // A separator row of bullets or stars is a line of its own by design.
-          if (/^[\s\p{P}]+$/u.test(x.n.nodeValue) && !/^[\s•·*⁂‧∙]+$/.test(x.n.nodeValue)) {
+          // A headword that is punctuation ("@", "&") is the entry's own line.
+          if (/^[\s\p{P}\p{S}]+$/u.test(x.n.nodeValue) && !/^[\s•·*⁂‧∙]+$/.test(x.n.nodeValue)
+              && !x.n.parentElement.closest('[data-xdict-lead],[data-xdict-role=headword]')) {
             var alone = !same(prev && prev.last, x.first) && !same(x.last, next && next.first);
             note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line');
           }
