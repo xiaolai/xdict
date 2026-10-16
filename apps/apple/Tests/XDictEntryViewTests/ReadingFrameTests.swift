@@ -171,6 +171,14 @@ struct ReadingFrameTests {
     /// Unification R (2026-10-16): the transcription face reaches every descendant but a speaker's tag, face only; the
     /// lead resets size and face inside it, never weight or colour; links are the link colour; the browser's own
     /// heading sizes and block margins are on the scale and the space tokens.
+    /// A long word breaks only where it would overflow: `anywhere` counted toward a table column's min-content, so
+    /// CALD's level table drew one letter a line.
+    @Test func wordsBreakOnlyToAvoidOverflow() {
+        #expect(EntryReadingFrame.columnCSS.contains("overflow-wrap:break-word !important"))
+        #expect(!EntryReadingFrame.columnCSS.contains("anywhere"))
+        #expect(!EntryReadingFrame.minimalCSS.contains("anywhere"))
+    }
+
     @Test func unificationRsRulesAreInTheTypeLayer() {
         let css = EntryReadingFrame.typeCSS
         #expect(css.contains("@layer xdict-unify{"))

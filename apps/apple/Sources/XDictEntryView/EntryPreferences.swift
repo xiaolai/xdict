@@ -41,6 +41,17 @@ public struct EntryPreferences: @unchecked Sendable {
     static func zoomKey(_ dictionary: String) -> String { "entry.zoom.\(dictionary)" }
     static func themeKey(_ dictionary: String) -> String { "entry.theme.\(dictionary)" }
     public static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
+    /// The reading style's accent, for every dictionary (Settings ▸ Reading).
+    public static let accentKey = "reading.accent"
+
+    /// The accent; teal unless chosen, and teal for a value this version does not know.
+    public func accent() -> EntryReadingFrame.Accent {
+        defaults.string(forKey: Self.accentKey).flatMap(EntryReadingFrame.Accent.init(rawValue:)) ?? .teal
+    }
+
+    public func setAccent(_ accent: EntryReadingFrame.Accent) {
+        defaults.set(accent.rawValue, forKey: Self.accentKey)
+    }
 
     /// The dictionary shown in its own style, without XDict's reading frame (ADR-0010 Q3). Off unless chosen.
     public func originalStyle(for dictionary: String) -> Bool {

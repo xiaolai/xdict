@@ -609,6 +609,22 @@
         }
       }
     },
+    "Accent colour" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accent colour"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "强调色"
+          }
+        }
+      }
+    },
     "Actual Size" : {
       "localizations" : {
         "en" : {
@@ -1501,6 +1517,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在导入…"
+          }
+        }
+      }
+    },
+    "Indigo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Indigo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "靛蓝"
           }
         }
       }
@@ -2513,6 +2545,22 @@
         }
       }
     },
+    "Red" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Red"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "红色"
+          }
+        }
+      }
+    },
     "Remove from Library" : {
       "localizations" : {
         "en" : {
@@ -2849,6 +2897,22 @@
         }
       }
     },
+    "Teal" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Teal"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "青色"
+          }
+        }
+      }
+    },
     "The check could not finish. It runs again when the dictionary next opens." : {
       "localizations" : {
         "en" : {
@@ -2861,6 +2925,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "检查未能完成。下次打开这部词典时会重新检查。"
+          }
+        }
+      }
+    },
+    "The colour a dictionary's coloured words are drawn in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The colour a dictionary's coloured words are drawn in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典中带颜色的文字所用的颜色。"
           }
         }
       }

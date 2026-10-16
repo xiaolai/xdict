@@ -40,6 +40,7 @@ struct XDictApp: App {
 
         Settings {
             TabView {
+                Tab("Reading", systemImage: "textformat") { ReadingSettings() }
                 Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
                 Tab("Lookup", systemImage: "keyboard") { ShortcutSettings(registrar: LookupAnywhere.shared.registrar) }
             }

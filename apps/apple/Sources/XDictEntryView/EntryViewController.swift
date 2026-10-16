@@ -250,6 +250,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     private func currentFrame(for dictionary: String) -> EntryReadingFrame {
         environment.readingFrame.applied(originalStyle: environment.preferences.originalStyle(for: dictionary))
+            .with(accent: environment.preferences.accent())
     }
 
     private func currentScheme(for dictionary: String) -> EntryColourScheme {

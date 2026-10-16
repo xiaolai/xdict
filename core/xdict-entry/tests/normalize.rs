@@ -233,18 +233,18 @@ fn colours_become_palette_tokens() {
     let s = plain();
     assert_eq!(
         css(".a{color:#c00000} .b{color:navy}", &s),
-        ".a{color:var(--xdict-accent, #901114)} .b{color:var(--xdict-accent, #901114)}"
+        ".a{color:var(--xdict-accent, #055959)} .b{color:var(--xdict-accent, #055959)}"
     );
     assert_eq!(css(".c{color:transparent}", &s), ".c{color:transparent}");
     // A chip loses its band, and its white text takes the band's family, so the label keeps its meaning.
-    assert_eq!(css(".d{color:white;background:#602090}", &s), ".d{color:var(--xdict-accent, #901114)}");
+    assert_eq!(css(".d{color:white;background:#602090}", &s), ".d{color:var(--xdict-accent, #055959)}");
     assert_eq!(
         html(r#"<span style="color:rgb(0,0,0)">x</span>"#, &s),
         format!(r#"<span style="color:{TEXT}">x</span>"#)
     );
     assert_eq!(
         html("<style>.e{color:hsl(0,100%,25%)}</style>", &s),
-        "<style>.e{color:var(--xdict-accent, #901114)}</style>"
+        "<style>.e{color:var(--xdict-accent, #055959)}</style>"
     );
     assert_eq!(counts(".a{color:red;background:#eee}", &s).colour, 1);
 }
@@ -284,7 +284,7 @@ fn presentational_html_becomes_style() {
     assert_eq!(
         html(r##"<font color="#c00000" size=2 face="Times">x</font>"##, &s),
         format!(
-            r#"<font style="color:var(--xdict-accent, #901114);font-size:var(--xdict-fs-s, 0.875rem);line-height:var(--xdict-leading, 1.6);font-family:{FONT}">x</font>"#
+            r#"<font style="color:var(--xdict-accent, #055959);font-size:var(--xdict-fs-s, 0.875rem);line-height:var(--xdict-leading, 1.6);font-family:{FONT}">x</font>"#
         )
     );
     assert_eq!(
@@ -293,7 +293,7 @@ fn presentational_html_becomes_style() {
     );
     assert_eq!(
         html(r#"<td bgcolor=white style="color:red">x</td>"#, &s),
-        r#"<td style="color:var(--xdict-accent, #901114)">x</td>"#
+        r#"<td style="color:var(--xdict-accent, #055959)">x</td>"#
     );
     assert_eq!(html("<p align=center>x</p>", &s), r#"<p style="text-align:center">x</p>"#);
     assert_eq!(html("<img align=left src=a.png border=0>", &s), r#"<img src="xdict://d/r/a.png" style="float:left">"#);
@@ -794,13 +794,13 @@ fn a_text_colour_is_only_a_token() {
         assert_eq!(html(&format!("<font color=\"{v}\">x</font>"), &s), "<font>x</font>", "{v}");
     }
     // `all` resets the colour to the engine's own (`initial` is CanvasText).
-    assert_eq!(css(".a{all:initial;color:red}", &s), ".a{color:var(--xdict-accent, #901114)}");
+    assert_eq!(css(".a{all:initial;color:red}", &s), ".a{color:var(--xdict-accent, #055959)}");
     for v in ["currentColor", "inherit", "transparent", "unset"] {
         assert_eq!(css(&format!(".a{{color:{v}}}"), &s), format!(".a{{color:{v}}}"));
     }
-    assert_eq!(css(".a{color:navy}", &s), ".a{color:var(--xdict-accent, #901114)}");
+    assert_eq!(css(".a{color:navy}", &s), ".a{color:var(--xdict-accent, #055959)}");
     assert_eq!(css(".a{text-decoration:underline dotted}", &s), ".a{text-decoration:underline dotted}");
-    assert_eq!(css(".a{color:var(--xdict-accent, #901114)}", &s), ".a{color:var(--xdict-accent, #901114)}");
+    assert_eq!(css(".a{color:var(--xdict-accent, #055959)}", &s), ".a{color:var(--xdict-accent, #055959)}");
     assert_eq!(html(r#"<p style="color:LinkText">x</p>"#, &s), r#"<p style="">x</p>"#);
 }
 
@@ -836,7 +836,7 @@ fn original_style_leaves_the_dictionarys_declarations_as_written() {
 #[test]
 fn a_coloured_run_is_the_accent_not_dropped() {
     let s = plain();
-    let accent = "var(--xdict-accent, #901114)";
+    let accent = "var(--xdict-accent, #055959)";
     assert_eq!(css(".a{color:#2a7a2a}", &s), format!(".a{{color:{accent}}}"));
     assert_eq!(html(r#"<span style="color:teal">x</span>"#, &s), format!(r#"<span style="color:{accent}">x</span>"#));
     assert_eq!(html(r#"<font color="purple">x</font>"#, &s), format!(r#"<font style="color:{accent}">x</font>"#));

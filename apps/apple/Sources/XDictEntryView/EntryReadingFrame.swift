@@ -37,7 +37,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":root[data-xdict-theme=light]{background:#ffffff !important}"
         + ":root[data-xdict-theme=dark]{background:\(paper) !important}"
         + ":root[data-xdict-theme=dark]{\(colours.map { "--xdict-\($0.0):\($0.1);" }.joined())}"
-        + "body{contain:layout !important;overflow-wrap:anywhere}"
+        + "body{contain:layout !important;overflow-wrap:break-word}"
 
 
     /// In original style transcriptions draw in the bundled phonetic faces too (a dictionary's own IPA font is often
@@ -50,6 +50,41 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
 
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
     public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? .minimal : self }
+
+    /// **The accent** every chromatic text colour of the reading style is (owner, 2026-10-16: flatten; teal by
+    /// default, the reader's choice in Settings ▸ Reading). The core writes `var(--xdict-accent)`; the shell sets it.
+    public enum Accent: String, CaseIterable, Sendable {
+        case teal, red, indigo
+
+        /// Light then dark: each at least 7:1 on every surface and tint of the palette, in both themes.
+        public var values: (light: String, dark: String) {
+            switch self {
+            case .teal: ("#055959", "#81ecec")
+            case .red: ("#901114", "#fec9c2")
+            case .indigo: ("#3f3a8c", "#c4c1ff")
+            }
+        }
+
+        /// Its bit in the frame: none for the default, so a frame without one is teal.
+        var bit: EntryReadingFrame {
+            switch self {
+            case .teal: []
+            case .red: EntryReadingFrame(rawValue: 1 << 4)
+            case .indigo: EntryReadingFrame(rawValue: 1 << 5)
+            }
+        }
+    }
+
+    static let accentBits = EntryReadingFrame(rawValue: 1 << 4 | 1 << 5)
+
+    /// The accent this frame draws with.
+    public var accent: Accent { Accent.allCases.first { !$0.bit.isEmpty && contains($0.bit) } ?? .teal }
+
+    /// This frame with `accent`; only the reading style has one, so Original style's frame is left as it is.
+    public func with(accent: Accent) -> EntryReadingFrame {
+        guard contains(.type) else { return self }
+        return subtracting(Self.accentBits).union(accent.bit)
+    }
 
     /// **The tokens (§1), in one place.** Names are fixed by the spec; values are the gallery's to tune. Colours per
     /// theme on `:root[data-xdict-theme=…]`, which the appearance script sets.
@@ -81,7 +116,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         ("bg", "#ffffff", "#1e1e1e"), ("panel", "#f3f3f5", "#2a2a2c"), ("text", "#1d1d1f", "#e6e6e9"),
         ("text-2", "#636366", "#a3a3a8"), ("rule", "#d8d8dc", "#3a3a3d"), ("plate", "transparent", "#ececef"),
         // The one accent every chromatic text colour becomes (owner, 2026-10-16: flatten); the red family's deep tier.
-        ("accent", "#901114", "#fec9c2"),
+        ("accent", "#055959", "#81ecec"),
         ("red-deep", "#901114", "#fec9c2"), ("red", "#af342f", "#fb988d"), ("red-tint", "#ffebe8", "#3e2724"),
         ("orange-deep", "#773a00", "#ffcba9"), ("orange", "#9b4e01", "#f2a26a"), ("orange-tint", "#ffece0", "#3c291d"),
         ("yellow-deep", "#5c4c00", "#ecd78a"), ("yellow", "#796502", "#cfb656"), ("yellow-tint", "#f6f0da", "#332e19"),
@@ -97,6 +132,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         func block(_ pairs: [(String, String)]) -> String { pairs.map { "--xdict-\($0.0):\($0.1);" }.joined() }
         return ":root[data-xdict-theme=light]{\(block(colours.map { ($0.0, $0.1) }))}"
             + ":root[data-xdict-theme=dark]{\(block(colours.map { ($0.0, $0.2) }))}"
+            + Accent.allCases.map { a in
+                ":root[data-xdict-theme=light][data-xdict-hue=\(a.rawValue)]{--xdict-accent:\(a.values.light)}"
+                    + ":root[data-xdict-theme=dark][data-xdict-hue=\(a.rawValue)]{--xdict-accent:\(a.values.dark)}"
+            }.joined()
     }
 
     static var tokensCSS: String {
@@ -118,7 +157,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "zoom:1 !important;position:static !important;writing-mode:horizontal-tb !important}"
         + "body{margin:0 auto !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;"
         + "max-width:calc(var(--xdict-measure) + 2 * var(--xdict-pad-inline)) !important;width:auto !important;"
-        + "min-width:0 !important;box-sizing:border-box !important;overflow-wrap:anywhere !important;"
+        + "min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word !important;"
         + "contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;"
         + "filter:none !important;transform:none !important;zoom:1 !important;position:static !important;"
         + "float:none !important;writing-mode:horizontal-tb !important}"
@@ -293,12 +332,12 @@ extension EntryScripts {
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
                 + EntryReadingFrame.marksCSS + EntryReadingFrame.originalPhonCSS : ""
-        let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
+        let tokens = frame.subtracting([.serif, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """
             (function () {
               'use strict';
-              var THEME = '\(scheme.rawValue)', FACE = '\(face)', SHEETS = [['xdict-frame-tokens', \(jsString(tokens))],
+              var THEME = '\(scheme.rawValue)', FACE = '\(face)', HUE = '\(frame.accent.rawValue)', SHEETS = [['xdict-frame-tokens', \(jsString(tokens))],
                 ['xdict-frame-column', \(jsString(column))], ['xdict-frame-type', \(jsString(type))],
                 ['xdict-frame-minimal', \(jsString(minimal))]];
               var ID = /^xdict-frame-/;
@@ -318,6 +357,7 @@ extension EntryScripts {
                 var root = document.documentElement;
                 if (root.getAttribute('data-xdict-theme') !== THEME) root.setAttribute('data-xdict-theme', THEME);
                 if (root.getAttribute('data-xdict-face') !== FACE) root.setAttribute('data-xdict-face', FACE);
+                if (root.getAttribute('data-xdict-hue') !== HUE) root.setAttribute('data-xdict-hue', HUE);
                 SHEETS.forEach(function (s) { if (s[1]) sheet(s[0], s[1]); });
               }
               // §5.2: each speaker the core marked is a button with a name, set here in the shell's world.
@@ -450,7 +490,7 @@ extension EntryScripts {
                   Array.prototype.forEach.call(r.addedNodes, function (n) { if (n.nodeType === 1) name(n.parentNode || n); });
                 });
               }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
-                                                      attributeFilter: ['media', 'disabled', 'id', 'data-xdict-theme', 'data-xdict-face'] });
+                                                      attributeFilter: ['media', 'disabled', 'id', 'data-xdict-theme', 'data-xdict-face', 'data-xdict-hue'] });
               window.__xdictFrame = { measure: measure };
             })();
             """
