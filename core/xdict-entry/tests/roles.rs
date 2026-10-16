@@ -217,6 +217,21 @@ fn punctuation_between_blocks_stays_with_the_block_before() {
     assert!(inline.contains("</b>, <i"), "{inline}");
 }
 
+/// Space alone between two blocks, a no-break space included, is a line of its own: it goes (OED's "&nbsp;" between
+/// its Brit. and U.S. pronunciation wrappers drew a blank line). Between inline elements it is a word space and stays.
+#[test]
+fn space_alone_between_two_blocks_goes() {
+    let oed = r#"<div class="pw">Brit. /ˈbaŋkə/</div>,&nbsp;<div class="pw">U.S. /ˈbæŋkər/</div>"#;
+    let (out, _) = entry(oed, "banker");
+    assert!(out.contains("</div><div"), "{out}");
+    let (raw, _) = entry("<div>Brit. /a/</div>\u{a0} <div>U.S. /b/</div>", "banker");
+    assert!(raw.contains("</div><div"), "{raw:?}");
+    let (inline, _) = entry("<p><b>run</b>&nbsp;<i>verb</i></p>", "run");
+    assert!(inline.contains("</b>&nbsp;<i"), "{inline}");
+    let (word, _) = entry("<div>one</div> two <div>three</div>", "one");
+    assert!(word.contains("</div> two <div"), "{word}");
+}
+
 /// An empty element goes with its blank content (OED's `<span class="ieWhitespace">&nbsp;</span>` left a no-break space
 /// beside the source's own: "banc␣␣␣bench"); one space stays, so words it separated stay apart.
 #[test]
