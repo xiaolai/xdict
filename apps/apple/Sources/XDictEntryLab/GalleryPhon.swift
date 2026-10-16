@@ -68,18 +68,21 @@ enum GalleryPhon {
         }).slice(0, 12);
         var checked = 0, inconclusive = 0, wrong = [], box = null, first = null;
         shown.forEach(function (el) {
-          var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), node, drawn = 0, inExpected = 0, inBody = 0, worst = 0, text = '';
+          var walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), node, drawn = 0, inExpected = 0, inBody = 0, worst = 0, text = '', pieces = [];
           while ((node = walker.nextNode())) {
             var t = node.textContent, a = t.search(/\\S/), b = t.length - t.split('').reverse().join('').search(/\\S/);
             if (a < 0 || node.parentElement.closest(skip) || !node.parentElement.getClientRects().length) continue;
             if (/^\\p{M}/u.test(t.slice(a))) continue;
+            // A separator alone (CEPD's ";", NOAD's ",") is no evidence of the face, and its drawn box was measured
+            // 1.5 px off its measure span while the transcription beside it matched to the tenth (gallery 2026-10-16).
+            if (/^[\\s\\p{P}]+$/u.test(t)) continue;
             var piece = t.slice(a, b), range = document.createRange(); range.setStart(node, a); range.setEnd(node, b);
             var d = 0, rects = range.getClientRects(); Array.prototype.forEach.call(rects, function (r) { d += r.width; });
             var x = measure(node, piece, '"' + family + '"');
             var slack = Math.max(0, rects.length - 1) * measure(node, ' ', '"' + family + '"');
             drawn += d; inExpected += x; inBody += measure(node, piece, bodyFamily);
             worst = Math.max(worst, Math.abs(d - x) - 0.5 - 0.01 * x - slack);
-            text += piece + ' ';
+            text += piece + ' '; pieces.push([piece.slice(0, 12), Math.round(d * 10) / 10, Math.round(x * 10) / 10, rects.length, node.parentElement.tagName + (node.parentElement.getAttribute('data-xdict-hug') !== null ? '+hug' : '')]);
           }
           if (!text) return;
           if (Math.abs(inExpected - inBody) < 0.5) { inconclusive += 1; return; }
@@ -88,7 +91,7 @@ enum GalleryPhon {
           // The study's rule: drawn as the expected face measures, or nearer it than the body's.
           if (worst > 0 && Math.abs(drawn - inExpected) >= Math.abs(drawn - inBody)) {
             wrong.push([text.trim().slice(0, 40), getComputedStyle(el).fontFamily.slice(0, 40), Math.round(drawn * 10) / 10,
-                        Math.round(inExpected * 10) / 10, Math.round(inBody * 10) / 10]);
+                        Math.round(inExpected * 10) / 10, Math.round(inBody * 10) / 10, JSON.stringify(pieces).slice(0, 400)]);
           }
         });
         if (first) {
