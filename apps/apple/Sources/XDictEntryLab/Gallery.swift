@@ -91,8 +91,12 @@ enum GalleryRun {
                     try await Task.sleep(for: .milliseconds(500))
                     let file = "\(name)-\(kind)-\(mode.name).jpg"
                     let measured = await measure(controller.webView)
-                    // Every text colour on a framed page is a palette token's value in that theme.
-                    if !mode.frame.isEmpty, !mode.original, let stray = measured?["nonToken"] as? [[Any]], !stray.isEmpty {
+                    // Every text colour on a framed page is a palette token's value in that theme. Text drawn fully
+                    // transparent draws nothing (YHDCD's `.Z_Z{color:transparent}` " | " spacer) and has no colour.
+                    let stray = (measured?["nonToken"] as? [[Any]] ?? []).filter {
+                        ($0.first as? String)?.range(of: #"^rgba\(.*,\s*0\)$"#, options: .regularExpression) == nil
+                    }
+                    if !mode.frame.isEmpty, !mode.original, !stray.isEmpty {
                         failures.append("\(name) \(mode.name) \(entry.key): text colours outside the palette \(stray)")
                     }
                     if let webView = controller.webView, let image = try? await webView.takeSnapshot(configuration: nil),
