@@ -618,6 +618,10 @@ pub(crate) struct Roles<'s> {
     gap: Option<(usize, usize)>,
     /// Space to drop: alone between two blocks, or between an inline element and the full stop after it.
     gaps: Vec<(usize, usize)>,
+    /// A `<br>` written before anything else in its block (the block, where the break starts and ends): the block
+    /// already starts a line, so once text follows in it the break goes, as its blank line would (COBUILD-EC's
+    /// `<div><br>【语法信息】…`, WI-11 R8). Alone in its block it is a spacer the dictionary meant, and stays.
+    lead_break: Option<(u32, usize, usize)>,
 }
 
 /// What the tree decided: its edits, the strip counts it owns, and the roles written.
@@ -684,6 +688,7 @@ impl<'s> Roles<'s> {
             gaps: Vec::new(),
             gap: None,
             hugs: Vec::new(),
+            lead_break: None,
         }
     }
 
@@ -731,6 +736,14 @@ impl<'s> Roles<'s> {
             return;
         }
         let Some(&parent) = self.stack.last() else { return };
+        // A break before anything else in a block: it goes once text follows in that block (`lead_break`).
+        if lower == "br"
+            && self.nodes.get(parent as usize).is_some_and(|p| {
+                block_tag(&p.name) && p.kids.iter().all(|k| matches!(k, Kid::Text { blank: true, .. }))
+            })
+        {
+            self.lead_break = Some((parent, start, tag_end));
+        }
         let attrs = attributes(tag);
         let get = |n: &str| attrs.iter().find(|(k, _)| k == n).map(|(_, v)| v.as_str());
         let classes: Vec<String> = get("class")
@@ -905,6 +918,13 @@ impl<'s> Roles<'s> {
         if !read && self.buf.len().saturating_add(text.len()) <= TEXT_BYTES {
             self.buf.push_str(&text);
         }
+        if !blank
+            && let Some((block, from, to)) = self.lead_break.take()
+            && self.stack.contains(&block)
+            && self.gaps.len() < MAX_NODES
+        {
+            self.gaps.push((from, to));
+        }
         let Some(&top) = self.stack.last() else { return };
         let Some(node) = self.nodes.get_mut(top as usize) else { return };
         node.direct |= !blank;
@@ -994,7 +1014,7 @@ impl<'s> Roles<'s> {
             decided.edits.push((*at, *at + punct.len(), String::new()));
         }
         if self.key.is_some() {
-            let mut led = false;
+            let mut led: Option<u64> = None;
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
                 if *role == Role::Headword {
@@ -1021,10 +1041,11 @@ impl<'s> Roles<'s> {
                 }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
-                // navigation, and the entry's own headword follows it.
-                if *role == Role::Headword && !led && !self.linked(i) {
+                // navigation, and the entry's own headword follows it. A later headword in the lead's own markup is a
+                // homograph's (OALD's `h1.headword` of *bloody²*): a lead too, so homographs look alike (WI-11 Q2).
+                if *role == Role::Headword && !self.linked(i) && led.is_none_or(|sig| sig == node.sig) {
                     attr.push_str(" data-xdict-lead");
-                    led = true;
+                    led = Some(node.sig);
                 }
                 let mut counted = name.to_owned();
                 if let Some((attribute, value)) = kind {
