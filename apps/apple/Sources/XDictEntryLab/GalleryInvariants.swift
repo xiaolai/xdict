@@ -10,7 +10,7 @@ extension GalleryRun {
     static let invariantsScript = #"""
         var SIZES = [12, 14, 16, 18, 20, 24], SPACE = [0, 4, 8, 12, 16, 24];
         function near(v, set) { return set.some(function (s) { return Math.abs(Math.abs(v) - s) < 0.51; }); }
-        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {}, cellWords: {}, punctLine: {}, wordGap: {} };
+        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {}, cellWords: {}, punctLine: {}, wordGap: {}, strayMarker: {} };
         Object.keys(checks).forEach(function (k) { checks[k] = { total: 0, off: 0, values: {} }; });
         function note(check, ok, n, value) {
           var c = checks[check]; c.total += n;
@@ -119,6 +119,21 @@ extension GalleryRun {
             }
           }
         }
+        // No bullet the dictionary draws itself survives beside XDict's one marker: a generated bullet glyph or a list
+        // counter drawn as one (MWU's `counter(r89, square)` before "Synonyms:"), on a box XDict did not mark.
+        var BULLET = /^["'][\s•◦▪■□●○◆◇‣]*["']$|counter\([^)]*,\s*(disc|circle|square)\s*\)/;
+        Array.prototype.forEach.call((document.body || document.documentElement).getElementsByTagName('*'), function (e, i) {
+          // A dot between a headword's syllables (NOAD's `.hsb`) is the word's, not a bullet.
+          if (i > 65536 || e.closest('[data-xdict-control],[data-xdict-tag],[data-xdict-icon],[data-xdict-role=headword]')) return;
+          ['before', 'after'].forEach(function (side) {
+            if (e.getAttribute('data-xdict-' + side)) return;
+            var ps = getComputedStyle(e, '::' + side), c = ps.content;
+            if (!c || c === 'none' || c === 'normal' || c === '""' || ps.display === 'none' || ps.visibility === 'hidden') return;
+            if (!BULLET.test(c) || !/[^\s"']/.test(c.replace(/^["']|["']$/g, '')) && !/counter/.test(c)) return;
+            note('strayMarker', false, 1, c.slice(0, 30) + ' ::' + side + ' <' + e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + '>');
+          });
+          note('strayMarker', true, 1, '');
+        });
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
         // pronunciations; "banc   bench").
         // The line a text is laid out in: its nearest ancestor that is not plain inline (an inline-block is a box of
