@@ -123,11 +123,10 @@ struct SectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(verbatim: section.name).fontWeight(.semibold).lineLimit(1)
-            if let edition = section.edition {
-                Text(verbatim: SearchSentences.edition(edition))
+            if let edition = SearchSentences.inlineEdition(section) {
+                Text(verbatim: edition)
                     .font(.caption.monospaced())
                     .foregroundStyle(.tertiary)
-                    .help(Text("Edition"))
             }
             Spacer(minLength: 4)
             if case .results(let results) = section.status {
@@ -139,17 +138,10 @@ struct SectionHeader: View {
         // A List's section header runs to the sidebar's edge, where its rows stop short: without this the count meets
         // the divider and reads as part of the entry ("1 result purple"; measured 2 pt from the edge, 2026-10-15).
         .padding(.trailing, Self.trailingInset)
+        .help(section.edition.map { Text(SearchSentences.editionHelp($0)) } ?? Text(verbatim: ""))
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text(label))
+        .accessibilityLabel(Text(SearchSentences.header(section)))
         .accessibilityIdentifier("section")
-    }
-
-    private var label: LocalizedStringResource {
-        if case .results(let results) = section.status {
-            return SearchSentences.section(name: section.name, edition: section.edition, loaded: results.hits.count,
-                                           total: results.total)
-        }
-        return SearchSentences.section(name: section.name, edition: section.edition)
     }
 }
 

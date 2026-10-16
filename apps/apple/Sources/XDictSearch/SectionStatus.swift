@@ -9,7 +9,18 @@ public struct ResultSection: Hashable, Sendable, Identifiable {
     public let id: UUID
     public let name: String
     public let edition: Edition?
+    /// Whether the header names the edition: only while another edition of the same dictionary (one lineage) is in
+    /// the results too, so the two can be told apart (owner, 2026-10-16). Its help names it always.
+    public let showsEdition: Bool
     public let status: SectionStatus
+
+    public init(id: UUID, name: String, edition: Edition?, showsEdition: Bool, status: SectionStatus) {
+        self.id = id
+        self.name = name
+        self.edition = edition
+        self.showsEdition = showsEdition
+        self.status = status
+    }
 
     /// What the reader can do next, if anything (Q11: every state names its next action).
     public var next: NextAction? { status.next(for: id) }

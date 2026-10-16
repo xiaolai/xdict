@@ -261,6 +261,31 @@ struct SearchModelTests {
         #expect(await backend.lookups.map(\.dicts) == [[Fixture.handle("A")], [DictId(rawValue: "handle-A2")]])
     }
 
+    /// The owner, 2026-10-16: a header names its edition only beside another edition of the same dictionary (one
+    /// lineage), so the two can be told apart; otherwise the hash stays out of the header.
+    @Test func aHeaderNamesItsEditionOnlyBesideAnotherEditionOfTheSameDictionary() async {
+        let backend = Self.apples()
+        let second = SearchSource(id: Fixture.id(2), name: "A", edition: Fixture.edition("A2"),
+                                  preferencesKey: "lineage-A", enabled: true, state: .ready(Fixture.handle("A2")))
+        let both = Self.model(backend, Sources([Fixture.source(1, "A"), second, Fixture.source(3, "B")]))
+        both.submit("apple")
+        await both.idle()
+        await both.answersSettled()
+        #expect(both.sections.map(\.showsEdition) == [true, true, false])
+        let alone = Self.model(backend, Sources([Fixture.source(1, "A"), Fixture.source(3, "B")]))
+        alone.submit("apple")
+        await alone.idle()
+        await alone.answersSettled()
+        #expect(alone.sections.map(\.showsEdition) == [false, false])
+        let one = Self.model(backend, Sources([Fixture.source(1, "A"), second]))
+        one.submit("apple")
+        await one.idle()
+        one.setScope(.one(Fixture.id(1)))
+        await one.idle()
+        await one.answersSettled()
+        #expect(one.sections.map(\.showsEdition) == [false], "the other edition is not in these results")
+    }
+
     @Test func retryAsksAFailedDictionaryAgain() async {
         let backend = FakeSearchBackend { _, _, _ in .failure(.wire(.timedOut(deadline: .seconds(5)))) }
         let model = Self.model(backend, Sources([Fixture.source(1, "A")]))
