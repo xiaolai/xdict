@@ -985,6 +985,7 @@ impl<'s> Roles<'s> {
             decided.edits.push((*at, *at + punct.len(), String::new()));
         }
         if self.key.is_some() {
+            let mut led = false;
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
                 if *role == Role::Headword {
@@ -993,9 +994,11 @@ impl<'s> Roles<'s> {
                 let Some((name, kind)) = role.written() else { continue };
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
-                // (unification R, 2026-10-16).
-                if *role == Role::Headword && decided.headwords.len() == 1 {
+                // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
+                // navigation, and the entry's own headword follows it.
+                if *role == Role::Headword && !led && !self.linked(i) {
                     attr.push_str(" data-xdict-lead");
+                    led = true;
                 }
                 let mut counted = name.to_owned();
                 if let Some((attribute, value)) = kind {
@@ -1007,6 +1010,21 @@ impl<'s> Roles<'s> {
             }
         }
         decided
+    }
+
+    /// Whether the element, or one it is in, is a link.
+    fn linked(&self, mut i: usize) -> bool {
+        for _ in 0..MAX_DEPTH {
+            let Some(node) = self.nodes.get(i) else { return false };
+            if node.href {
+                return true;
+            }
+            if i == 0 || node.parent as usize == i {
+                return false;
+            }
+            i = node.parent as usize;
+        }
+        false
     }
 
     /// S5: an element whose attribute or handler names a recording becomes, or is wrapped in, a sound link.

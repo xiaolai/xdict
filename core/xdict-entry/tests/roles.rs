@@ -233,6 +233,24 @@ fn space_alone_between_two_blocks_goes() {
     assert!(word.contains("</div> two <div"), "{word}");
 }
 
+/// The lead is never a link: LDOCE's homograph strip (`<a href="#…_2">bloody²</a>`) is navigation, and the entry's own
+/// headword after it is the lead.
+#[test]
+fn the_lead_is_never_a_link() {
+    let ldoce = concat!(
+        r##"<div class="chwd"><a href="#LDOCE6_bloody_1"><span class="hw">bloody<sup>1</sup></span> <i>adjective, adverb</i></a>"##,
+        r##"<a href="#LDOCE6_bloody_2"><span class="hw">bloody<sup>2</sup></span> <i>adjective</i></a></div>"##,
+        r#"<span class="entry"><span class="entryhead"><span class="hw">bloody</span>"#,
+        r#"<span class="homnum">1</span> <span class="pos">adjective</span></span> used to emphasize what you are saying</span>"#
+    );
+    let (out, _) = entry(ldoce, "bloody");
+    // The strip's links are headwords, and none of them is the lead (the entry's own headword, where the core reads
+    // one, is: LDOCE's "blood‧y" in the gallery's holdout).
+    assert!(out.contains(r##"<a data-xdict-role="headword" href="#LDOCE6_bloody_1">"##), "{out}");
+    let strip = &out[..out.find("</div>").unwrap()];
+    assert!(!strip.contains("data-xdict-lead"), "a link is the lead: {out}");
+}
+
 /// A space between an inline element and the full stop after it goes (COBUILD's "is called a <b>row</b> ."). Only a
 /// lone full stop: an ellipsis, a comma (OED's own "bankier , banquier") and space after a block stay as written.
 #[test]
