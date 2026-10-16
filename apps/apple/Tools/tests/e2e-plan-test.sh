@@ -76,8 +76,28 @@ case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "the analyzer's 
     *) bad "the analyzer's change did not bring hostile.controls: $got" ;; esac
 same "a library instrument brings the relinking control" "$(lines library.generated library.corpus library.control)" \
     "$(bash $affected --paths apps/apple/Sources/XDictInstruments/LibraryCorpus.swift)"
+# (Not a confinement layer's file: those name hostile.controls themselves, as product code, not as a check's.)
 same "product code brings no control" "$(lines hostile.binding hostile.faults reader hostile.production lookup.core lookup.a11y hostile.app entries.quick entries.persistence sound.speech sound.notices sound.recordings)" \
-    "$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryWebView.swift)"
+    "$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryEvents.swift)"
+# The gallery is a style tool no sub-stage runs (2026-10-16: it selected hostile.controls, 23 min).
+same "the gallery's code selects nothing" "" \
+    "$(bash $affected --paths apps/apple/Sources/XDictEntryLab/Gallery.swift apps/apple/Sources/XDictEntryLab/GalleryInvariants.swift \
+        apps/apple/Sources/XDictEntryLab/GalleryPhon.swift apps/apple/Tools/gallery/run.sh apps/apple/Tools/gallery/page.py)"
+# A lookup driver change with small harness edits (ba6e081) ran every sub-stage.
+got=$(bash $affected --paths apps/apple/Makefile apps/apple/Tools/build-lab.sh apps/apple/Tools/e2e.sh \
+    apps/apple/Tools/lookup/drive.py apps/apple/Tools/lookup/typing_check.py apps/apple/Tools/tests/lookup_typing_test.py)
+case " $(tr '\n' ' ' <<<"$got") " in
+    *" sound."*|*" library."*|*" hostile.controls "*) bad "a driver change with harness edits selects sound, library or the hostile controls: $got" ;;
+    *" launch "*" lookup.core "*) ok "a driver change with harness edits selects a smoke set and its own stage" ;;
+    *) bad "a driver change with harness edits missed launch or lookup.core: $got" ;; esac
+same "a lookup driver change selects only lookup" "$(lines lookup.core lookup.a11y lookup.paging)" \
+    "$(bash $affected --paths apps/apple/Tools/lookup/drive.py)"
+got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryRuleList.swift)
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "a confinement layer's change brings the hostile controls" ;;
+    *) bad "a confinement layer's change did not bring hostile.controls: $got" ;; esac
+got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift apps/apple/Sources/XDictEntryLab/Reader.swift)
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) bad "a style or reader-lab change brings the hostile controls: $got" ;;
+    *) ok "a style or reader-lab change leaves out the hostile controls" ;; esac
 # Every name the map uses is a sub-stage or a stage.
 names=$(awk '/^[[:space:]]*(#|$)/ { next } $1 == "control" { print $2; print $3; next }
     { for (i = 2; i <= NF; i++) { n = $i; sub(/^check:/, "", n); if (n != "none" && n != "all") print n } }' e2e-affected.map | sort -u)

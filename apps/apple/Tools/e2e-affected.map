@@ -63,10 +63,17 @@ apps/apple/Tools/lookup/*                           check:lookup
 apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
 apps/apple/Tools/library/health-expected.json       check:library.health
 apps/apple/Tools/library/*                          check:library.generated library.corpus
-apps/apple/Tools/build-lab.sh                       hostile reader entries.quick entries.persistence library.generated lookup selection services panel menubar shortcut
+apps/apple/Tools/gallery/*                          none
+# The harness's shared code: a change to it can break any stage, but most are a line for one stage's driver, which that
+# stage's own rule above already selects. So these select a smoke set, a minute in all: the bundle launched, the kit's
+# lab, the fixtures, a lookup window over the corpus (2026-10-16: a lookup driver change with three such lines ran every
+# sub-stage, 46 min). **A change to what every stage shares (the run's setup, the lock, the evidence, `flunk`) names its
+# stages or runs T2.**
+apps/apple/Tools/build-lab.sh                       hostile.binding hostile.faults lookup.core
+apps/apple/Tools/e2e.sh                             launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
+apps/apple/Makefile                                 launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
 apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut
 apps/apple/Tools/*                                  all
-apps/apple/Makefile                                 all
 
 # --- The instruments: each check's own code -------------------------------------------------------------------------
 apps/apple/Sources/XDictInstruments/Lookup*         check:lookup
@@ -79,6 +86,11 @@ apps/apple/Sources/XDictInstruments/Projection*     check:service.conformance
 apps/apple/Sources/XDictInstruments/IdleCheck.swift check:service.idle
 apps/apple/Sources/XDictInstruments/Findings.swift  all
 apps/apple/Sources/XDictInstruments/*               check:service.recovery
+# The lab: the gallery is a style tool no sub-stage runs; each mode's file is its own stage's; the rest is shared.
+apps/apple/Sources/XDictEntryLab/Gallery*           none
+apps/apple/Sources/XDictEntryLab/Hostile.swift      check:hostile.production
+apps/apple/Sources/XDictEntryLab/Reader*            check:reader
+apps/apple/Sources/XDictEntryLab/Corpus.swift       check:entries.lab
 apps/apple/Sources/XDictEntryLab/*                  check:hostile.production hostile.controls hostile.faults hostile.binding reader entries.lab
 apps/apple/Sources/XDict/AppCorpus.swift            check:entries.quick entries.full entries.persistence
 apps/apple/Sources/XDict/AppHostile.swift           check:hostile.app
@@ -95,6 +107,19 @@ apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel men
 apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.core lookup.a11y sound
 apps/apple/Sources/XDictEntryView/EntryMarks.swift  hostile.production reader entries.quick entries.persistence lookup.a11y sound
 apps/apple/Sources/XDictEntryView/EntryColourGuard.swift hostile.production reader entries.quick entries.persistence lookup.a11y
+# What keeps an entry off the network: each layer the hostile controls switch off one at a time, the scheme that answers,
+# the ways out (a remote link, a new window, the context menu). The controls are these layers' positive control.
+apps/apple/Sources/XDictEntryView/EntryConfinement.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryRuleList.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryNavigationPolicy.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/WebKitSwitches.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntrySchemeHandler.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryResourceServer.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryRoutes.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/RemoteOpenGate.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryWebView.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryViewController.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryPane.swift   hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
 apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
 apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
