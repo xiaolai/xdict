@@ -22,6 +22,9 @@ public struct ReadingSettings: View {
             .accessibilityIdentifier("accent-colour")
         }
         .formStyle(.grouped)
+        // As tall as its rows: a grouped form scrolls and would take the window's height, leaving it mostly empty.
+        .scrollDisabled(true)
+        .fixedSize(horizontal: false, vertical: true)
         .frame(width: 480)
     }
 
