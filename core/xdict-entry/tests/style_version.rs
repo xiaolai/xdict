@@ -9,12 +9,12 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (6, 0xd0bf_ad7d_a896_2be0);
+const PINNED: (u32, u64) = (7, 0x934b_0f14_cede_c765);
 
 const BASE: &str = "xdict://d/";
 
 /// Inputs shaped to reach each part of the rules, keyed where the roles need a key.
-const SHAPED: [(&str, &str); 11] = [
+const SHAPED: [(&str, &str); 12] = [
     ("", r#"<p style="font-size:18px;color:#f00;font-family:Arial">plain <b>bold</b> <font size="+1">big</font></p>"#),
     ("", r#"<table><tr><td>a</td><td>b</td></tr></table><img src="x.png"><a href="entry://hue#s1">hue</a>"#),
     ("", r#"<span class="phon">/ˈæp(ə)l/</span> <b>[<i>ˈ</i>&#230;pl]</b> <em>\ˈa-pəl\</em>"#),
@@ -34,6 +34,11 @@ const SHAPED: [(&str, &str); 11] = [
     ),
     // A word list written in a drawn box (STYLE 4: OPAL's pills are labels).
     ("x", r#"<span class="pill">OPAL W</span> <span class="pill">B2</span>"#),
+    // The roles a markup's table makes sure beyond the part of speech (STYLE 7).
+    (
+        "run",
+        r#"<b class="hw">run</b> <span class="sensenum">1</span> <span class="d">to move fast</span> <b>2.</b> <span class="d">to flow</span>"#,
+    ),
 ];
 
 /// FNV-1a, 64 bits: stable across platforms and releases, which `DefaultHasher` does not promise.

@@ -72,3 +72,45 @@ fn a_part_of_speech_in_a_link_is_the_tables() {
     );
     assert!(tag_of(&out, "pos").contains(r#"data-xdict-sure="pos""#), "{out}");
 }
+
+/// A sense number the markup's table names is sure (`data-xdict-sure="sensenum"`); the generic rule's guesses of a
+/// sense number are not written there.
+#[test]
+fn a_known_markup_names_its_sense_numbers_sure() {
+    let out = render(
+        LONGMAN,
+        r#"<div><span class="hw">run</span> <span class="sensenum">2</span> <span class="d">to move fast</span> <b class="bn">3.</b> <span class="d">to flow</span></div>"#,
+        "run",
+    );
+    let n = tag_of(&out, "sensenum");
+    assert!(n.contains(r#"data-xdict-role="sensenum""#), "{out}");
+    assert!(n.contains(r#"data-xdict-sure="sensenum""#), "{out}");
+    assert!(!tag_of(&out, "bn").contains(r#"data-xdict-role="sensenum""#), "{out}");
+}
+
+/// A table's sense-number selector holds only numbers: PEU's `hang` also holds a dash; a section number of three
+/// digits ("379") and a sub-sense ("1.1") are numbers.
+#[test]
+fn a_sense_number_selector_takes_only_numbers() {
+    let peu = ".peu-quote{margin:0}.peu-btns{margin:0}.hang{float:left}";
+    let out = render(
+        peu,
+        r#"<div><b>will</b> <span class="hang">379</span> <span class="hang x">–</span> <span class="hang y">1.1</span> <span>the text of the section that follows</span></div>"#,
+        "will",
+    );
+    assert!(tag_of(&out, "hang").contains(r#"data-xdict-sure="sensenum""#), "{out}");
+    assert!(tag_of(&out, "hang y").contains(r#"data-xdict-sure="sensenum""#), "{out}");
+    assert!(!tag_of(&out, "hang x").contains("data-xdict-sure"), "{out}");
+}
+
+/// The generic rule's sense numbers still stand where no table names the markup, unmarked as sure.
+#[test]
+fn an_unknown_markup_keeps_its_sense_numbers_unsure() {
+    let out = render(
+        ".sensenum{font-weight:bold}",
+        r#"<div><span class="hw">run</span> <span class="sensenum">2</span> <span class="d">to move fast</span></div>"#,
+        "run",
+    );
+    assert!(tag_of(&out, "sensenum").contains(r#"data-xdict-role="sensenum""#), "{out}");
+    assert!(!out.contains("data-xdict-sure"), "{out}");
+}
