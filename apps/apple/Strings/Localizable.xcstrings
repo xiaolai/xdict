@@ -625,6 +625,22 @@
         }
       }
     },
+    "Accessibility" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Accessibility"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "辅助功能"
+          }
+        }
+      }
+    },
     "Actual Size" : {
       "localizations" : {
         "en" : {
@@ -977,6 +993,22 @@
         }
       }
     },
+    "Dictionaries answering lookups: %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionaries answering lookups: %lld."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可供查询的词典：%lld 部。"
+          }
+        }
+      }
+    },
     "Dictionary" : {
       "localizations" : {
         "en" : {
@@ -1085,6 +1117,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本标识 %@"
+          }
+        }
+      }
+    },
+    "English" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "English"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "English"
           }
         }
       }
@@ -1393,6 +1441,22 @@
         }
       }
     },
+    "General" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "General"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "通用"
+          }
+        }
+      }
+    },
     "Go" : {
       "localizations" : {
         "en" : {
@@ -1405,6 +1469,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前往"
+          }
+        }
+      }
+    },
+    "Granted. The shortcut can read the selection in any app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Granted. The shortcut can read the selection in any app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已授权。快捷键可以读取任何 App 中选中的文字。"
           }
         }
       }
@@ -1585,6 +1665,22 @@
         }
       }
     },
+    "Language" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语言"
+          }
+        }
+      }
+    },
     "Languages" : {
       "localizations" : {
         "en" : {
@@ -1745,6 +1841,22 @@
         }
       }
     },
+    "Lookup shortcut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup shortcut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词快捷键"
+          }
+        }
+      }
+    },
     "MDict %@" : {
       "localizations" : {
         "en" : {
@@ -1853,6 +1965,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "名称"
+          }
+        }
+      }
+    },
+    "Needed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "待完成"
+          }
+        }
+      }
+    },
+    "Needed to read the word you select in another app. Turn XDict on in System Settings ▸ Privacy & Security ▸ Accessibility; this row updates by itself." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needed to read the word you select in another app. Turn XDict on in System Settings ▸ Privacy & Security ▸ Accessibility; this row updates by itself."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取你在其他 App 中选中的词需要此权限。请在“系统设置 ▸ 隐私与安全性 ▸ 辅助功能”中打开 XDict，这一行会自动更新。"
+          }
+        }
+      }
+    },
+    "Needs attention" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs attention"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要处理"
           }
         }
       }
@@ -2225,6 +2385,22 @@
         }
       }
     },
+    "Open System Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open System Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开系统设置"
+          }
+        }
+      }
+    },
     "Open XDict" : {
       "localizations" : {
         "en" : {
@@ -2237,6 +2413,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开 XDict"
+          }
+        }
+      }
+    },
+    "Open XDict when you log in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open XDict when you log in"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录时打开 XDict"
           }
         }
       }
@@ -2753,6 +2945,22 @@
         }
       }
     },
+    "Select a word anywhere and press the shortcut to look it up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a word anywhere and press the shortcut to look it up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在任何地方选中一个词，按下快捷键即可查询。"
+          }
+        }
+      }
+    },
     "Select a word in any app and press the shortcut: its entry opens in a panel beside it. Press Escape or click elsewhere to close the panel, or the shortcut again to open it in XDict. You can also choose Look Up in XDict when you Control-click a selection." : {
       "localizations" : {
         "en" : {
@@ -2765,6 +2973,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在任意 App 中选中一个词并按下快捷键，词条会在它旁边的面板中打开。按 Esc 键或点按别处可关闭面板，再按一次快捷键则在 XDict 中打开。按住 Control 键点按所选内容时，也可以选取“在 XDict 中查询”。"
+          }
+        }
+      }
+    },
+    "Set Up XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置 XDict"
+          }
+        }
+      }
+    },
+    "Set Up XDict…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Set Up XDict…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置 XDict…"
           }
         }
       }
@@ -2785,6 +3025,22 @@
         }
       }
     },
+    "Setup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Setup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置向导"
+          }
+        }
+      }
+    },
     "Show %llu More" : {
       "localizations" : {
         "en" : {
@@ -2797,6 +3053,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "再显示 %llu 条"
+          }
+        }
+      }
+    },
+    "Show Setup…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Setup…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示设置向导…"
           }
         }
       }
@@ -3201,6 +3473,22 @@
         }
       }
     },
+    "The shortcut is in use by another app. Choose another one." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The shortcut is in use by another app. Choose another one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个快捷键已被其他 App 占用，请换一个。"
+          }
+        }
+      }
+    },
     "The sound output did not start, so this recording (%@) could not be played." : {
       "localizations" : {
         "en" : {
@@ -3229,6 +3517,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "系统未能注册此快捷键（错误 %@）。"
+          }
+        }
+      }
+    },
+    "The system's language" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system's language"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随系统"
           }
         }
       }
@@ -3747,6 +4051,22 @@
         }
       }
     },
+    "Waiting for your approval in System Settings ▸ General ▸ Login Items." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for your approval in System Settings ▸ General ▸ Login Items."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在等待你在“系统设置 ▸ 通用 ▸ 登录项”中批准。"
+          }
+        }
+      }
+    },
     "Waiting to import" : {
       "localizations" : {
         "en" : {
@@ -3811,6 +4131,22 @@
         }
       }
     },
+    "XDict comes with no dictionaries. Add your own MDict files (.mdx and .mdd)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict comes with no dictionaries. Add your own MDict files (.mdx and .mdd)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 不附带任何词典。请添加你自己的 MDict 文件（.mdx 和 .mdd）。"
+          }
+        }
+      }
+    },
     "XDict could not tell this dictionary's languages from its file name. Which are they?" : {
       "localizations" : {
         "en" : {
@@ -3823,6 +4159,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 无法从文件名判断这部词典的语言。它们是什么语言？"
+          }
+        }
+      }
+    },
+    "XDict does not open when you log in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict does not open when you log in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录时不会打开 XDict。"
           }
         }
       }
@@ -3843,6 +4195,22 @@
         }
       }
     },
+    "XDict looks words up in your own MDict dictionaries. Each row below shows what is set up now." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict looks words up in your own MDict dictionaries. Each row below shows what is set up now."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 用你自己的 MDict 词典查词。下面每一行显示当前的设置状态。"
+          }
+        }
+      }
+    },
     "XDict may not read the selection in %@: Accessibility is turned off for XDict." : {
       "localizations" : {
         "en" : {
@@ -3855,6 +4223,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 无法读取 %@ 中的选中内容：XDict 的辅助功能权限已关闭。"
+          }
+        }
+      }
+    },
+    "XDict opens when you log in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict opens when you log in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "登录时会打开 XDict。"
           }
         }
       }
@@ -3887,6 +4271,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 读取你已有的 MDict 词典。请先在词库中添加，然后在这里查词。"
+          }
+        }
+      }
+    },
+    "XDict's own words; dictionaries are never translated. Takes effect when XDict next opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict's own words; dictionaries are never translated. Takes effect when XDict next opens."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 界面的语言；词典内容从不翻译。下次打开 XDict 时生效。"
           }
         }
       }
@@ -3967,6 +4367,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缩小"
+          }
+        }
+      }
+    },
+    "macOS cannot find XDict to open at login." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS cannot find XDict to open at login."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 找不到 XDict，无法在登录时打开。"
           }
         }
       }
@@ -4127,6 +4543,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”指向你所选文件夹之外，因此未被添加。"
+          }
+        }
+      }
+    },
+    "简体中文" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "简体中文"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "简体中文"
           }
         }
       }
