@@ -615,6 +615,8 @@ pub(crate) struct Decided {
     pub(crate) hidden_duplicates: u64,
     pub(crate) roles: BTreeMap<String, u64>,
     pub(crate) icons: BTreeMap<String, u64>,
+    /// Each headword element's extent, from where its attributes go to its end tag (unclosed: the entry's end).
+    pub(crate) headwords: Vec<(usize, usize)>,
 }
 
 impl<'s> Roles<'s> {
@@ -905,6 +907,7 @@ impl<'s> Roles<'s> {
             hidden_duplicates: 0,
             roles: BTreeMap::new(),
             icons: BTreeMap::new(),
+            headwords: Vec::new(),
         };
         if self.strip {
             self.audio(&t, &mut decided);
@@ -921,6 +924,9 @@ impl<'s> Roles<'s> {
         if self.key.is_some() {
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
+                if *role == Role::Headword {
+                    decided.headwords.push((node.attr_at, node.end.map_or(usize::MAX, |(at, _)| at)));
+                }
                 let Some((name, kind)) = role.written() else { continue };
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
                 let mut counted = name.to_owned();
