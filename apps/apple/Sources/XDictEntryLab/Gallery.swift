@@ -128,6 +128,11 @@ enum GalleryRun {
                             failures.append("\(name) \(mode.name) \(entry.key): a rule drawn as a line (hrDrawn \(v) \(layout["hrs"] ?? ""))")
                         }
                     }
+                    // R's invariants are the reading style's; Original style keeps the dictionary's own.
+                    let invariants = mode.frame.isEmpty || mode.original ? nil : await run(invariantsScript, controller.webView)
+                    if !mode.frame.isEmpty && !mode.original {
+                        failures += invariantFailures(invariants, where: "\(name) \(mode.name) \(entry.key)")
+                    }
                     let marked = mode.frame.isEmpty ? nil : await marks(controller.webView)
                     if let marked {
                         if let leaks = marked["leaks"] as? [Any], !leaks.isEmpty {
@@ -142,7 +147,8 @@ enum GalleryRun {
                     }
                     rows.append(["dict": name, "kind": kind, "key": entry.key, "mode": mode.name, "image": "images/\(file)",
                                  "measure": measured ?? NSNull(), "marks": marked ?? NSNull(),
-                                 "layout": layout ?? NSNull(), "phon": phon ?? NSNull()])
+                                 "layout": layout ?? NSNull(), "phon": phon ?? NSNull(),
+                                 "invariants": invariants ?? NSNull()])
                 }
                 controller.closeEntry()
                 window.close()
