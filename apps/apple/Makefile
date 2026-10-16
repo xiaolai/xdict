@@ -67,6 +67,10 @@ export XDICT_BUILD_NUMBER := $(BUILD_NUMBER)
 export XDICT_NOTARY_PROFILE := $(NOTARY_PROFILE)
 export XDICT_E2E_HOST := $(E2E_HOST)
 export XDICT_E2E_CORPUS := $(E2E_CORPUS)
+# The E2E run's cargo work goes there too (Tools/core-on-host.sh), on its copy of the corpus.
+BUILD_CORPUS ?=
+export XDICT_BUILD_HOST := $(BUILD_HOST)
+export XDICT_BUILD_CORPUS := $(BUILD_CORPUS)
 ifneq ($(BUILD_HOST),)
 export XDICT_REMOTE_PRODUCTS := $(APPLE)/.build/remote-products
 endif
@@ -139,6 +143,7 @@ e2e-affected:
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/remote-build-test.sh
+	@Tools/tests/core-on-host-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 
