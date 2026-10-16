@@ -179,6 +179,14 @@ struct ReadingFrameTests {
         #expect(!EntryReadingFrame.minimalCSS.contains("anywhere"))
     }
 
+    /// R caps a dictionary's inline horizontal spacing in the reading style; original style keeps the dictionary's.
+    @Test func inlineSpacingIsCappedInTheReadingStyleOnly() {
+        let reading = EntryScripts.appearance(.light, frame: .all)
+        let original = EntryScripts.appearance(.light, frame: EntryReadingFrame.all.applied(originalStyle: true))
+        #expect(reading.contains("var SPACE_CAP = 0.25,"))
+        #expect(original.contains("var SPACE_CAP = 0,"))
+    }
+
     @Test func unificationRsRulesAreInTheTypeLayer() {
         let css = EntryReadingFrame.typeCSS
         #expect(css.contains("@layer xdict-unify{"))
