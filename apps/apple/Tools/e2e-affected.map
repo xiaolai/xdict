@@ -137,3 +137,6 @@ apps/apple/Sources/XDictUI/Setup*                   setup
 apps/apple/Sources/XDictUI/LaunchAtLogin.swift      setup
 apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup
 apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup
+# The catalog's text reaches only the checks that compare a reader-facing sentence or run the app in Chinese; the
+# instruments read every other string through `String(localized:)`, so a reworded line cannot fail them.
+apps/apple/Strings/*                                setup launch lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu
