@@ -200,8 +200,20 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     func setFrame(_ frame: EntryReadingFrame) {
         guard frame != self.frame else { return }
+        let restyled = Self.restyles(from: self.frame, to: frame)
         self.frame = frame
-        reloadDocument()
+        // "Original style" is the core's rendering too, not only the frame: the entry is asked for again, not reloaded
+        // from memory (it was: the frame changed and the reading style's markup stayed, E2E 2026-10-16).
+        if restyled, let reference {
+            Task { _ = await show(reference) }
+        } else {
+            reloadDocument()
+        }
+    }
+
+    /// Whether going from one frame to another changes which rendering the core gives (ADR-0010 Q3).
+    nonisolated static func restyles(from old: EntryReadingFrame, to new: EntryReadingFrame) -> Bool {
+        old.contains(.minimal) != new.contains(.minimal)
     }
 
     func setScheme(_ scheme: EntryColourScheme) {

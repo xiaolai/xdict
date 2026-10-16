@@ -83,7 +83,7 @@ enum GalleryRun {
                     let file = "\(name)-\(kind)-\(mode.name).jpg"
                     let measured = await measure(controller.webView)
                     // Every text colour on a framed page is a palette token's value in that theme.
-                    if !mode.frame.subtracting(.minimal).isEmpty, let stray = measured?["nonToken"] as? [[Any]], !stray.isEmpty {
+                    if !mode.frame.isEmpty, !mode.original, let stray = measured?["nonToken"] as? [[Any]], !stray.isEmpty {
                         failures.append("\(name) \(mode.name) \(entry.key): text colours outside the palette \(stray)")
                     }
                     if let webView = controller.webView, let image = try? await webView.takeSnapshot(configuration: nil),
@@ -98,7 +98,7 @@ enum GalleryRun {
                         failures += GalleryPhon.failures(phon).map { "\(name) \(mode.name) \(entry.key): \($0)" }
                     }
                     // After the snapshot: the fold check clicks the page.
-                    let layout = mode.frame.subtracting(.minimal).isEmpty ? nil : await run(layoutScript, controller.webView)
+                    let layout = mode.frame.isEmpty ? nil : await run(layoutScript, controller.webView)
                     if let layout {
                         for (key, limit, what) in [("dotWorst", 0.05, "a marker dot is not round"),
                                                    ("pronOff", 0.0, "a speaker off its transcription's line"),
@@ -110,7 +110,7 @@ enum GalleryRun {
                             }
                         }
                     }
-                    let marked = mode.frame.subtracting(.minimal).isEmpty ? nil : await marks(controller.webView)
+                    let marked = mode.frame.isEmpty ? nil : await marks(controller.webView)
                     if let marked {
                         if let leaks = marked["leaks"] as? [Any], !leaks.isEmpty {
                             failures.append("\(name) \(mode.name) \(entry.key): a dictionary glyph drawn where the core marked one \(leaks)")

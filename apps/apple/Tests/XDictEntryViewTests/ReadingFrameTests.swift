@@ -99,6 +99,14 @@ struct ReadingFrameTests {
         #expect(EntryReadingFrame.all.applied(originalStyle: false) == .all)
     }
 
+    /// Switching "Original style" changes the core's rendering, so the entry is fetched again; any other frame change
+    /// only reloads what is in memory.
+    @Test func switchingOriginalStyleFetchesTheEntryAgain() {
+        #expect(EntryPane.restyles(from: .all, to: .minimal))
+        #expect(EntryPane.restyles(from: .minimal, to: .all))
+        #expect(!EntryPane.restyles(from: .all, to: [.column, .type, .serif]))
+    }
+
     /// Q3, `reading-style.md` §6: "Original style" keeps a minimal frame: the page's insets and containment, and a
     /// light paper under the dictionary, whose colours assume white, in dark too. No column, type or controls, and no
     /// colour of the dictionary's is touched.
@@ -111,9 +119,17 @@ struct ReadingFrameTests {
         #expect(!css.contains("max-width"), "the column is the reading style's")
         let dark = EntryScripts.appearance(.dark, frame: .minimal)
         #expect(dark.contains("xdict-frame-minimal"))
-        #expect(!dark.contains("[data-xdict-icon=speaker]"), "XDict's controls are the reading style's")
-        #expect(!dark.contains("--xdict-font:"), "XDict's type is the reading style's")
         #expect(!EntryScripts.appearance(.dark, frame: .all).contains(EntryReadingFrame.minimalCSS))
+        // The owner (2026-10-16): XDict's whole marks layer comes with it (labels, speakers, folds), the type and the
+        // column do not.
+        #expect(dark.contains("[data-xdict-icon=speaker]"), "XDict's speaker")
+        #expect(dark.contains("[data-xdict-role=label]{"), "XDict's labels")
+        #expect(dark.contains("[data-xdict-labelled]{display:none !important}"), "the badges the labels replace, hidden")
+        #expect(dark.contains("[data-xdict-control=disclosure]"), "XDict's fold signs")
+        #expect(!dark.contains(EntryReadingFrame.typeCSS), "XDict's type is the reading style's")
+        #expect(!dark.contains("max-width:calc(var(--xdict-measure)"), "XDict's column is the reading style's")
+        // On the paper, the marks take the light palette in dark too, or a dark theme's pale link would sit on paper.
+        #expect(css.contains(":root[data-xdict-theme=dark]{--xdict-bg:#ffffff;"))
     }
 
     /// No backgrounds anywhere (owner, 2026-10-15): a data table's header row is shown by weight and spacing only.
