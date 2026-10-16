@@ -82,6 +82,11 @@ enum GalleryRun {
                     } else {
                         failures.append("\(name) \(mode.name) \(entry.key): no snapshot")
                     }
+                    let phon = mode.frame.isEmpty ? nil
+                        : await GalleryPhon.check(controller.webView, crop: images.appending(path: "\(name)-\(kind)-\(mode.name)-phon.png"))
+                    if let phon {
+                        failures += GalleryPhon.failures(phon).map { "\(name) \(mode.name) \(entry.key): \($0)" }
+                    }
                     // After the snapshot: the fold check clicks the page.
                     let layout = mode.frame.isEmpty ? nil : await run(layoutScript, controller.webView)
                     if let layout {
@@ -109,7 +114,7 @@ enum GalleryRun {
                     }
                     rows.append(["dict": name, "kind": kind, "key": entry.key, "mode": mode.name, "image": "images/\(file)",
                                  "measure": measured ?? NSNull(), "marks": marked ?? NSNull(),
-                                 "layout": layout ?? NSNull()])
+                                 "layout": layout ?? NSNull(), "phon": phon ?? NSNull()])
                 }
                 controller.closeEntry()
                 window.close()
