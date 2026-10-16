@@ -184,3 +184,7 @@ health.everyDictionaryChecked
 health.findingsMatchCore
 health.keptForTheEdition
 health.sentencesInBothLanguages
+# added by WI-11 (the "Original style" switch and the recordings setting)
+entry.originalStyleSwitch
+sound.recordings.offByDefault
+sound.setting.bothLanguages

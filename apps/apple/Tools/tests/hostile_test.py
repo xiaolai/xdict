@@ -26,8 +26,8 @@ class Battery(unittest.TestCase):
         self.assertEqual(battery.RUNS["production"], battery.LAYERS)
         self.assertEqual(battery.RUNS["shell"], [layer for layer in battery.LAYERS if layer != "strip"])
         on = [label for label, layers in battery.RUNS.items() if "strip" in layers]
-        self.assertEqual(sorted(on), ["production", "strip"])
-        self.assertEqual(battery.PRODUCTION_PART, ["shell", "production"])
+        self.assertEqual(sorted(on), ["production", "production-original", "strip"])
+        self.assertEqual(battery.PRODUCTION_PART, ["shell", "production", "production-original"])
         probe = battery.PROBES["strip"]
         self.assertEqual((probe["run"], probe["against"]), ("strip", "baseline"))
 
@@ -106,10 +106,25 @@ class Runs(unittest.TestCase):
         with open(os.path.join(battery.FIXTURE, "cases.json")) as f:
             listed = json.load(f)
         out = lambda *a: analyze.runs_of(listed, *a)
-        self.assertEqual(out("production"), ["shell", "production"])
+        self.assertEqual(out("production"), ["shell", "production", "production-original"])
         self.assertNotIn("production", out("controls"))
+        # ADR-0010 Q3: production again in the dictionary's own style, every layer on, held to the same zero.
+        self.assertEqual(listed["runs"]["production-original"], listed["runs"]["production"])
+        self.assertEqual(listed["originalStyle"], ["production-original"])
         self.assertIn("strip", out("controls"))
         self.assertEqual(len(out(None)), len(out("production")) + len(out("controls")))
+
+    def test_only_the_original_runs_ask_for_original_style_and_the_suite_holds_it(self):
+        with open(os.path.join(battery.FIXTURE, "cases.json")) as f:
+            listed = json.load(f)
+        self.assertEqual([r for r in listed["runs"] if r in listed["originalStyle"]], ["production-original"])
+        # A run whose lab did not render as asked fails the suite, either way round; a lab that says nothing fails too.
+        asked = analyze.rendered_as_asked
+        self.assertTrue(asked(listed, "production-original", {"originalStyle": True}))
+        self.assertTrue(asked(listed, "production", {"originalStyle": False}))
+        self.assertFalse(asked(listed, "production-original", {"originalStyle": False}))
+        self.assertFalse(asked(listed, "production", {"originalStyle": True}))
+        self.assertFalse(asked(listed, "production-original", {}))
 
 
 if __name__ == "__main__":

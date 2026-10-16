@@ -42,7 +42,7 @@ final class LabCore: @unchecked Sendable {
     }
 
     /// Imports (when needed) and opens the dictionary in `folder`.
-    func open(_ folder: URL) throws -> CoreContent {
+    func open(_ folder: URL, originalStyle: Bool = false) throws -> CoreContent {
         let package = try Self.package(folder)
         var opened = try core.open(package: package)
         if case .needsImport = opened {
@@ -53,7 +53,7 @@ final class LabCore: @unchecked Sendable {
             throw LabFailure(description: "\(folder.lastPathComponent) did not open after import: \(opened)")
         }
         let binding = EntryBinding(dictionary: "lab." + folder.lastPathComponent, edition: edition, handle: dict)
-        return CoreContent(core: core, binding: binding, title: info.title, folder: folder)
+        return CoreContent(core: core, binding: binding, title: info.title, folder: folder, originalStyle: originalStyle)
     }
 }
 
@@ -63,9 +63,11 @@ final class CoreContent: EntryContent, @unchecked Sendable {
     let binding: EntryBinding
     let title: String
     let folder: URL
-    let view = View(baseUrl: EntryRoutes.base, maxBodyBytes: UInt64(EntryResourceServer.maxRenderedBytes))
+    let view: View
 
-    init(core: Core, binding: EntryBinding, title: String, folder: URL) {
+    init(core: Core, binding: EntryBinding, title: String, folder: URL, originalStyle: Bool = false) {
+        view = View(baseUrl: EntryRoutes.base, maxBodyBytes: UInt64(EntryResourceServer.maxRenderedBytes),
+                    originalStyle: originalStyle)
         self.core = core
         self.binding = binding
         self.title = title

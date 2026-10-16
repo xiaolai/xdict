@@ -199,9 +199,13 @@ public struct RenderContext: Codable, Hashable, Sendable {
     /// The ceiling on one rendered body (an entry, or a stylesheet, script or page it loads), between 1 byte and
     /// `Limits.maxBodyBytes`.
     public let maxBodyBytes: UInt64
+    /// The reader's "Original style" for the dictionary (ADR-0010 Q3): its own styles kept. The rewrite, the strip
+    /// list and the policy are the same either way.
+    public let originalStyle: Bool
 
-    public init(maxBodyBytes: UInt64) {
+    public init(maxBodyBytes: UInt64, originalStyle: Bool = false) {
         self.maxBodyBytes = maxBodyBytes
+        self.originalStyle = originalStyle
     }
 }
 

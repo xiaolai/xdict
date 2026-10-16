@@ -43,7 +43,8 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
                 throw LabFailure(description: "--hostile needs a fixture folder and --cases")
             }
             let cases = try JSONDecoder().decode(HostileCases.self, from: Data(contentsOf: casesFile)).cases
-            let run = HostileRun(options: options, content: try core.open(fixture), cases: cases)
+            let run = HostileRun(options: options, content: try core.open(fixture, originalStyle: options.originalStyle),
+                                 cases: cases)
             hostile = run
             run.start()
         case .faultSwitch(let fault):

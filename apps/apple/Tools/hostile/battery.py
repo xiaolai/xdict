@@ -569,9 +569,13 @@ RUNS = {
     "strip": ["strip"],
     "shell": VIEW_LAYERS,
     "production": LAYERS,
+    "production-original": LAYERS,
 }
 # The runs `hostile.production` holds to zero; the rest are `hostile.controls`.
-PRODUCTION_PART = ["shell", "production"]
+PRODUCTION_PART = ["shell", "production", "production-original"]
+# The runs whose dictionary is shown in its own style (ADR-0010 Q3): the reader's "Original style" moves no layer, so
+# production in it is held to everything production is.
+ORIGINAL_STYLE = ["production-original"]
 PROBES = {
     # The policy header: a connection, a srcdoc document's fetch (inherited), an SVG document under r/ navigated to
     # (the case a shell-written <meta> missed in spike 3), a worker, and markup the rewriter could not see.
@@ -636,7 +640,8 @@ def build() -> tuple[str, str]:
     listed = {
         "comment": "What the hostile stage runs and what it holds each run to (apps/apple/Tools/hostile/battery.py).",
         "token": TOKEN, "control": CONTROL, "selftestName": f"selftest-{TOKEN}.invalid",
-        "layers": LAYERS, "runs": RUNS, "productionPart": PRODUCTION_PART, "probes": PROBES,
+        "layers": LAYERS, "runs": RUNS, "productionPart": PRODUCTION_PART,
+        "originalStyle": ORIGINAL_STYLE, "probes": PROBES,
         "reader": {"tcp": reader.tcp, "udp": reader.udp, "names": reader.names},
         "cases": [{k: v for k, v in c.items() if k not in ("record", "resources")} for c in all_cases],
     }

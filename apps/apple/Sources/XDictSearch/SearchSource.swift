@@ -76,7 +76,7 @@ extension Library {
     public var searchSources: [SearchSource] {
         entries.map { entry in
             SearchSource(id: entry.id, name: entry.displayName, edition: entry.edition,
-                         preferencesKey: entry.lineage?.rawValue ?? entry.id.uuidString, enabled: entry.enabled,
+                         preferencesKey: entry.preferencesKey, enabled: entry.enabled,
                          state: SourceState(phases[entry.id], handle: handle(entry.id)))
         }
     }

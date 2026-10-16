@@ -13,8 +13,12 @@ public final class ServiceEntryContent: EntryContent {
     private let dict: DictId
     private let edition: Edition
 
-    /// The content of `source`, while it answers; nil when it cannot (not open, or never imported).
-    public init?(source: SearchSource, backend: any SearchBackend) {
+    private let preferences: EntryPreferences
+
+    /// The content of `source`, while it answers; nil when it cannot (not open, or never imported). `preferences` holds
+    /// the reader's "Original style" for it, read at each request.
+    public init?(source: SearchSource, backend: any SearchBackend, preferences: EntryPreferences = EntryPreferences()) {
+        self.preferences = preferences
         guard let handle = source.handle, let edition = source.edition else { return nil }
         self.backend = backend
         dict = handle
@@ -26,8 +30,14 @@ public final class ServiceEntryContent: EntryContent {
         EntryRef(edition: edition, key: reference.key, occurrence: reference.occurrence)
     }
 
+    /// The reader's render context, in the style the reader chose for this dictionary now (ADR-0010 Q3).
+    private var render: RenderContext {
+        RenderContext(maxBodyBytes: RenderContext.reader.maxBodyBytes,
+                      originalStyle: preferences.originalStyle(for: binding.dictionary))
+    }
+
     public func entry(_ reference: EntryReference) async throws -> EntryDocument {
-        let delivered = try await backend.request(.entry(dict: dict, entry: self.reference(reference), render: .reader)).get()
+        let delivered = try await backend.request(.entry(dict: dict, entry: self.reference(reference), render: render)).get()
         guard case .entry(let entry) = delivered.answer, let html = delivered.payload else {
             throw ClientFailure.wire(.undecodable(detail: "not an entry"))
         }
@@ -35,7 +45,7 @@ public final class ServiceEntryContent: EntryContent {
     }
 
     public func resource(_ path: String) async throws -> EntryResource {
-        let delivered = try await backend.request(.resource(dict: dict, path: path, render: .reader)).get()
+        let delivered = try await backend.request(.resource(dict: dict, path: path, render: render)).get()
         switch delivered.answer {
         case .resource(.found(_, let mime)):
             guard let bytes = delivered.payload else { throw ClientFailure.wire(.undecodable(detail: "no bytes")) }

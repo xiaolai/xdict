@@ -56,11 +56,24 @@
    "link-preconnect",
    "peer-connection",
    "strip"
+  ],
+  "production-original": [
+   "csp",
+   "rules",
+   "nav",
+   "popups",
+   "link-preconnect",
+   "peer-connection",
+   "strip"
   ]
  },
  "productionPart": [
   "shell",
-  "production"
+  "production",
+  "production-original"
+ ],
+ "originalStyle": [
+  "production-original"
  ],
  "probes": {
   "csp": {

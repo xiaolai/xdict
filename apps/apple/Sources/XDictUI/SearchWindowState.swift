@@ -102,7 +102,7 @@ public final class SearchWindowState {
     /// Shows the model's entry in the pane, from its dictionary as the library has it now.
     public func present(_ shown: SearchModel.Shown) async {
         guard let source = model.source(shown.result.dictionary),
-              let content = ServiceEntryContent(source: source, backend: backend) else {
+              let content = ServiceEntryContent(source: source, backend: backend, preferences: entry.preferences) else {
             onPresented?(shown, false)
             return
         }

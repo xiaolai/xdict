@@ -721,11 +721,13 @@ hostile_prepare() {
 }
 # hostile_runs <label...>: those configurations' observed runs.
 hostile_runs() {
-    local label off
+    local label off style
     for label in "$@"; do
         rm -rf "${hostile_results:?}/$label" "$hostile_results/$label.log"
         off=$(python3 -I "$kit/analyze.py" off "$kit/cases.json" "$label")
-        if "$kit/run-hostile.sh" "$kit" "$hostile_results" "$label" hostile ${off:+--disable-layer "$off"} \
+        # The reader's "Original style" (ADR-0010 Q3) for the runs `cases.json` lists under it.
+        style=$(python3 -I "$kit/analyze.py" original "$kit/cases.json" "$label")
+        if "$kit/run-hostile.sh" "$kit" "$hostile_results" "$label" hostile ${off:+--disable-layer "$off"} $style \
             >"$hostile_results/$label.log" 2>&1; then
             echo "      $label: $(tail -1 "$hostile_results/$label.log")"
         else

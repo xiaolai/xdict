@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictContract
+import XDictEntryView
 import XDictLibrary
 
 /// **One dictionary's details**: the question a changed file asks (and the undo of its answer), the reader's name for
@@ -9,6 +10,14 @@ import XDictLibrary
 struct LibraryDetail: View {
     let library: Library
     let entry: LibraryEntry
+    /// ADR-0010 Q3: this dictionary in its own style, kept under its lineage (never its path), off by default.
+    @AppStorage private var originalStyle: Bool
+
+    init(library: Library, entry: LibraryEntry) {
+        self.library = library
+        self.entry = entry
+        _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
+    }
 
     /// The languages the reader is offered: XDict's own two, and those dictionaries most often pair them with. Named by
     /// the system in the reader's language.
@@ -26,6 +35,7 @@ struct LibraryDetail: View {
                 }
             }
             languages
+            reading
             about
             health
             if !entry.notes.isEmpty {
@@ -140,6 +150,17 @@ struct LibraryDetail: View {
             pair[keyPath: side] = chosen
             library.setLanguages(entry.id, pair)
         })
+    }
+
+    /// How the dictionary's entries look: XDict's reading style, or the dictionary's own.
+    private var reading: some View {
+        Section("Reading") {
+            Toggle(isOn: $originalStyle) {
+                Text("Original style")
+                Text("Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way.")
+            }
+            .accessibilityIdentifier("original-style")
+        }
     }
 
     private var about: some View {

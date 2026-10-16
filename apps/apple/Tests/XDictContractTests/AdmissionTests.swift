@@ -191,7 +191,8 @@ struct AdmissionTests {
     @Test func theRenderBaseIsFixed() throws {
         #expect(RenderContext.baseURL == "xdict://d/")
         let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(RenderContext.reader)) as? [String: Any]
-        #expect(Set(json?.keys ?? [:].keys) == ["maxBodyBytes"])
+        // The ceiling and the reader's "Original style" (ADR-0010 Q3), never a base.
+        #expect(Set(json?.keys ?? [:].keys) == ["maxBodyBytes", "originalStyle"])
         #expect(RenderContext.reader.maxBodyBytes == Limits.maxBodyBytes)
     }
 }

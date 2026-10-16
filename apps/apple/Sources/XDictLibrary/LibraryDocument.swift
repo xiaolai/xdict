@@ -120,6 +120,10 @@ public struct LibraryEntry: Codable, Hashable, Identifiable, Sendable {
     /// The reader's join, until undone.
     public var join: LineageJoin?
 
+    /// What the reader's choices for this dictionary are kept under (zoom, theme, "Original style"): its lineage, which
+    /// survives a new edition and a moved file (ADR-0002); its own id until it has one.
+    public var preferencesKey: String { lineage?.rawValue ?? id.uuidString }
+
     public init(id: UUID, root: StoredLocation, files: [StoredFile], languages: Languages) {
         self.id = id
         self.root = root

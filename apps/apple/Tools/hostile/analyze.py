@@ -225,6 +225,7 @@ def summarize(d):
             cases[cid]["left"] = True
     return {
         "label": os.path.basename(d.rstrip("/")), "disabled": lab.get("disabled"), "confinement": lab.get("confinement"),
+        "originalStyle": lab.get("originalStyle"),
         "switchesReadBack": lab.get("switchesReadBack"), "opened": lab.get("opened"), "os": lab.get("os"),
         "webkit": lab.get("webkit"), "controls": controls, "cases": cases,
         "notLoaded": sorted(cid for cid, v in cases.items() if not v["loaded"]),
@@ -488,6 +489,29 @@ def entries(res, part=None):
     return 0 if all(results) else 1
 
 
+def rendered_as_asked(listed, label, summary):
+    """Whether the lab rendered `label`'s run in the style `cases.json` asks for it (ADR-0010 Q3)."""
+    return summary.get("originalStyle") is (label in listed.get("originalStyle", []))
+
+
+def production_rules(production, label, rule):
+    """The rules of a production run, in either style: the app's confinement, both switches off, allowed content
+    working, and the strip list applied."""
+    if not production:
+        return
+    rule(not production["webkitOtherLookups"],
+         f"{label}: no other lookup by the lab's WebKit ({production['webkitOtherLookups'][:3]})")
+    rule((production["confinement"] or {}).get("production") is True, f"{label}: the confinement is the app's")
+    rule(production["switchesReadBack"] == {"LinkPreconnect": False, "PeerConnectionEnabled": False},
+         f"{label}: both switches read back off ({production['switchesReadBack']})")
+    for cid in ("ok-xdict", "ok-placeholder", "ok-link-nav"):
+        broken = production["cases"].get(cid, {}).get("broken")
+        rule(broken == [], f"{label}: allowed content works: {cid} (missing {broken})")
+    ok = production["cases"].get("ok-xdict", {})
+    rule(ok.get("stripped") is True, f"{label}: ok-xdict's scripts are stripped, not run "
+                                     f"({ok.get('scriptsServed')} of {ok.get('scriptsWritten')} served)")
+
+
 def suite(res, part=None):
     """`part` is one E2E sub-stage's share (`Tools/e2e.sh`): `production` holds the production run alone to its rules;
     `controls` the other runs, the baseline and every layer's probe (none of which reads production). None: all."""
@@ -517,8 +541,12 @@ def suite(res, part=None):
         wanted_off = sorted(set(listed["layers"]) - set(listed["runs"][label]))
         rule(sorted(s["disabled"] or []) == wanted_off, f"{label}: the lab ran with exactly {wanted_off or 'nothing'} off")
         rule(s["opened"] == [], f"{label}: nothing was opened in a browser ({s['opened']})")
+        original = label in listed.get("originalStyle", [])
+        rule(rendered_as_asked(listed, label, s),
+             f"{label}: the lab rendered in {'the dictionary’s own style' if original else 'XDict’s reading style'} "
+             f"({s.get('originalStyle')})")
 
-    for label in ("shell", "production"):
+    for label in ("shell", "production", "production-original"):
         held = runs.get(label)
         if not held:
             continue
@@ -536,19 +564,8 @@ def suite(res, part=None):
         rule(broken == [], f"shell: the reading frame puts itself back after a page removes it ({broken})")
         broken = shell["cases"].get("ok-xdict", {}).get("broken")
         rule(broken == [], f"shell: allowed content works with its scripts live: ok-xdict (missing {broken})")
-    production = runs.get("production")
-    if production:
-        rule(not production["webkitOtherLookups"],
-             f"production: no other lookup by the lab's WebKit ({production['webkitOtherLookups'][:3]})")
-        rule((production["confinement"] or {}).get("production") is True, "production: the confinement is the app's")
-        rule(production["switchesReadBack"] == {"LinkPreconnect": False, "PeerConnectionEnabled": False},
-             f"production: both switches read back off ({production['switchesReadBack']})")
-        for cid in ("ok-xdict", "ok-placeholder", "ok-link-nav"):
-            broken = production["cases"].get(cid, {}).get("broken")
-            rule(broken == [], f"production: allowed content works: {cid} (missing {broken})")
-        ok = production["cases"].get("ok-xdict", {})
-        rule(ok.get("stripped") is True, f"production: ok-xdict's scripts are stripped, not run "
-                                         f"({ok.get('scriptsServed')} of {ok.get('scriptsWritten')} served)")
+    for label in ("production", "production-original"):
+        production_rules(runs.get(label), label, rule)
 
     baseline = runs.get("baseline")
     if baseline:
@@ -597,6 +614,9 @@ def main():
     command = sys.argv[1] if len(sys.argv) > 1 else ""
     if command == "runs" and len(sys.argv) in (3, 4):
         print(" ".join(runs_of(read_json(sys.argv[2]), sys.argv[3] if len(sys.argv) == 4 else None)))
+        return 0
+    if command == "original" and len(sys.argv) == 4:
+        print("--original-style" if sys.argv[3] in read_json(sys.argv[2]).get("originalStyle", []) else "")
         return 0
     if command == "off" and len(sys.argv) == 4:
         listed = read_json(sys.argv[2])

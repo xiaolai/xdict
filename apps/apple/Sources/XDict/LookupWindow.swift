@@ -176,6 +176,7 @@ final class LookupWindowRun: LookupStage {
         if setupFindings.passed {
             findings.merge(await scenario.run(pagingToo: pagingToo))
             findings.merge(await supersededLoads())
+            findings.merge(await originalStyleSwitch())
         }
         write(["timeline": timeline], to: work.appending(path: "timeline.json"))
         do {
@@ -242,6 +243,64 @@ final class LookupWindowRun: LookupStage {
         // The window's own entry again, from the window's own content.
         state.entry.closeEntry()
         if let shown = model.shown { await state.present(shown) }
+        return findings
+    }
+
+    // MARK: - "Original style" (ADR-0010 Q3)
+
+    /// `entry.originalStyleSwitch`: Alpha's "apple" (whose own `<style>` sets the page's margin, which the reading style
+    /// drops) shown in the reading style, then the reader's "Original style" for Alpha switched on where the Library's
+    /// switch keeps it (the window's preferences, under Alpha's lineage) and, with nothing else done, the entry shown
+    /// again by the core without normalization and without XDict's frame: the page visibly not the same (the body's
+    /// face and margin). Then off again, and the reading style back. The choice is left off.
+    private func originalStyleSwitch() async -> Findings {
+        var findings = Findings()
+        let name = "entry.originalStyleSwitch"
+        guard let state, let alpha = state.model.known.first(where: { $0.name == "Alpha" }),
+              let content = ServiceEntryContent(source: alpha, backend: XDictApp.service,
+                                                preferences: state.entry.preferences) else {
+            findings.check(name, false, "Alpha is not in the window's library")
+            return findings
+        }
+        let preferences = state.entry.preferences, key = alpha.preferencesKey
+        defer { preferences.setOriginalStyle(false, for: key) }
+        preferences.setOriginalStyle(false, for: key)
+        state.entry.closeEntry()
+        _ = await state.entry.show(EntryReference(key: "apple"), from: content)
+        let look = #"""
+            var b = document.body, s = b ? getComputedStyle(b) : null;
+            var own = Array.from(document.querySelectorAll('style'))
+              .some(function (e) { return /body\{margin:0\}/.test(e.textContent); });
+            return JSON.stringify({frame: !!document.getElementById('xdict-frame-column'), own: own,
+              font: s ? s.fontFamily : '', margin: s ? s.marginTop : '', text: b ? b.textContent.slice(0, 40) : ''});
+            """#
+        func read(until wanted: @escaping ([String: Any]) -> Bool) async -> [String: Any] {
+            var last: [String: Any] = [:]
+            let deadline = ContinuousClock.now + .seconds(8)
+            while ContinuousClock.now < deadline {
+                if let text = await InstrumentPage.evaluate(state.entry.webView, look) as? String,
+                   let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
+                    last = parsed
+                    if wanted(parsed) { return parsed }
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            return last
+        }
+        let showsApple = { (page: [String: Any]) in (page["text"] as? String)?.contains("apple") == true }
+        let styled = await read { showsApple($0) && $0["frame"] as? Bool == true }
+        preferences.setOriginalStyle(true, for: key)
+        let original = await read { showsApple($0) && $0["frame"] as? Bool == false && $0["own"] as? Bool == true }
+        preferences.setOriginalStyle(false, for: key)
+        let back = await read { showsApple($0) && $0["frame"] as? Bool == true }
+        let differs = styled["font"] as? String != original["font"] as? String
+            || styled["margin"] as? String != original["margin"] as? String
+        findings.check(name, styled["frame"] as? Bool == true && styled["own"] as? Bool == false
+                       && original["frame"] as? Bool == false && original["own"] as? Bool == true && differs
+                       && back["frame"] as? Bool == true && back["own"] as? Bool == false,
+                       "reading style \(styled); original style \(original); back \(back)")
+        state.entry.closeEntry()
+        if let shown = state.model.shown { await state.present(shown) }
         return findings
     }
 

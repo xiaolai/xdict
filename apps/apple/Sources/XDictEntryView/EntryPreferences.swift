@@ -40,7 +40,7 @@ public struct EntryPreferences: @unchecked Sendable {
 
     static func zoomKey(_ dictionary: String) -> String { "entry.zoom.\(dictionary)" }
     static func themeKey(_ dictionary: String) -> String { "entry.theme.\(dictionary)" }
-    static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
+    public static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
 
     /// The dictionary shown in its own style, without XDict's reading frame (ADR-0010 Q3). Off unless chosen.
     public func originalStyle(for dictionary: String) -> Bool {

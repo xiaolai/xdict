@@ -88,7 +88,7 @@ extension ConformanceScenario {
             let e = q["entry"] as? [String: Any] ?? [:]
             let ref = EntryRef(edition: (q["edition"] as? String).map(Edition.init) ?? edition, key: e["key"] as? String ?? "",
                                occurrence: Self.uint32(e["occurrence"]) ?? 0)
-            let view = Self.uint64(q["maxBodyBytes"]).map(RenderContext.init) ?? render
+            let view = Self.uint64(q["maxBodyBytes"]).map { RenderContext(maxBodyBytes: $0) } ?? render
             let got = P.outcome(await client.call(.entry(dict: dict, entry: ref, render: view))) { d -> Any in
                 if case .entry(let entry) = d.answer { return P.entry(entry, html: d.payload) } else { return "\(d.answer)" }
             }
@@ -106,7 +106,9 @@ extension ConformanceScenario {
             })
         }
         for (n, q) in ((x["resources"] as? [[String: Any]]) ?? []).enumerated() {
-            let got = await client.call(.resource(dict: dict, path: q["path"] as? String ?? "", render: render))
+            // ADR-0010 Q3: a case may ask for the dictionary's own style.
+            let styled = RenderContext(maxBodyBytes: render.maxBodyBytes, originalStyle: q["originalStyle"] as? Bool ?? false)
+            let got = await client.call(.resource(dict: dict, path: q["path"] as? String ?? "", render: styled))
             c.compare("resources[\(n)]", q["resource"], Self.resource(got))
         }
         c.compare("health", x["health"], Projection.outcome(await client.submitHealth(dict).outcome()) { d -> Any in
