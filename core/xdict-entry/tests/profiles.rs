@@ -128,6 +128,17 @@ fn a_known_markup_names_its_examples_sure() {
     assert!(!tag_of(&out, "hl").contains("data-xdict-sure"), "{out}");
 }
 
+/// A section heading the markup's table names is sure (`data-xdict-sure="heading"`).
+#[test]
+fn a_known_markup_names_its_headings_sure() {
+    let out = render(
+        LONGMAN,
+        r#"<div><span class="hw">run</span> <span class="d">to move fast</span> <div class="box"><span class="popheader popexa">EXAMPLES FROM THE CORPUS</span> <span class="ex">They ran.</span></div></div>"#,
+        "run",
+    );
+    assert!(tag_of(&out, "popheader popexa").contains(r#"data-xdict-sure="heading""#), "{out}");
+}
+
 /// Where a table names no examples (LDOCE's held a translation inside each, below the bar), the generic rule's
 /// examples stand, unsure.
 #[test]
