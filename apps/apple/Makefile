@@ -144,6 +144,7 @@ test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/core-on-host-test.sh
+	@Tools/tests/gate-cache-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py
