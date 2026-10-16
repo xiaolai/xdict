@@ -36,11 +36,16 @@ apps/apple/Tools/compiler-warnings.py               none
 apps/apple/Tools/release.sh                         none
 apps/apple/.swiftlint.yml                           none
 
-# --- The core: the sample of the owner's dictionaries comes from one of its tests; the rest is in every bundle --------
+# --- The core: the sample of the owner's dictionaries comes from one of its tests; a crate read only by rendering,
+# health or lookup selects those; the rest is in every bundle (2026-10-16: a one-attribute change to xdict-entry ran
+# every sub-stage, 46 min) -------------------------------------------------------------------------------------------
 core/xdict-core/tests/entries_corpus.rs             entries.quick
 core/xdict-core/examples/index_bench.rs             library.corpus
 core/*/tests/*                                      none
 core/*/benches/*                                    none
+core/xdict-health/*                                 library.health
+core/xdict-lookup/*                                 lookup library.corpus
+core/xdict-entry/*                                  hostile.production hostile.app hostile.faults hostile.binding reader entries.full entries.persistence lookup.core sound
 core/*                                              all
 conformance/fixtures/hostile/*                      check:hostile.production hostile.app
 conformance/fixtures/twin-*                         check:hostile.binding
@@ -87,6 +92,9 @@ apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services pan
 apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
 
 # --- The product ----------------------------------------------------------------------------------------------------
+apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.a11y sound
+apps/apple/Sources/XDictEntryView/EntryMarks.swift  hostile.production reader entries.quick entries.persistence lookup.a11y sound
+apps/apple/Sources/XDictEntryView/EntryColourGuard.swift hostile.production reader entries.quick entries.persistence lookup.a11y
 apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
 apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel

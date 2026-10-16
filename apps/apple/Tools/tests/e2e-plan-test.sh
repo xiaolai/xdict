@@ -54,6 +54,17 @@ same "what sub-stages need" "$(lines corpus editions)" "$(bash $plan needs libra
 got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryWebView.swift)
 case " $(tr '\n' ' ' <<<"$got") " in *" hostile.production "*) ok "an XDictEntryView change selects hostile.production" ;;
     *) bad "an XDictEntryView change did not select hostile.production: $got" ;; esac
+same "a health change selects only its own sub-stage" "library.health" \
+    "$(bash $affected --paths core/xdict-health/src/lib.rs)"
+got=$(bash $affected --paths core/xdict-entry/src/roles.rs)
+case " $(tr '\n' ' ' <<<"$got") " in
+    *" launch."*|*" library."*|*" panel."*) bad "a rendering change selects stages that never render: $got" ;;
+    *" hostile.production "*" entries.full "*) ok "a rendering change selects the entry's stages, not the app's" ;;
+    *) bad "a rendering change missed hostile.production or entries.full: $got" ;; esac
+got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryMarks.swift)
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.faults "*|*" hostile.binding "*) bad "a stylesheet change selects the fault and binding twins: $got" ;;
+    *" reader "*) ok "a stylesheet change selects what draws the entry" ;; *) bad "a stylesheet change missed reader: $got" ;; esac
+same "the reader is everything" "$(bash $plan substages)" "$(bash $affected --paths core/xdict-mdx/src/lib.rs)"
 same "an unmapped path selects every default sub-stage" "$(bash $plan substages)" \
     "$(bash $affected --paths apps/apple/no-rule-names-this.file)"
 same "the service's code is everything" "$(bash $plan substages)" \
