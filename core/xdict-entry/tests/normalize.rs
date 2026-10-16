@@ -138,40 +138,39 @@ fn an_ascii_phonetic_face_is_kept() {
     assert!(s.kept().is_empty(), "{:?}", s.kept());
 }
 
-/// R4: every size is on the scale: absolute ones by their ratio to the base, relative ones clamped.
+/// R4: every size is on the scale, as a step of it: absolute ones by their ratio to the base, relative ones by their
+/// own ratio, never compounding (unification R, owner 2026-10-16). Each size carries its leading: 1.6, 1.3 when large.
+/// A size that cannot be read goes.
 #[test]
 fn sizes_go_onto_the_scale() {
     let s = Style::of_sheets(["body{font-size:16px}"]);
     assert_eq!(s.base().px, 16.0);
-    assert_eq!(css(".a{font-size:16px}", &s), ".a{font-size:var(--xdict-fs-m, 1rem)}");
-    assert_eq!(css(".a{font-size: 9pt}", &s), ".a{font-size: var(--xdict-fs-xs, 0.75rem)}");
-    assert_eq!(css(".a{font-size:small}", &s), ".a{font-size:var(--xdict-fs-s, 0.875rem)}");
-    assert_eq!(
-        css(".a{font-size:80PX}", &s),
-        ".a{font-size:var(--xdict-fs-xxl, 1.5rem);line-height:var(--xdict-leading-tight, 1.3)}"
-    );
-    assert_eq!(
-        css(".a{font-size:90%}", &s),
-        ".a{font-size:clamp(var(--xdict-fs-min, .75rem), 0.875em, var(--xdict-fs-max, 1.5rem))}"
-    );
-    assert_eq!(
-        css(".a{font-size:2em}", &s),
-        ".a{font-size:clamp(var(--xdict-fs-min, .75rem), 1.5em, var(--xdict-fs-max, 1.5rem));line-height:var(--xdict-leading-tight, 1.3)}"
-    );
-    for kept in [".a{font-size:0}", ".a{font-size:calc(2px + 1em)}", ".a{font-size:inherit}"] {
+    let lead = "line-height:var(--xdict-leading, 1.6)";
+    let tight = "line-height:var(--xdict-leading-tight, 1.3)";
+    assert_eq!(css(".a{font-size:16px}", &s), format!(".a{{font-size:var(--xdict-fs-m, 1rem);{lead}}}"));
+    assert_eq!(css(".a{font-size: 9pt}", &s), format!(".a{{font-size: var(--xdict-fs-xs, 0.75rem);{lead}}}"));
+    assert_eq!(css(".a{font-size:small}", &s), format!(".a{{font-size:var(--xdict-fs-s, 0.875rem);{lead}}}"));
+    assert_eq!(css(".a{font-size:80PX}", &s), format!(".a{{font-size:var(--xdict-fs-xxl, 1.5rem);{tight}}}"));
+    assert_eq!(css(".a{font-size:90%}", &s), format!(".a{{font-size:var(--xdict-fs-s, 0.875rem);{lead}}}"));
+    assert_eq!(css(".a{font-size:2em}", &s), format!(".a{{font-size:var(--xdict-fs-xxl, 1.5rem);{tight}}}"));
+    assert_eq!(css(".a{font-size:smaller}", &s), format!(".a{{font-size:var(--xdict-fs-s, 0.875rem);{lead}}}"));
+    assert_eq!(css(".a{font-size:unset}", &s), ".a{font-size:unset;line-height:inherit}", "its parent's leading too");
+    for kept in [".a{font-size:0}", ".a{font-size:inherit;line-height:inherit}"] {
         assert_eq!(css(kept, &s), kept);
+    }
+    for gone in [".a{font-size:calc(2px + 1em)}", ".a{font-size:2ex}", ".a{font-size:var(--x)}"] {
+        assert_eq!(css(gone, &s), ".a{}", "{gone}");
     }
     assert_eq!(counts(".a{font-size:12px}.b{font-size:1em}", &s).size, 2);
 }
 
-/// R5: line heights are the frame's, except where a rule sets a height (a centring trick), kept there in `em`.
+/// R5: line heights are the frame's, everywhere (unification R, 2026-10-16).
 #[test]
 fn line_heights_are_dropped() {
     let s = Style::of_sheets(["body{font-size:16px}"]);
     assert_eq!(css(".a{line-height:30px;color:inherit}", &s), ".a{color:inherit}");
     assert_eq!(css(".b{line-height:1.4}", &s), ".b{}");
-    assert_eq!(css(".c{height:20px;line-height:20px}", &s), ".c{height:20px;line-height:1.25em}");
-    assert_eq!(css(".c{height:9px;line-height:9px}", &s), ".c{height:9px;line-height:1em}", "below 1 would overlap");
+    assert_eq!(css(".c{height:20px;line-height:20px}", &s), ".c{height:20px}", "one leading, a height or not");
     assert_eq!(counts(".b{line-height:21px}", &s).line_height, 1);
 }
 
@@ -180,11 +179,13 @@ fn the_font_shorthand_is_normalized_part_by_part() {
     let s = Style::of_sheets(["body{font-size:12px}"]);
     assert_eq!(
         css(".a{font:bold 12px/18px Arial, sans-serif}", &s),
-        format!(".a{{font:var(--xdict-weight-bold, 600) var(--xdict-fs-m, 1rem) {FONT}}}")
+        format!(
+            ".a{{font:var(--xdict-weight-bold, 600) var(--xdict-fs-m, 1rem) {FONT};line-height:var(--xdict-leading, 1.6)}}"
+        )
     );
     assert_eq!(
         css(".a{font:italic 1em Arial}", &s),
-        format!(".a{{font:italic clamp(var(--xdict-fs-min, .75rem), 1em, var(--xdict-fs-max, 1.5rem)) {FONT}}}")
+        format!(".a{{font:italic var(--xdict-fs-m, 1rem) {FONT};line-height:var(--xdict-leading, 1.6)}}")
     );
     assert_eq!(css(".a{font:caption}", &s), ".a{font:caption}");
 }
@@ -232,18 +233,18 @@ fn colours_become_palette_tokens() {
     let s = plain();
     assert_eq!(
         css(".a{color:#c00000} .b{color:navy}", &s),
-        ".a{color:var(--xdict-red, #af342f)} .b{color:var(--xdict-blue-deep, #02489f)}"
+        ".a{color:var(--xdict-accent, #901114)} .b{color:var(--xdict-accent, #901114)}"
     );
     assert_eq!(css(".c{color:transparent}", &s), ".c{color:transparent}");
     // A chip loses its band, and its white text takes the band's family, so the label keeps its meaning.
-    assert_eq!(css(".d{color:white;background:#602090}", &s), ".d{color:var(--xdict-purple-deep, #622c91)}");
+    assert_eq!(css(".d{color:white;background:#602090}", &s), ".d{color:var(--xdict-accent, #901114)}");
     assert_eq!(
         html(r#"<span style="color:rgb(0,0,0)">x</span>"#, &s),
         format!(r#"<span style="color:{TEXT}">x</span>"#)
     );
     assert_eq!(
         html("<style>.e{color:hsl(0,100%,25%)}</style>", &s),
-        "<style>.e{color:var(--xdict-red-deep, #901114)}</style>"
+        "<style>.e{color:var(--xdict-accent, #901114)}</style>"
     );
     assert_eq!(counts(".a{color:red;background:#eee}", &s).colour, 1);
 }
@@ -283,13 +284,16 @@ fn presentational_html_becomes_style() {
     assert_eq!(
         html(r##"<font color="#c00000" size=2 face="Times">x</font>"##, &s),
         format!(
-            r#"<font style="color:var(--xdict-red, #af342f);font-size:var(--xdict-fs-s, 0.875rem);font-family:{FONT}">x</font>"#
+            r#"<font style="color:var(--xdict-accent, #901114);font-size:var(--xdict-fs-s, 0.875rem);line-height:var(--xdict-leading, 1.6);font-family:{FONT}">x</font>"#
         )
     );
-    assert_eq!(html("<font size=+2>x</font>", &s), r#"<font style="font-size:var(--xdict-fs-xl, 1.25rem)">x</font>"#);
+    assert_eq!(
+        html("<font size=+2>x</font>", &s),
+        r#"<font style="font-size:var(--xdict-fs-xl, 1.25rem);line-height:var(--xdict-leading-tight, 1.3)">x</font>"#
+    );
     assert_eq!(
         html(r#"<td bgcolor=white style="color:red">x</td>"#, &s),
-        r#"<td style="color:var(--xdict-red, #af342f)">x</td>"#
+        r#"<td style="color:var(--xdict-accent, #901114)">x</td>"#
     );
     assert_eq!(html("<p align=center>x</p>", &s), r#"<p style="text-align:center">x</p>"#);
     assert_eq!(html("<img align=left src=a.png border=0>", &s), r#"<img src="xdict://d/r/a.png" style="float:left">"#);
@@ -790,13 +794,13 @@ fn a_text_colour_is_only_a_token() {
         assert_eq!(html(&format!("<font color=\"{v}\">x</font>"), &s), "<font>x</font>", "{v}");
     }
     // `all` resets the colour to the engine's own (`initial` is CanvasText).
-    assert_eq!(css(".a{all:initial;color:red}", &s), ".a{color:var(--xdict-red, #af342f)}");
+    assert_eq!(css(".a{all:initial;color:red}", &s), ".a{color:var(--xdict-accent, #901114)}");
     for v in ["currentColor", "inherit", "transparent", "unset"] {
         assert_eq!(css(&format!(".a{{color:{v}}}"), &s), format!(".a{{color:{v}}}"));
     }
-    assert_eq!(css(".a{color:navy}", &s), ".a{color:var(--xdict-blue-deep, #02489f)}");
+    assert_eq!(css(".a{color:navy}", &s), ".a{color:var(--xdict-accent, #901114)}");
     assert_eq!(css(".a{text-decoration:underline dotted}", &s), ".a{text-decoration:underline dotted}");
-    assert_eq!(css(".a{color:var(--xdict-red, #af342f)}", &s), ".a{color:var(--xdict-red, #af342f)}");
+    assert_eq!(css(".a{color:var(--xdict-accent, #901114)}", &s), ".a{color:var(--xdict-accent, #901114)}");
     assert_eq!(html(r#"<p style="color:LinkText">x</p>"#, &s), r#"<p style="">x</p>"#);
 }
 
@@ -825,4 +829,16 @@ fn original_style_leaves_the_dictionarys_declarations_as_written() {
     ] {
         assert!(html.contains(kept), "{kept} in {html}");
     }
+}
+
+/// A coloured run survives as the one accent (owner, 2026-10-16: flatten), in a sheet, a style attribute and a
+/// `<font color>`: the exact-hue branch once mapped colours to `light-dark()`, which the token check then dropped.
+#[test]
+fn a_coloured_run_is_the_accent_not_dropped() {
+    let s = plain();
+    let accent = "var(--xdict-accent, #901114)";
+    assert_eq!(css(".a{color:#2a7a2a}", &s), format!(".a{{color:{accent}}}"));
+    assert_eq!(html(r#"<span style="color:teal">x</span>"#, &s), format!(r#"<span style="color:{accent}">x</span>"#));
+    assert_eq!(html(r#"<font color="purple">x</font>"#, &s), format!(r#"<font style="color:{accent}">x</font>"#));
+    assert!(TOKENS.contains(&"--xdict-accent"));
 }

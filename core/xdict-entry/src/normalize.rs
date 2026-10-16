@@ -19,7 +19,7 @@ pub const STYLE: u32 = 4;
 
 /// Every token the core may write, by `dev-docs/reading-style.md` §1's names: the frame defines exactly these, and a
 /// name not among them would fall back silently. The one list; a test holds every output to it.
-pub const TOKENS: [&str; 51] = [
+pub const TOKENS: [&str; 52] = [
     "--xdict-font",
     "--xdict-font-phon",
     "--xdict-font-mono",
@@ -42,6 +42,7 @@ pub const TOKENS: [&str; 51] = [
     "--xdict-text-2",
     "--xdict-panel",
     "--xdict-rule",
+    "--xdict-accent",
     "--xdict-red-deep",
     "--xdict-red",
     "--xdict-red-tint",
@@ -741,14 +742,10 @@ struct Facts {
     /// It draws an icon: private-use `content`, or a bundled face's pseudo-element `content` (R3: the family is kept
     /// on this rule only).
     icon: bool,
-    /// Its own absolute size, in pixels, for a coupled line height.
-    own_px: Option<f64>,
     /// The background it paints, when it also sets a text colour: a chip (§4.3).
     chip: Option<colour::Rgb>,
     /// It draws a box (a border or padding), where a near-white background is a panel.
     boxed: bool,
-    /// It sets a height, so a line height there centres something (R5) and is kept.
-    coupled: bool,
     /// Its subject is an image, an SVG or a video, whose sizes the frame must win (R2).
     media: bool,
     /// Its subject is an `<hr>`, which is a gap (Q9): what would draw it a line is dropped.
@@ -758,7 +755,7 @@ struct Facts {
 impl Facts {
     /// An element's own attributes: nothing known of a rule.
     fn plain() -> Self {
-        Self { icon: false, own_px: None, chip: None, boxed: false, coupled: false, media: false, rule: false }
+        Self { icon: false, chip: None, boxed: false, media: false, rule: false }
     }
 
     fn of(decls: &[Option<Decl<'_>>], selector: &str, style: &Style) -> Self {
@@ -775,11 +772,6 @@ impl Facts {
             named.iter().any(|(k, _)| style.draws_icons(k))
         });
         let icon = private || (drawn && bundled && pseudo_element(selector));
-        let own_px = all().rev().find_map(|d| match d.name.as_str() {
-            "font-size" => absolute_px(d.value),
-            "font" => shorthand(d.value).and_then(|s| absolute_px(s.size)),
-            _ => None,
-        });
         let sets_colour = all().any(|d| d.name == "color");
         let chip = sets_colour
             .then(|| {
@@ -793,7 +785,6 @@ impl Facts {
             (d.name.starts_with("border") || d.name.starts_with("padding"))
                 && !matches!(d.value.trim(), "0" | "none" | "0px" | "0 none")
         });
-        let coupled = all().any(|d| matches!(d.name.as_str(), "height" | "min-height" | "max-height"));
         let subject = selector.rsplit(|c: char| c.is_whitespace() || matches!(c, '>' | '+' | '~' | ',')).next();
         let element: String = subject
             .unwrap_or("")
@@ -803,7 +794,7 @@ impl Facts {
             .to_ascii_lowercase();
         let media = matches!(element.as_str(), "img" | "svg" | "video");
         let rule = element == "hr";
-        Self { icon, own_px, chip, boxed, coupled, media, rule }
+        Self { icon, chip, boxed, media, rule }
     }
 }
 
@@ -855,7 +846,7 @@ pub(crate) fn finish(
     let facts = Facts::of(&decls, &selector, style);
     let mut changed = false;
     let mut out: Vec<String> = Vec::with_capacity(pieces.len() + 1);
-    let mut tight = false;
+    let mut sized: Option<&str> = None;
     for (piece, decl) in pieces.iter().zip(&decls) {
         let Some(decl) = decl else {
             out.push((*piece).to_owned());
@@ -894,8 +885,12 @@ pub(crate) fn finish(
                 act = Action::Drop;
             }
         }
-        let line_height = act == Action::LineHeight && !facts.coupled;
-        let drop = act == Action::Drop || line_height;
+        // R5: every line height is the frame's, even where a rule sets a height (unification R, 2026-10-16: one
+        // leading; the box it centred text in is gone with "Plain by default").
+        let line_height = act == Action::LineHeight;
+        // A size that cannot be put on the scale (`calc()`, `ex`, a variable) goes: the element takes its parent's.
+        let unreadable = act == Action::Size && !size_kept(decl.value) && size_token(decl.value, style).is_none();
+        let drop = act == Action::Drop || line_height || unreadable;
         // R2: `!important` goes only where the frame must win.
         let strip = decl.important
             && (page || drop || (facts.media && matches!(decl.name.as_str(), "width" | "max-width" | "height")));
@@ -914,16 +909,18 @@ pub(crate) fn finish(
             changed = true;
             continue;
         }
+        if act == Action::Size && size_inherits(decl.value) {
+            sized = Some(leading_of(false, decl.value));
+        }
         let value = match act {
-            Action::Drop | Action::Keep => None,
+            Action::Drop | Action::Keep | Action::LineHeight => None,
             Action::Family => family_value(decl.value, &facts, style, counts),
             Action::Size => size_value(decl.value, style, counts).map(|(v, large)| {
-                tight |= large;
+                sized = Some(leading_of(large, decl.value));
                 v
             }),
-            Action::LineHeight => coupled_line_height(decl.value, facts.own_px.unwrap_or(style.base.px), counts),
             Action::Font => font_value(decl.value, &facts, style, counts).map(|(v, large)| {
-                tight |= large;
+                sized = Some(leading_of(large, decl.value));
                 v
             }),
             Action::Colour(role) => colour_value(decl.value, role, &facts, counts),
@@ -939,15 +936,16 @@ pub(crate) fn finish(
         let important = if decl.important && !strip { " !important" } else { "" };
         out.push(format!("{}{}{important}{}", decl.head, value.as_deref().unwrap_or(decl.value), decl.tail));
     }
-    // R4: large text wraps less airily.
-    if tight && !facts.coupled {
+    // R4: every size carries its leading, so text never inherits a leading set for another size: large text wraps
+    // less airily (unification R, 2026-10-16: 1.6, 1.3 when large).
+    if let Some(leading) = sized {
         let last = out.pop().unwrap_or_default();
         if last.trim().is_empty() {
-            out.push("line-height:var(--xdict-leading-tight, 1.3)".to_owned());
+            out.push(leading.to_owned());
             out.push(last);
         } else {
             out.push(last);
-            out.push("line-height:var(--xdict-leading-tight, 1.3)".to_owned());
+            out.push(leading.to_owned());
         }
         changed = true;
     }
@@ -1208,6 +1206,26 @@ fn family_value(value: &str, facts: &Facts, style: &Style, counts: &mut Counts) 
     Some(format!("{space}{to}"))
 }
 
+/// The leading a size carries (`--xdict-leading`), and a large size's.
+const LEADING: &str = "line-height:var(--xdict-leading, 1.6)";
+const LEADING_TIGHT: &str = "line-height:var(--xdict-leading-tight, 1.3)";
+
+/// The leading a size declaration carries: a size that inherits its parent's takes its parent's leading too.
+fn leading_of(large: bool, value: &str) -> &'static str {
+    if size_inherits(value) {
+        "line-height:inherit"
+    } else if large {
+        LEADING_TIGHT
+    } else {
+        LEADING
+    }
+}
+
+fn size_inherits(value: &str) -> bool {
+    let v = value.trim().to_ascii_lowercase();
+    matches!(v.as_str(), "inherit" | "unset" | "revert" | "revert-layer")
+}
+
 /// The type scale (`--xdict-fs-*`): name and ratio.
 const SCALE: [(&str, f64); 6] = [("xs", 0.75), ("s", 0.875), ("m", 1.0), ("l", 1.125), ("xl", 1.25), ("xxl", 1.5)];
 
@@ -1279,11 +1297,18 @@ fn size_token(value: &str, style: &Style) -> Option<(String, bool)> {
     if lower.ends_with("vw") || lower.ends_with("vh") {
         return Some((step_token(2), false));
     }
+    // A relative size is a step of the scale too, by its own ratio: never compounded on its parent's, so every
+    // size an entry shows is on the scale (unification R, 2026-10-16).
     let ratio = relative_ratio(v).filter(|r| *r > 0.0)?;
     let i = snap(ratio);
-    let r = SCALE.get(i).map_or(1.0, |s| s.1);
-    let token = format!("clamp(var(--xdict-fs-min, .75rem), {}em, var(--xdict-fs-max, 1.5rem))", number(r));
-    Some((token, r >= 1.25))
+    Some((step_token(i), i >= 4))
+}
+
+/// A size kept as written: one that sets no size of its own (`inherit`, ...) or hides the text (`0`).
+fn size_kept(value: &str) -> bool {
+    let v = value.trim().to_ascii_lowercase();
+    matches!(v.as_str(), "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "0")
+        || absolute_px(&v) == Some(0.0)
 }
 
 fn size_value(value: &str, style: &Style, counts: &mut Counts) -> Option<(String, bool)> {
@@ -1309,18 +1334,7 @@ pub(crate) fn font_size_attribute(value: &str) -> Option<String> {
         5 => 4,
         _ => 5,
     };
-    Some(format!("font-size:{}", step_token(i)))
-}
-
-/// R5: a line height kept where its rule sets a height, in `em`; below 1 it is dropped (it would overlap).
-fn coupled_line_height(value: &str, size_px: f64, counts: &mut Counts) -> Option<String> {
-    let (space, height) = split_space(value);
-    let em = match absolute_px(height) {
-        Some(px) if size_px > 0.0 => px / size_px,
-        _ => return None,
-    };
-    counts.line_height += 1;
-    Some(format!("{space}{}em", number(em.max(1.0))))
+    Some(format!("font-size:{};{}", step_token(i), if i >= 4 { LEADING_TIGHT } else { LEADING }))
 }
 
 fn font_value(value: &str, facts: &Facts, style: &Style, counts: &mut Counts) -> Option<(String, bool)> {
@@ -1335,9 +1349,6 @@ fn font_value(value: &str, facts: &Facts, style: &Style, counts: &mut Counts) ->
     };
     // R5: the shorthand's line height goes with the rest, unless the rule sets a height.
     let height = match parts.line_height {
-        Some(h) if facts.coupled => absolute_px(h)
-            .map(|px| format!("/{}em", number((px / facts.own_px.unwrap_or(style.base.px)).max(1.0))))
-            .unwrap_or_else(|| format!("/{h}")),
         Some(_) => {
             counts.line_height += 1;
             String::new()

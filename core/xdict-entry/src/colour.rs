@@ -5,22 +5,15 @@
 //! to know which background a text lands on.
 //!
 //! - **Foreground:** a neutral (C < 0.035) is `--xdict-text` (L < 0.45) or `--xdict-text-2`; near-white is text on a
-//!   chip and becomes `--xdict-text`; otherwise its hue family, `-deep` when L < 0.5.
+//!   chip and becomes `--xdict-text`; any other colour is the one accent, `--xdict-accent` (owner, 2026-10-16:
+//!   "flatten"; ADR-0010's unification amendment): a colour that only told categories apart no longer does.
 //! - **Background:** near-white neutral is `--xdict-panel` on a box and `transparent` elsewhere; another neutral is
 //!   `--xdict-panel`; a chromatic colour is its family's `-tint`.
 //! - **Mark** (border, outline, shadow): its family's foreground; a neutral is `--xdict-rule`.
-//! - **Chip** (a rule that sets both): its text follows the background's family (`-deep`), or `--xdict-text`.
-//!
-//! [`SNAP_HUES`] is the owner's Q1: snap to the eight families (chosen 2026-10-15), or keep each colour's exact hue with
-//! the token tier's lightness and chroma.
+//! - **Chip** (a rule that sets both): its text is the accent on a coloured background, `--xdict-text` on a neutral one.
 
-/// Q1: snap hues to the palette's families (`true`, the owner's answer) or keep the exact hue (`false`).
-const SNAP_HUES: bool = true;
-/// Monochrome text with one accent (the owner's "plain" option): every chromatic text colour becomes the accent,
-/// `--xdict-blue` (the link colour), its tier kept. Off: each keeps its family.
-const MONOCHROME: bool = false;
-/// The accent family under [`MONOCHROME`]: blue.
-const ACCENT: usize = 5;
+/// The accent, light then dark: the red family's deep tier, so it reads at 4.5:1 wherever the palette's text does.
+const ACCENT: [u32; 2] = [0x901114, 0xfec9c2];
 
 /// What a colour is used for.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +35,10 @@ struct Family {
     name: &'static str,
     until: f64,
     light: [u32; 3],
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "the frame defines the dark values; the contrast test reads them")
+    )]
     dark: [u32; 3],
 }
 
@@ -79,6 +76,8 @@ pub(crate) enum Token {
     Panel,
     Rule,
     Transparent,
+    /// The one accent a chromatic text colour becomes.
+    Accent,
     /// A family (index into [`FAMILIES`]) at a tier: 0 deep, 1 plain, 2 tint.
     Hue(usize, usize),
 }
@@ -99,6 +98,7 @@ struct Lch {
     h: f64,
 }
 
+#[cfg(test)]
 fn hex_rgb(hex: u32) -> Rgb {
     let byte = |s: u32| f64::from((hex >> s) & 0xff) / 255.0;
     Rgb { r: byte(16), g: byte(8), b: byte(0), a: 1.0 }
@@ -124,7 +124,7 @@ pub(crate) fn token(colour: Rgb, role: Role, chip: Option<Rgb>) -> Token {
         Role::Text => {
             if let Some(bg) = chip {
                 match token(bg, Role::Background { boxed: false }, None) {
-                    Token::Hue(f, _) => return Token::Hue(f, 0),
+                    Token::Hue(..) => return Token::Accent,
                     Token::Panel => return Token::Text,
                     _ => {}
                 }
@@ -134,8 +134,7 @@ pub(crate) fn token(colour: Rgb, role: Role, chip: Option<Rgb>) -> Token {
             } else if neutral {
                 if lch.l < 0.45 { Token::Text } else { Token::Text2 }
             } else {
-                let f = if MONOCHROME { ACCENT } else { family(lch.h) };
-                Token::Hue(f, if lch.l < 0.5 { 0 } else { 1 })
+                Token::Accent
             }
         }
         Role::Background { boxed } => {
@@ -154,7 +153,7 @@ pub(crate) fn token(colour: Rgb, role: Role, chip: Option<Rgb>) -> Token {
 
 impl Token {
     /// As CSS writes it: `var(--xdict-…, <light value>)`.
-    pub(crate) fn css(self, colour: Rgb) -> String {
+    pub(crate) fn css(self) -> String {
         let neutral =
             |name: &str, i: usize| format!("var(--xdict-{name}, #{:06x})", NEUTRAL_LIGHT.get(i).copied().unwrap_or(0));
         match self {
@@ -163,22 +162,12 @@ impl Token {
             Self::Panel => neutral("panel", 1),
             Self::Rule => neutral("rule", 4),
             Self::Transparent => "transparent".to_owned(),
+            Self::Accent => format!("var(--xdict-accent, #{:06x})", ACCENT[0]),
             Self::Hue(f, tier) => {
                 let Some(fam) = FAMILIES.get(f) else { return neutral("text", 2) };
                 let light = fam.light.get(tier).copied().unwrap_or(0);
-                if SNAP_HUES {
-                    let suffix = ["-deep", "", "-tint"].get(tier).copied().unwrap_or("");
-                    format!("var(--xdict-{}{suffix}, #{light:06x})", fam.name)
-                } else {
-                    // The exact hue, at the tier's lightness and chroma in each theme.
-                    let h = opaque(colour).lch().h;
-                    let tone = |hex: u32| {
-                        let t = hex_rgb(hex).lch();
-                        Lch { h, ..t }.fitted(1.0).hex()
-                    };
-                    let dark = fam.dark.get(tier).copied().unwrap_or(0);
-                    format!("light-dark({}, {})", tone(light), tone(dark))
-                }
+                let suffix = ["-deep", "", "-tint"].get(tier).copied().unwrap_or("");
+                format!("var(--xdict-{}{suffix}, #{light:06x})", fam.name)
             }
         }
     }
@@ -186,15 +175,11 @@ impl Token {
 
 /// A colour as written, mapped for its role.
 pub(crate) fn mapped(colour: Rgb, role: Role, chip: Option<Rgb>) -> String {
-    token(colour, role, chip).css(colour)
+    token(colour, role, chip).css()
 }
 
 fn to_linear(c: f64) -> f64 {
     if c <= 0.04045 { c / 12.92 } else { ((c + 0.055) / 1.055).powf(2.4) }
-}
-
-fn from_linear(c: f64) -> f64 {
-    if c <= 0.003_130_8 { c * 12.92 } else { 1.055 * c.powf(1.0 / 2.4) - 0.055 }
 }
 
 impl Rgb {
@@ -216,6 +201,7 @@ impl Rgb {
     }
 
     /// The colour as CSS writes it: `#rrggbb`, or `#rrggbbaa` when translucent.
+    #[cfg(test)]
     pub(crate) fn hex(self) -> String {
         let byte = |c: f64| (c.clamp(0.0, 1.0) * 255.0).round() as u8;
         if self.a < 1.0 {
@@ -223,40 +209,6 @@ impl Rgb {
         } else {
             format!("#{:02x}{:02x}{:02x}", byte(self.r), byte(self.g), byte(self.b))
         }
-    }
-}
-
-impl Lch {
-    /// The sRGB colour, or `None` outside the gamut.
-    fn rgb(self, a: f64) -> Option<Rgb> {
-        let (ok_a, ok_b) = (self.c * self.h.cos(), self.c * self.h.sin());
-        let l = (self.l + 0.396_337_777_4 * ok_a + 0.215_803_757_3 * ok_b).powi(3);
-        let m = (self.l - 0.105_561_345_8 * ok_a - 0.063_854_172_8 * ok_b).powi(3);
-        let s = (self.l - 0.089_484_177_5 * ok_a - 1.291_485_548 * ok_b).powi(3);
-        let r = 4.076_741_662_1 * l - 3.307_711_591_3 * m + 0.230_969_929_2 * s;
-        let g = -1.268_438_004_6 * l + 2.609_757_401_1 * m - 0.341_319_396_5 * s;
-        let b = -0.004_196_086_3 * l - 0.703_418_614_7 * m + 1.707_614_701 * s;
-        let inside = |c: f64| (-1e-4..=1.0 + 1e-4).contains(&c);
-        (inside(r) && inside(g) && inside(b)).then(|| Rgb {
-            r: from_linear(r.clamp(0.0, 1.0)),
-            g: from_linear(g.clamp(0.0, 1.0)),
-            b: from_linear(b.clamp(0.0, 1.0)),
-            a,
-        })
-    }
-
-    /// The nearest colour in gamut with this lightness and hue: chroma reduced until it fits.
-    fn fitted(self, a: f64) -> Rgb {
-        if let Some(rgb) = self.rgb(a) {
-            return rgb;
-        }
-        let (mut lo, mut hi) = (0.0, self.c);
-        for _ in 0..24 {
-            let mid = (lo + hi) / 2.0;
-            if (Lch { c: mid, ..self }).rgb(a).is_some() { lo = mid } else { hi = mid }
-        }
-        let grey = self.l.clamp(0.0, 1.0);
-        (Lch { c: lo, ..self }).rgb(a).unwrap_or(Rgb { r: grey, g: grey, b: grey, a })
     }
 }
 
@@ -639,7 +591,7 @@ mod tests {
         for (theme, neutral, tier) in
             [("light", NEUTRAL_LIGHT, FAMILIES.map(|f| f.light)), ("dark", NEUTRAL_DARK, FAMILIES.map(|f| f.dark))]
         {
-            let mut texts = vec![neutral[2], neutral[3]];
+            let mut texts = vec![neutral[2], neutral[3], if theme == "light" { ACCENT[0] } else { ACCENT[1] }];
             let mut surfaces = vec![neutral[0], neutral[1]];
             for t in tier {
                 texts.extend([t[0], t[1]]);
@@ -654,15 +606,14 @@ mod tests {
         }
     }
 
-    /// Hue is meaning: each family takes its colours; tone is XDict's: deep for dark colours.
+    /// One accent (owner, 2026-10-16: flatten): every chromatic text colour is the accent, a neutral is text or
+    /// text-2; backgrounds and marks keep their family.
     #[test]
-    fn colours_take_their_familys_token() {
+    fn colours_take_their_token() {
         let css = |hex: u32, role: Role| mapped(rgb(hex), role, None);
-        assert_eq!(css(0xc00000, Role::Text), "var(--xdict-red, #af342f)");
-        assert_eq!(css(0x8b0000, Role::Text), "var(--xdict-red-deep, #901114)");
-        assert_eq!(css(0x1a0dab, Role::Text), "var(--xdict-blue-deep, #02489f)");
-        assert_eq!(css(0x006400, Role::Text), "var(--xdict-green-deep, #035e23)");
-        assert_eq!(css(0x800080, Role::Text), "var(--xdict-purple-deep, #622c91)");
+        for hex in [0xc00000, 0x8b0000, 0x1a0dab, 0x006400, 0x800080, 0xffd700] {
+            assert_eq!(css(hex, Role::Text), "var(--xdict-accent, #901114)", "{hex:06x}");
+        }
         assert_eq!(css(0x000000, Role::Text), "var(--xdict-text, #1d1d1f)");
         assert_eq!(css(0x333333, Role::Text), "var(--xdict-text, #1d1d1f)");
         assert_eq!(css(0x999999, Role::Text), "var(--xdict-text-2, #636366)");
@@ -676,13 +627,13 @@ mod tests {
         assert_eq!(css(0xc00000, Role::Mark), "var(--xdict-red, #af342f)");
     }
 
-    /// A chip's text follows its background's family, so the pair reads in every theme.
+    /// A chip's coloured text is the accent; on a neutral chip it is text.
     #[test]
     fn a_chips_text_follows_its_background() {
         let purple = Some(rgb(0x602090));
-        assert_eq!(mapped(rgb(0xffffff), Role::Text, purple), "var(--xdict-purple-deep, #622c91)");
+        assert_eq!(mapped(rgb(0xffffff), Role::Text, purple), "var(--xdict-accent, #901114)");
         assert_eq!(mapped(rgb(0xffff00), Role::Text, Some(rgb(0x808080))), "var(--xdict-text, #1d1d1f)");
-        assert_eq!(mapped(rgb(0xc00000), Role::Text, Some(rgb(0xffffff))), "var(--xdict-red, #af342f)");
+        assert_eq!(mapped(rgb(0xc00000), Role::Text, Some(rgb(0xffffff))), "var(--xdict-accent, #901114)");
     }
 
     #[test]
