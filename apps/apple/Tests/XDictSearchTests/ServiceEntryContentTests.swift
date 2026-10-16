@@ -45,6 +45,33 @@ struct ServiceEntryContentTests {
                                                                                      occurrence: 2), render: .reader)])
     }
 
+    /// ADR-0010 Q3: the reader's "Original style" for this dictionary (kept under its lineage) travels with every entry
+    /// and resource it asks for, read at the time of asking, so a change shows at the next render.
+    @Test func originalStyleTravelsWithEveryEntryAndResource() async throws {
+        let suite = "xdict-search-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let preferences = EntryPreferences(defaults: defaults)
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { operation in
+            switch operation {
+            case .entry(_, let entry, _):
+                .success(Delivered(answer: .entry(Entry(entry: entry, csp: "", lossyBytes: 0)), payload: Data()))
+            default:
+                .success(Delivered(answer: .resource(.missing(path: "a.css")), payload: nil))
+            }
+        }
+        let content = try #require(ServiceEntryContent(source: Self.source, backend: backend, preferences: preferences))
+        _ = try await content.entry(EntryReference(key: "run", occurrence: 0))
+        preferences.setOriginalStyle(true, for: "lineage-b")
+        _ = try await content.resource("a.css")
+        preferences.setOriginalStyle(true, for: "lineage-a")
+        _ = try await content.entry(EntryReference(key: "run", occurrence: 0))
+        _ = try await content.resource("a.css")
+        let original = await backend.requests.map(\.render?.originalStyle)
+        #expect(original == [false, false, true, true], "another dictionary's choice leaked, or the choice did not travel")
+    }
+
     @Test func aResourceIsFoundWithItsTypeOrMissing() async throws {
         let (content, backend) = try await Self.content { operation in
             guard case .resource(_, let path, _) = operation else { return .failure(.wire(.interrupted)) }

@@ -28,6 +28,7 @@ public struct LibraryView: View {
         } detail: {
             if let id = selection, let entry = library.entries.first(where: { $0.id == id }) {
                 LibraryDetail(library: library, entry: entry)
+                    .id(entry.preferencesKey)
             } else {
                 Text("Select a dictionary to see its details.")
                     .foregroundStyle(.secondary)

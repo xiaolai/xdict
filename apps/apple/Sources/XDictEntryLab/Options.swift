@@ -24,6 +24,9 @@ struct LabOptions {
     var keys: URL?
     var persistence: String?
     var disabled: Set<String> = []
+    /// The reader's "Original style" (ADR-0010 Q3) for the hostile battery's dictionary: the core renders it without the
+    /// normalization and the view shows it without the frame, every layer of the confinement as it is.
+    var originalStyle = false
     var concurrency = 4
     var only: Set<String> = []
 
@@ -31,7 +34,7 @@ struct LabOptions {
     /// lab's binary must hold `--disable-layer` (the reading can see it) and the app's must not.
     static let usage = """
         usage:
-          XDictEntryLab --hostile <fixture dir> --cases <cases.json> --out <report.json> [--disable-layer L,…]
+          XDictEntryLab --hostile <fixture dir> --cases <cases.json> --out <report.json> [--disable-layer L,…] [--original-style]
                         [--concurrency N] [--only id,…]
           XDictEntryLab --fault-switch <fault> --fixture <dir> --out <report.json>
           XDictEntryLab --binding <twin-a dir> <twin-b dir> --out <report.json>
@@ -71,6 +74,7 @@ struct LabOptions {
             case "--persistence": options.persistence = try value()
             case "--disable-layer":
                 options.disabled.formUnion(try value().split(separator: ",").map(String.init))
+            case "--original-style": options.originalStyle = true
             case "--concurrency": options.concurrency = max(1, Int(try value()) ?? 4)
             case "--only": options.only = Set(try value().split(separator: ",").map(String.init))
             default:

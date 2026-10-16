@@ -95,8 +95,11 @@ final class HostileRun {
 
     private func environment(for id: String) -> EntryEnvironment {
         let directory = FileManager.default.temporaryDirectory.appending(path: "xdict-lab-rules")
+        let preferences = EntryPreferences(defaults: UserDefaults(suiteName: "ai.xdict.lab.hostile") ?? .standard)
+        // The view's frame follows the reader's choice as the app's does: none in "Original style".
+        preferences.setOriginalStyle(options.originalStyle, for: content.binding.dictionary)
         return EntryEnvironment(
-            preferences: EntryPreferences(defaults: UserDefaults(suiteName: "ai.xdict.lab.hostile") ?? .standard),
+            preferences: preferences,
             opener: opener, confinement: options.confinement, ruleListDirectory: directory,
             events: { [weak self] event in self?.note(id, event) },
             newWindow: { [weak self] configuration, action in self?.popup(id, configuration, action) })
@@ -219,6 +222,7 @@ final class HostileRun {
             "os": ProcessInfo.processInfo.operatingSystemVersionString,
             "webkit": Report.webKitVersion,
             "disabled": options.disabled.sorted(),
+            "originalStyle": options.originalStyle,
             "confinement": [
                 "production": confinement.isProduction, "policyHeader": confinement.policyHeader,
                 "ruleList": confinement.ruleList, "navigationPolicy": confinement.navigationPolicy,

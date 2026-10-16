@@ -131,6 +131,10 @@ struct CoreMappingTests {
         #expect(XDictCore.LinkOrigin(.entry(entry: ref)) == .entry(entry: XDictCore.EntryRef(ref)))
         #expect(XDictCore.LinkOrigin(.resource(path: "styles/a.css")) == .resource(path: "styles/a.css"))
         #expect(XDictCore.View(RenderContext(maxBodyBytes: 1_024)) == XDictCore.View(baseUrl: "xdict://d/", maxBodyBytes: 1_024))
+        // ADR-0010 Q3: the reader's "Original style" reaches the core; off unless asked.
+        #expect(XDictCore.View(RenderContext(maxBodyBytes: 1_024, originalStyle: true))
+                == XDictCore.View(baseUrl: "xdict://d/", maxBodyBytes: 1_024, originalStyle: true))
+        #expect(RenderContext.reader.originalStyle == false)
         let identity = XDictContract.FileIdentity(device: .max, inode: 2, size: 3, mtimeNs: -4, ctimeNs: 5)
         #expect(XDictCore.FileIdentity(identity) == XDictCore.FileIdentity(device: .max, inode: 2, size: 3, mtimeNs: -4, ctimeNs: 5))
     }

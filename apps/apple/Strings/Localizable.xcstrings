@@ -1025,18 +1025,18 @@
         }
       }
     },
-    "Each dictionary is spoken in the language set for it in the Library. A dictionary's own recordings play where macOS can play them; the others are spoken by the system voice instead." : {
+    "Each dictionary is spoken in the language set for it in the Library." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each dictionary is spoken in the language set for it in the Library. A dictionary's own recordings play where macOS can play them; the others are spoken by the system voice instead."
+            "value" : "Each dictionary is spoken in the language set for it in the Library."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "每部词典都按你在词库中为它设定的语言朗读。词典自带的录音在 macOS 能播放时直接播放，其余的改由系统语音朗读。"
+            "value" : "每部词典按资料库中为它设定的语言朗读。"
           }
         }
       }
@@ -2273,6 +2273,22 @@
         }
       }
     },
+    "Original style" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Original style"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "原始样式"
+          }
+        }
+      }
+    },
     "Part of this dictionary is damaged, so this lookup could not be read." : {
       "localizations" : {
         "en" : {
@@ -2445,6 +2461,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "经由 %@ 到达"
+          }
+        }
+      }
+    },
+    "Reading" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读"
           }
         }
       }
@@ -2733,6 +2765,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在词库中显示"
+          }
+        }
+      }
+    },
+    "Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按这部词典自带的样式表显示词条，而不用 XDict 的阅读样式。链接和防护在两种样式下都一样。"
           }
         }
       }
@@ -3587,6 +3635,22 @@
         }
       }
     },
+    "Use the dictionary's recordings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use the dictionary's recordings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用词典的录音"
+          }
+        }
+      }
+    },
     "Voice" : {
       "localizations" : {
         "en" : {
@@ -3615,6 +3679,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等待导入"
+          }
+        }
+      }
+    },
+    "Where a dictionary has its own recording of a word and macOS can play it, play that instead of the system voice." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Where a dictionary has its own recording of a word and macOS can play it, play that instead of the system voice."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典自带某个词的录音、且 macOS 能播放时，播放录音而不用系统语音。"
           }
         }
       }

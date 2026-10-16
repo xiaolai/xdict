@@ -75,6 +75,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// The current web view, if one exists: for the window's focus and for the E2E lab's instruments.
     public var webView: WKWebView? { pane?.view }
     public var binding: EntryBinding? { pane?.binding }
+    /// Where this view's per-dictionary choices are kept: the content it shows reads "Original style" from the same.
+    public var preferences: EntryPreferences { environment.preferences }
+    /// A choice changed elsewhere (the Library's "Original style") reaches the shown entry at once.
+    private var preferencesObserver: (any NSObjectProtocol)?
     public var lastFind: EntryFindResult? { findBar.result }
 
     public init(environment: EntryEnvironment = EntryEnvironment()) {
@@ -88,6 +92,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     override public func loadView() {
         let root = AppearanceTrackingView()
         root.onAppearanceChange = { [weak self] in self?.applyPreferences() }
+        preferencesObserver = NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification,
+                                                                     object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyPreferences() }
+        }
         message.isHidden = true
         message.isSelectable = true
         findBar.isHidden = true
@@ -159,6 +167,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         refusal = nil
         message.isHidden = true
         pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
+        pane.setFrame(currentFrame(for: pane.binding.dictionary))
         let shown = await pane.show(reference, landing: landing)
         if !shown, self.pane === pane, pane.reference != reference {
             say(EntrySentences.entryFailed)

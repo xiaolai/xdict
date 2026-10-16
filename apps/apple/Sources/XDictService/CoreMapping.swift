@@ -247,9 +247,9 @@ extension XDictCore.LinkOrigin {
 }
 
 extension XDictCore.View {
-    /// The core's view for a render context: the contract's one base, the request's ceiling.
+    /// The core's view for a render context: the contract's one base, the request's ceiling and style.
     init(_ render: RenderContext) {
-        self.init(baseUrl: RenderContext.baseURL, maxBodyBytes: render.maxBodyBytes)
+        self.init(baseUrl: RenderContext.baseURL, maxBodyBytes: render.maxBodyBytes, originalStyle: render.originalStyle)
     }
 }
 

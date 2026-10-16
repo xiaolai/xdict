@@ -57,6 +57,7 @@
     phrase.resolvesIntact phrase.suggested internal.neverSuggested internal.ldoce unavailable.toldApart
     unavailable.indexingEnds delay.othersNotHeld delay.entryKeepsTheOrder link.followedInLinkMode
     trail.backReturnsExactly trail.forwardReturnsExactly trail.originInOneStep entry.supersededLoadIsNoLink
+    entry.originalStyleSwitch
 
 @ lookup.a11y default kit,fixtures,corpus group=lookup
     ax.scope ax.order ax.folding ax.suggestions ax.unavailable.records ax.unavailable.slow ax.unavailable.gone
@@ -110,6 +111,7 @@
 
 @ sound.notices default kit,fixtures group=sound
     sound.access sound.notices.toldApart sound.fallback.speaks sound.notices.shown sound.sentences.bothLanguages
+    sound.recordings.offByDefault sound.setting.bothLanguages
 
 @ sound.recordings default fixtures,sample,corpus group=sound
     sound.corpus.formatsSeen sound.corpus.playablePlay sound.corpus.speexFallsBack sound.corpus.everyClickAnswered
