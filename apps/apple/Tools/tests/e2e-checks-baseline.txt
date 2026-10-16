@@ -188,3 +188,5 @@ health.sentencesInBothLanguages
 entry.originalStyleSwitch
 sound.recordings.offByDefault
 sound.setting.bothLanguages
+# added by unification R (the accent in Settings > Reading)
+entry.accentSwitch

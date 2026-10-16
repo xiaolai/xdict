@@ -177,6 +177,7 @@ final class LookupWindowRun: LookupStage {
             findings.merge(await scenario.run(pagingToo: pagingToo))
             findings.merge(await supersededLoads())
             findings.merge(await originalStyleSwitch())
+            findings.merge(await accentSwitch())
         }
         write(["timeline": timeline], to: work.appending(path: "timeline.json"))
         do {
@@ -299,6 +300,66 @@ final class LookupWindowRun: LookupStage {
                        && original["frame"] as? Bool == false && original["own"] as? Bool == true && differs
                        && back["frame"] as? Bool == true && back["own"] as? Bool == false,
                        "reading style \(styled); original style \(original); back \(back)")
+        state.entry.closeEntry()
+        if let shown = state.model.shown { await state.present(shown) }
+        return findings
+    }
+
+    // MARK: - The accent (Settings ▸ Reading)
+
+    /// `entry.accentSwitch`: Alpha's "apple" open in the reading style; the accent preference set where Settings
+    /// keeps it (its raw value under `EntryPreferences.accentKey`), red, then indigo, then teal, with nothing else
+    /// done; each time the open entry's accent token turns to that accent's light or dark value (the pane redraws the
+    /// entry it holds, as for any change of frame). The reader's earlier choice is put back.
+    private func accentSwitch() async -> Findings {
+        var findings = Findings()
+        let name = "entry.accentSwitch"
+        guard let state, let alpha = state.model.known.first(where: { $0.name == "Alpha" }),
+              let content = ServiceEntryContent(source: alpha, backend: XDictApp.service,
+                                                preferences: state.entry.preferences) else {
+            findings.check(name, false, "Alpha is not in the window's library")
+            return findings
+        }
+        let preferences = state.entry.preferences, before = preferences.accent()
+        defer { preferences.setAccent(before) }
+        preferences.setAccent(.teal)
+        state.entry.closeEntry()
+        _ = await state.entry.show(EntryReference(key: "apple"), from: content)
+        let look = #"""
+            var r = document.documentElement;
+            return JSON.stringify({accent: getComputedStyle(r).getPropertyValue('--xdict-accent').trim().toLowerCase(),
+              hue: r.getAttribute('data-xdict-hue') || '',
+              text: document.body ? document.body.textContent.slice(0, 40) : ''});
+            """#
+        func read(until wanted: @escaping ([String: Any]) -> Bool) async -> [String: Any] {
+            var last: [String: Any] = [:]
+            let deadline = ContinuousClock.now + .seconds(8)
+            while ContinuousClock.now < deadline {
+                if let text = await InstrumentPage.evaluate(state.entry.webView, look) as? String,
+                   let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
+                    last = parsed
+                    if wanted(parsed) { return parsed }
+                }
+                try? await Task.sleep(for: .milliseconds(50))
+            }
+            return last
+        }
+        func shows(_ accent: EntryReadingFrame.Accent) -> ([String: Any]) -> Bool {
+            { page in
+                let value = page["accent"] as? String ?? ""
+                return (page["text"] as? String)?.contains("apple") == true
+                    && [accent.values.light, accent.values.dark].map { $0.lowercased() }.contains(value)
+            }
+        }
+        let first = await read(until: shows(.teal))
+        var pages = [("teal", first, shows(.teal)(first))]
+        for accent in [EntryReadingFrame.Accent.red, .indigo, .teal] {
+            preferences.setAccent(accent)
+            let page = await read(until: shows(accent))
+            pages.append((accent.rawValue, page, shows(accent)(page)))
+        }
+        findings.check(name, pages.allSatisfy(\.2),
+                       pages.map { "\($0.0): \($0.1["accent"] ?? "?") hue \($0.1["hue"] ?? "?")" }.joined(separator: "; "))
         state.entry.closeEntry()
         if let shown = state.model.shown { await state.present(shown) }
         return findings

@@ -57,7 +57,7 @@
     phrase.resolvesIntact phrase.suggested internal.neverSuggested internal.ldoce unavailable.toldApart
     unavailable.indexingEnds delay.othersNotHeld delay.entryKeepsTheOrder link.followedInLinkMode
     trail.backReturnsExactly trail.forwardReturnsExactly trail.originInOneStep entry.supersededLoadIsNoLink
-    entry.originalStyleSwitch
+    entry.originalStyleSwitch entry.accentSwitch
 
 @ lookup.a11y default kit,fixtures,corpus group=lookup
     ax.scope ax.order ax.folding ax.suggestions ax.unavailable.records ax.unavailable.slow ax.unavailable.gone
