@@ -15,6 +15,8 @@ trap 'if [ -n "$saved" ]; then cp "$saved" .build/e2e-selection.tsv; else rm -f 
 export XDICT_GATE_CACHE=$scratch/cache XDICT_E2E_CORPUS= XDICT_E2E_STAGES= XDICT_E2E_FULL=
 defaults=$(bash Tools/e2e-plan.sh substages | sort | tr '\n' ' ')
 
+bash $run pending 2>/dev/null | grep -q '^E2E suggested: .* — .*no pass recorded' && ok "pending names what has no pass" \
+    || bad "pending with no record: $(bash $run pending 2>&1 | tail -1)"
 got=$(bash $run select 2>"$scratch/err" | sort | tr '\n' ' ')
 [ "$got" = "$defaults" ] && ok "no record: every default sub-stage" || bad "no record: [$got]"
 grep -q 'run: no pass recorded' "$scratch/err" && ok "each says why it runs" || bad "no reason: $(head -3 "$scratch/err")"
@@ -27,6 +29,8 @@ if got=$(bash $run select 2>"$scratch/err"); then
     [ -z "$got" ] && ok "an unchanged tree selects nothing" || bad "unchanged tree selected [$got]"
 else bad "select failed: $(tail -2 "$scratch/err")"; fi
 grep -q 'skipped: unchanged since pass 20' "$scratch/err" && ok "a skip names its pass's date" || bad "skip line: $(head -2 "$scratch/err")"
+[ "$(bash $run pending 2>/dev/null)" = "E2E: nothing pending" ] && ok "pending: nothing, after every pass" \
+    || bad "pending after passes: $(bash $run pending 2>&1)"
 
 got=$(XDICT_E2E_FULL=1 bash $run select 2>/dev/null | sort | tr '\n' ' ')
 [ "$got" = "$defaults" ] && ok "FULL=1 selects every default sub-stage" || bad "FULL=1: [$got]"

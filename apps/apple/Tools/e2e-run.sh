@@ -6,6 +6,8 @@
 #                         (`Tools/gate-cache.py`: a sub-stage's key is the content of every file the affected map gives
 #                         it, plus the corpus). STAGES=<names> runs those, forced; FULL=1 every default sub-stage,
 #                         ignoring the cache. Writes the keys to .build/e2e-selection.tsv for `run`
+#   e2e-run.sh pending    one line, running nothing: `E2E suggested: <sub-stages> — <changed paths>` or
+#                         `E2E: nothing pending` (`make e2e-pending`, and the end of `make land`)
 #   e2e-run.sh run <sub-stage...>
 #                         runs them with Tools/e2e.sh: split over E2E_HOST_MACOS and E2E_HOST_MACOS_2 in parallel when
 #                         both are set and E2E_SPLIT is not 0, else on E2E_HOST alone. Then files each pass of this tree
@@ -195,9 +197,27 @@ run_stages() {
     return "$status"
 }
 
+# **E2E runs only on the owner's demand** (owner, 2026-10-17): agents and `make land` only say what is pending. One
+# line: the default sub-stages with no pass for their current key, and the changed paths that reach them.
+pending() {
+    local rows
+    rows=$(python3 -I Tools/gate-cache.py status --fact "corpus=$(corpus_fact)" e2e) || fail "the gate cache failed"
+    awk -F'\t' '
+        $1 == "run" { subs = subs " " substr($2, 5); n++
+                      if ($4 ~ /^changed: /) { p = substr($4, 10); if (!(p in seen)) { seen[p] = 1; paths = paths (paths ? ", " : "") p } }
+                      else other++ }
+        END {
+            if (!n) { print "E2E: nothing pending"; exit }
+            why = paths
+            if (other) why = why (why ? "; " : "") other " with no pass recorded"
+            print "E2E suggested:" subs " — " why
+        }' <<<"$rows"
+}
+
 case ${1:-} in
     select) select_stages ;;
+    pending) pending ;;
     run) shift; run_stages "$@" ;;
     split) shift; split "$@" ;;
-    *) fail "usage: e2e-run.sh select | run <sub-stage...> | split <sub-stage...>" ;;
+    *) fail "usage: e2e-run.sh select | pending | run <sub-stage...> | split <sub-stage...>" ;;
 esac
