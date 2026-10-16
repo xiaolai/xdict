@@ -75,5 +75,5 @@ cp Tools/lookup/drive.py Tools/lookup/run-app-hostile.sh Tools/lookup/verdicts.p
 # Lookup from anywhere's hands in other apps and its driver (plan-macos-v1 WI-8).
 mkdir -p "$KIT/anywhere"
 swiftc -O -warnings-as-errors -o "$KIT/anywhere/hands" Tools/anywhere/hands.swift || fail "the hands helper did not build"
-cp Tools/anywhere/drive.py "$KIT/anywhere/"
+cp Tools/anywhere/drive.py Tools/anywhere/hostcondition.py "$KIT/anywhere/"
 echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"

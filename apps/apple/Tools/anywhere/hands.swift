@@ -280,7 +280,12 @@ case "select":
         }
         usleep(200_000)
     }
-    guard let page = found else { die("\(bundle) shows no text view and no page") }
+    // The front window named, so a host's own window in the way (Chrome's profile picker) is told from XDict failing.
+    guard let page = found else {
+        let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute))
+        let title = window.flatMap { string($0, kAXTitleAttribute) } ?? ""
+        die("\(bundle) shows no text view and no page; its front window is \"\(title)\"")
+    }
     var located: (NSRange, CFTypeRef)?
     for _ in 0..<50 {
         if let start = attribute(page, "AXStartTextMarker"), let end = attribute(page, "AXEndTextMarker"),
