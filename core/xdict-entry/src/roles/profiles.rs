@@ -15,26 +15,19 @@ use crate::facts::Facts;
 /// Selectors: element (`None`: any) and classes, all of which the element must carry.
 type Sel = &'static [(Option<&'static str>, &'static [&'static str])];
 
-/// A role a table makes sure: what `data-xdict-sure` says.
+/// A role a table makes sure; `data-xdict-sure` repeats the role written.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub(crate) enum Sure {
     Pos,
     Sensenum,
     Example,
     Heading,
+    /// A translation, a sense's or an example's: which of the two is the generic rule's call.
+    Trans,
 }
 
 impl Sure {
-    pub(crate) const ALL: [Sure; 4] = [Sure::Pos, Sure::Sensenum, Sure::Example, Sure::Heading];
-
-    pub(crate) fn name(self) -> &'static str {
-        match self {
-            Sure::Pos => "pos",
-            Sure::Sensenum => "sensenum",
-            Sure::Example => "example",
-            Sure::Heading => "heading",
-        }
-    }
+    pub(crate) const ALL: [Sure; 5] = [Sure::Pos, Sure::Sensenum, Sure::Example, Sure::Heading, Sure::Trans];
 }
 
 /// One markup's table.
@@ -51,10 +44,13 @@ pub(crate) struct Profile {
     example: Sel,
     /// Section headings: a box's or a block's title ("Word Origin", "EXAMPLES FROM THE CORPUS").
     heading: Sel,
+    /// Translations in a bilingual dictionary, of a sense or of an example.
+    trans: Sel,
 }
 
 /// A table that names nothing: a role a table leaves out stays the generic rule's.
-const NONE: Profile = Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[], heading: &[] };
+const NONE: Profile =
+    Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[], heading: &[], trans: &[] };
 
 fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
     sel.iter().any(|(t, cs)| t.is_none_or(|t| t == tag) && cs.iter().all(|c| classes.iter().any(|k| k == c)))
@@ -71,6 +67,8 @@ impl Profile {
             Some(Sure::Example)
         } else if matches(self.heading, tag, classes) {
             Some(Sure::Heading)
+        } else if matches(self.trans, tag, classes) {
+            Some(Sure::Trans)
         } else {
             None
         }
@@ -83,6 +81,7 @@ impl Profile {
             Sure::Sensenum => !self.sensenum.is_empty(),
             Sure::Example => !self.example.is_empty(),
             Sure::Heading => !self.heading.is_empty(),
+            Sure::Trans => !self.trans.is_empty(),
         }
     }
 }
@@ -103,6 +102,8 @@ pub(crate) const PROFILES: &[Profile] = &[
             (Some("span"), &["ws-head"]),
             (Some("span"), &["popverbs"]),
         ],
+        // The English–Chinese edition's `<tran>`, and `<example>`, an example's Chinese inside its `span.example`.
+        trans: &[(Some("tran"), &[]), (Some("example"), &[])],
         ..NONE
     },
     // OALD 10: its sense numbers are the sheet's counters, not text.
@@ -120,6 +121,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos_words: true,
         sensenum: &[(Some("span"), &["num"])],
         heading: &[(Some("div"), &["label"])],
+        trans: &[(Some("div"), &["cn_def"]), (Some("p"), &["cn"])],
         ..NONE
     },
     // Collins English Dictionary.
@@ -140,6 +142,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["st"])],
         sensenum: &[(Some("span"), &["num"]), (Some("span"), &["text_blue"])],
         heading: &[(Some("div"), &["cc_addon_text"]), (Some("span"), &["ginfotitle"])],
+        trans: &[(Some("span"), &["chinese-text"])],
         ..NONE
     },
     // Merriam-Webster's Advanced Learner's and Unabridged: `fl`, the functional label; `snum` and `sn`, a sense's
@@ -199,6 +202,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["cxa", "phmk", "cx"],
         pos: &[(Some("span"), &["cx"])],
         sensenum: &[(Some("span"), &["xha"])],
+        trans: &[(Some("def"), &[]), (Some("span"), &["eb"])],
         ..NONE
     },
     // Practical English Usage: `hang` holds its section and point numbers, and a dash before a heading.

@@ -1003,17 +1003,21 @@ impl<'s> Roles<'s> {
                 let Some((name, kind)) = role.written() else { continue };
                 // Where the edition's markup has a table that names a role, that role is the table's, and sure; the
                 // generic rule's guesses of it are not written there.
-                let sure = t.sure(i).filter(|s| sure_role(*s) == *role);
+                // The mark says what the table is sure of: a translation is `trans` whichever kind the role says.
+                let sure = t
+                    .sure(i)
+                    .filter(|s| covers(*s, *role))
+                    .map(|s| if s == profiles::Sure::Trans { "trans" } else { name });
                 if sure.is_none()
                     && self
                         .profile
-                        .is_some_and(|p| profiles::Sure::ALL.iter().any(|s| sure_role(*s) == *role && p.decides(*s)))
+                        .is_some_and(|p| profiles::Sure::ALL.iter().any(|s| covers(*s, *role) && p.decides(*s)))
                 {
                     continue;
                 }
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
                 if let Some(sure) = sure {
-                    attr.push_str(&format!(" data-xdict-sure=\"{}\"", sure.name()));
+                    attr.push_str(&format!(" data-xdict-sure=\"{sure}\""));
                 }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
@@ -1428,13 +1432,23 @@ fn shares(s: &str) -> (f64, f64) {
     if n == 0 { (0.0, 0.0) } else { (f64::from(c) / f64::from(n), f64::from(l) / f64::from(n)) }
 }
 
-/// The role a table's sure mark gives.
-fn sure_role(sure: profiles::Sure) -> Role {
+/// The role a table's sure mark gives before the generic rules run; `None` for a translation, whose kind (a sense's
+/// or an example's) the generic rule decides.
+fn sure_role(sure: profiles::Sure) -> Option<Role> {
     match sure {
-        profiles::Sure::Pos => Role::Pos,
-        profiles::Sure::Sensenum => Role::Sensenum,
-        profiles::Sure::Example => Role::Example,
-        profiles::Sure::Heading => Role::Heading,
+        profiles::Sure::Pos => Some(Role::Pos),
+        profiles::Sure::Sensenum => Some(Role::Sensenum),
+        profiles::Sure::Example => Some(Role::Example),
+        profiles::Sure::Heading => Some(Role::Heading),
+        profiles::Sure::Trans => None,
+    }
+}
+
+/// Whether a table's sure mark speaks for the role written.
+fn covers(sure: profiles::Sure, role: Role) -> bool {
+    match sure {
+        profiles::Sure::Trans => matches!(role, Role::Trans | Role::ExampleTrans),
+        _ => sure_role(sure) == Some(role),
     }
 }
 
@@ -1660,7 +1674,7 @@ impl<'n> Tree<'n> {
         let ok = match sure {
             profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
             profiles::Sure::Sensenum => numbered(t),
-            profiles::Sure::Example => f.len > 0,
+            profiles::Sure::Example | profiles::Sure::Trans => f.len > 0,
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
         };
         ok.then_some(sure)
@@ -1796,8 +1810,8 @@ impl<'n> Tree<'n> {
         // 0. the markup's own roles (`profiles`), before any generic rule can take the element. In a link too: LDOCE's
         // word lists and YHDCD's senses write their parts of speech inside one (the holdout labels them so).
         for i in 1..n {
-            if let Some(sure) = self.sure(i) {
-                r.mark(i, sure_role(sure));
+            if let Some(role) = self.sure(i).and_then(sure_role) {
+                r.mark(i, role);
             }
         }
         // 1. audio

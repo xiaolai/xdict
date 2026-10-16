@@ -301,6 +301,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font) !important;"
         + "font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;"
         + "font-weight:var(--xdict-weight-bold) !important;font-style:normal !important}"
+        // A translation a markup table names, a sense's or an example's: upright, in the secondary text colour.
+        + "[data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}"
+        + "[data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] "
+        + ":not([data-xdict-tag],[data-xdict-icon]){font-style:normal !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"
