@@ -95,8 +95,25 @@ struct ReadingFrameTests {
         preferences.setOriginalStyle(true, for: "a")
         #expect(preferences.originalStyle(for: "a"))
         #expect(preferences.originalStyle(for: "b") == false)
-        #expect(EntryReadingFrame.all.applied(originalStyle: true).isEmpty)
+        #expect(EntryReadingFrame.all.applied(originalStyle: true) == .minimal)
         #expect(EntryReadingFrame.all.applied(originalStyle: false) == .all)
+    }
+
+    /// Q3, `reading-style.md` §6: "Original style" keeps a minimal frame: the page's insets and containment, and a
+    /// light paper under the dictionary, whose colours assume white, in dark too. No column, type or controls, and no
+    /// colour of the dictionary's is touched.
+    @Test func originalStyleKeepsAMinimalFrameOnLightPaper() {
+        let css = EntryReadingFrame.minimalCSS
+        #expect(css.contains("contain:layout"))
+        #expect(css.contains("padding:"))
+        #expect(css.contains(":root[data-xdict-theme=dark]{background:\(EntryReadingFrame.paper)"))
+        #expect(css.contains(":root[data-xdict-theme=light]{background:#ffffff"))
+        #expect(!css.contains("max-width"), "the column is the reading style's")
+        let dark = EntryScripts.appearance(.dark, frame: .minimal)
+        #expect(dark.contains("xdict-frame-minimal"))
+        #expect(!dark.contains("[data-xdict-icon=speaker]"), "XDict's controls are the reading style's")
+        #expect(!dark.contains("--xdict-font:"), "XDict's type is the reading style's")
+        #expect(!EntryScripts.appearance(.dark, frame: .all).contains(EntryReadingFrame.minimalCSS))
     }
 
     /// No backgrounds anywhere (owner, 2026-10-15): a data table's header row is shown by weight and spacing only.
