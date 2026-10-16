@@ -278,7 +278,6 @@ fn html_out<'s>(
         crate::roles::Roles::new(&n.style.facts, entry.map(|e| e.key), base, dir)
             .with_resource(entry.and_then(|e| e.resource))
             .unstripped(n.strip_off_for_tests)
-            .original(n.original)
     });
     out.resource = entry.and_then(|e| e.resource);
     out.norm = norm;
@@ -458,8 +457,7 @@ fn html_out<'s>(
             let judged = crate::images::judge(source);
             image = links == 0 && !speaker && !matches!(judged, crate::images::Image::Decoration);
             match (links > 0 || speaker, judged) {
-                // "Original style" keeps the dictionary's decorations (ADR-0010 Q3).
-                (false, crate::images::Image::Decoration) if !norm.original => {
+                (false, crate::images::Image::Decoration) => {
                     norm.counts.images_dropped += 1;
                     rest = from.get(source.len()..).unwrap_or("");
                     continue;
@@ -1050,7 +1048,6 @@ pub(crate) fn normalized_html<'s>(
     let mut out = html_out(&text, base, dir, false, max, Some(norm), entry);
     drop(text);
     let roles = out.roles.take();
-    let original = out.norm.as_ref().is_some_and(|n| n.original);
     let norm = out.norm;
     let (counts, rules) = norm.map(|n| (n.counts, n.rules)).unwrap_or_default();
     let mut counts = counts;
@@ -1063,12 +1060,8 @@ pub(crate) fn normalized_html<'s>(
         edits.extend(marks.into_iter().map(insert));
     }
     if let Some(controls) = out.controls.take() {
-        // In "Original style" a speaker gets its marks, never XDict's glyph.
-        edits.extend(controls.inserts.into_iter().filter(|(_, s)| !original || !s.starts_with('<')).map(insert));
-        // The dictionary's own glyphs inside a speaker go only where XDict draws the speaker (not "Original style").
-        if !original {
-            edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
-        }
+        edits.extend(controls.inserts.into_iter().map(insert));
+        edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
     }
     let mut headwords = Vec::new();
     if let Some(roles) = roles {
