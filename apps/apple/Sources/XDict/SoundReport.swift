@@ -116,6 +116,10 @@ final class SoundRun {
         findings.fact("volume", "0")
         findings.fact("voices", "\(Voices.installed.count)")
         guard let tinySource, let soundsSource else { return findings }
+        // The reader's recordings setting starts at its default, and is left there (ADR-0010 Q5).
+        let speechDefaults = UserDefaults(suiteName: InstrumentWindow.speechSuite)
+        speechDefaults?.removeObject(forKey: SpeechPreferences.useRecordingsKey)
+        defer { speechDefaults?.removeObject(forKey: SpeechPreferences.useRecordingsKey) }
 
         await speech(library: library, tiny: tinySource, window: window)
         await notices(sounds: soundsSource, window: window)
@@ -177,6 +181,14 @@ final class SoundRun {
             findings.check("sound.notices.toldApart", false, "the sounds fixture's entry was not shown")
             return
         }
+        // ADR-0010 Q5: by default a recording link is spoken by the system voice and no recording plays; the reader's
+        // "Use the dictionary's recordings" turns them on, which the rest of this stage then holds to.
+        let byDefault = await clickExisting(containing: "here.mp3", in: window)
+        let spoken: Bool = if case .speech(.spoken)? = byDefault.notice { true } else { false }
+        findings.check("sound.recordings.offByDefault",
+                       preferences.useRecordings == false && spoken && byDefault.playback == nil && byDefault.finished,
+                       "setting \(preferences.useRecordings); here.mp3: \(byDefault.describe)")
+        preferences.useRecordings = true
         var told: [String: Heard] = [:]
         for name in ["gone.mp3", "present.spx", "here.mp3"] {
             told[name] = await clickExisting(containing: name, in: window)
@@ -489,6 +501,18 @@ final class SoundRun {
         findings.check("sound.sentences.bothLanguages",
                        translated && Set(english).count == notices.count && Set(chinese).count == notices.count,
                        zip(english, chinese).map { "en: \($0) | zh-Hans: \($1)" }.joined(separator: " || "))
+        // The setting and the one-time tip, in both languages (ADR-0010 Q5).
+        let setting: [LocalizedStringResource] = [
+            "Use the dictionary's recordings",
+            "Where a dictionary has its own recording of a word and macOS can play it, play that instead of the system voice.",
+            SpeechSentences.caveat(.compactOnly(.get("Ava"))),
+        ]
+        let pairs = setting.map { resource in
+            ["en", "zh-Hans"].map { code in var line = resource; line.locale = Locale(identifier: code); return String(localized: line) }
+        }
+        findings.check("sound.setting.bothLanguages", pairs.allSatisfy { pair in
+            pair[0] != pair[1] && pair[1].unicodeScalars.contains { (0x4E00...0x9FFF).contains($0.value) }
+        }, pairs.map { "en: \($0[0]) | zh-Hans: \($0[1])" }.joined(separator: " || "))
         return findings
     }
 }

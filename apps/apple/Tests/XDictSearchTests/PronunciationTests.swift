@@ -77,8 +77,11 @@ struct PronunciationTests {
     let preferences = SpeechPreferences(defaults: UserDefaults(suiteName: "ai.xdict.tests.pronunciation.\(UUID())")
                                             ?? .standard)
 
-    func pronunciation(_ backend: any SearchBackend) -> Pronunciation {
-        Pronunciation(backend: backend, output: output, preferences: preferences, voices: { Self.voices })
+    /// The recordings' tests below are the reader's "Use the dictionary's recordings" turned on; off is the default.
+    func pronunciation(_ backend: any SearchBackend, recordings: Bool = true,
+                       voices: [VoiceInfo] = Self.voices) -> Pronunciation {
+        preferences.useRecordings = recordings
+        return Pronunciation(backend: backend, output: output, preferences: preferences, voices: { voices })
     }
 
     static func backend(_ answer: @escaping @Sendable (ServiceOperation) -> ClientOutcome) async -> FakeSearchBackend {
@@ -101,7 +104,52 @@ struct PronunciationTests {
         .success(Delivered(answer: .resource(.found(path: path, mime: mime)), payload: bytes))
     }
 
-    // MARK: - Recordings
+    // MARK: - The system voice by default (ADR-0010 Q5)
+
+    /// The default: a sound link is spoken by the system voice, and no recording is asked for.
+    @Test func soundLinksSpeakWithTheSystemVoiceAndFetchNothingByDefault() async {
+        #expect(SpeechPreferences(defaults: UserDefaults(suiteName: "ai.xdict.tests.default.\(UUID())") ?? .standard)
+                    .useRecordings == false, "the dictionary's recordings are the reader's choice, not the default")
+        let backend = await Self.backend { _ in Self.found("us/run.mp3", "audio/mpeg") }
+        let speech = pronunciation(backend, recordings: false)
+        await speech.playRecording("us/run.mp3", from: Self.handle, word: "run", language: "en")
+        #expect(await backend.requests.isEmpty, "a recording was fetched though the reader did not ask for recordings")
+        #expect(output.played.isEmpty)
+        #expect(output.spoken.map(\.text) == ["run"])
+        #expect(speech.shown?.notice == .speech(.spoken(voice: "Samantha", language: "en-US")))
+    }
+
+    /// The setting is kept across launches.
+    @Test func theRecordingsSettingIsKept() {
+        let suite = "ai.xdict.tests.recordings.\(UUID())"
+        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        defer { defaults.removePersistentDomain(forName: suite) }
+        SpeechPreferences(defaults: defaults).useRecordings = true
+        #expect(SpeechPreferences(defaults: defaults).useRecordings)
+    }
+
+    /// A one-time tip: the first time a compact voice speaks, the reader is told a better one can be downloaded; never
+    /// again after, and never when the voice is already enhanced or premium.
+    @Test func aCompactVoiceGetsTheDownloadTipOnceAndABetterOneNever() async {
+        let backend = await Self.backend { _ in .failure(.wire(.interrupted)) }
+        let speech = pronunciation(backend, recordings: false)
+        speech.speak("run", language: "en")
+        #expect(speech.shown?.tip == .compactOnly(.get("Ava")))
+        speech.speak("run", language: "en")
+        #expect(speech.shown?.tip == nil, "the tip was shown twice")
+        #expect(preferences.voiceTipShown)
+
+        preferences.voiceTipShown = false
+        let ava = VoiceInfo(identifier: "us.ava", name: "Ava", language: "en-US", quality: .premium, isNovelty: false,
+                            isPersonal: false, isLanguageDefault: false)
+        let premium = pronunciation(backend, recordings: false, voices: Self.voices + [ava])
+        premium.speak("run", language: "en")
+        #expect(premium.shown?.notice == .speech(.spoken(voice: "Ava", language: "en-US")))
+        #expect(premium.shown?.tip == nil, "a tip for a premium voice")
+        #expect(preferences.voiceTipShown == false, "the one-time tip was spent where it was not shown")
+    }
+
+    // MARK: - Recordings, when the reader asked for them
 
     @Test func aRecordingMacOSPlaysIsFetchedFromItsDictionaryPlayedAndLabelledAsTheDictionarys() async {
         let backend = await Self.backend { _ in Self.found("us/run.mp3", "audio/mpeg") }

@@ -1,5 +1,7 @@
+import AppKit
 import SwiftUI
 import XDictSearch
+import XDictSpeech
 
 /// **What a sound did, told where the reader is looking** (plan-macos-v1 WI-7; R9, L6): a small notice at the foot of
 /// the entry — the dictionary's recording playing, or why it could not and what the system voice did instead. It does
@@ -24,6 +26,16 @@ struct PronunciationBanner: View {
                             .foregroundStyle(index == 0 ? .primary : .secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    // Once only (the pronunciation decides): a better voice than the compact one that spoke.
+                    if let tip = shown.tip {
+                        Text(SpeechSentences.caveat(tip))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityIdentifier("voice-tip")
+                        Button("Open VoiceOver Utility") { NSWorkspace.shared.open(Voices.voiceLibraryURL) }
+                            .controlSize(.small)
+                    }
                 }
                 Button {
                     dismissed = shown.serial
@@ -45,8 +57,10 @@ struct PronunciationBanner: View {
             .accessibilityIdentifier("pronunciation-notice")
             .transition(.opacity)
             .task(id: shown.serial) {
-                AccessibilityNotification.Announcement(lines.map { String(localized: $0) }.joined(separator: "\n")).post()
-                try? await Task.sleep(for: .seconds(6))
+                let spoken = lines + (shown.tip.map { [SpeechSentences.caveat($0)] } ?? [])
+                AccessibilityNotification.Announcement(spoken.map { String(localized: $0) }.joined(separator: "\n")).post()
+                // A tip stays long enough to be read and acted on.
+                try? await Task.sleep(for: .seconds(shown.tip == nil ? 6 : 15))
                 dismissed = shown.serial
             }
         }
