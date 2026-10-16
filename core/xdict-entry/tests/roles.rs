@@ -209,7 +209,8 @@ fn the_first_headword_is_the_lead() {
 /// pronunciation wrappers stood on a line of its own); inside an inline run it is left where it is.
 #[test]
 fn punctuation_between_blocks_stays_with_the_block_before() {
-    let oed = r#"<div class="pw">Brit. /ˈbaŋkə/</div>, <div class="pw">U.S. /ˈbæŋkər/</div><p>a person who keeps a bank</p>"#;
+    let oed =
+        r#"<div class="pw">Brit. /ˈbaŋkə/</div>, <div class="pw">U.S. /ˈbæŋkər/</div><p>a person who keeps a bank</p>"#;
     let (out, _) = entry(oed, "banker");
     assert!(out.contains("/ˈbaŋkə/,"), "{out}");
     assert!(!out.contains("</div>,"), "{out}");

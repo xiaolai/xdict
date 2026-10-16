@@ -184,7 +184,9 @@ struct ReadingFrameTests {
         #expect(css.contains("@layer xdict-unify{"))
         #expect(css.contains(":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font-phon) !important}"))
         #expect(!css.contains("phon-colour"), "the transcription keeps its colour")
-        #expect(css.contains("{font-size:inherit !important;font-family:inherit !important;line-height:inherit !important}"))
+        // A label's inside takes the label's size, face and colour.
+        #expect(css.contains("{font-size:inherit !important;font-family:inherit !important;color:inherit !important;"
+            + "line-height:inherit !important}"))
         #expect(!css.contains("[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
             + "[data-xdict-role=label] *,[data-xdict-tag],[data-xdict-icon]){font-weight"))
         #expect(css.contains("color:var(--xdict-link) !important"))
@@ -225,13 +227,22 @@ struct ReadingFrameTests {
         let texts = EntryReadingFrame.colours.map(\.0).filter {
             !surfaces.contains($0) && !$0.hasSuffix("-tint") && $0 != "rule" && $0 != "plate"
         }
-        #expect(texts.count == 18)   // text, text-2, and 8 hues × plain and deep
+        #expect(texts.count == 19)   // text, text-2, the accent, and 8 hues × plain and deep
         for text in texts {
             for surface in surfaces {
                 let (tl, td) = try #require(table[text]), (sl, sd) = try #require(table[surface])
                 let (light, dark) = (try contrast(tl, sl), try contrast(td, sd))
                 #expect(light >= 4.5, "light \(text) on \(surface): \(light)")
                 #expect(dark >= 4.5, "dark \(text) on \(surface): \(dark)")
+            }
+        }
+        // Each accent the reader can choose holds the 7:1 its doc comment states, on both surfaces, in both themes.
+        for accent in EntryReadingFrame.Accent.allCases {
+            for surface in surfaces {
+                let (sl, sd) = try #require(table[surface])
+                let (light, dark) = (try contrast(accent.values.light, sl), try contrast(accent.values.dark, sd))
+                #expect(light >= 7, "light \(accent) on \(surface): \(light)")
+                #expect(dark >= 7, "dark \(accent) on \(surface): \(dark)")
             }
         }
     }
