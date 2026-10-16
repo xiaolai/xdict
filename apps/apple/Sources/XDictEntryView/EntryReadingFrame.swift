@@ -39,11 +39,6 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":root[data-xdict-theme=dark]{\(colours.map { "--xdict-\($0.0):\($0.1);" }.joined())}"
         + "body{contain:layout !important;overflow-wrap:anywhere}"
 
-    /// In original style a label the core read from the dictionary's own words (not one replacing a drawing) keeps the
-    /// colour of the box it sits in, which the dictionary chose for that box's background: the palette's grey on
-    /// LDOCE's blue "GRAMMAR" header read at 2.34:1 (gallery 2026-10-16).
-    static let originalLabelsCSS = ":root [data-xdict-role=label]:not([data-xdict-label=level],[data-xdict-label=wordlist],"
-        + "[data-xdict-label=frequency],[data-xdict-label=new]){color:inherit !important}"
 
     /// In original style transcriptions draw in the bundled phonetic faces too (a dictionary's own IPA font is often
     /// missing); their colour stays the dictionary's.
@@ -243,7 +238,7 @@ extension EntryScripts {
                          labels: EntryReadingFrame.SpeakerLabels) -> String {
         let column = frame.contains(.column)
             ? EntryReadingFrame.columnCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS : ""
+                + EntryReadingFrame.marksCSS + EntryReadingFrame.readingLabelsCSS : ""
         let names = ["uk": labels.uk, "us": labels.us, "other": labels.other]
         let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["link", "phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
         let namesJSON = (try? JSONSerialization.data(withJSONObject: !frame.isDisjoint(with: [.column, .minimal]) ? names : [:], options: [.sortedKeys]))
@@ -252,7 +247,7 @@ extension EntryScripts {
         // "Original style": the minimal frame and XDict's whole marks layer (the owner, 2026-10-16), no column or type.
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalLabelsCSS + EntryReadingFrame.originalPhonCSS : ""
+                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalPhonCSS : ""
         let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """

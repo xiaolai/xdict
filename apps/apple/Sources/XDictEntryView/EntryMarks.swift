@@ -23,6 +23,10 @@ extension EntryReadingFrame {
             + "mask:\(mask(svg)) center/contain no-repeat !important"
     }
 
+    /// Labels in the secondary colour with no box (R11): every label in the reading style.
+    static let readingLabelsCSS = "[data-xdict-role=label]{color:var(--xdict-text-2) !important;"
+        + "background:none !important;border:0 !important;padding:0 !important}"
+
     /// The marks' rules, after the controls' (`controlsCSS`), in the column layer.
     static var marksCSS: String {
         // In a cascade layer: a layered `!important` wins over every unlayered one whatever its specificity, so a
@@ -112,9 +116,14 @@ extension EntryReadingFrame {
             + "[data-xdict-labelled]{display:none !important}}"
             // 8. Labels: one style, plain text in the secondary colour, no box (R11).
             + "[data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);"
-            + "font-weight:var(--xdict-weight-bold);color:var(--xdict-text-2) !important;letter-spacing:0.02em;"
-            + "white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em;background:none !important;"
-            + "border:0 !important;padding:0 !important}"
+            + "font-weight:var(--xdict-weight-bold);letter-spacing:0.02em;"
+            + "white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}"
+            // A label replacing a drawing is XDict's in both styles; one read from the dictionary's words takes this
+            // colour and loses its box in the reading style only (`readingLabelsCSS`): in original style it keeps the
+            // dictionary's, chosen for the box it sits on (LDOCE's GRAMMAR heading on cyan read 2.34:1 in grey).
+            + "[data-xdict-role=label]:is([data-xdict-label=level],[data-xdict-label=wordlist],"
+            + "[data-xdict-label=frequency],[data-xdict-label=new]){color:var(--xdict-text-2) !important;"
+            + "background:none !important;border:0 !important;padding:0 !important}"
             + "[data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist]"
             + "{font-variant-numeric:lining-nums}"
             + "[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:0.08em}"
