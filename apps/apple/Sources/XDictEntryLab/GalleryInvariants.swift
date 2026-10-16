@@ -65,7 +65,11 @@ extension GalleryRun {
         }
         document.querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]').forEach(function (m) {
           if (!m.getClientRects().length) return;
-          var inside = /[\p{L}\p{N}]/u.test(edge(m, true)) && /[\p{L}\p{N}]/u.test(edge(m, false));
+          // Inside a word: text right before and right after it in the same parent, one inline run, its letters
+          // touching the marker. A block boundary is not the inside of a word.
+          var p = m.previousSibling, n = m.nextSibling;
+          var inside = /^inline/.test(getComputedStyle(m).display) && p && n && p.nodeType === 3 && n.nodeType === 3
+            && /[\p{L}\p{N}]$/u.test(p.nodeValue) && /^[\p{L}\p{N}]/u.test(n.nodeValue);
           note('markerInWord', !inside, 1, edge(m, true) + '•' + edge(m, false) + ' <' + m.tagName.toLowerCase() + '.' + String(m.className).split(' ')[0] + '>');
         });
         var all = document.body ? document.body.getElementsByTagName('*') : [];
