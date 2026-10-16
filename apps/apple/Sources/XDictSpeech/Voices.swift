@@ -118,10 +118,14 @@ public enum Voices {
         return .unknown
     }
 
-    /// **Where a voice is installed on macOS 27, which is not System Settings**: Settings has no voice list any more,
-    /// and VoiceOver Utility → Speech is where it survives (XiaolaiDict, checked 2026-10-01). There is no API to install
-    /// one, so the app can only open the door.
-    public static let voiceLibraryURL = URL(fileURLWithPath: "/System/Applications/Utilities/VoiceOver Utility.app")
+    /// **Where a voice is chosen, previewed and downloaded on macOS 27**: System Settings ▸ Accessibility ▸ Read & Speak ▸
+    /// System voice ▸ the ⓘ button (the owner, by hand, 2026-10-16). Corrected 2026-10-16: this note said VoiceOver
+    /// Utility ▸ Speech, from XiaolaiDict's check of 2026-10-01, and that Settings had no voice list. There is no API to
+    /// install one, so the app opens the pane. The anchor (`SpokenContent`) was not seen landing on Read & Speak (the
+    /// second E2E Mac's screen showed no Settings window over SSH); without it the URL still opens Accessibility.
+    public static let voiceSettingsURL =
+        URL(string: "x-apple.systempreferences:com.apple.Accessibility-Settings.extension?SpokenContent")
+        ?? URL(fileURLWithPath: "/System/Applications/System Settings.app")
 
     // MARK: - The installed list
 

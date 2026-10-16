@@ -33,7 +33,7 @@ public struct SpeechSettings: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(SpeechSentences.caveat(caveat))
                         .foregroundStyle(.secondary)
-                    Button("Open VoiceOver Utility") { NSWorkspace.shared.open(Voices.voiceLibraryURL) }
+                    Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }
                 }
             }
             Toggle(isOn: $useRecordings) {

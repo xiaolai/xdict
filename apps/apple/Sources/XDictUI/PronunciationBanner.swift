@@ -33,7 +33,7 @@ struct PronunciationBanner: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .accessibilityIdentifier("voice-tip")
-                        Button("Open VoiceOver Utility") { NSWorkspace.shared.open(Voices.voiceLibraryURL) }
+                        Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }
                             .controlSize(.small)
                     }
                 }
