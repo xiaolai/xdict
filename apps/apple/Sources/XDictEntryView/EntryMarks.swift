@@ -119,7 +119,7 @@ extension EntryReadingFrame {
             // A graphic the core turned into a label stays hidden, whatever display the dictionary gives images.
             + "[data-xdict-labelled]{display:none !important}}"
             // 8. Labels: one style, plain text in the secondary colour, no box (R11).
-            + "[data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);"
+            + "[data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);"
             + "font-weight:var(--xdict-weight-bold);letter-spacing:0.02em;"
             + "white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}"
             // A label replacing a drawing is XDict's in both styles; one read from the dictionary's words takes this
@@ -132,8 +132,9 @@ extension EntryReadingFrame {
             + "{font-variant-numeric:lining-nums}"
             + "[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:0.08em}"
             + "[data-xdict-role=label][data-xdict-label=new]{font-variant-caps:all-small-caps;font-size:var(--xdict-fs-s)}"
-            // Sense numbers: plain numerals, bold as the headword, with no circle or box.
-            + "[data-xdict-role=sensenum]{font-weight:var(--xdict-weight-bold);font-style:normal;"
+            // Sense numbers: no circle or box. Their weight is the dictionary's: the mark is not precise enough for
+            // strong styling (0.74 on the holdout; unification R, 2026-10-16).
+            + "[data-xdict-role=sensenum]{"
             + "font-variant-numeric:lining-nums tabular-nums;background:none !important;border:0 !important;"
             + "border-radius:0 !important;margin-inline-end:0.25em}"
     }

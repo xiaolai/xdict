@@ -80,6 +80,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     static let colours: [(String, String, String)] = [
         ("bg", "#ffffff", "#1e1e1e"), ("panel", "#f3f3f5", "#2a2a2c"), ("text", "#1d1d1f", "#e6e6e9"),
         ("text-2", "#636366", "#a3a3a8"), ("rule", "#d8d8dc", "#3a3a3d"), ("plate", "transparent", "#ececef"),
+        // The one accent every chromatic text colour becomes (owner, 2026-10-16: flatten); the red family's deep tier.
+        ("accent", "#901114", "#fec9c2"),
         ("red-deep", "#901114", "#fec9c2"), ("red", "#af342f", "#fb988d"), ("red-tint", "#ffebe8", "#3e2724"),
         ("orange-deep", "#773a00", "#ffcba9"), ("orange", "#9b4e01", "#f2a26a"), ("orange-tint", "#ffece0", "#3c291d"),
         ("yellow-deep", "#5c4c00", "#ecd78a"), ("yellow", "#796502", "#cfb656"), ("yellow-tint", "#f6f0da", "#332e19"),
@@ -172,7 +174,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
             + "mask-image:\(speakerMask);mask-size:contain;mask-repeat:no-repeat;mask-position:center}"
             + "[data-xdict-unavailable]{opacity:0.4;cursor:default}"
             // In XDict's face even inside a transcription (OALECD's sound links wrap them).
-            + "[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:0.625em;font-variant-caps:all-small-caps;color:var(--xdict-text-2);"
+            + "[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);font-variant-caps:all-small-caps;color:var(--xdict-text-2);"
             // 0.35em of the text after the tag (0.56em of its own 0.625em): the next speaker or word does not touch it.
             + "letter-spacing:0.02em;margin-inline-end:0.56em}"
             + "[data-xdict-accent=uk]>[data-xdict-tag]::before{content:\(quoted(ukTag))}"
@@ -197,10 +199,47 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
 
     /// R1's body face, size and leading; the transcription face (§1.5). Inside a transcription XDict's text face is
     /// the phonetic face, so a dictionary rule the core set to `var(--xdict-font)` there (OALD's, MWU's) draws in it
-    /// too; no cycle, as `--xdict-font-phon` is declared on the root alone and arrives here resolved.
+    /// too; no cycle, as `--xdict-font-phon` is declared on the root alone and arrives here resolved. Unification R
+    /// (owner, 2026-10-16; `dev-docs/artifacts/reading-frame/unify/` §11): what the browser's own sheet sizes and
+    /// spaces is put on the scale and the space tokens, and the three strong roles win over their descendants'
+    /// normalized declarations from a cascade layer; a transcription keeps its colour.
     static let typeCSS = "body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}"
-        + "[data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon);"
-        + "color:var(--xdict-phon-colour)}"
+        + "[data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}"
+        // The browser's defaults, at zero specificity, so a dictionary's own (normalized) rule still wins.
+        + ":where(h1){font-size:var(--xdict-fs-xxl);line-height:var(--xdict-leading-tight)}"
+        + ":where(h2){font-size:var(--xdict-fs-xl);line-height:var(--xdict-leading-tight)}"
+        + ":where(h3){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}"
+        + ":where(h4){font-size:var(--xdict-fs-m);line-height:var(--xdict-leading)}"
+        + ":where(h5){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
+        + ":where(h6){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}"
+        + ":where(small){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
+        + ":where(big){font-size:var(--xdict-fs-l);line-height:var(--xdict-leading)}"
+        + ":where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}"
+        + ":where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}"
+        + ":where(button,input,select,textarea){font:inherit}"
+        + ":where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}"
+        + ":where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}"
+        + "@layer xdict-unify{"
+        // The transcription face reaches all of a transcription's text, a speaker wrapping it included; the face
+        // only, its colour kept. An ASCII-mapped phonetic font (`font:<name>`) keeps its own.
+        + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']),"
+        + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']) :not([data-xdict-tag],[data-xdict-icon])"
+        + "{font-family:var(--xdict-font-phon) !important}"
+        // The lead (the entry's first headword): one size, face and leading; weight and colour are XDict's on it
+        // and its descendants keep their own (a stress mark's), so only size and face are reset inside it.
+        + "[data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;"
+        + "font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
+        + "font-style:normal !important;color:var(--xdict-text) !important}"
+        + "[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,"
+        + "[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;"
+        + "line-height:inherit !important}"
+        // A label's text is the label's, whatever its descendants declared.
+        + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
+        + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"
+        // A link is the link colour, whatever colour the dictionary gave it (flatten: link stays link).
+        + "a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-control=disclosure]) "
+        + ":not([data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-link) !important}"
+        + "}"
 }
 
 extension EntryScripts {

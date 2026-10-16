@@ -14,14 +14,12 @@ extension EntryScripts {
     /// The core's rule, with no DOM (`core/xdict-entry/src/colour.rs`; parity with it is
     /// `conformance/fixtures/colour-tokens.tsv`): a text colour read in OKLCH, made opaque over white. Near-white is
     /// `--xdict-text`, a neutral (C < 0.035) is `--xdict-text` below L 0.45 and `--xdict-text-2` above, anything else
-    /// its hue family, `-deep` below L 0.5. `plan` is what one element's inline declarations become.
+    /// the one accent, `--xdict-accent` (owner, 2026-10-16: flatten). `plan` is what one element's inline declarations become.
     static var colourCore: String {
         """
         var XDictColourCore = (function () {
           'use strict';
           var FALLBACK = \(fallbacksJSON);
-          var FAMILIES = [['red', 45], ['orange', 80], ['yellow', 110], ['green', 170], ['teal', 215], ['blue', 280],
-                          ['purple', 330], ['pink', 360]];
           var HEX = /^#([0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/i;
           var RGB = /^rgba?\\(\\s*([\\d.]+%?)[,\\s]+([\\d.]+%?)[,\\s]+([\\d.]+%?)(?:\\s*[,\\/]\\s*([\\d.]+%?))?\\s*\\)$/i;
           function parse(css) {
@@ -54,9 +52,7 @@ extension EntryScripts {
             var p = lch(c);
             if (p.l >= 0.95 && p.c < 0.03) return 'text';
             if (p.c < 0.035) return p.l < 0.45 ? 'text' : 'text-2';
-            var deg = ((p.h * 180 / Math.PI) % 360 + 360) % 360, family = FAMILIES[0][0];
-            for (var i = 0; i < FAMILIES.length; i++) { if (deg < FAMILIES[i][1]) { family = FAMILIES[i][0]; break; } }
-            return p.l < 0.5 ? family + '-deep' : family;
+            return 'accent';
           }
           function text(c) {
             if (!c) return null;
