@@ -121,20 +121,60 @@ extension GalleryRun {
         }
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
         // pronunciations; "banc   bench").
+        // The inline formatting context a text is laid out in: its nearest ancestor that is not plain inline. A text
+        // inside a float or a positioned box is out of the line's flow.
+        function flow(e) {
+          var out = false;
+          for (; e && e !== document.body; e = e.parentElement) {
+            var st = getComputedStyle(e);
+            if (st.float !== 'none' || st.position === 'absolute' || st.position === 'fixed') out = true;
+            if (st.display !== 'inline' && st.display !== 'contents') break;
+          }
+          return { ctx: e, out: out };
+        }
         var texts = [], tw2 = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
         for (var t2 = tw2.nextNode(); t2 && texts.length < 20000; t2 = tw2.nextNode()) {
           if (!t2.nodeValue.trim() || !t2.parentElement) continue;
           if (t2.parentElement.closest('[data-xdict-control],[data-xdict-tag],td,th,svg')) continue;
           var r2 = document.createRange(); r2.selectNodeContents(t2);
           var rs = Array.prototype.filter.call(r2.getClientRects(), function (q) { return q.width > 0; });
-          if (rs.length) texts.push({ n: t2, first: rs[0], last: rs[rs.length - 1], fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
+          if (rs.length) {
+            var f2 = flow(t2.parentElement);
+            texts.push({ n: t2, first: rs[0], last: rs[rs.length - 1], ctx: f2.ctx, out: f2.out,
+              fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
+          }
         }
         // What draws between two words without being text: XDict's controls, icons, tags, labels, images.
         var boxes = Array.prototype.map.call(document.querySelectorAll('[data-xdict-control],[data-xdict-icon],[data-xdict-tag],[data-xdict-role=label],img,svg'),
           function (e) { return e.getBoundingClientRect(); }).filter(function (q) { return q.width > 0; });
-        function drawnBetween(a, b) {
-          return boxes.some(function (q) { return q.right > a.right - 1 && q.left < b.left + 1 && q.bottom > a.top && q.top < a.bottom; });
+        // And the dictionary's own drawings beside a word: generated content (OCD's "→", its "|") and side borders.
+        var edges = [], all2 = document.body ? document.body.getElementsByTagName('*') : [];
+        for (var i2 = 0; i2 < all2.length && i2 < 20000; i2++) {
+          var e2 = all2[i2], st2 = getComputedStyle(e2);
+          var drawn2 = parseFloat(st2.borderLeftWidth) > 0 || parseFloat(st2.borderRightWidth) > 0
+            || ['::before', '::after'].some(function (p) { var ps = getComputedStyle(e2, p), c = ps.content;
+              // Text, or an empty box with a size (XDict's "→" lookup sign is a mask on an empty box).
+              return c && c !== 'none' && c !== 'normal' && (c !== '""' || parseFloat(ps.width) > 0); });
+          if (!drawn2) continue;
+          Array.prototype.forEach.call(e2.getClientRects(), function (q) { if (q.width > 0) edges.push(q); });
         }
+        function drawnBetween(a, b) {
+          var line = function (q) { return q.bottom > a.top && q.top < a.bottom; };
+          var inGap = function (v) { return v > a.right - 1 && v < b.left + 1; };
+          // A box drawn inside the gap, not one of the two words' own (a label's box is its text's).
+          return boxes.some(function (q) { return Math.min(q.right, b.left) - Math.max(q.left, a.right) > 2 && line(q); })
+            // A drawing's box edge in the gap: the drawing is there (a box around both words is not).
+            || edges.some(function (q) { return line(q) && (inGap(q.left) || inGap(q.right)); });
+        }
+        // Inside one text: a run of space holding a no-break space does not collapse, and draws as wide as it is written.
+        texts.forEach(function (x) {
+          var v = x.n.nodeValue, re = /\S([ \t\n ]* [ \t\n ]*)(?=\S)/g, m;
+          while ((m = re.exec(v))) {
+            var rr = document.createRange(); rr.setStart(x.n, m.index + 1); rr.setEnd(x.n, m.index + 1 + m[1].length);
+            var w = 0; Array.prototype.forEach.call(rr.getClientRects(), function (q) { w = Math.max(w, q.width); });
+            note('wordGap', w <= x.fs + 0.5, 1, Math.round(w) + 'px of space in ' + JSON.stringify(v.trim().slice(0, 16)));
+          }
+        });
         texts.forEach(function (x, k) {
           var prev = texts[k - 1], next = texts[k + 1];
           // One line: the two boxes overlap over most of the shorter one's height (faces and sizes differ in a line).
@@ -150,8 +190,21 @@ extension GalleryRun {
             var alone = !same(prev && prev.last, x.first) && !same(x.last, next && next.first);
             note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line');
           }
-          if (prev && same(prev.last, x.first) && x.first.left > prev.last.right && !drawnBetween(prev.last, x.first)) {
-            var gap = x.first.left - prev.last.right;
+          // A gap between words is measured only inside one line box: one formatting context, neither word floated
+          // or positioned (a float, a cell or a right-aligned button beside a line is not a gap in it).
+          if (prev && prev.ctx === x.ctx && !prev.out && !x.out && same(prev.last, x.first)
+              && x.first.left > prev.last.right && !drawnBetween(prev.last, x.first)) {
+            // What the space between them draws: the gap less the boxes' own side margins and padding up to the
+            // element holding both. A field's set-off (MW's "/pron/   adjective", COBUILD's "death row   skid row") is
+            // the dictionary's layout; space the text writes (OED's "banc␣␣␣bench") is the defect.
+            var sides = function (n, side) {
+              var s = 0;
+              for (var e = n.parentElement; e && !e.contains(side === 'Right' ? x.n : prev.n); e = e.parentElement) {
+                var st = getComputedStyle(e); s += parseFloat(st['margin' + side]) + parseFloat(st['padding' + side]);
+              }
+              return s;
+            };
+            var gap = x.first.left - prev.last.right - Math.max(0, sides(prev.n, 'Right')) - Math.max(0, sides(x.n, 'Left'));
             note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16)));
           }
         });
@@ -174,6 +227,16 @@ extension GalleryRun {
             + ":root:root[data-xdict-theme=dark]{--xdict-accent:\(parts[1])}"
         return "var s = document.createElement('style'); s.id = 'xdict-lab-accent'; s.textContent = '\(css)';"
             + "(document.head || document.documentElement).appendChild(s); return {};"
+    }
+
+    /// Lab only: `XDICT_LAB_CONTROL=1` writes a known fault into every framed page before it is measured, the
+    /// positive control of the spacing checks: gaps of no-break spaces inside one text and between two (`wordGap`) and a comma
+    /// alone between two blocks (`punctLine`). A run with it must be red.
+    static var positiveControl: String? {
+        guard ProcessInfo.processInfo.environment["XDICT_LAB_CONTROL"] == "1" else { return nil }
+        return "var d = document.createElement('div'); d.innerHTML = '<p>control\\u00a0\\u00a0\\u00a0\\u00a0\\u00a0gap</p>"
+            + "<p>split <span>\\u00a0\\u00a0\\u00a0\\u00a0\\u00a0\\u00a0</span> gap</p>"
+            + "<div>one</div>,<div>two</div>'; (document.body || document.documentElement).appendChild(d); return {};"
     }
 
     /// Each invariant broken on this page, as a failure line naming every value off.

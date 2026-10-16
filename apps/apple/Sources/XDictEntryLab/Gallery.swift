@@ -87,6 +87,7 @@ enum GalleryRun {
                         }
                     }
                     if !mode.frame.isEmpty, let accent = accentCandidate { _ = await run(accent, controller.webView) }
+                    if !mode.frame.isEmpty, let control = positiveControl { _ = await run(control, controller.webView) }
                     try await Task.sleep(for: .milliseconds(500))
                     let file = "\(name)-\(kind)-\(mode.name).jpg"
                     let measured = await measure(controller.webView)
@@ -317,7 +318,12 @@ enum GalleryRun {
           var scope = sp.parentElement && sp.parentElement.parentElement ? sp.parentElement.parentElement : document.body;
           // Its transcription: the text after it inside a transcription that holds it, else the next one near it.
           var ph = null, b = null;
-          if (sp.closest('[data-xdict-phon]')) { var tn = nextText(sp); if (tn && tn.parentElement.closest('[data-xdict-phon]')) ph = tn; }
+          // A speaker that wraps its transcription (OALECD's `<a … data-xdict-phon>`, a prefix control) holds it.
+          var own = sp.hasAttribute('data-xdict-phon') ? Array.prototype.find.call(sp.querySelectorAll('*'), function (e) {
+            return !e.closest('[data-xdict-icon],[data-xdict-tag]') && /\S/.test(e.textContent) && seen(e) && !e.children.length;
+          }) : null;
+          if (own) ph = own;
+          else if (sp.closest('[data-xdict-phon]')) { var tn = nextText(sp); if (tn && tn.parentElement.closest('[data-xdict-phon]')) ph = tn; }
           else {
             var pe = nextIn(sp, '[data-xdict-phon]', scope);
             // The next transcription is the speaker's only when no word separates them (other speakers aside): a
