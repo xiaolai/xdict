@@ -64,6 +64,8 @@ public final class Pronunciation {
     public struct Shown: Hashable, Sendable {
         public let notice: PronunciationNotice
         public let serial: Int
+        /// The one-time tip that the voice that spoke is a compact one and a better one can be downloaded.
+        public var tip: VoiceCaveat?
     }
 
     public private(set) var shown: Shown?
@@ -76,6 +78,8 @@ public final class Pronunciation {
     /// The latest request: an answer to an earlier one arrives to find it has moved on.
     @ObservationIgnored private var request = 0
     @ObservationIgnored private var serial = 0
+    /// The tip the next notice carries, set when a compact voice speaks for the first time.
+    @ObservationIgnored private var pendingTip: VoiceCaveat?
 
     public init(backend: any SearchBackend, output: any PronunciationOutput, preferences: SpeechPreferences,
                 voices: @escaping @MainActor () -> [VoiceInfo] = { Voices.installed }) {
@@ -88,7 +92,13 @@ public final class Pronunciation {
 
     /// A recording a `sound://` link names, `path` as the core gave it, from the dictionary open as `handle`; `word` is
     /// spoken in `language` if it cannot play.
+    /// Unless the reader turned on "Use the dictionary's recordings", `word` is spoken by the system voice and nothing is
+    /// fetched (ADR-0010 Q5).
     public func playRecording(_ path: String, from handle: DictId, word: String, language: String?) async {
+        guard preferences.useRecordings else {
+            speak(word, language: language)
+            return
+        }
         let mine = begin()
         let outcome = await backend.request(.resource(dict: handle, path: path, render: .reader))
         guard mine == request else { return }
@@ -162,12 +172,20 @@ public final class Pronunciation {
         guard let voice = Voices.best(for: tags, among: voices()), output.speak(text, with: voice) else {
             return .noVoice(language: language)
         }
+        // The one-time tip: a compact voice spoke, and a better one may be a download away (not for a language macOS
+        // has nothing better for, where it would be noise).
+        let advice = Voices.advice(for: voice.language)
+        if !preferences.voiceTipShown, voice.quality == .compact, advice != .nothingBetter {
+            preferences.voiceTipShown = true
+            pendingTip = .compactOnly(advice)
+        }
         return .spoken(voice: voice.name, language: voice.language)
     }
 
     private func notify(_ notice: PronunciationNotice) {
         serial += 1
-        shown = Shown(notice: notice, serial: serial)
+        shown = Shown(notice: notice, serial: serial, tip: pendingTip)
+        pendingTip = nil
         onEvent?(.notice(notice))
     }
 

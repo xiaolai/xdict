@@ -7,6 +7,7 @@ import XDictSpeech
 /// of Settings around it.
 public struct SpeechSettings: View {
     @AppStorage(SpeechPreferences.accentKey) private var accent: Accent = SpeechPreferences.defaultAccent
+    @AppStorage(SpeechPreferences.useRecordingsKey) private var useRecordings = false
 
     public init() {}
 
@@ -35,10 +36,12 @@ public struct SpeechSettings: View {
                     Button("Open VoiceOver Utility") { NSWorkspace.shared.open(Voices.voiceLibraryURL) }
                 }
             }
-            Text("""
-                Each dictionary is spoken in the language set for it in the Library. A dictionary's own recordings play \
-                where macOS can play them; the others are spoken by the system voice instead.
-                """)
+            Toggle(isOn: $useRecordings) {
+                Text("Use the dictionary's recordings")
+                Text("Where a dictionary has its own recording of a word and macOS can play it, play that instead of the system voice.")
+            }
+            .accessibilityIdentifier("use-recordings")
+            Text("Each dictionary is spoken in the language set for it in the Library.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

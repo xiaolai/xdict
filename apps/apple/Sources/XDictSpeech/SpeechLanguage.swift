@@ -48,6 +48,21 @@ public struct SpeechPreferences: @unchecked Sendable {
         self.defaults = defaults
     }
 
+    public static let useRecordingsKey = "speech.useRecordings"
+    static let voiceTipKey = "speech.voiceTipShown"
+
+    /// "Use the dictionary's recordings" (ADR-0010 Q5): off, the system voice speaks every sound link.
+    public var useRecordings: Bool {
+        get { defaults.bool(forKey: Self.useRecordingsKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.useRecordingsKey) }
+    }
+
+    /// The one-time tip that a better voice can be downloaded has been shown.
+    public var voiceTipShown: Bool {
+        get { defaults.bool(forKey: Self.voiceTipKey) }
+        nonmutating set { defaults.set(newValue, forKey: Self.voiceTipKey) }
+    }
+
     public var accent: Accent {
         get { defaults.string(forKey: Self.accentKey).flatMap(Accent.init(rawValue:)) ?? Self.defaultAccent }
         nonmutating set { defaults.set(newValue.rawValue, forKey: Self.accentKey) }
