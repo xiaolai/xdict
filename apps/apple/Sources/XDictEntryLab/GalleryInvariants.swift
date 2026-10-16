@@ -108,7 +108,7 @@ extension GalleryRun {
           if (!cells[ci].getClientRects().length) continue;
           var tw = document.createTreeWalker(cells[ci], NodeFilter.SHOW_TEXT);
           for (var tn = tw.nextNode(); tn && seen < 3000; tn = tw.nextNode()) {
-            var re = /\S{2,}/g, mm;
+            var re = /[^\s\-‐]{2,}/g, mm;   // a break at a hyphen is a break between words
             while ((mm = re.exec(tn.nodeValue)) && seen < 3000) {
               seen += 1;
               var wr = document.createRange(); wr.setStart(tn, mm.index); wr.setEnd(tn, mm.index + mm[0].length);
