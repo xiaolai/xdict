@@ -506,9 +506,12 @@ impl Core {
             let style = self.edition_style(&opened)?;
             // The key finds the headword (the roles, element-sweep §2.1); the package says which images it holds (S13).
             let holds = |path: &str| self.holds(&opened, path);
+            // A transcription candidate that is a key is a headword written with stress (ADR-0010 Phonetics).
+            let is_key = |key: &str| opened.mdx.find(key).is_ok_and(|found| !found.is_empty());
             let context = xdict_entry::Entry {
                 key: &entry.key,
                 resource: Some(&holds),
+                is_key: Some(&is_key),
                 strip_off_for_tests: self.strip_off_for_tests,
             };
             // Given owned (the record's text, or its expansion), it is freed once it is read.

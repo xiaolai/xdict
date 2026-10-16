@@ -474,6 +474,9 @@ pub struct Entry<'a> {
     pub key: &'a str,
     /// Whether the package holds a resource, by its path as it travels; `None` keeps every image.
     pub resource: Option<&'a dyn Fn(&str) -> bool>,
+    /// Whether the edition holds a key, under its own matching rules; `None` asks nothing. A text that is a key
+    /// once its stress marks are gone is a headword or a derived form, not a transcription (`crate::phon`).
+    pub is_key: Option<&'a dyn Fn(&str) -> bool>,
     /// The strip list (S1–S14) off: the hostile battery's lab only (`Config::strip_off_for_tests`).
     pub strip_off_for_tests: bool,
 }
