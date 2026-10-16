@@ -29,8 +29,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         ("base", "16px"),
         ("font-cjk", #""PingFang SC", "Hiragino Sans GB""#),
         ("font", #"-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif"#),
-        // SIL 7.000 renamed Charis SIL and Gentium Plus; the new names first, the old for an earlier install.
-        ("font-phon", #""Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)"#),
+        // XDict's own face first (`EntryFonts`: Noto Sans; Charis in Serif, below), then what the Mac may have.
+        ("font-phon", #""\#(EntryFonts.sans)", \#(phonFallbacks)"#),
+        // The text face, kept where `--xdict-font` means the phonetic face (inside a transcription, `typeCSS`).
+        ("font-text", "var(--xdict-font)"),
         ("font-mono", #"ui-monospace, "SF Mono", Menlo, monospace"#),
         ("fs-xs", "0.75rem"), ("fs-s", "0.875rem"), ("fs-m", "1rem"), ("fs-l", "1.125rem"), ("fs-xl", "1.25rem"),
         ("fs-xxl", "1.5rem"), ("fs-min", "var(--xdict-fs-xs)"), ("fs-max", "var(--xdict-fs-xxl)"),
@@ -42,6 +44,9 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         ("link", "var(--xdict-blue)"), ("phon-colour", "var(--xdict-text)"),
         ("mark", "#ffe36e"), ("mark-current", "#ff9632"),
     ]
+
+    /// SIL 7.000 renamed Charis SIL and Gentium Plus; the new names first, the old for an earlier install.
+    static let phonFallbacks = #""Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)"#
 
     /// §1.3: surfaces, text, and eight hue families × deep / plain / tint, light then dark.
     static let colours: [(String, String, String)] = [
@@ -66,9 +71,9 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
 
     static var tokensCSS: String {
         func block(_ pairs: [(String, String)]) -> String { pairs.map { "--xdict-\($0.0):\($0.1);" }.joined() }
-        return ":root{\(block(tokens))}" + paletteCSS
+        return EntryFonts.fontFaceCSS + ":root{\(block(tokens))}" + paletteCSS
             + #":root[data-xdict-face=serif]{--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;"#
-            + #"--xdict-font-cjk:"Songti SC", "STSong"}"#
+            + #"--xdict-font-cjk:"Songti SC", "STSong";--xdict-font-phon:"\#(EntryFonts.serif)", \#(phonFallbacks)}"#
             + ":lang(zh-Hant){--xdict-font-cjk:\"PingFang TC\"}:lang(ja){--xdict-font-cjk:\"Hiragino Sans\"}"
             + ":lang(ko){--xdict-font-cjk:\"Apple SD Gothic Neo\"}"
     }
@@ -139,7 +144,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
             + "mask-image:\(speakerMask);mask-size:contain;mask-repeat:no-repeat;mask-position:center}"
             + "[data-xdict-unavailable]{opacity:0.4;cursor:default}"
             // In XDict's face even inside a transcription (OALECD's sound links wrap them).
-            + "[data-xdict-tag]{font-family:var(--xdict-font);font-style:normal;font-size:0.625em;font-variant-caps:all-small-caps;color:var(--xdict-text-2);"
+            + "[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:0.625em;font-variant-caps:all-small-caps;color:var(--xdict-text-2);"
             // 0.35em of the text after the tag (0.56em of its own 0.625em): the next speaker or word does not touch it.
             + "letter-spacing:0.02em;margin-inline-end:0.56em}"
             + "[data-xdict-accent=uk]>[data-xdict-tag]::before{content:\(quoted(ukTag))}"
@@ -162,9 +167,12 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         }
     }
 
-    /// R1's body face, size and leading; the transcription face (§1.5).
+    /// R1's body face, size and leading; the transcription face (§1.5). Inside a transcription XDict's text face is
+    /// the phonetic face, so a dictionary rule the core set to `var(--xdict-font)` there (OALD's, MWU's) draws in it
+    /// too; no cycle, as `--xdict-font-phon` is declared on the root alone and arrives here resolved.
     static let typeCSS = "body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}"
-        + "[data-xdict-phon]{font-family:var(--xdict-font-phon);color:var(--xdict-phon-colour)}"
+        + "[data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon);"
+        + "color:var(--xdict-phon-colour)}"
 }
 
 extension EntryScripts {

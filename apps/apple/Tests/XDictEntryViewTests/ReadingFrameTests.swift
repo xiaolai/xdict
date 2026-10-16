@@ -44,7 +44,7 @@ struct ReadingFrameTests {
     /// new first, so either installed version sets the transcriptions.
     @Test func thePhoneticFontsAreNamedOldAndNew() {
         #expect(EntryReadingFrame.tokensCSS.contains(
-            #"--xdict-font-phon:"Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);"#))
+            #"--xdict-font-phon:"XDict Phonetic Sans", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);"#))
     }
 
     /// R10 and R13: the quirks-mode table reset undone; only an unwrapped data table scrolls itself, no table is made a
@@ -118,7 +118,7 @@ struct ReadingFrameTests {
         #expect(css.contains("[data-xdict-control]::before,[data-xdict-control]::after{content:none !important}"))
         #expect(css.contains("[data-xdict-accent=uk]>[data-xdict-tag]::before{content:"))
         #expect(css.contains("calc((var(--xdict-hit) - 1em) / 2)"))
-        #expect(css.contains("[data-xdict-tag]{font-family:var(--xdict-font);"))
+        #expect(css.contains("[data-xdict-tag]{font-family:var(--xdict-font-text);"))
         // A tag ends its control with 0.35em of the text before the next control or word (0.56em of the tag's own
         // 0.625em): MED's `UK` touched the next speaker (icon sweep 2026-10-15, §8.4).
         #expect(css.contains("margin-inline-end:0.56em"))

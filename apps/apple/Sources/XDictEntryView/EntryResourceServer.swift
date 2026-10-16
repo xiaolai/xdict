@@ -39,10 +39,14 @@ public final class EntryResourceServer {
 
     private(set) var document: (url: URL, document: EntryDocument)?
 
-    public init(content: any EntryContent, attachesPolicy: Bool = true,
+    /// The folder XDict's phonetic faces are read from (`EntryFonts.bundled`); none, and `font/…` is refused.
+    let fonts: URL?
+
+    public init(content: any EntryContent, attachesPolicy: Bool = true, fonts: URL? = EntryFonts.bundled,
                 placeholderLabel: @escaping @MainActor (String) -> String) {
         self.content = content
         self.attachesPolicy = attachesPolicy
+        self.fonts = fonts
         self.placeholderLabel = placeholderLabel
     }
 
@@ -82,6 +86,12 @@ public final class EntryResourceServer {
                 let ceiling = Self.rendered.contains(type) ? Self.maxRenderedBytes : Self.maxResourceBytes
                 return answer(200, mime: type, body: bytes, policy: policy, ceiling: ceiling)
             }
+        case .font(let file):
+            // Read-only, from the app's own bundle; the route has already held the name to the eight files.
+            guard let fonts, let bytes = try? Data(contentsOf: fonts.appending(path: file)) else {
+                return .refuse("XDict's font \(file) is not in the bundle")
+            }
+            return answer(200, mime: "font/ttf", body: bytes, policy: policy, ceiling: Self.maxResourceBytes)
         case .blocked(let remote):
             let host = URLComponents(string: remote)?.host ?? ""
             let svg = Self.placeholder(label: placeholderLabel(host.isEmpty ? remote : host))

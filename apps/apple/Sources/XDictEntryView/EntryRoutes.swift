@@ -2,8 +2,8 @@ import Foundation
 
 /// **The one space of URLs the entry view serves** (ADR-0007 decision 14, made exact 2026-10-14): the core writes every
 /// entry under `xdict://d/`, as `entry/…` (a lookup), `r/…` (a resource), `sound/…` (a recording) and `blocked/…` (a
-/// remote URL it saw and refused). The scheme handler answers that authority and those routes, and refuses everything
-/// else; it never redirects.
+/// remote URL it saw and refused); the shell adds `font/…`, its own phonetic faces (`EntryFonts`). The scheme handler
+/// answers that authority and those routes, and refuses everything else; it never redirects.
 public enum EntryRoutes {
     public static let scheme = "xdict"
     public static let authority = "d"
@@ -20,12 +20,14 @@ public enum EntryRoutes {
         case sound(path: String)
         /// `blocked/…`: the remote URL the core refused, decoded once. Answered with a placeholder naming its host.
         case blocked(remote: String)
+        /// `font/<file>`: one of XDict's own phonetic faces (`EntryFonts.files`), named exactly; never the dictionary's.
+        case font(String)
         case refused(Refusal)
     }
 
     /// Why a request was refused before anything was asked of the dictionary. Logged, never shown.
     public enum Refusal: String, Sendable, CaseIterable {
-        case notThisScheme, notThisAuthority, credentialsOrPort, unknownRoute, emptyPath, notGet, undecodable
+        case notThisScheme, notThisAuthority, credentialsOrPort, unknownRoute, emptyPath, notGet, undecodable, notAFont
     }
 
     /// The route `url` names, for a request made with `method` (nil reads as GET, as `URLRequest` defaults).
@@ -50,6 +52,11 @@ public enum EntryRoutes {
         for (prefix, make) in [("r/", Route.resource(path:)), ("sound/", Route.sound(path:))] where route.hasPrefix(prefix) {
             let rest = String(route.dropFirst(prefix.count)) + query
             return rest.isEmpty ? .refused(.emptyPath) : make(rest)
+        }
+        if route.hasPrefix("font/") {
+            // The name as it travels, unencoded and with no query: exactly one of the bundled files, or nothing.
+            let file = String(route.dropFirst("font/".count))
+            return parts.percentEncodedQuery == nil && EntryFonts.files.contains(file) ? .font(file) : .refused(.notAFont)
         }
         if route.hasPrefix("blocked/") {
             let rest = String(route.dropFirst("blocked/".count)) + query
