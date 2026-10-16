@@ -9,7 +9,7 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (4, 0xe7a3_c0eb_2289_c2d3);
+const PINNED: (u32, u64) = (5, 0xfeb5_915f_1a85_2205);
 
 const BASE: &str = "xdict://d/";
 
