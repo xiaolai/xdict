@@ -30,6 +30,12 @@
 #                     their last pass (Tools/e2e-run.sh); FULL=1 all of them, STAGES=… those, forced
 #   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
 #   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`)
+#   make affected-graph [PATHS=<path...>] [BASE=<ref>]
+#                     the picture of what a change reaches (file -> crate/target -> gate/sub-stage), with PATHS or the
+#                     change since BASE (default macos-v1) lit: dev-docs/artifacts/affected/index.html, opened
+#   make affected-graph-update
+#                     rewrite Tools/affected-graph.json from cargo metadata and Package.swift (a build Mac: needs cargo
+#                     and swift); `make test` fails while it is stale
 #   make e2e-status   what each sub-stage last did, how long it took, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
@@ -41,7 +47,7 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-pending land e2e-status e2e-evidence \
+.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-pending land affected-graph affected-graph-update e2e-status e2e-evidence \
 	e2e-evidence-bootstrap release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -158,9 +164,18 @@ e2e-pending:
 land:
 	@Tools/land.sh
 
+# What a change reaches, drawn (Tools/affected_graph.py; no request leaves the page).
+BASE ?= macos-v1
+affected-graph:
+	@out=$$(python3 -I Tools/affected_graph.py html --base "$(BASE)" $(PATHS)) && open "$$out" && echo "$$out"
+
+affected-graph-update:
+	@python3 -I Tools/affected_graph.py generate
+
 # The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
+	@Tools/tests/affected-graph-test.sh
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh

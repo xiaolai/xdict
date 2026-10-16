@@ -3,9 +3,10 @@
 #
 #   e2e-run.sh select     the sub-stages to run, one a line on stdout; on stderr, per sub-stage, `skipped: unchanged
 #                         since pass <date>` or `run: <why>`. By default **only what changed since its last pass**
-#                         (`Tools/gate-cache.py`: a sub-stage's key is the content of every file the affected map gives
-#                         it, plus the corpus). STAGES=<names> runs those, forced; FULL=1 every default sub-stage,
-#                         ignoring the cache. Writes the keys to .build/e2e-selection.tsv for `run`
+#                         (`Tools/gate-cache.py`: a sub-stage's key is the content of every file that reaches it by
+#                         the generated graph and the hand list, Tools/affected_graph.py, plus the corpus).
+#                         STAGES=<names> runs those, forced; FULL=1 every default sub-stage, ignoring the cache.
+#                         Writes the keys to .build/e2e-selection.tsv for `run`
 #   e2e-run.sh pending    one line, running nothing: `E2E suggested: <sub-stages> — <changed paths>` or
 #                         `E2E: nothing pending` (`make e2e-pending`, and the end of `make land`)
 #   e2e-run.sh run <sub-stage...>

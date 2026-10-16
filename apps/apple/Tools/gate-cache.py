@@ -8,17 +8,20 @@
     gate-cache.py corpus-id <folder>
         a corpus's identity (names, sizes, times), for a `--fact`
     gate-cache.py select-paths <path ...>
-        the E2E sub-stages those paths select, by the map (for the tests: the same as Tools/e2e-affected.sh)
+        the E2E sub-stages those paths select (`-v` first: why, on stderr); Tools/e2e-affected.sh asks this
 
 **A key is the content a gate reads**, never a branch or a date: the path and blob of every file in its inputs, in the
 working copy's tree (committed or not, as `Tools/source-tree.sh` reads it), plus the facts the caller names (rustc,
 SwiftLint, the corpus). The gates' inputs:
 
     core, apple-test, entries, lookup-corpus, mdx-v3, bindings, memory
-                                           the paths in PREFIXES below, AGENTS.md's table
-    e2e:<sub-stage>                        every file `Tools/e2e-affected.map` gives that sub-stage: its rule names it,
-                                           names its stage, names `all`, or no rule names the file (fail-safe). `e2e` is
-                                           every default sub-stage; `e2e-all` every one
+                                           the files of the crates and targets the gate reaches in the generated graph,
+                                           plus the paths it reads that no compiler sees (`GATES` in
+                                           Tools/affected_graph.py; AGENTS.md's table)
+    e2e:<sub-stage>                        every file that reaches that sub-stage (Tools/affected_graph.py): by the hand
+                                           list (`Tools/affected-hand.map`), else by the crate or target that owns it,
+                                           else everything (fail-safe). `e2e` is every default sub-stage; `e2e-all`
+                                           every one
 
 **Changed means since that gate's last pass**: a miss names the first path whose content differs from the inputs of
 the gate's most recent pass, so the reader sees why it runs.
@@ -29,11 +32,12 @@ pass at all: everything runs, and stderr says why. Never a skip on doubt. A rele
 
 The record: `$XDICT_GATE_CACHE` (default ~/.cache/xdict-gates), outside every checkout so all worktrees share it:
 `passes.tsv` (`v1, key, gate, date, seconds, host`) and `manifests/<key>` (the inputs that key stands for).
-Environment for the tests: XDICT_GATE_REPO, XDICT_E2E_AFFECTED_MAP, XDICT_E2E_SUBSTAGES (read by Tools/e2e-plan.sh).
+Environment for the tests: XDICT_GATE_REPO, XDICT_AFFECTED_GRAPH, XDICT_AFFECTED_HAND, XDICT_E2E_SUBSTAGES (read by
+Tools/e2e-plan.sh).
 """
 import datetime
-import fnmatch
 import hashlib
+import importlib.util
 import os
 import re
 import subprocess
@@ -43,22 +47,9 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.environ.get("XDICT_GATE_REPO") or subprocess.run(
     ["git", "-C", HERE, "rev-parse", "--show-toplevel"], check=True, capture_output=True, text=True).stdout.strip()
-MAP = os.environ.get("XDICT_E2E_AFFECTED_MAP") or os.path.join(HERE, "e2e-affected.map")
 CACHE = os.environ.get("XDICT_GATE_CACHE") or os.path.expanduser("~/.cache/xdict-gates")
 PASSES = os.path.join(CACHE, "passes.tsv")
 MANIFESTS = os.path.join(CACHE, "manifests")
-# AGENTS.md "Which gates a change needs", as paths (a prefix or a whole path).
-PREFIXES = {
-    "core": ["core/"],
-    "apple-test": ["apps/apple/", "core/", "conformance/"],
-    "entries": ["core/xdict-entry/", "core/xdict-core/"],
-    "lookup-corpus": ["core/xdict-lookup/", "core/xdict-mdx/src/text.rs", "core/xdict-mdx/src/index.rs"],
-    "mdx-v3": ["core/xdict-mdx/src/v3.rs", "core/xdict-mdx/src/cipher.rs", "core/xdict-mdx/tests/mdxbuilder.rs"],
-    "bindings": ["core/xdict-ffi/", "core/xdict-wasm/", "core/xdict-conformance/", "core/binding-env.sh",
-                 "conformance/"],
-    "memory": ["core/xdict-entry/", "core/xdict-core/src/", "core/xdict-ffi/", "core/xdict-wasm/",
-               "core/binding-env.sh"],
-}
 LINE = re.compile(r"^v1\t[0-9a-f]{64}\t[a-z0-9.:-]+\t\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\t\d+\t[A-Za-z0-9._-]+$")
 
 
@@ -87,87 +78,22 @@ def files():
     return listing
 
 
-def plan():
-    """Sub-stages in run order, which are default, from Tools/e2e-plan.sh's table (the only catalog)."""
-    out = subprocess.run(["bash", os.path.join(HERE, "e2e-plan.sh"), "table"], check=True, capture_output=True,
-                         text=True).stdout
-    order, default = [], set()
-    for row in out.splitlines():
-        sub, kind = row.split("\t")[:2]
-        if sub not in order:
-            order.append(sub)
-        if kind == "default":
-            default.add(sub)
-    return order, default
+def load_graph(listing=None):
+    """Tools/affected_graph.py, loaded by its path: `python3 -I` puts no script directory on sys.path."""
+    spec = importlib.util.spec_from_file_location("affected_graph", os.path.join(HERE, "affected_graph.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module, module.Graph(listing, REPO)
 
 
-def read_map():
-    rules, controls = [], {}
-    for raw in open(MAP, encoding="utf-8"):
-        words = raw.split()
-        if not words or words[0].startswith("#"):
-            continue
-        if words[0] == "control":
-            controls.setdefault(words[1], []).append(words[2])
-            continue
-        rules.append((words[0], words[1], words[2:]))
-    if not rules:
-        die(f"the map {MAP} has no rule")
-    return rules, controls
-
-
-class Selector:
-    """Which sub-stages a path selects: Tools/e2e-affected.sh's rules (first match decides; none matching is all)."""
-
-    def __init__(self):
-        self.order, self.default = plan()
-        self.rules, self.controls = read_map()
-
-    def expand(self, names):
-        wanted = set()
-        for name in names:
-            if name == "all":
-                wanted.update(self.order)
-            elif "." in name:
-                if name not in self.order:
-                    die(f"the map names no sub-stage called {name}")
-                wanted.add(name)
-            else:
-                stage = {s for s in self.order if s in self.default and (s == name or s.startswith(name + "."))}
-                if not stage:
-                    die(f"the map names no stage called {name}")
-                wanted |= stage
-        return wanted
-
-    def of(self, path):
-        """The sub-stages the path selects; None for everything."""
-        for pattern, first, rest in self.rules:
-            if not fnmatch.fnmatchcase(path, pattern):
-                continue
-            names = [first.removeprefix("check:")] + rest
-            if "none" in names:
-                return set()
-            if "all" in names:
-                return None
-            selected = self.expand(names)
-            if first.startswith("check:"):
-                for sub in list(selected):
-                    selected |= set(self.controls.get(sub, []))
-            return selected
-        return None
-
-
-def inputs(gates, listing, selector):
+def inputs(gates, listing, graph, gate_names):
     """gate -> {path: blob} it reads."""
     wanted = {}
-    e2e = [g for g in gates if g.startswith("e2e:")]
-    by_path = {}
-    if e2e:
-        for path in listing:
-            by_path[path] = selector.of(path)
+    by_path = {path: graph.of(path) for path in listing} if any(g.startswith("e2e:") for g in gates) else {}
     for gate in gates:
-        if gate in PREFIXES:
-            wanted[gate] = {p: b for p, b in listing.items() if any(p.startswith(x) for x in PREFIXES[gate])}
+        if gate in gate_names:
+            nodes = graph.gate_nodes(gate)
+            wanted[gate] = {p: b for p, b in listing.items() if graph.gate_reads(gate, p, nodes)}
         else:
             sub = gate[4:]
             wanted[gate] = {p: b for p, b in listing.items() if by_path[p] is None or sub in by_path[p]}
@@ -237,19 +163,19 @@ def status(args):
             gates.append(word)
     if not gates:
         die("status: name the gates")
-    selector = Selector() if any(g.startswith("e2e") for g in gates) else None
+    listing = files()
+    module, graph = load_graph(listing)
     named = []
     for gate in gates:
         if gate == "e2e":
-            named += [f"e2e:{s}" for s in selector.order if s in selector.default]
+            named += [f"e2e:{s}" for s in graph.order if s in graph.default]
         elif gate == "e2e-all":
-            named += [f"e2e:{s}" for s in selector.order]
-        elif gate in PREFIXES or (gate.startswith("e2e:") and gate[4:] in selector.order):
+            named += [f"e2e:{s}" for s in graph.order]
+        elif gate in module.GATES or (gate.startswith("e2e:") and gate[4:] in graph.order):
             named.append(gate)
         else:
             die(f"no gate called {gate}")
-    listing = files()
-    manifests = inputs(named, listing, selector)
+    manifests = inputs(named, listing, graph, module.GATES)
     record = None if full else passes()
     os.makedirs(MANIFESTS, exist_ok=True)
     for gate in named:
@@ -304,14 +230,9 @@ def corpus_id(args):
 
 
 def select_paths(paths):
-    selector = Selector()
-    wanted = set()
-    for path in paths:
-        got = selector.of(path)
-        wanted |= ({s for s in selector.order if s in selector.default} if got is None else got)
-    for sub in selector.order:
-        if sub in wanted:
-            print(sub)
+    verbose = bool(paths) and paths[0] == "-v"
+    for sub in load_graph()[1].select_paths(paths[1:] if verbose else paths, verbose):
+        print(sub)
 
 
 def main():

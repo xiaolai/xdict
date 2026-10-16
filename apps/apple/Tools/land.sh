@@ -138,7 +138,7 @@ command_of() {
     local corpus=\$HOME/$2
     case $1 in
         core) echo "cd core && cargo fmt --check && cargo test && cargo clippy --all-targets" ;;
-        # The tool tests read git (the source tree, the affected map): the copy has none, so it gets a snapshot.
+        # The tool tests read git (the source tree): the copy has none, so it gets a snapshot.
         apple-test) echo "rm -rf .git && git init -q && git add -A && git -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
         entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
         lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
