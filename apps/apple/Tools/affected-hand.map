@@ -1,26 +1,13 @@
-# **What no compiler sees**, for `Tools/affected_graph.py`: the drivers, fixtures, scripts and resources an E2E
-# sub-stage reads, and what each sub-stage launches. Everything compiled (core/*'s crates, Sources/ and Tests/) is the
-# generated graph's (`Tools/affected-graph.json`); **do not add a rule for a compiled file** unless it is a script or
-# a resource that lives in a crate's directory.
+# **What the generated graph needs told**, for `Tools/affected_graph.py`. E2E selection reads, in order:
+# `Tools/e2e-affected.map` (file-level, first match decides), then the rules below, then the crate or target that
+# owns the path in the generated graph (`Tools/affected-graph.json`); **a path none of them names selects everything**.
+# Recorded coverage (`Graph.recorded_coverage`) is what will later replace the map for the paths it names.
 #
-#   <pattern>   <what>
-#
-# <pattern> is a path from the repository's root, matched as a shell pattern (`*` crosses `/`). **The first rule that
-# matches decides**, before the graph. A path no rule matches goes to the graph; **one the graph owns no node for
-# either selects everything**: an unforeseen file costs a full run, never a missed one.
-#
-# <what> is `none`, `all`, sub-stage and stage names (`Tools/e2e-substages.txt`; a stage means its default sub-stages),
-# or graph nodes (`crate:<name>`, `target:<name>`, `*` for every one): the sub-stages that reach that node. Prefixed
-# `check:`, the path is a check's own code, and each sub-stage named also brings its positive control (`control`).
-#
-#   control  <sub-stage> <its positive control>
+#   <pattern>   <what>        as in e2e-affected.map, and graph nodes (`crate:<name>`, `target:<name>`, `*` for all):
+#                             the sub-stages that reach that node
 #   launches <sub-stage pattern> <executable target...>   what a sub-stage starts (Tools/e2e.sh); the first match decides
 #   builds   <need> <node...>                             what the catalog's need is built from on the build Mac
 #   binary   <binary target> <crate:name>                 what a prebuilt Swift binary target is built from
-
-control hostile.production hostile.controls
-control hostile.app        hostile.controls
-control library.corpus     library.control
 
 # The lab (`lab_report`, `run-hostile.sh`); every other sub-stage drives the app, whose bundle carries the service.
 launches hostile.production XDictEntryLab
@@ -39,65 +26,10 @@ builds sample   tests:xdict-core
 builds editions tests:xdict-core
 binary xdictFFI crate:xdict-ffi
 
-# --- What no E2E sub-stage reads: the notes, the other platforms, scripts that run only on a build Mac ---------------
-*.md                                                none
-LICENSE                                             none
-dev-docs/*                                          none
-apps/android/*                                      none
-apps/windows/*                                      none
-apps/linux/*                                        none
-apps/web/*                                          none
-apps/extension/*                                    none
-core/xdict-ffi/test-*.sh                            none
-core/xdict-ffi/measure-memory.sh                    none
-core/xdict-wasm/*.sh                                none
-core/binding-env.sh                                 none
-core/rustfmt.toml                                   none
-apps/apple/Tools/tests/*                            none
-apps/apple/Tools/affected*                          none
-apps/apple/Tools/e2e-affected.sh                    none
-apps/apple/Tools/strings.sh                         none
-apps/apple/Tools/compiler-warnings.py               none
-apps/apple/Tools/release.sh                         none
-apps/apple/Tools/gate-cache.py                      none
-apps/apple/Tools/land.sh                            none
-apps/apple/Tools/gallery/*                          none
-apps/apple/.swiftlint.yml                           none
-
-# --- Manifests: the workspace's reach every crate; the package's is the graph itself -------------------------------
-core/Cargo.toml                                     crate:*
-core/Cargo.lock                                     crate:*
+# What the map does not name and no target owns: the package's manifest is the Swift graph itself; resources by the
+# target that reads them; the graph's own files.
 apps/apple/Package.swift                            all
-
-# --- Resources, by the target that reads them -----------------------------------------------------------------------
 apps/apple/Resources/DictionaryService*             target:XDictService
 apps/apple/Resources/Fonts/*                        target:XDictEntryView
 apps/apple/Resources/*                              target:XDict
 apps/apple/Strings/*                                target:XDict
-
-# --- Fixtures the conformance crate does not compile in: each check's own input -------------------------------------
-conformance/fixtures/hostile/*                      check:hostile.production hostile.app
-conformance/fixtures/twin-*                         check:hostile.binding
-conformance/*                                       check:service.conformance
-
-# --- The harness: what runs the checks ------------------------------------------------------------------------------
-apps/apple/Tools/hostile/analyze.py                 check:hostile.production hostile.faults hostile.binding reader entries.full entries.persistence entries.lab
-apps/apple/Tools/hostile/battery.py                 check:hostile.production hostile.app
-apps/apple/Tools/hostile/reader.py                  check:reader
-apps/apple/Tools/hostile/pointer.swift              check:reader library.generated
-apps/apple/Tools/hostile/*                          check:hostile.production hostile.app reader
-apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
-apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
-apps/apple/Tools/lookup/*                           check:lookup
-apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
-apps/apple/Tools/library/health-expected.json       check:library.health
-apps/apple/Tools/library/*                          check:library.generated library.corpus
-# The harness's shared code selects a smoke set; a change to what every stage shares (the run's setup, the lock, the
-# evidence, `flunk`) names its stages or runs T2 (2026-10-16: three such lines with a driver change ran every
-# sub-stage, 46 min).
-apps/apple/Tools/build-lab.sh                       hostile.binding hostile.faults lookup.core
-apps/apple/Tools/e2e-run.sh                         launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
-apps/apple/Tools/e2e.sh                             launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
-apps/apple/Makefile                                 launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
-apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut
-apps/apple/Tools/*                                  all

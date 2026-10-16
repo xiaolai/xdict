@@ -41,16 +41,20 @@ json.dump({"version": 1, "manifests": {"apps/apple/Package.swift": sys.argv[2]},
                        "xdictFFI": {"type": "binary", "dir": "apps/apple/Generated/xdictFFI.xcframework/", "deps": []}}},
           open(sys.argv[1], "w"))
 PY
-cat >"$scratch/hand" <<'MAP'
+# The file-level map, read first for E2E; a path it does not name goes to the graph.
+cat >"$scratch/map" <<'MAP'
 control hostile.production hostile.controls
+*.md                                none
+apps/apple/Sources/XDictSpeech/*    sound
+apps/apple/Tools/lookup/*           check:lookup
+apps/apple/Tools/hostile/*          check:hostile.production
+MAP
+cat >"$scratch/hand" <<'MAP'
 launches hostile.*  XDictEntryLab
 launches *          XDict XDictService
 builds kit          crate:xdict-conformance
 binary xdictFFI     crate:xdict-ffi
-*.md                                none
 apps/apple/Package.swift            all
-apps/apple/Tools/lookup/*           check:lookup
-apps/apple/Tools/hostile/*          check:hostile.production
 MAP
 cat >"$scratch/catalog" <<'CAT'
 @ launch default -
@@ -69,6 +73,7 @@ sound.notices.ok
 entries.quick.ok
 CAT
 export XDICT_GATE_REPO=$repo XDICT_AFFECTED_GRAPH=$scratch/graph.json XDICT_AFFECTED_HAND=$scratch/hand
+export XDICT_E2E_AFFECTED_MAP=$scratch/map
 export XDICT_E2E_SUBSTAGES=$scratch/catalog XDICT_GATE_CACHE=$scratch/cache
 gates="core apple-test e2e"
 status() { python3 -I "$tool" status "$@" $gates; }
@@ -88,13 +93,20 @@ out=$(status 2>&1)
 [ -z "$(runs <<<"$out")" ] && ok "an unchanged tree selects nothing" || bad "unchanged tree ran: $(runs <<<"$out")"
 grep -q '^skip	core	.*	20' <<<"$out" && ok "a skip names the date of its pass" || bad "skip without a date: $out"
 
-# One byte of one target's file: the sub-stages whose executables link it, and the apps gate; not the lab's.
+# A path the map names gets the map's answer, not the graph's (which would add launch and lookup.core).
 printf 'let s = 2\n' >"$repo/apps/apple/Sources/XDictSpeech/s.swift"
 out=$(status 2>&1)
-[ "$(runs <<<"$out")" = "apple-test e2e:launch e2e:lookup.core e2e:sound.notices e2e:sound.speech " ] \
-    && ok "a target's change selects only the sub-stages whose executables link it" || bad "one-file change: $(runs <<<"$out")"
+[ "$(runs <<<"$out")" = "apple-test e2e:sound.notices e2e:sound.speech " ] \
+    && ok "a path the map names gets the map's answer" || bad "map-named change: $(runs <<<"$out")"
 grep -q 'e2e:sound.speech	.*apps/apple/Sources/XDictSpeech/s.swift' <<<"$out" \
     && ok "a run names the changed path" || bad "a run did not name the path: $out"
+record_all
+
+# A path the map does not name: the sub-stages whose executables link its target, and not the lab's.
+printf 'let v = 2\n' >"$repo/apps/apple/Sources/XDictService/v.swift"
+out=$(status 2>&1)
+[ "$(runs <<<"$out")" = "apple-test e2e:launch e2e:lookup.core e2e:sound.notices e2e:sound.speech " ] \
+    && ok "an unnamed target's change selects the sub-stages that link it" || bad "unnamed target: $(runs <<<"$out")"
 record_all
 
 # A check's own code brings its positive control.
@@ -115,13 +127,13 @@ out=$(status 2>&1)
 [ -z "$(runs <<<"$out")" ] && ok "a note selects nothing" || bad "a note ran: $(runs <<<"$out")"
 echo z >"$repo/unmapped.txt"
 out=$(status 2>&1)
-[ "$(runs <<<"$out")" = "$every" ] && ok "a path no source names selects every sub-stage" || bad "unmapped: $(runs <<<"$out")"
+[ "$(runs <<<"$out")" = "$every" ] && ok "an unnamed file the graph does not know selects every sub-stage" || bad "unmapped: $(runs <<<"$out")"
 record_all
 
 # A crate's change alters the keys of what reaches it, and of nothing else.
 echo '// x' >>"$repo/core/xdict-wasm/src/lib.rs"
 out=$(status 2>&1)
-[ "$(runs <<<"$out")" = "core " ] && ok "a crate nothing on the Apple side reaches changes only the core gate's key" \
+[ "$(runs <<<"$out")" = "core " ] && ok "an unnamed Rust file in a crate nothing links selects nothing, and changes only the core gate's key" \
     || bad "wasm change: $(runs <<<"$out")"
 record_all
 echo '// x' >>"$repo/core/xdict-mdx/src/lib.rs"
