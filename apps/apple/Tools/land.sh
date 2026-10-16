@@ -29,6 +29,7 @@ readonly CORPUS_NAME=the24
 # The tests name others (Tools/tests/land-test.sh).
 readonly AIR_CORPUS=${XDICT_LAND_CORPUS:-$HOME/xdict-corpus/$CORPUS_NAME}
 readonly LOCAL_MK=${XDICT_LAND_LOCAL_MK:-$REPO/local.mk}
+MAIN=$(cd "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/.." && pwd) || fail "no main checkout"
 NAME=$(basename "$REPO")
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "the checkout's folder name is not a plain name: $NAME"
 readonly REMOTE=xdict-build/$NAME-land
@@ -37,7 +38,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT"
 started=$(date +%s)
 
-mk() { awk -F'=' -v k="$1" '{ gsub(/^[ \t]+|[ \t]+$/, "", $1) } $1 == k { sub(/^[^=]*=[ \t]*/, ""); print; exit }' "$LOCAL_MK"; }
+mk() { awk -F'=' -v k="$1" '{ name = $1; gsub(/^[ \t]+|[ \t]+$/, "", name) } name == k { sub(/^[^=]*=[ \t]*/, ""); print; exit }' "$LOCAL_MK"; }
 [ -f "$LOCAL_MK" ] || fail "no local.mk at $LOCAL_MK: it names the build Macs"
 BUILD_HOSTS=$(mk BUILD_HOSTS); BUILD_HOSTS_XCODE=$(mk BUILD_HOSTS_XCODE); E2E_BUILD_HOST=$(mk BUILD_HOST)
 [ -n "$BUILD_HOSTS" ] || fail "local.mk sets no BUILD_HOSTS"
@@ -142,14 +143,17 @@ command_of() {
         entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
         lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
         mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
-        bindings) echo "~/bin/run1 core/xdict-ffi/test-swift.sh && ~/bin/run1 core/xdict-ffi/test-kotlin.sh && ~/bin/run1 core/xdict-wasm/test-worker.sh" ;;
-        memory) echo "~/bin/run1 core/xdict-ffi/measure-memory.sh && ~/bin/run1 core/xdict-wasm/measure-memory.sh" ;;
+        # run1 <log name> <command>: the binding toolchain's PATH and JAVA_HOME; its log is ~/logs/<name>.log there.
+        bindings) echo "export TAILN=30; ~/bin/run1 land-swift core/xdict-ffi/test-swift.sh && ~/bin/run1 land-kotlin core/xdict-ffi/test-kotlin.sh && ~/bin/run1 land-worker core/xdict-wasm/test-worker.sh" ;;
+        memory) echo "export TAILN=30; ~/bin/run1 land-memory-swift core/xdict-ffi/measure-memory.sh && ~/bin/run1 land-memory-worker core/xdict-wasm/measure-memory.sh" ;;
     esac
 }
-# A green run that measured nothing is not a pass: the corpus tests say "not measured" when the corpus is unset.
+# A green run that measured nothing is not a pass: each corpus test must print the line only a measured run prints
+# (the files' "not measured" lines belong to other variables of the same test files, so their absence proves nothing).
 measured() {
     case $1 in
-        entries | lookup-corpus) ! grep -qi 'not measured' "$2" ;;
+        entries) grep -q 'entries; written links' "$2" && grep -q 'entries_of_the_corpus \.\.\. ok' "$2" ;;
+        lookup-corpus) grep -qE '^24 files: ' "$2" ;;
         *) return 0 ;;
     esac
 }
@@ -166,11 +170,15 @@ host_job() {
     fi
     for g in "$@"; do
         # The format-3.0 test's file is an .mdx, which the copy leaves out: sent alone (it is MDXBuilder's, not content).
+        # dev-docs/ is untracked, so a worktree has none: the main checkout's.
         if [ "$g" = mdx-v3 ]; then
-            rsync -a "$REPO/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$REMOTE/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$OUT/rsync.$host" 2>&1
+            rsync -a "$MAIN/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$REMOTE/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$OUT/rsync.$host" 2>&1
         fi
         t0=$(date +%s)
-        ssh -o BatchMode=yes -- "$host" "set -o pipefail; export PATH=\$HOME/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:\$PATH RUSTUP_TOOLCHAIN=$RUST
+        # The toolchain pinned only where the default is another: a pinned name can be a second install without the
+        # default's targets (wasm32 on the bindings' host, 2026-10-17).
+        ssh -o BatchMode=yes -- "$host" "set -o pipefail; export PATH=\$HOME/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:\$PATH
+[ \"\$(rustc --version 2>/dev/null | awk '{print \$2}')\" = $RUST ] || export RUSTUP_TOOLCHAIN=$RUST
 cd $REMOTE && $(command_of "$g" "$corpus")" >"$OUT/$g.log" 2>&1
         status=$?
         [ "$status" != 0 ] || measured "$g" "$OUT/$g.log" || status=97
