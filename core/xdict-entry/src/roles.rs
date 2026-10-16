@@ -601,6 +601,8 @@ pub(crate) struct Roles<'s> {
     glyphs: Vec<icons::Written>,
     /// Whether the strip list's rules this tree owns (S5, S10, S11) apply: always, but in the hostile battery's lab.
     strip: bool,
+    /// "Original style": nothing of XDict's drawn (`Roles::original`).
+    original: bool,
     /// The element closed last, while nothing visible has followed it: punctuation written next hugs it.
     hug_after: Option<u32>,
     /// Elements closed right before a `,` `;` or `.` (the frame drops their inline end spacing).
@@ -664,6 +666,7 @@ impl<'s> Roles<'s> {
             resource: None,
             glyphs: Vec::new(),
             strip: true,
+            original: false,
             hug_after: None,
             hugs: Vec::new(),
         }
@@ -672,6 +675,13 @@ impl<'s> Roles<'s> {
     /// The strip list off ([`crate::Entry::strip_off_for_tests`]): the tree marks roles and strips nothing.
     pub(crate) fn unstripped(mut self, off: bool) -> Self {
         self.strip = !off;
+        self
+    }
+
+    /// "Original style" (ADR-0010 Q3): the dictionary's drawing kept whole. The tree writes the marks the shell reads
+    /// and the strip list's edits, but no label, glyph or symbol of XDict's, and hides or unwraps nothing.
+    pub(crate) fn original(mut self, original: bool) -> Self {
+        self.original = original;
         self
     }
 
@@ -915,7 +925,16 @@ impl<'s> Roles<'s> {
             self.empty(&mut decided);
         }
         let roles = if self.key.is_some() { t.assign() } else { Vec::new() };
+        let drawn = decided.edits.len();
         icons::decide(&self.nodes, &t, &roles, &self.glyphs, self.facts, &mut decided);
+        if self.original {
+            // Only the icon sweep's marks stay: attributes the shell reads, nothing drawn, hidden or removed.
+            let mut i = 0;
+            decided.edits.retain(|(at, until, text)| {
+                i += 1;
+                i <= drawn || (at == until && text.starts_with(" data-xdict-") && !text.contains('<'))
+            });
+        }
         for &i in &self.hugs {
             if let Some(n) = self.nodes.get(i as usize) {
                 decided.edits.push((n.attr_at, n.attr_at, " data-xdict-hug".into()));
@@ -966,10 +985,15 @@ impl<'s> Roles<'s> {
             let blank = t.feat.get(i).is_none_or(|f| f.len == 0);
             let mode = if blank || node.void { "replace" } else { "prefix" };
             let mut marks = format!(" data-xdict-control=\"speaker\" data-xdict-control-mode=\"{mode}\"");
-            let mut glyph = "<span data-xdict-icon=\"speaker\" aria-hidden=\"true\"></span>".to_owned();
+            let mut glyph = String::new();
+            if !self.original {
+                glyph.push_str("<span data-xdict-icon=\"speaker\" aria-hidden=\"true\"></span>");
+            }
             if let Some(accent) = accent {
                 marks.push_str(&format!(" data-xdict-accent=\"{accent}\""));
-                glyph.push_str("<span data-xdict-tag aria-hidden=\"true\"></span>");
+                if !self.original {
+                    glyph.push_str("<span data-xdict-tag aria-hidden=\"true\"></span>");
+                }
             }
             if &*node.name == "a" && !node.href {
                 decided.edits.push((node.attr_at, node.attr_at, format!(" href=\"{href}\"{marks}")));
