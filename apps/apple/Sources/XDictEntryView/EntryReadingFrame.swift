@@ -471,8 +471,44 @@ extension EntryScripts {
                          bodyMaxWidth: body ? getComputedStyle(body).maxWidth : '',
                          xdictFontShare: chars ? framed / chars : 0, fixedContained: contained };
               }
+              // R's inline spacing (coordinator, 2026-10-16): between two words of a line a dictionary's horizontal
+              // margins and padding add up to at most SPACE_CAP of the size, so a line's words are set off alike (MW's
+              // 1.06em before a part of speech; OALECD's region label, four nested boxes with a margin each; COBUILD's
+              // padded links). Nested boxes sharing an edge share the cap: the outermost keeps its spacing first, each
+              // inner one what is left. Blocks keep theirs: there it is indentation. XDict's
+              // controls, tags, icons and marked boxes (a marker's place) are XDict's already. Reading style only.
+              var SPACE_CAP = \(frame.contains(.type) ? "0.25" : "0"), LABEL = '\(frame.contains(.type) ? "[data-xdict-role=label]" : "")';
+              function inline(st) { return st.display === 'inline' || /^inline-/.test(st.display); }
+              function edge(e, first) {
+                var n = first ? e.previousSibling : e.nextSibling;
+                while (n && n.nodeType === 3 && !/\\S/.test(n.nodeValue)) n = first ? n.previousSibling : n.nextSibling;
+                return !n && e.parentElement && inline(getComputedStyle(e.parentElement));
+              }
+              function spacing() {
+                if (!SPACE_CAP || !document.body) return;
+                var all = document.body.getElementsByTagName('*'), mine = '[data-xdict-control],[data-xdict-tag],[data-xdict-icon],[data-xdict-before],[data-xdict-after]';
+                for (var i = 0; i < all.length && i < 65536; i++) {
+                  var e = all[i];
+                  if (e.tagName === 'IMG' || e.closest(mine)) continue;
+                  var st = getComputedStyle(e);
+                  if (!inline(st)) continue;
+                  // A label owns 0.35em after it (icon sweep §8.4), more than a word's set-off.
+                  var outerLabel = e.matches(LABEL) && !(e.parentElement && e.parentElement.closest(LABEL));
+                  var cap = (outerLabel ? Math.max(SPACE_CAP, 0.35) : SPACE_CAP) * parseFloat(st.fontSize);
+                  [['left', true], ['right', false]].forEach(function (side) {
+                    var m = Math.max(0, parseFloat(st.getPropertyValue('margin-' + side[0])));
+                    var p = Math.max(0, parseFloat(st.getPropertyValue('padding-' + side[0])));
+                    // What the boxes around it already put at this edge, the parent first in document order.
+                    var outside = edge(e, side[1]) ? (e.parentElement.__xdictSpace || {})[side[0]] || 0 : 0;
+                    var room = Math.max(0, cap - outside), np = Math.min(p, room), nm = Math.min(m, room - np);
+                    if (np < p - 0.5) e.style.setProperty('padding-' + side[0], np + 'px', 'important');
+                    if (nm < m - 0.5) e.style.setProperty('margin-' + side[0], nm + 'px', 'important');
+                    (e.__xdictSpace = e.__xdictSpace || {})[side[0]] = outside + np + nm;
+                  });
+                }
+              }
               install();
-              function start() { install(); name(document); }
+              function start() { install(); name(document); spacing(); }
               if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
               else start();
               window.addEventListener('load', start, { once: true });
