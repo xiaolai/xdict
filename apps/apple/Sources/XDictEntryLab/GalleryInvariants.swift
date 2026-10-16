@@ -10,7 +10,7 @@ extension GalleryRun {
     static let invariantsScript = #"""
         var SIZES = [12, 14, 16, 18, 20, 24], SPACE = [0, 4, 8, 12, 16, 24];
         function near(v, set) { return set.some(function (s) { return Math.abs(Math.abs(v) - s) < 0.51; }); }
-        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {} };
+        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {} };
         Object.keys(checks).forEach(function (k) { checks[k] = { total: 0, off: 0, values: {} }; });
         function note(check, ok, n, value) {
           var c = checks[check]; c.total += n;
@@ -38,7 +38,36 @@ extension GalleryRun {
             note('phonFace', /^"?(Charis|Doulos|Gentium)/.test(cs.fontFamily), k, cs.fontFamily.split(',')[0] + ' <' + label + '>');
           }
           note('colour', !!allowed[cs.color], k, cs.color + ' <' + label + '>');
+          // The lead's own text (not a transcription or a label inside it) is the lead's look: 24 px, text colour.
+          var lead = el.closest('[data-xdict-lead]');
+          if (lead && !el.closest('[data-xdict-phon],[data-xdict-role=label],[data-xdict-tag]')) {
+            var role = el.closest('[data-xdict-role]');
+            if (role && (role === lead || role.getAttribute('data-xdict-role') === 'headword')) {
+              var ok = Math.abs(fs - 24) < 0.51 && allowed[cs.color] === 'text';
+              note('lead', ok, k, Math.round(fs) + 'px ' + cs.color + ' <' + label + '>');
+            }
+          }
         }
+        // An entry with a headword has a lead.
+        if (document.querySelector('[data-xdict-role=headword]')) {
+          note('lead', !!document.querySelector('[data-xdict-lead]'), 1, 'no lead in the entry');
+        }
+        // A marker is never drawn between two letters of a word.
+        function edge(node, back) {
+          var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          w.currentNode = node;
+          var t = back ? w.previousNode() : (function () {
+            var last = node; while (last.lastChild) last = last.lastChild; w.currentNode = last; return w.nextNode();
+          })();
+          while (t && !t.nodeValue.length) t = back ? w.previousNode() : w.nextNode();
+          if (!t || node.contains(t)) return '';
+          return back ? t.nodeValue.slice(-1) : t.nodeValue.charAt(0);
+        }
+        document.querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]').forEach(function (m) {
+          if (!m.getClientRects().length) return;
+          var inside = /[\p{L}\p{N}]/u.test(edge(m, true)) && /[\p{L}\p{N}]/u.test(edge(m, false));
+          note('markerInWord', !inside, 1, edge(m, true) + '•' + edge(m, false) + ' <' + m.tagName.toLowerCase() + '.' + String(m.className).split(' ')[0] + '>');
+        });
         var all = document.body ? document.body.getElementsByTagName('*') : [];
         for (var i = 0; i < all.length && i < 20000; i++) {
           var e = all[i];
@@ -57,6 +86,19 @@ extension GalleryRun {
         });
         return checks;
         """#
+
+    /// Lab only: `XDICT_LAB_ACCENT=<light>,<dark>` renders the gallery with another accent, for the owner to choose
+    /// between candidates side by side. A sheet after the frame's, with a more specific selector.
+    static var accentCandidate: String? {
+        guard let value = ProcessInfo.processInfo.environment["XDICT_LAB_ACCENT"] else { return nil }
+        let parts = value.split(separator: ",").map(String.init)
+        guard parts.count == 2, parts.allSatisfy({ $0.range(of: "^#[0-9a-fA-F]{6}$", options: .regularExpression) != nil })
+        else { return nil }
+        let css = ":root:root[data-xdict-theme=light]{--xdict-accent:\(parts[0])}"
+            + ":root:root[data-xdict-theme=dark]{--xdict-accent:\(parts[1])}"
+        return "var s = document.createElement('style'); s.id = 'xdict-lab-accent'; s.textContent = '\(css)';"
+            + "(document.head || document.documentElement).appendChild(s); return {};"
+    }
 
     /// Each invariant broken on this page, as a failure line naming every value off.
     static func invariantFailures(_ checks: [String: Any]?, where place: String) -> [String] {
