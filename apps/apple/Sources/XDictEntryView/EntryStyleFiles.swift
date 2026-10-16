@@ -776,6 +776,9 @@ min-height:0 !important;float:none !important;position:static !important}
 [data-xdict-hug] [data-xdict-role=label]:has(+ [data-xdict-labelled]:last-child)
 {margin-inline-end:0 !important;
 padding-inline-end:0 !important}
+/* A marked element that starts a line (the core's `data-xdict-line-start`) has no space before it: the space */
+/* parted it from a word, and alone on its line it only indented it (OALD's *Pima*, a "noun" under its plurals). */
+[data-xdict-line-start]{margin-inline-start:0 !important}
 /* A bullet the dictionary wrote as text with nothing after it in its block marks nothing (`loneBullets`). */
 [data-xdict-lone-bullet]{display:none !important}
 /* A graphic the core turned into a label stays hidden, whatever display the dictionary gives images. */

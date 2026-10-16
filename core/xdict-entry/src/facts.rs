@@ -26,6 +26,8 @@ pub(crate) struct Props {
     pub(crate) sup: Option<bool>,
     /// `display: none` (only from a rule that holds whatever the state).
     pub(crate) none: Option<bool>,
+    /// `display: inline…` (`Some(true)`) or another box (`Some(false)`), from the same rules as `none`.
+    pub(crate) inline: Option<bool>,
 }
 
 impl Props {
@@ -36,6 +38,7 @@ impl Props {
         self.upper = other.upper.or(self.upper);
         self.sup = other.sup.or(self.sup);
         self.none = other.none.or(self.none);
+        self.inline = other.inline.or(self.inline);
     }
 
     /// The properties `decls` set; `display` only when `simple`.
@@ -63,7 +66,10 @@ impl Props {
                 "font" if v.contains("small-caps") => p.small_caps = Some(true),
                 "text-transform" => p.upper = Some(v == "uppercase"),
                 "vertical-align" => p.sup = Some(v.contains("super")),
-                "display" if simple => p.none = Some(v == "none"),
+                "display" if simple => {
+                    p.none = Some(v == "none");
+                    p.inline = Some(v.starts_with("inline") || v == "contents");
+                }
                 _ => {}
             }
         }
