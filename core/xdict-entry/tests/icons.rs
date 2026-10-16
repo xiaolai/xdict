@@ -121,6 +121,17 @@ fn a_control_or_prose_is_never_a_label() {
 
 // 2. Symbols by role.
 
+/// A dot a sheet draws between two letters is a syllable break (Apple NOAD's `ser<span class="hsb">` + `•`), never a
+/// list marker; the same dot at the head of an item still is.
+#[test]
+fn a_dot_inside_a_word_is_not_a_marker() {
+    let sheet = r#"span.hsb:before{content:'\2022'}"#;
+    let o = out(r#"<span class="hw">ser<span class="hsb"></span>en<span class="hsb"></span>dip</span>"#, sheet);
+    assert!(!o.contains("data-xdict-before"), "{o}");
+    let o = out(r#"<div><span class="hsb"></span>an item</div><div>x <span class="hsb"></span> y</div>"#, sheet);
+    assert_eq!(o.matches(r#"data-xdict-before="marker""#).count(), 2, "{o}");
+}
+
 #[test]
 fn a_bullet_a_sheet_draws_becomes_xdicts_marker_and_an_arrow_its_lookup_mark() {
     let sheet = r#".x-g::before{content:"•"} .xr::before{content:"☞ "} .nb::after{content:"※"}"#;

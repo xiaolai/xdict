@@ -324,7 +324,7 @@ pub(super) fn decide(
     labels(nodes, t, &mut done, &mut count, decided);
     let disclosure = disclosures(nodes, t, facts, &mut count, decided);
     speaker_rows(nodes, t, &mut count, decided);
-    drawn(nodes, &disclosure, &mut count, decided);
+    drawn(nodes, t.buf, &disclosure, &mut count, decided);
     text(nodes, roles, written, &disclosure, &mut count, decided);
     empty_links(nodes, t, &done, &mut count, decided);
     for (k, v) in count {
@@ -654,6 +654,14 @@ fn signs(nodes: &[Node], t: &Tree<'_>, marked: &[bool], count: &mut BTreeMap<Str
     }
 }
 
+/// Whether an element's text sits inside a word: a letter or digit right before it and right after it.
+fn within_word(buf: &str, (start, end): (u32, u32)) -> bool {
+    let (start, end) = (start as usize, end as usize);
+    let before = buf.get(..start).and_then(|b| b.chars().next_back());
+    let after = buf.get(end..).and_then(|a| a.chars().next());
+    before.is_some_and(char::is_alphanumeric) && after.is_some_and(char::is_alphanumeric)
+}
+
 fn link_name(link: Option<Lk>) -> &'static str {
     match link {
         Some(Lk::Sound) => "sound",
@@ -666,7 +674,7 @@ fn link_name(link: Option<Lk>) -> &'static str {
 
 /// §7.1 on what a sheet draws: XDict's marker, its `lookup` mark, or nothing (`drop`); the frame draws the mark in
 /// place of the dictionary's glyph.
-fn drawn(nodes: &[Node], disclosure: &[bool], count: &mut BTreeMap<String, u64>, decided: &mut Decided) {
+fn drawn(nodes: &[Node], buf: &str, disclosure: &[bool], count: &mut BTreeMap<String, u64>, decided: &mut Decided) {
     for (i, node) in nodes.iter().enumerate().skip(1) {
         let a = &node.icon;
         for (side, glyph) in [("before", &a.before), ("after", &a.after)] {
@@ -685,6 +693,8 @@ fn drawn(nodes: &[Node], disclosure: &[bool], count: &mut BTreeMap<String, u64>,
                 ..Ctx::default()
             };
             let mark = match symbols::owned(*ch, symbols::treatment(*ch, &ctx), &*node.name == "li") {
+                // A dot drawn between two letters is a syllable break (NOAD's `ser•en•dip`), never a list marker.
+                Treatment::Marker if within_word(buf, node.text) => continue,
                 Treatment::Marker => "marker",
                 Treatment::Xref => "lookup",
                 Treatment::Speaker | Treatment::Wordlist | Treatment::Drop | Treatment::Frequency => "drop",

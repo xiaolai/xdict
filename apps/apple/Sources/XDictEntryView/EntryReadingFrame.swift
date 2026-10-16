@@ -233,6 +233,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,"
         + "[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;"
         + "line-height:inherit !important}"
+        // A headword nested in the lead is the lead's colour too (NOAD's `.color` span inside its headword `div`).
+        + "[data-xdict-lead] [data-xdict-role=headword]{color:inherit !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"

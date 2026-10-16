@@ -180,6 +180,7 @@ struct ReadingFrameTests {
         #expect(!css.contains("[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
             + "[data-xdict-role=label] *,[data-xdict-tag],[data-xdict-icon]){font-weight"))
         #expect(css.contains("color:var(--xdict-link) !important"))
+        #expect(css.contains("[data-xdict-lead] [data-xdict-role=headword]{color:inherit !important}"), "NOAD's nested headword")
         #expect(css.contains(":where(h1){font-size:var(--xdict-fs-xxl);"))
         #expect(css.contains("{margin-block:var(--xdict-space-4)}"))
     }
