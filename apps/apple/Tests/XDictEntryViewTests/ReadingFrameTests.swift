@@ -191,6 +191,29 @@ struct ReadingFrameTests {
         #expect(EntryReadingFrame.marksCSS.contains("list-style:none !important"))
     }
 
+    /// A bullet the dictionary wrote as text, alone in its block (NOAD's "harm": `<div class="m1"><div class="opt">•
+    /// </div></div>`), is not drawn in the reading style: the frame marks the block, the marks layer hides it. Only a
+    /// block whose whole shown text is bullet glyphs.
+    @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
+        let reading = EntryScripts.appearance(.light, frame: .all)
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); }"))
+        #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))
+        #expect(EntryReadingFrame.marksCSS.contains("[data-xdict-lone-bullet]{display:none !important}"))
+        let start = try #require(reading.range(of: "var GLYPHS = "))
+        let end = try #require(reading.range(of: ";\n", range: start.upperBound..<reading.endIndex))
+        let context = try #require(JSContext())
+        context.evaluateScript(String(reading[start.lowerBound..<end.upperBound]))
+        func lone(_ text: String) -> Bool {
+            context.setObject(text, forKeyedSubscript: "t" as NSString)
+            return context.evaluateScript("GLYPHS.test(t.replace(/\\s+/g, ''))")?.toBool() == true
+        }
+        #expect(lone("•"))
+        #expect(lone(" ■ \n"))
+        #expect(!lone("• come to no harm"))
+        #expect(!lone(""))
+        #expect(!lone("·"))   // a syllable dot is the word's
+    }
+
     @Test func unificationRsRulesAreInTheTypeLayer() {
         let css = EntryReadingFrame.typeCSS
         #expect(css.contains("@layer xdict-unify{"))
