@@ -225,22 +225,26 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']),"
         + "[data-xdict-phon]:not([data-xdict-phon-system^='font:']) :not([data-xdict-tag],[data-xdict-icon])"
         + "{font-family:var(--xdict-font-phon) !important}"
-        // The lead (the entry's first headword): one size, face and leading; weight and colour are XDict's on it
-        // and its descendants keep their own (a stress mark's), so only size and face are reset inside it.
+        // The lead (the entry's first headword): one size, face, leading and colour; inside it only weight is the
+        // dictionary's (a stress mark's). Its colour reaches its descendants too: NOAD's headword text is a coloured
+        // span inside the lead, MWU's a link (gallery, 2026-10-16), and the 24's stress marks carry no colour of
+        // their own (the gallery's lead check), so study fix 3's "keep colour" kept only the dictionaries' hues.
         + "[data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;"
         + "font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
         + "font-style:normal !important;color:var(--xdict-text) !important}"
         + "[data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,"
         + "[data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;"
-        + "line-height:inherit !important}"
-        // A headword nested in the lead is the lead's colour too (NOAD's `.color` span inside its headword `div`).
-        + "[data-xdict-lead] [data-xdict-role=headword]{color:inherit !important}"
+        + "line-height:inherit !important;color:inherit !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"
         // A link is the link colour, whatever colour the dictionary gave it (flatten: link stays link).
         + "a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-control=disclosure]) "
         + ":not([data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-link) !important}"
+        // ... but a link in the lead is the lead's colour (MWU's headword links to itself).
+        + "[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]),"
+        + "[data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label] *)"
+        + "{color:inherit !important}"
         + "}"
 }
 
