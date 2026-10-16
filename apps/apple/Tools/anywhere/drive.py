@@ -20,6 +20,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import hostcondition  # noqa: E402
+
 kit, work, app, fixtures, out = sys.argv[1:6]
 asked = set(sys.argv[6:])
 hands = os.path.join(kit, "anywhere", "hands")
@@ -191,6 +194,12 @@ def close_hosts(opened):
             time.sleep(0.3)
 
 
+def not_selected(host, raw, what):
+    """A failed selection's detail: the host's own condition when it is one, else what XDict's check could not do."""
+    said = hostcondition.of(host, raw)
+    return hostcondition.detail(host, said) if said else f"could not select {what} in {host}: {raw}"
+
+
 def select(host, needle):
     answer = tool("select", HOSTS[host], needle)
     return answer if "error" not in answer else None, answer
@@ -220,7 +229,7 @@ def selection_hosts():
         name = f"selection.{host}"
         selected, raw = select(host, "abbé")
         if not selected:
-            check(name, False, f"could not select in {host}: {raw}")
+            check(name, False, not_selected(host, raw, "the word"))
             continue
         seconds, measured = shortcut_panel()
         shown = wait_for(lambda: (lambda p, m, _: p.get("shown") and m.get("query") == "abbé" and (p, m))(*panel_state()), 5)
@@ -240,7 +249,7 @@ def services_menu():
         selected, raw = select(host, phrase)
         if not selected or not selected.get("box"):
             facts["service"][host] = "not measured"
-            check(name, False, f"could not select the phrase in {host}: {raw}")
+            check(name, False, not_selected(host, raw, "the phrase"))
             delivered_all = False
             continue
         box = selected["box"]
