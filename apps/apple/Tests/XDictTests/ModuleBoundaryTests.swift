@@ -30,8 +30,9 @@ struct ModuleBoundaryTests {
         // The IPC contract: Foundation alone (`theContractStandsAlone` says why, and refuses more).
         "XDictContract": contractMayBind,
         // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers; `AppKit` is the main window's
-        // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6).
-        "XDictUI": ["AppKit", "Foundation", "Observation", "SwiftUI", "UniformTypeIdentifiers"],
+        // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6);
+        // `ServiceManagement` launch at login and `os` the log of its refusal (WI-9).
+        "XDictUI": ["AppKit", "Foundation", "Observation", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         "XDictSearchTests": ["Foundation", "Synchronization", "Testing"],

@@ -60,6 +60,16 @@ struct StringCatalogTests {
         #expect(Self.incomplete(strings) == [])
     }
 
+    /// **The Service's menu title too** (plan-macos-v1 WI-9): macOS reads it from its own table, `ServicesMenu`, which
+    /// `make strings` does not extract, so its completeness is held here, not by `everyLiteralTheReaderSeesIsInTheCatalog`.
+    @Test func theServiceMenuTitleIsCompleteInBothLanguages() throws {
+        let data = try Data(contentsOf: Manifest.package.appending(path: "Strings/ServicesMenu.xcstrings"))
+        let catalog = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try Self.strings(catalog)
+        #expect(strings["Look Up in XDict"] != nil, "the Service's title is not in its table")
+        #expect(Self.incomplete(strings) == [])
+    }
+
     /// The control: an entry missing its Chinese, one whose Chinese is not yet translated, one with an empty English,
     /// and a stale one are each named; a complete one is not.
     @Test func anIncompleteEntryIsNamed() {
