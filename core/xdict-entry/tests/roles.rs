@@ -168,7 +168,7 @@ fn a_key_of_the_edition_written_with_stress_is_not_a_transcription() {
     let is_key = |k: &str| keys.iter().any(|x| x.eq_ignore_ascii_case(k));
     let marked = |text: &str, key: &str| {
         let style = Style::of_sheets([".pos{font-style:italic}"]);
-        let e = Entry { key, resource: None, is_key: Some(&is_key), strip_off_for_tests: false };
+        let e = Entry { key, resource: None, is_key: Some(&is_key), strip_off_for_tests: false, original: false };
         entry_normalized_within(text, BASE, "", &style, &e, usize::MAX).unwrap().1.transcriptions.marked
     };
     // The record's headword in its own element first, as the dictionaries write it.

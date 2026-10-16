@@ -350,7 +350,7 @@ fn original_style_does_every_marks_work_and_normalizes_nothing() {
         r#"<img data-src-mp3="us/about.mp3" src="spkr.png"><style>.x{color:#123456;font-family:Foo}</style>"#
     );
     let style = Style::of_sheets([sheet]);
-    let entry = Entry { key: "about", resource: None, strip_off_for_tests: false, original: true };
+    let entry = Entry { key: "about", resource: None, is_key: None, strip_off_for_tests: false, original: true };
     let (o, _) = entry_normalized_within(text, BASE, "", &style, &entry, usize::MAX).unwrap();
     let (styled, _) = entry_with(text, &style, None);
     // The marks: the same in both styles.
