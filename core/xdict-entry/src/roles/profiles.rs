@@ -20,15 +20,17 @@ type Sel = &'static [(Option<&'static str>, &'static [&'static str])];
 pub(crate) enum Sure {
     Pos,
     Sensenum,
+    Example,
 }
 
 impl Sure {
-    pub(crate) const ALL: [Sure; 2] = [Sure::Pos, Sure::Sensenum];
+    pub(crate) const ALL: [Sure; 3] = [Sure::Pos, Sure::Sensenum, Sure::Example];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Sure::Pos => "pos",
             Sure::Sensenum => "sensenum",
+            Sure::Example => "example",
         }
     }
 }
@@ -43,10 +45,12 @@ pub(crate) struct Profile {
     pub(crate) pos_words: bool,
     /// Sense numbers: only an element whose text is a number (`roles::numbered`) is one.
     sensenum: Sel,
+    /// Examples.
+    example: Sel,
 }
 
 /// A table that names nothing: a role a table leaves out stays the generic rule's.
-const NONE: Profile = Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[] };
+const NONE: Profile = Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[] };
 
 fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
     sel.iter().any(|(t, cs)| t.is_none_or(|t| t == tag) && cs.iter().all(|c| classes.iter().any(|k| k == c)))
@@ -59,6 +63,8 @@ impl Profile {
             Some(Sure::Pos)
         } else if matches(self.sensenum, tag, classes) {
             Some(Sure::Sensenum)
+        } else if matches(self.example, tag, classes) {
+            Some(Sure::Example)
         } else {
             None
         }
@@ -66,11 +72,11 @@ impl Profile {
 
     /// Whether the table names the role at all: then the generic rule's guesses of it are not written.
     pub(crate) fn decides(&self, sure: Sure) -> bool {
-        !match sure {
-            Sure::Pos => self.pos,
-            Sure::Sensenum => self.sensenum,
+        match sure {
+            Sure::Pos => !self.pos.is_empty(),
+            Sure::Sensenum => !self.sensenum.is_empty(),
+            Sure::Example => !self.example.is_empty(),
         }
-        .is_empty()
     }
 }
 
@@ -94,6 +100,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["pos"]), (Some("div"), &["pos"])],
         pos_words: true,
         sensenum: &[(Some("span"), &["num"])],
+        ..NONE
     },
     // Collins English Dictionary.
     Profile {
@@ -120,6 +127,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["scnt", "vi", "fl"],
         pos: &[(None, &["fl"])],
         sensenum: &[(Some("div"), &["snum"]), (Some("em"), &["sn"])],
+        example: &[(Some("div"), &["vi_content"])],
         ..NONE
     },
     // Etymonline.
@@ -129,17 +137,30 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["boxsensefull", "base-form", "part-of-speech"],
         pos: &[(Some("span"), &["part-of-speech"])],
         sensenum: &[(Some("div"), &["sense-num"])],
+        example: &[(Some("p"), &["example"])],
         ..NONE
     },
     // NOAD 3: `p` also holds grammar words (`obj.`). Its sense numbers are unclassed `b`.
-    Profile { signature: &["m1", "m2", "opt", "p"], pos: &[(Some("span"), &["p"])], pos_words: true, ..NONE },
+    Profile {
+        signature: &["m1", "m2", "opt", "p"],
+        pos: &[(Some("span"), &["p"])],
+        pos_words: true,
+        example: &[(Some("span"), &["ex"])],
+        ..NONE
+    },
     // Oxford Collocations.
-    Profile { signature: &["ocd_hw", "ocd_pos"], pos: &[(None, &["ocd_pos"])], ..NONE },
-    // ODE.
+    Profile {
+        signature: &["ocd_hw", "ocd_pos"],
+        pos: &[(None, &["ocd_pos"])],
+        example: &[(Some("span"), &["ocd_ex"])],
+        ..NONE
+    },
+    // ODE: `xv4`, an example in a sense; `lmn`, one in its list of further examples.
     Profile {
         signature: &["a8e", "aej", "xno"],
         pos: &[(Some("span"), &["xno"])],
         sensenum: &[(Some("span"), &["vkq"])],
+        example: &[(Some("em"), &["xv4"]), (Some("li"), &["lmn"])],
         ..NONE
     },
     // 21st Century English–Chinese (YHDCD).
