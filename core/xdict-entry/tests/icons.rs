@@ -93,6 +93,9 @@ fn a_level_written_in_a_drawn_box_becomes_a_label() {
     let o = out(pill, sheet);
     assert!(o.contains(&(label("level", "B1", "B1") + r#"<span hidden data-xdict-labelled class="lvl">"#)), "{o}");
     assert!(o.contains("Education"), "{o}");
+    // A word list written in a drawn box (OALD's "OPAL W" pill beside its level labels) is a word-list label.
+    let opal = out(r#"<span class="opal_symbol">OPAL W</span>"#, ".opal_symbol{background:#666;padding:0 15px}");
+    assert!(opal.contains(&label("wordlist", "opal-w", "OPAL W")), "{opal}");
     let both = out(r#"<span class="cefr"><span class="in">C2</span></span>"#, ".cefr{border:1px solid}");
     assert!(both.contains(&label("level", "C2", "C2")), "the box may be the token's wrapper: {both}");
     // Not drawn: the dictionary's text, left as written.

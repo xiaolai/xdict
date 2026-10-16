@@ -245,6 +245,21 @@ fn tokens(a: &Attrs) -> Vec<String> {
     out
 }
 
+/// What a drawn box's whole text names: a CEFR level, or a word list written as text (OPAL's written and spoken
+/// lists, "OPAL W" and "OPAL S").
+fn pill(text: &str) -> Option<Label> {
+    if let Some(level) = cefr(text) {
+        return Some(Label { kind: "level", value: level.clone(), max: None, text: level });
+    }
+    let squeezed: String = text.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_uppercase();
+    let value = match squeezed.as_str() {
+        "OPAL W" => "opal-w",
+        "OPAL S" => "opal-s",
+        _ => return None,
+    };
+    Some(Label { kind: "wordlist", value: value.into(), max: None, text: squeezed })
+}
+
 fn cefr(t: &str) -> Option<String> {
     let t = t.trim().to_ascii_lowercase();
     matches!(t.as_str(), "a1" | "a2" | "b1" | "b2" | "c1" | "c2").then(|| t.to_ascii_uppercase())
@@ -346,7 +361,7 @@ fn meaning(nodes: &[Node], t: &Tree<'_>, i: usize) -> Option<Meaning> {
         return None;
     }
     // A level pill: the element's whole text is a level and the dictionary's rules draw its box. A link keeps its text.
-    if node.drawn && !matches!(&*node.name, "img" | "a") && t.f(i).short.as_deref().and_then(cefr).is_some() {
+    if node.drawn && !matches!(&*node.name, "img" | "a") && t.f(i).short.as_deref().and_then(pill).is_some() {
         return Some(Meaning::Pill);
     }
     if &*node.name != "img" && !wordless(t, i) {
@@ -478,11 +493,7 @@ fn read_labels(node: &Node, m: Meaning, text: Option<&str>) -> Vec<Label> {
             let text = max.map_or_else(|| format!("Frequency {value}"), |m| format!("Frequency {value}/{m}"));
             vec![Label { kind: "frequency", value: value.to_string(), max, text }]
         }
-        Meaning::Pill => text
-            .and_then(cefr)
-            .map(|level| Label { kind: "level", value: level.clone(), max: None, text: level })
-            .into_iter()
-            .collect(),
+        Meaning::Pill => text.and_then(pill).into_iter().collect(),
         Meaning::New => vec![Label { kind: "new", value: "new".into(), max: None, text: "New".into() }],
     }
 }
