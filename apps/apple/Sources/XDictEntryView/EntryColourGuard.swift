@@ -65,6 +65,7 @@ extension EntryScripts {
           }
           // What the core drops inside an entry ("Plain by default"), and a fill colour that would override the token.
           var DROP = /^(background|border|outline|box-shadow$|text-shadow$|-webkit-text-fill-color$)/;
+          var NOTHING = /^(0|0px|none|hidden)$/i;
           var LEFT = /^(inherit|initial|unset|revert|revert-layer|currentcolor|transparent)$/i;
           // `declarations`: [name, value, priority] of one element's inline style; `resolve`: a CSS colour to RGBA.
           // A token, a keyword and a value the resolver cannot read are left alone, so the guard never rewrites its own.
@@ -72,7 +73,9 @@ extension EntryScripts {
             var out = [];
             declarations.forEach(function (d) {
               var name = String(d[0]), value = String(d[1]).trim();
-              if (DROP.test(name)) { out.push(['remove', name]); return; }
+              // A border that draws nothing (the core's `<hr>` gap, Q9) stays: removing it brings back the UA's line.
+              var none = /^(border|outline)/.test(name) && NOTHING.test(value);
+              if (DROP.test(name)) { if (!none) out.push(['remove', name]); return; }
               if (name !== 'color' || /^var\\(\\s*--xdict-/.test(value) || /var\\(/.test(value) || LEFT.test(value)) return;
               var css = text(resolve(value));
               if (css && css !== value) out.push(['set', 'color', css, d[2] || '']);

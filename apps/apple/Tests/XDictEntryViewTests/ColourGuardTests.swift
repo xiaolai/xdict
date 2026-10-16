@@ -49,6 +49,10 @@ struct ColourGuardTests {
         #expect(plan(##"[["color","var(--xdict-text, #1d1d1f)",""],["color","inherit",""],["color","currentcolor",""],"##
                      + ##"["font-weight","bold",""]]"##) == "[]", "a token, a keyword and anything else are left alone")
         #expect(plan(##"[["-webkit-text-fill-color","#000",""]]"##) == ##"[["remove","-webkit-text-fill-color"]]"##)
+        // A border that draws nothing is the core's own `<hr>` gap (Q9, `border:0`): dropping it brings back the UA's
+        // inset line (AHD's "leek", gallery 2026-10-16).
+        #expect(plan(##"[["border-top-width","0px",""],["border-top-style","none",""],["border-left-width","0",""],"##
+                     + ##"["outline-style","hidden",""]]"##) == "[]", "a border that draws nothing stays")
     }
 
     /// The contrast correction that swapped a failing colour for black or white is gone: the palette's tokens read on
