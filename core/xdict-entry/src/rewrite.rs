@@ -278,6 +278,7 @@ fn html_out<'s>(
         crate::roles::Roles::new(&n.style.facts, entry.map(|e| e.key), base, dir)
             .with_resource(entry.and_then(|e| e.resource))
             .unstripped(n.strip_off_for_tests)
+            .original(n.original)
     });
     out.resource = entry.and_then(|e| e.resource);
     out.norm = norm;
@@ -1062,7 +1063,8 @@ pub(crate) fn normalized_html<'s>(
         edits.extend(marks.into_iter().map(insert));
     }
     if let Some(controls) = out.controls.take() {
-        edits.extend(controls.inserts.into_iter().map(insert));
+        // In "Original style" a speaker gets its marks, never XDict's glyph.
+        edits.extend(controls.inserts.into_iter().filter(|(_, s)| !original || !s.starts_with('<')).map(insert));
         // The dictionary's own glyphs inside a speaker go only where XDict draws the speaker (not "Original style").
         if !original {
             edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));

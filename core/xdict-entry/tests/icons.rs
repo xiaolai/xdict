@@ -265,3 +265,36 @@ fn an_element_closed_right_before_punctuation_is_marked_to_hug_it() {
     assert!(!o.contains("<b data-xdict-hug"), "a space the source wrote stays: {o}");
     assert!(!o.contains("<u data-xdict-hug"), "an image between is not punctuation: {o}");
 }
+
+// 6. "Original style" (ADR-0010 Q3): the dictionary's own drawing, and nothing of XDict's drawn into it.
+
+/// In original style the core writes no label, no glyph and no replaced symbol, and hides and unwraps nothing of the
+/// dictionary's: only the marks the shell reads (a speaker's control and accent, a fold's disclosure, roles) and the
+/// strip list's own edits (S5's sound link around a recording, S6) remain.
+#[test]
+fn original_style_inserts_no_label_glyph_or_symbol() {
+    let sheet = ".ox3ksym_a1{background:url(a1.svg);width:48px;height:27px}";
+    let text = concat!(
+        r#"<div class="symbols"><a href="entry://@ox3000&level=a1"><span class="ox3ksym_a1"> </span></a></div>"#,
+        r#"<span class="sn">①</span> sense <a href="sound://uk/about.mp3">&#xEA27;UK</a>"#,
+        r#"<img data-src-mp3="us/about.mp3" src="spkr.png"><a href="javascript:void(0)"></a>"#
+    );
+    let style = Style::of_sheets([sheet]);
+    let entry = Entry { key: "about", resource: None, strip_off_for_tests: false, original: true };
+    let (o, _) = entry_normalized_within(text, BASE, "", &style, &entry, usize::MAX).unwrap();
+    for absent in ["data-xdict-label=", "data-xdict-icon", "data-xdict-tag", " hidden", "Oxford 3000"] {
+        assert!(!o.contains(absent), "{absent} written in original style: {o}");
+    }
+    for kept in [
+        r#"<span class="ox3ksym_a1"> </span>"#,
+        "①",
+        "&#xEA27;UK",
+        "data-xdict-control=\"speaker\"",
+        "href=\"xdict://d/sound/us/about.mp3\"",
+    ] {
+        assert!(o.contains(kept), "{kept} not kept in original style: {o}");
+    }
+    // The reading style does draw them: the same entry, normalized, has the labels.
+    let (styled, _) = entry_with(text, &style, None);
+    assert!(styled.contains("data-xdict-label=") && styled.contains("data-xdict-icon"), "{styled}");
+}
