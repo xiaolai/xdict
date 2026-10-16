@@ -19,15 +19,16 @@ A crate reaches its normal and build dependencies; `tests:X` also X's dev-depend
 the binary target `xdictFFI` the crate it is built from (the hand list's `binary` line). An E2E sub-stage reaches what
 the executables it launches reach (`launches`) and what its needs are built from (`builds`, by the catalog's needs).
 
-**The hand list** (`Tools/affected-hand.map`) is read first, first matching rule wins; then the path's owning node; and
-**a path neither names reaches everything** (fail-safe). A graph whose manifests changed since it was generated is stale:
-everything is reached, and stderr says so. Never a narrower selection on doubt.
+**E2E selection is file-level first**: `Tools/e2e-affected.map` decides every path it names (first match); then the hand
+list (`Tools/affected-hand.map`); then the path's owning node in the graph; and **a path none names reaches everything**
+(fail-safe). Gates read the graph only. A graph whose manifests changed since it was generated is stale: every gate,
+and every path the rules do not name, reaches everything, and stderr says so. Never a narrower selection on doubt.
 
 **Recorded coverage** (plan-verification §4.2, third bullet) plugs in at `Graph.recorded_coverage`: once an E2E run
 records which files a sub-stage actually executed, that sub-stage's file set narrows to them there. Today it records
 nothing, so it narrows nothing.
 
-Environment for the tests: XDICT_AFFECTED_GRAPH, XDICT_AFFECTED_HAND, XDICT_E2E_SUBSTAGES (read by Tools/e2e-plan.sh).
+Environment for the tests: XDICT_AFFECTED_GRAPH, XDICT_AFFECTED_HAND, XDICT_E2E_AFFECTED_MAP, XDICT_E2E_SUBSTAGES (read by Tools/e2e-plan.sh).
 """
 import fnmatch
 import hashlib
@@ -40,6 +41,7 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 GRAPH = os.environ.get("XDICT_AFFECTED_GRAPH") or os.path.join(HERE, "affected-graph.json")
 HAND = os.environ.get("XDICT_AFFECTED_HAND") or os.path.join(HERE, "affected-hand.map")
+MAP = os.environ.get("XDICT_E2E_AFFECTED_MAP") or os.path.join(HERE, "e2e-affected.map")
 CRATE_TEST_DIRS = ("tests/", "benches/", "examples/")
 # The gates' inputs (AGENTS.md "Which gates a change needs"): the crates and targets a gate builds and runs, as graph
 # roots, plus the paths it reads that no compiler sees. A gate reaching any crate also reads core/Cargo.toml and
@@ -145,6 +147,28 @@ def read_hand(path):
     return rules, controls, launches, builds, binaries
 
 
+def read_map(path):
+    """Tools/e2e-affected.map: file-level rules for the E2E sub-stages, first match decides."""
+    rules, controls = [], {}
+    try:
+        lines = open(path, encoding="utf-8").read().splitlines()
+    except OSError as error:
+        die(f"no map at {path} ({error})")
+    for raw in lines:
+        words = raw.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if words[0] == "control" and len(words) == 3:
+            controls.setdefault(words[1], []).append(words[2])
+        elif len(words) >= 2:
+            rules.append((words[0], words[1], words[2:]))
+        else:
+            die(f"the map {path}: malformed `{raw.strip()}`")
+    if not rules:
+        die(f"the map {path} has no rule")
+    return rules, controls
+
+
 def plan():
     """Sub-stages in run order, which are default, and each one's needs, from Tools/e2e-plan.sh's table."""
     out = subprocess.run(["bash", os.path.join(HERE, "e2e-plan.sh"), "table"], check=True, capture_output=True,
@@ -173,6 +197,9 @@ class Graph:
             die(f"the graph {GRAPH} is not version 1")
         self.crates, self.targets = self.data["crates"], self.data["targets"]
         self.rules, self.controls, launches, self.builds, self.binaries = read_hand(HAND)
+        self.map_rules, map_controls = read_map(MAP)
+        for sub, extra in map_controls.items():
+            self.controls.setdefault(sub, []).extend(c for c in extra if c not in self.controls.get(sub, []))
         self.order, self.default, self.needs = plan()
         self.stale = self.staleness(listing, repo)
         if self.stale:
@@ -294,25 +321,33 @@ class Graph:
 
     def why(self, path):
         """(sub-stages or None for everything, the reason)."""
+        for source, rules in (("map", self.map_rules), ("hand", self.rules)):
+            got = self.by_rules(source, rules, path)
+            if got is not None:
+                return got
         if self.stale:
-            return None, "the graph is stale"
-        for pattern, first, rest in self.rules:
-            if not fnmatch.fnmatchcase(path, pattern):
-                continue
-            names = [first.removeprefix("check:")] + rest
-            if "none" in names:
-                return set(), f"hand: {pattern} -> none"
-            if "all" in names:
-                return None, f"hand: {pattern} -> all"
-            selected = self.expand_names(names)
-            if first.startswith("check:"):
-                for sub in list(selected):
-                    selected |= set(self.controls.get(sub, []))
-            return selected, f"hand: {pattern} -> {' '.join([first] + rest)}"
+            return None, "no rule names it and the graph is stale: everything"
         node = self.owner(path)
         if node is None:
             return None, "no rule and no crate or target owns it: everything"
         return {s for s in self.order if node in self.sub_nodes[s]}, f"graph: {node}"
+
+    def by_rules(self, source, rules, path):
+        """(selection, reason) by the first rule matching, or None when no rule names the path."""
+        for pattern, first, rest in rules:
+            if not fnmatch.fnmatchcase(path, pattern):
+                continue
+            names = [first.removeprefix("check:")] + rest
+            if "none" in names:
+                return set(), f"{source}: {pattern} -> none"
+            if "all" in names:
+                return None, f"{source}: {pattern} -> all"
+            selected = self.expand_names(names)
+            if first.startswith("check:"):
+                for sub in list(selected):
+                    selected |= set(self.controls.get(sub, []))
+            return selected, f"{source}: {pattern} -> {' '.join([first] + rest)}"
+        return None
 
     def of(self, path):
         return self.why(path)[0]

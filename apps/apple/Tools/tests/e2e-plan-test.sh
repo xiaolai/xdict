@@ -50,88 +50,92 @@ same "E2E_ONLY's checks select their owners" "$(lines service.recovery lookup.pa
 refuses "an unknown check is refused" bash $plan only paging.everything
 same "what sub-stages need" "$(lines corpus editions)" "$(bash $plan needs library.corpus library.control)"
 
-# --- what a change selects (Tools/affected_graph.py: the generated graph and the hand list) -------------------------
-# Sub-stages by what they launch (Tools/e2e.sh): the lab's, and the app's (the app and its service).
-lab_subs=$(lines hostile.binding hostile.faults reader hostile.production hostile.controls entries.lab)
-has() { case " $(tr '\n' ' ' <<<"$2") " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-none_of() { local s; for s in $1; do has "$s" "$2" && return 1; done; return 0; }
-everything=$(bash $plan substages --all)
-
+# --- the affected map ------------------------------------------------------------------------------------------------
 got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryWebView.swift)
-has hostile.production "$got" && ok "an XDictEntryView change selects hostile.production" \
-    || bad "an XDictEntryView change did not select hostile.production: $got"
-same "a crate the service links is every sub-stage" "$everything" "$(bash $affected --paths core/xdict-mdx/src/lib.rs)"
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.production "*) ok "an XDictEntryView change selects hostile.production" ;;
+    *) bad "an XDictEntryView change did not select hostile.production: $got" ;; esac
+same "a health change selects only its own sub-stage" "library.health" \
+    "$(bash $affected --paths core/xdict-health/src/lib.rs)"
+got=$(bash $affected --paths core/xdict-entry/src/roles.rs)
+case " $(tr '\n' ' ' <<<"$got") " in
+    *" launch."*|*" library."*|*" panel."*) bad "a rendering change selects stages that never render: $got" ;;
+    *" hostile.production "*" entries.full "*) ok "a rendering change selects the entry's stages, not the app's" ;;
+    *) bad "a rendering change missed hostile.production or entries.full: $got" ;; esac
+got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryMarks.swift)
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.faults "*|*" hostile.binding "*) bad "a stylesheet change selects the fault and binding twins: $got" ;;
+    *" reader "*) ok "a stylesheet change selects what draws the entry" ;; *) bad "a stylesheet change missed reader: $got" ;; esac
+same "the reader is everything" "$(bash $plan substages)" "$(bash $affected --paths core/xdict-mdx/src/lib.rs)"
 same "an unmapped path selects every default sub-stage" "$(bash $plan substages)" \
     "$(bash $affected --paths apps/apple/no-rule-names-this.file)"
-# The service is in the app's bundle, not in the lab (which links the core itself).
-got=$(bash $affected --paths apps/apple/Sources/XDictService/Service.swift)
-if none_of "$lab_subs" "$got" && has launch "$got" && has service.conformance "$got"; then
-    ok "the service's code selects the app's sub-stages, not the lab's"
-else bad "the service's code: $got"; fi
 same "notes and unit tests select nothing" "" \
     "$(bash $affected --paths README.md dev-docs/plan.md apps/apple/Tests/XDictTests/X.swift core/xdict-mdx/tests/t.rs)"
 got=$(bash $affected --paths apps/apple/Tools/hostile/analyze.py)
-has hostile.controls "$got" && ok "the analyzer's change brings the hostile controls" \
-    || bad "the analyzer's change did not bring hostile.controls: $got"
-# The gallery's Swift is compiled into the lab, so it reaches the lab's sub-stages (the hand map said none: 2026-10-16,
-# it had selected hostile.controls); its scripts reach nothing.
-same "the gallery's code selects the lab's sub-stages, its scripts nothing" "$lab_subs" \
-    "$(bash $affected --paths apps/apple/Sources/XDictEntryLab/Gallery.swift apps/apple/Tools/gallery/run.sh \
-        apps/apple/Tools/gallery/page.py)"
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "the analyzer's change brings the hostile controls" ;;
+    *) bad "the analyzer's change did not bring hostile.controls: $got" ;; esac
+same "a library instrument brings the relinking control" "$(lines library.generated library.corpus library.control)" \
+    "$(bash $affected --paths apps/apple/Sources/XDictInstruments/LibraryCorpus.swift)"
+# (Not a confinement layer's file: those name hostile.controls themselves, as product code, not as a check's.)
+same "product code brings no control" "$(lines hostile.binding hostile.faults reader hostile.production lookup.core lookup.a11y hostile.app entries.quick entries.persistence sound.speech sound.notices sound.recordings)" \
+    "$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryEvents.swift)"
+# The gallery is a style tool no sub-stage runs (2026-10-16: it selected hostile.controls, 23 min).
+same "the gallery's code selects nothing" "" \
+    "$(bash $affected --paths apps/apple/Sources/XDictEntryLab/Gallery.swift apps/apple/Sources/XDictEntryLab/GalleryInvariants.swift \
+        apps/apple/Sources/XDictEntryLab/GalleryPhon.swift apps/apple/Tools/gallery/run.sh apps/apple/Tools/gallery/page.py)"
 # A lookup driver change with small harness edits (ba6e081) ran every sub-stage.
 got=$(bash $affected --paths apps/apple/Makefile apps/apple/Tools/build-lab.sh apps/apple/Tools/e2e.sh \
     apps/apple/Tools/lookup/drive.py apps/apple/Tools/lookup/typing_check.py apps/apple/Tools/tests/lookup_typing_test.py)
-if none_of "sound.speech library.generated hostile.controls" "$got" && has launch "$got" && has lookup.core "$got"; then
-    ok "a driver change with harness edits selects a smoke set and its own stage"
-else bad "a driver change with harness edits: $got"; fi
+case " $(tr '\n' ' ' <<<"$got") " in
+    *" sound."*|*" library."*|*" hostile.controls "*) bad "a driver change with harness edits selects sound, library or the hostile controls: $got" ;;
+    *" launch "*" lookup.core "*) ok "a driver change with harness edits selects a smoke set and its own stage" ;;
+    *) bad "a driver change with harness edits missed launch or lookup.core: $got" ;; esac
 same "a lookup driver change selects only lookup" "$(lines lookup.core lookup.a11y lookup.paging)" \
     "$(bash $affected --paths apps/apple/Tools/lookup/drive.py)"
 got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryRuleList.swift)
-has hostile.controls "$got" && ok "a confinement layer's change brings the hostile controls" \
-    || bad "a confinement layer's change did not bring hostile.controls: $got"
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "a confinement layer's change brings the hostile controls" ;;
+    *) bad "a confinement layer's change did not bring hostile.controls: $got" ;; esac
+got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift apps/apple/Sources/XDictEntryLab/Reader.swift)
+case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) bad "a style or reader-lab change brings the hostile controls: $got" ;;
+    *) ok "a style or reader-lab change leaves out the hostile controls" ;; esac
+# Every name the map uses is a sub-stage or a stage.
+names=$(awk '/^[[:space:]]*(#|$)/ { next } $1 == "control" { print $2; print $3; next }
+    { for (i = 2; i <= NF; i++) { n = $i; sub(/^check:/, "", n); if (n != "none" && n != "all") print n } }' e2e-affected.map | sort -u)
+# shellcheck disable=SC2086 # names, split on purpose
+if bash $plan expand $names >/dev/null 2>"$scratch/why"; then ok "every name in the map is a sub-stage or a stage"
+else bad "the map names what is no sub-stage: $(cat "$scratch/why")"; fi
+# The control of the map's fail-safe: a map whose last rule takes every path selects only what it says.
+{ cat e2e-affected.map; echo "*  launch"; } >"$scratch/catch-all.map"
+same "map control: a catch-all rule overrides the fail-safe (so the fail-safe is what selected everything)" "launch" \
+    "$(XDICT_E2E_AFFECTED_MAP=$scratch/catch-all.map bash $affected --paths apps/apple/no-rule-names-this.file)"
 
-# The graph's own cases (2026-10-17), each shown red once against the control below it.
-# 1. A core crate nothing on the Apple side links, and one only the fixtures build, select no Swift-only sub-stage.
-same "an xdict-wasm change selects no sub-stage" "" "$(bash $affected --paths core/xdict-wasm/src/lib.rs)"
-got=$(bash $affected --paths core/xdict-mdx-writer/src/lib.rs)
-if ! has launch "$got" && has service.conformance "$got"; then
-    ok "a fixtures-only crate selects what reads fixtures, not launch (which links only the app and the service)"
-else bad "a fixtures-only crate: $got"; fi
-# 2. XDictSearch is the app's: none of the lab's hostile sub-stages (hostile.app types into its window, so it stays).
+
+# --- paths the map does not name: the generated graph (Tools/affected_graph.py) -------------------------------------
+lab_subs="hostile.binding hostile.faults reader hostile.production hostile.controls entries.lab"
+has() { case " $(tr '\n' ' ' <<<"$2") " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+# The service's code is named by no rule: the graph gives it the app's sub-stages (it is in the app's bundle), and not
+# the lab's, which links the core itself. (It was everything, by the fail-safe, before the graph.)
+got=$(bash $affected --paths apps/apple/Sources/XDictService/Service.swift)
+lab_hit=""; for s in $lab_subs; do has "$s" "$got" && lab_hit="$lab_hit $s"; done
+if [ -z "$lab_hit" ] && has launch "$got" && has service.conformance "$got"; then
+    ok "the service's code (no rule) selects the app's sub-stages by the graph, not the lab's"
+else bad "the service's code: lab [$lab_hit], got $(tr '\n' ' ' <<<"$got")"; fi
+same "a Package.swift change selects everything" "$(bash $plan substages)" "$(bash $affected --paths apps/apple/Package.swift)"
 got=$(bash $affected --paths apps/apple/Sources/XDictSearch/SearchModel.swift)
-if none_of "$lab_subs" "$got" && has hostile.app "$got"; then ok "an XDictSearch change selects no lab hostile sub-stage"
-else bad "an XDictSearch change: $got"; fi
-# 3. The package manifest is the Swift graph itself.
-same "a Package.swift change selects everything" "$(bash $plan substages)" \
-    "$(bash $affected --paths apps/apple/Package.swift)"
-# Their controls: a graph or hand list made wrong must turn each red.
+lab_hit=""; for s in $lab_subs; do has "$s" "$got" && lab_hit="$lab_hit $s"; done
+[ -z "$lab_hit" ] && ok "an XDictSearch change selects no lab hostile sub-stage" || bad "an XDictSearch change selects$lab_hit"
+# Its controls: a graph made wrong turns the service's case red; a map made wrong the XDictSearch one.
 python3 -I - affected-graph.json "$scratch/wrong.json" <<'PY'
 import json, sys
 g = json.load(open(sys.argv[1]))
-g["targets"]["XDictEntryLab"]["deps"].append("XDictSearch")
-g["crates"]["xdict-ffi"]["deps"].append("xdict-wasm")
+g["targets"]["XDictEntryLab"]["deps"].append("XDictService")
 json.dump(g, open(sys.argv[2], "w"))
 PY
-got=$(XDICT_AFFECTED_GRAPH=$scratch/wrong.json bash $affected --paths core/xdict-wasm/src/lib.rs 2>/dev/null)
-[ -n "$got" ] && ok "control: an xdict-wasm the core linked would select sub-stages" || bad "control 1 stayed green"
-got=$(XDICT_AFFECTED_GRAPH=$scratch/wrong.json bash $affected --paths apps/apple/Sources/XDictSearch/SearchModel.swift 2>/dev/null)
-has hostile.production "$got" && ok "control: an XDictSearch the lab linked would select hostile.production" \
-    || bad "control 2 stayed green: $got"
-sed 's|^apps/apple/Package.swift .*|apps/apple/Package.swift none|' affected-hand.map >"$scratch/wrong.map"
-got=$(XDICT_AFFECTED_HAND=$scratch/wrong.map bash $affected --paths apps/apple/Package.swift)
-[ -z "$got" ] && ok "control: a hand list saying none for Package.swift selects nothing" || bad "control 3 stayed green: $got"
-
-# Every name the hand list uses is a sub-stage, a stage or a node the graph has (the module refuses one that is not).
-names=$(awk '/^[[:space:]]*(#|$)/ { next } $1 == "control" { print $2; print $3; next } $1 ~ /^(launches|builds|binary)$/ { next }
-    { for (i = 2; i <= NF; i++) { n = $i; sub(/^check:/, "", n); if (n != "none" && n != "all" && n !~ /:/) print n } }' \
-    affected-hand.map | sort -u)
-# shellcheck disable=SC2086 # names, split on purpose
-if bash $plan expand $names >/dev/null 2>"$scratch/why"; then ok "every name in the hand list is a sub-stage or a stage"
-else bad "the hand list names what is no sub-stage: $(cat "$scratch/why")"; fi
-# The control of the fail-safe: a hand list whose last rule takes every path selects only what it says.
-{ cat affected-hand.map; echo "*  launch"; } >"$scratch/catch-all.map"
-same "hand list control: a catch-all rule overrides the fail-safe (so the fail-safe is what selected everything)" "launch" \
-    "$(XDICT_AFFECTED_HAND=$scratch/catch-all.map bash $affected --paths apps/apple/no-rule-names-this.file)"
+got=$(XDICT_AFFECTED_GRAPH=$scratch/wrong.json bash $affected --paths apps/apple/Sources/XDictService/Service.swift 2>/dev/null)
+has hostile.production "$got" && ok "control: a service the lab linked would select hostile.production" \
+    || bad "control: the wrong graph changed nothing: $got"
+sed 's|^apps/apple/Sources/XDictSearch/\*.*|apps/apple/Sources/XDictSearch/* hostile.production|' e2e-affected.map >"$scratch/wrong.map"
+got=$(XDICT_E2E_AFFECTED_MAP=$scratch/wrong.map bash $affected --paths apps/apple/Sources/XDictSearch/SearchModel.swift)
+has hostile.production "$got" && ok "control: the map's answer is the one taken for a path it names" \
+    || bad "control: the map's rule was not taken: $got"
 
 # --- the harness lists what the plan says ----------------------------------------------------------------------------
 same "e2e.sh --list-stages is the plan's default sub-stages (what a release requires)" "$(bash $plan substages)" \

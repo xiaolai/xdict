@@ -1,0 +1,133 @@
+# **Which end-to-end sub-stages a changed path needs** (`Tools/e2e-affected.sh`). One rule a line:
+#
+#   <pattern>   <what>
+#
+# <pattern> is a path from the repository's root, matched as a shell pattern (`*` crosses `/`). **The first rule that
+# matches decides**, so the specific come before the general. **A path no rule matches goes to the generated
+# graph** (`Tools/affected_graph.py`): it selects what its crate or target reaches, and **everything if the graph owns
+# it neither**: an unforeseen file costs a full run, never a missed one.
+#
+# <what> is `none` (no E2E sub-stage reads it), `all`, or sub-stage and stage names (`Tools/e2e-substages.txt`; a stage
+# means its default sub-stages). Prefixed `check:`, the path is a check's own code (its analyzer, verdicts, scenario or
+# instrument), and each sub-stage named also brings its positive control, from the `control` lines.
+#
+#   control <sub-stage> <its positive control>
+
+control hostile.production hostile.controls
+control hostile.app        hostile.controls
+control library.corpus     library.control
+
+# --- What no E2E sub-stage reads: the notes, the other platforms, tests that run only here ---------------------------
+*.md                                                none
+LICENSE                                             none
+dev-docs/*                                          none
+apps/android/*                                      none
+apps/windows/*                                      none
+apps/linux/*                                        none
+apps/web/*                                          none
+apps/extension/*                                    none
+core/xdict-wasm/*                                   none
+core/xdict-ffi/test-*.sh                            none
+core/xdict-ffi/measure-memory.sh                    none
+apps/apple/Tests/*                                  none
+apps/apple/Tools/tests/*                            none
+apps/apple/Tools/e2e-affected.*                     none
+apps/apple/Tools/affected*                          none
+apps/apple/Tools/strings.sh                         none
+apps/apple/Tools/compiler-warnings.py               none
+apps/apple/Tools/release.sh                         none
+apps/apple/Tools/gate-cache.py                      none
+apps/apple/Tools/land.sh                            none
+apps/apple/.swiftlint.yml                           none
+
+# --- The core: the sample of the owner's dictionaries comes from one of its tests; a crate read only by rendering,
+# health or lookup selects those; the rest is in every bundle (2026-10-16: a one-attribute change to xdict-entry ran
+# every sub-stage, 46 min) -------------------------------------------------------------------------------------------
+core/xdict-core/tests/entries_corpus.rs             entries.quick
+core/xdict-core/examples/index_bench.rs             library.corpus
+core/*/tests/*                                      none
+core/*/benches/*                                    none
+core/xdict-health/*                                 library.health
+core/xdict-lookup/*                                 lookup library.corpus
+core/xdict-entry/*                                  hostile.production hostile.app hostile.faults hostile.binding reader entries.full entries.persistence lookup.core sound
+core/*                                              all
+conformance/fixtures/hostile/*                      check:hostile.production hostile.app
+conformance/fixtures/twin-*                         check:hostile.binding
+conformance/*                                       check:service.conformance
+
+# --- The harness: what runs the checks ------------------------------------------------------------------------------
+apps/apple/Tools/hostile/analyze.py                 check:hostile.production hostile.faults hostile.binding reader entries.full entries.persistence entries.lab
+apps/apple/Tools/hostile/battery.py                 check:hostile.production hostile.app
+apps/apple/Tools/hostile/reader.py                  check:reader
+apps/apple/Tools/hostile/pointer.swift              check:reader library.generated
+apps/apple/Tools/hostile/*                          check:hostile.production hostile.app reader
+apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
+apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
+apps/apple/Tools/lookup/*                           check:lookup
+apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
+apps/apple/Tools/library/health-expected.json       check:library.health
+apps/apple/Tools/library/*                          check:library.generated library.corpus
+apps/apple/Tools/gallery/*                          none
+# The harness's shared code: a change to it can break any stage, but most are a line for one stage's driver, which that
+# stage's own rule above already selects. So these select a smoke set, a minute in all: the bundle launched, the kit's
+# lab, the fixtures, a lookup window over the corpus (2026-10-16: a lookup driver change with three such lines ran every
+# sub-stage, 46 min). **A change to what every stage shares (the run's setup, the lock, the evidence, `flunk`) names its
+# stages or runs T2.**
+apps/apple/Tools/build-lab.sh                       hostile.binding hostile.faults lookup.core
+apps/apple/Tools/e2e-run.sh                         launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
+apps/apple/Tools/e2e.sh                             launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
+apps/apple/Makefile                                 launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
+apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut
+apps/apple/Tools/*                                  all
+
+# --- The instruments: each check's own code -------------------------------------------------------------------------
+apps/apple/Sources/XDictInstruments/Lookup*         check:lookup
+apps/apple/Sources/XDictInstruments/TransportHold.swift check:lookup service.recovery
+apps/apple/Sources/XDictInstruments/LibraryHealth.swift check:library.health
+apps/apple/Sources/XDictInstruments/Library*        check:library.generated library.corpus
+apps/apple/Sources/XDictInstruments/ChangedEdition.swift check:library.generated library.corpus
+apps/apple/Sources/XDictInstruments/Conformance*    check:service.conformance
+apps/apple/Sources/XDictInstruments/Projection*     check:service.conformance
+apps/apple/Sources/XDictInstruments/IdleCheck.swift check:service.idle
+apps/apple/Sources/XDictInstruments/Findings.swift  all
+apps/apple/Sources/XDictInstruments/*               check:service.recovery
+# The lab: the gallery is a style tool no sub-stage runs; each mode's file is its own stage's; the rest is shared.
+apps/apple/Sources/XDictEntryLab/Gallery*           none
+apps/apple/Sources/XDictEntryLab/Hostile.swift      check:hostile.production
+apps/apple/Sources/XDictEntryLab/Reader*            check:reader
+apps/apple/Sources/XDictEntryLab/Corpus.swift       check:entries.lab
+apps/apple/Sources/XDictEntryLab/*                  check:hostile.production hostile.controls hostile.faults hostile.binding reader entries.lab
+apps/apple/Sources/XDict/AppCorpus.swift            check:entries.quick entries.full entries.persistence
+apps/apple/Sources/XDict/AppHostile.swift           check:hostile.app
+apps/apple/Sources/XDict/LookupWindow.swift         check:lookup
+apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated library.corpus library.health
+apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
+apps/apple/Sources/XDict/ServiceReport.swift        check:service
+apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
+apps/apple/Sources/XDict/SoundReport.swift          check:sound
+apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services panel menubar shortcut
+apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
+
+# --- The product ----------------------------------------------------------------------------------------------------
+apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.core lookup.a11y sound
+apps/apple/Sources/XDictEntryView/EntryMarks.swift  hostile.production reader entries.quick entries.persistence lookup.a11y sound
+apps/apple/Sources/XDictEntryView/EntryColourGuard.swift hostile.production reader entries.quick entries.persistence lookup.a11y
+# What keeps an entry off the network: each layer the hostile controls switch off one at a time, the scheme that answers,
+# the ways out (a remote link, a new window, the context menu). The controls are these layers' positive control.
+apps/apple/Sources/XDictEntryView/EntryConfinement.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryRuleList.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryNavigationPolicy.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/WebKitSwitches.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntrySchemeHandler.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryResourceServer.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryRoutes.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/RemoteOpenGate.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryWebView.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryViewController.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/EntryPane.swift   hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
+apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
+apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
+apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
+apps/apple/Sources/XDictSpeech/*                    sound
+apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
+apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut
