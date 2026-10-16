@@ -5,6 +5,7 @@
 //! - a C1 control character is a Windows-1252 byte its maker read as Latin-1 (in the 25: a dash lost between two words,
 //!   curly quotes around one): it is read as Windows-1252, unless that character follows it already (a dash written
 //!   twice), when it goes, as do the five bytes Windows-1252 leaves undefined. Dropped, they would join words;
+//! - a small form of CJK punctuation (U+FE50–FE57) becomes the full-size punctuation it stands for;
 //! - a literal `\n` becomes a line break when no backslash precedes it and the run's end (a tag, or the record's
 //!   end) or whitespace follows it; any other (`\n\t\ta`, `\\n`, MWU's `\t\` notation) is left as written.
 //!
@@ -60,10 +61,24 @@ fn windows_1252(c: char) -> Option<char> {
     WINDOWS_1252.get(at as usize).copied().flatten()
 }
 
+/// The full-size CJK punctuation a small form (U+FE50–FE57) stands for: a CNS/Big5 converter wrote it for an ordinary
+/// comma, which a CJK face draws as a dot at the baseline (LDOCE-EC's "书﹐书籍", WI-11, 2026-10-17).
+fn full_size(c: char) -> Option<char> {
+    match c {
+        '\u{fe50}' => Some('，'),
+        '\u{fe51}' => Some('、'),
+        '\u{fe54}' => Some('；'),
+        '\u{fe55}' => Some('：'),
+        '\u{fe56}' => Some('？'),
+        '\u{fe57}' => Some('！'),
+        _ => None,
+    }
+}
+
 /// `run` repaired, and how many repairs were made. `at_start` says the run begins the record, where a byte-order
 /// mark is the encoder's and stays.
 pub(crate) fn text(run: &str, at_start: bool) -> (Cow<'_, str>, u64) {
-    if !run.chars().any(|c| stray(c) || c == '\u{feff}') && !run.contains("\\n") {
+    if !run.chars().any(|c| stray(c) || c == '\u{feff}' || full_size(c).is_some()) && !run.contains("\\n") {
         return (Cow::Borrowed(run), 0);
     }
     let mut out = String::with_capacity(run.len());
@@ -79,6 +94,12 @@ pub(crate) fn text(run: &str, at_start: bool) -> (Cow<'_, str>, u64) {
                 out.push(read);
                 prev = Some(read);
             }
+            continue;
+        }
+        if let Some(full) = full_size(c) {
+            repairs += 1;
+            out.push(full);
+            prev = Some(full);
             continue;
         }
         if c == '\\' && prev != Some('\\') && chars.peek().is_some_and(|&(_, n)| n == 'n') {
