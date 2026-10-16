@@ -425,9 +425,7 @@ final class LookupWindowRun: LookupStage {
         for section in model.sections.prefix(3) {
             switch section.status {
             case .results(let results):
-                let header = String(localized: SearchSentences.section(name: section.name, edition: section.edition,
-                                                                       loaded: results.hits.count, total: results.total))
-                ordered.append(header)
+                ordered.append(String(localized: SearchSentences.header(section)))
                 let repeated = results.repeatedKeys
                 present += results.hits.prefix(3).map { hit in
                     Self.label(hit, in: section.name, record: repeated.contains(hit.entry.key) ? Int(hit.entry.occurrence) + 1 : nil)
@@ -436,7 +434,7 @@ final class LookupWindowRun: LookupStage {
                     present.append(String(localized: SearchSentences.more(1_000, remaining: results.total - UInt64(results.hits.count))))
                 }
             default:
-                ordered.append(String(localized: SearchSentences.section(name: section.name, edition: section.edition)))
+                ordered.append(String(localized: SearchSentences.header(section)))
                 if let sentence = SearchSentences.status(section.status) { present.append(String(localized: sentence)) }
                 if let next = section.next { present.append(String(localized: SearchSentences.action(next))) }
                 if section.status == .searching, let query = model.lookup?.query {
