@@ -18,6 +18,8 @@ enum GalleryRun {
         let name: String
         let frame: EntryReadingFrame
         let theme: EntryTheme
+        /// The reader's "Original style" (ADR-0010 Q3): the core's rendering without normalization, and no frame.
+        var original = false
     }
 
     /// The views the merged tree can render. "before" and "after" (frame only) need a core without normalization, so
@@ -26,6 +28,10 @@ enum GalleryRun {
                         Mode(name: "core-dark", frame: .all, theme: .dark),
                         Mode(name: "coreserif-light", frame: [.column, .type, .serif], theme: .original),
                         Mode(name: "coreserif-dark", frame: [.column, .type, .serif], theme: .dark)]
+
+    /// `--original-style`: the same entries in XDict's reading style and in the dictionary's own, side by side.
+    static let originalModes = [Mode(name: "core-light", frame: .all, theme: .original),
+                                Mode(name: "original-light", frame: [], theme: .original, original: true)]
 
     static func run(options: LabOptions, core: LabCore) async throws -> [String: Any] {
         guard let root = options.fixture, let samplePath = options.sample, let out = options.out else {
@@ -46,7 +52,9 @@ enum GalleryRun {
             } else {
                 chosen = await choose(byDict[name] ?? [], content: content, failures: &failures)
             }
-            for mode in modes {
+            let original = options.originalStyle ? try core.open(root.appending(path: name), originalStyle: true) : nil
+            for mode in options.originalStyle ? originalModes : modes {
+                let content = mode.original ? original ?? content : content
                 let log = EventLog()
                 var environment = CorpusRun.environment("gallery-\(mode.name)", log: log)
                 environment.readingFrame = mode.frame
