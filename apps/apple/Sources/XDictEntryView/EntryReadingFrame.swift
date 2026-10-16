@@ -45,6 +45,14 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     static let originalLabelsCSS = ":root [data-xdict-role=label]:not([data-xdict-label=level],[data-xdict-label=wordlist],"
         + "[data-xdict-label=frequency],[data-xdict-label=new]){color:inherit !important}"
 
+    /// In original style transcriptions draw in the bundled phonetic faces too (a dictionary's own IPA font is often
+    /// missing); their colour stays the dictionary's.
+    /// `!important`, and on the transcription's own elements: a dictionary's font rule on its class (MWU's) outranks
+    /// a plain one. XDict's controls and labels inside keep their own face.
+    static let originalPhonCSS = "[data-xdict-phon],"
+        + "[data-xdict-phon] :not([data-xdict-control],[data-xdict-control] *,[data-xdict-role=label])"
+        + "{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon) !important}"
+
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
     public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? .minimal : self }
 
@@ -244,7 +252,7 @@ extension EntryScripts {
         // "Original style": the minimal frame and XDict's whole marks layer (the owner, 2026-10-16), no column or type.
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalLabelsCSS : ""
+                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalLabelsCSS + EntryReadingFrame.originalPhonCSS : ""
         let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """

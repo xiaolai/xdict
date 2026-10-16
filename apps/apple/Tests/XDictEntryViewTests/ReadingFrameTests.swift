@@ -124,6 +124,11 @@ struct ReadingFrameTests {
         // column do not.
         #expect(dark.contains("[data-xdict-icon=speaker]"), "XDict's speaker")
         #expect(dark.contains("[data-xdict-role=label]{"), "XDict's labels")
+        // The bundled phonetic faces (macos-v1 ab1525f) draw transcriptions in original style too; the colour stays
+        // the dictionary's.
+        #expect(dark.contains("@font-face"), "the bundled faces")
+        #expect(dark.contains(EntryReadingFrame.originalPhonCSS))
+        #expect(EntryReadingFrame.originalPhonCSS.contains("font-family:var(--xdict-font-phon) !important"))
         #expect(dark.contains("[data-xdict-labelled]{display:none !important}"), "the badges the labels replace, hidden")
         #expect(dark.contains("[data-xdict-control=disclosure]"), "XDict's fold signs")
         #expect(!dark.contains(EntryReadingFrame.typeCSS), "XDict's type is the reading style's")
