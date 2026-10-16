@@ -9,7 +9,7 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (5, 0xfeb5_915f_1a85_2205);
+const PINNED: (u32, u64) = (6, 0xd0bf_ad7d_a896_2be0);
 
 const BASE: &str = "xdict://d/";
 
@@ -125,7 +125,10 @@ fn json_string(chars: &mut std::iter::Peekable<std::str::Chars<'_>>) -> Option<S
 
 #[test]
 fn style_is_raised_with_any_change_to_the_output() {
-    let style = Style::of_sheets([".pos{font-style:italic} .hw{font-weight:bold} .pill{background:#666}"]);
+    let style = Style::of_sheets([
+        // `chwd` and `collobox` name Longman's markup (STYLE 6: per-markup tables, `data-xdict-sure`).
+        ".pos{font-style:italic} .hw{font-weight:bold} .pill{background:#666} .chwd{font-weight:bold} .collobox{border:0}",
+    ]);
     let mut digest = 0xcbf2_9ce4_8422_2325;
     let inputs = fixture_entries().into_iter().chain(SHAPED.iter().map(|(k, b)| ((*k).to_owned(), (*b).to_owned())));
     for (key, body) in inputs {

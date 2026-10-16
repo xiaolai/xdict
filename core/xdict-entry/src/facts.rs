@@ -244,6 +244,11 @@ impl Facts {
         facts
     }
 
+    /// Whether a rule's subject leads with `class` (lower case): the edition's sheets style it.
+    pub(crate) fn styles_class(&self, class: &str) -> bool {
+        self.by_class.contains_key(class)
+    }
+
     /// The properties an element's own rules set: its element's, then its classes'.
     pub(crate) fn props(&self, tag: &str, classes: &[String]) -> Props {
         let mut out = self.by_tag.get(tag).copied().unwrap_or_default();
