@@ -111,6 +111,7 @@ enum GalleryRun {
                                                    ("foldGapOver", 0.0, "fold heads too far apart"),
                                                    ("spacePunct", 0.0, "a space before punctuation after a label"),
                                                    ("labelTight", 0.0, "a label or tag against the next text"),
+                                                   ("speakerTight", 0.0, "a speaker against the word before it"),
                                                    ("markerOff", 0.0, "a marker off its item's first line"),
                                                    ("chevronOff", 0.0, "a chevron off its head's first line"),
                                                    ("levelPill", 0.0, "a level pill the dictionary still draws"),
@@ -401,6 +402,32 @@ enum GalleryRun {
           // The list rhythm: the line's own leading plus the gap token between blocks.
           if (d > lead + gap) { foldGapOver += 1; if (folds.length < 3) folds.push([Math.round(d), trim(p).slice(0, 150)]); }
         }
+        // A speaker keeps the control spacing (0.25em of the text) from the word before it on its line (CED "filiform").
+        var speakerTight = 0, spTight = [];
+        document.querySelectorAll('[data-xdict-control=speaker]').forEach(function (sp) {
+          if (!seen(sp)) return;
+          var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), t = null, n;
+          w.currentNode = sp;
+          while ((n = w.previousNode())) {
+            if (sp.contains(n) || !/\S/.test(n.nodeValue) || !n.parentElement || !seen(n.parentElement)) {
+              if (!sp.contains(n) && n.parentElement && seen(n.parentElement) && /\s/.test(n.nodeValue)) break;
+              continue;
+            }
+            t = n; break;
+          }
+          if (!t || /\s$/.test(t.nodeValue) || t.parentElement.closest('[data-xdict-control]')) return;
+          var r = document.createRange(); r.selectNodeContents(t); var tr = r.getClientRects(); tr = tr[tr.length - 1];
+          if (!tr) return;
+          var tg = sp.querySelector('[data-xdict-tag]'), ic = sp.querySelector('[data-xdict-icon]');
+          var first = tg && seen(tg) && tg.getBoundingClientRect().width > 0 ? tg : ic;
+          if (!first) return;
+          var fr = first.getBoundingClientRect();
+          if (Math.abs((fr.top + fr.bottom) / 2 - (tr.top + tr.bottom) / 2) > tr.height) return;
+          // The control spacing is the speaker's own (0.25em of its font): after a larger headword it is not scaled up.
+          var em = parseFloat(getComputedStyle(sp).fontSize);
+          var d = getComputedStyle(sp).direction === 'rtl' ? tr.left - fr.right : fr.left - tr.right;
+          if (d < 0.25 * em - 0.5 && d > -em) { speakerTight += 1; if (spTight.length < 3) spTight.push([Math.round(d * 10) / 10, t.nodeValue.slice(-12), trim(sp).slice(0, 120)]); }
+        });
         // icon sweep §8.4: a label or an accent tag owns 0.35em of its own before the next word or control on its line.
         var labelTight = 0, tight = [];
         document.querySelectorAll('[data-xdict-role=label],[data-xdict-tag]').forEach(function (lb) {
@@ -523,7 +550,7 @@ enum GalleryRun {
                  heads: Array.prototype.map.call(document.querySelectorAll("[data-xdict-control=disclosure]"), function (h) { return trim(h).slice(0, 600); }).slice(0, 2), pronOff: pronOff, pronTotal: pronTotal, pron: pron,
                  labelGapOver: labelGapOver, labelGaps: labelGaps, foldGapOver: foldGapOver, folds: folds,
                  foldHeads: heads.length, spacePunct: spacePunct, punct: punct,
-                 labelTight: labelTight, tight: tight, markerOff: mk[0], markers: mk[1], markerTotal: mk[2],
+                 labelTight: labelTight, tight: tight, speakerTight: speakerTight, spTight: spTight, markerOff: mk[0], markers: mk[1], markerTotal: mk[2],
                  chevronOff: ch[0], chevrons: ch[1], chevronTotal: ch[2], levelPill: levelPill, pills: pills, pillLabels: pillLabels, phonFonts: Array.from(new Set(Array.prototype.map.call(document.querySelectorAll("[data-xdict-phon]"), function (e) { return getComputedStyle(e).fontFamily; }))).slice(0, 3), hrDrawn: hrDrawn, hrs: hrs, foldSign: foldSign, signs: signs };
         """#
 
