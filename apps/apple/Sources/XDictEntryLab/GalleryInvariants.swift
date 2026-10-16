@@ -21,6 +21,9 @@ extension GalleryRun {
         ['text', 'text-2', 'link', 'accent'].forEach(function (t) {
           probe.style.color = 'var(--xdict-' + t + ')'; allowed[getComputedStyle(probe).color] = t;
         });
+        probe.style.color = '';
+        probe.style.fontFamily = 'var(--xdict-font-phon)';
+        var PHON = getComputedStyle(probe).fontFamily.split(',')[0].replace(/["']/g, '').trim();
         probe.remove();
         var walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
         for (var n = walker.nextNode(); n; n = walker.nextNode()) {
@@ -35,7 +38,7 @@ extension GalleryRun {
           note('leading', Math.abs(lh - want) < 0.03, k, (isNaN(lh) ? 'normal' : Math.round(lh * 100) / 100) + ' at ' + Math.round(fs) + 'px <' + label + '>');
           var phon = el.closest('[data-xdict-phon]');
           if (phon && !/^font:/.test(phon.getAttribute('data-xdict-phon-system') || '') && !el.closest('[data-xdict-tag]')) {
-            note('phonFace', /^"?(Charis|Doulos|Gentium)/.test(cs.fontFamily), k, cs.fontFamily.split(',')[0] + ' <' + label + '>');
+            note('phonFace', cs.fontFamily.split(',')[0].replace(/["']/g, '').trim() === PHON, k, cs.fontFamily.split(',')[0] + ' <' + label + '>');
           }
           note('colour', !!allowed[cs.color], k, cs.color + ' <' + label + '>');
           // The lead's own text (not a transcription or a label inside it) is the lead's look: 24 px, text colour.
@@ -126,14 +129,21 @@ extension GalleryRun {
           var rs = Array.prototype.filter.call(r2.getClientRects(), function (q) { return q.width > 0; });
           if (rs.length) texts.push({ n: t2, first: rs[0], last: rs[rs.length - 1], fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
         }
+        // What draws between two words without being text: XDict's controls, icons, tags, labels, images.
+        var boxes = Array.prototype.map.call(document.querySelectorAll('[data-xdict-control],[data-xdict-icon],[data-xdict-tag],[data-xdict-role=label],img,svg'),
+          function (e) { return e.getBoundingClientRect(); }).filter(function (q) { return q.width > 0; });
+        function drawnBetween(a, b) {
+          return boxes.some(function (q) { return q.right > a.right - 1 && q.left < b.left + 1 && q.bottom > a.top && q.top < a.bottom; });
+        }
         texts.forEach(function (x, k) {
           var prev = texts[k - 1], next = texts[k + 1];
           var same = function (a, b) { return a && b && Math.abs(a.top - b.top) < 2 && Math.abs(a.bottom - b.bottom) < 2; };
-          if (/^[\s\p{P}]+$/u.test(x.n.nodeValue)) {
+          // A separator row of bullets or stars is a line of its own by design.
+          if (/^[\s\p{P}]+$/u.test(x.n.nodeValue) && !/^[\s•·*⁂‧∙]+$/.test(x.n.nodeValue)) {
             var alone = !same(prev && prev.last, x.first) && !same(x.last, next && next.first);
             note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line');
           }
-          if (prev && same(prev.last, x.first) && x.first.left > prev.last.right) {
+          if (prev && same(prev.last, x.first) && x.first.left > prev.last.right && !drawnBetween(prev.last, x.first)) {
             var gap = x.first.left - prev.last.right;
             note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16)));
           }
