@@ -294,7 +294,7 @@
           "key": "run",
           "occurrence": 1
         },
-        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\">run</b> (noun) an act of running",
+        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\" data-xdict-lead>run</b> (noun) an act of running",
         "lossyBytes": 0
       },
       "cspContains": "connect-src 'none'"
@@ -309,7 +309,7 @@
           "key": "run",
           "occurrence": 0
         },
-        "html": "<!DOCTYPE html><link rel=\"stylesheet\" href=\"xdict://d/r/tiny.css\"><b data-xdict-role=\"headword\">run</b> to move fast <a data-xdict-control=\"speaker\" data-xdict-control-mode=\"prefix\" data-xdict-role=\"audio\" href=\"xdict://d/sound/run.mp3\"><span data-xdict-icon=\"speaker\" aria-hidden=\"true\"></span>play</a>",
+        "html": "<!DOCTYPE html><link rel=\"stylesheet\" href=\"xdict://d/r/tiny.css\"><b data-xdict-role=\"headword\" data-xdict-lead>run</b> to move fast <a data-xdict-control=\"speaker\" data-xdict-control-mode=\"prefix\" data-xdict-role=\"audio\" href=\"xdict://d/sound/run.mp3\"><span data-xdict-icon=\"speaker\" aria-hidden=\"true\"></span>play</a>",
         "lossyBytes": 0
       }
     },

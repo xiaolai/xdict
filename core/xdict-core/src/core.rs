@@ -1463,7 +1463,11 @@ mod tests {
         let Resource::Found { bytes, .. } = core.resource(dict.clone(), "side.css".into(), view()).unwrap() else {
             panic!("missing")
         };
-        assert_eq!(String::from_utf8(bytes).unwrap(), "body{} .p{font-size:var(--xdict-fs-s, 0.875rem) !important}");
+        // A size carries its leading (unification R).
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            "body{} .p{font-size:var(--xdict-fs-s, 0.875rem) !important;line-height:var(--xdict-leading, 1.6)}"
+        );
         let report = core.style_report(dict).unwrap();
         assert_eq!(report.version, STYLE);
         assert_eq!(report.edition.style.base().px, 14.0);

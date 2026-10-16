@@ -100,7 +100,7 @@
         "occurrence": 0
       },
       "result": {
-        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\">run</b> to move",
+        "html": "<!DOCTYPE html><b data-xdict-role=\"headword\" data-xdict-lead>run</b> to move",
         "lossyBytes": 0
       }
     },
