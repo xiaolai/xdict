@@ -146,6 +146,7 @@ test-tools:
 	@Tools/tests/core-on-host-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
+	@python3 -I Tools/tests/lookup_typing_test.py
 
 e2e-status:
 	@Tools/e2e-status.sh show

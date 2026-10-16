@@ -388,14 +388,23 @@ record() {
 }
 pass() { record pass "$@"; }
 flunk() { record fail "$@"; }
-# A sub-stage that never reported one of its checks (that were asked for) fails, by name.
+# A sub-stage that never reported one of its checks (that were asked for) fails, by name. When its driver stopped and
+# said why (`STOPPED`, e.g. a key the E2E Mac dropped), the checks it never reached fail once, under that sentence,
+# rather than each as an unexplained non-report.
+STOPPED=""
 require_reported() {
-    local sub=$1 check
+    local sub=$1 check missing=()
     STAGE=$sub
     for check in $(checks_of "$sub"); do
         check_asked "$check" || continue
-        case $REPORTED in *" $sub:$check "*) ;; *) flunk - "$sub: $check was never reported" ;; esac
+        case $REPORTED in *" $sub:$check "*) ;; *) missing+=("$check") ;; esac
     done
+    [ "${#missing[@]}" -gt 0 ] || return 0
+    if [ -n "$STOPPED" ]; then
+        flunk - "$sub: ${#missing[@]} checks not reached because $STOPPED (${missing[*]})"
+    else
+        for check in "${missing[@]}"; do flunk - "$sub: $check was never reported"; done
+    fi
 }
 
 # **A stage that dies part-way is a failed stage, and says where it died**: `set -e` ends the script silently at the
@@ -1098,7 +1107,8 @@ substage_lookup() {
     if python3 -I "$kit/lookup/drive.py" "$kit" "$work" "$app" "$work/driver.json" >"$results/drive.log" 2>&1; then
         echo "      driven: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
     else
-        flunk - "lookup: the driver stopped — $(tail -2 "$results/drive.log" | tr '\n' ' ')"
+        STOPPED="the driver stopped: $(sed -n 's/^drive: //p' "$results/drive.log" | tail -1)"
+        flunk - "lookup: $STOPPED"
     fi
     for _ in $(seq 1 100); do is_running "$exe" || break; sleep 0.1; done
     quit_bundle >/dev/null 2>&1 || true
@@ -1237,6 +1247,7 @@ for sub in "${WANTED[@]}"; do
     echo "-- ${members[*]}"
     before=$failures
     started=$SECONDS
+    STOPPED=""
     "$function_name"
     took=$((SECONDS - started))
     for member in "${members[@]}"; do

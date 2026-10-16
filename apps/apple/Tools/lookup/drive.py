@@ -23,6 +23,9 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import typing_check  # noqa: E402
+
 kit, work, app, out = sys.argv[1:5]
 keys = os.path.join(kit, "lookup", "keys")
 commands = os.path.join(work, "commands")
@@ -118,16 +121,23 @@ def press(combo, settle=0.8, name=None):
 
 
 def type_text(text, settle=0.8):
-    before = hold(f"type {text}")
-    seen = len(before.get("keys", []))
-    tool("type", text)
-    time.sleep(settle)
-    after = ask("state")
-    arrived = after.get("keys", [])[seen:]
-    if len(arrived) < len(text) or not all(k.get("active") and k.get("key") for k in arrived):
-        abort(f"typing {text!r}: only {len(arrived)} of {len(text)} keys reached the app's main window while it was "
-              f"active")
-    return after
+    """`text` typed into the search field (empty or selected), confirmed by reading the field back: a dropped key is
+    typed again once (`typing_check`); a second miss stops the run with a sentence naming the field and the front."""
+    def type_keys(t):
+        tool("type", t)
+        time.sleep(settle)
+
+    def front():
+        f = tool("front")
+        return f"{f.get('name')} (pid {f.get('pid')})"
+
+    try:
+        typing_check.type_and_confirm(
+            text, hold=lambda: hold(f"type {text}"), select_all=lambda: tool("press", "cmd+a"),
+            type_keys=type_keys, read_field=lambda: ask("state").get("text", ""), front=front)
+    except typing_check.Lost as lost:
+        abort(str(lost))
+    return ask("state")
 
 
 def until(predicate, seconds=10.0):
