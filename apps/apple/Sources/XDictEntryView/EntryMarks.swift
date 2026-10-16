@@ -45,6 +45,14 @@ extension EntryReadingFrame {
             + "font-size:inherit !important;border:0 !important;box-shadow:none !important;transform:none !important}"
             + "[data-xdict-before=marker]::before{margin:0 0.35em 0 0 !important;margin-inline:0 0.35em !important}"
             + "[data-xdict-after=marker]::after{margin:0 0 0 0.35em !important;margin-inline:0.35em 0 !important}"
+            // The leading dot hangs in a gutter of its own, centred on the first line box, whatever display the item's
+            // content has: a block child would otherwise push the text to the line below the dot (COBUILD's examples).
+            + "[data-xdict-before=marker]{position:relative !important;padding-inline-start:0.7em !important;"
+            + "text-indent:0 !important}"
+            // The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text.
+            + "[data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}"
+            + "[data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;"
+            + "inset-block-start:calc(0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}"
             // 4. The disclosure chevron, drawn from `aria-expanded`, which the disclosure script keeps to the fold.
             + "[data-xdict-control=disclosure]::before{\(glyph(chevronSVG));margin:0 0.25em 0 0 !important;"
             + "margin-inline:0 0.25em !important;transition:transform 0.15s !important}"
@@ -55,13 +63,26 @@ extension EntryReadingFrame {
             // A fold head's own vertical spacing goes: consecutive heads sit at the block gap.
             + "[data-xdict-control=disclosure]{margin-block:0 !important;"
             + "padding-block:0 !important}"
+            // The chevron hangs in its own gutter on the head's first line box, as the marker does.
+            + "[data-xdict-control=disclosure]{position:relative !important;"
+            + "padding-inline-start:calc(var(--xdict-icon) + 0.25em) !important}"
+            + "[data-xdict-control=disclosure]::before{position:absolute !important;inset-inline-start:0 !important;"
+            + "inset-block-start:calc(0.5lh - var(--xdict-icon) / 2) !important;margin:0 !important}"
             // 5. The speaker: one inline row, the accent tag first, both on the line's baseline, the glyph centred on
             // the tag; whatever width, height, float or display the dictionary gave its button.
             + "[data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;"
             + "width:auto !important;height:auto !important;min-width:0 !important;min-height:0 !important;"
             + "float:none !important;position:static !important;vertical-align:baseline !important;"
             + "flex-wrap:nowrap !important;line-height:inherit !important}"
-            + "[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.32em !important}"
+            + "[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}"
+            // A box holding only speakers (the core's `data-xdict-speakers`) sits on its transcription's line.
+            + "[data-xdict-speakers]{display:inline !important;float:none !important;position:static !important;"
+            + "margin-block:0 !important}"
+            // A box of speakers leading its block floats at the line's start, so the transcription's block after it
+            // (CEPD's `sense-body`) begins its first line beside it.
+            + "[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:0.35em !important}"
+            // A tag wrapped deeper in its speaker (OED's) owns its gap too (§8.4); 0.56em of its 0.625em is 0.35em of the text.
+            + "[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:0.56em !important}"
             + "[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 0.35em !important}"
             // 6. Labels are sized by their text, not by the badge's box the dictionary sized for its drawing.
             + "[data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist],"
@@ -74,8 +95,15 @@ extension EntryReadingFrame {
             // A fold head's wrapper adds no vertical space of its own around it.
             + ":has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])"
             + "{margin-block:0 !important;padding-block:0 !important}"
+            // A label owns 0.35em after it before the next word or control (§8.4); two labels in a row share it.
+            + "[data-xdict-role=label]{margin-inline-end:0.35em !important}"
+            + "[data-xdict-role=label]+[data-xdict-role=label]{margin-inline-start:0 !important}"
             // 7. Punctuation the source set against an element stays against it: its inline end spacing goes.
-            + "[data-xdict-hug],[data-xdict-hug] :last-child{margin-inline-end:0 !important;"
+            // A speaker's tag is drawn first (order -1), never last; a label that replaced the hugging element's last
+            // child is its last drawn text.
+            + "[data-xdict-hug],[data-xdict-hug] :last-child:not([data-xdict-tag]),"
+            + "[data-xdict-hug] [data-xdict-role=label]:has(+ [data-xdict-labelled]:last-child)"
+            + "{margin-inline-end:0 !important;"
             + "padding-inline-end:0 !important}"
             // A graphic the core turned into a label stays hidden, whatever display the dictionary gives images.
             + "[data-xdict-labelled]{display:none !important}}"

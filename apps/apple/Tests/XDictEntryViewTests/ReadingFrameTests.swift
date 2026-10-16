@@ -344,8 +344,15 @@ struct ReadingFrameTests {
         #expect(inLayer("[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;"))
         #expect(inLayer("[data-xdict-role=label][data-xdict-label=level],"))
         #expect(inLayer("{display:inline !important;width:auto !important;height:auto !important;"))
-        #expect(inLayer("[data-xdict-hug],[data-xdict-hug] :last-child{margin-inline-end:0 !important;"
-                        + "padding-inline-end:0 !important}"))
+        #expect(inLayer("[data-xdict-hug],[data-xdict-hug] :last-child:not([data-xdict-tag]),"
+                        + "[data-xdict-hug] [data-xdict-role=label]:has(+ [data-xdict-labelled]:last-child)"
+                        + "{margin-inline-end:0 !important;padding-inline-end:0 !important}"))
+        // The coordinator's review of 2026-10-16 (second round): labels and tags own their spacing (§8.4), and the
+        // marker and the chevron hang in a gutter on their block's first line box.
+        #expect(inLayer("[data-xdict-role=label]{margin-inline-end:0.35em !important}"))
+        #expect(inLayer("[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}"))
+        #expect(inLayer("[data-xdict-before=marker]::before{position:absolute !important;"))
+        #expect(inLayer("[data-xdict-control=disclosure]::before{position:absolute !important;"))
         #expect(inLayer("[data-xdict-control=disclosure]{margin-block:0 !important;"
                         + "padding-block:0 !important}"))
         #expect(inLayer(":has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])"

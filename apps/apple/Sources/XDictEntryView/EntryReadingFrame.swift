@@ -39,6 +39,12 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":root[data-xdict-theme=dark]{\(colours.map { "--xdict-\($0.0):\($0.1);" }.joined())}"
         + "body{contain:layout !important;overflow-wrap:anywhere}"
 
+    /// In original style a label the core read from the dictionary's own words (not one replacing a drawing) keeps the
+    /// colour of the box it sits in, which the dictionary chose for that box's background: the palette's grey on
+    /// LDOCE's blue "GRAMMAR" header read at 2.34:1 (gallery 2026-10-16).
+    static let originalLabelsCSS = ":root [data-xdict-role=label]:not([data-xdict-label=level],[data-xdict-label=wordlist],"
+        + "[data-xdict-label=frequency],[data-xdict-label=new]){color:inherit !important}"
+
     /// What a dictionary is shown with: nothing of the frame when the reader chose its "Original style" (ADR-0010 Q3).
     public func applied(originalStyle: Bool) -> EntryReadingFrame { originalStyle ? .minimal : self }
 
@@ -238,7 +244,7 @@ extension EntryScripts {
         // "Original style": the minimal frame and XDict's whole marks layer (the owner, 2026-10-16), no column or type.
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS + EntryReadingFrame.controlsCSS(ukTag: labels.ukTag, usTag: labels.usTag)
-                + EntryReadingFrame.marksCSS : ""
+                + EntryReadingFrame.marksCSS + EntryReadingFrame.originalLabelsCSS : ""
         let tokens = frame.subtracting(.serif).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         let face = frame.contains(.serif) ? "serif" : "sans"
         return """
