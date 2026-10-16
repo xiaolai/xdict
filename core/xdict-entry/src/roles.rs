@@ -1434,6 +1434,7 @@ fn sure_role(sure: profiles::Sure) -> Role {
         profiles::Sure::Pos => Role::Pos,
         profiles::Sure::Sensenum => Role::Sensenum,
         profiles::Sure::Example => Role::Example,
+        profiles::Sure::Heading => Role::Heading,
     }
 }
 
@@ -1660,6 +1661,7 @@ impl<'n> Tree<'n> {
             profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
             profiles::Sure::Sensenum => numbered(t),
             profiles::Sure::Example => f.len > 0,
+            profiles::Sure::Heading => f.len > 0 && f.len <= 120,
         };
         ok.then_some(sure)
     }

@@ -296,6 +296,11 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
         + "[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;"
         + "font-synthesis-style:none !important}"
+        // A section heading a markup table names: one size and weight in the body face; its colour stays.
+        + "[data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] "
+        + ":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font) !important;"
+        + "font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;"
+        + "font-weight:var(--xdict-weight-bold) !important;font-style:normal !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"

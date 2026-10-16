@@ -21,16 +21,18 @@ pub(crate) enum Sure {
     Pos,
     Sensenum,
     Example,
+    Heading,
 }
 
 impl Sure {
-    pub(crate) const ALL: [Sure; 3] = [Sure::Pos, Sure::Sensenum, Sure::Example];
+    pub(crate) const ALL: [Sure; 4] = [Sure::Pos, Sure::Sensenum, Sure::Example, Sure::Heading];
 
     pub(crate) fn name(self) -> &'static str {
         match self {
             Sure::Pos => "pos",
             Sure::Sensenum => "sensenum",
             Sure::Example => "example",
+            Sure::Heading => "heading",
         }
     }
 }
@@ -47,10 +49,12 @@ pub(crate) struct Profile {
     sensenum: Sel,
     /// Examples.
     example: Sel,
+    /// Section headings: a box's or a block's title ("Word Origin", "EXAMPLES FROM THE CORPUS").
+    heading: Sel,
 }
 
 /// A table that names nothing: a role a table leaves out stays the generic rule's.
-const NONE: Profile = Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[] };
+const NONE: Profile = Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[], heading: &[] };
 
 fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
     sel.iter().any(|(t, cs)| t.is_none_or(|t| t == tag) && cs.iter().all(|c| classes.iter().any(|k| k == c)))
@@ -65,6 +69,8 @@ impl Profile {
             Some(Sure::Sensenum)
         } else if matches(self.example, tag, classes) {
             Some(Sure::Example)
+        } else if matches(self.heading, tag, classes) {
+            Some(Sure::Heading)
         } else {
             None
         }
@@ -76,6 +82,7 @@ impl Profile {
             Sure::Pos => !self.pos.is_empty(),
             Sure::Sensenum => !self.sensenum.is_empty(),
             Sure::Example => !self.example.is_empty(),
+            Sure::Heading => !self.heading.is_empty(),
         }
     }
 }
@@ -89,10 +96,22 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["chwd", "collobox", "pos"],
         pos: SPAN_POS,
         sensenum: &[(Some("span"), &["sensenum"])],
+        // Its boxes' titles, a word set's name, a thesaurus section's.
+        heading: &[
+            (Some("span"), &["popheader"]),
+            (Some("span"), &["secheading"]),
+            (Some("span"), &["ws-head"]),
+            (Some("span"), &["popverbs"]),
+        ],
         ..NONE
     },
     // OALD 10: its sense numbers are the sheet's counters, not text.
-    Profile { signature: &["oup_icons", "ox3ksym_a1", "pos"], pos: SPAN_POS, ..NONE },
+    Profile {
+        signature: &["oup_icons", "ox3ksym_a1", "pos"],
+        pos: SPAN_POS,
+        heading: &[(Some("span"), &["box_title"])],
+        ..NONE
+    },
     // ODE 3 with Chinese (ODECN): `div.pos` heads a part-of-speech block, and may hold its inflections too
     // ("modal verb 3rd sing. present will"): only one that holds the part of speech alone is.
     Profile {
@@ -100,6 +119,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["pos"]), (Some("div"), &["pos"])],
         pos_words: true,
         sensenum: &[(Some("span"), &["num"])],
+        heading: &[(Some("div"), &["label"])],
         ..NONE
     },
     // Collins English Dictionary.
@@ -119,6 +139,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["collins_en_cn", "tips_box", "st"],
         pos: &[(Some("span"), &["st"])],
         sensenum: &[(Some("span"), &["num"]), (Some("span"), &["text_blue"])],
+        heading: &[(Some("div"), &["cc_addon_text"]), (Some("span"), &["ginfotitle"])],
         ..NONE
     },
     // Merriam-Webster's Advanced Learner's and Unabridged: `fl`, the functional label; `snum` and `sn`, a sense's
@@ -128,16 +149,24 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(None, &["fl"])],
         sensenum: &[(Some("div"), &["snum"]), (Some("em"), &["sn"])],
         example: &[(Some("div"), &["vi_content"])],
+        heading: &[(Some("span"), &["vfont"])],
         ..NONE
     },
     // Etymonline.
-    Profile { signature: &["word__name", "related__word", "word_c"], pos: &[(Some("span"), &["word_c"])], ..NONE },
+    Profile {
+        signature: &["word__name", "related__word", "word_c"],
+        pos: &[(Some("span"), &["word_c"])],
+        heading: &[(Some("h3"), &["h3_title"])],
+        ..NONE
+    },
     // Macmillan English Dictionary.
     Profile {
         signature: &["boxsensefull", "base-form", "part-of-speech"],
         pos: &[(Some("span"), &["part-of-speech"])],
         sensenum: &[(Some("div"), &["sense-num"])],
         example: &[(Some("p"), &["example"])],
+        // A thesaurus box's topic, and a block's title ("phrases"). Not `synonyms`, which also holds its word list.
+        heading: &[(Some("span"), &["h2"]), (Some("h2"), &["title"])],
         ..NONE
     },
     // NOAD 3: `p` also holds grammar words (`obj.`). Its sense numbers are unclassed `b`.
@@ -153,6 +182,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["ocd_hw", "ocd_pos"],
         pos: &[(None, &["ocd_pos"])],
         example: &[(Some("span"), &["ocd_ex"])],
+        heading: &[(Some("span"), &["ocd_ps"])],
         ..NONE
     },
     // ODE: `xv4`, an example in a sense; `lmn`, one in its list of further examples.
@@ -161,6 +191,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["xno"])],
         sensenum: &[(Some("span"), &["vkq"])],
         example: &[(Some("em"), &["xv4"]), (Some("li"), &["lmn"])],
+        heading: &[(Some("span"), &["tki"])],
         ..NONE
     },
     // 21st Century English–Chinese (YHDCD).
