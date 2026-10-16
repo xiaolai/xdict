@@ -49,7 +49,11 @@ enum GalleryRun {
         for name in byDict.keys.sorted() where options.only.isEmpty || options.only.contains(name) {
             let content = try core.open(root.appending(path: name))
             let chosen: [(String, SampledEntry)]
-            if let earlier = previous[name] {
+            if options.spread > 0, let all = byDict[name], !all.isEmpty {
+                let step = max(1, all.count / options.spread)
+                chosen = stride(from: 0, to: all.count, by: step).prefix(options.spread).enumerated()
+                    .map { ("spread\($0.offset + 1)", all[$0.element]) }
+            } else if let earlier = previous[name] {
                 chosen = earlier.map { ($0.kind, SampledEntry(dict: name, key: $0.key, occurrence: $0.occurrence)) }
             } else {
                 chosen = await choose(byDict[name] ?? [], content: content, failures: &failures)
@@ -101,13 +105,23 @@ enum GalleryRun {
                     let layout = mode.frame.isEmpty ? nil : await run(layoutScript, controller.webView)
                     if let layout {
                         for (key, limit, what) in [("dotWorst", 0.05, "a marker dot is not round"),
+                                                   ("dotSquare", 0.0, "a marker dot with square corners"),
                                                    ("pronOff", 0.0, "a speaker off its transcription's line"),
                                                    ("labelGapOver", 0.0, "a label too far from the next text"),
                                                    ("foldGapOver", 0.0, "fold heads too far apart"),
-                                                   ("spacePunct", 0.0, "a space before punctuation after a label")] {
+                                                   ("spacePunct", 0.0, "a space before punctuation after a label"),
+                                                   ("labelTight", 0.0, "a label or tag against the next text"),
+                                                   ("markerOff", 0.0, "a marker off its item's first line"),
+                                                   ("chevronOff", 0.0, "a chevron off its head's first line"),
+                                                   ("levelPill", 0.0, "a level pill the dictionary still draws"),
+                                                   ("foldSign", 0.0, "a dictionary fold sign beside the chevron")] {
                             if let v = layout[key] as? Double, v > limit {
                                 failures.append("\(name) \(mode.name) \(entry.key): \(what) (\(key) \(v))")
                             }
+                        }
+                        // The reading style's Q9; Original style keeps the dictionary's own rules.
+                        if !mode.original, let v = layout["hrDrawn"] as? Double, v > 0 {
+                            failures.append("\(name) \(mode.name) \(entry.key): a rule drawn as a line (hrDrawn \(v) \(layout["hrs"] ?? ""))")
                         }
                     }
                     let marked = mode.frame.isEmpty ? nil : await marks(controller.webView)
@@ -254,7 +268,7 @@ enum GalleryRun {
         var gap = parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.5 + 1;
         function trim(el) { return el ? el.outerHTML.replace(/\s+/g, ' ').slice(0, 300) : ''; }
         function seen(el) { return el.getClientRects().length > 0; }
-        var dotWorst = 0, dots = [];
+        var dotWorst = 0, dots = [], dotSquare = 0, squares = [];
         document.querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]').forEach(function (el) {
           ['before', 'after'].forEach(function (side) {
             if (el.getAttribute('data-xdict-' + side) !== 'marker' || !seen(el)) return;
@@ -263,6 +277,12 @@ enum GalleryRun {
             if (!(h > 0)) return;
             var d = Math.abs(w / h - 1);
             if (d > dotWorst) { dotWorst = d; dots = [ps.width, ps.height, ps.padding, ps.display, trim(el).slice(0, 120)]; }
+            // A square passes the ratio: each corner's radius must reach half the box.
+            var round = ['TopLeft', 'TopRight', 'BottomRight', 'BottomLeft'].every(function (k) {
+              var v = ps['border' + k + 'Radius'];
+              return /%/.test(v) ? parseFloat(v) >= 50 : parseFloat(v) >= Math.min(w, h) / 2 - 0.01;
+            });
+            if (!round) { dotSquare += 1; if (squares.length < 3) squares.push([ps.borderRadius, w, h, trim(el).slice(0, 120)]); }
           });
         });
         // The next element after `el` in document order matching `sel`, within `el`'s grandparent.
@@ -280,7 +300,17 @@ enum GalleryRun {
           // Its transcription: the text after it inside a transcription that holds it, else the next one near it.
           var ph = null, b = null;
           if (sp.closest('[data-xdict-phon]')) { var tn = nextText(sp); if (tn && tn.parentElement.closest('[data-xdict-phon]')) ph = tn; }
-          else { var pe = nextIn(sp, '[data-xdict-phon]', scope); if (pe && seen(pe)) ph = pe; }
+          else {
+            var pe = nextIn(sp, '[data-xdict-phon]', scope);
+            // The next transcription is the speaker's only when no word separates them (other speakers aside): a
+            // headword's speakers wrapped past its transcription do not own a later run-on's (LDOCE-EC).
+            if (pe && seen(pe)) {
+              var gapR = document.createRange(); gapR.setStartAfter(sp); gapR.setEndBefore(pe);
+              var gapF = gapR.cloneContents();
+              Array.prototype.forEach.call(gapF.querySelectorAll('[data-xdict-control]'), function (c) { c.remove(); });
+              if (!/[A-Za-zÀ-ɏ]/.test(gapF.textContent)) ph = pe;
+            }
+          }
           if (!ph) return;
           if (ph.nodeType === 3) { var tr = document.createRange(); tr.selectNodeContents(ph); b = tr.getClientRects()[0]; } else b = ph.getClientRects()[0];
           if (!b) return;
@@ -293,7 +323,7 @@ enum GalleryRun {
               for (var e = sp; e && e !== document.body && chain.length < 4; e = e.parentElement) {
                 var cs = getComputedStyle(e); chain.push(e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + ' ' + cs.display + '/' + cs.float + '/' + cs.position);
               }
-              pron.push([chain, trim(sp.parentElement && sp.parentElement.parentElement)]);
+              pron.push([chain, (sp.parentElement && sp.parentElement.parentElement ? (sp.closest("[data-xdict-speakers]:not([data-xdict-speakers] [data-xdict-speakers])") || sp).parentElement.outerHTML.replace(/\s+/g, ' ').slice(0, 1500) : '')]);
             }
           }
         });
@@ -337,7 +367,11 @@ enum GalleryRun {
             k += 1;
             // A space the dictionary's own sheet draws after the element (`::after{content:" "}`) is the source's.
             var drawnSpace = prev && /^"\s+"$/.test(getComputedStyle(prev.parentElement, '::after').content);
-            if (prev && !drawnSpace && /^[,;.]/.test(n.nodeValue) && !/\s$/.test(prev.nodeValue)) {
+            // Punctuation set after a control (CED's speaker after a transcription) is against the control, not the text.
+            var afterControl = false;
+            if (prev) { var cg = document.createRange(); cg.setStartAfter(prev); cg.setEnd(n, 0);
+              afterControl = !!cg.cloneContents().querySelector('[data-xdict-control],[data-xdict-icon]'); }
+            if (prev && !drawnSpace && !afterControl && /^[,;.]/.test(n.nodeValue) && !/\s$/.test(prev.nodeValue)) {
               var a = document.createRange(); a.selectNodeContents(prev); var ar = a.getClientRects(); ar = ar[ar.length - 1];
               var c = document.createRange(); c.setStart(n, 0); c.setEnd(n, 1); var cr = c.getClientRects()[0];
               var em = parseFloat(getComputedStyle(n.parentElement).fontSize);
@@ -367,9 +401,130 @@ enum GalleryRun {
           // The list rhythm: the line's own leading plus the gap token between blocks.
           if (d > lead + gap) { foldGapOver += 1; if (folds.length < 3) folds.push([Math.round(d), trim(p).slice(0, 150)]); }
         }
-        return { dotWorst: Math.round(dotWorst * 1000) / 1000, dots: dots, pronOff: pronOff, pronTotal: pronTotal, pron: pron,
+        // icon sweep §8.4: a label or an accent tag owns 0.35em of its own before the next word or control on its line.
+        var labelTight = 0, tight = [];
+        document.querySelectorAll('[data-xdict-role=label],[data-xdict-tag]').forEach(function (lb) {
+          if (!seen(lb) || (lb.parentElement && lb.parentElement.closest('[data-xdict-role=label]'))) return;
+          var n = nextText(lb);
+          // The label's own box (its letter-spacing included, its margin not): where its drawing ends.
+          var lr = lb.getClientRects(); lr = lr[lr.length - 1];
+          if (!lr) return;
+          var nr = null, what = '';
+          // A control, label or image before that text is the next thing on the line.
+          if (lb.hasAttribute('data-xdict-tag')) {
+            var ic = lb.parentElement && lb.parentElement.querySelector('[data-xdict-icon]');
+            if (ic && seen(ic)) { nr = ic.getBoundingClientRect(); what = 'icon'; }
+          }
+          var cands = nr ? [] : document.querySelectorAll('[data-xdict-control],[data-xdict-role=label],[data-xdict-icon],img,svg');
+          for (var i = 0; i < cands.length; i++) {
+            var c = cands[i];
+            if (lb.contains(c) || c.contains(lb) || !seen(c)) continue;
+            if (!(lb.compareDocumentPosition(c) & Node.DOCUMENT_POSITION_FOLLOWING)) continue;
+            if (n && (c.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_PRECEDING) && !c.contains(n)) break;
+            // A speaker is drawn from its accent tag (order -1): the gap runs to the tag's text, not the button's box.
+            var tg = c.querySelector('[data-xdict-tag]'), cr = c.getBoundingClientRect();
+            if (tg && seen(tg)) cr = tg.getBoundingClientRect();
+            else {
+              // A control's hit area (padding, offset by a negative margin) is not drawn: its content box is.
+              var ccs = getComputedStyle(c), pl = parseFloat(ccs.paddingLeft), pr = parseFloat(ccs.paddingRight);
+              cr = { left: cr.left + pl, right: cr.right - pr, top: cr.top + parseFloat(ccs.paddingTop), width: cr.width - pl - pr };
+            }
+            if (cr.width > 0) { nr = cr; what = [probeBox(c), probeBox(lb.parentElement), trim(c).slice(0, 100)]; }
+            break;
+          }
+          if (!nr && n) {
+            // Punctuation set against the label stays against it (§7).
+            if (/^[,;.:)\]]/.test(n.nodeValue)) return;
+            var r = document.createRange(); r.selectNodeContents(n); nr = r.getClientRects()[0]; what = n.nodeValue.slice(0, 16);
+          }
+          if (!nr || Math.abs(nr.top - lr.top) >= lr.height) return;
+          // A tag's gap is the surrounding text's 0.35em (it is set at 0.625em of it).
+          var em = parseFloat(getComputedStyle(lb.hasAttribute('data-xdict-tag') && lb.parentElement ? lb.parentElement : lb).fontSize);
+          var d = getComputedStyle(lb).direction === 'rtl' ? lr.left - nr.right : nr.left - lr.right;
+          // Far behind the label is not its neighbour: a label the dictionary floats to the line's end (CED).
+          if (d < 0.35 * em - 0.5 && d > -em) { labelTight += 1; if (tight.length < 3) tight.push([Math.round(d * 10) / 10, lb.textContent.slice(0, 20), what, probeBox(lb), trim(lb).slice(0, 120), getComputedStyle(lb).marginInlineEnd]); }
+        });
+        // A mark drawn at the head of a block sits on the line box of the block's first text, whatever display its
+        // content has: the marker dot (§3) and the fold chevron (§4).
+        function firstTextRect(el) {
+          var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), t;
+          while ((t = w.nextNode())) {
+            if (!/\S/.test(t.nodeValue) || !t.parentElement || !seen(t.parentElement)) continue;
+            var r = document.createRange(); r.selectNodeContents(t); var b = r.getClientRects()[0]; if (b) return b;
+          }
+          return null;
+        }
+        function headOff(sel, side, gapEm) {
+          var off = 0, out = [], total = 0;
+          document.querySelectorAll(sel).forEach(function (el) {
+            if (!seen(el)) return;
+            var ps = getComputedStyle(el, '::' + side);
+            if (ps.content === 'none' || ps.display === 'none') return;
+            var t = firstTextRect(el);
+            if (!t) return;
+            total += 1;
+            var cs = getComputedStyle(el), r = el.getBoundingClientRect();
+            var top = r.top + parseFloat(cs.borderTopWidth) + parseFloat(cs.paddingTop), h = parseFloat(ps.height);
+            var bad = false, mid = null;
+            if (ps.position === 'absolute') {
+              mid = r.top + parseFloat(cs.borderTopWidth) + parseFloat(ps.top) + h / 2;
+              bad = mid < t.top || mid > t.bottom;
+              // And it keeps 0.35em of its own before the text (§3), whatever indent the item's content has.
+              var w = parseFloat(ps.width), em = parseFloat(ps.fontSize), rtl = cs.direction === 'rtl';
+              var markEnd = rtl ? r.right - parseFloat(cs.borderRightWidth) - parseFloat(ps.right) - w
+                                : r.left + parseFloat(cs.borderLeftWidth) + parseFloat(ps.left) + w;
+              var room = rtl ? markEnd - t.right : t.left - markEnd;
+              if (room < gapEm * em - 0.5) { bad = true; mid = 'room ' + Math.round(room * 10) / 10; }
+            } else {
+              // In flow, the mark opens the block's first line: its first text must be on that line too.
+              bad = cs.display !== 'inline' && t.top - top > Math.max(h, t.height / 2);
+            }
+            if (bad) { off += 1; if (out.length < 3) out.push([ps.position, Math.round(t.top - top), mid === null || typeof mid === 'string' ? mid : Math.round(mid - t.top), trim(el).slice(0, 150), cs.textIndent, cs.paddingLeft, el.firstElementChild ? getComputedStyle(el.firstElementChild).marginLeft + '|' + getComputedStyle(el.firstElementChild).textIndent : '']); }
+          });
+          return [off, out, total];
+        }
+        var mk = headOff('[data-xdict-before=marker]', 'before', 0.35), ch = headOff('[data-xdict-control=disclosure]', 'before', 0.25);
+        // A CEFR level the dictionary draws as a pill or box is XDict's label, not the dictionary's drawing.
+        // Q9: in the reading style a rule is a gap, never a line.
+        var hrDrawn = 0, hrs = [];
+        document.querySelectorAll('hr').forEach(function (el) {
+          if (!seen(el)) return;
+          var cs = getComputedStyle(el);
+          var line = ['Top', 'Right', 'Bottom', 'Left'].some(function (s) { return parseFloat(cs['border' + s + 'Width']) > 0 && cs['border' + s + 'Style'] !== 'none' && cs['border' + s + 'Style'] !== 'hidden'; })
+            || (!/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) && el.getBoundingClientRect().height > 0)
+            || cs.backgroundImage !== 'none';
+          if (line) { hrDrawn += 1; if (hrs.length < 3) hrs.push([trim(el), cs.borderTop, cs.backgroundColor, cs.height]); }
+        });
+        // A dictionary's own fold sign inside a fold head XDict draws a chevron for: drawn boxes holding no word.
+        var foldSign = 0, signs = [];
+        document.querySelectorAll('[data-xdict-control=disclosure] *').forEach(function (el) {
+          if (!seen(el) || /\S/.test(el.textContent) || el.closest('[data-xdict-control=speaker],[data-xdict-role=label]') || el.matches('img,svg,[data-xdict-icon]')) return;
+          var r = el.getBoundingClientRect();
+          if (r.width < 2 && r.height < 2) return;
+          var cs = getComputedStyle(el);
+          var drawn = !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
+            || ['Top', 'Right', 'Bottom', 'Left'].some(function (s) { return parseFloat(cs['border' + s + 'Width']) > 0 && cs['border' + s + 'Style'] !== 'none'; });
+          if (drawn) { foldSign += 1; if (signs.length < 3) signs.push(trim(el).slice(0, 150)); }
+        });
+        var levelPill = 0, pills = [];
+        // Pills the core made labels (a level label in front of the text it replaced): reported, for review.
+        var pillLabels = Array.prototype.filter.call(document.querySelectorAll('[data-xdict-label=level] + [data-xdict-labelled]'),
+          function (el) { return /\S/.test(el.textContent); }).map(function (el) { return trim(el).slice(0, 120); });
+        document.querySelectorAll('body *').forEach(function (el) {
+          if (!seen(el) || el.closest('[data-xdict-role=label]') || !/^[abc][12]\+?$/i.test(el.textContent.trim())) return;
+          var cs = getComputedStyle(el);
+          var drawn = !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
+            || ['Top', 'Right', 'Bottom', 'Left'].some(function (s) { return parseFloat(cs['border' + s + 'Width']) > 0 && cs['border' + s + 'Style'] !== 'none'; });
+          if (!drawn) return;
+          levelPill += 1;
+          if (pills.length < 3) pills.push([trim(el).slice(0, 150), cs.backgroundColor, cs.borderTopWidth]);
+        });
+        return { dotWorst: Math.round(dotWorst * 1000) / 1000, dots: dots, dotSquare: dotSquare, squares: squares,
+                 heads: Array.prototype.map.call(document.querySelectorAll("[data-xdict-control=disclosure]"), function (h) { return trim(h).slice(0, 600); }).slice(0, 2), pronOff: pronOff, pronTotal: pronTotal, pron: pron,
                  labelGapOver: labelGapOver, labelGaps: labelGaps, foldGapOver: foldGapOver, folds: folds,
-                 foldHeads: heads.length, spacePunct: spacePunct, punct: punct };
+                 foldHeads: heads.length, spacePunct: spacePunct, punct: punct,
+                 labelTight: labelTight, tight: tight, markerOff: mk[0], markers: mk[1], markerTotal: mk[2],
+                 chevronOff: ch[0], chevrons: ch[1], chevronTotal: ch[2], levelPill: levelPill, pills: pills, pillLabels: pillLabels, hrDrawn: hrDrawn, hrs: hrs, foldSign: foldSign, signs: signs };
         """#
 
     static func run(_ script: String, _ webView: WKWebView?) async -> [String: Any]? {
