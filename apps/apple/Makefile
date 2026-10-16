@@ -177,6 +177,7 @@ test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/affected-graph-test.sh
 	@Tools/tests/remote-build-test.sh
+	@Tools/tests/lab-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-run-test.sh
