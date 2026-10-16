@@ -86,6 +86,7 @@ enum GalleryRun {
                             _ = await log.waitForFinished(before + 1, seconds: 20)
                         }
                     }
+                    if !mode.frame.isEmpty, let accent = accentCandidate { _ = await run(accent, controller.webView) }
                     try await Task.sleep(for: .milliseconds(500))
                     let file = "\(name)-\(kind)-\(mode.name).jpg"
                     let measured = await measure(controller.webView)
