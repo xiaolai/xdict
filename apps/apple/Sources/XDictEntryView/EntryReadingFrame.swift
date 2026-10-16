@@ -283,6 +283,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "font-weight:normal !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
         + "font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-accent) !important;"
         + "background:none !important}"
+        // A sense number a markup table names: one face, weight and colour; its size and place stay the dictionary's.
+        + "[data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])"
+        + "{font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
+        + "font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"

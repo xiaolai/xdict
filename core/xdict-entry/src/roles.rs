@@ -562,8 +562,8 @@ struct Node {
     big_font: bool,
     /// Its markup (element and classes, or its presentation), hashed: elements of the same markup.
     sig: u64,
-    /// The edition's markup table names it a part of speech (`profiles`).
-    profiled: bool,
+    /// The role the edition's markup table names it (`profiles`), before its text is checked.
+    profiled: Option<profiles::Sure>,
     /// What the icon rules read (`icons`), and what of it is inherited.
     icon: icons::Attrs,
     inherit: icons::Inherited,
@@ -662,7 +662,7 @@ impl<'s> Roles<'s> {
             image: false,
             big_font: false,
             sig: 0,
-            profiled: false,
+            profiled: None,
             icon: icons::Attrs::default(),
             inherit: icons::Inherited::default(),
         };
@@ -801,7 +801,7 @@ impl<'s> Roles<'s> {
         };
         let (icon, inherit) = icons::Attrs::of(&lower, &attrs, &classes, link, self.facts, &self.nodes, &self.stack);
         let pos = self.nodes.get(parent as usize).map_or(0, |p| p.kids.len()) as u32;
-        let profiled = self.profile.is_some_and(|p| p.is_pos(&lower, &classes));
+        let profiled = self.profile.and_then(|p| p.sure(&lower, &classes));
         let id = self.nodes.len() as u32;
         let at = self.buf_at();
         self.nodes.push(Node {
@@ -1001,14 +1001,19 @@ impl<'s> Roles<'s> {
                     decided.headwords.push((node.attr_at, node.end.map_or(usize::MAX, |(at, _)| at)));
                 }
                 let Some((name, kind)) = role.written() else { continue };
-                // Where the edition's markup has a table, its part of speech is the table's, and sure; the generic
-                // rule's guesses are not written there.
-                if *role == Role::Pos && self.profile.is_some() && !node.profiled {
+                // Where the edition's markup has a table that names a role, that role is the table's, and sure; the
+                // generic rule's guesses of it are not written there.
+                let sure = t.sure(i).filter(|s| sure_role(*s) == *role);
+                if sure.is_none()
+                    && self
+                        .profile
+                        .is_some_and(|p| profiles::Sure::ALL.iter().any(|s| sure_role(*s) == *role && p.decides(*s)))
+                {
                     continue;
                 }
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
-                if *role == Role::Pos && node.profiled {
-                    attr.push_str(" data-xdict-sure=\"pos\"");
+                if let Some(sure) = sure {
+                    attr.push_str(&format!(" data-xdict-sure=\"{}\"", sure.name()));
                 }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
@@ -1423,6 +1428,30 @@ fn shares(s: &str) -> (f64, f64) {
     if n == 0 { (0.0, 0.0) } else { (f64::from(c) / f64::from(n), f64::from(l) / f64::from(n)) }
 }
 
+/// The role a table's sure mark gives.
+fn sure_role(sure: profiles::Sure) -> Role {
+    match sure {
+        profiles::Sure::Pos => Role::Pos,
+        profiles::Sure::Sensenum => Role::Sensenum,
+    }
+}
+
+/// A number, for a table's sense-number selector, which already says where numbers are: what [`sense_number`] takes,
+/// a section number of up to three digits ("379"), a sub-sense ("1.1", "2.3."), or a Roman numeral sign ("Ⅱ").
+fn numbered(t: &str) -> bool {
+    let t = t.trim();
+    if sense_number(t) {
+        return true;
+    }
+    let body = t.strip_prefix('(').unwrap_or(t);
+    let body = body.strip_suffix(')').unwrap_or(body);
+    let body = body.strip_suffix('.').unwrap_or(body);
+    if body.chars().count() == 1 && body.chars().all(|c| matches!(u32::from(c), 0x2160..=0x217F)) {
+        return true;
+    }
+    !body.is_empty() && body.split('.').all(|p| (1..=3).contains(&p.len()) && p.bytes().all(|b| b.is_ascii_digit()))
+}
+
 fn sense_number(t: &str) -> bool {
     let body = t.strip_prefix('(').unwrap_or(t);
     let chars: Vec<char> = body.chars().collect();
@@ -1620,6 +1649,19 @@ impl<'n> Tree<'n> {
         Self { nodes, buf, feat, pos_words }
     }
 
+    /// The role the markup's table makes sure for the element, once its text passes the role's check: a part of
+    /// speech is 1–40 characters (and a part-of-speech word where the table asks); a sense number is a number.
+    fn sure(&self, i: usize) -> Option<profiles::Sure> {
+        let sure = self.nodes.get(i)?.profiled?;
+        let f = self.feat.get(i)?;
+        let t = f.short.as_deref().unwrap_or("");
+        let ok = match sure {
+            profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
+            profiles::Sure::Sensenum => numbered(t),
+        };
+        ok.then_some(sure)
+    }
+
     /// An element's whole text, spaces collapsed, when it is no longer than the rules read.
     fn whole(&self, i: usize) -> Option<String> {
         let n = self.nodes.get(i)?;
@@ -1747,17 +1789,12 @@ impl<'n> Tree<'n> {
         let short = |i: usize| f(i).short.as_deref().unwrap_or("");
         let audio = |i: usize| self.node(i).is_some_and(|x| x.audio_attr || (x.pathy && f(i).len == 0));
 
-        // 0. the markup's own part of speech (`profiles`), before any generic rule can take the element. In a link
-        // too: LDOCE's word lists and YHDCD's senses write it inside one (the holdout labels them part of speech).
+        // 0. the markup's own roles (`profiles`), before any generic rule can take the element. In a link too: LDOCE's
+        // word lists and YHDCD's senses write their parts of speech inside one (the holdout labels them so).
         for i in 1..n {
-            let Some(node) = self.node(i) else { continue };
-            if !node.profiled || f(i).len == 0 || f(i).len > 40 {
-                continue;
+            if let Some(sure) = self.sure(i) {
+                r.mark(i, sure_role(sure));
             }
-            if self.pos_words && !pos_text(short(i)) {
-                continue;
-            }
-            r.mark(i, Role::Pos);
         }
         // 1. audio
         let mut covered = 0usize;
@@ -1894,7 +1931,7 @@ impl<'n> Tree<'n> {
             let low = lower.trim_matches(|c: char| " .,;:()[]{}".contains(c));
             // An element the markup's table names was decided in pass 0, whichever way.
             if pos_text(t)
-                && !node.profiled
+                && node.profiled != Some(profiles::Sure::Pos)
                 && node.link != Lk::Lookup
                 && !(d.caps && t.chars().count() > 3 && leads(i) && d.order > 12 && node.flags.bold)
             {
