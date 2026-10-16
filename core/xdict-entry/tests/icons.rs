@@ -130,6 +130,11 @@ fn a_dot_inside_a_word_is_not_a_marker() {
     assert!(!o.contains("data-xdict-before"), "{o}");
     let o = out(r#"<div><span class="hsb"></span>an item</div><div>x <span class="hsb"></span> y</div>"#, sheet);
     assert_eq!(o.matches(r#"data-xdict-before="marker""#).count(), 2, "{o}");
+    // OALD: a list item's bullet after a block ending in a letter, before an item starting with one, is a marker:
+    // a block boundary is not the inside of a word.
+    let oald = r#"<span class="def">to advertise it</span><ul class="examples"><li><span class="x">He featured.</span></li><li><span class="x">The review.</span></li></ul>"#;
+    let o = out(oald, "ul.examples li::before{content:'\\2022'}");
+    assert_eq!(o.matches(r#"data-xdict-before="marker""#).count(), 2, "{o}");
 }
 
 #[test]

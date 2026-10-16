@@ -654,9 +654,23 @@ fn signs(nodes: &[Node], t: &Tree<'_>, marked: &[bool], count: &mut BTreeMap<Str
     }
 }
 
-/// Whether an element's text sits inside a word: a letter or digit right before it and right after it.
-fn within_word(buf: &str, (start, end): (u32, u32)) -> bool {
-    let (start, end) = (start as usize, end as usize);
+/// Whether an empty element sits inside a word: in its parent, text right before it and right after it (one inline
+/// run, no element or block boundary between), ending and starting with a letter or digit.
+fn within_word(nodes: &[Node], i: usize, buf: &str) -> bool {
+    let Some(node) = nodes.get(i) else { return false };
+    let (start, end) = (node.text.0 as usize, node.text.1 as usize);
+    if start != end {
+        return false;
+    }
+    let Some(parent) = nodes.get(node.parent as usize) else { return false };
+    let at = node.pos as usize;
+    if !matches!(parent.kids.get(at), Some(Kid::El(e)) if *e as usize == i) {
+        return false;
+    }
+    let text = |k: Option<&Kid>| matches!(k, Some(Kid::Text { blank: false, .. }));
+    if !(at > 0 && text(parent.kids.get(at - 1)) && text(parent.kids.get(at + 1))) {
+        return false;
+    }
     let before = buf.get(..start).and_then(|b| b.chars().next_back());
     let after = buf.get(end..).and_then(|a| a.chars().next());
     before.is_some_and(char::is_alphanumeric) && after.is_some_and(char::is_alphanumeric)
@@ -694,7 +708,7 @@ fn drawn(nodes: &[Node], buf: &str, disclosure: &[bool], count: &mut BTreeMap<St
             };
             let mark = match symbols::owned(*ch, symbols::treatment(*ch, &ctx), &*node.name == "li") {
                 // A dot drawn between two letters is a syllable break (NOAD's `ser•en•dip`), never a list marker.
-                Treatment::Marker if within_word(buf, node.text) => continue,
+                Treatment::Marker if within_word(nodes, i, buf) => continue,
                 Treatment::Marker => "marker",
                 Treatment::Xref => "lookup",
                 Treatment::Speaker | Treatment::Wordlist | Treatment::Drop | Treatment::Frequency => "drop",
