@@ -36,12 +36,41 @@ fn tiers_for_homographs_formulas_and_accents() {
     assert_eq!(keys(&f, "café", Mode::Reader)[0], ("café".into(), How::Exact));
 }
 
-/// Codex 20: a link is matched at tier 1 alone; a reader's query at both.
+/// A link tier 1 cannot answer falls back to tier 2, as a reader's query does (owner, 2026-10-16: about 3,107 links of
+/// the 25 need it); a link tier 1 answers never reaches tier 2.
 #[test]
-fn a_link_never_falls_into_tier_2() {
+fn a_link_falls_into_tier_2_only_when_tier_1_finds_nothing() {
     let f = file(&[("abbé", "an abbot")]);
     assert_eq!(keys(&f, "abbe", Mode::Reader), [("abbé".into(), How::Unmarked)]);
-    assert!(keys(&f, "abbe", Mode::Link).is_empty());
+    assert_eq!(keys(&f, "abbe", Mode::Link), [("abbé".into(), How::Unmarked)]);
+    let f = file(&[("abbe", "plain"), ("abbé", "an abbot")]);
+    assert_eq!(keys(&f, "abbe", Mode::Link), [("abbe".into(), How::Exact)]);
+}
+
+/// Several tier-2 keys for one link: all of them, in the lookup's own order (file order, as a reader's tier 2), so
+/// the first a click shows is always the same one.
+#[test]
+fn a_link_s_tier_2_keys_come_in_the_lookup_s_order() {
+    let f = file(&[("resumé", "b"), ("résumé", "a"), ("rèsume", "c")]);
+    let link = keys(&f, "resume", Mode::Link);
+    assert_eq!(link.len(), 3, "{link:?}");
+    assert!(link.iter().all(|(_, how)| *how == How::Unmarked), "{link:?}");
+    assert_eq!(link, keys(&f, "resume", Mode::Reader));
+    let order: Vec<usize> = matches(&f, "resume", Mode::Link).unwrap().into_iter().map(|(i, _)| i).collect();
+    let mut sorted = order.clone();
+    sorted.sort_unstable();
+    assert_eq!(order, sorted, "file order");
+}
+
+/// An internal key is reached by a link's tier 2 too, never by a reader's.
+#[test]
+fn a_link_s_tier_2_reaches_internal_keys() {
+    let mut entries: Vec<(String, String)> = (0..150).map(|i| (format!("@sénse{i}"), format!("sense {i}"))).collect();
+    entries.extend((0..1000).map(|i| (format!("word{i}"), "w".to_owned())));
+    let pairs: Vec<(&str, &str)> = entries.iter().map(|(k, v)| (k.as_str(), v.as_str())).collect();
+    let f = file(&pairs);
+    assert!(keys(&f, "@sense1", Mode::Reader).is_empty());
+    assert_eq!(keys(&f, "@sense1", Mode::Link), [("@sénse1".into(), How::Unmarked)]);
 }
 
 /// Codex 21 and finding 8: internal keys are reached by links, never offered to a reader.

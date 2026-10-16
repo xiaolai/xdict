@@ -36,7 +36,7 @@ public protocol LookupStage: AnyObject {
 public final class LookupScenario {
     public static let checkNames: Set<String> = [
         "setup.library", "scope.changesResults", "order.followsTheLibrary", "folding.exactLeads",
-        "folding.readerModeOnly", "phrase.resolvesIntact", "phrase.suggested", "internal.neverSuggested",
+        "folding.linkFallsBack", "phrase.resolvesIntact", "phrase.suggested", "internal.neverSuggested",
         "unavailable.toldApart", "unavailable.indexingEnds", "delay.othersNotHeld", "delay.entryKeepsTheOrder",
         "paging.everyRecord", "link.followedInLinkMode", "trail.backReturnsExactly", "trail.forwardReturnsExactly",
         "trail.originInOneStep",

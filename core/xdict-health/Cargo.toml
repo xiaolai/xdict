@@ -9,10 +9,10 @@ rust-version.workspace = true
 
 [dependencies]
 xdict-entry = { path = "../xdict-entry" }
+xdict-lookup = { path = "../xdict-lookup" }
 xdict-mdx = { path = "../xdict-mdx" }
 
 [dev-dependencies]
-xdict-lookup = { path = "../xdict-lookup" }
 xdict-mdx-writer = { path = "../xdict-mdx-writer" }
 
 [lints]

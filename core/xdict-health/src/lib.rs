@@ -383,21 +383,17 @@ enum Found {
 }
 
 impl Scan<'_> {
-    /// Whether a link's key is in the edition: at tier 1, as a link is matched, or failing that at tier 2.
+    /// Whether a link's key is in the edition, by the very matching a click uses (`xdict_lookup::matches` in link
+    /// mode): at tier 1, or failing that at tier 2.
     fn key(&mut self, key: &str) -> Found {
         if let Some(&f) = self.found.get(key) {
             return f;
         }
-        let nonempty = |r: Result<Vec<usize>, xdict_mdx::Error>| r.is_ok_and(|v| !v.is_empty());
-        let f = if nonempty(self.file.find(key)) {
-            Found::Tier1
-        } else if nonempty(self.file.find_unmarked(key)) || {
-            let plain = self.file.unmark(key);
-            plain != key && nonempty(self.file.find(&plain))
-        } {
-            Found::Folded
-        } else {
-            Found::Missing
+        let matched = xdict_lookup::matches(self.file, key, xdict_lookup::Mode::Link).ok();
+        let f = match matched.and_then(|m| m.into_iter().next()) {
+            None => Found::Missing,
+            Some((_, xdict_lookup::How::Unmarked)) => Found::Folded,
+            Some(_) => Found::Tier1,
         };
         if self.found.len() < MAX_CACHED_KEYS {
             self.found.insert(key.to_owned(), f);

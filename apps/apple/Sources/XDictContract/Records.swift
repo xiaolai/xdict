@@ -117,7 +117,7 @@ public struct EntryRef: Codable, Hashable, Sendable {
 public enum MatchMode: String, Codable, Hashable, Sendable {
     /// What a reader typed: both tiers, public keys.
     case reader
-    /// What a link named: tier 1 only, internal keys included.
+    /// What a link named: tier 1, else tier 2, internal keys included.
     case link
 }
 

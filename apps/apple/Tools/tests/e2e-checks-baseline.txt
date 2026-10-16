@@ -93,7 +93,7 @@ setup.library
 scope.changesResults
 order.followsTheLibrary
 folding.exactLeads
-folding.readerModeOnly
+folding.linkFallsBack
 phrase.resolvesIntact
 phrase.suggested
 internal.neverSuggested
