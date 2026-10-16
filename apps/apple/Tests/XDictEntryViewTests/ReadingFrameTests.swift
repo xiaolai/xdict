@@ -40,6 +40,13 @@ struct ReadingFrameTests {
         #expect(!css.contains("--xdict-base-size"))
     }
 
+    /// SIL's 7.000 fonts renamed "Charis SIL" to "Charis" and "Gentium Plus" to "Gentium": both names are asked for, the
+    /// new first, so either installed version sets the transcriptions.
+    @Test func thePhoneticFontsAreNamedOldAndNew() {
+        #expect(EntryReadingFrame.tokensCSS.contains(
+            #"--xdict-font-phon:"Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);"#))
+    }
+
     /// R10 and R13: the quirks-mode table reset undone; only an unwrapped data table scrolls itself, no table is made a
     /// block otherwise; the body contains a dictionary's fixed elements.
     @Test func tablesAndContainmentFollowTheSpec() {
