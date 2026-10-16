@@ -1,0 +1,2 @@
+# Fonts are binary: no diff, no merge, no end-of-line conversion.
+*.ttf binary

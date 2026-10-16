@@ -46,6 +46,8 @@ readonly LANGUAGES="en zh-Hans"
 # What the service must answer: the core's versions, read by `Tools/build-core.sh` through the same binding and archive.
 readonly CORE_VERSIONS=Generated/core-versions.json
 readonly SHIPPED_VERSIONS=Contents/Resources/CoreVersions.json
+# XDict's phonetic faces and their SIL OFL notices (EntryFonts), shipped byte for byte as released: never subset.
+readonly FONTS=Resources/Fonts
 readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 # `--timestamp` asks Apple's server and fails the way network calls fail (XiaolaiDict lost a release to it); a
 # development build signs offline and succeeds or fails on its first try.
@@ -150,6 +152,11 @@ verify_required_files() {
     done
     for file in Contents/Info.plist "$XPC_PATH/Contents/Info.plist" "$SHIPPED_VERSIONS"; do
         [ -s "$bundle/$file" ] || { echo "missing: $bundle/$file"; return 1; }
+    done
+    # Exactly the eight faces and two notices, each identical to the tracked file.
+    [ "$(find "$FONTS" -type f | wc -l | tr -d ' ')" = 10 ] || { echo "$FONTS is not the eight faces and two notices"; return 1; }
+    for file in "$FONTS"/*; do
+        cmp -s "$file" "$bundle/Contents/$file" || { echo "missing or changed: Contents/$file"; return 1; }
     done
     # A translation that never reached the bundle is a reader still reading English.
     for language in $LANGUAGES; do
@@ -352,6 +359,7 @@ assemble() {
     cp Resources/Info.plist "$contents/Info.plist"
     cp Resources/DictionaryService-Info.plist "$xpc/Contents/Info.plist"
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
+    cp -R "$FONTS" "$contents/Resources/"
 
     # The build number is stamped into the copies, never the tracked files, and read back: PlistBuddy reports success
     # for keys it did not write.
