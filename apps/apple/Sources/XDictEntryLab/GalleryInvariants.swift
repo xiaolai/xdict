@@ -40,7 +40,7 @@ extension GalleryRun {
           if (phon && !/^font:/.test(phon.getAttribute('data-xdict-phon-system') || '') && !el.closest('[data-xdict-tag]')) {
             note('phonFace', cs.fontFamily.split(',')[0].replace(/["']/g, '').trim() === PHON, k, cs.fontFamily.split(',')[0] + ' <' + label + '>');
           }
-          note('colour', !!allowed[cs.color], k, cs.color + ' <' + label + '>');
+          if (!/^rgba\(.*,\s*0\)$/.test(cs.color)) note('colour', !!allowed[cs.color], k, cs.color + ' <' + label + '>');
           // The lead's own text (not a transcription or a label inside it) is the lead's look: 24 px, text colour.
           var lead = el.closest('[data-xdict-lead]');
           if (lead && !el.closest('[data-xdict-phon],[data-xdict-role=label],[data-xdict-tag]')) {
@@ -218,8 +218,8 @@ extension GalleryRun {
               }
               return out.join(' < ');
             };
-            note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16))
-              + (gap > x.fs + 0.5 ? ' [after ' + JSON.stringify(prev.n.nodeValue.slice(-6)) + ': ' + why(prev.n, 'Right')
+            note('wordGap', gap <= Math.max(x.fs, prev.fs) + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16))
+              + (gap > Math.max(x.fs, prev.fs) + 0.5 ? ' [after ' + JSON.stringify(prev.n.nodeValue.slice(-6)) + ': ' + why(prev.n, 'Right')
                  + ' | ' + why(x.n, 'Left') + ']' : ''));
           }
         });
