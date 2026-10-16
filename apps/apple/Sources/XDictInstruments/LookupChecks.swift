@@ -51,8 +51,8 @@ extension LookupScenario {
     // MARK: - Folding (Q4) and links (I7)
 
     /// `folding.exactLeads`: in Alpha, typed `abbe` finds `abbe` (exact) before `abbé` (marks dropped), each with its
-    /// reason; Beta, which has only `abbé`, finds it. `folding.readerModeOnly`: Beta's link to `abbe`, looked up in
-    /// link mode, finds nothing there.
+    /// reason; Beta, which has only `abbé`, finds it. `folding.linkFallsBack`: Beta's link to `abbe`, looked up in
+    /// link mode, finds `abbé` there by tier 2, tier 1 having nothing (owner, 2026-10-16).
     func folding(_ findings: inout Findings) async {
         await search("abbe")
         let alpha = results("alpha")?.hits, beta = results("beta")?.hits
@@ -66,15 +66,16 @@ extension LookupScenario {
         guard let betaID = ids["beta"] else { return }
         model.follow("abbe", anchor: nil, from: betaID)
         await settle()
-        let linked = model.lookup, status = section("beta")?.status
+        let linked = model.lookup, followed = results("beta")?.hits
         let direct = await lookup("abbe", in: "beta", mode: .link)
         model.back()
         await settle()
-        findings.check("folding.readerModeOnly", linked?.mode == .link && linked?.scope == .one(betaID)
-                       && status == .noMatch(query: "abbe", mode: .link) && direct?.total == 0
+        findings.check("folding.linkFallsBack", linked?.mode == .link && linked?.scope == .one(betaID)
+                       && followed.map { $0.map(\.headword) } == ["abbé"] && followed?.first?.how == .unmarked
+                       && direct?.total == 1
                        && model.lookup?.query == "abbe" && model.lookup?.mode == .reader,
                        "Beta's link to abbe: looked up as \(String(describing: linked?.mode)) in "
-                       + "\(String(describing: linked?.scope)), Beta \(String(describing: status)); asked directly in "
+                       + "\(String(describing: linked?.scope)), Beta \(describe(followed)); asked directly in "
                        + "link mode: \(direct.map { "\($0.total) hits" } ?? "no answer"); Back to "
                        + "\(model.lookup?.query ?? "nothing") (\(String(describing: model.lookup?.mode)))")
     }

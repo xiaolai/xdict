@@ -53,7 +53,7 @@
     hostile.suite.production
 
 @ lookup.core default kit,fixtures,corpus group=lookup
-    lookup.access setup.library scope.changesResults order.followsTheLibrary folding.exactLeads folding.readerModeOnly
+    lookup.access setup.library scope.changesResults order.followsTheLibrary folding.exactLeads folding.linkFallsBack
     phrase.resolvesIntact phrase.suggested internal.neverSuggested internal.ldoce unavailable.toldApart
     unavailable.indexingEnds delay.othersNotHeld delay.entryKeepsTheOrder link.followedInLinkMode
     trail.backReturnsExactly trail.forwardReturnsExactly trail.originInOneStep entry.supersededLoadIsNoLink

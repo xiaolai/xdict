@@ -271,7 +271,7 @@ record! {
     pub enum MatchMode {
         /// What a reader typed: both tiers, public keys.
         Reader,
-        /// What a link named: tier 1 only, internal keys included.
+        /// What a link named: tier 1, else tier 2, internal keys included.
         Link,
     }
 

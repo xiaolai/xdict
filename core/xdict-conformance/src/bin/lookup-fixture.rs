@@ -5,7 +5,7 @@
 //!   and `abbé` both (the exact one leads, with its reason), a phrase key `take off` beside `take` and `take on`, 120 internal keys `@take_box_000`… (a shape is
 //!   internal only as a pattern of the file: ADR-0007 decision 16), whose folded forms begin as `take` does, and
 //!   `hop0`…`hop5`, tall entries each linking to the next: a trail.
-//! - `beta/`: `abbé` alone (reader mode finds it typed `abbe`, link mode does not), `apple`, and `see-abbe`, whose link
+//! - `beta/`: `abbé` alone (found typed `abbe`, and by a link to `abbe` through tier 2), `apple`, and `see-abbe`, whose link
 //!   names `abbe`.
 //! - `records/`: 66,355 records under the one key `EC`, as the sentence library files them (ADR-0007 row 23).
 //! - `damaged/`: a wrong header checksum; `locked/`: the registration-code bit: refused, each for its reason.

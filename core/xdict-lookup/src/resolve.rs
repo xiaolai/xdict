@@ -11,7 +11,7 @@ use xdict_mdx::{Budget, Error, File, Kept};
 pub enum Mode {
     /// What a reader typed: both tiers, public keys only.
     Reader,
-    /// What a link or a redirect named: tier 1 only, internal keys included.
+    /// What a link named: tier 1, else tier 2, internal keys included.
     Link,
 }
 
@@ -63,8 +63,9 @@ pub const FAN_OUT: usize = 1024;
 /// Targets one lookup tries in all, over every matched key: past it the lookup is refused, as too large.
 pub const STEPS: usize = 1 << 16;
 
-/// The keys `query` matches, in order: tier 1 (exact spellings, then folded, each in file order), then, for a
-/// reader, tier 2 (in file order). A reader is never given an internal key.
+/// The keys `query` matches, in order: tier 1 (exact spellings, then folded, each in file order), then tier 2 (in
+/// file order): for a reader always, for a link only when tier 1 found nothing. A reader is never given an internal
+/// key. The health check counts a link broken by this same function (`xdict-health`).
 pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>, Error> {
     let mut found = Vec::new();
     let mut seen = HashSet::new();
@@ -75,7 +76,8 @@ pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>
         }
         seen.insert(i);
     }
-    if mode == Mode::Reader {
+    // A link reaches tier 2 only when tier 1 found nothing (owner, 2026-10-16).
+    if mode == Mode::Reader || seen.is_empty() {
         let plain = file.unmark(query);
         let mut tier2 = file.find_unmarked(query)?;
         if plain != query {
@@ -84,7 +86,7 @@ pub fn matches(file: &File, query: &str, mode: Mode) -> Result<Vec<(usize, How)>
         tier2.sort_unstable();
         tier2.dedup();
         for i in tier2 {
-            if !seen.contains(&i) && file.is_public(i)? {
+            if !seen.contains(&i) && (mode == Mode::Link || file.is_public(i)?) {
                 found.push((i, How::Unmarked));
             }
         }
