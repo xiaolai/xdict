@@ -355,6 +355,8 @@ struct ReadingFrameTests {
         // The coordinator's review of 2026-10-16 (second round): labels and tags own their spacing (§8.4), and the
         // marker and the chevron hang in a gutter on their block's first line box.
         #expect(inLayer("[data-xdict-role=label]{margin-inline-end:0.35em !important}"))
+        #expect(inLayer("margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}"),
+                "a speaker keeps the control spacing from the word before it")
         #expect(inLayer("[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}"))
         #expect(inLayer("[data-xdict-before=marker]::before{position:absolute !important;"))
         #expect(inLayer("[data-xdict-control=disclosure]::before{position:absolute !important;"))

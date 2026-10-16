@@ -73,7 +73,10 @@ extension EntryReadingFrame {
             + "[data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;"
             + "width:auto !important;height:auto !important;min-width:0 !important;min-height:0 !important;"
             + "float:none !important;position:static !important;vertical-align:baseline !important;"
-            + "flex-wrap:nowrap !important;line-height:inherit !important}"
+            + "flex-wrap:nowrap !important;line-height:inherit !important;"
+            // The control spacing before it: its hit area's negative margin, less 0.25em, so a speaker set against the
+            // word before it (CED's after a transcription, COBUILD's after a headword) does not touch it.
+            + "margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}"
             + "[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}"
             // A box holding only speakers (the core's `data-xdict-speakers`) sits on its transcription's line.
             + "[data-xdict-speakers]{display:inline !important;float:none !important;position:static !important;"
