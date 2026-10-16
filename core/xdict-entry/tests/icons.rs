@@ -137,6 +137,19 @@ fn a_dot_inside_a_word_is_not_a_marker() {
     assert_eq!(o.matches(r#"data-xdict-before="marker""#).count(), 2, "{o}");
 }
 
+/// A bullet a sheet draws as a list counter's glyph is a bullet too: MWU's `.related-to dt:before{content:counter(r89,
+/// square)}` drew a grey square before "Synonyms:".
+#[test]
+fn a_counter_drawn_as_a_bullet_is_a_marker() {
+    let html = r#"<div class="related-to"><dl><dt>Synonyms:</dt><dd>adroitness</dd></dl></div>"#;
+    for style in ["square", "disc", "circle"] {
+        let o = out(html, &format!(".related-to dt:before{{content:counter(r89, {style})}}"));
+        assert!(o.contains(r#"<dt data-xdict-before="marker""#), "{style}: {o}");
+    }
+    let o = out(html, ".related-to dt:before{content:counter(r89, decimal)}");
+    assert!(!o.contains("data-xdict-before"), "a number is not a bullet: {o}");
+}
+
 #[test]
 fn a_bullet_a_sheet_draws_becomes_xdicts_marker_and_an_arrow_its_lookup_mark() {
     let sheet = r#".x-g::before{content:"•"} .xr::before{content:"☞ "} .nb::after{content:"※"}"#;

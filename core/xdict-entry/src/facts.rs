@@ -400,7 +400,21 @@ fn drawn_symbol(decls: &[(String, String)]) -> Option<char> {
     let content = decls.iter().rev().find(|(n, _)| n.eq_ignore_ascii_case("content")).map(|(_, v)| v)?;
     let text = crate::rewrite::unescaped(content);
     let quoted = text.split(['"', '\'']).skip(1).step_by(2).collect::<String>();
-    quoted.chars().find(|c| crate::symbols::symbol(*c))
+    quoted.chars().find(|c| crate::symbols::symbol(*c)).or_else(|| counter_bullet(&text))
+}
+
+/// The bullet a list counter draws as its glyph (`counter(n, square)`; MWU's "Synonyms:"): disc, circle or square.
+/// A numbering style is no bullet.
+fn counter_bullet(content: &str) -> Option<char> {
+    let lower = content.to_ascii_lowercase();
+    let at = lower.find("counter")?;
+    let args = lower.get(at..)?.split_once('(')?.1.split_once(')')?.0;
+    match args.rsplit(',').next()?.trim() {
+        "disc" => Some('•'),
+        "circle" => Some('◦'),
+        "square" => Some('▪'),
+        _ => None,
+    }
 }
 
 /// A compound as a glyph rule reads it: its element and classes, attribute tests ignored; `None` when it names a
