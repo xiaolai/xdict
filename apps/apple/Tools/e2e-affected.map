@@ -71,6 +71,7 @@ apps/apple/Tools/gallery/*                          none
 # sub-stage, 46 min). **A change to what every stage shares (the run's setup, the lock, the evidence, `flunk`) names its
 # stages or runs T2.**
 apps/apple/Tools/build-lab.sh                       hostile.binding hostile.faults lookup.core
+apps/apple/Tools/e2e-run.sh                         launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
 apps/apple/Tools/e2e.sh                             launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
 apps/apple/Makefile                                 launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
 apps/apple/Tools/build-fixtures.sh                  service library.generated lookup selection services panel menubar shortcut

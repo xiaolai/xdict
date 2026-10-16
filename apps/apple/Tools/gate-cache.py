@@ -5,6 +5,8 @@
         one line a gate: `run<TAB>gate<TAB>key<TAB>why` or `skip<TAB>gate<TAB>key<TAB>date of the pass`
     gate-cache.py record <gate> <key> <seconds> <host>
         file a pass of <gate> under <key> (only after `status` computed that key on this machine)
+    gate-cache.py corpus-id <folder>
+        a corpus's identity (names, sizes, times), for a `--fact`
     gate-cache.py select-paths <path ...>
         the E2E sub-stages those paths select, by the map (for the tests: the same as Tools/e2e-affected.sh)
 
@@ -275,6 +277,25 @@ def record(args):
         out.write(line + "\n")
 
 
+def corpus_id(args):
+    """The corpus's identity, as a fact: every file's path, size and modification time under it, digested. Never its
+    content (tens of GB); a dictionary replaced in place changes its size or time."""
+    if len(args) != 1 or not os.path.isdir(args[0]):
+        die("usage: corpus-id <folder>")
+    h = hashlib.sha256()
+    count = 0
+    for root, dirs, names in os.walk(args[0]):
+        dirs.sort()
+        for name in sorted(names):
+            path = os.path.join(root, name)
+            st = os.stat(path)
+            h.update(f"{os.path.relpath(path, args[0])} {st.st_size} {int(st.st_mtime)}\n".encode())
+            count += 1
+    if not count:
+        die(f"the corpus {args[0]} holds no file")
+    print(h.hexdigest()[:16])
+
+
 def select_paths(paths):
     selector = Selector()
     wanted = set()
@@ -294,6 +315,8 @@ def main():
         status(args)
     elif command == "record":
         record(args)
+    elif command == "corpus-id":
+        corpus_id(args)
     elif command == "select-paths":
         select_paths(args)
     else:

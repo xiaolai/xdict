@@ -30,6 +30,14 @@ record() {
     local ran=$1 host=$2 os=$3 tree=$4 mode=$5 now name result seconds
     now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     mkdir -p "$(dirname "$STATUS")"
+    # Two E2E Macs of one split run file their rows at once (Tools/e2e-run.sh): one writer at a time, or a row is lost.
+    local lock=$STATUS.lock waited=0
+    until /usr/bin/shlock -f "$lock" -p $$; do
+        waited=$((waited + 1))
+        [ "$waited" -lt 300 ] || { echo "e2e-status: $lock held for 5 min; nothing recorded" >&2; return 1; }
+        sleep 1
+    done
+    trap 'rm -f "$lock"' EXIT
     { grep "^RESULT	\|^TIME	" || true; } | awk -F'\t' '
         $1 == "TIME" { took[$2] = $3; next }
         { if ($3 == "fail") seen[$2] = "fail"; else if (!($2 in seen)) seen[$2] = "pass" }
@@ -94,7 +102,7 @@ require_fresh() {
     if [ -n "$problems" ]; then
         echo "no fresh end-to-end pass of this source tree (${tree:0:12}) for the $mode release:" >&2
         sed 's/^/  /' <<<"$problems" >&2
-        echo "run make e2e on this tree, then release" >&2
+        echo "run make e2e FULL=1 E2E_SPLIT=0 on this tree (one E2E Mac, every sub-stage), then release" >&2
         return 1
     fi
     echo "end-to-end evidence for the $mode release: $stages — each passed on a development bundle of this tree (${tree:0:12})"
