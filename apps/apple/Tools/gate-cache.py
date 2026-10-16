@@ -14,9 +14,8 @@
 working copy's tree (committed or not, as `Tools/source-tree.sh` reads it), plus the facts the caller names (rustc,
 SwiftLint, the corpus). The gates' inputs:
 
-    core, entries, memory, lookup-corpus   core/
-    bindings                               core/ conformance/
-    apple-test                             apps/apple/ core/ conformance/
+    core, apple-test, entries, lookup-corpus, mdx-v3, bindings, memory
+                                           the paths in PREFIXES below, AGENTS.md's table
     e2e:<sub-stage>                        every file `Tools/e2e-affected.map` gives that sub-stage: its rule names it,
                                            names its stage, names `all`, or no rule names the file (fail-safe). `e2e` is
                                            every default sub-stage; `e2e-all` every one
@@ -48,9 +47,17 @@ MAP = os.environ.get("XDICT_E2E_AFFECTED_MAP") or os.path.join(HERE, "e2e-affect
 CACHE = os.environ.get("XDICT_GATE_CACHE") or os.path.expanduser("~/.cache/xdict-gates")
 PASSES = os.path.join(CACHE, "passes.tsv")
 MANIFESTS = os.path.join(CACHE, "manifests")
+# AGENTS.md "Which gates a change needs", as paths (a prefix or a whole path).
 PREFIXES = {
-    "core": ["core/"], "entries": ["core/"], "memory": ["core/"], "lookup-corpus": ["core/"],
-    "bindings": ["core/", "conformance/"], "apple-test": ["apps/apple/", "core/", "conformance/"],
+    "core": ["core/"],
+    "apple-test": ["apps/apple/", "core/", "conformance/"],
+    "entries": ["core/xdict-entry/", "core/xdict-core/"],
+    "lookup-corpus": ["core/xdict-lookup/", "core/xdict-mdx/src/text.rs", "core/xdict-mdx/src/index.rs"],
+    "mdx-v3": ["core/xdict-mdx/src/v3.rs", "core/xdict-mdx/src/cipher.rs", "core/xdict-mdx/tests/mdxbuilder.rs"],
+    "bindings": ["core/xdict-ffi/", "core/xdict-wasm/", "core/xdict-conformance/", "core/binding-env.sh",
+                 "conformance/"],
+    "memory": ["core/xdict-entry/", "core/xdict-core/src/", "core/xdict-ffi/", "core/xdict-wasm/",
+               "core/binding-env.sh"],
 }
 LINE = re.compile(r"^v1\t[0-9a-f]{64}\t[a-z0-9.:-]+\t\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\t\d+\t[A-Za-z0-9._-]+$")
 

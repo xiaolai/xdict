@@ -41,7 +41,7 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-status e2e-evidence \
+.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-pending land e2e-status e2e-evidence \
 	e2e-evidence-bootstrap release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -59,8 +59,9 @@ NOTARY_PROFILE ?= chase-notary
 E2E_HOST ?= $(E2E_HOST_MACOS)
 # Another Mac's SSH name to compile on; unset, this one compiles.
 BUILD_HOST ?=
-# The owner's 25 dictionaries, for the `entries` stage; unset, that stage fails as not measured.
-E2E_CORPUS ?=
+# The owner's dictionaries (the 24), for the corpus sub-stages; unset, they fail as not measured. Defaults to
+# $HOME/xdict-corpus/the24 where that exists, an absolute path (a `~` in it once reached a host unexpanded).
+E2E_CORPUS ?= $(wildcard $(HOME)/xdict-corpus/the24)
 
 # Handed to the scripts through the environment, as data, never spliced into a shell command.
 export XDICT_SIGN_ID := $(SIGN_ID)
@@ -149,6 +150,14 @@ e2e-quick:
 e2e-affected:
 	@$(MAKE) e2e
 
+# **E2E runs only on the owner's demand** (2026-10-17): what `make e2e` would run, and why, running nothing.
+e2e-pending:
+	@Tools/e2e-run.sh pending
+
+# Every gate the tree needs, in parallel on the build Macs, cached; no E2E, only the line of what is pending.
+land:
+	@Tools/land.sh
+
 # The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
@@ -156,6 +165,7 @@ test-tools:
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-run-test.sh
+	@Tools/tests/land-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py
