@@ -1076,7 +1076,7 @@ pub(crate) fn normalized_html<'s>(
         headwords = decided.headwords;
     }
     if let Some(marker) = out.marker.take() {
-        let (marks, found) = marker.finish(&headwords);
+        let (marks, found) = marker.finish(&headwords, entry.and_then(|e| e.is_key));
         counts.transcriptions.add(&found);
         edits.extend(marks.into_iter().map(insert));
     }

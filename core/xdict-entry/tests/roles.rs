@@ -13,7 +13,7 @@ fn entry(text: &str, key: &str) -> (String, Counts) {
         BASE,
         "",
         &style,
-        &Entry { key, resource: None, strip_off_for_tests: false },
+        &Entry { key, resource: None, is_key: None, strip_off_for_tests: false },
         usize::MAX,
     )
     .unwrap()
@@ -101,7 +101,7 @@ fn a_remote_recording_speaks_the_word() {
 fn a_missing_image_leaves_its_alt() {
     let style = Style::of_sheets([]);
     let has = |p: &str| p == "here.png";
-    let e = Entry { key: "x", resource: Some(&has), strip_off_for_tests: false };
+    let e = Entry { key: "x", resource: Some(&has), is_key: None, strip_off_for_tests: false };
     let text = r#"<img src="here.png"><img src="gone.png" alt="a picture">"#;
     let (out, counts) = entry_normalized_within(text, BASE, "", &style, &e, usize::MAX).unwrap();
     assert!(out.contains("here.png") && !out.contains("gone.png") && out.contains("a picture"), "{out}");
@@ -157,4 +157,36 @@ fn a_headword_with_stress_marks_is_not_a_transcription() {
     let (out, _) =
         entry(r#"<b class="hw">pet</b> <span class="ph">ˈpet</span> <span class="d">an animal</span>"#, "pet");
     assert!(out.contains(r#"data-xdict-phon-system="none" class="ph""#), "{out}");
+}
+
+/// A text that is a key of the edition once its stress marks are gone is a headword or a derived form written with
+/// stress (CALD's phrases, Chambers' derived forms), not a transcription; except the record's own key as one word
+/// stressed only before it (`ˈpet`).
+#[test]
+fn a_key_of_the_edition_written_with_stress_is_not_a_transcription() {
+    let keys = ["county council", "autobiographer", "pet", "petal"];
+    let is_key = |k: &str| keys.iter().any(|x| x.eq_ignore_ascii_case(k));
+    let marked = |text: &str, key: &str| {
+        let style = Style::of_sheets([".pos{font-style:italic}"]);
+        let e = Entry { key, resource: None, is_key: Some(&is_key), strip_off_for_tests: false };
+        entry_normalized_within(text, BASE, "", &style, &e, usize::MAX).unwrap().1.transcriptions.marked
+    };
+    // The record's headword in its own element first, as the dictionaries write it.
+    let marked_in = |inner: &str, key: &str| {
+        marked(
+            &format!(r#"<b class="hw">{key}</b> <span class="d">a sense</span> <span class="r">{inner}</span>"#),
+            key,
+        )
+    };
+    // CALD: a phrase inside another record, stressed only before its words.
+    assert_eq!(marked_in("ˌcounty ˈcouncil", "county"), 0);
+    // Chambers: a derived form stressed inside the word.
+    assert_eq!(marked_in("autobiogˈrapher", "autobiography"), 0);
+    // Another record's key, one word, stressed before it: a headword there, not this record's transcription.
+    assert_eq!(marked_in("ˈpet", "petal"), 0);
+    // The record's own key, one word, stressed before it: ODE's transcription.
+    assert_eq!(marked_in("ˈpet", "pet"), 1);
+    // Not a key: a transcription.
+    assert_eq!(marked_in("ˈpɛtl̩", "petal"), 1);
+    assert_eq!(marked_in("ˌdaʊn ˈvest", "down"), 1);
 }

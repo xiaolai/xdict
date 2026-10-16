@@ -14,7 +14,7 @@ fn entry_with(text: &str, style: &Style, resource: Option<&dyn Fn(&str) -> bool>
         BASE,
         "",
         style,
-        &Entry { key: "about", resource, strip_off_for_tests: false },
+        &Entry { key: "about", resource, is_key: None, strip_off_for_tests: false },
         usize::MAX,
     )
     .unwrap()

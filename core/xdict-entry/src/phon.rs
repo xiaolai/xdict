@@ -21,6 +21,8 @@ use crate::normalize::{KeptReason, Style};
 
 /// The most characters of text an element may hold and still be a transcription.
 const TEXT_CHARS: usize = 160;
+/// The most keys an entry's marking asks the edition for: one per undelimited candidate.
+const KEY_ASKS: usize = 256;
 /// The deepest open element followed.
 const MAX_DEPTH: usize = 256;
 /// How far down the stack an end tag looks for its element.
@@ -185,8 +187,7 @@ impl Marker {
         let system = (!open.fixed && !open.over)
             .then(|| transcription(&open.text))
             .flatten()
-            .filter(|s| !(open.delimited && *s == "none"))
-            .filter(|s| !(*s == "none" && self.key.as_deref().is_some_and(|k| stressed_word(&open.text, k))));
+            .filter(|s| !(open.delimited && *s == "none"));
         let delimited = open.delimited || system.is_some_and(|s| s != "none");
         let parent = self.stack.last_mut();
         if let Some(parent) = parent {
@@ -235,8 +236,12 @@ impl Marker {
 
     /// The insertions to make, by output position: every element still open closed.
     /// `headwords`: the extents of the elements the core gives the headword role, inside which nothing undelimited
-    /// is a transcription.
-    pub(crate) fn finish(mut self, headwords: &[(usize, usize)]) -> (Vec<(usize, String)>, Transcriptions) {
+    /// is a transcription. `is_key`: whether the edition holds a key ([`crate::Entry::is_key`]).
+    pub(crate) fn finish(
+        mut self,
+        headwords: &[(usize, usize)],
+        is_key: Option<&dyn Fn(&str) -> bool>,
+    ) -> (Vec<(usize, String)>, Transcriptions) {
         while !self.stack.is_empty() {
             self.close();
         }
@@ -254,7 +259,14 @@ impl Marker {
             let i = merged.partition_point(|(from, _)| *from <= at);
             i.checked_sub(1).and_then(|i| merged.get(i)).is_some_and(|(_, to)| at < *to)
         };
-        self.done.retain(|m| !(m.end.is_none() && m.system == "none" && in_headword(m.at)));
+        let mut asks = KEY_ASKS;
+        let key = self.key.take();
+        self.done.retain(|m| {
+            if m.end.is_some() || m.system != "none" {
+                return true;
+            }
+            !(in_headword(m.at) || written_with_stress(&m.text, key.as_deref(), is_key, &mut asks))
+        });
         for m in &self.done {
             self.found.marked += 1;
             *self.found.systems.entry(m.system.clone()).or_default() += 1;
@@ -343,12 +355,27 @@ fn folded(text: &str) -> String {
     kept.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
 }
 
-/// Whether `text` is the key `key` (folded) with stress marked inside a word (`cataˈractical`), as a headword
-/// is; a stress mark only before a word (`ˈpet`) is a transcription's as much as a headword's, so it is not enough.
-fn stressed_word(text: &str, key: &str) -> bool {
+/// Whether an undelimited candidate is a key written with stress: the record's key, or any key of the edition
+/// (`is_key`, asked at most `asks` times an entry), once [`folded`]. A headword or a derived form (CALD's
+/// `ˌcounty ˈcouncil`, Chambers' `autobiogˈrapher`), not a transcription; except the record's own key as one word
+/// stressed only before it (ODE's `ˈpet`), which is a transcription's spelling as much as a headword's.
+fn written_with_stress(text: &str, key: Option<&str>, is_key: Option<&dyn Fn(&str) -> bool>, asks: &mut usize) -> bool {
+    let f = folded(text);
+    if f.is_empty() {
+        return false;
+    }
+    let own = key == Some(f.as_str());
     let inside =
         text.split_whitespace().any(|w| w.char_indices().any(|(i, c)| i > 0 && matches!(c, 'ˈ' | 'ˌ' | '·' | '‧')));
-    inside && folded(text) == key
+    if own && !inside && !f.contains(' ') {
+        return false;
+    }
+    own || is_key.is_some_and(|is_key| {
+        *asks > 0 && {
+            *asks -= 1;
+            is_key(&f)
+        }
+    })
 }
 
 fn append(open: &mut Open, text: &str) {
@@ -493,7 +520,7 @@ mod tests {
         let mut m = Marker::new(&Style::of_sheets([""]), None);
         m.done = vec![mark(30), mark(12)];
         // The block 0..100 holds the headword 10..20 and the transcription at 30.
-        let (inserts, found) = m.finish(&[(0, 100), (10, 20)]);
+        let (inserts, found) = m.finish(&[(0, 100), (10, 20)], None);
         assert_eq!(inserts.iter().map(|(at, _)| *at).collect::<Vec<_>>(), [30]);
         assert_eq!(found.marked, 1);
     }

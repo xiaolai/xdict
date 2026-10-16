@@ -27,7 +27,7 @@ const HANDLERS: [&str; 3] = ["onerror", "onclick", "onload"];
 fn rewrite(text: &str) -> String {
     let style = Style::of_sheets([]);
     let has = |p: &str| !p.contains("gone");
-    let entry = Entry { key: "w", resource: Some(&has), strip_off_for_tests: false };
+    let entry = Entry { key: "w", resource: Some(&has), is_key: None, strip_off_for_tests: false };
     entry_normalized_within(text, BASE, "", &style, &entry, usize::MAX).unwrap().0
 }
 
