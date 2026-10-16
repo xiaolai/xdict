@@ -34,6 +34,7 @@ apps/apple/Tools/e2e-affected.*                     none
 apps/apple/Tools/strings.sh                         none
 apps/apple/Tools/compiler-warnings.py               none
 apps/apple/Tools/release.sh                         none
+apps/apple/Tools/gate-cache.py                      none
 apps/apple/.swiftlint.yml                           none
 
 # --- The core: the sample of the owner's dictionaries comes from one of its tests; a crate read only by rendering,
