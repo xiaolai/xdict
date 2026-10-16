@@ -26,8 +26,9 @@
 #                     and is not copied again when the E2E Mac has it
 #   make e2e-quick STAGES=<sub-stages>
 #                     T0: those sub-stages, fail-fast
-#   make e2e-affected [BASE=macos-v1]
-#                     T1: the sub-stages the change since BASE needs (Tools/e2e-affected.sh), or nothing
+#   make e2e-affected T1: the same as `make e2e`, whose default is now only the sub-stages whose inputs changed since
+#                     their last pass (Tools/e2e-run.sh); FULL=1 all of them, STAGES=… those, forced
+#   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
 #   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`)
 #   make e2e-status   what each sub-stage last did, how long it took, on which build, of which source tree
 #   make release BUILD_NUMBER=<n>
@@ -116,28 +117,37 @@ strings: core
 # **A bundle already built of this very tree is not built again** (`.build/XDict.app.source-tree`, written here once the
 # tree is still the same after the build, removed by Tools/build-bundle.sh whenever it publishes another bundle): its
 # lint, tests and build ran when it was made.
+# **Only what changed since its last pass runs** (Tools/e2e-run.sh select, by Tools/gate-cache.py): nothing at all, and
+# no bundle built, when nothing did. STAGES=<names> forces those; FULL=1 every default sub-stage. The run is split over
+# both E2E Macs (E2E_HOST_MACOS, E2E_HOST_MACOS_2) unless E2E_SPLIT=0 or E2E_HOST is given; a release's evidence is one
+# Mac's: `make e2e FULL=1 E2E_SPLIT=0`.
+E2E_SPLIT ?= $(if $(filter command line,$(origin E2E_HOST)),0,1)
+FULL ?=
+export XDICT_E2E_HOST_2 := $(E2E_HOST_MACOS_2)
+export XDICT_E2E_SPLIT := $(E2E_SPLIT)
+export XDICT_E2E_STAGES := $(STAGES)
+export XDICT_E2E_FULL := $(FULL)
 e2e:
 	@[ -n "$(E2E_HOST)" ] || { echo "E2E_HOST_MACOS is not set: put the E2E Mac's SSH name in $(REPO)/local.mk" >&2; exit 1; }
-	@tree=$$(Tools/source-tree.sh) && \
+	@stages=$$(Tools/e2e-run.sh select) || exit 1; stages=$$(echo $$stages); \
+	if [ -z "$$stages" ]; then echo "e2e: every sub-stage is unchanged since its last pass; nothing to run (FULL=1 runs them all)"; exit 0; fi; \
+	tree=$$(Tools/source-tree.sh) && \
 	if [ -d .build/XDict.app ] && [ "$$(cat .build/XDict.app.source-tree 2>/dev/null)" = "$$tree" ]; then \
 	  echo "e2e: .build/XDict.app is built of this tree already; not building it again"; \
 	else \
 	  $(MAKE) app && { [ "$$(Tools/source-tree.sh)" != "$$tree" ] || echo "$$tree" >.build/XDict.app.source-tree; }; \
 	fi && \
 	XDICT_E2E_TREE="$$tree" XDICT_E2E_ONLY="$(E2E_ONLY)" XDICT_E2E_FAILFAST="$(E2E_FAILFAST)" \
-	  Tools/e2e.sh "$(E2E_HOST)" $(STAGES)
+	  Tools/e2e-run.sh run $$stages
 
 # T0: the sub-stages named, stopping at the first that fails.
 e2e-quick:
 	@[ -n "$(STAGES)" ] || { echo "e2e-quick: name the sub-stages, STAGES=\"hostile.production lookup.core\"" >&2; exit 1; }
 	@$(MAKE) e2e E2E_FAILFAST=1
 
-# T1: the sub-stages the change since BASE needs (Tools/e2e-affected.map); nothing when it needs none.
-BASE ?= macos-v1
+# T1: now the same as `make e2e`: what changed since each sub-stage's last pass (BASE is no longer read).
 e2e-affected:
-	@stages=$$(Tools/e2e-affected.sh "$(BASE)" | tr '\n' ' ') || exit 1; \
-	if [ -z "$$stages" ]; then echo "e2e-affected: the change since $(BASE) needs no end-to-end sub-stage"; \
-	else echo "e2e-affected: since $(BASE): $$stages"; $(MAKE) e2e STAGES="$$stages"; fi
+	@$(MAKE) e2e
 
 # The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
 test-tools:
@@ -145,6 +155,7 @@ test-tools:
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
+	@Tools/tests/e2e-run-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py
