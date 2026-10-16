@@ -329,18 +329,16 @@ enum GalleryRun {
           if (!b) return;
           pronTotal += 1;
           var a = sp.getBoundingClientRect(), mid = (a.top + a.bottom) / 2;
-          // The column wrapped them: the speaker ends its line and the transcription would not have fitted after it
-          // (CALD "remember sb to sb" at the column's width). The line break is the width's, not the layout's.
-          var col = document.body.getBoundingClientRect(), cs0 = getComputedStyle(document.body);
-          var wrapped = b.top >= a.bottom - 1 && a.right + 4 + b.width > col.right - parseFloat(cs0.paddingRight);
-          if (!wrapped && (mid < b.top || mid > b.bottom)) {
+          // Wrapping is no excuse: a speaker and the transcription it plays stay on one line (the break goes before the
+          // speaker), so a wrap between them counts.
+          if (mid < b.top || mid > b.bottom) {
             pronOff += 1;
             if (pron.length < 3) {
               var chain = [];
               for (var e = sp; e && e !== document.body && chain.length < 4; e = e.parentElement) {
                 var cs = getComputedStyle(e); chain.push(e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + ' ' + cs.display + '/' + cs.float + '/' + cs.position);
               }
-              pron.push([chain, (sp.parentElement && sp.parentElement.parentElement ? (sp.closest("[data-xdict-speakers]:not([data-xdict-speakers] [data-xdict-speakers])") || sp).parentElement.outerHTML.replace(/\s+/g, ' ').slice(0, 1500) : '')]);
+              pron.push([chain, (sp.parentElement && sp.parentElement.parentElement ? (sp.closest("[data-xdict-speakers]:not([data-xdict-speakers] [data-xdict-speakers])") || sp).parentElement.outerHTML.replace(/\s+/g, ' ').slice(0, 4000) : '')]);
             }
           }
         });

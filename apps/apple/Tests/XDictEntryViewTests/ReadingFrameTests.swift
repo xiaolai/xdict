@@ -370,4 +370,36 @@ struct ReadingFrameTests {
         #expect(inLayer(":has(> [data-xdict-labelled]):not(:has(> :not([data-xdict-labelled],[data-xdict-role=label])))"))
         #expect(inLayer("[data-xdict-labelled]{display:none !important}"))
     }
+
+    /// A speaker and the transcription it plays stay on one line (CALD "remember sb to sb" broke between them): the
+    /// run from a speaker through blanks and other speakers to the next transcription is held together; anything else
+    /// in between (a word) ends it, and a transcription first or alone is left as it is.
+    @Test func aSpeakerRunsOnToItsTranscription() throws {
+        let context = try #require(JSContext())
+        context.exceptionHandler = { _, exception in Issue.record("JS: \(exception?.toString() ?? "?")") }
+        context.evaluateScript(EntryScripts.pronRunCore)
+        // Nodes: 's' a speaker, 'p' a transcription, ' ' a blank text, 'w' a word or other element.
+        context.evaluateScript("""
+            function chain(kinds) {
+              var nodes = kinds.split('').map(function (k, i) { return { kind: k, i: i, nextSibling: null }; });
+              for (var i = 0; i + 1 < nodes.length; i++) nodes[i].nextSibling = nodes[i + 1];
+              return nodes;
+            }
+            var is = { speaker: function (n) { return n.kind === 's'; }, phon: function (n) { return n.kind === 'p'; },
+                       blank: function (n) { return n.kind === ' '; } };
+            function run(kinds) {
+              var r = XDictPronRunCore.run(chain(kinds)[0], is);
+              return r ? r.first.i + '-' + r.last.i : 'none';
+            }
+            """)
+        func run(_ kinds: String) -> String? { context.evaluateScript("run('\(kinds)')")?.toString() }
+        #expect(run("s s p") == "0-4", "two speakers and their transcription")
+        #expect(run("sp") == "0-1")
+        #expect(run("s w p") == "none", "a word between: not its transcription")
+        #expect(run("s") == "none")
+        #expect(run("s  ") == "none")
+        #expect(EntryReadingFrame.marksCSS.contains("[data-xdict-pron-run]{white-space:nowrap !important}"))
+        #expect(EntryScripts.installed(.light, frame: .minimal).contains(EntryScripts.pronRunDOM))
+        #expect(EntryScripts.installed(.light, frame: .all).contains(EntryScripts.pronRunDOM))
+    }
 }
