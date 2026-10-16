@@ -33,6 +33,12 @@
 #                    a positive control: a JSON file of versions the `launch` stage expects instead of the bundle's own
 #                    (`Contents/Resources/CoreVersions.json`), to show a wrong expectation failing. A run with it
 #                    records nothing
+#   XDICT_E2E_HOSTILE_CONCURRENCY
+#                    how many hostile cases one lab runs at once in each hostile run (the lab's `--concurrency`; 4,
+#                    its old default, unless set). Each case has its own ports and `.invalid` names and the WebRTC
+#                    cases run alone, so more at once is the case-level sharding of the runs' sleeping; **UNMEASURED**
+#                    above 4 (2026-10-17): before it becomes the default, the owner runs hostile.controls and
+#                    hostile.production at 4 and at 8 (then 16) on one tree and their verdicts must be identical
 #   XDICT_E2E_SSH    the program that reaches the host, `ssh` unless set. The host guard's positive control sets it to
 #                    `Tools/tests/ssh-to-this-mac`, which runs the remote side here
 #   XDICT_E2E_CORPUS the owner's 25 dictionaries (`../dictionary-collection/corpus`), for `entries.*`, `library.corpus`,
@@ -174,6 +180,8 @@ if [ "$source_tree" != - ] && [ "$source_tree" != "$(Tools/source-tree.sh)" ]; t
     source_tree=-
 fi
 expected_override=${XDICT_E2E_EXPECTED_VERSIONS:-}
+hostile_concurrency=${XDICT_E2E_HOSTILE_CONCURRENCY:-4}
+case $hostile_concurrency in [1-9] | [1-9][0-9]) ;; *) fail "XDICT_E2E_HOSTILE_CONCURRENCY is 1 to 99; got '$hostile_concurrency'" ;; esac
 [ -z "$expected_override" ] || [ -s "$expected_override" ] || fail "XDICT_E2E_EXPECTED_VERSIONS names no file: $expected_override"
 echo "sub-stages: $SUBSTAGES${only:+(only $only)}"
 [ "$NEEDS" = "  " ] || echo "they need:$NEEDS"
@@ -219,6 +227,10 @@ on_host "codesign --verify --strict --deep '$REMOTE_DIR/XDict.app'" || fail "the
 # The plan the remote side runs by: each check's sub-stage (`Tools/e2e-plan.sh table`), and the checks asked for.
 bash "$PLAN" table | on_host "cat > '$REMOTE_DIR/plan.tsv'" || fail "could not copy the plan"
 printf '%s\n' "$only" | tr ',' '\n' | on_host "cat > '$REMOTE_DIR/only'" || fail "could not copy the checks asked for"
+# How many hostile cases one lab runs at once (`--concurrency`); each case has its own ports and names, and the
+# WebRTC cases run alone whatever the number.
+printf '%s\n' "$hostile_concurrency" | on_host "cat > '$REMOTE_DIR/hostile-concurrency'" \
+    || fail "could not copy the hostile concurrency"
 # **The fixtures are written here, by the core's own MDX writer, and shipped with the bundle**: no dictionary content
 # enters the repository or reaches the E2E Mac from anywhere else (Tools/build-fixtures.sh).
 if needs fixtures; then
@@ -750,13 +762,15 @@ hostile_prepare() {
 }
 # hostile_runs <label...>: those configurations' observed runs.
 hostile_runs() {
-    local label off style
+    local label off style concurrency
+    concurrency=$(cat "$home/hostile-concurrency" 2>/dev/null || true)
+    case $concurrency in [1-9] | [1-9][0-9]) ;; *) flunk - "hostile: no concurrency was shipped ($concurrency)"; return 0 ;; esac
     for label in "$@"; do
         rm -rf "${hostile_results:?}/$label" "$hostile_results/$label.log"
         off=$(python3 -I "$kit/analyze.py" off "$kit/cases.json" "$label")
         # The reader's "Original style" (ADR-0010 Q3) for the runs `cases.json` lists under it.
         style=$(python3 -I "$kit/analyze.py" original "$kit/cases.json" "$label")
-        if "$kit/run-hostile.sh" "$kit" "$hostile_results" "$label" hostile ${off:+--disable-layer "$off"} $style \
+        if "$kit/run-hostile.sh" "$kit" "$hostile_results" "$label" hostile ${off:+--disable-layer "$off"} $style --concurrency "$concurrency" \
             >"$hostile_results/$label.log" 2>&1; then
             echo "      $label: $(tail -1 "$hostile_results/$label.log")"
         else
