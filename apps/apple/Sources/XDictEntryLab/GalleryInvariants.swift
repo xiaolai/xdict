@@ -10,7 +10,7 @@ extension GalleryRun {
     static let invariantsScript = #"""
         var SIZES = [12, 14, 16, 18, 20, 24], SPACE = [0, 4, 8, 12, 16, 24];
         function near(v, set) { return set.some(function (s) { return Math.abs(Math.abs(v) - s) < 0.51; }); }
-        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {} };
+        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {} };
         Object.keys(checks).forEach(function (k) { checks[k] = { total: 0, off: 0, values: {} }; });
         function note(check, ok, n, value) {
           var c = checks[check]; c.total += n;
@@ -79,6 +79,21 @@ extension GalleryRun {
             note('margin', near(v, SPACE), 1, Math.round(v * 10) / 10 + 'px <' + e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).split(' ')[0] : '') + '>');
           });
         }
+        // One list, one marker: where any item of a list carries XDict's marker, every item does, never the
+        // dictionary's bullet beside it (OALD's examples, gallery 2026-10-16).
+        document.querySelectorAll('ul,ol').forEach(function (list) {
+          var kinds = {};
+          Array.prototype.forEach.call(list.children, function (li) {
+            if (li.tagName !== 'LI' || !li.getClientRects().length) return;
+            var ours = /^marker$/.test(li.getAttribute('data-xdict-before') || li.getAttribute('data-xdict-after') || '');
+            var b = getComputedStyle(li, '::before').content, ls = getComputedStyle(li);
+            var theirs = !ours && ((b !== 'none' && b !== 'normal' && b !== '""') || (ls.display === 'list-item' && ls.listStyleType !== 'none'));
+            kinds[ours ? 'xdict' : theirs ? 'dictionary' : 'none'] = true;
+          });
+          if (!kinds.xdict) return;
+          var mixed = !!kinds.dictionary;
+          note('listMarkers', !mixed, 1, 'mixed markers in <' + list.tagName.toLowerCase() + (list.className ? '.' + String(list.className).split(' ')[0] : '') + '>');
+        });
         Object.keys(checks).forEach(function (k) {
           var c = checks[k];
           c.values = Object.keys(c.values).sort(function (a, b) { return c.values[b] - c.values[a]; })
