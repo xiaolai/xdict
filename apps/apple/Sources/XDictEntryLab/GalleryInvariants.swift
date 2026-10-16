@@ -10,7 +10,7 @@ extension GalleryRun {
     static let invariantsScript = #"""
         var SIZES = [12, 14, 16, 18, 20, 24], SPACE = [0, 4, 8, 12, 16, 24];
         function near(v, set) { return set.some(function (s) { return Math.abs(Math.abs(v) - s) < 0.51; }); }
-        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {} };
+        var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {}, cellWords: {}, punctLine: {}, wordGap: {} };
         Object.keys(checks).forEach(function (k) { checks[k] = { total: 0, off: 0, values: {} }; });
         function note(check, ok, n, value) {
           var c = checks[check]; c.total += n;
@@ -97,6 +97,46 @@ extension GalleryRun {
           if (!kinds.xdict) return;
           var mixed = !!kinds.dictionary;
           note('listMarkers', !mixed, 1, 'mixed markers in <' + list.tagName.toLowerCase() + (list.className ? '.' + String(list.className).split(' ')[0] : '') + '>');
+        });
+        // No word is broken inside a table cell (CALD's level table: one letter a line, as `overflow-wrap:anywhere`
+        // let the column shrink to one character).
+        var cells = document.querySelectorAll('td,th'), seen = 0;
+        for (var ci = 0; ci < cells.length && seen < 3000; ci++) {
+          if (!cells[ci].getClientRects().length) continue;
+          var tw = document.createTreeWalker(cells[ci], NodeFilter.SHOW_TEXT);
+          for (var tn = tw.nextNode(); tn && seen < 3000; tn = tw.nextNode()) {
+            var re = /\S{2,}/g, mm;
+            while ((mm = re.exec(tn.nodeValue)) && seen < 3000) {
+              seen += 1;
+              var wr = document.createRange(); wr.setStart(tn, mm.index); wr.setEnd(tn, mm.index + mm[0].length);
+              var tops = {};
+              Array.prototype.forEach.call(wr.getClientRects(), function (q) { if (q.width > 0) tops[Math.round(q.top)] = 1; });
+              var lines = Object.keys(tops).length;
+              note('cellWords', lines <= 1, 1, mm[0].slice(0, 20) + ' over ' + lines + ' lines');
+            }
+          }
+        }
+        // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
+        // pronunciations; "banc   bench").
+        var texts = [], tw2 = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+        for (var t2 = tw2.nextNode(); t2 && texts.length < 20000; t2 = tw2.nextNode()) {
+          if (!t2.nodeValue.trim() || !t2.parentElement) continue;
+          if (t2.parentElement.closest('[data-xdict-control],[data-xdict-tag],td,th,svg')) continue;
+          var r2 = document.createRange(); r2.selectNodeContents(t2);
+          var rs = Array.prototype.filter.call(r2.getClientRects(), function (q) { return q.width > 0; });
+          if (rs.length) texts.push({ n: t2, first: rs[0], last: rs[rs.length - 1], fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
+        }
+        texts.forEach(function (x, k) {
+          var prev = texts[k - 1], next = texts[k + 1];
+          var same = function (a, b) { return a && b && Math.abs(a.top - b.top) < 2 && Math.abs(a.bottom - b.bottom) < 2; };
+          if (/^[\s\p{P}]+$/u.test(x.n.nodeValue)) {
+            var alone = !same(prev && prev.last, x.first) && !same(x.last, next && next.first);
+            note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line');
+          }
+          if (prev && same(prev.last, x.first) && x.first.left > prev.last.right) {
+            var gap = x.first.left - prev.last.right;
+            note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16)));
+          }
         });
         Object.keys(checks).forEach(function (k) {
           var c = checks[k];
