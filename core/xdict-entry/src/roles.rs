@@ -603,6 +603,9 @@ pub(crate) struct Roles<'s> {
     strip: bool,
     /// The element closed last, while nothing visible has followed it: punctuation written next hugs it.
     hug_after: Option<u32>,
+    /// Punctuation alone after a block it hugs, to move inside that block: the block, where the text is written, and
+    /// the punctuation.
+    moves: Vec<(u32, usize, String)>,
     /// Elements closed right before a `,` `;` or `.` (the frame drops their inline end spacing).
     hugs: Vec<u32>,
 }
@@ -665,6 +668,7 @@ impl<'s> Roles<'s> {
             glyphs: Vec::new(),
             strip: true,
             hug_after: None,
+            moves: Vec::new(),
             hugs: Vec::new(),
         }
     }
@@ -832,6 +836,15 @@ impl<'s> Roles<'s> {
             && self.hugs.len() < MAX_NODES
         {
             self.hugs.push(n);
+            // Nothing but punctuation and space: after a block it would stand on a line of its own (OED's "," between
+            // two pronunciation blocks), so it goes inside the block, before its end tag.
+            let punct = raw.trim_end().len();
+            if let Some(at) = at
+                && let Some(p) = raw.get(..punct)
+                && p.chars().all(|c| matches!(c, ',' | ';' | '.' | ':'))
+            {
+                self.moves.push((n, at, p.to_owned()));
+            }
         }
         if let (Some(at), Some(&top)) = (at, self.stack.last()) {
             let first = self.nodes.get(top as usize).is_some_and(|n| !n.direct);
@@ -920,6 +933,15 @@ impl<'s> Roles<'s> {
             if let Some(n) = self.nodes.get(i as usize) {
                 decided.edits.push((n.attr_at, n.attr_at, " data-xdict-hug".into()));
             }
+        }
+        for (i, at, punct) in &self.moves {
+            let Some(n) = self.nodes.get(*i as usize) else { continue };
+            let Some((end, _)) = n.end else { continue };
+            if !block_tag(&n.name) || end > *at {
+                continue;
+            }
+            decided.edits.push((end, end, punct.clone()));
+            decided.edits.push((*at, *at + punct.len(), String::new()));
         }
         if self.key.is_some() {
             for (i, role) in roles.iter().enumerate() {
@@ -1030,8 +1052,17 @@ impl<'s> Roles<'s> {
     fn empty(&self, decided: &mut Decided) {
         let n = self.nodes.len();
         let mut blank = vec![false; n];
+        // Whether a blank element holds any space at all: it goes as one space then, as nothing otherwise.
+        let mut spaced = vec![false; n];
         for i in (1..n).rev() {
             let Some(node) = self.nodes.get(i) else { continue };
+            let has = node.kids.iter().any(|k| match k {
+                Kid::Text { .. } => true,
+                Kid::El(c) => spaced.get(*c as usize).copied().unwrap_or(false),
+            });
+            if let Some(sp) = spaced.get_mut(i) {
+                *sp = has;
+            }
             let kids_blank = node.kids.iter().all(|k| match k {
                 Kid::Text { blank, .. } => *blank,
                 Kid::El(c) => blank.get(*c as usize).copied().unwrap_or(false),
@@ -1045,10 +1076,17 @@ impl<'s> Roles<'s> {
             if !blank.get(i).copied().unwrap_or(false) {
                 continue;
             }
-            let Some((end, after)) = node.end else { continue };
-            decided.edits.push((node.start, node.tag_end, String::new()));
-            decided.edits.push((end, after, String::new()));
+            let Some((_, after)) = node.end else { continue };
             decided.empty += 1;
+            // The outermost blank element goes whole, its blank content with it, as one space if it held any: content
+            // left behind (OED's `<span class="ieWhitespace">&nbsp;</span>`) is a no-break space beside the source's
+            // own, a gap of two (gallery 2026-10-16); one space keeps the words it separated apart and collapses with
+            // theirs.
+            if blank.get(node.parent as usize).copied().unwrap_or(false) {
+                continue;
+            }
+            let space = if spaced.get(i).copied().unwrap_or(false) { " " } else { "" };
+            decided.edits.push((node.start, after, space.into()));
         }
     }
 }
@@ -1984,6 +2022,15 @@ impl<'n> Tree<'n> {
         }
         r.roles
     }
+}
+
+/// An element the browser lays out as a block by default: punctuation after it would start a line of its own.
+fn block_tag(name: &str) -> bool {
+    matches!(
+        name,
+        "div" | "p" | "li" | "dd" | "dt" | "dl" | "ul" | "ol" | "section" | "article" | "blockquote" | "h1" | "h2"
+            | "h3" | "h4" | "h5" | "h6" | "header" | "footer" | "aside" | "table" | "center" | "address" | "figure"
+    )
 }
 
 /// Roles as they are assigned: the first one an element gets is its role; `desc` holds, per element, the roles

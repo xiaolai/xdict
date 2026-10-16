@@ -388,3 +388,15 @@ fn original_style_does_every_marks_work_and_normalizes_nothing() {
     let (sheet_out, _) = xdict_entry::css_styled_within(sheet, BASE, "", &style, true, usize::MAX).unwrap();
     assert!(sheet_out.contains("color:#123456") && !sheet_out.contains("content:url"), "{sheet_out}");
 }
+
+/// A speaker's image the package does not hold is not replaced by its `alt` (OED's `<img alt="sound">` inside each
+/// sound link read "sound" beside XDict's speaker); outside a speaker the `alt` still stands in for the image.
+#[test]
+fn a_speakers_missing_image_leaves_no_alt_text() {
+    let none = |_: &str| false;
+    let oed = r#"Brit.<a href="sound://gb_1.mp3"><img src="file://img/sound.png" alt="sound"></img></a>/<span class="phonetics">ˈbaŋkə</span>/ <img src="map.png" alt="a map">"#;
+    let (o, _) = entry_with(oed, &Style::of_sheets([""]), Some(&none));
+    assert!(!o.contains("sound</"), "{o}");
+    assert!(!o.contains(">sound"), "{o}");
+    assert!(o.contains("a map"), "{o}");
+}
