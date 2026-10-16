@@ -520,11 +520,14 @@ extension EntryScripts {
               // dictionary draws is (the core marks those). A list the dictionary marks itself, its own ::before
               // drawing, is left alone, so nothing gets two. Reading style only.
               function bullets() {
-                if (!SPACE_CAP || !document.body) return;
+                // Only once the dictionary's sheets apply (`load`): before, every item reads the browser's default disc,
+                // and COBUILD-EC's examples, which its sheet sets `list-style:none`, got a marker they never show.
+                if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
                 Array.prototype.forEach.call(document.body.getElementsByTagName('li'), function (li, i) {
-                  if (i > 65536 || li.hasAttribute('data-xdict-before')) return;
-                  var st = getComputedStyle(li);
+                  if (i > 65536 || li.hasAttribute('data-xdict-before') || !li.getClientRects().length) return;
+                  var st = getComputedStyle(li), mk = getComputedStyle(li, '::marker');
                   if (st.display !== 'list-item' || !/^(disc|circle|square)$/.test(st.listStyleType) || st.listStyleImage !== 'none') return;
+                  if (!(parseFloat(mk.fontSize) > 0) || st.visibility === 'hidden') return;
                   var own = getComputedStyle(li, '::before').content;
                   if (own && own !== 'none' && own !== 'normal') return;
                   li.setAttribute('data-xdict-before', 'marker');
