@@ -1969,18 +1969,18 @@
         }
       }
     },
-    "No system voice for %@ is installed. Voices are added in VoiceOver Utility → Speech." : {
+    "No system voice for %@ is installed. Voices are added in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No system voice for %@ is installed. Voices are added in VoiceOver Utility → Speech."
+            "value" : "No system voice for %@ is installed. Voices are added in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未安装%@的系统语音。语音可在“旁白实用工具 → 语音”中添加。"
+            "value" : "未安装%@的系统声音。可在“系统设置”▸“无障碍”▸“阅读与朗读”▸“系统声音”▸ ⓘ中添加声音。"
           }
         }
       }
@@ -2081,34 +2081,34 @@
         }
       }
     },
-    "Only a compact voice is installed. %@ is a free download in VoiceOver Utility → Speech." : {
+    "Only a compact voice is installed. %@ is a free download in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only a compact voice is installed. %@ is a free download in VoiceOver Utility → Speech."
+            "value" : "Only a compact voice is installed. %@ is a free download in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只安装了精简版语音。可在“旁白实用工具 → 语音”中免费下载 %@。"
+            "value" : "只安装了精简版声音。可在“系统设置”▸“无障碍”▸“阅读与朗读”▸“系统声音”▸ ⓘ中免费下载 %@。"
           }
         }
       }
     },
-    "Only a compact voice is installed. Better ones may be available in VoiceOver Utility → Speech." : {
+    "Only a compact voice is installed. Better ones may be available in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Only a compact voice is installed. Better ones may be available in VoiceOver Utility → Speech."
+            "value" : "Only a compact voice is installed. Better ones may be available in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只安装了精简版语音。“旁白实用工具 → 语音”中可能有更好的语音。"
+            "value" : "只安装了精简版声音。“系统设置”▸“无障碍”▸“阅读与朗读”▸“系统声音”▸ ⓘ中可能有更好的声音。"
           }
         }
       }
@@ -2177,18 +2177,18 @@
         }
       }
     },
-    "Open VoiceOver Utility" : {
+    "Open Read & Speak Settings" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open VoiceOver Utility"
+            "value" : "Open Read & Speak Settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开旁白实用工具"
+            "value" : "打开“阅读与朗读”设置"
           }
         }
       }

@@ -64,8 +64,9 @@ struct SpeechSentencesTests {
                                       .compactOnly(.unknown)]
         let lines = caveats.map { String(localized: SpeechSentences.caveat($0)) }
         #expect(Set(lines).count == caveats.count)
-        #expect(lines[1].contains("Ava") && lines[1].contains("VoiceOver Utility"))
-        #expect(!lines[2].contains("VoiceOver Utility"), "it offered a download that does not exist")
+        #expect(lines[1].contains("Ava") && lines[1].contains("Read & Speak") && lines[1].contains("System voice"))
+        #expect(!lines[2].contains("Read & Speak"), "it offered a download that does not exist")
+        #expect(!lines.joined().contains("VoiceOver Utility"), "macOS 27 downloads voices in Read & Speak")
     }
 
     /// R8: the speak button claims no sense-specific pronunciation.

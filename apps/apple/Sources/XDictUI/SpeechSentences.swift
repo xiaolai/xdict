@@ -48,7 +48,7 @@ public enum SpeechSentences {
                 """)
         case .noVoice(let language):
             LocalizedStringResource("""
-                No system voice for \(languageName(language)) is installed. Voices are added in VoiceOver Utility → Speech.
+                No system voice for \(languageName(language)) is installed. Voices are added in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ.
                 """)
         case .nothingToSay:
             LocalizedStringResource("There is nothing to say.")
@@ -67,11 +67,11 @@ public enum SpeechSentences {
         case .noVoice:
             LocalizedStringResource("No voice is installed for this language.")
         case .compactOnly(.get(let better)):
-            LocalizedStringResource("Only a compact voice is installed. \(better) is a free download in VoiceOver Utility → Speech.")
+            LocalizedStringResource("Only a compact voice is installed. \(better) is a free download in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ.")
         case .compactOnly(.nothingBetter):
             LocalizedStringResource("Only a compact voice is available for this language. macOS offers nothing better for it.")
         case .compactOnly(.unknown):
-            LocalizedStringResource("Only a compact voice is installed. Better ones may be available in VoiceOver Utility → Speech.")
+            LocalizedStringResource("Only a compact voice is installed. Better ones may be available in System Settings ▸ Accessibility ▸ Read & Speak ▸ System voice ▸ ⓘ.")
         }
     }
 

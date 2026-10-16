@@ -75,9 +75,10 @@ struct InstalledVoicesTests {
         }
     }
 
-    /// Where voices are installed on macOS 27, which is not System Settings (XiaolaiDict, checked 2026-10-01).
-    @Test func theVoiceLibraryIsVoiceOverUtility() {
-        #expect(Voices.voiceLibraryURL.lastPathComponent == "VoiceOver Utility.app")
-        #expect(FileManager.default.fileExists(atPath: Voices.voiceLibraryURL.path))
+    /// Where voices are chosen, previewed and downloaded on macOS 27: System Settings ▸ Accessibility ▸ Read & Speak ▸
+    /// System voice ▸ ⓘ (the owner, by hand, 2026-10-16), opened at its pane.
+    @Test func theVoicesAreInReadAndSpeak() {
+        #expect(Voices.voiceSettingsURL.scheme == "x-apple.systempreferences")
+        #expect(Voices.voiceSettingsURL.absoluteString.contains("com.apple.Accessibility-Settings.extension"))
     }
 }
