@@ -1,4 +1,5 @@
 import SwiftUI
+import XDictAnywhere
 import XDictBase
 import XDictClient
 import XDictEntryView
@@ -29,7 +30,12 @@ struct XDictApp: App {
                 .task { await LibraryLaunch.once() }
         }
         .defaultSize(width: 1_000, height: 700)
-        .commands { SearchCommands() }
+        .commands {
+            SearchCommands()
+            CommandGroup(after: .appSettings) {
+                Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
+            }
+        }
 
         Window("Library", id: Self.libraryWindow) {
             LibraryView(library: Self.library)
@@ -38,8 +44,26 @@ struct XDictApp: App {
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
 
+        // The setup board (WI-9): opened by itself once, on a fresh account, and from the app menu or Settings after.
+        Window("Set Up XDict", id: Self.setupWindow) {
+            SetupView(library: Self.library, registrar: LookupAnywhere.shared.registrar,
+                      trusted: { AccessibilityGate.system(false) },
+                      openLibrary: { MenuBarActions.openLibrary() })
+                .task { await LibraryLaunch.once() }
+        }
+        .windowResizability(.contentSize)
+
         Settings {
             TabView {
+                Tab("General", systemImage: "gearshape") {
+                    GeneralSettings(login: Self.loginItem, defaults: .standard, domain: XDictIdentity.app,
+                                    openSetup: { MenuBarActions.openSetup() })
+                }
+                Tab("Dictionaries", systemImage: "books.vertical") {
+                    LibraryView(library: Self.library)
+                        .frame(width: 720, height: 460)
+                        .task { await LibraryLaunch.once() }
+                }
                 Tab("Reading", systemImage: "book") { ReadingSettings() }
                 Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
                 Tab("Lookup", systemImage: "keyboard") { ShortcutSettings(registrar: LookupAnywhere.shared.registrar) }
@@ -60,6 +84,9 @@ struct XDictApp: App {
 
     static let mainWindow = "main"
     static let libraryWindow = "library"
+    static let setupWindow = "setup"
+    /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
+    @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
 
     static func handshake() async -> LaunchStatus {
         let log = Logger(subsystem: XDictIdentity.app, category: "launch")
@@ -99,6 +126,8 @@ struct AppSetup: Sendable {
     var speechVolume: Float = 1
     /// The defaults suite the accent is kept in; nil for the reader's own.
     var speechSuite: String?
+    /// The reader's own run, not an instrument's: only it opens the setup board by itself.
+    var isReader = false
 
     var speechDefaults: UserDefaults {
         speechSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
@@ -106,7 +135,7 @@ struct AppSetup: Sendable {
 
     static var reader: AppSetup {
         AppSetup(libraryDirectory: URL.applicationSupportDirectory.appending(path: XDictIdentity.app),
-                 service: ServiceClient(), entryEvents: nil)
+                 service: ServiceClient(), entryEvents: nil, isReader: true)
     }
 }
 
@@ -167,6 +196,8 @@ struct MenuBarLabel: View {
             .task {
                 LookupAnywhere.shared.openMainWindow = { openWindow(id: XDictApp.mainWindow) }
                 MenuBarActions.open = { openWindow(id: $0) }
+                await LibraryLaunch.once()
+                SetupLaunch.openOnAFreshAccount()
             }
     }
 }
@@ -186,8 +217,26 @@ enum MenuBarActions {
         }
     }
 
+    static func openSetup() {
+        NSApp.activate()
+        open?(XDictApp.setupWindow)
+    }
+
     static func openLibrary() {
         NSApp.activate()
         open?(XDictApp.libraryWindow)
+    }
+}
+
+/// **The setup board opens by itself once**, on the reader's first launch with no dictionaries; after that only when
+/// asked (the app menu, Settings ▸ General). The flag decides only whether it opens, never what it shows.
+@MainActor
+enum SetupLaunch {
+    static let shownKey = "setup.openedOnce"
+
+    static func openOnAFreshAccount(defaults: UserDefaults = .standard) {
+        guard XDictApp.setup.isReader, !defaults.bool(forKey: shownKey), XDictApp.library.entries.isEmpty else { return }
+        defaults.set(true, forKey: shownKey)
+        MenuBarActions.openSetup()
     }
 }

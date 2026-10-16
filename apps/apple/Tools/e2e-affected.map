@@ -101,6 +101,7 @@ apps/apple/Sources/XDictEntryLab/Corpus.swift       check:entries.lab
 apps/apple/Sources/XDictEntryLab/*                  check:hostile.production hostile.controls hostile.faults hostile.binding reader entries.lab
 apps/apple/Sources/XDict/AppCorpus.swift            check:entries.quick entries.full entries.persistence
 apps/apple/Sources/XDict/AppHostile.swift           check:hostile.app
+apps/apple/Sources/XDict/SetupReport.swift         check:setup
 apps/apple/Sources/XDict/LookupWindow.swift         check:lookup
 apps/apple/Sources/XDict/LibraryReport.swift        check:library.generated library.corpus library.health
 apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
@@ -132,4 +133,10 @@ apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
 apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
-apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut
+apps/apple/Sources/XDictUI/Setup*                   setup
+apps/apple/Sources/XDictUI/LaunchAtLogin.swift      setup
+apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup
+apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup
+# The catalog's text reaches only the checks that compare a reader-facing sentence or run the app in Chinese; the
+# instruments read every other string through `String(localized:)`, so a reworded line cannot fail them.
+apps/apple/Strings/*                                setup launch lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu
