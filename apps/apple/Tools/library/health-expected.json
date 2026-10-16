@@ -14,7 +14,6 @@
  "mwaled": {"entries": 87545, "findings": [["missingWords", 2428, null], ["commentMarks", 1, null], ["repeatedEntries", 21, null]]},
  "mwc": {"entries": 119775, "findings": [["missingWords", 11, null], ["oddHeadwords", 17, null]]},
  "mwu": {"entries": 322943, "findings": [["missingSounds", 104, null], ["missingWords", 54807, null], ["codeAsText", 31772, null], ["repeatedEntries", 1, null], ["repaired", 29, null]]},
- "ncecd": {"entries": 232283, "findings": [["missingSounds", 3155, null], ["missingWords", 59507, null], ["codeAsText", 4, null], ["oddHeadwords", 3, null], ["repaired", 5, null]]},
  "noad": {"entries": 98541, "findings": [["missingWords", 1172, null]]},
  "oald": {"entries": 84843, "findings": [["missingWords", 19777, null], ["hugeEntries", 1, null]]},
  "oalecd": {"entries": 238766, "findings": [["missingSounds", 607, null], ["missingWords", 20238, null], ["brokenRedirects", 5, null], ["repeatedEntries", 1, null], ["oddHeadwords", 3, null]]},
