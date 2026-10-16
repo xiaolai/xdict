@@ -296,11 +296,13 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + ":not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
         + "[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;"
         + "font-synthesis-style:none !important}"
-        // A section heading a markup table names: one size and weight in the body face; its colour stays.
+        // A section heading a markup table names: one look, bold, 1.125rem, the body face and the body text colour; the
+        // accent is not for headings (owner, 2026-10-17). Its own text only: a link or a list inside it keeps its look.
         + "[data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] "
-        + ":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font) !important;"
+        + ":not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;"
         + "font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;"
-        + "font-weight:var(--xdict-weight-bold) !important;font-style:normal !important}"
+        + "font-weight:var(--xdict-weight-bold) !important;font-style:normal !important;"
+        + "color:var(--xdict-text) !important}"
         // A translation a markup table names, a sense's or an example's: upright, in the secondary text colour.
         + "[data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}"
         + "[data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] "
