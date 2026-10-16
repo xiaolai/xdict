@@ -88,6 +88,10 @@ extension EntryReadingFrame {
             // A box of speakers leading its block floats at the line's start, so the transcription's block after it
             // (CEPD's `sense-body`) begins its first line beside it.
             + "[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:0.35em !important}"
+            // A speaker and the transcription it plays are one run (`pronRunDOM`): no break inside it but within the
+            // transcription itself.
+            + "[data-xdict-pron-run]{white-space:nowrap !important}"
+            + "[data-xdict-pron-run] [data-xdict-phon]{white-space:normal !important}"
             // A tag wrapped deeper in its speaker (OED's) owns its gap too (§8.4); 0.56em of its 0.625em is 0.35em of the text.
             + "[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:0.56em !important}"
             + "[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 0.35em !important}"
@@ -218,6 +222,62 @@ extension EntryScripts {
           else start();
           window.addEventListener('load', later, { once: true });
           window.__xdictDisclosure = { sync: sync, expand: expand };
+        })();
+        """#
+
+    /// **A speaker and the transcription it plays stay on one line** (CALD "remember sb to sb" broke between them):
+    /// the run from a speaker, through blanks and other speakers, to the next sibling transcription. No DOM: `is`
+    /// says what a node is, so the rule is tested alone. `null` when anything else comes first.
+    static let pronRunCore = #"""
+        var XDictPronRunCore = (function () {
+          'use strict';
+          function run(speaker, is) {
+            var n = speaker.nextSibling, steps = 0;
+            while (n && steps < 32) {
+              if (is.phon(n)) return { first: speaker, last: n };
+              if (!is.blank(n) && !is.speaker(n)) return null;
+              n = n.nextSibling; steps += 1;
+            }
+            return null;
+          }
+          return { run: run };
+        })();
+        """#
+
+    /// The run on the page, in the shell's world: wrapped once in `data-xdict-pron-run`, which the marks keep from
+    /// breaking (the break goes before the speaker); the transcription inside still wraps within itself.
+    static let pronRunDOM = #"""
+        (function () {
+          'use strict';
+          if (typeof document === 'undefined' || window.__xdictPronRun) return;
+          var is = {
+            speaker: function (n) { return n.nodeType === 1 && n.getAttribute('data-xdict-control') === 'speaker'; },
+            phon: function (n) { return n.nodeType === 1 && n.hasAttribute('data-xdict-phon'); },
+            blank: function (n) { return n.nodeType === 3 && !/\S/.test(n.nodeValue); }
+          };
+          var MAX = 2000;
+          function glue() {
+            var speakers = document.querySelectorAll('[data-xdict-control=speaker]'), done = 0;
+            for (var i = 0; i < speakers.length && i < MAX; i++) {
+              var s = speakers[i];
+              if (!s.parentNode || s.parentNode.hasAttribute && s.parentNode.hasAttribute('data-xdict-pron-run')) continue;
+              var prev = s.previousSibling;
+              while (prev && is.blank(prev)) prev = prev.previousSibling;
+              if (prev && is.speaker(prev)) continue;
+              var r = XDictPronRunCore.run(s, is);
+              if (!r) continue;
+              var wrap = document.createElement('span');
+              wrap.setAttribute('data-xdict-pron-run', '');
+              s.parentNode.insertBefore(wrap, s);
+              var n = s, stop = r.last.nextSibling;
+              while (n && n !== stop) { var next = n.nextSibling; wrap.appendChild(n); n = next; }
+              done += 1;
+            }
+            return done;
+          }
+          function start() { window.__xdictPronRun = { glued: glue() }; }
+          if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+          else start();
         })();
         """#
 }
