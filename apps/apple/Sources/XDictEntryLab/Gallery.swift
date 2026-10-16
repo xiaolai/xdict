@@ -46,6 +46,8 @@ enum GalleryRun {
         let previous = try keys(options.keys, sample: sample)
         var rows: [[String: Any]] = []
         var failures: [String] = []
+        // Rows the run means to write: the runner holds the report to it, so a run that ends early is not read as done.
+        var expected = 0
         for name in byDict.keys.sorted() where options.only.isEmpty || options.only.contains(name) {
             let content = try core.open(root.appending(path: name))
             let chosen: [(String, SampledEntry)]
@@ -59,6 +61,7 @@ enum GalleryRun {
                 chosen = await choose(byDict[name] ?? [], content: content, failures: &failures)
             }
             let original = options.originalStyle ? try core.open(root.appending(path: name), originalStyle: true) : nil
+            expected += chosen.count * (options.originalStyle ? originalModes : modes).count
             for mode in options.originalStyle ? originalModes : modes {
                 let content = mode.original ? original ?? content : content
                 let log = EventLog()
@@ -145,7 +148,7 @@ enum GalleryRun {
                 window.close()
             }
         }
-        return ["mode": "gallery", "rows": rows, "failures": failures,
+        return ["mode": "gallery", "rows": rows, "expected": expected, "failures": failures,
                 "folding": try await CorpusRun.folding(root: root, core: core)]
     }
 
@@ -316,7 +319,9 @@ enum GalleryRun {
               var gapR = document.createRange(); gapR.setStartAfter(sp); gapR.setEndBefore(pe);
               var gapF = gapR.cloneContents();
               Array.prototype.forEach.call(gapF.querySelectorAll('[data-xdict-control]'), function (c) { c.remove(); });
-              if (!/[A-Za-zÀ-ɏ]/.test(gapF.textContent)) ph = pe;
+              // A line break the dictionary writes between them (CALD's `<br>` before the transcription line) is its
+              // layout: the speaker ends one line and the transcription starts the next.
+              if (!/[A-Za-zÀ-ɏ]/.test(gapF.textContent) && !gapF.querySelector('br')) ph = pe;
             }
           }
           if (!ph) return;
@@ -324,7 +329,11 @@ enum GalleryRun {
           if (!b) return;
           pronTotal += 1;
           var a = sp.getBoundingClientRect(), mid = (a.top + a.bottom) / 2;
-          if (mid < b.top || mid > b.bottom) {
+          // The column wrapped them: the speaker ends its line and the transcription would not have fitted after it
+          // (CALD "remember sb to sb" at the column's width). The line break is the width's, not the layout's.
+          var col = document.body.getBoundingClientRect(), cs0 = getComputedStyle(document.body);
+          var wrapped = b.top >= a.bottom - 1 && a.right + 4 + b.width > col.right - parseFloat(cs0.paddingRight);
+          if (!wrapped && (mid < b.top || mid > b.bottom)) {
             pronOff += 1;
             if (pron.length < 3) {
               var chain = [];
