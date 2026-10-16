@@ -92,7 +92,7 @@ apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services pan
 apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
 
 # --- The product ----------------------------------------------------------------------------------------------------
-apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.a11y sound
+apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.core lookup.a11y sound
 apps/apple/Sources/XDictEntryView/EntryMarks.swift  hostile.production reader entries.quick entries.persistence lookup.a11y sound
 apps/apple/Sources/XDictEntryView/EntryColourGuard.swift hostile.production reader entries.quick entries.persistence lookup.a11y
 apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
