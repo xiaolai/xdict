@@ -29,7 +29,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         ("base", "16px"),
         ("font-cjk", #""PingFang SC", "Hiragino Sans GB""#),
         ("font", #"-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif"#),
-        ("font-phon", #""Charis SIL", "Doulos SIL", "Gentium Plus", var(--xdict-font)"#),
+        // SIL 7.000 renamed Charis SIL and Gentium Plus; the new names first, the old for an earlier install.
+        ("font-phon", #""Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)"#),
         ("font-mono", #"ui-monospace, "SF Mono", Menlo, monospace"#),
         ("fs-xs", "0.75rem"), ("fs-s", "0.875rem"), ("fs-m", "1rem"), ("fs-l", "1.125rem"), ("fs-xl", "1.25rem"),
         ("fs-xxl", "1.5rem"), ("fs-min", "var(--xdict-fs-xs)"), ("fs-max", "var(--xdict-fs-xxl)"),
