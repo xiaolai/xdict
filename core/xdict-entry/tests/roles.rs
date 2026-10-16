@@ -133,3 +133,28 @@ fn hostile_entries_stay_linear() {
         assert!(large / small < 10.0, "{name}: {small:.3}s at n, {large:.3}s at 4n");
     }
 }
+
+/// A headword is not a transcription: stress marks and syllable dots on it do not make it one. An undelimited
+/// transcription beside the headword stays marked (ODE's `ˈpet`), even when it spells the key.
+#[test]
+fn a_headword_with_stress_marks_is_not_a_transcription() {
+    let phon = |out: &str| out.matches("data-xdict-phon ").count();
+    // CALD: the headword, stressed.
+    let (out, c) = entry(r#"<b class="hw">ˌcounty ˈcouncil</b> <span class="d">a council</span>"#, "county council");
+    assert_eq!((phon(&out), c.transcriptions.marked), (0, 0), "{out}");
+    // OED: stressed inside the word, case and syllable dots folded.
+    let (out, _) = entry(r#"<h1 class="hw">Cata·ˈractical</h1> <span class="d">of a cataract</span>"#, "cataractical");
+    assert_eq!(phon(&out), 0, "{out}");
+    // A part inside the headword's element.
+    let (out, _) =
+        entry(r#"<b class="hw">ˌcounty <i>ˈcouncil</i></b> <span class="d">a council</span>"#, "county council");
+    assert_eq!(phon(&out), 0, "{out}");
+    // ODE: the transcription undelimited beside a plain headword.
+    let (out, c) =
+        entry(r#"<b class="hw">pet</b> <span class="ph">ˈpɛt</span> <span class="d">an animal</span>"#, "pet");
+    assert!(out.contains(r#"data-xdict-phon-system="none" class="ph""#), "{out}");
+    assert_eq!(c.transcriptions.marked, 1);
+    let (out, _) =
+        entry(r#"<b class="hw">pet</b> <span class="ph">ˈpet</span> <span class="d">an animal</span>"#, "pet");
+    assert!(out.contains(r#"data-xdict-phon-system="none" class="ph""#), "{out}");
+}

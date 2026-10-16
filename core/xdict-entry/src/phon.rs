@@ -89,11 +89,13 @@ pub(crate) struct Marker {
     done: Vec<Mark>,
     /// Classes whose elements a kept phonetic font draws, and the font.
     fonts: Vec<(String, String)>,
+    /// The entry's key, folded ([`folded`]): a headword stressed inside a word is not a transcription.
+    key: Option<String>,
     pub(crate) found: Transcriptions,
 }
 
 impl Marker {
-    pub(crate) fn new(style: &Style) -> Self {
+    pub(crate) fn new(style: &Style, key: Option<&str>) -> Self {
         let mut fonts = Vec::new();
         for kept in style.kept().iter().filter(|k| k.reason == KeptReason::Phonetic) {
             for selector in kept.selector.split(',') {
@@ -106,7 +108,8 @@ impl Marker {
                 }
             }
         }
-        Self { stack: Vec::new(), deep: 0, done: Vec::new(), fonts, found: Transcriptions::default() }
+        let key = key.map(folded).filter(|k| !k.is_empty());
+        Self { stack: Vec::new(), deep: 0, done: Vec::new(), fonts, key, found: Transcriptions::default() }
     }
 
     /// A start tag, written so that an attribute inserted at `at` follows its name; `tag` is its source.
@@ -182,7 +185,8 @@ impl Marker {
         let system = (!open.fixed && !open.over)
             .then(|| transcription(&open.text))
             .flatten()
-            .filter(|s| !(open.delimited && *s == "none"));
+            .filter(|s| !(open.delimited && *s == "none"))
+            .filter(|s| !(*s == "none" && self.key.as_deref().is_some_and(|k| stressed_word(&open.text, k))));
         let delimited = open.delimited || system.is_some_and(|s| s != "none");
         let parent = self.stack.last_mut();
         if let Some(parent) = parent {
@@ -226,16 +230,35 @@ impl Marker {
     }
 
     fn commit(&mut self, mark: Mark) {
-        self.found.marked += 1;
-        *self.found.systems.entry(mark.system.clone()).or_default() += 1;
-        self.found.characters.extend(mark.text.chars().filter(|c| !c.is_ascii()));
         self.done.push(mark);
     }
 
     /// The insertions to make, by output position: every element still open closed.
-    pub(crate) fn finish(mut self) -> (Vec<(usize, String)>, Transcriptions) {
+    /// `headwords`: the extents of the elements the core gives the headword role, inside which nothing undelimited
+    /// is a transcription.
+    pub(crate) fn finish(mut self, headwords: &[(usize, usize)]) -> (Vec<(usize, String)>, Transcriptions) {
         while !self.stack.is_empty() {
             self.close();
+        }
+        // Only an innermost headword: a block given the role as well (AHD's) holds the transcription beside it.
+        // Sorted by start, longest first, a range holds another exactly when the next one starts before it ends.
+        let mut spans = headwords.to_vec();
+        spans.sort_unstable_by_key(|&(from, to)| (from, std::cmp::Reverse(to)));
+        let merged: Vec<(usize, usize)> = spans
+            .iter()
+            .enumerate()
+            .filter(|(i, (_, to))| spans.get(i + 1).is_none_or(|(next, _)| next >= to))
+            .map(|(_, r)| *r)
+            .collect();
+        let in_headword = |at: usize| {
+            let i = merged.partition_point(|(from, _)| *from <= at);
+            i.checked_sub(1).and_then(|i| merged.get(i)).is_some_and(|(_, to)| at < *to)
+        };
+        self.done.retain(|m| !(m.end.is_none() && m.system == "none" && in_headword(m.at)));
+        for m in &self.done {
+            self.found.marked += 1;
+            *self.found.systems.entry(m.system.clone()).or_default() += 1;
+            self.found.characters.extend(m.text.chars().filter(|c| !c.is_ascii()));
         }
         // At one position a wrap's end goes before anything that starts there.
         let mut inserts: Vec<(usize, bool, String)> = Vec::with_capacity(self.done.len());
@@ -312,6 +335,20 @@ fn decoded(raw: &str, from: usize) -> Option<(char, usize)> {
         (Some(c), None) if text != entity => Some((c, entity.len())),
         _ => None,
     }
+}
+
+/// Text as a key compares: stress marks and syllable dots gone, spaces collapsed, lower case.
+fn folded(text: &str) -> String {
+    let kept: String = text.chars().filter(|c| !matches!(c, 'ˈ' | 'ˌ' | '·' | '‧')).collect();
+    kept.split_whitespace().collect::<Vec<_>>().join(" ").to_lowercase()
+}
+
+/// Whether `text` is the key `key` (folded) with stress marked inside a word (`cataˈractical`), as a headword
+/// is; a stress mark only before a word (`ˈpet`) is a transcription's as much as a headword's, so it is not enough.
+fn stressed_word(text: &str, key: &str) -> bool {
+    let inside =
+        text.split_whitespace().any(|w| w.char_indices().any(|(i, c)| i > 0 && matches!(c, 'ˈ' | 'ˌ' | '·' | '‧')));
+    inside && folded(text) == key
 }
 
 fn append(open: &mut Open, text: &str) {
@@ -446,6 +483,19 @@ mod tests {
         for no in ["apple", "/apple/", "苹果 ə", "ˈ", "a ə 1", "see ə: «x»"] {
             assert_eq!(transcription(no), None, "{no}");
         }
+    }
+
+    /// AHD gives the headword role to the block holding the headword and its transcription as well as to the
+    /// headword itself: only an innermost headword holds no transcription.
+    #[test]
+    fn only_the_innermost_headword_excludes() {
+        let mark = |at| Mark { at, end: None, system: "none".into(), text: "ə".into() };
+        let mut m = Marker::new(&Style::of_sheets([""]), None);
+        m.done = vec![mark(30), mark(12)];
+        // The block 0..100 holds the headword 10..20 and the transcription at 30.
+        let (inserts, found) = m.finish(&[(0, 100), (10, 20)]);
+        assert_eq!(inserts.iter().map(|(at, _)| *at).collect::<Vec<_>>(), [30]);
+        assert_eq!(found.marked, 1);
     }
 
     #[test]

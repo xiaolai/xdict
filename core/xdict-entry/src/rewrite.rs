@@ -271,7 +271,7 @@ fn html_out<'s>(
     entry: Option<&crate::normalize::Entry<'s>>,
 ) -> Out<'s> {
     let mut out = Out::new(text.len() + text.len() / 8, collect, max);
-    out.marker = norm.as_ref().map(|n| crate::phon::Marker::new(n.style));
+    out.marker = norm.as_ref().map(|n| crate::phon::Marker::new(n.style, entry.map(|e| e.key)));
     out.tables = norm.as_ref().map(|_| crate::tables::Tables::default());
     out.controls = norm.as_ref().map(|_| crate::controls::Controls::default());
     out.roles = norm.as_ref().map(|n| {
@@ -1060,6 +1060,7 @@ pub(crate) fn normalized_html<'s>(
         edits.extend(controls.inserts.into_iter().map(insert));
         edits.extend(controls.removals.into_iter().map(|(at, until)| (at, until, String::new())));
     }
+    let mut headwords = Vec::new();
     if let Some(roles) = roles {
         let decided = roles.finish();
         counts.strip.audio_links += decided.audio_links;
@@ -1072,9 +1073,10 @@ pub(crate) fn normalized_html<'s>(
             *counts.icons.entry(k).or_default() += v;
         }
         edits.extend(decided.edits);
+        headwords = decided.headwords;
     }
     if let Some(marker) = out.marker.take() {
-        let (marks, found) = marker.finish();
+        let (marks, found) = marker.finish(&headwords);
         counts.transcriptions.add(&found);
         edits.extend(marks.into_iter().map(insert));
     }
