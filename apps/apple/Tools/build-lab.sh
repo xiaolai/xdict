@@ -33,6 +33,8 @@ fi
 rm -rf "$KIT"
 mkdir -p "$APP/Contents/MacOS" "$KIT/fixtures"
 cp "$products/$LAB" "$APP/Contents/MacOS/$LAB"
+# The phonetic faces, where the entry view reads them in the app (`EntryFonts.bundled`).
+mkdir -p "$APP/Contents/Resources" && cp -R Resources/Fonts "$APP/Contents/Resources/"
 cat >"$APP/Contents/Info.plist" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
