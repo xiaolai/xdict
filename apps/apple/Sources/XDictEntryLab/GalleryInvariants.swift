@@ -121,14 +121,17 @@ extension GalleryRun {
         }
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
         // pronunciations; "banc   bench").
-        // The inline formatting context a text is laid out in: its nearest ancestor that is not plain inline. A text
-        // inside a float or a positioned box is out of the line's flow.
+        // The line a text is laid out in: its nearest ancestor that is not plain inline (an inline-block is a box of
+        // its own: ETYM's fixed-width navigation items). A text inside a float, a positioned box, a flex or grid item
+        // or a table cell is out of the line's flow.
         function flow(e) {
           var out = false;
           for (; e && e !== document.body; e = e.parentElement) {
-            var st = getComputedStyle(e);
+            var st = getComputedStyle(e), d = st.display;
             if (st.float !== 'none' || st.position === 'absolute' || st.position === 'fixed') out = true;
-            if (st.display !== 'inline' && st.display !== 'contents') break;
+            var up = e.parentElement ? getComputedStyle(e.parentElement).display : 'block';
+            if (/flex|grid/.test(up) || d === 'table-cell') out = true;
+            if (d !== 'inline' && d !== 'contents') break;
           }
           return { ctx: e, out: out };
         }
@@ -144,8 +147,9 @@ extension GalleryRun {
               fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
           }
         }
-        // What draws between two words without being text: XDict's controls, icons, tags, labels, images.
-        var boxes = Array.prototype.map.call(document.querySelectorAll('[data-xdict-control],[data-xdict-icon],[data-xdict-tag],[data-xdict-role=label],img,svg'),
+        // What draws between two words without being text: XDict's controls, icons, tags, images. Not a label: its
+        // words are measured as words, and its box's padding and margin are spacing (OALECD's "especially US    ˌ…").
+        var boxes = Array.prototype.map.call(document.querySelectorAll('[data-xdict-control],[data-xdict-icon],[data-xdict-tag],img,svg'),
           function (e) { return e.getBoundingClientRect(); }).filter(function (q) { return q.width > 0; });
         // And the dictionary's own drawings beside a word: generated content (OCD's "→", its "|") and side borders.
         var edges = [], all2 = document.body ? document.body.getElementsByTagName('*') : [];
@@ -158,13 +162,20 @@ extension GalleryRun {
           if (!drawn2) continue;
           Array.prototype.forEach.call(e2.getClientRects(), function (q) { if (q.width > 0) edges.push(q); });
         }
-        function drawnBetween(a, b) {
+        // The widest stretch of the gap between two words that nothing draws in: a box drawn inside it (a tag, an
+        // icon, a control) or a drawing's box reaching into it (generated content) covers its part; the space left
+        // over is what the text's layout puts there (a label's own box is its text's, and covers none of the gap).
+        function uncovered(a, b) {
           var line = function (q) { return q.bottom > a.top && q.top < a.bottom; };
           var inGap = function (v) { return v > a.right - 1 && v < b.left + 1; };
-          // A box drawn inside the gap, not one of the two words' own (a label's box is its text's).
-          return boxes.some(function (q) { return Math.min(q.right, b.left) - Math.max(q.left, a.right) > 2 && line(q); })
-            // A drawing's box edge in the gap: the drawing is there (a box around both words is not).
-            || edges.some(function (q) { return line(q) && (inGap(q.left) || inGap(q.right)); });
+          var spans = [];
+          boxes.forEach(function (q) { if (line(q) && Math.min(q.right, b.left) - Math.max(q.left, a.right) > 2) spans.push(q); });
+          edges.forEach(function (q) { if (line(q) && (inGap(q.left) || inGap(q.right))) spans.push(q); });
+          spans = spans.map(function (q) { return [Math.max(q.left, a.right), Math.min(q.right, b.left)]; })
+            .sort(function (p, q) { return p[0] - q[0]; });
+          var at = a.right, widest = 0;
+          spans.forEach(function (sp) { if (sp[0] > at) widest = Math.max(widest, sp[0] - at); at = Math.max(at, sp[1]); });
+          return Math.max(widest, b.left - at);
         }
         // Inside one text: a run of space holding a no-break space does not collapse, and draws as wide as it is written.
         texts.forEach(function (x) {
@@ -193,19 +204,23 @@ extension GalleryRun {
           // A gap between words is measured only inside one line box: one formatting context, neither word floated
           // or positioned (a float, a cell or a right-aligned button beside a line is not a gap in it).
           if (prev && prev.ctx === x.ctx && !prev.out && !x.out && same(prev.last, x.first)
-              && x.first.left > prev.last.right && !drawnBetween(prev.last, x.first)) {
-            // What the space between them draws: the gap less the boxes' own side margins and padding up to the
-            // element holding both. A field's set-off (MW's "/pron/   adjective", COBUILD's "death row   skid row") is
-            // the dictionary's layout; space the text writes (OED's "banc␣␣␣bench") is the defect.
-            var sides = function (n, side) {
-              var s = 0;
-              for (var e = n.parentElement; e && !e.contains(side === 'Right' ? x.n : prev.n); e = e.parentElement) {
-                var st = getComputedStyle(e); s += parseFloat(st['margin' + side]) + parseFloat(st['padding' + side]);
+              && x.first.left > prev.last.right) {
+            // A field's set-off by its own margin (MW's "/pron/   adjective") counts: R puts inline spacing on the
+            // space tokens (coordinator, 2026-10-16).
+            var gap = uncovered(prev.last, x.first);
+            // For diagnosis, what sets the two words apart: each box up to the line's, with its display and side spacing.
+            var why = function (n, side) {
+              var out = [];
+              for (var e = n.parentElement; e && e !== x.ctx && out.length < 4; e = e.parentElement) {
+                var st = getComputedStyle(e);
+                out.push(e.tagName.toLowerCase() + ' ' + st.display + ' m' + st['margin' + side] + ' p' + st['padding' + side]
+                  + (st.width !== 'auto' && st.display !== 'inline' ? ' w' + st.width : ''));
               }
-              return s;
+              return out.join(' < ');
             };
-            var gap = x.first.left - prev.last.right - Math.max(0, sides(prev.n, 'Right')) - Math.max(0, sides(x.n, 'Left'));
-            note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16)));
+            note('wordGap', gap <= x.fs + 0.5, 1, Math.round(gap) + 'px before ' + JSON.stringify(x.n.nodeValue.trim().slice(0, 16))
+              + (gap > x.fs + 0.5 ? ' [after ' + JSON.stringify(prev.n.nodeValue.slice(-6)) + ': ' + why(prev.n, 'Right')
+                 + ' | ' + why(x.n, 'Left') + ']' : ''));
           }
         });
         Object.keys(checks).forEach(function (k) {
