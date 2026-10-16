@@ -185,6 +185,10 @@ struct ReadingFrameTests {
         let original = EntryScripts.appearance(.light, frame: EntryReadingFrame.all.applied(originalStyle: true))
         #expect(reading.contains("var SPACE_CAP = 0.25,"))
         #expect(original.contains("var SPACE_CAP = 0,"))
+        // The browser's list bullets become XDict's marker the same way (reading style only, gated by the same flag),
+        // and a marked item draws no list marker of its own.
+        #expect(reading.contains("li.setAttribute('data-xdict-before', 'marker')"))
+        #expect(EntryReadingFrame.marksCSS.contains("list-style:none !important"))
     }
 
     @Test func unificationRsRulesAreInTheTypeLayer() {

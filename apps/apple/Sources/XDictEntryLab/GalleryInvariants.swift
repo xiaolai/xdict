@@ -123,15 +123,23 @@ extension GalleryRun {
         // counter drawn as one (MWU's `counter(r89, square)` before "Synonyms:"), on a box XDict did not mark.
         var BULLET = /^["'][\s•◦▪■□●○◆◇‣]*["']$|counter\([^)]*,\s*(disc|circle|square)\s*\)/;
         Array.prototype.forEach.call((document.body || document.documentElement).getElementsByTagName('*'), function (e, i) {
+          if (i > 65536 || e.closest('[data-xdict-control],[data-xdict-tag],[data-xdict-icon]')) return;
           // A dot between a headword's syllables (NOAD's `.hsb`) is the word's, not a bullet.
-          if (i > 65536 || e.closest('[data-xdict-control],[data-xdict-tag],[data-xdict-icon],[data-xdict-role=headword]')) return;
+          var inWord = !!e.closest('[data-xdict-role=headword]');
           ['before', 'after'].forEach(function (side) {
-            if (e.getAttribute('data-xdict-' + side)) return;
+            if (inWord || e.getAttribute('data-xdict-' + side)) return;
             var ps = getComputedStyle(e, '::' + side), c = ps.content;
             if (!c || c === 'none' || c === 'normal' || c === '""' || ps.display === 'none' || ps.visibility === 'hidden') return;
             if (!BULLET.test(c) || !/[^\s"']/.test(c.replace(/^["']|["']$/g, '')) && !/counter/.test(c)) return;
             note('strayMarker', false, 1, c.slice(0, 30) + ' ::' + side + ' <' + e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + '>');
           });
+          // The browser's own bullet on a list item (MWU's homograph strip): `::marker` is no ::before, so it is read
+          // from the item's list style.
+          var ls = getComputedStyle(e);
+          if (ls.display === 'list-item' && /^(disc|circle|square)$/.test(ls.listStyleType) && ls.listStyleImage === 'none'
+              && !e.getAttribute('data-xdict-before') && e.getClientRects().length) {
+            note('strayMarker', false, 1, ls.listStyleType + ' ::marker <' + e.tagName.toLowerCase() + '.' + String(e.className).split(' ')[0] + '>');
+          }
           note('strayMarker', true, 1, '');
         });
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
