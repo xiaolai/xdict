@@ -77,6 +77,24 @@ struct SearchSentencesTests {
         #expect(header.contains("Records") && header.contains("3f2a9c1e"))
     }
 
+    /// The owner, 2026-10-16: the edition is out of a header, shown and read, unless another edition of the same
+    /// dictionary is in the results; its help names it either way.
+    @Test func aHeaderNamesItsEditionOnlyWhereTwoEditionsMeet() {
+        let edition = Edition(rawValue: "mdx-sha256-v1:3f2a9c1e5b7d00112233445566778899")
+        let results = SectionStatus.results(Results(hits: [], total: 3, generation: 1))
+        let alone = ResultSection(id: UUID(), name: "Alpha", edition: edition, showsEdition: false, status: results)
+        let beside = ResultSection(id: UUID(), name: "Alpha", edition: edition, showsEdition: true, status: results)
+        #expect(SearchSentences.inlineEdition(alone) == nil)
+        #expect(SearchSentences.inlineEdition(beside) == "3f2a9c1e")
+        #expect(!Self.text(SearchSentences.header(alone)).contains("3f2a9c1e"))
+        #expect(Self.text(SearchSentences.header(alone)).contains("Alpha"))
+        #expect(Self.text(SearchSentences.header(beside)).contains("3f2a9c1e"))
+        #expect(Self.text(SearchSentences.editionHelp(edition)).contains("3f2a9c1e5b7d00112233445566778899"))
+        let damaged = ResultSection(id: UUID(), name: "Damaged", edition: edition, showsEdition: false,
+                                    status: .failed(.serviceFailed))
+        #expect(Self.text(SearchSentences.header(damaged)) == "Damaged")
+    }
+
     /// Q11, R10: a section with nothing to count (indexing, damaged, missing) names its dictionary and edition and
     /// claims no count: VoiceOver must not read "0 results" for a dictionary that was never asked.
     @Test func aSectionWithNothingToCountClaimsNoCount() {

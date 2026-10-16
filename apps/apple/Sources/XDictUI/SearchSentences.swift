@@ -92,6 +92,31 @@ public enum SearchSentences {
         return String(edition.rawValue[edition.rawValue.index(after: colon)...].prefix(8))
     }
 
+    /// The edition a header shows inline: only where its section says another edition of the dictionary is beside it.
+    public static func inlineEdition(_ section: ResultSection) -> String? {
+        section.showsEdition ? section.edition.map(edition) : nil
+    }
+
+    /// A header's help: the edition, whole.
+    public static func editionHelp(_ edition: Edition) -> LocalizedStringResource {
+        LocalizedStringResource("Edition \(digest(edition))")
+    }
+
+    /// A header as VoiceOver reads it: whose results, the edition where it is shown, and how many.
+    public static func header(_ section: ResultSection) -> LocalizedStringResource {
+        let edition = section.showsEdition ? section.edition : nil
+        if case .results(let results) = section.status {
+            return self.section(name: section.name, edition: edition, loaded: results.hits.count, total: results.total)
+        }
+        return self.section(name: section.name, edition: edition)
+    }
+
+    /// An edition's digest: what follows its scheme.
+    private static func digest(_ edition: Edition) -> String {
+        guard let colon = edition.rawValue.lastIndex(of: ":") else { return edition.rawValue }
+        return String(edition.rawValue[edition.rawValue.index(after: colon)...])
+    }
+
     /// How many results a dictionary has, and how many are shown (Q10).
     public static func count(loaded: Int, total: UInt64) -> LocalizedStringResource {
         if UInt64(loaded) >= total {

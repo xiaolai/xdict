@@ -123,8 +123,16 @@ public final class SearchModel {
     /// One section per dictionary in the lookup's scope, in the reader's order as it is now.
     public var sections: [ResultSection] {
         guard let lookup else { return [] }
-        return inScope(lookup.scope).map { source in
-            ResultSection(id: source.id, name: source.name, edition: source.edition, status: status(of: source, in: lookup))
+        let shown = inScope(lookup.scope)
+        // Lineages with two editions or more among these results: only their headers name the edition.
+        var editions: [String: Set<Edition>] = [:]
+        for source in shown {
+            if let edition = source.edition { editions[source.preferencesKey, default: []].insert(edition) }
+        }
+        return shown.map { source in
+            ResultSection(id: source.id, name: source.name, edition: source.edition,
+                          showsEdition: (editions[source.preferencesKey]?.count ?? 0) > 1,
+                          status: status(of: source, in: lookup))
         }
     }
 
