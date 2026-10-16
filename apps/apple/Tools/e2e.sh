@@ -1214,7 +1214,10 @@ substage_anywhere() {
         ${asked_subs[@]+"${asked_subs[@]}"} >"$results/drive.log" 2>&1; then
         echo "      driven: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
     else
-        flunk - "anywhere: the driver stopped — $(tail -2 "$results/drive.log" | tr '\n' ' ')"
+        # `drive: <sentence>` names who held the front (`Tools/anywhere/front.py`); else the log's tail.
+        STOPPED="the driver stopped: $(sed -n 's/^drive: //p' "$results/drive.log" | tail -1)"
+        [ "$STOPPED" != "the driver stopped: " ] || STOPPED="the driver stopped: $(tail -2 "$results/drive.log" | tr '\n' ' ')"
+        flunk - "anywhere: $STOPPED"
     fi
     quit_bundle >/dev/null 2>&1 || true
     if [ -s "$work/driver.json" ]; then

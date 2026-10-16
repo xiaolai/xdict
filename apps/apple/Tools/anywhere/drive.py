@@ -21,6 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import front  # noqa: E402
 import hostcondition  # noqa: E402
 
 kit, work, app, fixtures, out = sys.argv[1:6]
@@ -62,14 +63,35 @@ def run(*args, timeout=60):
     return done.returncode, done.stdout.strip(), done.stderr.strip()
 
 
-def tool(*args, timeout=60):
-    status, stdout, stderr = run(hands, *args, timeout=timeout)
+def answer_of(status, stdout, stderr):
     if status != 0:
         return {"error": stderr or f"exit {status}"}
     try:
         return json.loads(stdout.splitlines()[-1])
     except (ValueError, IndexError):
         return {"error": f"no JSON: {stdout[:200]}"}
+
+
+def front_now():
+    try:
+        return answer_of(*run(hands, "front", timeout=10))
+    except subprocess.TimeoutExpired:
+        return {"name": "unknown (hands front timed out)"}
+
+
+def xctests():
+    try:
+        return run("pgrep", "-fl", "xctest", timeout=10)[1].splitlines()
+    except subprocess.TimeoutExpired:
+        return []
+
+
+def tool(*args, timeout=60):
+    """A `hands` action, with the front held to account (`front.guarded`): a timeout or a host that would not come
+    forward stops the driver naming who has the front."""
+    what = "hands " + " ".join(str(a) for a in args[:2])
+    return front.guarded(what, lambda: answer_of(*run(hands, *args, timeout=timeout)),
+                         front=front_now, processes=xctests)
 
 
 def ask(op, wait=20, **extra):
@@ -471,5 +493,8 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except front.Stopped as stopped:
+        write_out()
+        raise SystemExit(f"drive: {stopped}") from None
     finally:
         write_out()
