@@ -142,6 +142,19 @@ extension GalleryRun {
           }
           note('strayMarker', true, 1, '');
         });
+        // No marker where the dictionary draws none: a list item XDict marked must, without XDict's mark, show the
+        // browser's bullet or the dictionary's own ::before (COBUILD-EC's examples hide theirs, `li{list-style:none}`;
+        // the frame once read them before the sheet applied). Read with the mark taken off for a moment.
+        Array.prototype.forEach.call((document.body || document.documentElement).querySelectorAll('li[data-xdict-before=marker]'), function (li, i) {
+          if (i > 4096 || !li.getClientRects().length) return;
+          li.removeAttribute('data-xdict-before');
+          var st = getComputedStyle(li), mk = getComputedStyle(li, '::marker'), own = getComputedStyle(li, '::before').content;
+          var drawn = (st.display === 'list-item' && st.listStyleType !== 'none' && parseFloat(mk.fontSize) > 0)
+            || (st.display === 'list-item' && st.listStyleImage !== 'none') || (own && own !== 'none' && own !== 'normal');
+          var lst = st.listStyleType;
+          li.setAttribute('data-xdict-before', 'marker');
+          note('strayMarker', drawn, 1, drawn ? '' : 'none drawn, XDict marker ' + lst + ' <li.' + String(li.className).split(' ')[0] + '>');
+        });
         // Punctuation alone on a line, and gaps wider than 1em between words on one line (OED's "," between its
         // pronunciations; "banc   bench").
         // The line a text is laid out in: its nearest ancestor that is not plain inline (an inline-block is a box of
