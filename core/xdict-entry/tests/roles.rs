@@ -192,17 +192,62 @@ fn a_key_of_the_edition_written_with_stress_is_not_a_transcription() {
 }
 
 /// The entry's first headword is the lead (unification R, 2026-10-16): the one headword mark precise enough for strong
-/// styling (0.92 on the holdout, where headwords as a whole are 0.59). Exactly one, the first in document order.
+/// styling (0.92 on the holdout, where headwords as a whole are 0.59). A homograph's headword, written in the same
+/// markup as the first (OALD's second `h1.headword` of *bloody*), is a lead too, so every homograph looks the same
+/// (WI-11 Q2, 2026-10-17); a headword in other markup (an idiom's) is not.
 #[test]
-fn the_first_headword_is_the_lead() {
+fn the_first_headword_and_its_homographs_are_leads() {
     let two = r#"<div><b class="hw">run</b> <span class="d">to move fast</span></div><div><b class="hw">run</b> <span class="d">to manage</span></div>"#;
     let (out, _) = entry(two, "run");
-    assert_eq!(out.matches("data-xdict-lead").count(), 1, "{out}");
+    assert_eq!(out.matches("data-xdict-lead").count(), 2, "{out}");
     let lead = out.find("data-xdict-lead").unwrap();
     let first = out.find("data-xdict-role=\"headword\"").unwrap();
     assert!(out[..lead].rfind('<') == out[..first].rfind('<'), "the lead is not the first headword: {out}");
+    let other = r#"<div><b class="hw">run</b> <span class="d">to move fast</span></div><p><b class="idm">run</b> to manage</p>"#;
+    let (out, _) = entry(other, "run");
+    assert!(out.matches("data-xdict-role=\"headword\"").count() == 2, "both are headwords: {out}");
+    assert_eq!(out.matches("data-xdict-lead").count(), 1, "{out}");
+    // A frequency or level class does not make other markup: LDOCE's `hyphenation frequent` then `hyphenation`, MED's
+    // `BASE redword` then `BASE`.
+    for (first, later) in [("hyphenation frequent", "hyphenation"), ("BASE redword", "BASE"), ("hw", "hw star3")] {
+        let marked = format!(
+            r#"<div><span class="{first}">run</span> <span class="d">to move fast</span></div><div><span class="{later}">run</span> <span class="d">to manage</span></div>"#
+        );
+        let (out, _) = entry(&marked, "run");
+        assert_eq!(out.matches("data-xdict-lead").count(), 2, "{out}");
+    }
     let (none, _) = entry(r#"<p>no headword here at all, only a sentence of prose.</p>"#, "zzz");
     assert!(!none.contains("data-xdict-lead"), "{none}");
+}
+
+/// A line break before anything else in a block goes: the block already starts a line, so the break only drew a blank
+/// one (COBUILD-EC's `<div><br>【语法信息】：V n</div>`, WI-11 R8). A break after text stays, and so does one alone in its
+/// block, a spacer the dictionary meant.
+#[test]
+fn a_break_leading_a_block_goes() {
+    let cobuild = r#"<div class="caption">If you <b>bank</b> money. <span><div id="g"><div><div><br>【语法信息】：V n</div></div></div></span></div>"#;
+    let (out, _) = entry(cobuild, "bank");
+    assert!(out.contains(">【语法信息】") && !out.contains("<br>"), "{out}");
+    let (after, _) = entry(r#"<div>one<br>two</div>"#, "zzz");
+    assert!(after.contains("one<br>two"), "{after}");
+    let (spaced, _) = entry(r#"<div> <br>two</div>"#, "zzz");
+    assert!(spaced.contains("<div> two</div>"), "{spaced}");
+    let (alone, _) = entry(r#"<p>one</p><p><br></p><p>two</p>"#, "zzz");
+    assert!(alone.contains("<p><br></p>"), "{alone}");
+}
+
+/// A marked element that starts a line, after a block or first in its block, says so: the space a dictionary put
+/// before it to part it from the word before (OALD's `.pos{margin-left:.25rem}`) then only indents it (OALD's *Pima*,
+/// whose "noun" stands under "(plural Pima, Pimas)", WI-11 R8). One after a word on its line does not.
+#[test]
+fn a_role_starting_a_line_says_so() {
+    let pima = r#"<div><b class="headword">Pima</b> <span class="pos">noun</span><div>(plural <b>Pima</b>, <b>Pimas</b>)</div> <span class="pos">noun</span></div><p>a member of a people</p>"#;
+    let (out, _) = entry(pima, "Pima");
+    assert_eq!(out.matches("data-xdict-line-start").count(), 1, "{out}");
+    let at = out.find("data-xdict-line-start").unwrap();
+    assert!(out[..at].contains("Pimas"), "{out}");
+    let (first, _) = entry(r#"<h1>run</h1><div> <span class="pos">verb</span> to move</div>"#, "run");
+    assert_eq!(first.matches("data-xdict-line-start").count(), 1, "{first}");
 }
 
 /// Punctuation alone between two blocks stays with the block before it (OED's "," between its Brit. and U.S.

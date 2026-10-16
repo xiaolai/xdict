@@ -4,7 +4,8 @@
 # drag source (WI-5); the keyboard helper, the lookup stage's driver and the app's hostile run (WI-6).
 # Built here, run on the E2E Mac only (`Tools/e2e.sh`); **nothing here launches anything**.
 #
-#   build-lab.sh      writes .build/e2e-kit/ whole, or fails
+#   build-lab.sh             writes .build/e2e-kit/ whole, or fails
+#   build-lab.sh --app-only  only the signed lab, into .build/lab-kit/ (Tools/gallery/lab.sh: compiles nothing here)
 #
 # `XDictEntryLab` links the core and can switch a confinement layer off, so it is never in XDict.app
 # (`Tools/build-bundle.sh` refuses a bundle that carries it); it is signed with the same Developer ID and the hardened
@@ -12,7 +13,9 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 readonly LAB=XDictEntryLab
-readonly KIT=.build/e2e-kit
+APP_ONLY=0
+[ "${1:-}" = --app-only ] && APP_ONLY=1
+if [ "$APP_ONLY" = 1 ]; then readonly KIT=.build/lab-kit; else readonly KIT=.build/e2e-kit; fi
 readonly APP=$KIT/$LAB.app
 fail() { echo "build-lab: $*" >&2; exit 1; }
 
@@ -54,6 +57,7 @@ cat >"$APP/Contents/Info.plist" <<'PLIST'
 PLIST
 codesign --force --options runtime --timestamp=none --sign "$identity" "$APP" >/dev/null
 codesign --verify --strict "$APP" || fail "$APP does not verify"
+[ "$APP_ONLY" = 1 ] && { echo "build-lab: $APP signed by $identity"; exit 0; }
 
 # The fixtures, by the core's writer: every folder of conformance/fixtures, the battery and the twins among them.
 kit_abs=$(cd "$KIT" && pwd)
