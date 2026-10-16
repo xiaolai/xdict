@@ -114,3 +114,28 @@ fn an_unknown_markup_keeps_its_sense_numbers_unsure() {
     assert!(tag_of(&out, "sensenum").contains(r#"data-xdict-role="sensenum""#), "{out}");
     assert!(!out.contains("data-xdict-sure"), "{out}");
 }
+
+/// An example the markup's table names is sure (`data-xdict-sure="example"`); the headword inside it is not marked.
+#[test]
+fn a_known_markup_names_its_examples_sure() {
+    let macmillan = ".boxsensefull{margin:0}.base-form{font-weight:bold}.part-of-speech{font-style:italic}";
+    let out = render(
+        macmillan,
+        r#"<div><span class="base-form">run</span> <span class="def">to move fast</span> <p class="example">She <b class="hl">ran</b> home.</p></div>"#,
+        "run",
+    );
+    assert!(tag_of(&out, "example").contains(r#"data-xdict-sure="example""#), "{out}");
+    assert!(!tag_of(&out, "hl").contains("data-xdict-sure"), "{out}");
+}
+
+/// Where a table names no examples (LDOCE's held a translation inside each, below the bar), the generic rule's
+/// examples stand, unsure.
+#[test]
+fn a_table_without_examples_keeps_the_generic_ones() {
+    let out = render(
+        LONGMAN,
+        r#"<div><span class="hw">run</span> <span class="d">to move fast</span> <span class="example">She ran home quickly after school.</span></div>"#,
+        "run",
+    );
+    assert!(!tag_of(&out, "example").contains(r#"data-xdict-sure="example""#), "{out}");
+}

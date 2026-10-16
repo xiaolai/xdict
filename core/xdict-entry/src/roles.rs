@@ -1433,6 +1433,7 @@ fn sure_role(sure: profiles::Sure) -> Role {
     match sure {
         profiles::Sure::Pos => Role::Pos,
         profiles::Sure::Sensenum => Role::Sensenum,
+        profiles::Sure::Example => Role::Example,
     }
 }
 
@@ -1658,6 +1659,7 @@ impl<'n> Tree<'n> {
         let ok = match sure {
             profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
             profiles::Sure::Sensenum => numbered(t),
+            profiles::Sure::Example => f.len > 0,
         };
         ok.then_some(sure)
     }

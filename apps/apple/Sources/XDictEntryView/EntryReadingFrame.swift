@@ -287,6 +287,15 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         + "[data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])"
         + "{font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;"
         + "font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}"
+        // An example a markup table names: italic in the body face and the secondary text colour, so the accent stays
+        // for labels and numbers (owner, 2026-10-16). Its descendants take the face and the slant but keep their own
+        // colour and weight: a headword the dictionary coloured inside it is the one accent (COBUILD-EC's
+        // "correlate"). Han text is never slanted: no synthesized oblique, and CJK faces have no italic.
+        + "[data-xdict-sure=example][data-xdict-sure]{color:var(--xdict-text-2) !important}"
+        + "[data-xdict-sure=example][data-xdict-sure],[data-xdict-sure=example][data-xdict-sure] "
+        + ":not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],"
+        + "[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;"
+        + "font-synthesis-style:none !important}"
         // A label's text is the label's, whatever its descendants declared.
         + "[data-xdict-role=label] :not([data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;"
         + "font-family:inherit !important;color:inherit !important;line-height:inherit !important}"
