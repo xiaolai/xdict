@@ -608,6 +608,11 @@ pub(crate) struct Roles<'s> {
     moves: Vec<(u32, usize, String)>,
     /// Elements closed right before a `,` `;` or `.` (the frame drops their inline end spacing).
     hugs: Vec<u32>,
+    /// Space written right after a block, past any punctuation: where it starts and ends. It goes if a block opens
+    /// next, since space alone between two blocks is a line of its own (OED's `&nbsp;` between pronunciations).
+    gap: Option<(usize, usize)>,
+    /// Space alone between two blocks, to drop.
+    gaps: Vec<(usize, usize)>,
 }
 
 /// What the tree decided: its edits, the strip counts it owns, and the roles written.
@@ -669,6 +674,8 @@ impl<'s> Roles<'s> {
             strip: true,
             hug_after: None,
             moves: Vec::new(),
+            gaps: Vec::new(),
+            gap: None,
             hugs: Vec::new(),
         }
     }
@@ -700,6 +707,12 @@ impl<'s> Roles<'s> {
         closed: Option<(usize, usize)>,
     ) {
         let lower = name.to_ascii_lowercase();
+        if let Some(gap) = self.gap.take()
+            && block_tag(&lower)
+            && self.gaps.len() < MAX_NODES
+        {
+            self.gaps.push(gap);
+        }
         let void = closed.is_none() && (VOID.contains(&lower.as_str()) || tag.ends_with("/>"));
         if void || image {
             self.hug_after = None;
@@ -831,6 +844,15 @@ impl<'s> Roles<'s> {
         if raw.is_empty() {
             return;
         }
+        let after_block = self.hug_after.and_then(|n| self.nodes.get(n as usize)).is_some_and(|n| block_tag(&n.name));
+        self.gap = None;
+        if after_block && let Some(at) = at {
+            let lead = raw.len() - raw.trim_start_matches([',', ';', '.', ':']).len();
+            let rest = raw.get(lead..).unwrap_or("");
+            if !rest.is_empty() && crate::rewrite::unescaped_html(rest).chars().all(char::is_whitespace) {
+                self.gap = Some((at + lead, at + raw.len()));
+            }
+        }
         if let Some(n) = self.hug_after.take()
             && raw.starts_with([',', ';', '.'])
             && self.hugs.len() < MAX_NODES
@@ -838,10 +860,11 @@ impl<'s> Roles<'s> {
             self.hugs.push(n);
             // Nothing but punctuation and space: after a block it would stand on a line of its own (OED's "," between
             // two pronunciation blocks), so it goes inside the block, before its end tag.
-            let punct = raw.trim_end().len();
+            // The space may be written as an entity (`,&nbsp;`).
+            let punct = raw.len() - raw.trim_start_matches([',', ';', '.', ':']).len();
             if let Some(at) = at
-                && let Some(p) = raw.get(..punct)
-                && p.chars().all(|c| matches!(c, ',' | ';' | '.' | ':'))
+                && let (Some(p), Some(rest)) = (raw.get(..punct), raw.get(punct..))
+                && crate::rewrite::unescaped_html(rest).chars().all(char::is_whitespace)
             {
                 self.moves.push((n, at, p.to_owned()));
             }
@@ -873,6 +896,7 @@ impl<'s> Roles<'s> {
 
     /// An end tag, written from `at` to `after`: closes its element, and any left open inside it.
     pub(crate) fn end(&mut self, name: &str, at: usize, after: usize) {
+        self.gap = None;
         if self.deep > 0 {
             self.deep -= 1;
             return;
@@ -933,6 +957,9 @@ impl<'s> Roles<'s> {
             if let Some(n) = self.nodes.get(i as usize) {
                 decided.edits.push((n.attr_at, n.attr_at, " data-xdict-hug".into()));
             }
+        }
+        for &(from, to) in &self.gaps {
+            decided.edits.push((from, to, String::new()));
         }
         for (i, at, punct) in &self.moves {
             let Some(n) = self.nodes.get(*i as usize) else { continue };
@@ -2026,11 +2053,33 @@ impl<'n> Tree<'n> {
 
 /// An element the browser lays out as a block by default: punctuation after it would start a line of its own.
 fn block_tag(name: &str) -> bool {
-    matches!(
-        name,
-        "div" | "p" | "li" | "dd" | "dt" | "dl" | "ul" | "ol" | "section" | "article" | "blockquote" | "h1" | "h2"
-            | "h3" | "h4" | "h5" | "h6" | "header" | "footer" | "aside" | "table" | "center" | "address" | "figure"
-    )
+    const BLOCKS: &[&str] = &[
+        "div",
+        "p",
+        "li",
+        "dd",
+        "dt",
+        "dl",
+        "ul",
+        "ol",
+        "section",
+        "article",
+        "blockquote",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "header",
+        "footer",
+        "aside",
+        "table",
+        "center",
+        "address",
+        "figure",
+    ];
+    BLOCKS.contains(&name)
 }
 
 /// Roles as they are assigned: the first one an element gets is its role; `desc` holds, per element, the roles
