@@ -9,7 +9,7 @@ enum EntryStyleFiles {
   'use strict';
   var mode = '{{theme}}';
   var css = (mode === 'dark'
-    ? 'html{color-scheme:dark;background-color:rgb(30,30,30);color:rgb(230,230,230)}'
+    ? 'html{color-scheme:dark;background-color:rgb(30,30,30);color:rgb(255,255,255)}'
     : 'html{color-scheme:light;background-color:rgb(255,255,255)}') + '{{inset}}';
   function install() {
     var s = document.getElementById('xdict-appearance-style');
@@ -176,8 +176,10 @@ html{padding:0 !important;font-size:var(--xdict-base) !important;
 background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
 visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
 zoom:1 !important;position:static !important;writing-mode:horizontal-tb !important}
-body{margin:0 auto !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;
-max-width:calc(var(--xdict-measure) + 2 * var(--xdict-pad-inline)) !important;width:auto !important;
+/* No measure (parity P17, owner 2026-10-17: follow Apple): the text runs the pane's width, left-aligned, 16 pt from */
+/* its edges at the default size, as Apple's Dictionary draws it. */
+body{margin:0 !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;
+max-width:none !important;width:auto !important;
 min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word !important;
 contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;
 filter:none !important;transform:none !important;zoom:1 !important;position:static !important;
@@ -1445,8 +1447,9 @@ line-height:var(--xdict-leading) !important}
 /* A plain title the lead restates at once (CALD's title line, then the word with its stress marks and speakers): */
 /* the title is drawn once. Its line break goes with it, or an empty line would open the entry. */
 [data-xdict-restated],[data-xdict-restated]+br{display:none !important}
-[data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;
-font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
+/* Apple's headword (parity P19): 23 px at the default size, weight 500. */
+[data-xdict-lead]{font-size:var(--xdict-fs-hw) !important;line-height:var(--xdict-leading-tight) !important;
+font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-headword) !important;
 font-style:normal !important;color:var(--xdict-text) !important}
 [data-xdict-lead] :not([data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],[data-xdict-role=label] *,
 [data-xdict-tag],[data-xdict-icon]){font-size:inherit !important;font-family:inherit !important;
@@ -1455,15 +1458,16 @@ line-height:inherit !important;color:inherit !important}
 /* dictionary, its descendants' declarations included, in the lead too. The generic rule's guesses carry no */
 /* `sure` and keep the dictionary's look (precision, not reach, decides: Codex's unification objections 2, 4). */
 [data-xdict-sure=pos][data-xdict-sure],[data-xdict-sure=pos][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])
-/* No slanted CJK: COBUILD's English–Chinese codes carry their Chinese gloss ("VERB 动词"). */
-{font-family:var(--xdict-font) !important;font-style:italic !important;font-synthesis-style:none !important;
-font-weight:normal !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;
-font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-accent) !important;
+/* Apple's (parity P21): upright, the system face at 500, the secondary label colour. */
+{font-family:var(--xdict-font-ui) !important;font-style:normal !important;font-synthesis-style:none !important;
+font-weight:500 !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;
+font-variant-caps:normal !important;text-transform:none !important;color:var(--xdict-text-2) !important;
 background:none !important}
-/* A sense number a markup table names: one face, weight and colour; its size and place stay the dictionary's. */
+/* A sense number a markup table names: one face, weight and colour; its size and place stay the dictionary's. Apple's */
+/* (parity P22): the system face, 600, the secondary label colour. */
 [data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])
-{font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
-font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}
+{font-family:var(--xdict-font-ui) !important;font-weight:var(--xdict-weight-bold) !important;
+font-style:normal !important;color:var(--xdict-text-2) !important;background:none !important}
 /* An example a markup table names: italic in the body face and size and the secondary text colour, so the accent */
 /* stays for labels and numbers (owner, 2026-10-16; MED's were 14 px, G2). Its descendants take the face, size */
 /* and slant but keep their own */
@@ -1476,13 +1480,12 @@ font-style:normal !important;color:var(--xdict-accent) !important;background:non
 [data-xdict-role=label] *,[data-xdict-sure=keep],[data-xdict-sure=keep] *,[data-xdict-sure=trans],
 [data-xdict-sure=trans] *){font-family:var(--xdict-font) !important;font-style:italic !important;
 font-synthesis-style:none !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important}
-/* A section heading a markup table names: one look, bold, 1.125rem, the body face and the body text colour; the */
-/* accent is not for headings (owner, 2026-10-17). Its own text only: a link or a list inside it keeps its look. */
+/* A section heading a markup table names: one look, Apple's section label (parity P24, 2026-10-17): small capitals */
+/* of the lowercase, 0.03em apart, the body size, the secondary label colour. Its own text only: a link or a list */
+/* inside it keeps its look. Apple's thin rule under the label is not drawn: a heading the core names may be inline. */
 [data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 
 :not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;
-font-size:var(--xdict-fs-l) !important;line-height:var(--xdict-leading) !important;
-font-weight:var(--xdict-weight-bold) !important;font-style:normal !important;
-color:var(--xdict-text) !important}
+font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}
 /* A translation a markup table names, a sense's or an example's: upright, in the secondary text colour. */
 [data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}
 [data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] 
@@ -1497,6 +1500,18 @@ a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-contr
 [data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]),
 [data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label] *)
 {color:inherit !important}
+/* Apple's links (parity P28): no underline but on hover; in the look-up panel, plain text. */
+a:any-link:not([data-xdict-control]){text-decoration:none !important}
+a:any-link:not([data-xdict-control]):hover{text-decoration:underline !important}
+:root[data-xdict-density=panel] a:any-link:not([data-xdict-control]),
+:root[data-xdict-density=panel] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-text) !important}
+/* A part of speech inside a link (MED's) is still Apple's secondary label (D44): four attributes outrank the link rule. */
+[data-xdict-sure=pos][data-xdict-sure][data-xdict-sure][data-xdict-sure],
+[data-xdict-sure=pos][data-xdict-sure][data-xdict-sure][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon]){color:var(--xdict-text-2) !important}
+/* A transcription in the secondary label colour, as Apple's (parity P20), its text included; a speaker, a tag or a */
+/* label inside it keeps its own. */
+[data-xdict-phon],[data-xdict-phon] :not([data-xdict-control],[data-xdict-control] *,[data-xdict-tag],[data-xdict-icon],
+[data-xdict-role=label],[data-xdict-role=label] *){color:var(--xdict-phon-colour) !important}
 }
 /* R7a, space by role (WI-11, 2026-10-17; `dev-docs/measurements/2026-10-17-space-images/`): the gap before a */
 /* role-marked block is its role's, the dictionary's vertical margins on it gone. Two densities, decided 2026-10-17: */

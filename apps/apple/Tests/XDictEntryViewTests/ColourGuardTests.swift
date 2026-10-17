@@ -40,7 +40,7 @@ struct ColourGuardTests {
         func plan(_ declarations: String) -> String? {
             context.evaluateScript("JSON.stringify(XDictColourCore.plan(\(declarations), XDictColourCore.parse))")?.toString()
         }
-        #expect(plan(##"[["color","rgb(0, 0, 0)",""]]"##) == ##"[["set","color","var(--xdict-text, #1d1d1f)",""]]"##)
+        #expect(plan(##"[["color","rgb(0, 0, 0)",""]]"##) == ##"[["set","color","var(--xdict-text, #000000)",""]]"##)
         #expect(plan(##"[["color","#c00000","important"]]"##) == ##"[["set","color","var(--xdict-accent, #055959)","important"]]"##)
         #expect(plan(##"[["background-color","red",""],["border-top-width","1px",""],["box-shadow","1px 1px red",""],"##
                      + ##"["text-shadow","none",""],["outline-color","red",""],["background-image","none",""]]"##)
