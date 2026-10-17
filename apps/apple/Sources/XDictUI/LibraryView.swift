@@ -280,17 +280,6 @@ struct LibraryRow: View {
             }
             Spacer(minLength: 4)
             action
-            // A fixed slot, so the badge never moves with the row's action (L-07); secondary, since a caution colour on
-            // nearly every row stops meaning anything (L-06).
-            Group {
-                if entry.languages.needsAsking || entry.offer != nil {
-                    Image(systemName: "questionmark.circle")
-                        .foregroundStyle(.secondary)
-                        .help(Text("A question awaits your answer in the details"))
-                        .accessibilityLabel(Text("A question awaits your answer in the details"))
-                }
-            }
-            .frame(width: 16)
         }
         .padding(.vertical, 2)
     }
@@ -305,6 +294,11 @@ struct LibraryRow: View {
         case .some(let phase):
             if let sentence = ProblemStatus.sentence(for: phase) {
                 ProblemStatus(sentence: sentence, compact: true)
+            } else if case .ready = phase, entry.offer != nil {
+                // What the details ask, in words, only where it is needed (Codex §5, instead of a badge on every row).
+                Text("Confirm the changed file").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            } else if case .ready = phase, entry.languages.needsAsking {
+                Text("Confirm languages").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
             } else {
                 Text(LibrarySentences.phase(phase))
                     .font(.subheadline)

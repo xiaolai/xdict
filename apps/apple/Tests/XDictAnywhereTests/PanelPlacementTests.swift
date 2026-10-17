@@ -73,7 +73,7 @@ struct PanelPlacementTests {
         #expect(PanelPlacement.height(document: 40, chrome: 29) == PanelPlacement.minimumHeight)
         #expect(PanelPlacement.height(document: 300, chrome: 29) == 329)
         #expect(PanelPlacement.height(document: 5_000, chrome: 29) == PanelPlacement.maximumHeight)
-        #expect(PanelPlacement.height(document: nil, chrome: 29) == PanelPlacement.defaultHeight)
-        #expect(PanelPlacement.height(document: .nan, chrome: 29) == PanelPlacement.defaultHeight)
+        #expect(PanelPlacement.height(document: nil, chrome: 29) == PanelPlacement.initialHeight)
+        #expect(PanelPlacement.height(document: .nan, chrome: 29) == PanelPlacement.initialHeight)
     }
 }

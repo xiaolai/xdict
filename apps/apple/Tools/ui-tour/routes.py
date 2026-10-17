@@ -38,6 +38,38 @@ ROUTES = [
     ("main.start", "full", "Launch XDict", "Main window, the toolbar's search field focused, 'Look Up a Word' and "
      "'Type a word and press Return.'; toolbar Back / Forward / Return to Original Word, Dictionaries picker, "
      "Pronounce, the search field", []),
+    ("main.w640", "full", "Look up 'accomplished' at 640 pt (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 640, 600)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w640.closed", "full", "Look up 'accomplished' at 640 pt, sidebar hidden (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 640, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w720", "full", "Look up 'accomplished' at 720 pt (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 720, 600)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w720.closed", "full", "Look up 'accomplished' at 720 pt, sidebar hidden (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 720, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w820", "full", "Look up 'accomplished' at 820 pt (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 820, 600)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w820.closed", "full", "Look up 'accomplished' at 820 pt, sidebar hidden (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 820, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w1000", "full", "Look up 'accomplished' at 1000 pt (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 1000, 600)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
+    ("main.w1000.closed", "full", "Look up 'accomplished' at 1000 pt, sidebar hidden (Codex §1)",
+     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
+     "Return in the overflow", [("size", 1000, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
+     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
     ("main.narrow", "full", "Look up 'apple' at the 640 pt minimum width", "The search field and the Dictionaries "
      "picker both still in the toolbar and readable; nothing in an overflow menu that search needs",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),

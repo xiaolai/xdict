@@ -14,6 +14,8 @@ struct SearchSidebar: View {
         VStack(spacing: 0) {
             if state.model.showsSuggestions {
                 SuggestionList(state: state)
+            } else if state.model.lookup == nil {
+                RecentList(state: state)
             } else {
                 ResultList(state: state)
                     .focused($resultsFocused)
@@ -266,5 +268,37 @@ struct StatusRow: View {
         .padding(.vertical, 2)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("status")
+    }
+}
+
+/// **Before the first lookup**: up to 8 recent words, newest first, and Clear Recent Lookups; with none, one quiet line
+/// (Codex §5). A word chosen is looked up again in the current scope.
+struct RecentList: View {
+    let state: SearchWindowState
+
+    var body: some View {
+        if state.recent.words.isEmpty {
+            Text("Your lookup results appear here.")
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("recent.empty")
+        } else {
+            List {
+                Section {
+                    ForEach(state.recent.words, id: \.self) { word in
+                        Button { state.lookUpRecent(word) } label: {
+                            Text(verbatim: word).frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("recent")
+                    }
+                    Button("Clear Recent Lookups") { state.recent.clear() }
+                        .controlSize(.small)
+                } header: {
+                    Text("Recent Lookups")
+                }
+            }
+        }
     }
 }

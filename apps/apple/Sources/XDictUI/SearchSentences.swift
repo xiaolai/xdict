@@ -72,6 +72,16 @@ public enum SearchSentences {
         }
     }
 
+    /// How many dictionaries could not look, under a no-results view (Codex §5).
+    public static func unsearched(_ count: Int) -> LocalizedStringResource {
+        LocalizedStringResource("\(count) dictionaries couldn’t be searched")
+    }
+
+    /// Under "No Results in Available Dictionaries": the word, and how many could not look.
+    public static func noResultsIncomplete(query: String, unsearched: Int) -> LocalizedStringResource {
+        LocalizedStringResource("Nothing for “\(query)”. \(unsearched) dictionaries couldn’t be searched.")
+    }
+
     /// The dictionaries a typed word is not in, said once for all of them (UI review M-08).
     public static func notIn(_ names: [String]) -> LocalizedStringResource {
         LocalizedStringResource("Not in \(names.formatted(.list(type: .and))).")

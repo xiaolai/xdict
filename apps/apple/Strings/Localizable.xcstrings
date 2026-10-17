@@ -295,6 +295,34 @@
         }
       }
     },
+    "%lld dictionaries couldn’t be searched" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dictionary couldn’t be searched"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld dictionaries couldn’t be searched"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 部词典未能查询"
+          }
+        }
+      }
+    },
     "%lld files beside the dictionary were left out: one dictionary takes at most 64 files." : {
       "localizations" : {
         "en" : {
@@ -1231,22 +1259,6 @@
         }
       }
     },
-    "A question awaits your answer in the details" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "A question awaits your answer in the details"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "详情中有一个问题等你回答"
-          }
-        }
-      }
-    },
     "About" : {
       "localizations" : {
         "en" : {
@@ -1671,6 +1683,22 @@
         }
       }
     },
+    "Clear Recent Lookups" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Recent Lookups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除最近查询"
+          }
+        }
+      }
+    },
     "Click, then type the combination to use" : {
       "localizations" : {
         "en" : {
@@ -1731,6 +1759,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "确认"
+          }
+        }
+      }
+    },
+    "Confirm languages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm languages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认语言"
+          }
+        }
+      }
+    },
+    "Confirm the changed file" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Confirm the changed file"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "确认已更改的文件"
           }
         }
       }
@@ -2713,6 +2773,22 @@
         }
       }
     },
+    "Look up in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look up in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在%@中查询"
+          }
+        }
+      }
+    },
     "Look up the selection" : {
       "localizations" : {
         "en" : {
@@ -3001,6 +3077,22 @@
         }
       }
     },
+    "No Results in Available Dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Results in Available Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可用词典中没有结果"
+          }
+        }
+      }
+    },
     "No app is in front, so there is no selection to look up." : {
       "localizations" : {
         "en" : {
@@ -3173,6 +3265,44 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 中没有。"
+          }
+        }
+      }
+    },
+    "Nothing for “%@”. %lld dictionaries couldn’t be searched." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing for “%1$@”. %2$#@n@ couldn’t be searched."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg dictionary"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg dictionaries"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有“%1$@”的结果。%2$lld 部词典未能查询。"
           }
         }
       }
@@ -3717,6 +3847,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可用"
+          }
+        }
+      }
+    },
+    "Recent Lookups" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recent Lookups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最近查询"
           }
         }
       }
@@ -5505,6 +5651,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你的词库由更新版本的 XDict 保存。请更新 XDict 后再使用；词库文件未作改动。"
+          }
+        }
+      }
+    },
+    "Your lookup results appear here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your lookup results appear here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询结果将显示在这里。"
           }
         }
       }

@@ -26,7 +26,12 @@ final class LookupAnywhere {
     /// How long the selection may take before the panel shows by the pointer, saying it is reading: the panel's budget is
     /// 1 s from the key (the E2E `panel.deadline` sub-stage), and a hung app may take the read's whole 2 s.
     static let readGrace: Duration = .milliseconds(300)
-    static let panelSize = CGSize(width: 460, height: 440)
+    /// Opening size: 460 pt wide, 180 pt tall while the entry loads (Codex §3); the entry then sets the height.
+    static let panelSize = CGSize(width: PanelPlacement.widths.default, height: PanelPlacement.initialHeight)
+    /// Whether a measured height is taken: not under 2 pt, not from an earlier entry, not after the reader's resize.
+    @ObservationIgnored private var fit = PanelFit()
+    @ObservationIgnored private var shownEntry = 0
+    @ObservationIgnored private var resizeObserver: (any NSObjectProtocol)?
 
     @ObservationIgnored private(set) lazy var registrar = ShortcutRegistrar(
         defaults: .standard, hotkeys: .shared) { [weak self] in self?.pressed() }
@@ -216,7 +221,9 @@ final class LookupAnywhere {
         let pointer = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(word.map { CGPoint(x: $0.midX, y: $0.midY) } ?? pointer) }
             ?? NSScreen.main
-        let frame = PanelPlacement.frame(size: Self.panelSize, word: word, pointer: pointer,
+        // While shown, the panel keeps its size (the reader's, or its entry's); a new showing opens at the default.
+        let size = panel.isVisible ? panel.frame.size : Self.panelSize
+        let frame = PanelPlacement.frame(size: size, word: word, pointer: pointer,
                                          visible: screen?.visibleFrame ?? CGRect(origin: .zero, size: Self.panelSize))
         if !panel.isVisible || notice != .reading { panel.setFrame(frame, display: true) }
         panel.orderFrontRegardless()
@@ -231,30 +238,59 @@ final class LookupAnywhere {
     private func makePanel(_ state: SearchWindowState) -> LookupPanelWindow {
         let panel = LookupPanelWindow(contentRect: CGRect(origin: .zero, size: Self.panelSize))
         panel.contentView = NSHostingView(rootView: PanelRoot(anywhere: self, state: state))
-        state.entry.onDocumentFinished = { [weak self] in self?.fitToEntry() }
+        panel.contentMinSize = CGSize(width: PanelPlacement.widths.min, height: PanelPlacement.minimumHeight)
+        panel.contentMaxSize = CGSize(width: PanelPlacement.widths.max, height: PanelPlacement.maximumHeight)
+        state.entry.onDocumentFinished = { [weak self] in self?.entryFinished() }
+        // A size the reader drags to is theirs until the panel is dismissed (Codex §3).
+        resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification,
+                                                                object: panel, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.fit.readerResized() }
+        }
         self.panel = panel
         return panel
     }
 
-    /// The panel as tall as its entry, within bounds (UI review P-03), its top edge kept where it is.
-    private func fitToEntry() {
-        guard let state else { return }
+    /// A new entry finished loading: measured now and again as its fonts and images settle (0.4, 1.2 and 3 s), each
+    /// measure taken only if it is this entry's and moves the panel by 2 pt or more, so a settled entry never
+    /// oscillates (Codex §3). Polled from here rather than a ResizeObserver in the page: the entry page's scripts are
+    /// the confinement's, and the settling an observer would catch happens within those passes.
+    private func entryFinished() {
+        shownEntry += 1
+        fit.began(entry: shownEntry)
+        let entry = shownEntry
         Task { @MainActor in
-            let document = await state.entry.documentHeight()
-            guard let panel, panel.isVisible else { return }
-            let height = PanelPlacement.height(document: document, chrome: LookupPanelView.headerHeight + 1)
-            var frame = panel.frame
-            guard abs(frame.height - height) > 1 else { return }
-            frame.origin.y += frame.height - height
-            frame.size.height = height
-            panel.setFrame(frame, display: true, animate: false)
+            for delay in [0.0, 0.4, 1.2, 3.0] {
+                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+                guard entry == self.shownEntry else { return }
+                await self.fitToEntry(entry)
+            }
         }
+    }
+
+    /// The panel as tall as its entry, within bounds and the screen's room (UI review P-03, Codex §3), its top edge
+    /// kept where it is unless that would leave the screen.
+    private func fitToEntry(_ entry: Int) async {
+        guard let state else { return }
+        let document = await state.entry.documentHeight()
+        guard let panel, panel.isVisible else { return }
+        let visible = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
+        let chrome = panel.frame.height - (panel.contentLayoutRect.height) + LookupPanelView.headerHeight + 1
+        let height = PanelPlacement.height(document: document, chrome: chrome,
+                                           available: visible.height - 2 * PanelPlacement.margin)
+        guard fit.accepts(height: height, current: panel.frame.height, entry: entry) else { return }
+        var frame = panel.frame
+        frame.origin.y += frame.height - height
+        frame.size.height = height
+        // Back inside the screen, its margin kept, if growing took it past the bottom.
+        frame.origin.y = max(frame.origin.y, visible.minY + PanelPlacement.margin)
+        panel.setFrame(frame, display: true, animate: false)
     }
 
     func close(why: String) {
         reading?.cancel()
         guard let panel, panel.isVisible else { return }
         panel.orderOut(nil)
+        fit.dismissed()
         if let escape { HotkeyCenter.shared.escape.pop(escape) }
         escape = nil
         for monitor in clickMonitors { NSEvent.removeMonitor(monitor) }

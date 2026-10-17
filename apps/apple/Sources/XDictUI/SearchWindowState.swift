@@ -119,11 +119,22 @@ public final class SearchWindowState {
         onPresented?(shown, done)
     }
 
-    /// What covers the entry pane now (UI review X1).
+    /// What covers the entry pane now (UI review X1), saying when some dictionaries could not look (Codex §5).
     public var placeholder: EntryPlaceholder {
-        EntryPlaceholder.of(noDictionaries: library.entries.isEmpty && library.unreadable == nil,
-                            query: model.lookup?.query, selection: model.selection, searching: model.isSearching)
+        let unsearched = model.sections.filter { if case .unavailable(let why) = $0.status {
+            if case .indexing = why { false } else { true } } else { false } }.count
+        return EntryPlaceholder.of(noDictionaries: library.entries.isEmpty && library.unreadable == nil,
+                                   query: model.lookup?.query, selection: model.selection,
+                                   searching: model.isSearching, unsearched: unsearched)
     }
+
+    /// The dictionary the shown entry is read from: named beside its headword (Codex §5).
+    public var shownSourceName: String? {
+        model.shown.flatMap { model.source($0.result.dictionary)?.name }
+    }
+
+    /// The words looked up last, for an empty sidebar (Codex §5).
+    public let recent = RecentLookups()
 
     /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
     /// entry either (UI review X1). Called when the placeholder changes.
@@ -166,6 +177,14 @@ public final class SearchWindowState {
         let chosen = model.showsSuggestions ? highlighted : nil
         highlighted = nil
         model.submit(chosen)
+        if let query = model.lookup?.query { recent.add(query) }
+    }
+
+    /// A recent word chosen: looked up again, in the current scope.
+    public func lookUpRecent(_ word: String) {
+        model.text = word
+        model.submit(word)
+        recent.add(word)
     }
 
     /// ↑ or ↓ in the search field: through the suggestions while they show, else ↓ into the results.
