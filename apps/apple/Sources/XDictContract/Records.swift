@@ -336,12 +336,12 @@ public struct ReadingStyle: Codable, Hashable, Sendable {
     public let fonts: [KeptFont]
     /// The sheets read, by path; those not read, each with why.
     public let sheets: [String]
-    public let skipped: [String]
+    public let skipped: [SkippedSheet]
     /// What normalizing the dictionary's sheets changed.
     public let changes: StyleChanges
 
     public init(version: UInt32, basePx: Double, baseFrom: BaseSource, fonts: [KeptFont], sheets: [String],
-                skipped: [String], changes: StyleChanges) {
+                skipped: [SkippedSheet], changes: StyleChanges) {
         self.version = version
         self.basePx = basePx
         self.baseFrom = baseFrom
@@ -362,6 +362,30 @@ public enum BaseSource: Codable, Hashable, Sendable {
     case text(chars: UInt64, share: Double)
     /// No absolute size at all: a browser's default.
     case browserDefault
+}
+
+/// A sheet the reading style did not read (`xdict-core`'s `SkippedSheet`): its path as the dictionary names it, and why.
+public struct SkippedSheet: Codable, Hashable, Sendable {
+    public let path: String
+    public let reason: SkipReason
+
+    public init(path: String, reason: SkipReason) {
+        self.path = path
+        self.reason = reason
+    }
+}
+
+/// Why a sheet was not read (`xdict-core`'s `SkipReason`): a kind the view layer words. A `detail` is the core's own
+/// diagnostic, in English, shown only behind a disclosure, never as the reader's sentence.
+public enum SkipReason: Codable, Hashable, Sendable {
+    /// Past the first `limit` sheets.
+    case tooMany(limit: UInt64)
+    /// Past the `limit` bytes read in all.
+    case tooLarge(limit: UInt64, detail: String)
+    /// Named by the dictionary, but not among its files.
+    case notFound
+    /// There, but could not be read.
+    case unreadable(detail: String)
 }
 
 /// A font the dictionary keeps, why, and the rule that showed it.

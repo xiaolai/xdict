@@ -70,25 +70,105 @@ struct StringCatalogTests {
         #expect(Self.incomplete(strings) == [])
     }
 
-    /// The control: an entry missing its Chinese, one whose Chinese is not yet translated, one with an empty English,
-    /// and a stale one are each named; a complete one is not.
-    @Test func anIncompleteEntryIsNamed() {
-        func unit(_ value: String, _ state: String = "translated") -> [String: Any] {
-            ["stringUnit": ["state": state, "value": value]]
+    /// **What the system shows of Info.plist too**: the name and the copyright line, read from `InfoPlist.strings`.
+    /// Every one of those keys is in the table, complete in both languages, its English the Info.plist's own (a
+    /// mismatch would show one line in Finder and another in a translated About panel), and every key the table holds
+    /// is one Info.plist has.
+    @Test func theInfoPlistStringsAreCompleteAndMatchInfoPlist() throws {
+        let data = try Data(contentsOf: Manifest.package.appending(path: "Strings/InfoPlist.xcstrings"))
+        let catalog = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let strings = try Self.strings(catalog)
+        let plist = try #require(NSDictionary(contentsOf: Manifest.package.appending(path: "Resources/Info.plist")) as? [String: Any])
+        #expect(Self.incomplete(strings) == [])
+        for key in Self.systemShownInfoPlistKeys {
+            #expect(strings[key] != nil, "InfoPlist.xcstrings lacks \(key)")
         }
+        for (key, entry) in strings {
+            #expect(Self.value(of: entry, in: "en") == plist[key] as? String, "\(key): the table's English is not Info.plist's")
+        }
+        let usage = plist.keys.filter { $0.hasSuffix("UsageDescription") }
+        #expect(usage.allSatisfy { strings[$0] != nil }, "a usage description is not translated: \(usage)")
+    }
+
+    /// The Info.plist keys a reader sees, which `InfoPlist.xcstrings` must carry.
+    static let systemShownInfoPlistKeys = ["CFBundleDisplayName", "CFBundleName", "NSHumanReadableCopyright"]
+
+    /// The control: an entry missing its Chinese, one whose Chinese is not yet translated, one with an empty English,
+    /// and a stale one are each named; a complete one is not. Plural forms count only when every form is translated and
+    /// `other` is among them.
+    @Test func anIncompleteEntryIsNamed() {
         let strings: [String: Any] = [
-            "Complete": ["localizations": ["en": unit("Complete"), "zh-Hans": unit("完整")]],
-            "No Chinese": ["localizations": ["en": unit("No Chinese")]],
-            "Untranslated": ["localizations": ["en": unit("Untranslated"), "zh-Hans": unit("未", "needs_review")]],
-            "Empty English": ["localizations": ["en": unit(""), "zh-Hans": unit("空")]],
-            "Stale": ["extractionState": "stale", "localizations": ["en": unit("Stale"), "zh-Hans": unit("旧")]],
+            "Complete": ["localizations": ["en": Self.unit("Complete"), "zh-Hans": Self.unit("完整")]],
+            "No Chinese": ["localizations": ["en": Self.unit("No Chinese")]],
+            "Untranslated": ["localizations": ["en": Self.unit("Untranslated"), "zh-Hans": Self.unit("未", "needs_review")]],
+            "Empty English": ["localizations": ["en": Self.unit(""), "zh-Hans": Self.unit("空")]],
+            "Stale": ["extractionState": "stale", "localizations": ["en": Self.unit("Stale"), "zh-Hans": Self.unit("旧")]],
+            "%lld plural": ["localizations": ["en": Self.plural(["one": "%lld one", "other": "%lld more"]),
+                                              "zh-Hans": Self.plural(["other": "%lld 个"])]],
+            "%lld no other": ["localizations": ["en": Self.plural(["one": "%lld one"]),
+                                                "zh-Hans": Self.plural(["other": "%lld 个"])]],
+            "%lld half done": ["localizations": ["en": Self.plural(["one": "%lld one", "other": ""]),
+                                                 "zh-Hans": Self.plural(["other": "%lld 个"])]],
         ]
         #expect(Self.incomplete(strings) == [
+            "%lld half done: no translated en",
+            "%lld no other: no translated en",
             "Empty English: no translated en",
             "No Chinese: no translated zh-Hans",
             "Stale: stale — the source no longer says it; run make strings and remove it",
             "Untranslated: no translated zh-Hans",
         ])
+    }
+
+    /// **A count reads in the reader's grammar** (owner's i18n round, 2026-10-17): every English entry whose format
+    /// takes an integer has plural forms, as a variation or as a substitution, so "1 files" cannot be shown. The few
+    /// integers that are not counts of a noun say why in `notCounts`.
+    @Test func everyCountHasPluralForms() throws {
+        let strings = try Self.strings(Self.catalog())
+        #expect(Self.countsWithoutPlurals(strings) == [], "add plural variations (Strings/README.md)")
+        let gone = Self.notCounts.keys.filter { strings[$0] == nil }.sorted()
+        #expect(gone.isEmpty, "notCounts names keys the catalog no longer has: \(gone)")
+    }
+
+    /// The control: a count with a single form is named; one with plural forms, one with a substitution, an exempt
+    /// integer and a string argument are not.
+    @Test func aCountWithoutPluralFormsIsNamed() {
+        let strings: [String: Any] = [
+            "%lld files": ["localizations": ["en": Self.unit("%lld files")]],
+            "%llu entries are empty.": ["localizations": ["en": Self.plural(["one": "%llu entry", "other": "%llu entries"])]],
+            "%@ has %lld votes": ["localizations": ["en": [
+                "stringUnit": ["state": "translated", "value": "%1$@ has %2$#@n@"],
+                "substitutions": ["n": ["argNum": 2, "formatSpecifier": "lld",
+                                        "variations": ["plural": ["one": Self.unit("%arg vote"),
+                                                                  "other": Self.unit("%arg votes")]]]],
+            ]]],
+            "record %lld": ["localizations": ["en": Self.unit("record %lld")]],
+            "Open %@": ["localizations": ["en": Self.unit("Open %@")]],
+        ]
+        #expect(Self.countsWithoutPlurals(strings) == ["%lld files"])
+    }
+
+    /// **Every plural entry reads whole in both languages**: compiled as the bundle compiles it, formatted with 1 and
+    /// with 2, it leaves no format directive behind, and in English 1 and 2 choose different words wherever the
+    /// catalog's forms differ.
+    @Test func everyPluralReadsWholeInBothLanguages() throws {
+        let strings = try Self.strings(Self.catalog())
+        let plurals = strings.keys.filter { Self.hasPlurals(strings[$0] as Any, in: "en") }.sorted()
+        #expect(plurals.count >= 30, "only \(plurals.count) plural entries: the scan is not reading the catalog")
+        for language in Self.languages {
+            let bundle = try CompiledCatalog.bundle(language)
+            for key in plurals {
+                let format = bundle.localizedString(forKey: key, value: nil, table: nil)
+                let one = Self.render(format, key: key, count: 1, language: language)
+                let two = Self.render(format, key: key, count: 2, language: language)
+                for text in [one, two] {
+                    #expect(!text.contains("%") && !text.contains("#@"), "\(language): \(key) reads \(text)")
+                }
+                if language == "en", Self.formsDiffer(strings[key] as Any) {
+                    #expect(one.replacingOccurrences(of: "1", with: "2") != two, "en: \(key) reads \(one) for 1")
+                }
+            }
+        }
     }
 
     /// **No display text below the view layer**: a sentence there could be shown and never extracted.
@@ -127,7 +207,14 @@ struct StringCatalogTests {
             let table = try #require(
                 NSDictionary(contentsOf: scratch.appending("\(language).lproj/Localizable.strings")) as? [String: String],
                 "no \(language).lproj/Localizable.strings was produced")
+            let plurals = try #require(
+                NSDictionary(contentsOf: scratch.appending("\(language).lproj/Localizable.stringsdict")) as? [String: Any],
+                "no \(language).lproj/Localizable.stringsdict was produced")
             for (key, entry) in strings {
+                if Self.hasPlurals(entry, in: language) {
+                    #expect(plurals[key] != nil, "\(language): \(key) has plural forms the compiled table lacks")
+                    continue
+                }
                 let wanted = Self.value(of: entry, in: language)
                 #expect(table[key] == wanted, "\(language): \(key) compiles to \(table[key] ?? "nothing"), not \(wanted ?? "nothing")")
             }
@@ -188,13 +275,63 @@ struct StringCatalogTests {
         try #require(catalog["strings"] as? [String: Any])
     }
 
-    static func value(of entry: Any, in language: String) -> String? {
-        let localizations = (entry as? [String: Any])?["localizations"] as? [String: Any]
-        let unit = (localizations?[language] as? [String: Any])?["stringUnit"] as? [String: Any]
+    static func unit(_ value: String, _ state: String = "translated") -> [String: Any] {
+        ["stringUnit": ["state": state, "value": value]]
+    }
+
+    static func plural(_ forms: [String: String]) -> [String: Any] {
+        ["variations": ["plural": forms.mapValues { unit($0) }]]
+    }
+
+    static func localization(_ entry: Any, _ language: String) -> [String: Any]? {
+        ((entry as? [String: Any])?["localizations"] as? [String: Any])?[language] as? [String: Any]
+    }
+
+    /// A string unit's value, when it is translated and not empty.
+    static func translated(_ unit: Any?) -> String? {
+        let unit = (unit as? [String: Any])?["stringUnit"] as? [String: Any]
         guard unit?["state"] as? String == "translated", let value = unit?["value"] as? String, !value.isEmpty else {
             return nil
         }
         return value
+    }
+
+    /// The plural forms a localization holds: its own variation, and each substitution's.
+    static func pluralForms(_ localization: [String: Any]) -> [[String: Any]] {
+        var forms: [[String: Any]] = []
+        if let own = (localization["variations"] as? [String: Any])?["plural"] as? [String: Any] { forms.append(own) }
+        for case let substitution as [String: Any] in (localization["substitutions"] as? [String: Any])?.values.map({ $0 }) ?? [] {
+            forms.append(((substitution["variations"] as? [String: Any])?["plural"] as? [String: Any]) ?? [:])
+        }
+        return forms
+    }
+
+    static func hasPlurals(_ entry: Any, in language: String) -> Bool {
+        localization(entry, language).map { !pluralForms($0).isEmpty } ?? false
+    }
+
+    /// Whether some plural of the English differs between its forms ("entry" and "entries"; not "Show 1 More").
+    static func formsDiffer(_ entry: Any) -> Bool {
+        guard let english = localization(entry, "en") else { return false }
+        return pluralForms(english).contains { forms in
+            Set(forms.values.compactMap { translated($0)?.replacingOccurrences(of: "%arg", with: "") }
+                .map { $0.replacingOccurrences(of: "%lld", with: "").replacingOccurrences(of: "%llu", with: "") }).count > 1
+        }
+    }
+
+    /// An entry's plain value in a language; nil when it is missing or untranslated, or held as plural forms.
+    static func value(of entry: Any, in language: String) -> String? {
+        localization(entry, language).flatMap { translated($0) }
+    }
+
+    /// Whether a language's localization is whole: a translated value, or plural forms each translated with `other`
+    /// among them (and, beside substitutions, the sentence that holds them).
+    static func isComplete(_ entry: Any, in language: String) -> Bool {
+        guard let localization = localization(entry, language) else { return false }
+        let forms = pluralForms(localization)
+        let ownPlural = (localization["variations"] as? [String: Any])?["plural"] != nil
+        if !ownPlural, translated(localization) == nil { return false }
+        return forms.allSatisfy { forms in forms["other"] != nil && forms.values.allSatisfy { translated($0) != nil } }
     }
 
     static func incomplete(_ strings: [String: Any]) -> [String] {
@@ -203,8 +340,45 @@ struct StringCatalogTests {
             if (entry as? [String: Any])?["extractionState"] as? String == "stale" {
                 return ["\(key): stale — the source no longer says it; run make strings and remove it"]
             }
-            return languages.compactMap { value(of: entry as Any, in: $0) == nil ? "\(key): no translated \($0)" : nil }
+            return languages.compactMap { isComplete(entry as Any, in: $0) ? nil : "\(key): no translated \($0)" }
         }
+    }
+
+    // MARK: - Counts
+
+    /// An integer argument in a key, as `swiftc` writes one for an interpolated `Int` or `UInt64`.
+    static var countSpecifier: Regex<Substring> { #/%(?:\d+\$)?(?:ll|l)?[du]/# }
+
+    /// The integers that are not a count of something, each with why it needs no plural forms.
+    static let notCounts: [String: String] = [
+        "%lld of %lld": "a position in find's matches, \"3 of 7\": no noun to agree",
+        "%lld of %llu shown": "how many of the results show, \"20 of 120 shown\": no noun to agree",
+        "Dictionaries answering lookups: %lld.": "a label and its number",
+        "Fonts kept: %lld": "a label and its number",
+        "Style sheets read: %lld, skipped: %lld": "a label and its numbers",
+        "XDict reading style, rules version %u.": "a version, not a count",
+        "record %lld": "which record under a key, an ordinal label",
+    ]
+
+    /// The English entries whose format takes a count and that have no plural forms.
+    static func countsWithoutPlurals(_ strings: [String: Any]) -> [String] {
+        strings.keys.filter { key in
+            key.contains(countSpecifier) && notCounts[key] == nil && !hasPlurals(strings[key] as Any, in: "en")
+        }.sorted()
+    }
+
+    /// A compiled format read with every count `count` and every string "X", in `language`'s number format.
+    static func render(_ format: String, key: String, count: Int, language: String) -> String {
+        let specifiers = key.matches(of: #/%(?:\d+\$)?(ll|l)?([duf@])/#)
+        let arguments: [any CVarArg] = specifiers.map { match -> any CVarArg in
+            switch match.output.2 {
+            case "@": "X" as NSString
+            case "u": UInt64(count)
+            case "f": Double(count)
+            default: Int64(count)
+            }
+        }
+        return String(format: format, locale: Locale(identifier: language), arguments: arguments)
     }
 
     // MARK: - Reading the source

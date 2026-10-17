@@ -29,7 +29,14 @@ public struct GeneralSettings: View {
             .accessibilityLabel(Text("Open XDict when you log in"))
             .accessibilityIdentifier("launch-at-login")
             if let failure = login.failure {
-                Text(verbatim: failure).foregroundStyle(.red).accessibilityIdentifier("launch-at-login.failure")
+                // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("The system did not change whether XDict opens when you log in.")
+                    Text(verbatim: failure).font(.caption)
+                }
+                .foregroundStyle(.red)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("launch-at-login.failure")
             }
             Picker(selection: $language) {
                 ForEach(InterfaceLanguage.allCases) { choice in

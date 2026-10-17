@@ -94,8 +94,7 @@ public enum LibrarySentences {
 
     /// The one line several notices are gathered into (UI review X7); each is listed, with its reason, behind it.
     public static func noticesHeadline(_ count: Int) -> LocalizedStringResource {
-        count == 1 ? LocalizedStringResource("1 file could not be added.")
-            : LocalizedStringResource("\(count) files could not be added.")
+        LocalizedStringResource("\(count) files could not be added.")
     }
 
     /// Why the library itself cannot be used, and that it was left alone.
@@ -159,7 +158,10 @@ public enum LibrarySentences {
         case .emptyEntries:
             return LocalizedStringResource("\(n) entries are empty.")
         case .hugeEntries:
-            return LocalizedStringResource("\(n) entries are larger than 1 MB and may be slow to show.")
+            return LocalizedStringResource("""
+                \(n) entries are larger than \(Self.hugeEntryBytes, format: .byteCount(style: .memory)) and may be slow \
+                to show.
+                """)
         case .repeatedEntries:
             return LocalizedStringResource("\(n) entries are stored twice under the same headword.")
         case .oddHeadwords:
@@ -169,15 +171,20 @@ public enum LibrarySentences {
         }
     }
 
-    /// Where the check is: running (how far), done (healthy, or with findings below), or unable to finish.
+    /// The size over which the health check calls an entry huge (`xdict-core`'s `HugeEntries`: over 1 MiB).
+    static let hugeEntryBytes: Int64 = 1 << 20
+
+    /// A share as the reader's language writes a percentage, whole: "42%", "42 %".
+    static let percent = FloatingPointFormatStyle<Double>.Percent.percent.precision(.fractionLength(0))
+
+    /// Where the check is: running (how far), done (healthy, or with findings below), or unable to finish. The count
+    /// is plural-aware in the catalog ("its 1 entry", "all 2 entries").
     public static func healthStatus(_ state: HealthState) -> LocalizedStringResource {
         switch state {
         case .checking(let done, let total):
-            let percent = total > 0 ? Int(done * 100 / total) : 0
-            return LocalizedStringResource("Checking entries… \(percent)%")
-        case .checked(let health) where health.entries == 1:
-            return health.findings.allSatisfy({ $0.kind == .repaired })
-                ? LocalizedStringResource("Healthy. Checked its 1 entry.") : LocalizedStringResource("Checked its 1 entry.")
+            // Whole percent, rounded down: "100%" only when it is done.
+            let share = total > 0 ? Double(done * 100 / total) / 100 : 0
+            return LocalizedStringResource("Checking entries… \(share, format: Self.percent)")
         case .checked(let health) where health.findings.allSatisfy({ $0.kind == .repaired }):
             return LocalizedStringResource("Healthy. Checked all \(health.entries) entries.")
         case .checked(let health):
@@ -208,10 +215,36 @@ public enum LibrarySentences {
         case .prose(let weight):
             return LocalizedStringResource("Base size \(size) px, the size most of its text rules set (\(weight) votes).")
         case .text(_, let share):
-            let percent = Int((share * 100).rounded())
-            return LocalizedStringResource("Text size \(size) px: \(percent)% of a sample of its entries are set in it.")
+            return LocalizedStringResource("Text size \(size) px: \(share, format: Self.percent) of a sample of its entries are set in it.")
         case .browserDefault:
             return LocalizedStringResource("Base size \(size) px: the dictionary sets no size of its own.")
+        }
+    }
+
+    /// Why one of the dictionary's sheets was not read; the path is the dictionary's own text, quoted as written.
+    public static func skipped(_ sheet: SkippedSheet) -> LocalizedStringResource {
+        let path = sheet.path
+        switch sheet.reason {
+        case .tooMany(let limit):
+            return LocalizedStringResource("“\(path)” was not read: XDict reads at most \(limit) style sheets of a dictionary.")
+        case .tooLarge(let limit, _):
+            let size = Int64(clamping: limit)
+            return LocalizedStringResource("""
+                “\(path)” was not read: XDict reads at most \(size, format: .byteCount(style: .memory)) of a dictionary’s \
+                style sheets.
+                """)
+        case .notFound:
+            return LocalizedStringResource("“\(path)” was not read: it is not among the dictionary’s files.")
+        case .unreadable:
+            return LocalizedStringResource("“\(path)” could not be read.")
+        }
+    }
+
+    /// The core's own words about a skipped sheet, in English: a diagnostic for a disclosure, never the reader's sentence.
+    public static func skippedDetail(_ sheet: SkippedSheet) -> String? {
+        switch sheet.reason {
+        case .tooLarge(_, let detail), .unreadable(let detail): detail.isEmpty ? nil : detail
+        case .tooMany, .notFound: nil
         }
     }
 

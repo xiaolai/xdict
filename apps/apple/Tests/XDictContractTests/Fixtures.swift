@@ -138,7 +138,10 @@ enum Fixtures {
     static let readingStyle = ReadingStyle(
         version: 1, basePx: 14, baseFrom: .text(chars: 6_120, share: 0.81),
         fonts: [KeptFont(family: "Kingsoft Phonetic Plain", reason: .phonetic, selector: ".phon")],
-        sheets: ["oalecd.css", "in/icons.css"], skipped: ["big.css: larger than 32 MiB"],
+        sheets: ["oalecd.css", "in/icons.css"], skipped: [
+            SkippedSheet(path: "big.css", reason: .tooLarge(limit: 33_554_432, detail: "40 MiB")),
+            SkippedSheet(path: "gone.css", reason: .notFound),
+        ],
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 

@@ -23,6 +23,13 @@ fun reason(r: FontReason) = when (r) {
     FontReason.PHONETIC -> "phonetic"
 }
 
+fun skipped(r: SkipReason) = when (r) {
+    is SkipReason.TooMany -> obj("tooMany" to obj("limit" to r.limit.toString()))
+    is SkipReason.TooLarge -> obj("tooLarge" to obj("limit" to r.limit.toString(), "detail" to q(r.detail)))
+    is SkipReason.NotFound -> q("notFound")
+    is SkipReason.Unreadable -> obj("unreadable" to obj("detail" to q(r.detail)))
+}
+
 fun main(args: Array<String>) {
     val dir = File(args[0])
     fun at(name: String) = Location.Path(File(dir, name).path)
@@ -44,7 +51,9 @@ fun main(args: Array<String>) {
     val list = { l: List<String> -> l.joinToString(",", "[", "]") { q(it) } }
     println(obj(
         "version" to s.version.toString(), "basePx" to s.basePx.toString(), "baseFrom" to baseFrom, "fonts" to fonts,
-        "sheets" to list(s.sheets), "skipped" to list(s.skipped),
+        "sheets" to list(s.sheets), "skipped" to s.skipped.joinToString(",", "[", "]") {
+            obj("path" to q(it.path), "reason" to skipped(it.reason))
+        },
         "changes" to obj(
             "important" to c.important.toString(), "page" to c.page.toString(), "family" to c.family.toString(),
             "size" to c.size.toString(), "lineHeight" to c.lineHeight.toString(), "colour" to c.colour.toString(),

@@ -315,7 +315,16 @@ extension XDictContract.ReadingStyle {
                       }
                       return XDictContract.KeptFont(family: $0.family, reason: reason, selector: $0.selector)
                   },
-                  sheets: style.sheets, skipped: style.skipped,
+                  sheets: style.sheets,
+                  skipped: style.skipped.map {
+                      let reason: XDictContract.SkipReason = switch $0.reason {
+                      case .tooMany(let limit): .tooMany(limit: limit)
+                      case .tooLarge(let limit, let detail): .tooLarge(limit: limit, detail: detail)
+                      case .notFound: .notFound
+                      case .unreadable(let detail): .unreadable(detail: detail)
+                      }
+                      return XDictContract.SkippedSheet(path: $0.path, reason: reason)
+                  },
                   changes: XDictContract.StyleChanges(important: c.important, page: c.page, family: c.family, size: c.size,
                                                       lineHeight: c.lineHeight, colour: c.colour, weight: c.weight,
                                                       space: c.space, dropped: c.dropped))
