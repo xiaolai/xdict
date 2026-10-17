@@ -9,8 +9,8 @@ import XDictLibrary
 /// the run's own, added to a library of the run's own through the service the client reaches. A file and a folder are
 /// registered; ordered volumes and a sidecar are found by the bytes the service returns; a missing volume is named; an
 /// import is cancelled while it runs and retried to completion while another dictionary answers lookups; a stated
-/// language pair is not asked and a guessed one is, and an edit persists; a format 3.0 volume, a registration code and
-/// a damaged file are each refused with their own reason; a link out of the chosen folder is refused; missing and
+/// language pair is not asked and a guessed one is, and an edit persists; a format 3.0 volume and a damaged file are
+/// each refused with their own reason, and a file locked with a registration code is not added at all, with a notice; a link out of the chosen folder is refused; missing and
 /// unsupported sounds are told apart; a rewritten file becomes a new edition joined only when the reader says so, and
 /// the join undoes; a moved folder is found again, and only by relinking.
 ///

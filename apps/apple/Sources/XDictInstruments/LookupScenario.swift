@@ -25,7 +25,7 @@ public protocol LookupStage: AnyObject {
 ///
 /// Switching scope changes the results; reordering the library reorders them; `abbe` finds `abbé` in reader mode only,
 /// and the exact `abbe` leads with its reason; the phrase `take off` resolves intact and is suggested; no internal key
-/// is ever suggested; no match, indexing, a missing file, a damaged file and an unsupported one are told apart, each with
+/// is ever suggested; no match, indexing, a missing file and a damaged one are told apart, each with
 /// its next action; a dictionary whose replies the check holds delays no other's results, nor takes the entry from an
 /// earlier one; a 66,355-record key pages to every record; a five-hop trail of links (each looked up in link mode in its
 /// own dictionary) returns exactly, scroll included, with Back, and to the typed word in one step.
@@ -122,10 +122,13 @@ public final class LookupScenario {
         let phases = Self.answering.map { "\($0): \(describe(ids[$0].flatMap { library.phases[$0] }))" }
         let wanted: [String: (EntryPhase?) -> Bool] = [
             "alpha": { $0 == .ready }, "beta": { $0 == .ready }, "records": { $0 == .ready },
-            "damaged": { $0 == .refused(.damaged) }, "locked": { $0 == .refused(.registrationCode) },
+            "damaged": { $0 == .refused(.damaged) },
             "gone": { if case .missing = $0 { true } else { false } },
         ]
-        let wrong = wanted.filter { name, ok in !ok(ids[name].flatMap { library.phases[$0] }) }.keys.sorted()
+        var wrong = wanted.filter { name, ok in !ok(ids[name].flatMap { library.phases[$0] }) }.keys.sorted()
+        // A file locked with a registration code is not added at all, and the reader is told so (ADR-0005 decision 4).
+        let lockedGone = ids["locked"].map { id in !library.entries.contains { $0.id == id } } ?? false
+        if !lockedGone || !library.notices.contains(.locked(fileName: "locked.mdx")) { wrong.append("locked") }
         let ldoce = ids["ldoce"].map { describe(library.phases[$0]) } ?? "absent"
         findings.check("setup.library", settled && wrong.isEmpty && (ldoce != "absent" || corpus == nil),
                        "settled \(settled); \(phases.joined(separator: ", ")); LDOCE \(ldoce); wrong: \(wrong); notices "

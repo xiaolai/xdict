@@ -136,8 +136,8 @@ extension LookupScenario {
 
     // MARK: - Why nothing (Q11)
 
-    /// `unavailable.toldApart`: for `apple`, Records has no match, Slow is indexing, Gone's file is missing, Damaged is
-    /// damaged and Locked unsupported: five kinds, each with its own next action. The driver reads each one's sentence
+    /// `unavailable.toldApart`: for `apple`, Records has no match, Slow is indexing, Gone's file is missing and Damaged is
+    /// damaged: four kinds (Locked is not in the library at all, `setup.library`), each with its own next action. The driver reads each one's sentence
     /// (`unavailable`). Slow is added here, its import's request held by the transport, by its file's id (which the
     /// request names, `FileSpec.name`), set before the import's task first runs. Then `unavailable.indexingEnds`.
     func unavailable(_ findings: inout Findings) async {
@@ -154,7 +154,6 @@ extension LookupScenario {
             ("slow", { if case .unavailable(.indexing)? = $0 { true } else { false } }, .wait),
             ("gone", { $0 == .unavailable(.missingFile("gone.mdx")) }, ids["gone"].map(NextAction.openLibrary)),
             ("damaged", { $0 == .unavailable(.malformed) }, ids["damaged"].map(NextAction.openLibrary)),
-            ("locked", { $0 == .unavailable(.unsupported(.registrationCode)) }, ids["locked"].map(NextAction.openLibrary)),
         ]
         var wrong: [String] = [], seen: [String] = []
         for (name, ok, next) in wanted {

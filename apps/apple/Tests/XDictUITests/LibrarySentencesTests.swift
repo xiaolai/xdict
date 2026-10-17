@@ -50,7 +50,7 @@ struct LibrarySentencesTests {
             .finder(.notADictionaryFile(fileName: "a.txt")), .finder(.noDictionaryIn(folderName: "f")),
             .finder(.volumesWithoutDictionary(fileNames: ["o.mdd"])), .finder(.outsideChosenFolder(fileName: "far.mdx")),
             .finder(.unreadable(fileName: "u")), .alreadyInLibrary(name: "N"), .relinked(name: "R"),
-            .notSaved(.unavailable(errno: 28)),
+            .notSaved(.unavailable(errno: 28)), .locked(fileName: "locked.mdx"),
         ]
         let sentences = notices.map { String(localized: LibrarySentences.notice($0)) }
         #expect(Set(sentences).count == notices.count, "\(sentences)")

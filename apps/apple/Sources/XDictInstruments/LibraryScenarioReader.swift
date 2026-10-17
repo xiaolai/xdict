@@ -38,9 +38,10 @@ extension LibraryScenario {
         findings.check("refusal.resourceLibraryV3", v3.map { library.phases[$0.id] == .ready } == true
                        && v3?.notes == [.volumeUnreadable(fileName: "v3.mdd", reason: .resourceLibraryV3)],
                        "phase \(describe(v3.flatMap { library.phases[$0.id] })), notes \(v3?.notes ?? [])")
-        findings.check("refusal.registrationCode", locked.map { library.phases[$0.id] == .refused(.registrationCode) } == true
-                       && locked?.refusal == .registrationCode,
-                       "phase \(describe(locked.flatMap { library.phases[$0.id] }))")
+        // A registration code is not a refusal kept with the dictionary: the file is not added at all, and said so once.
+        findings.check("refusal.registrationCode", locked == nil && library.notices.contains(.locked(fileName: "regcode.mdx")),
+                       "entry \(locked.map { "kept, phase \(describe(library.phases[$0.id]))" } ?? "not added"), notices "
+                       + "\(library.notices)")
         findings.check("refusal.damaged", damaged.map { library.phases[$0.id] == .refused(.damaged) } == true
                        && damaged?.refusal == .damaged, "phase \(describe(damaged.flatMap { library.phases[$0.id] }))")
         findings.fact("refusals", [v3?.notes.first.map { "\($0)" }, locked?.refusal.map { "\($0)" },
