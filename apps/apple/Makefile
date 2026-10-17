@@ -107,6 +107,7 @@ remote-build:
 test: lint test-tools test-swift
 
 core:
+	@Tools/not-on-air.sh
 	@Tools/build-core.sh
 
 # **A warning the compiler wrote down fails the build, whatever the compiler exited with**: `swift test` first, then
@@ -116,6 +117,7 @@ DIAGNOSTICS := .build/out/Intermediates.noindex/XDict.build/Debug
 # The service's tests read `conformance/`'s fixtures and the slow ones (Tools/build-fixtures.sh), written by the core's
 # own MDX writer: no dictionary content enters the repository.
 test-swift: core
+	@Tools/not-on-air.sh
 	Tools/build-fixtures.sh $(APPLE)/.build/fixtures
 	swift test; status=$$?; python3 Tools/compiler-warnings.py $(DIAGNOSTICS) || status=1; exit $$status
 
@@ -124,12 +126,14 @@ test-swift: core
 # itself is not a gate.
 SWIFTLINT_VERSION := 0.65.1
 lint:
+	@Tools/not-on-air.sh
 	@command -v swiftlint >/dev/null || { echo "swiftlint not found: brew install swiftlint" >&2; exit 1; }
 	@test "$$(swiftlint version)" = "$(SWIFTLINT_VERSION)" || \
 	  { echo "swiftlint $$(swiftlint version); this gate is pinned to $(SWIFTLINT_VERSION)" >&2; exit 1; }
 	swiftlint lint --strict --quiet
 
 strings: core
+	@Tools/not-on-air.sh
 	@Tools/strings.sh
 
 # **The source tree is read before the bundle is built**, and the run holds it to what it finds when it starts and when
@@ -191,8 +195,10 @@ affected-graph-update:
 # The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects; the
 # WI-10 measurement's arithmetic; every linked crate and bundled font with its notice (Tools/notices.py, needs cargo).
 test-tools:
+	@Tools/not-on-air.sh
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/e2e-requested-test.sh
+	@Tools/tests/not-on-air-test.sh
 	@Tools/tests/affected-graph-test.sh
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/lab-test.sh
