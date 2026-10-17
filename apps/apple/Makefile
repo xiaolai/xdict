@@ -205,7 +205,7 @@ test-tools:
 	@python3 -I Tools/tests/measure_test.py
 	@python3 -I Tools/tests/ui_tour_test.py
 	@python3 -I Tools/tests/ledger_test.py
-	@python3 -I Tools/gallery/ledger.py check
+	@python3 -I Tools/gallery/ledger.py check $(if $(XDICT_KNOWN_COMMITS),--known-commits $(XDICT_KNOWN_COMMITS))
 	@Tools/tests/notices-test.sh
 	@Tools/tests/icons-test.sh
 

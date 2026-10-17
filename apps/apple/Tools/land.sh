@@ -34,7 +34,7 @@ command_of() {
         core) echo "cd core && cargo fmt --check && cargo test && cargo clippy --all-targets && cargo test -p xdict-core --no-run -q" ;;
         # The tool tests read git (the source tree): the copy has none, so it gets a snapshot. No hooks: a host's own
         # global hooks (the build Mac's, 2026-10-17) judge commits meant for a repository, not this throwaway one.
-        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c core.hooksPath=/dev/null -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
+        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c core.hooksPath=/dev/null -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && XDICT_KNOWN_COMMITS=\$PWD/../../.known-commits make test" ;;
         entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
         lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
         mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
@@ -201,6 +201,11 @@ host_job() {
     for g in "$@"; do
         # The format-3.0 test's file is an .mdx, which the copy leaves out: sent alone (it is MDXBuilder's, not content).
         # dev-docs/ is untracked, so a worktree has none: the main checkout's.
+        # The snapshot has no history: the ledger's commits are checked against the Air's list (ledger.py check).
+        if [ "$g" = apple-test ]; then
+            git -C "$REPO" rev-list --all >"$OUT/known-commits.$lane" &&
+                rsync -a "$OUT/known-commits.$lane" "$host:$remote/.known-commits" >>"$rlog" 2>&1
+        fi
         if [ "$g" = mdx-v3 ]; then
             rsync -a "$MAIN/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$remote/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$rlog" 2>&1
         fi

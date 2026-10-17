@@ -110,8 +110,22 @@ class Check(unittest.TestCase):
         self.assertEqual(r.returncode, 1)
         self.assertIn("3 fields, not 10", r.stderr)
 
+    def test_known_commits_stand_in_for_history(self):
+        # A copy without history (make land's snapshot) checks commits against the list the Air sent with it.
+        known = os.path.join(self.root, "known")
+        with open(known, "w") as f:
+            f.write("0123456789abcdef0123456789abcdef01234567\n")
+        r = run("--ledger", self.ledger(self.row()), "--root", self.root, "check", "--known-commits", known)
+        self.assertEqual(r.returncode, 1, r.stdout + r.stderr)
+        self.assertIn(f"commit '{self.sha}' does not exist", r.stderr)
+        with open(known, "a") as f:
+            f.write(git(self.root, "rev-parse", self.sha) + "\n")
+        r = run("--ledger", self.ledger(self.row()), "--root", self.root, "check", "--known-commits", known)
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+
     def test_the_real_ledger_is_green(self):
-        r = run("check")
+        known = os.environ.get("XDICT_KNOWN_COMMITS")
+        r = run("check", *(["--known-commits", known] if known else []))
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("0 problems", r.stdout)
 

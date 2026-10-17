@@ -94,14 +94,16 @@ def guard_found(guard, root):
     return False
 
 
-def commit_exists(sha, root):
+def commit_exists(sha, root, known=None):
+    if known is not None:
+        return any(c.startswith(sha) for c in known)
     return subprocess.run(["git", "-C", root, "cat-file", "-e", sha + "^{commit}"],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
-def problems(path, root):
+def problems(path, root, known=None):
     out, seen = [], set()
-    if subprocess.run(["git", "-C", root, "rev-parse", "--git-dir"], stdout=subprocess.DEVNULL,
+    if known is None and subprocess.run(["git", "-C", root, "rev-parse", "--git-dir"], stdout=subprocess.DEVNULL,
                       stderr=subprocess.DEVNULL).returncode != 0:
         return [f"{root} is not a git repository: commits cannot be checked"]
     for number, row, line in read(path):
@@ -132,7 +134,7 @@ def problems(path, root):
         if row["guard"] != "-" and not guard_found(row["guard"], root):
             out.append(f"{where}: guard {row['guard']!r} is defined nowhere in the repository")
         if row["commit"] != "-" and not (re.fullmatch(r"[0-9a-f]{7,40}", row["commit"])
-                                         and commit_exists(row["commit"], root)):
+                                         and commit_exists(row["commit"], root, known)):
             out.append(f"{where}: commit {row['commit']!r} does not exist")
     return out
 
@@ -208,7 +210,8 @@ def main(argv):
     r.add_argument("id")
     r.add_argument("--theme", choices=sorted(THEMES))
     r.add_argument("--dry-run", action="store_true")
-    sub.add_parser("check")
+    # A copy without history (make land's snapshot) gets the Air's `git rev-list --all` instead.
+    sub.add_parser("check").add_argument("--known-commits", metavar="FILE")
     sub.add_parser("triage").add_argument("report")
     a = p.parse_args(argv)
 
@@ -242,7 +245,11 @@ def main(argv):
             return 0
         return subprocess.run(command).returncode
     elif a.cmd == "check":
-        found = problems(a.ledger, a.root)
+        known = None
+        if a.known_commits:
+            with open(a.known_commits) as f:
+                known = [c for c in f.read().split() if c]
+        found = problems(a.ledger, a.root, known)
         for line in found:
             print(f"ledger: {line}", file=sys.stderr)
         rows = [row for _, row, _ in read(a.ledger) if row]
