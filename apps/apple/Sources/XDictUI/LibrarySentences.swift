@@ -36,7 +36,7 @@ public enum LibrarySentences {
         case .changedDuringImport:
             LocalizedStringResource("The file changed while XDict was reading it. Try again.")
         case .cancelled:
-            LocalizedStringResource("Import cancelled.")
+            LocalizedStringResource("Import canceled.")
         case .serviceFailed:
             LocalizedStringResource("The dictionary service stopped before it finished. Try again.")
         }
@@ -113,7 +113,7 @@ public enum LibrarySentences {
         switch phase {
         case .waiting: LocalizedStringResource("Waiting to import")
         case .importing: LocalizedStringResource("Importing…")
-        case .cancelling: LocalizedStringResource("Cancelling…")
+        case .cancelling: LocalizedStringResource("Canceling…")
         case .opening: LocalizedStringResource("Opening…")
         case .ready: LocalizedStringResource("Ready")
         case .cancelled: refusal(.cancelled)
@@ -232,7 +232,7 @@ public enum LibrarySentences {
         if c.family > 0 { lines.append(LocalizedStringResource("\(c.family) fonts replaced with XDict’s")) }
         if c.size > 0 { lines.append(LocalizedStringResource("\(c.size) font sizes made relative")) }
         if c.lineHeight > 0 { lines.append(LocalizedStringResource("\(c.lineHeight) line heights made relative")) }
-        if c.colour > 0 { lines.append(LocalizedStringResource("\(c.colour) colours set to XDict’s palette")) }
+        if c.colour > 0 { lines.append(LocalizedStringResource("\(c.colour) colors set to XDict’s palette")) }
         if c.weight > 0 { lines.append(LocalizedStringResource("\(c.weight) font weights set to XDict’s")) }
         if c.space > 0 { lines.append(LocalizedStringResource("\(c.space) spacings put on XDict’s steps")) }
         if c.dropped > 0 {

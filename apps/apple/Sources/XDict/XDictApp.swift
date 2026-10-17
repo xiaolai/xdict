@@ -41,7 +41,7 @@ struct XDictApp: App {
             CommandGroup(after: .appSettings) {
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
-            AcknowledgementsCommand()
+            AcknowledgmentsCommand()
             // File ▸ Add Dictionaries… (A-04): the Library, with its open panel up.
             CommandGroup(after: .newItem) {
                 Button("Add Dictionaries…") {
@@ -55,8 +55,8 @@ struct XDictApp: App {
         }
 
         // Every third-party notice (WI-10), from the app menu beside About; not in the Window menu (A-06).
-        Window("Acknowledgments", id: Self.acknowledgementsWindow) {
-            AcknowledgementsView(notices: AcknowledgementsView.bundled())
+        Window("Acknowledgments", id: Self.acknowledgmentsWindow) {
+            AcknowledgmentsView(notices: AcknowledgmentsView.bundled())
         }
         .defaultSize(width: 640, height: 560)
         .commandsRemoved()
@@ -112,7 +112,7 @@ struct XDictApp: App {
     static let mainWindow = "main"
     static let libraryWindow = "library"
     static let setupWindow = "setup"
-    static let acknowledgementsWindow = "acknowledgements"
+    static let acknowledgmentsWindow = "acknowledgments"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
     @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
 
@@ -295,13 +295,13 @@ enum SetupLaunch {
     }
 }
 
-/// XDict ▸ Acknowledgements…, right after About XDict.
-struct AcknowledgementsCommand: Commands {
+/// XDict ▸ Acknowledgments…, right after About XDict.
+struct AcknowledgmentsCommand: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
-            Button { openWindow(id: XDictApp.acknowledgementsWindow) } label: { Text("Acknowledgments") }
+            Button { openWindow(id: XDictApp.acknowledgmentsWindow) } label: { Text("Acknowledgments") }
         }
     }
 }
