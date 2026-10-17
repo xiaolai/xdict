@@ -24,6 +24,9 @@ pub(crate) enum Sure {
     Heading,
     /// A translation, a sense's or an example's: which of the two is the generic rule's call.
     Trans,
+    /// Inside an example, text that is not the example's own (a gloss, a grammar pattern, a label): it keeps the
+    /// dictionary's look. Not a role; written `data-xdict-sure="keep"`, and only inside an example.
+    Keep,
 }
 
 impl Sure {
@@ -42,6 +45,8 @@ pub(crate) struct Profile {
     sensenum: Sel,
     /// Examples.
     example: Sel,
+    /// Inside an example, what is not its own text (`Sure::Keep`).
+    example_keep: Sel,
     /// Section headings: a box's or a block's title ("Word Origin", "EXAMPLES FROM THE CORPUS").
     heading: Sel,
     /// Translations in a bilingual dictionary, of a sense or of an example.
@@ -49,8 +54,16 @@ pub(crate) struct Profile {
 }
 
 /// A table that names nothing: a role a table leaves out stays the generic rule's.
-const NONE: Profile =
-    Profile { signature: &[], pos: &[], pos_words: false, sensenum: &[], example: &[], heading: &[], trans: &[] };
+const NONE: Profile = Profile {
+    signature: &[],
+    pos: &[],
+    pos_words: false,
+    sensenum: &[],
+    example: &[],
+    example_keep: &[],
+    heading: &[],
+    trans: &[],
+};
 
 fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
     sel.iter().any(|(t, cs)| t.is_none_or(|t| t == tag) && cs.iter().all(|c| classes.iter().any(|k| k == c)))
@@ -69,6 +82,8 @@ impl Profile {
             Some(Sure::Heading)
         } else if matches(self.trans, tag, classes) {
             Some(Sure::Trans)
+        } else if matches(self.example_keep, tag, classes) {
+            Some(Sure::Keep)
         } else {
             None
         }
@@ -82,6 +97,7 @@ impl Profile {
             Sure::Example => !self.example.is_empty(),
             Sure::Heading => !self.heading.is_empty(),
             Sure::Trans => !self.trans.is_empty(),
+            Sure::Keep => false,
         }
     }
 }
@@ -95,6 +111,9 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["chwd", "collobox", "pos"],
         pos: SPAN_POS,
         sensenum: &[(Some("span"), &["sensenum"])],
+        // An example in a sense, and the corpus's examples (`ul.exas`); a gloss in one, "(=keeping its profits …)".
+        example: &[(Some("span"), &["example"]), (Some("ul"), &["exas"])],
+        example_keep: &[(Some("span"), &["gloss"])],
         // Its boxes' titles, a word set's name, a thesaurus section's.
         heading: &[
             (Some("span"), &["popheader"]),
@@ -110,6 +129,9 @@ pub(crate) const PROFILES: &[Profile] = &[
     Profile {
         signature: &["oup_icons", "ox3ksym_a1", "pos"],
         pos: SPAN_POS,
+        // `span.x`, an example; `gloss`, its explanation in brackets ("(= Certainly not!)").
+        example: &[(Some("span"), &["x"])],
+        example_keep: &[(Some("span"), &["gloss"])],
         heading: &[(Some("span"), &["box_title"]), (Some("span"), &["idioms_heading"])],
         ..NONE
     },
@@ -120,9 +142,11 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["pos"]), (Some("div"), &["pos"])],
         pos_words: true,
         sensenum: &[(Some("span"), &["num"])],
+        // `p.en`, an example's English; a grammar note inside it ("with clause") is a label.
+        example: &[(Some("p"), &["en"])],
+        example_keep: &[(Some("span"), &["grammatical-note"])],
         heading: &[(Some("div"), &["label"])],
         trans: &[(Some("div"), &["cn_def"]), (Some("p"), &["cn"])],
-        ..NONE
     },
     // Collins English Dictionary.
     Profile {
@@ -141,6 +165,10 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["collins_en_cn", "tips_box", "st"],
         pos: &[(Some("span"), &["st"])],
         sensenum: &[(Some("span"), &["num"]), (Some("span"), &["text_blue"])],
+        // A list item is an example, its English and its Chinese (a Chinese block is the translation: `roles`);
+        // `tips_sentence`, a grammar pattern after it ("[+ to]").
+        example: &[(Some("li"), &[])],
+        example_keep: &[(Some("span"), &["tips_sentence"])],
         heading: &[(Some("div"), &["cc_addon_text"]), (Some("span"), &["ginfotitle"])],
         trans: &[(Some("span"), &["chinese-text"])],
         ..NONE
@@ -207,7 +235,14 @@ pub(crate) const PROFILES: &[Profile] = &[
         ..NONE
     },
     // Practical English Usage: `hang` holds its section and point numbers, and a dash before a heading.
-    Profile { signature: &["peu-quote", "peu-btns", "hang"], sensenum: &[(Some("span"), &["hang"])], ..NONE },
+    // Its examples; inside one, a small-capitals label ("NOT") and an equivalent in brackets ("(= He's ill)").
+    Profile {
+        signature: &["peu-quote", "peu-btns", "hang"],
+        sensenum: &[(Some("span"), &["hang"])],
+        example: &[(Some("span"), &["example"])],
+        example_keep: &[(Some("span"), &["smallcaps"]), (Some("span"), &["equivalent"])],
+        ..NONE
+    },
 ];
 
 /// The table of the markup an edition's sheets name, if any.

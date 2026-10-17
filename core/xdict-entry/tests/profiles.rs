@@ -176,14 +176,64 @@ fn a_known_markup_names_its_translations_sure() {
     assert!(cn.contains(r#"data-xdict-sure="trans""#), "{out}");
 }
 
-/// Where a table names no examples (LDOCE's held a translation inside each, below the bar), the generic rule's
-/// examples stand, unsure.
+/// Where a table names no examples (Collins English Dictionary's), the generic rule's examples stand, unsure.
 #[test]
 fn a_table_without_examples_keeps_the_generic_ones() {
+    let ced = ".dictentry{margin:0}.gramgrp{margin:0}.pos{font-style:italic}";
     let out = render(
-        LONGMAN,
+        ced,
         r#"<div><span class="hw">run</span> <span class="d">to move fast</span> <span class="example">She ran home quickly after school.</span></div>"#,
         "run",
     );
     assert!(!tag_of(&out, "example").contains(r#"data-xdict-sure="example""#), "{out}");
+}
+
+/// LDOCE's examples (`span.example`) are its table's, sure: one look of examples in every dictionary (WI-11, owner
+/// 2026-10-17). The headword inside one is not marked; its English–Chinese edition's translation inside one stays a
+/// translation.
+#[test]
+fn ldoce_names_its_examples_sure() {
+    let out = render(
+        LONGMAN,
+        r#"<div><span class="hw">run</span> <span class="d">to move fast</span> <span class="example">She <span class="nodeword">ran</span> home quickly.<example>她很快跑回家。</example></span></div>"#,
+        "run",
+    );
+    assert!(tag_of(&out, "example").contains(r#"data-xdict-sure="example""#), "{out}");
+    assert!(!tag_of(&out, "nodeword").contains("data-xdict-sure"), "{out}");
+    let tr = &out[out.find("<example").unwrap()..];
+    assert!(tr[..tr.find('>').unwrap()].contains(r#"data-xdict-sure="trans""#), "{out}");
+}
+
+/// What a table names as not an example's own text keeps the dictionary's look inside one (`data-xdict-sure="keep"`):
+/// OALD's gloss in an example, "(= Certainly not!)". The same class outside an example is not marked.
+#[test]
+fn a_gloss_inside_an_example_is_kept() {
+    let oald = ".oup_icons{margin:0}.ox3ksym_a1{margin:0}.pos{font-style:italic}";
+    let out = render(
+        oald,
+        r#"<div><h1 class="headword">bloody</h1> <span class="def">used to emphasize <span class="gloss">(= rude)</span></span> <ul><li><span class="x">Not bloody likely! <span class="gloss">(= Certainly not!)</span></span></li></ul></div>"#,
+        "bloody",
+    );
+    assert!(tag_of(&out, "x").contains(r#"data-xdict-sure="example""#), "{out}");
+    let first = out.find(r#"class="gloss""#).unwrap();
+    let second = first + 1 + out[first + 1..].find(r#"class="gloss""#).unwrap();
+    let start = |at: usize| &out[out[..at].rfind('<').unwrap()..at + out[at..].find('>').unwrap()];
+    assert!(!start(first).contains("data-xdict-sure"), "{out}");
+    assert!(start(second).contains(r#"data-xdict-sure="keep""#), "{out}");
+}
+
+/// A block inside an example whose text is Chinese, digits and punctuation, with no Latin letter, is the example's
+/// translation, sure: COBUILD's unclassed `<p>` after the English one ("其本质设计和100多年前…").
+#[test]
+fn a_chinese_block_inside_an_example_is_its_translation() {
+    let cobuild = ".collins_en_cn{margin:0}.tips_box{margin:0}.st{font-style:italic}";
+    let out = render(
+        cobuild,
+        r#"<div class="collins_en_cn"><span class="hw">basic</span> <span class="st">ADJ</span> <ul><li><p class="en">The basic design changed little in 100 years.</p><p class="zh"><span class="chinese-text">其本质设计和</span>100<span class="chinese-text">多年前相差无几。</span></p></li></ul></div>"#,
+        "basic",
+    );
+    let li = &out[out.find("<li").unwrap()..];
+    assert!(li[..li.find('>').unwrap()].contains(r#"data-xdict-sure="example""#), "{out}");
+    assert!(tag_of(&out, "zh").contains(r#"data-xdict-sure="trans""#), "{out}");
+    assert!(!tag_of(&out, "en").contains("data-xdict-sure"), "{out}");
 }
