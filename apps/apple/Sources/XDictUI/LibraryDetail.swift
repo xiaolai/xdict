@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XDictContract
 import XDictEntryView
@@ -10,12 +11,17 @@ import XDictLibrary
 struct LibraryDetail: View {
     let library: Library
     let entry: LibraryEntry
+    /// Remove, undoable, and Locate… (the open panel), as the Library list does them.
+    let remove: () -> Void
+    let locate: () -> Void
     /// ADR-0010 Q3: this dictionary in its own style, kept under its lineage (never its path), off by default.
     @AppStorage private var originalStyle: Bool
 
-    init(library: Library, entry: LibraryEntry) {
+    init(library: Library, entry: LibraryEntry, remove: @escaping () -> Void = {}, locate: @escaping () -> Void = {}) {
         self.library = library
         self.entry = entry
+        self.remove = remove
+        self.locate = locate
         _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
     }
 
@@ -24,7 +30,9 @@ struct LibraryDetail: View {
     static let languages = ["en", "zh-Hans", "zh-Hant", "ja", "ko", "fr", "de", "es", "it", "pt", "ru", "la", "ar"]
 
     var body: some View {
+        // Status first, then the reader's choices, then what XDict knows of it (UI review L-02, L-10).
         Form {
+            problem
             if let offer = entry.offer { joinQuestion(offer) }
             if entry.join != nil { joined }
             Section {
@@ -33,12 +41,15 @@ struct LibraryDetail: View {
                                                                 fileName: entry.mdx?.fileName ?? ""))) {
                     Text("Name")
                 }
+                .accessibilityLabel(Text("Name"))
             }
-            languages
-            reading
+            // What only an opened dictionary has: hidden for one that never opened (L-02).
+            if entry.info != nil {
+                languages
+                reading
+            }
             about
             health
-            readingStyle
             if !entry.notes.isEmpty {
                 Section("Problems") {
                     ForEach(Array(entry.notes.enumerated()), id: \.offset) { _, note in
@@ -52,9 +63,7 @@ struct LibraryDetail: View {
                 }
             }
             Section {
-                Button("Remove from Library", role: .destructive) {
-                    Task { await library.remove(entry.id) }
-                }
+                Button("Remove from Library", role: .destructive) { remove() }
             }
         }
         .formStyle(.grouped)
@@ -63,7 +72,7 @@ struct LibraryDetail: View {
     /// What the reading style does to this dictionary (ADR-0010, owner's decision of 2026-10-17): asked of the service
     /// when these details show. The dictionary's own words (families, selectors, sheet paths) are shown as written.
     @ViewBuilder private var readingStyle: some View {
-        Section("Reading style") {
+        DisclosureGroup {
             if let state = library.readingStyles[entry.id] {
                 Text(LibrarySentences.styleStatus(state)).textSelection(.enabled)
                 if case .read(let style) = state {
@@ -98,14 +107,36 @@ struct LibraryDetail: View {
                     }
                 }
             }
+        } label: {
+            Text("What the reading style changes")
         }
         .task(id: entry.id) { await library.loadReadingStyle(entry.id) }
+    }
+
+    /// Why this dictionary cannot be used, in full, and the action that can fix it (UI review L-02, X3).
+    @ViewBuilder private var problem: some View {
+        let phase = library.phases[entry.id]
+        if let sentence = ProblemStatus.sentence(for: phase) {
+            Section {
+                ProblemStatus(sentence: sentence)
+                switch LibraryRowAction.for(phase) {
+                case .locate: Button("Locate…") { locate() }
+                case .showInFinder: Button("Show in Finder") { LibraryRow.showInFinder(entry) }
+                case .tryAgain: Button("Try Again") { library.retry(entry.id) }
+                case .cancel, .none: EmptyView()
+                }
+            }
+        }
     }
 
     /// What the health check found (WI-12): where it is, then one sentence per finding, each opening to its places.
     @ViewBuilder private var health: some View {
         if let state = library.health[entry.id] {
             Section("Health") {
+                if case .missing = library.phases[entry.id] {
+                    // What it says was true of the file when it was there (L-02).
+                    Text("Last checked when the file was there.").foregroundStyle(.secondary)
+                }
                 Text(LibrarySentences.healthStatus(state)).textSelection(.enabled)
                 if case .checked(let report) = state {
                     ForEach(Array(report.findings.enumerated()), id: \.offset) { _, finding in
@@ -163,7 +194,7 @@ struct LibraryDetail: View {
                     Text(entry.languages.basis == .unknown
                          ? LocalizedStringResource("XDict could not tell this dictionary's languages from its file name. Which are they?")
                          : LocalizedStringResource("XDict guessed these languages from the file name. Are they right?"))
-                    Button("They Are Right") { library.confirmLanguages(entry.id) }
+                    Button("Confirm") { library.confirmLanguages(entry.id) }
                         .disabled(entry.languages.pair.search == nil || entry.languages.pair.explanation == nil)
                 }
             }
@@ -202,8 +233,15 @@ struct LibraryDetail: View {
                 Text("Original style")
                 Text("Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way.")
             }
+            .accessibilityLabel(Text("Original style"))
             .accessibilityIdentifier("original-style")
+            readingStyle
         }
+    }
+
+    /// The edition's first 12 hexadecimal characters.
+    static func short(_ edition: Edition) -> String {
+        String(edition.rawValue.split(separator: ":").last.map { $0.prefix(12) } ?? "")
     }
 
     private var about: some View {
@@ -235,9 +273,22 @@ struct LibraryDetail: View {
             } else {
                 Text("Known once the dictionary is imported.").foregroundStyle(.secondary)
             }
+            // Short, the whole value in its help and on the pasteboard (UI review L-11).
             if let edition = entry.edition {
                 LabeledContent {
-                    Text(verbatim: edition.rawValue).font(.caption.monospaced()).textSelection(.enabled).lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(verbatim: Self.short(edition)).font(.subheadline.monospaced()).foregroundStyle(.secondary)
+                            .help(Text(verbatim: edition.rawValue))
+                        Button {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(edition.rawValue, forType: .string)
+                        } label: {
+                            Image(systemName: "doc.on.doc")
+                        }
+                        .buttonStyle(.borderless)
+                        .help(Text("Copy"))
+                        .accessibilityLabel(Text("Copy"))
+                    }
                 } label: {
                     Text("Edition")
                 }
