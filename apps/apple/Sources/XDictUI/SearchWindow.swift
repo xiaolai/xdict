@@ -4,19 +4,22 @@ import XDictEntryView
 import XDictLibrary
 import XDictSearch
 
-/// **The main window** (plan-macos-v1 WI-6): the search field and the results in the sidebar, the entry beside them.
-/// Plain macOS: a split view, a toolbar with Back, Forward and the original word (I8) on its leading side and the
-/// dictionaries a typed word is looked up in in its middle (Q1: the scope is always in sight), the speak button on its
-/// trailing side (WI-7), and the Go, Dictionaries and View menus for the keyboard (`SearchCommands`).
+/// **The main window** (plan-macos-v1 WI-6): the results in the sidebar, the entry beside them. Plain macOS: a split
+/// view, a toolbar with Back, Forward and the original word (I8) on its leading side, the dictionaries a typed word is
+/// looked up in in its middle (Q1: the scope is always in sight), the speak button and the search field at its trailing
+/// end (M1; owner's choice of 2026-10-17, after Codex's refutation), and the Go, Dictionaries and View menus for the
+/// keyboard (`SearchCommands`). The field is the AppKit one, so focus, Return, the arrows and Escape keep their
+/// contract; what it suggests shows in the sidebar, which typing reveals when it is collapsed.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
+    @State private var columns = NavigationSplitViewVisibility.all
 
     public init(state: SearchWindowState) {
         self.state = state
     }
 
     public var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 480)
         } detail: {
@@ -31,6 +34,8 @@ public struct SearchWindow: View {
             Task { await state.present(shown) }
         }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
+        // What the reader types shows in the sidebar: typing reveals it (Codex condition 2).
+        .onChange(of: state.typed) { if columns == .detailOnly { columns = .all } }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -52,6 +57,12 @@ public struct SearchWindow: View {
         }
         ToolbarItem(placement: .primaryAction) {
             PronounceButton(state: state)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
+                        onChange: { state.typedText($0) },
+                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
+                .frame(minWidth: 140, idealWidth: 220, maxWidth: 280)
         }
     }
 }
@@ -95,7 +106,8 @@ struct ScopePicker: View {
             Text("Dictionaries")
         }
         .pickerStyle(.menu)
-        .fixedSize()
+        // Readable beside the field at the minimum width, a long name truncated rather than pushing search out.
+        .frame(minWidth: 110, maxWidth: 200)
         .disabled(state.model.known.isEmpty)
         .accessibilityLabel(Text("Dictionaries"))
         .accessibilityIdentifier("scope")

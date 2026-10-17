@@ -2,7 +2,7 @@ import SwiftUI
 import XDictContract
 import XDictSearch
 
-/// **The sidebar**: the search field, then what was typed suggests (Q6, Q7) while the reader types, or the results of
+/// **The sidebar**: what the toolbar's search field suggests (Q6, Q7) while the reader types, or the results of
 /// the lookup made, one section per dictionary in the reader's order, each painted as it answers (Q12), each result
 /// with why it matched (Q4), every record under a key (Q10), and for a dictionary with nothing to show, why, and what
 /// the reader can do (Q11).
@@ -12,16 +12,6 @@ struct SearchSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
-                        onChange: { text in
-                            state.model.text = text
-                            state.highlighted = nil
-                            state.model.textDidChange()
-                        },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-            Divider()
             if state.model.showsSuggestions {
                 SuggestionList(state: state)
             } else {

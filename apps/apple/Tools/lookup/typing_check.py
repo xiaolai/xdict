@@ -11,6 +11,13 @@ class Lost(Exception):
     pass
 
 
+def search_focused(state, focused):
+    """Whether the search field holds the keyboard, by both readings: the window's first responder as the app
+    classifies it (`search`, wherever the field sits: the sidebar or, since 2026-10-17, the toolbar) and the element
+    VoiceOver finds focused (the field's AX identifier `search-field`)."""
+    return (state or {}).get("responder") == "search" and ((focused or {}).get("id") == "search-field")
+
+
 def type_and_confirm(text, *, hold, select_all, type_keys, read_field, front):
     """Types `text` into the focused search field; returns (field, tries). `hold()` brings the app forward,
     `select_all()` selects the field, `type_keys(text)` posts the keys, `read_field()` is the field's text, `front()`

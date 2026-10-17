@@ -234,7 +234,7 @@ if not ready.get("setup"):
 state = until(lambda s: s.get("responder") == "search", 5)
 focused = tool("focused", pid) or {}
 f = focused.get("focused") or {}
-check("launch.searchFocused", state.get("responder") == "search" and f.get("id") == "search-field",
+check("launch.searchFocused", typing_check.search_focused(state, f),
       f"the window's first responder: {state.get('responder')}; the focused element as VoiceOver finds it: "
       f"{f.get('role')} #{f.get('id')} {f.get('texts')}")
 

@@ -25,6 +25,8 @@ public final class SearchWindowState {
     public var highlighted: String?
     /// Asks the search field for the keyboard whenever it changes (at launch, and by Search, ⌥⌘F).
     public private(set) var searchFocus = 1
+    /// Counts the reader's typing in the search field: what reveals a collapsed sidebar.
+    public private(set) var typed = 0
     /// Asks the results list for the keyboard whenever it changes (↓ from the search field).
     public private(set) var resultsFocus = 0
     /// The dictionary whose entry the pane shows: its links are looked up there.
@@ -148,6 +150,15 @@ public final class SearchWindowState {
             model.setScope(.all)
             model.submit(query)
         }
+    }
+
+    /// **The reader typed** in the search field. Only typing comes here: a text the window sets (a visit adopted from
+    /// the panel, Back, Forward) reaches the field through `model.text` and never opens suggestions.
+    public func typedText(_ text: String) {
+        model.text = text
+        highlighted = nil
+        typed += 1
+        model.textDidChange()
     }
 
     /// Return in the search field: the highlighted suggestion, or what was typed.
