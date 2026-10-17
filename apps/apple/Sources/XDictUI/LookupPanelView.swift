@@ -22,12 +22,15 @@ public struct LookupPanelView: View {
     let notice: PanelNotice
     let shortcut: String?
     let expand: () -> Void
+    let openLibrary: () -> Void
 
-    public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?, expand: @escaping () -> Void) {
+    public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?, expand: @escaping () -> Void,
+                openLibrary: @escaping () -> Void = {}) {
         self.state = state
         self.notice = notice
         self.shortcut = shortcut
         self.expand = expand
+        self.openLibrary = openLibrary
     }
 
     public var body: some View {
@@ -42,8 +45,14 @@ public struct LookupPanelView: View {
             Task { await state.present(shown) }
         }
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
+        .onChange(of: state.placeholder) { state.placeholderChanged() }
     }
 
+    /// The header's height: the title bar's, so query, picker and Open in XDict share its row (UI review P-02).
+    public static let headerHeight: CGFloat = 28
+
+    /// In the title-bar row, after the close button: the query, the result pop-up when there are results (P-05), and
+    /// Open in XDict as a text button, since no glyph says it (P-04).
     private var header: some View {
         HStack(spacing: 8) {
             Text(verbatim: state.model.lookup?.query ?? "")
@@ -52,18 +61,19 @@ public struct LookupPanelView: View {
                 .truncationMode(.tail)
                 .accessibilityIdentifier("panel.query")
             Spacer(minLength: 4)
-            ResultPicker(state: state)
-            Button(action: expand) {
-                Label("Open in XDict", systemImage: "arrow.up.left.and.arrow.down.right")
+            if state.model.sections.contains(where: { if case .results(let r) = $0.status { !r.hits.isEmpty } else { false } }) {
+                ResultPicker(state: state)
+                    .controlSize(.small)
             }
-            .labelStyle(.iconOnly)
-            .buttonStyle(.borderless)
-            .disabled(state.model.lookup == nil)
-            .help(expandHelp)
-            .accessibilityIdentifier("panel.expand")
+            Button("Open in XDict", action: expand)
+                .controlSize(.small)
+                .disabled(state.model.lookup == nil)
+                .help(expandHelp)
+                .accessibilityIdentifier("panel.expand")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
+        .padding(.leading, 28)
+        .padding(.trailing, 8)
+        .frame(height: Self.headerHeight)
     }
 
     /// System Settings › Privacy & Security › Accessibility.
@@ -75,10 +85,9 @@ public struct LookupPanelView: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        let model = state.model
         switch notice {
         case .reading:
-            ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity).background(.background)
+            ProgressView().controlSize(.small).coversPane()
         case .refused(let refusal):
             ContentUnavailableView {
                 Label("Nothing to Look Up", systemImage: "text.cursor")
@@ -90,29 +99,25 @@ public struct LookupPanelView: View {
                         .accessibilityIdentifier("panel.openAccessibility")
                 }
             }
-            .background(.background)
+            .coversPane()
             .accessibilityIdentifier("panel.refusal")
         case .none:
-            if state.library.entries.isEmpty, state.library.unreadable == nil {
+            switch state.placeholder {
+            case .noDictionaries:
                 ContentUnavailableView {
                     Label("No Dictionaries", systemImage: "books.vertical")
                 } description: {
-                    Text("XDict reads the MDict dictionaries you have. Add them in the Library, then look words up here.")
+                    Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
+                } actions: {
+                    Button("Open Library") { openLibrary() }
                 }
-                .background(.background)
-            } else if model.selection == nil, model.isSearching {
-                ProgressView().controlSize(.small).frame(maxWidth: .infinity, maxHeight: .infinity).background(.background)
-            } else if model.selection == nil, let lookup = model.lookup {
-                ContentUnavailableView {
-                    Label {
-                        Text("No Results for “\(lookup.query)”")
-                    } icon: {
-                        Image(systemName: "magnifyingglass")
-                    }
-                } description: {
-                    Text("None of your dictionaries has this word.")
-                }
-                .background(.background)
+                .coversPane()
+            case .searching:
+                ProgressView().controlSize(.small).coversPane()
+            case .noResults(let query):
+                ContentUnavailableView.search(text: query).coversPane()
+            case .start, .none:
+                EmptyView()
             }
         }
     }
@@ -142,7 +147,6 @@ struct ResultPicker: View {
         .labelsHidden()
         .pickerStyle(.menu)
         .fixedSize()
-        .disabled(sections.isEmpty)
         .help(Text("The entry shown, and every other result"))
         .accessibilityIdentifier("panel.results")
     }

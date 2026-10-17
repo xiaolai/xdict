@@ -178,6 +178,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         return shown
     }
 
+    /// The shown entry's height in points (its CSS height at its zoom); nil with none shown.
+    public func documentHeight() async -> Double? {
+        guard let height = await pane?.documentHeight() else { return nil }
+        return height * zoom
+    }
+
+    /// Each shown document once it has finished loading: the lookup panel measures it then.
+    public var onDocumentFinished: (() -> Void)?
+
     /// How far down the shown entry the reader has scrolled, in CSS pixels; nil with none shown (the trail keeps it).
     public func scrollOffset() async -> Double? {
         await pane?.scrollOffset()
@@ -364,7 +373,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     func documentFinished(_ pane: EntryPane) {
-        guard pane === self.pane, !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }
+        guard pane === self.pane else { return }
+        onDocumentFinished?()
+        guard !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }
         performFind(findBar.field.stringValue)
     }
 }
