@@ -274,7 +274,7 @@ final class LookupAnywhere {
         let document = await state.entry.documentHeight()
         guard let panel, panel.isVisible else { return }
         let visible = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
-        let chrome = panel.frame.height - (panel.contentLayoutRect.height) + LookupPanelView.headerHeight + 1
+        let chrome = LookupPanelView.chromeHeight
         let height = PanelPlacement.height(document: document, chrome: chrome,
                                            available: visible.height - 2 * PanelPlacement.margin)
         guard fit.accepts(height: height, current: panel.frame.height, entry: entry) else { return }

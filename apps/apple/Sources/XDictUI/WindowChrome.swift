@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-/// **The lookup panel's title-bar buttons** (UI review P-01): a panel is neither minimized nor zoomed, so it shows only
-/// its close button (Escape and a click away close it too).
+/// **The lookup panel's title-bar buttons**: none, as the system Look Up popover has none (P41, 2026-10-17; UI review
+/// P-01 had kept the close button). Escape and a click away close it, as they close the popover.
 public enum PanelChrome {
-    public static let hidden: [NSWindow.ButtonType] = [.miniaturizeButton, .zoomButton]
+    public static let hidden: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
 
     @MainActor
     public static func apply(to window: NSWindow) {

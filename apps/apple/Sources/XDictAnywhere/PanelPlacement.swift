@@ -8,7 +8,7 @@ import CoreGraphics
 public enum PanelPlacement {
     public static let margin: CGFloat = 8
     /// The gap kept between the panel and the word.
-    public static let wordGap: CGFloat = 4
+    public static let wordGap: CGFloat = 3
     /// How far right of and below the pointer the panel's top-left corner sits: clear of the cursor's own bitmap.
     public static let pointerGap = CGSize(width: 12, height: 24)
 
@@ -17,8 +17,8 @@ public enum PanelPlacement {
     public static let minimumHeight: CGFloat = 140
     public static let maximumHeight: CGFloat = 560
     public static let initialHeight: CGFloat = 180
-    /// Its width: 460 pt, the reader may resize it between 360 and 640.
-    public static let widths: (min: CGFloat, default: CGFloat, max: CGFloat) = (360, 460, 640)
+    /// Its width: 390 pt, the Look Up popover's body (P41, 2026-10-17); the reader may resize it between 360 and 640.
+    public static let widths: (min: CGFloat, default: CGFloat, max: CGFloat) = (360, 390, 640)
 
     /// The panel's height for an entry `document` points tall under `chrome` points of header, within the bounds and
     /// the room `available` beside the selection; the opening height when the entry could not be measured.

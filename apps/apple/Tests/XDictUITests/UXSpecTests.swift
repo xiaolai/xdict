@@ -36,7 +36,8 @@ struct UXSpecTests {
         #expect(PanelPlacement.height(document: 200, chrome: 37) == 237)
         #expect(PanelPlacement.height(document: 900, chrome: 37) == 560)
         #expect(PanelPlacement.height(document: 900, chrome: 37, available: 300) == 300)
-        #expect(PanelPlacement.widths == (min: 360, default: 460, max: 640))
+        // Opening at the Look Up popover's 390 pt body (P41, 2026-10-17; §3 had 460).
+        #expect(PanelPlacement.widths == (min: 360, default: 390, max: 640))
     }
 
     @Test func aRefitIgnoresSmallChangesStaleEntriesAndTheReadersOwnSize() {
