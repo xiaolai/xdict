@@ -81,40 +81,11 @@ final class KeyboardSearchField: NSSearchField {
         currentEditor()?.selectAll(nil)
     }
 
-    /// The toolbar item holding the field is the last to go into the overflow menu as the window narrows, so search
-    /// stays directly usable down to the window's minimum width (Codex condition on the toolbar move).
-    private func keepInToolbar() { ToolbarPriority.raise(self) }
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        DispatchQueue.main.async { [weak self] in self?.keepInToolbar() }
         guard wantsKeyboard, window != nil else { return }
         wantsKeyboard = false
         DispatchQueue.main.async { [weak self] in self?.takeKeyboard() }
     }
-}
-
-/// **A toolbar item that stays out of the overflow menu**: the item holding `view` gets the highest visibility priority,
-/// set once (setting it again re-hosts the item, and SwiftUI then moves the view again).
-@MainActor
-enum ToolbarPriority {
-    static func raise(_ view: NSView) {
-        for item in view.window?.toolbar?.items ?? [] where item.view.map(view.isDescendant(of:)) == true
-            && item.visibilityPriority != .high {
-            item.visibilityPriority = .high
-        }
-    }
-}
-
-/// Put behind a toolbar control (`.background(ToolbarPriorityProbe())`) to keep its item visible.
-struct ToolbarPriorityProbe: NSViewRepresentable {
-    final class Probe: NSView {
-        override func viewDidMoveToWindow() {
-            super.viewDidMoveToWindow()
-            DispatchQueue.main.async { [weak self] in if let self { ToolbarPriority.raise(self) } }
-        }
-    }
-
-    func makeNSView(context: Context) -> Probe { Probe() }
-    func updateNSView(_ view: Probe, context: Context) {}
 }

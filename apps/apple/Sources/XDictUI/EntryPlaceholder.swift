@@ -9,13 +9,17 @@ public enum EntryPlaceholder: Equatable, Sendable {
     case start
     case searching
     case noResults(String)
+    /// No result, while `unsearched` dictionaries could not look: not a definitive absence (Codex §5).
+    case noResultsIncomplete(String, unsearched: Int)
     case none
 
-    public static func of(noDictionaries: Bool, query: String?, selection: ResultID?, searching: Bool) -> Self {
+    public static func of(noDictionaries: Bool, query: String?, selection: ResultID?, searching: Bool,
+                          unsearched: Int = 0) -> Self {
         if noDictionaries { return .noDictionaries }
         guard let query else { return .start }
         if selection != nil { return .none }
-        return searching ? .searching : .noResults(query)
+        if searching { return .searching }
+        return unsearched > 0 ? .noResultsIncomplete(query, unsearched: unsearched) : .noResults(query)
     }
 
     /// Whether the entry shown before goes: always, except when there is an entry to show.

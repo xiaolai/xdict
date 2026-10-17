@@ -48,7 +48,8 @@ struct LibraryDetail: View {
                 languages
                 reading
             }
-            about
+            // No About for a dictionary that never opened: it would only say so (Codex §5).
+            if entry.info != nil || entry.edition != nil { about }
             health
             if !entry.notes.isEmpty {
                 Section("Problems") {
@@ -124,7 +125,14 @@ struct LibraryDetail: View {
     @ViewBuilder private var problem: some View {
         let phase = library.phases[entry.id]
         if let sentence = ProblemStatus.sentence(for: phase) {
+            // Which dictionary first, its file beneath, then why and what to do (Codex §5).
             Section {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: entry.displayName).font(.headline)
+                    if let file = entry.mdx?.fileName {
+                        Text(verbatim: file).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                }
                 ProblemStatus(sentence: sentence)
                 switch LibraryRowAction.for(phase) {
                 case .locate: Button("Locate…") { locate() }

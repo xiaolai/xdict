@@ -48,18 +48,19 @@ public struct LookupPanelView: View {
         .onChange(of: state.placeholder) { state.placeholderChanged() }
     }
 
-    /// The header's height: the title bar's, so query, picker and Open in XDict share its row (UI review P-02).
-    public static let headerHeight: CGFloat = 28
+    /// The header's least height (Codex §3): one row, growing with its controls' own metrics.
+    public static let headerHeight: CGFloat = 36
 
-    /// In the title-bar row, after the close button: the query, the result pop-up when there are results (P-05), and
-    /// Open in XDict as a text button, since no glyph says it (P-04).
+    /// One row: close (the panel's own) | speaker | headword | source | Open in XDict (Codex §3; P-04, P-05).
     private var header: some View {
         HStack(spacing: 6) {
             // The speaker first, then the word it says, as in the main window (owner, 2026-10-17).
             PronounceButton(state: state)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-            Text(verbatim: state.model.lookup?.query ?? "")
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+            Text(verbatim: state.shownWord ?? state.model.lookup?.query ?? "")
                 .font(.headline)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -77,7 +78,7 @@ public struct LookupPanelView: View {
         }
         .padding(.leading, 28)
         .padding(.trailing, 8)
-        .frame(height: Self.headerHeight)
+        .frame(minHeight: Self.headerHeight)
     }
 
     /// System Settings › Privacy & Security › Accessibility.
@@ -120,6 +121,8 @@ public struct LookupPanelView: View {
                 ProgressView().controlSize(.small).coversPane()
             case .noResults(let query):
                 ContentUnavailableView.search(text: query).coversPane()
+            case .noResultsIncomplete(let query, let unsearched):
+                NoResultsIncomplete(query: query, unsearched: unsearched, openLibrary: openLibrary).coversPane()
             case .start, .none:
                 EmptyView()
             }
@@ -128,6 +131,7 @@ public struct LookupPanelView: View {
 }
 
 /// Every result of the panel's lookup, grouped by dictionary, the shown one checked: choosing one shows its entry.
+/// Closed, it names only the dictionary read from, 80–140 pt, truncated: the headword is beside it (Codex §3).
 struct ResultPicker: View {
     let state: SearchWindowState
 
@@ -136,21 +140,23 @@ struct ResultPicker: View {
             guard case .results(let results) = section.status, !results.hits.isEmpty else { return nil }
             return (section, results.hits.map { ResultID(dictionary: section.id, entry: $0.entry) })
         }
-        Picker(selection: Binding(get: { state.model.selection }, set: { state.model.select($0) })) {
-            // The dictionary's name with each result, so the closed pop-up names the shown entry's source (R11).
-            ForEach(Array(sections.enumerated()), id: \.element.0.id) { index, element in
-                if index > 0 { Divider() }
-                ForEach(element.1, id: \.self) { id in
-                    Text(verbatim: "\(element.0.name) — \(state.model.hit(id)?.headword ?? id.entry.key)")
-                        .tag(Optional(id))
+        Menu {
+            Picker(selection: Binding(get: { state.model.selection }, set: { state.model.select($0) })) {
+                ForEach(Array(sections.enumerated()), id: \.element.0.id) { index, element in
+                    if index > 0 { Divider() }
+                    ForEach(element.1, id: \.self) { id in
+                        Text(verbatim: "\(element.0.name) — \(state.model.hit(id)?.headword ?? id.entry.key)")
+                            .tag(Optional(id))
+                    }
                 }
+            } label: {
+                Text("Dictionary")
             }
+            .pickerStyle(.inline)
         } label: {
-            Text("Dictionary")
+            Text(verbatim: state.shownSourceName ?? "").lineLimit(1).truncationMode(.tail)
         }
-        .labelsHidden()
-        .pickerStyle(.menu)
-        .fixedSize()
+        .frame(minWidth: 80, maxWidth: 140)
         .help(Text("The entry shown, and every other result"))
         .accessibilityIdentifier("panel.results")
     }
