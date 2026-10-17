@@ -36,20 +36,16 @@ struct UXSpecTests {
         #expect(PanelPlacement.height(document: 200, chrome: 37) == 237)
         #expect(PanelPlacement.height(document: 900, chrome: 37) == 560)
         #expect(PanelPlacement.height(document: 900, chrome: 37, available: 300) == 300)
-        #expect(PanelPlacement.widths == (min: 360, default: 460, max: 640))
+        // Opening at the Look Up popover's 390 pt body (P41, 2026-10-17; §3 had 460).
+        #expect(PanelPlacement.widths == (min: 360, default: 390, max: 640))
     }
 
-    @Test func aRefitIgnoresSmallChangesStaleEntriesAndTheReadersOwnSize() {
+    @Test func aRefitIgnoresSmallChangesAndStaleEntries() {
         var fit = PanelFit()
         fit.began(entry: 1)
         #expect(fit.accepts(height: 300, current: 180, entry: 1))
         #expect(!fit.accepts(height: 301, current: 300, entry: 1), "under 2 pt")
         #expect(!fit.accepts(height: 400, current: 300, entry: 0), "an earlier entry's measure")
-        fit.readerResized()
-        #expect(!fit.accepts(height: 500, current: 300, entry: 1), "the reader's size is kept")
-        fit.began(entry: 2)
-        #expect(!fit.accepts(height: 500, current: 300, entry: 2), "until the panel is dismissed")
-        fit.dismissed()
         fit.began(entry: 3)
         #expect(fit.accepts(height: 500, current: 300, entry: 3))
     }

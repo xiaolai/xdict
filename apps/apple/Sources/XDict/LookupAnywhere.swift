@@ -26,19 +26,20 @@ final class LookupAnywhere {
     /// How long the selection may take before the panel shows by the pointer, saying it is reading: the panel's budget is
     /// 1 s from the key (the E2E `panel.deadline` sub-stage), and a hung app may take the read's whole 2 s.
     static let readGrace: Duration = .milliseconds(300)
-    /// Opening size: 460 pt wide, 180 pt tall while the entry loads (Codex §3); the entry then sets the height.
+    /// Opening size: the Look Up popover's 390 pt body (P41), 180 pt tall while the entry loads (Codex §3); the entry
+    /// then sets the height.
     static let panelSize = CGSize(width: PanelPlacement.widths.default, height: PanelPlacement.initialHeight)
-    /// Whether a measured height is taken: not under 2 pt, not from an earlier entry, not after the reader's resize.
+    /// Whether a measured height is taken: not under 2 pt, not from an earlier entry.
     @ObservationIgnored private var fit = PanelFit()
     @ObservationIgnored private var shownEntry = 0
-    @ObservationIgnored private var resizeObserver: (any NSObjectProtocol)?
 
     @ObservationIgnored private(set) lazy var registrar = ShortcutRegistrar(
         defaults: .standard, hotkeys: .shared) { [weak self] in self?.pressed() }
     private(set) var notice = PanelNotice.none
     /// The panel's own search and entry view: made once, at launch, so the first lookup does not wait for a web view.
     @ObservationIgnored private var state: SearchWindowState?
-    @ObservationIgnored private var panel: LookupPanelWindow?
+    @ObservationIgnored private var panel: LookupPopover?
+    @ObservationIgnored private var content: NSView?
     @ObservationIgnored private var escape: EscapeStack.Entry?
     @ObservationIgnored private var clickMonitors: [Any] = []
     @ObservationIgnored private var reading: Task<Void, Never>?
@@ -48,9 +49,9 @@ final class LookupAnywhere {
     /// What the panel and the expansion did, for the instruments (`AnywhereReport`).
     @ObservationIgnored var observe: ((String, [String: Any]) -> Void)?
 
-    var isShown: Bool { panel?.isVisible == true }
+    var isShown: Bool { panel?.isShown == true }
     var panelState: SearchWindowState? { state }
-    var panelFrame: CGRect? { panel?.isVisible == true ? panel?.frame : nil }
+    var panelFrame: CGRect? { panel?.frame }
 
     /// Registers the shortcut, offers the Service, and readies the panel. Once, at launch.
     /// The last app other than XDict to be frontmost: where a Service request came from, when it brought XDict forward.
@@ -79,7 +80,7 @@ final class LookupAnywhere {
         NSApp.servicesProvider = ServicesProvider.shared
         NSUpdateDynamicServices()
         registrar.registerSaved()
-        state = XDictApp.windowState()
+        state = XDictApp.windowState(panel: true)
     }
 
     // MARK: - Asking
@@ -221,12 +222,13 @@ final class LookupAnywhere {
         let pointer = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(word.map { CGPoint(x: $0.midX, y: $0.midY) } ?? pointer) }
             ?? NSScreen.main
-        // While shown, the panel keeps its size (the reader's, or its entry's); a new showing opens at the default.
-        let size = panel.isVisible ? panel.frame.size : Self.panelSize
-        let frame = PanelPlacement.frame(size: size, word: word, pointer: pointer,
-                                         visible: screen?.visibleFrame ?? CGRect(origin: .zero, size: Self.panelSize))
-        if !panel.isVisible || notice != .reading { panel.setFrame(frame, display: true) }
-        panel.orderFrontRegardless()
+        let visible = screen?.visibleFrame ?? CGRect(origin: .zero, size: Self.panelSize)
+        // While shown, the popover keeps its size (its entry's) and its anchor; a new showing opens at the default.
+        if !panel.isShown || notice != .reading, let content {
+            let size = panel.isShown ? panel.bodySize : Self.panelSize
+            panel.show(content, size: size, word: word, pointer: pointer, visible: visible)
+        }
+        let frame = panel.frame ?? .zero
         if escape == nil {
             escape = HotkeyCenter.shared.escape.push { [weak self] in self?.close(why: "escape") }
         }
@@ -235,17 +237,14 @@ final class LookupAnywhere {
                            "word": word.map(Self.describe) ?? NSNull(), "notice": String(describing: notice)])
     }
 
-    private func makePanel(_ state: SearchWindowState) -> LookupPanelWindow {
-        let panel = LookupPanelWindow(contentRect: CGRect(origin: .zero, size: Self.panelSize))
-        panel.contentView = NSHostingView(rootView: PanelRoot(anywhere: self, state: state))
-        panel.contentMinSize = CGSize(width: PanelPlacement.widths.min, height: PanelPlacement.minimumHeight)
-        panel.contentMaxSize = CGSize(width: PanelPlacement.widths.max, height: PanelPlacement.maximumHeight)
+    private func makePanel(_ state: SearchWindowState) -> LookupPopover {
+        let panel = LookupPopover()
+        let host = NSHostingView(rootView: PanelRoot(anywhere: self, state: state))
+        host.setAccessibilityIdentifier("lookupPanel")
+        content = host
+        // Closed by itself (a click elsewhere in XDict): the same bookkeeping as every other way it closes.
+        panel.onClose = { [weak self] in self?.close(why: "clickAway") }
         state.entry.onDocumentFinished = { [weak self] in self?.entryFinished() }
-        // A size the reader drags to is theirs until the panel is dismissed (Codex §3).
-        resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didEndLiveResizeNotification,
-                                                                object: panel, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.fit.readerResized() }
-        }
         self.panel = panel
         return panel
     }
@@ -272,25 +271,18 @@ final class LookupAnywhere {
     private func fitToEntry(_ entry: Int) async {
         guard let state else { return }
         let document = await state.entry.documentHeight()
-        guard let panel, panel.isVisible else { return }
-        let visible = (panel.screen ?? NSScreen.main)?.visibleFrame ?? panel.frame
-        let chrome = panel.frame.height - (panel.contentLayoutRect.height) + LookupPanelView.headerHeight + 1
-        let height = PanelPlacement.height(document: document, chrome: chrome,
+        guard let panel, panel.isShown else { return }
+        let visible = (panel.anchor.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        let height = PanelPlacement.height(document: document, chrome: LookupPanelView.chromeHeight,
                                            available: visible.height - 2 * PanelPlacement.margin)
-        guard fit.accepts(height: height, current: panel.frame.height, entry: entry) else { return }
-        var frame = panel.frame
-        frame.origin.y += frame.height - height
-        frame.size.height = height
-        // Back inside the screen, its margin kept, if growing took it past the bottom.
-        frame.origin.y = max(frame.origin.y, visible.minY + PanelPlacement.margin)
-        panel.setFrame(frame, display: true, animate: false)
+        guard fit.accepts(height: height, current: panel.bodySize.height, entry: entry) else { return }
+        panel.resize(height: height)
     }
 
     func close(why: String) {
         reading?.cancel()
-        guard let panel, panel.isVisible else { return }
-        panel.orderOut(nil)
-        fit.dismissed()
+        guard let panel, panel.isShown || escape != nil else { return }
+        panel.close()
         if let escape { HotkeyCenter.shared.escape.pop(escape) }
         escape = nil
         for monitor in clickMonitors { NSEvent.removeMonitor(monitor) }
@@ -317,8 +309,9 @@ final class LookupAnywhere {
     }
 
     private func closeIfAway(_ point: CGPoint, window: NSWindow?) {
-        guard let panel, panel.isVisible else { return }
-        if window === panel || panel.frame.contains(point) { return }
+        guard let panel, panel.isShown else { return }
+        let popoverWindow = panel.popover.contentViewController?.view.window
+        if window === popoverWindow || (panel.frame?.contains(point) ?? false) { return }
         if let window, window.level.rawValue >= NSWindow.Level.popUpMenu.rawValue { return }
         close(why: "clickAway")
     }
@@ -359,37 +352,6 @@ final class LookupAnywhere {
     }
 }
 
-/// **The panel's window**: a non-activating panel that never becomes key or main — so the reader's app keeps the
-/// keyboard and its next key — floating above ordinary windows, joining every Space and full-screen app, as a Quick
-/// Look or Dictionary panel does. Borderless chrome is not used: a titled utility panel draws the standard close button
-/// and shadow, and moves by its title bar.
-final class LookupPanelWindow: NSPanel {
-    init(contentRect: CGRect) {
-        super.init(contentRect: contentRect, styleMask: [.titled, .closable, .resizable, .utilityWindow, .nonactivatingPanel,
-                                                         .fullSizeContentView],
-                   backing: .buffered, defer: false)
-        isFloatingPanel = true
-        level = .floating
-        hidesOnDeactivate = false
-        becomesKeyOnlyIfNeeded = true
-        titleVisibility = .hidden
-        titlebarAppearsTransparent = true
-        isMovableByWindowBackground = true
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        isReleasedWhenClosed = false
-        setAccessibilityIdentifier("lookupPanel")
-        PanelChrome.apply(to: self)
-    }
-
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-
-    /// The close button, like Escape and a click away.
-    override func performClose(_ sender: Any?) {
-        MainActor.assumeIsolated { LookupAnywhere.shared.close(why: "closeButton") }
-    }
-}
-
 /// The panel's SwiftUI root: the content, redrawn as the notice and the shortcut change.
 private struct PanelRoot: View {
     let anywhere: LookupAnywhere
@@ -403,8 +365,6 @@ private struct PanelRoot: View {
                             anywhere.close(why: "openLibrary")
                             MenuBarActions.openLibrary()
                         })
-        // The header sits in the transparent title bar's row, beside the close button (UI review P-02).
-        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

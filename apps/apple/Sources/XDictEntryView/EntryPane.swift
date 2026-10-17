@@ -204,6 +204,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         guard frame != self.frame else { return }
         let restyled = Self.restyles(from: self.frame, to: frame)
         self.frame = frame
+        applyScheme()
         // "Original style" is the core's rendering too, not only the frame: the entry is asked for again, not reloaded
         // from memory (it was: the frame changed and the reading style's markup stayed, E2E 2026-10-16).
         if restyled, let reference {
@@ -225,9 +226,24 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         reloadDocument()
     }
 
+    /// What the web view draws under the page: the theme's paper, except in the lookup popover (P41), where the entry
+    /// sits on the popover's glass, as Apple's does. "Original style" drops the panel layer, so it keeps its paper.
+    struct Page: Equatable {
+        let draws: Bool
+        let under: NSColor
+    }
+
+    static func page(_ scheme: EntryColourScheme, frame: EntryReadingFrame) -> Page {
+        if frame.contains(.panel) { return Page(draws: false, under: .clear) }
+        return Page(draws: true, under: scheme == .dark ? NSColor(white: 30 / 255, alpha: 1) : .white)
+    }
+
     private func applyScheme() {
         view.appearance = NSAppearance(named: scheme == .dark ? .darkAqua : .aqua)
-        view.underPageBackgroundColor = scheme == .dark ? NSColor(white: 30 / 255, alpha: 1) : .white
+        let page = Self.page(scheme, frame: frame)
+        view.underPageBackgroundColor = page.under
+        // WKWebView has no public switch for its own background; `drawsBackground` is the key AppKit's web views take.
+        view.setValue(page.draws, forKey: "drawsBackground")
     }
 
     private func installScripts() {

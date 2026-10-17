@@ -13,8 +13,8 @@ public enum PanelNotice: Equatable, Sendable {
 }
 
 /// **The lookup panel's content** (plan-macos-v1 WI-8): the word, the dictionary whose entry is shown — a pop-up of every
-/// result, grouped by dictionary, to read another — "Open in XDict" to expand into the main window, and the entry. Plain
-/// macOS: a header bar over the entry, like a Quick Look panel. **The panel never takes the keyboard** (it must not
+/// result, grouped by dictionary, to read another — "Open in XDict" to expand into the main window, and the entry. Laid out as
+/// the system Look Up popover (P41): a title row over the entry, footer rows under it (PanelLook). **The panel never takes the keyboard** (it must not
 /// swallow the reader's next keystroke), so everything here is for the pointer; the keyboard has Escape, and the lookup
 /// shortcut pressed again, which expands it (`help` says so).
 public struct LookupPanelView: View {
@@ -36,10 +36,20 @@ public struct LookupPanelView: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
-            Divider()
             EntryHost(controller: state.entry)
+                // The entry fades out above the footer, so scrolled text never runs into its hairline (P41).
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: PanelLook.entryFade)
+                    }
+                }
                 .overlay { placeholder }
+            footer
         }
+        // The popover has no title bar: the title row starts 16 pt from the top, the hidden title bar only a drag area.
+        .ignoresSafeArea(.container, edges: .top)
         .onChange(of: state.model.shown) { _, shown in
             guard let shown else { return }
             Task { await state.present(shown) }
@@ -48,37 +58,56 @@ public struct LookupPanelView: View {
         .onChange(of: state.placeholder) { state.placeholderChanged() }
     }
 
-    /// The header's least height (Codex §3): one row, growing with its controls' own metrics.
-    public static let headerHeight: CGFloat = 36
+    /// Everything around the entry, in points: the title row under its space and over its gap, and the two footer rows,
+    /// each under a gap and a hairline (PanelLook).
+    public static let chromeHeight: CGFloat = PanelLook.topSpace + PanelLook.titleRow + PanelLook.footerGap
+        + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1) + PanelLook.bottomInset
 
-    /// One row: close (the panel's own) | speaker | headword | source | Open in XDict (Codex §3; P-04, P-05).
+    /// The popover's title row (P41): its 20 pt title, then a rule to the trailing inset. The popover's title is the
+    /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17), and the dictionary's name
+    /// after the rule is the switcher of every result.
     private var header: some View {
-        HStack(spacing: 6) {
-            // The speaker first, then the word it says, as in the main window (owner, 2026-10-17).
+        HStack(spacing: 8) {
             PronounceButton(state: state)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
-                .frame(width: 28, height: 28)
+                .frame(width: PanelLook.titleRow, height: PanelLook.titleRow)
                 .contentShape(Rectangle())
             Text(verbatim: state.shownWord ?? state.model.lookup?.query ?? "")
-                .font(.headline)
+                .font(.system(size: PanelLook.titleSize))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .layoutPriority(1)
                 .accessibilityIdentifier("panel.query")
-            Spacer(minLength: 4)
+            Rectangle()
+                .fill(.separator)
+                .frame(minWidth: 8, maxWidth: .infinity, maxHeight: 1)
+                .accessibilityHidden(true)
             if state.model.sections.contains(where: { if case .results(let r) = $0.status { !r.hits.isEmpty } else { false } }) {
                 ResultPicker(state: state)
                     .controlSize(.small)
             }
-            Button("Open in XDict", action: expand)
-                .controlSize(.small)
+        }
+        .frame(height: PanelLook.titleRow)
+        .padding(.top, PanelLook.topSpace)
+        .padding(.bottom, PanelLook.footerGap)
+        .padding(.leading, PanelLook.leading)
+        .padding(.trailing, PanelLook.trailing)
+    }
+
+    /// The popover's footer rows (P41): "Open in Dictionary" with a book, "Configure Dictionaries" with a gear; here
+    /// "Open in XDict" and the Library.
+    private var footer: some View {
+        VStack(spacing: 0) {
+            FooterRow(title: Text("Open in XDict"), symbol: "character.book.closed", action: expand)
                 .disabled(state.model.lookup == nil)
                 .help(expandHelp)
                 .accessibilityIdentifier("panel.expand")
+            FooterRow(title: Text("Configure Dictionaries"), symbol: "gearshape", action: openLibrary)
+                .accessibilityIdentifier("panel.configure")
         }
-        .padding(.leading, 28)
-        .padding(.trailing, 8)
-        .frame(minHeight: Self.headerHeight)
+        .padding(.bottom, PanelLook.bottomInset)
     }
 
     /// System Settings › Privacy & Security › Accessibility.
@@ -126,6 +155,36 @@ public struct LookupPanelView: View {
             case .start, .none:
                 EmptyView()
             }
+        }
+    }
+}
+
+/// One footer row of the popover (P41): an 8 pt gap, a hairline across the insets, then 26 pt of a semibold 13 pt title
+/// 26 pt in and its symbol at the trailing inset, the whole row one button.
+private struct FooterRow: View {
+    let title: Text
+    let symbol: String
+    let action: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Divider()
+                .padding(.leading, PanelLook.leading)
+                .padding(.trailing, PanelLook.trailing)
+                .padding(.top, PanelLook.footerGap)
+            Button(action: action) {
+                HStack {
+                    title.font(.system(size: PanelLook.footerFontSize, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Image(systemName: symbol).imageScale(.large).accessibilityHidden(true)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.leading, PanelLook.footerLeading)
+                .padding(.trailing, PanelLook.trailing)
+                .frame(height: PanelLook.footerRow)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
     }
 }

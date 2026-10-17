@@ -28,7 +28,9 @@ struct TestInventoryTests {
         "XDictLibraryTests": 52,
         "XDictSearchTests": 49,
         "XDictSpeechTests": 31,
-        "XDictAnywhereTests": 69,
+        // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
+        // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
+        "XDictAnywhereTests": 64,
         "XDictUITests": 24,
         "XDictEntryViewTests": 43,
         "XDictServiceTests": 44,
