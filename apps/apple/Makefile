@@ -63,7 +63,11 @@ APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO := $(abspath $(APPLE)/../..)
 # Machine-local settings, untracked: the E2E Mac's SSH name and the like. Absent is normal here; a missing host is loud
 # where it is needed.
--include $(REPO)/local.mk
+# A worktree has none of its own: the main checkout's is read, as Tools/ui-tour/run.sh and Tools/gallery/lab.sh read it.
+# Without it `make app` in a worktree compiled and ran `swift test` on this Mac, windows and all (2026-10-18).
+LOCAL_MK := $(firstword $(wildcard $(REPO)/local.mk) \
+  $(wildcard $(abspath $(shell git -C $(REPO) rev-parse --git-common-dir 2>/dev/null)/..)/local.mk))
+-include $(LOCAL_MK)
 
 # Unset: the login keychain's Developer ID Application identity, which Tools/build-bundle.sh requires to be exactly one.
 SIGN_ID ?=
