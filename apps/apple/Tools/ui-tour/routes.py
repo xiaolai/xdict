@@ -83,7 +83,7 @@ ROUTES = [
     ("speech.pronounce", "full", "Look up 'apple', ⌥⌘P", "Spoken (volume 0 here); a notice if no voice or recording",
      look_up("apple") + [("key", "cmd+opt+p"), ("wait", 1.5)]),
     # Menus
-    ("menu.app", "full", "Click the XDict menu", "About XDict, Acknowledgments…, Settings…, Set Up XDict…, "
+    ("menu.app", "full", "Click the XDict menu", "About XDict, Acknowledgments, Settings…, Set Up XDict…, "
      "Services, Hide, Quit", [("menuopen", 1)]),
     ("menu.file", "full", "Click File", "New Window and the app's file items", [("menuopen", 2)]),
     ("menu.edit", "full", "Click Edit", "Find in Entry… ⌘F, Find Next ⌘G, Find Previous ⇧⌘G, Pronounce ⌥⌘P",
@@ -100,8 +100,8 @@ ROUTES = [
     ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Library…, "
      "Settings…, Quit XDict", [("extra",)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
-    ("acknowledgments", "full", "XDict ▸ Acknowledgments…", "Every third-party notice, readable",
-     [("menu", 1, "Acknowledgments…")]),
+    ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
+     [("menu", 1, "Acknowledgments")]),
     ("setup.board", "full", "XDict ▸ Set Up XDict…", "Each setup row with its live state and action",
      [("menu", 1, "Set Up XDict…")]),
     ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library", "The Dictionaries row not done, "
@@ -133,8 +133,9 @@ ROUTES = [
      [LIBRARY, ("wait", 1), ("click", "damaged", "Damaged"), ("wait", 1.2)]),
     ("library.gone", "full", "⇧⌘L, click 'gone'", "The file is missing, said in a sentence, with what to do",
      [LIBRARY, ("wait", 1), ("click", "gone", "Gone"), ("wait", 1.2)]),
-    ("library.locked", "full", "⇧⌘L, click 'locked'", "XDict may not read the file, said in a sentence",
-     [LIBRARY, ("wait", 1), ("click", "locked", "Locked"), ("wait", 1.2)]),
+    ("library.locked", "full", "⇧⌘L over the fixtures, which hold a registration-code file", "No 'locked' row: "
+     "such a file is refused at import (ADR-0005 decision 4, 5b19fbd), with a notice naming why",
+     [LIBRARY, ("wait", 1.5)]),
     ("library.records", "full", "⇧⌘L, click 'records'", "A large dictionary's details and health",
      [LIBRARY, ("wait", 1), ("click", "records", "Records"), ("wait", 1.5)]),
     ("library.addPanel", "full", "⇧⌘L, Add Dictionaries… (⌘O)", "The open panel for .mdx/.mdd and folders",
