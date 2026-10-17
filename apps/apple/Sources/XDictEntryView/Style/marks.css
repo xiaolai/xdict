@@ -25,7 +25,7 @@ text-indent:0 !important;list-style:none !important}
 /* The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text. */
 [data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}
 [data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
+inset-block-start:calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
 /* 4. The disclosure chevron, drawn from `aria-expanded`, which the disclosure script keeps to the fold. */
 [data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 0.25em 0 0 !important;
 margin-inline:0 0.25em !important;transition:transform 0.15s !important}

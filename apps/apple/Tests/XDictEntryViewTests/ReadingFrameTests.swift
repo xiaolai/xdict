@@ -288,7 +288,7 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }"))
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }"))
         // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
         #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
         #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))
@@ -657,7 +657,7 @@ struct ReadingFrameTests {
         #expect(column.contains("[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}"))
         let reading = EntryScripts.appearance(.light, frame: .all)
         #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); "
-            + "lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }"))
+            + "lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }"))
     }
 
     /// P24: Apple's thin rule under a section label, on the label's own line: the heading's when it is a block, its
@@ -695,6 +695,20 @@ struct ReadingFrameTests {
     /// D46: a box the dictionary caps in height whose text does not fit grows: a scroller (MED's related words,
     /// `max-height:150px;overflow:auto`) hid rows a frame sized to its document cannot scroll to. One that clips
     /// (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+    /// D47: XDict's dot is placed from its item's top, so a top padding the spacing gives the item or its first block
+    /// (OALD's idiom heads, blocks in an inline span) drops the dot by the same amount; nothing else moves it.
+    @Test func aDotFollowsThePaddingAboveItsFirstLine() throws {
+        let context = try Self.core()
+        func drop(_ facts: String) -> Double { context.evaluateScript("XDictFrameCore.markerDrop(\(facts))")?.toDouble() ?? -1 }
+        #expect(drop("{padded: true, first: true, contentTop: 112, markerTop: 100}") == 12)
+        #expect(drop("{padded: false, first: true, contentTop: 112, markerTop: 100}") == 0)
+        #expect(drop("{padded: true, first: false, contentTop: 112, markerTop: 100}") == 0)
+        #expect(drop("{padded: true, first: true, contentTop: 98, markerTop: 100}") == 0)
+        let style = EntryScripts.appearance(.light, frame: .all)
+        #expect(style.contains("calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em)"))
+        #expect(style.contains("function markerDrops() {"))
+    }
+
     @Test func aCappedBoxWhoseTextRunsOnIsLetGrow() throws {
         let context = try Self.core()
         func lifts(_ facts: String) -> Bool { context.evaluateScript("XDictFrameCore.lifts(\(facts))")?.toBool() == true }

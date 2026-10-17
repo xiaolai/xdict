@@ -534,6 +534,21 @@
       e.style.setProperty('--xdict-space-at', best[i][0] + 'px');
     });
   }
+  // D47: a dot placed from its item's top follows the padding the spacing put above the item's first line (OALD's idiom
+  // heads, padded because they are blocks in an inline span), `--xdict-marker-drop` in marks.css. Reading style only.
+  function markerDrops() {
+    if (!SPACE_CAP || !document.body) return;
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-before=marker]'), function (m, i) {
+      if (i > 65536) return;
+      m.style.removeProperty('--xdict-marker-drop');
+      var d = m.hasAttribute('data-xdict-space-by') ? m : m.querySelector('[data-xdict-space-by]');
+      if (!d || !m.getClientRects().length) return;
+      var drop = XDictFrameCore.markerDrop({ padded: true, first: d === m || firstIn(m, d),
+        contentTop: d.getBoundingClientRect().top + d.clientTop + (parseFloat(getComputedStyle(d).paddingTop) || 0),
+        markerTop: m.getBoundingClientRect().top + m.clientTop });
+      if (drop > 0) m.style.setProperty('--xdict-marker-drop', drop + 'px');
+    });
+  }
   // D46: a height cap its text does not fit in is lifted (`XDictFrameCore.lifts`). Reading style only.
   function overflows() {
     if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
@@ -632,10 +647,10 @@
     if (pending || !SPACE_CAP) return;
     pending = true;
     // A timer, not an animation frame: a pane in the background gets no frames, and still resizes.
-    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); }, 16);
+    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }, 16);
   }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
   document.addEventListener('click', function () { setTimeout(later, 50); setTimeout(later, 400); });
