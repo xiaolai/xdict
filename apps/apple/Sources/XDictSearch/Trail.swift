@@ -30,17 +30,20 @@ public struct Visit: Hashable, Sendable {
     public var scroll: Double
     /// The anchor a link named, to scroll to on first arrival.
     public var anchor: String?
+    /// What the reader had typed in the search field here, whose list the sidebar shows; nil for a link followed.
+    public var typed: String?
     /// A word the reader typed, which "return to the original word" goes back to; a link followed is not one.
     public var isOrigin: Bool
 
     public init(query: String, mode: MatchMode, scope: SearchScope, result: ResultID? = nil, scroll: Double = 0,
-                anchor: String? = nil, isOrigin: Bool) {
+                anchor: String? = nil, typed: String? = nil, isOrigin: Bool) {
         self.query = query
         self.mode = mode
         self.scope = scope
         self.result = result
         self.scroll = scroll
         self.anchor = anchor
+        self.typed = typed
         self.isOrigin = isOrigin
     }
 }

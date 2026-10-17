@@ -7,7 +7,7 @@ asked through its command directory (`Sources/XDict/LookupWindow.swift`).
 
 The whole flow with key events alone: the search field has the keyboard at launch; a word typed and Return; ↓ into the
 results and through them; Tab into the entry and to its first link, Return to follow it; Back, Forward and Return to
-Original Word by their shortcuts; Search (⌥⌘F); a dictionary's scope (⌥⌘2) and every dictionary (⌥⌘0); a suggestion
+Original Word by their shortcuts; Search (⌥⌘F); a dictionary's scope (⌘2) and every dictionary (⌘0); a suggestion
 chosen with ↓ and Return. After each, the app says what it holds and what the keyboard reached. Then the app's scenario
 runs (`LookupScenario`); at each of its checkpoints the window is read through the Accessibility API, as VoiceOver
 reads it, against what the app says it must show. Writes `Findings` (checks and facts) to <driver.json>.
@@ -338,17 +338,17 @@ state = press("cmd+opt+f")
 check("keyboard.searchCommand", state.get("responder") == "search", f"⌥⌘F: the keyboard in {state.get('responder')}")
 
 # The scope, from the keyboard, and in sight (Q1).
-state = press("cmd+opt+2", settle=0.3)
+state = press("cmd+2", settle=0.3)
 state = until(lambda s: all(st != "searching" for _, st in sections(s)), 5)
 second = names[1] if len(names) > 1 else "?"
 scoped = (state.get("scope"), [n for n, _ in sections(state)])
 nodes, _ = ax_nodes()
 scope_texts = [n.get("texts") for n in nodes if n.get("id") == "scope"]
-check("keyboard.scope", scoped == (second, [second]), f"⌥⌘2: scope {scoped[0]!r}, sections {scoped[1]}")
+check("keyboard.scope", scoped == (second, [second]), f"⌘2: scope {scoped[0]!r}, sections {scoped[1]}")
 check("voiceover.scopeVisible", any(second in ts for ts in scope_texts),
       f"the toolbar's scope, as read: {scope_texts}")
-state = press("cmd+opt+0", settle=0.3)
-check("keyboard.scopeAll", state.get("scope") == "all", f"⌥⌘0: scope {state.get('scope')!r}")
+state = press("cmd+0", settle=0.3)
+check("keyboard.scopeAll", state.get("scope") == "all", f"⌘0: scope {state.get('scope')!r}")
 
 # A suggestion, chosen with the keyboard (Q6).
 state = press("cmd+opt+f")

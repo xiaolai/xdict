@@ -91,10 +91,11 @@ extension LookupScenario {
                        && hits?.first?.how == .exact, "Alpha for take off: \(describe(hits))")
         model.text = "take o"
         model.textDidChange()
-        let came = await until(Self.step) { !self.model.suggestions.isEmpty }
+        // Since the Apple parity the list stays after typing: wait for this text's own.
+        let came = await until(Self.step) { self.model.listing?.typed == "take o" && self.model.listing?.settled == true }
         let offered = model.suggestions
         findings.merge(await stage.checkpoint("suggestions"))
-        model.dismissSuggestions()
+        await model.idle()
         findings.check("phrase.suggested", came && offered.contains("take off") && offered.contains("take on"),
                        "typing take o suggested \(offered)")
     }
@@ -106,9 +107,9 @@ extension LookupScenario {
         let reached = await lookup("@take_box_000", in: "alpha", mode: .link)
         model.text = "take"
         model.textDidChange()
-        let came = await until(Self.step) { !self.model.suggestions.isEmpty }
+        let came = await until(Self.step) { self.model.listing?.typed == "take" && self.model.listing?.settled == true }
         let window = model.suggestions
-        model.dismissSuggestions()
+        await model.idle()
         var asked: [String: [String]] = [:]
         for prefix in ["take", "take_", "takeb", "@", "@t", "@take", "@take_box"] {
             asked[prefix] = await suggestions(prefix, in: "alpha") ?? ["(no answer)"]
