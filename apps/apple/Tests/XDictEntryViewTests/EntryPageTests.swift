@@ -99,7 +99,10 @@ struct EntryPageTests {
     /// Reader's order, one section each, the first with no divider, each divider named by its dictionary.
     @Test func sectionsFollowTheReadersOrderWithApplesDividers() async throws {
         let (controller, _, defaults, suite) = try await page(["alpha", "beta", "gamma"])
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         let sections = try #require(controller.pageSections)
         #expect(sections.map(\.name) == ["Alpha", "Beta", "Gamma"])
         #expect(sections.map(\.hasDivider) == [false, true, true])
@@ -112,7 +115,10 @@ struct EntryPageTests {
     /// switches read back off. No two frames share a store, a handler or a web view.
     @Test func everyFrameIsIsolatedWithEveryLayer() async throws {
         let (controller, contents, defaults, suite) = try await page(["alpha", "beta", "gamma"])
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         let panes = try #require(controller.pagePanes)
         #expect(panes.count == 3)
         #expect(panes.map(\.binding) == contents.map(\.binding))
@@ -131,7 +137,10 @@ struct EntryPageTests {
     /// A layer that cannot be put in place refuses the whole page: no frame is made for any dictionary.
     @Test func aLayerThatCannotHoldRefusesEveryFrame() async throws {
         let (controller, _, defaults, suite) = try await page(["alpha", "beta"], ruleList: false)
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         #expect(controller.refusal != nil)
         #expect(controller.pagePanes?.isEmpty ?? true)
         #expect(controller.webView == nil)
@@ -140,7 +149,10 @@ struct EntryPageTests {
     /// A collapsed dictionary keeps its divider, makes no frame, and the reader's click expands it and is kept.
     @Test func collapsingADictionaryIsKeptAndExpandingMakesItsFrame() async throws {
         let (controller, _, defaults, suite) = try await page(["alpha", "beta", "gamma"], collapsed: ["beta"])
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         var sections = try #require(controller.pageSections)
         #expect(sections.map(\.collapsed) == [false, true, false])
         #expect(sections[1].pane == nil, "a collapsed frame was made")
@@ -157,7 +169,10 @@ struct EntryPageTests {
     /// its place in the reader's order.
     @Test func showingThePageAgainKeepsItsFrames() async throws {
         let (controller, contents, defaults, suite) = try await page(["alpha", "gamma"])
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         let before = try #require(controller.pagePanes)
         let beta = FakeContent("beta")
         beta.documents["beta"] = EntryDocument(html: Data("<b>beta</b>".utf8), policy: "default-src 'none'")
@@ -177,7 +192,10 @@ struct EntryPageTests {
     /// One dictionary's page, or a single entry, leaves page mode: the single pane is back, the page gone.
     @Test func aSingleEntryReplacesThePage() async throws {
         let (controller, contents, defaults, suite) = try await page(["alpha", "beta"])
-        defer { defaults.removePersistentDomain(forName: suite) }
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
         _ = await controller.show(EntryReference(key: "alpha"), from: contents[0])
         #expect(controller.pageSections == nil)
         #expect(controller.webView != nil)
