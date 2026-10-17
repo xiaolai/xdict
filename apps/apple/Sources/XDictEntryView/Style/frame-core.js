@@ -23,7 +23,10 @@ var XDictFrameCore = (function () {
   // section is a phrase block when it holds idioms, phrasal verbs, collocates or derived words.
   var ROLE_SPACE = { sense: 'sense', sensenum: 'sense', example: 'example', 'example-trans': 'translation',
                      trans: 'translation', subhead: 'subhead', heading: 'heading', pos: 'pos' };
-  function spaceOf(role, section) {
+  // A section or heading inside a sense is that sense's note (OALD's "synonym proviso", "see also", D43): it keeps
+  // the dictionary's own gap, as its "Topics" line does, never a heading's.
+  function spaceOf(role, section, inSense) {
+    if (inSense && (role === 'section' || role === 'heading')) return '';
     if (role === 'section') return /^(idioms|phrasal|colloc|derivatives)$/.test(section || '') ? 'phrase' : 'heading';
     return Object.prototype.hasOwnProperty.call(ROLE_SPACE, role) ? ROLE_SPACE[role] : '';
   }

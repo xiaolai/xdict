@@ -459,7 +459,8 @@
       if (i > 65536 || e.closest('[data-xdict-control]') || !e.getClientRects().length) return;
       var st = getComputedStyle(e);
       var name = e.tagName === 'IMG' ? (st.display === 'block' && st.float === 'none' ? 'image' : '')
-        : XDictFrameCore.spaceOf(e.getAttribute('data-xdict-role'), e.getAttribute('data-xdict-section'));
+        : XDictFrameCore.spaceOf(e.getAttribute('data-xdict-role'), e.getAttribute('data-xdict-section'),
+            !!(e.parentElement && e.parentElement.closest('li,[data-xdict-role=sense]')));
       // A block picture is spaced by its outermost holder, a block with it (`data-xdict-img-holder`).
       if (name === 'image') {
         for (var up = e.parentElement; up && up.hasAttribute('data-xdict-img-holder'); up = up.parentElement) e = up;

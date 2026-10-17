@@ -105,6 +105,13 @@ extension GalleryRun {
         // G16: every role block that starts a line has its role's gap before it, ± 2 px.
         if (G16ON) {
           body.querySelectorAll('[data-xdict-role]').forEach(function (e) {
+            // A section or heading inside a sense (a list item, or a block the core marks a sense) is the sense's note
+            // (D43, OALD's "synonym proviso"): it keeps the dictionary's own gap, never a heading's.
+            var role = e.getAttribute('data-xdict-role');
+            if ((role === 'section' || role === 'heading') && e.parentElement && e.parentElement.closest('li,[data-xdict-role=sense]')) {
+              if (e.getClientRects().length) note('G16', !e.hasAttribute('data-xdict-space'), 'a note in a sense spaced as ' + e.getAttribute('data-xdict-space') + ' <' + label(e) + '> ' + e.textContent.trim().slice(0, 24));
+              return;
+            }
             var name = roleSpace(e);
             if (!name || e.closest('[data-xdict-control]') || !e.getClientRects().length) return;
             var st = getComputedStyle(e);
