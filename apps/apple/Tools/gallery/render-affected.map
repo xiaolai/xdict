@@ -1,0 +1,134 @@
+# **Which pictures a changed path needs** (`Tools/gallery/render_affected.py`; owner, 2026-10-18: "哪怕是要跑，也不是每次都要
+# full run，是不是？"). The gallery's and the UI tour's counterpart of Tools/e2e-affected.map. One rule a line:
+#
+#   <pattern>   <what...>
+#
+# <pattern> is a path from the repository's root, a shell pattern (`*` crosses `/`). **The first rule that matches
+# decides**, so the specific come before the general. **The owner's rule (2026-10-18): renders run only when a
+# dictionary's content style is being rectified, and only on that dictionary.** So: (a) a change confined to one
+# dictionary (its role-table row, a style-ledger row of its) selects that dictionary's entries, light core, dark too
+# only for colour; (b) a shared file (the reading style, the core's shared entry processing) selects one entry a
+# dictionary, light core only (24), reason "shared file: reaches every dictionary"; (c) windows, menus, the popover and
+# the page select UI-tour routes, no entry; (d) everything else, an unmatched path included, selects nothing, and
+# `select` says so. FULL=1 alone gives the full gallery (288).
+#
+# <what> is `none` (no picture shows it), or any of:
+#   rep                a shared file: one entry a dictionary (the `represent` kind of the gallery's keys)
+#   profile            core/xdict-entry/src/roles/profiles.rs: the dictionaries of the role-table rows the diff's hunks
+#                      touch, every gallery entry of theirs and their style-ledger repro entries; a hunk outside every
+#                      row (the matcher, the types) is a shared change, `rep`
+#   ledger             Tools/gallery/style-ledger.tsv: the dictionaries of the rows the hunks touch (a row's repro
+#                      names one dictionary), their gallery and repro entries; dark too when the row is about colour
+#   dict:<id>          every gallery entry of that dictionary
+#   views:<set>        the views those entries are pictured in (a `viewset`); required beside an entry token
+#   routes:<set>       the UI tour's routes of a `routeset`
+#   route:<glob>       UI tour routes by id (Tools/ui-tour/routes.py), a shell pattern; each must match a route
+#
+#   dicts <id...>                  the test set (the 24): the gallery's keys are read for these alone
+#   represent <kind>               the kind picturing a dictionary in `rep`
+#   viewset <name> <view...>       views of the gallery (Sources/XDictEntryLab/Gallery.swift `modes`)
+#   routeset <name> <glob...>      named route sets
+#   profile <class> <id...>        a role-table row (its signature's first class) and the dictionaries in its markup
+#   reads <view-glob> <path-glob...>   the style files a view reads: its render key's style inputs, exactly those its
+#                                  lines name (so an edit to another invalidates none of its pictures)
+
+dicts ahd cald ced cepd chambers cobuild cobuild-ec etym ldoce ldoce-ec lpd med mwaled mwc mwu noad oald oalecd ocd ode odecn oed peu yhdcd
+represent long
+
+viewset all   core-light core-dark coresans-light coresans-dark
+viewset core  core-light
+
+routeset panel  panel.* entry.find entry.zoomIn entry.collapse
+routeset page   page.*
+routeset search main.* search.* scope.* trail.* window.min
+routeset menus  menu.* menubar.extra about acknowledgments
+
+# Every row of core/xdict-entry/src/roles/profiles.rs `PROFILES`, by its signature's first class. Measured 2026-10-18
+# by the class in the 24's own sheets on the build Mac, except cepd, cobuild-ec, noad and ocd, whose sheets are inside
+# their .mdd: those are the row's own comment. render_affected.py fails while a row has no line here.
+profile chwd           ldoce ldoce-ec
+profile oup_icons      oald
+profile odecn          odecn
+profile dictentry      ced
+profile di-head        cepd
+profile cb13_jp        chambers
+profile collins_en_cn  cobuild cobuild-ec
+profile scnt           mwaled mwu
+profile word__name     etym
+profile boxsensefull   med
+profile m1             noad
+profile ocd_hw         ocd
+profile a8e            ode
+profile cxa            yhdcd
+profile peu-quote      peu
+
+# The four views read the column and type layers alike (`EntryReadingFrame.all` and `[.column, .type, .sans]`); the
+# minimal frame's files are "Original style"'s only, which no view of the four draws.
+reads *  apps/apple/Sources/XDictEntryView/Style/appearance.js apps/apple/Sources/XDictEntryView/Style/colour-*.js
+reads *  apps/apple/Sources/XDictEntryView/Style/column.css apps/apple/Sources/XDictEntryView/Style/controls.css
+reads *  apps/apple/Sources/XDictEntryView/Style/marks.css apps/apple/Sources/XDictEntryView/Style/reading-labels.css
+reads *  apps/apple/Sources/XDictEntryView/Style/type.css apps/apple/Sources/XDictEntryView/Style/frame*.js
+reads *  apps/apple/Sources/XDictEntryView/Style/disclosure*.js apps/apple/Sources/XDictEntryView/Style/pron-run*.js
+reads *  apps/apple/Sources/XDictEntryView/Style/find*.js apps/apple/Sources/XDictEntryView/Style/readability-core.js
+reads *  apps/apple/Sources/XDictEntryView/Style/placeholder-clicks.js apps/apple/Sources/XDictEntryView/Style/speaker-clicks.js
+
+# --- What no picture shows, named so `select` does not list it as unmatched --------------------------------------------
+*.md                                                        none
+LICENSE                                                     none
+dev-docs/*                                                  none
+conformance/*                                               none
+apps/android/*                                              none
+apps/windows/*                                              none
+apps/linux/*                                                none
+apps/web/*                                                  none
+apps/extension/*                                            none
+apps/apple/Tests/*                                          none
+core/*/tests/*                                              none
+
+# --- (a) One dictionary's style: only that dictionary ------------------------------------------------------------------
+core/xdict-entry/src/roles/profiles.rs                      profile views:core
+apps/apple/Tools/gallery/style-ledger.tsv                   ledger views:core
+
+# --- (b) Shared files: one entry a dictionary, light core ------------------------------------------------------------
+# Written from Style/ by Tools/reading-style-gen.py (EntryStyleFilesTests holds it): the Style file's own rule decides.
+apps/apple/Sources/XDictEntryView/EntryStyleFiles.swift     none
+# Behaviour no still picture of an entry shows, or "Original style", which none of the four views draws: their routes.
+apps/apple/Sources/XDictEntryView/Style/find*.js            route:entry.find route:page.find
+apps/apple/Sources/XDictEntryView/Style/readability-core.js route:entry.find route:page.find
+apps/apple/Sources/XDictEntryView/Style/speaker-clicks.js   route:speech.pronounce route:sound.recording
+apps/apple/Sources/XDictEntryView/Style/placeholder-clicks.js route:trail.followed
+apps/apple/Sources/XDictEntryView/Style/minimal.css         route:library.originalStyle
+apps/apple/Sources/XDictEntryView/Style/original-phon.css   route:library.originalStyle
+apps/apple/Sources/XDictEntryView/Style/*                   rep views:core
+apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift   rep views:core
+apps/apple/Sources/XDictEntryView/EntryMarks.swift          rep views:core
+apps/apple/Sources/XDictEntryView/EntryColourGuard.swift    rep views:core
+apps/apple/Sources/XDictEntryView/EntryFonts.swift          rep views:core
+core/xdict-entry/tests/*                                    none
+core/xdict-entry/src/*                                      rep views:core
+core/xdict-core/src/*                                       rep views:core
+
+# --- (c) The app's windows, panels, page and menus: UI-tour routes, no entry -----------------------------------------
+apps/apple/Sources/XDictEntryView/EntryPane.swift           routes:panel routes:page
+apps/apple/Sources/XDictEntryView/EntryPage*.swift          routes:page
+apps/apple/Sources/XDictUI/LookupPanelView.swift            routes:panel
+apps/apple/Sources/XDictUI/LookupPopover.swift              routes:panel
+apps/apple/Sources/XDictUI/PanelLook.swift                  routes:panel
+apps/apple/Sources/XDictAnywhere/PanelFit.swift             routes:panel
+apps/apple/Sources/XDictAnywhere/PanelPlacement.swift       routes:panel
+apps/apple/Sources/XDict/LookupAnywhere.swift               routes:panel
+apps/apple/Sources/XDictUI/AllPage.swift                    routes:page
+apps/apple/Sources/XDictUI/Search*.swift                    routes:search
+apps/apple/Sources/XDictUI/ScopeBar.swift                   route:scope.*
+apps/apple/Sources/XDictUI/Toolbar*.swift                   routes:search
+apps/apple/Sources/XDictUI/MenuBarMenu.swift                route:menubar.extra
+apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes:panel route:library.window route:settings.general
+apps/apple/Sources/XDictUI/Library*.swift                   route:library.*
+apps/apple/Sources/XDictUI/Settings*.swift                  route:settings.*
+apps/apple/Sources/XDictUI/*Settings.swift                  route:settings.*
+apps/apple/Sources/XDictUI/Setup*.swift                     route:setup.* route:reader.firstLaunch
+apps/apple/Sources/XDict/XDictApp.swift                     routes:menus
+apps/apple/Sources/XDict/LookupWindow.swift                 routes:search
+apps/apple/Sources/XDict/EntryWindows.swift                 routes:search routes:page
+
+# --- (d) Everything else selects nothing (no rule needed; `select` names such a path as "no rule: nothing") -------------
