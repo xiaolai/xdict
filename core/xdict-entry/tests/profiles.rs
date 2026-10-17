@@ -237,3 +237,17 @@ fn a_chinese_block_inside_an_example_is_its_translation() {
     assert!(tag_of(&out, "zh").contains(r#"data-xdict-sure="trans""#), "{out}");
     assert!(!tag_of(&out, "en").contains("data-xdict-sure"), "{out}");
 }
+
+/// COBUILD's example is a list item whose text is in blocks inside it; a list item with text of its own is not one:
+/// COBUILD-EC's sense menu ("1. FINANCE AND STORAGE 金融；储藏", gallery 2026-10-17) and any other list of words.
+#[test]
+fn a_list_item_with_text_of_its_own_is_not_a_cobuild_example() {
+    let cobuild = ".collins_en_cn{margin:0}.tips_box{margin:0}.st{font-style:italic}";
+    let out = render(
+        cobuild,
+        r#"<div class="collins_en_cn"><span class="hw">bank</span> <ul class="menu"><li class="m">1. FINANCE AND STORAGE 金融；储藏</li><li class="m">2. AREAS AND MASSES 地区</li></ul> <span class="st">N-COUNT</span> <ul><li class="ex"><p>Which bank offers you the service?</p><p>哪家银行提供服务？</p></li></ul></div>"#,
+        "bank",
+    );
+    assert!(!tag_of(&out, "m").contains("data-xdict-sure"), "{out}");
+    assert!(tag_of(&out, "ex").contains(r#"data-xdict-sure="example""#), "{out}");
+}
