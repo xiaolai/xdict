@@ -80,9 +80,18 @@ def running(executable=exe):
 
 
 def translated(title, lang):
+    # Only a catalog key is translated; an identifier or a menu index ("#0") is matched as written.
     if lang == "pseudo":
-        return f"{pseudo(title)}|{title}"
+        keys = zh_keys()
+        base = title if title in keys else title.rstrip("…")
+        return f"{pseudo(base)}|{title}" if base in keys else title
     return f"{zh[title]}|{title}" if lang == "zh" and title in zh else title
+
+
+def zh_keys():
+    """The catalog's keys (the kit's copy), which the pseudo language translates."""
+    with open(os.path.join(here, "Localizable.xcstrings"), encoding="utf-8") as f:
+        return json.load(f)["strings"].keys()
 
 
 PSEUDO_APP = os.path.join(home, "XDict-pseudo", "XDict.app")
