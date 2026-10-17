@@ -19,8 +19,10 @@ padding-bottom:var(--xdict-space-2)}
 [data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
 :not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
 img{max-width:100%;height:auto}
-/* One indent a list level (R9, G14): 1.5em of the list, whatever margin or padding the dictionary gave it. */
-ul,ol{margin-inline-start:0 !important;padding-inline-start:1.5em !important}
+/* A list level (R9, G14; owner, 2026-10-17): flush when its items show no number or bullet, one indent (1.5em) */
+/* when they do, whatever margin or padding the dictionary gave it. `data-xdict-list` is frame.js's reading. */
+ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
+[data-xdict-list=marked]{padding-inline-start:1.5em !important}
 /* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
 /* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
 :where(a:any-link){color:var(--xdict-link)}
