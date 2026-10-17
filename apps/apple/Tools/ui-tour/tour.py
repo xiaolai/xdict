@@ -421,6 +421,11 @@ def reader():
 
 
 def main():
+    # Two tours share this kit's output folder, XDict's preferences backup and the one bundle: the second would wipe
+    # the first's captures and lose the reader's preferences (it happened on 2026-10-17).
+    others = subprocess.run(["pgrep", "-f", "ui-tour-kit/tour.py"], capture_output=True, text=True).stdout.split()
+    if [p for p in others if int(p) != os.getpid()]:
+        raise SystemExit("tour: another UI tour is running on this Mac; wait for it")
     if running():
         raise SystemExit("tour: XDict is already running; the tour does not quit a reader's XDict")
     if subprocess.run(["pgrep", "-f", "xctest"], capture_output=True).returncode == 0:
