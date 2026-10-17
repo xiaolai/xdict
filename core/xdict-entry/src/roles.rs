@@ -618,8 +618,12 @@ pub(crate) struct Roles<'s> {
     /// Space written right after a block, past any punctuation: where it starts and ends. It goes if a block opens
     /// next, since space alone between two blocks is a line of its own (OED's `&nbsp;` between pronunciations).
     gap: Option<(usize, usize)>,
-    /// Space to drop: alone between two blocks, or between an inline element and the full stop after it.
+    /// Space to drop: between an inline element and the full stop after it, or a block's leading break.
     gaps: Vec<(usize, usize)>,
+    /// Space alone between two blocks, past any punctuation moved into the first: it becomes one plain space, which
+    /// collapses, so a text node stays between the blocks for a dictionary's script that walks `nextSibling`
+    /// (MWALED's `this.nextSibling.nextSibling` fold).
+    spaces: Vec<(usize, usize)>,
     /// A `<br>` written before anything else in its block (the block, where the break starts and ends): the block
     /// already starts a line, so once text follows in it the break goes, as its blank line would (COBUILD-EC's
     /// `<div><br>【语法信息】…`, WI-11 R8). Alone in its block it is a spacer the dictionary meant, and stays.
@@ -694,6 +698,7 @@ impl<'s> Roles<'s> {
             hug_after: None,
             moves: Vec::new(),
             gaps: Vec::new(),
+            spaces: Vec::new(),
             gap: None,
             hugs: Vec::new(),
             lead_break: None,
@@ -731,9 +736,9 @@ impl<'s> Roles<'s> {
         let lower = name.to_ascii_lowercase();
         if let Some(gap) = self.gap.take()
             && block_tag(&lower)
-            && self.gaps.len() < MAX_NODES
+            && self.spaces.len() < MAX_NODES
         {
-            self.gaps.push(gap);
+            self.spaces.push(gap);
         }
         let void = closed.is_none() && (VOID.contains(&lower.as_str()) || tag.ends_with("/>"));
         if void || image {
@@ -1032,6 +1037,9 @@ impl<'s> Roles<'s> {
         }
         for &(from, to) in &self.gaps {
             decided.edits.push((from, to, String::new()));
+        }
+        for &(from, to) in &self.spaces {
+            decided.edits.push((from, to, " ".into()));
         }
         for (i, at, punct) in &self.moves {
             let Some(n) = self.nodes.get(*i as usize) else { continue };
