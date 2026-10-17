@@ -4848,22 +4848,6 @@
         }
       }
     },
-    "The entry shown, and every other result" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The entry shown, and every other result"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前显示的词条，以及其他所有结果"
-          }
-        }
-      }
-    },
     "The file changed while XDict was reading it. Try again." : {
       "localizations" : {
         "en" : {
