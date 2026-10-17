@@ -378,7 +378,8 @@ fn reading_style_of_the_corpus() {
         let row = serde_json::json!({
             "dictionary": name,
             "sheets": report.edition.sheets,
-            "skipped": report.edition.skipped,
+            "skipped": report.edition.skipped.iter().map(|s| serde_json::json!({
+                "path": s.path, "reason": format!("{:?}", s.reason)})).collect::<Vec<_>>(),
             "styleMs": style_ms,
             "basePx": (style.base().px * 100.0).round() / 100.0,
             "baseFrom": base_from,
