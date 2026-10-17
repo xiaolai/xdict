@@ -640,7 +640,8 @@ substage_launch() {
 # **service.***: this bundle's own signed dictionary service, asked through the app's `ServiceClient` by an instrument
 # LaunchServices started (`XDict --service-report`, plan-macos-v1 WI-3), its `--checks` groups split three ways:
 # `conformance/`'s `tiny` and `matrix`; the refusals, supersession, a stalled bulk call, `kill -9` mid-lookup, then who
-# reaches the service by name and the client requirement it holds every connection to; the idle exit raced.
+# reaches the service by name and the client requirement it holds every connection to; the idle exit under launchd (the
+# race and the work spanning the timer are `IdleServiceTests`).
 
 # bounded <seconds> <command...>: the command's status, or 124 once it has run that long (and it is killed).
 bounded() {
