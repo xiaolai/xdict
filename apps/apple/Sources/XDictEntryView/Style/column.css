@@ -101,3 +101,9 @@ ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
 /* No transition on a classed picture or a spaced block: frame.js measures the gap it set at once, and a dictionary's */
 /* `transition: All 0.3s` (ODECN's `.ode3img`) left it measuring a margin partway there (2026-10-17). */
 img[data-xdict-img],[data-xdict-space],[data-xdict-img-holder]{transition:none !important}
+/* P41 (2026-10-18): in the lookup popover (`data-xdict-density=panel`) the page is clear, the entry on the popover's */
+/* glass as Apple's is; the theme's page colour (appearance.js) stays everywhere else. */
+:root[data-xdict-density=panel]{background-color:transparent !important}
+/* P41 (2026-10-18): on the glass over a busy desktop only the primary label colour holds 4.5:1 (secondary grey 1.9, */
+/* link 1.9, accent 3.0, measured from captures), so the popover draws every text colour as the primary one. */
+:root[data-xdict-density=panel]{--xdict-text-2:var(--xdict-text) !important;--xdict-link:var(--xdict-text) !important;--xdict-accent:var(--xdict-text) !important;--xdict-red:var(--xdict-text) !important;--xdict-red-deep:var(--xdict-text) !important;--xdict-orange:var(--xdict-text) !important;--xdict-orange-deep:var(--xdict-text) !important;--xdict-yellow:var(--xdict-text) !important;--xdict-yellow-deep:var(--xdict-text) !important;--xdict-green:var(--xdict-text) !important;--xdict-green-deep:var(--xdict-text) !important;--xdict-teal:var(--xdict-text) !important;--xdict-teal-deep:var(--xdict-text) !important;--xdict-blue:var(--xdict-text) !important;--xdict-blue-deep:var(--xdict-text) !important;--xdict-purple:var(--xdict-text) !important;--xdict-purple-deep:var(--xdict-text) !important;--xdict-pink:var(--xdict-text) !important;--xdict-pink-deep:var(--xdict-text) !important}

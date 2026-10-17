@@ -122,9 +122,11 @@ struct XDictApp: App {
     /// A main window's state: the app's library and service, and an entry view of its own in the production
     /// confinement (`EntryEnvironment()`'s defaults, ADR-0009 decision 7).
     @MainActor
-    static func windowState() -> SearchWindowState {
-        let entry = setup.entryEvents.map { EntryViewController(environment: EntryEnvironment(events: $0)) }
-            ?? EntryViewController()
+    /// `panel`: the lookup popover's, whose entry takes the panel layer (its density, and its page on the glass: P41).
+    static func windowState(panel: Bool = false) -> SearchWindowState {
+        var environment = setup.entryEvents.map { EntryEnvironment(events: $0) } ?? EntryEnvironment()
+        if panel { environment.readingFrame = environment.readingFrame.union(.panel) }
+        let entry = EntryViewController(environment: environment)
         return SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
                                  speech: SystemOutput(volume: setup.speechVolume),
                                  speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
