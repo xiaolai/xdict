@@ -1,9 +1,10 @@
 import Foundation
 
-/// **The gallery's checks G1–G15** (`dev-docs/reading-style.md` §7.2), on a framed page in the reading style, each
+/// **The gallery's checks G1–G15** (G16 and G17: `GallerySpace`) (`dev-docs/reading-style.md` §7.2), on a framed page in the reading style, each
 /// computed in the page from `getComputedStyle` and geometry and reported as characters or elements checked, those
 /// off, and the values off. The run's failures name every check off. `XDICT_LAB_CONTROL=G` writes one known fault for
-/// each check into every page first, their positive control: a run with it must be red in all fifteen.
+/// each check into every page first, their positive control: a run with it must be red in all seventeen
+/// (G16 and G17's faults are `GallerySpace`'s).
 ///
 /// Where §7.2 asks for what one framed page cannot show, the check says so in its `note` and measures the rest:
 /// G4's inset at 320 px and characters per line at 820 px are measured only at those widths; G8's layout-table
@@ -133,9 +134,20 @@ extension GalleryRun {
             var box = e.parentElement ? e.parentElement.getBoundingClientRect() : bodyR;
             note('G15', er.width <= Math.max(box.width, content) + 1, 1, 'image ' + Math.round(er.width) + 'px wide in ' + Math.round(box.width) + ' <' + label(e) + '>');
             var nh = e.naturalHeight || er.height, em = parseFloat(getComputedStyle(e.parentElement || body).fontSize);
-            if (nh <= 48) note('G15', er.height <= 1.25 * em + 0.5, 1, 'small image ' + Math.round(er.height) + 'px tall at ' + em + 'px <' + label(e) + '>');
+            // An image used as text keeps its own size (R16's classes): only the class it was given exempts it.
+            if (nh <= 48 && e.getAttribute('data-xdict-img') !== 'text') note('G15', er.height <= 1.25 * em + 0.5, 1, 'small image ' + Math.round(er.height) + 'px tall at ' + em + 'px <' + label(e) + '>');
             var src = (e.currentSrc || e.getAttribute('src') || '').toLowerCase();
-            if (dark && e.tagName.toLowerCase() === 'img' && nh > 48 && /\.(png|gif|svg)(\?|#|$)|^data:image\/(png|gif|svg)/.test(src)) {
+            // Transparent: read from its pixels (an opaque PNG has nothing for a plate to show through); a canvas the
+            // image taints is judged by its type.
+            var see = function (img) {
+              try {
+                var cv = document.createElement('canvas'); cv.width = Math.min(48, img.naturalWidth); cv.height = Math.min(48, img.naturalHeight);
+                var g = cv.getContext('2d'); g.drawImage(img, 0, 0, cv.width, cv.height); var d = g.getImageData(0, 0, cv.width, cv.height).data;
+                for (var q = 3; q < d.length; q += 4) if (d[q] < 250) return true;
+                return false;
+              } catch (err) { return /\.(png|gif|svg)(\?|#|$)|^data:image\/(png|gif|svg)/.test(src); }
+            };
+            if (dark && e.tagName.toLowerCase() === 'img' && nh > 48 && e.getAttribute('data-xdict-img') !== 'text' && see(e)) {
               note('G15', es.backgroundColor === PLATE, 1, 'illustration without the plate in dark ' + es.backgroundColor + ' <' + label(e) + '>');
             }
           }
@@ -214,6 +226,9 @@ extension GalleryRun {
           return null;
         }
         var heads = Array.prototype.filter.call(body.querySelectorAll('[data-xdict-control=disclosure]'), seen).slice(0, 8);
+        // XDict's own fold of the pictures the dictionary hid is always among them (owner, 2026-10-17).
+        var gathered = document.querySelector('#xdict-pictures > [data-xdict-control=disclosure]');
+        if (gathered && heads.indexOf(gathered) < 0) heads.push(gathered);
         function shown(x) { return !!x && x.checkVisibility({ visibilityProperty: true }) && x.getBoundingClientRect().height > 0; }
         for (var h = 0; h < heads.length; h++) {
           var head = heads[h], target = foldOf(head);
@@ -268,7 +283,9 @@ extension GalleryRun {
             "<i style='font-synthesis:style !important;font-style:italic !important'>G12 汉字</i>",
             "<p style='font-family:Courier !important'>G13 another face</p>",
             "<ul style='padding-left:100px !important;margin-left:0 !important'><li>G14 deep</li></ul>",
-            "<img src='\(png)' style='width:3000px !important;max-width:none !important;height:4px'>",
+            // An image with no pixels (bytes no decoder reads): R16's classes leave it alone, as they would resize a
+            // picture's fault away, and its box is still the 3000 px G15 must find.
+            "<img src='data:image/png;base64,AAAA' style='width:3000px !important;max-width:none !important;height:4px'>",
         ]
         let html = faults.joined().replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         // G4: the column wider than the measure. G7 shows only in a dark run.
@@ -298,9 +315,9 @@ extension GalleryRun {
 
     /// Each check off on this page, as a failure line naming its values.
     static func checkFailures(_ checks: [String: Any]?, where place: String) -> [String] {
-        guard let checks else { return ["\(place): G1–G15 were not measured"] }
+        guard let checks else { return ["\(place): G1–G17 were not measured"] }
         // G2 is per dictionary (`dominantSizeFailures`).
-        return (1...15).filter { $0 != 2 }.compactMap { index in
+        return (1...17).filter { $0 != 2 }.compactMap { index in
             let name = "G\(index)"
             guard let c = checks[name] as? [String: Any] else { return "\(place): \(name) missing" }
             guard let off = c["off"] as? Int, off > 0 else { return nil }

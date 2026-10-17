@@ -164,6 +164,34 @@ fn sizes_go_onto_the_scale() {
     assert_eq!(counts(".a{font-size:12px}.b{font-size:1em}", &s).size, 2);
 }
 
+/// R4 (2026-10-17): a relative size on the element that wraps the whole entry (ODE's `.Od3{font-size:117%}`) is the
+/// dictionary's base size, and XDict owns the base: it is 1, so the body text is at the base size. A relative size
+/// inside it, or on any other element, still snaps by its own ratio.
+#[test]
+fn a_relative_size_on_the_entry_wrapper_is_the_base() {
+    let sheet = ".Od3{font-size:117%} div.Od3{font-size:1.2em} .Od3 h2{font-size:117%} .x{font-size:117%} \
+                 .Od3,.x{font-size:117%}";
+    let s = Style::of_edition(
+        [sheet],
+        ["<link href=a.css><div class=\"Od3\"><p>a b c</p></div>", "<div class=Od3>d</div>"],
+    );
+    let lead = "line-height:var(--xdict-leading, 1.6)";
+    let m = format!("font-size:var(--xdict-fs-m, 1rem);{lead}");
+    let l = format!("font-size:var(--xdict-fs-l, 1.125rem);{lead}");
+    let xl = "font-size:var(--xdict-fs-xl, 1.25rem);line-height:var(--xdict-leading-tight, 1.3)";
+    assert_eq!(
+        css(sheet, &s),
+        format!(".Od3{{{m}}} div.Od3{{{m}}} .Od3 h2{{{l}}} .x{{{l}}} .Od3,.x{{{l}}}"),
+        "the wrapper's own size is the base; its descendants, another element and a list naming one snap"
+    );
+    // An absolute size on the wrapper is not touched by this rule: it snaps by its ratio to the base.
+    let sheet = ".Od3{font-size:20px}";
+    let s = Style::of_edition([".Od3 p{font-size:16px}"], ["<div class=Od3><p>a</p></div>"]);
+    assert_eq!(css(sheet, &s), format!(".Od3{{{xl}}}"));
+    // Without entries there is no wrapper: a plain sheet snaps as before.
+    assert_eq!(css(".Od3{font-size:117%}", &Style::of_sheets([])), format!(".Od3{{{l}}}"));
+}
+
 /// R5: line heights are the frame's, everywhere (unification R, 2026-10-16).
 #[test]
 fn line_heights_are_dropped() {
@@ -213,6 +241,9 @@ fn vertical_spacing_goes_onto_the_steps() {
     assert_eq!(css(".a{margin-top:-0.07em}", &s), ".a{margin-top:0}");
     assert_eq!(css(".a{margin-top:-0.5em}", &s), ".a{margin-top:calc(-1 * var(--xdict-space-2, 0.5rem))}");
     assert_eq!(css(".a{margin-top:-3em}", &s), ".a{margin-top:0}");
+    // In any unit (2026-10-17, LDOCE6's `1ex`): an `ex` is half an `em`, the CSS fallback for an x-height.
+    assert_eq!(css(".a{margin-bottom:1ex}", &s), ".a{margin-bottom:var(--xdict-space-2, 0.5rem)}");
+    assert_eq!(css(".a{margin:3ex 0}", &s), ".a{margin:var(--xdict-space-5, 1.5rem) 0 var(--xdict-space-5, 1.5rem)}");
     for kept in [".a{margin-left:2em}", ".a{margin:0 auto}", ".a{margin-top:5%}"] {
         assert_eq!(css(kept, &s), kept);
     }

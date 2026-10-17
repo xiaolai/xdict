@@ -98,6 +98,8 @@ pub(crate) struct Facts {
     script_words: BTreeSet<String>,
     /// The element (`cb13`, `.entry`, `div.e`) that wraps most entries, when a rule hides it unconditionally.
     pub(crate) revealed: BTreeSet<String>,
+    /// The elements (`div`, `.od3`) most entries start with, hidden or not: the box that wraps the whole entry.
+    wrappers: BTreeSet<String>,
     /// Symbols a rule's `::before`/`::after` draws, by its subject's first class, or element when it has none.
     glyphs: BTreeMap<String, Vec<Glyph>>,
     glyph_count: usize,
@@ -116,11 +118,15 @@ pub(crate) const ANCESTOR_DEPTH: usize = 32;
 pub(crate) struct Compound {
     pub(crate) tag: Option<String>,
     pub(crate) classes: Vec<String>,
+    /// Classes a `:not(.class)` excludes (COBUILD's `.example:not(.no-before)`).
+    pub(crate) not: Vec<String>,
 }
 
 impl Compound {
     pub(crate) fn matches(&self, tag: &str, classes: &[String]) -> bool {
-        self.tag.as_deref().is_none_or(|t| t == tag) && self.classes.iter().all(|c| classes.contains(c))
+        self.tag.as_deref().is_none_or(|t| t == tag)
+            && self.classes.iter().all(|c| classes.contains(c))
+            && !self.not.iter().any(|c| classes.contains(c))
     }
 }
 
@@ -373,6 +379,7 @@ impl Facts {
             if count * 2 < n || count == 0 {
                 continue;
             }
+            self.wrappers.insert(subject.clone());
             let hidden = if let Some(class) = subject.strip_prefix('.') {
                 self.by_class.get(class).is_some_and(|v| {
                     v.iter().any(|s| s.classes.len() == 1 && s.tag.is_none() && s.props.none == Some(true))
@@ -403,6 +410,26 @@ impl Facts {
         }
         let s = selector.trim().to_ascii_lowercase();
         !s.contains([',', ' ', ':', '[', '>', '+', '~']) && self.revealed.contains(&s)
+    }
+
+    /// Whether every selector of `selector` is the element that wraps the entry, written plainly as a compound of the
+    /// tag and classes most entries start with (`.od3`, `div.od3`): a size there is the dictionary's base (R4).
+    pub(crate) fn wraps(&self, selector: &str) -> bool {
+        if self.wrappers.is_empty() {
+            return false;
+        }
+        let s = selector.trim().to_ascii_lowercase();
+        if s.contains([' ', ':', '[', '>', '+', '~', '*', '#']) {
+            return false;
+        }
+        s.split(',').all(|compound| {
+            let compound = compound.trim();
+            let (tag, classes) = compound.split_once('.').map_or((compound, ""), |(t, c)| (t, c));
+            let classes: Vec<&str> = if classes.is_empty() { Vec::new() } else { classes.split('.').collect() };
+            !compound.is_empty()
+                && (tag.is_empty() || self.wrappers.contains(tag))
+                && classes.iter().all(|c| !c.is_empty() && self.wrappers.contains(&format!(".{c}")))
+        })
     }
 }
 
@@ -443,8 +470,18 @@ fn compound(text: &str) -> Option<Compound> {
     }
     let mut pieces = plain.split(':');
     let head = pieces.next().unwrap_or("");
+    let mut not = Vec::new();
     for piece in pieces {
         let name = piece.split('(').next().unwrap_or("");
+        // `:not(.class)`, one class: held when matching; any other argument is not read (as before).
+        if name == "not"
+            && let Some(arg) = piece.strip_prefix("not(").and_then(|r| r.strip_suffix(')'))
+            && let Some(class) = arg.strip_prefix('.')
+            && !class.is_empty()
+            && class.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            not.push(class.to_owned());
+        }
         if !matches!(
             name,
             "" | "before"
@@ -477,7 +514,7 @@ fn compound(text: &str) -> Option<Compound> {
             classes.push(name.to_owned());
         }
     }
-    (classes.len() <= MAX_CLASSES).then_some(Compound { tag, classes })
+    (classes.len() <= MAX_CLASSES).then_some(Compound { tag, classes, not })
 }
 
 /// The first element of an entry (past `link`, `script`, `style`, `meta` and the page's tags): its element and each
@@ -519,6 +556,19 @@ mod tests {
             grouped: false,
             decls: decls.iter().map(|(n, v)| ((*n).into(), (*v).into())).collect(),
         }
+    }
+
+    /// A glyph rule's `:not(.class)` holds: COBUILD's `.example:not(.no-before) li:before` draws no bullet in its usage
+    /// note (`.note.type-usage.no-before.example`), so that note's items are not the bullet's (gallery, 2026-10-17).
+    #[test]
+    fn a_glyph_rules_not_class_holds() {
+        let f = Facts::of_rules(&[rule(".example:not(.no-before) li:before", &[("content", "\"❑\"")])]);
+        let note = |c: &[&str]| c.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let held = |classes: &[&str]| {
+            f.glyphs("li", &[]).next().map(|g| g.ancestors.iter().all(|a| a.matches("div", &note(classes))))
+        };
+        assert_eq!(held(&["note", "example"]), Some(true));
+        assert_eq!(held(&["note", "no-before", "example"]), Some(false));
     }
 
     #[test]

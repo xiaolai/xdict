@@ -24,6 +24,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// paper under the dictionary. Never with the other layers.
     public static let minimal = EntryReadingFrame(rawValue: 1 << 3)
 
+    /// The lookup panel's density (R7a, decided 2026-10-17): the tighter role spacing, set A. The main window has the
+    /// default, B. A presentation attribute the shell sets for the panel, never inferred from the pane's width.
+    public static let panel = EntryReadingFrame(rawValue: 1 << 6)
+
     /// The paper an entry in its own style is drawn on in dark: the dictionary's colours assume a white page, so a
     /// light one, a little dimmer than white.
     static let paper = "#ecebe6"
@@ -230,6 +234,8 @@ extension EntryScripts {
             "sheet-minimal": jsString(minimal), "names": namesJSON, "token-names": tokenNames,
             "space-cap": frame.contains(.type) ? "0.25" : "0",
             "label": frame.contains(.type) ? "[data-xdict-role=label]" : "",
+            "pictures": jsString(String(localized: EntrySentences.pictures)),
+            "density": frame.contains(.panel) ? "panel" : "main",
         ])
     }
 
