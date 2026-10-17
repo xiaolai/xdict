@@ -14,7 +14,9 @@
 #    versions and binding, which the bundle's checks and its input digest read).
 #    The products are deleted on the host before its release build, so an unchanged tree relinks them (seconds) and
 #    whatever comes back was made by this run, never left over from an earlier one.
-# 5. Refused, loudly, if a product is missing, older than the run's marker on the host (both times are the host's
+#    And the toolchain the build compiled with, named by its own shell right after `swift build` (Tools/toolchain-facts.sh,
+#    as `fact:` lines), into .build/remote-products/toolchain: the E2E ledger keys the bundle's runs with it.
+# 5. Refused, loudly, if a product is missing, the toolchain unnamed, older than the run's marker on the host (both times are the host's
 #    clock), or the source tree changed while the host built. Only then is .build/remote-products/source-tree
 #    written, which `build-bundle.sh` and `build-lab.sh` require to equal the tree they assemble.
 #
@@ -55,10 +57,15 @@ python3 -I Tools/notices.py check >&2
 bin=\$(swift build -c release --show-bin-path)
 rm -f$(for p in $NAMES; do printf ' "$bin/%s"' "$p"; done)
 swift build -c release >&2
+bash Tools/toolchain-facts.sh | sed 's/^/fact:/'
 python3 Tools/compiler-warnings.py .build/out/Intermediates.noindex/XDict.build/Release --whole-module --no-test-targets >&2
 echo products=\$bin") || fail "the build on $host failed"
 bin=$(printf '%s\n' "$out" | sed -n 's/^products=//p' | tail -1)
 [ -n "$bin" ] || fail "the build on $host named no products"
+toolchain=$(printf '%s\n' "$out" | sed -n 's/^fact://p')
+for name in xcode swift rust; do
+    grep -q "^$name=." <<<"$toolchain" || fail "the build on $host named no $name version (Tools/toolchain-facts.sh)"
+done
 
 files=("$remote/apps/apple/.build/remote-build.marker")
 for p in $NAMES; do files+=("$bin/$p"); done
@@ -72,5 +79,6 @@ for p in $NAMES; do
     [ "$PRODUCTS/$p" -nt "$PRODUCTS/remote-build.marker" ] || fail "$p is older than this run's build on $host"
 done
 [ "$($TREE_CMD)" = "$tree" ] || fail "the source tree changed while $host built: build again"
+printf '%s\n' "$toolchain" >"$PRODUCTS/toolchain"
 printf '%s\n' "$tree" >"$PRODUCTS/source-tree"
 echo "remote-build: built on $host in $(($(date +%s) - started)) s; products in $PRODUCTS"

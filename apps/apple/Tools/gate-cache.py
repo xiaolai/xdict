@@ -6,11 +6,11 @@
     gate-cache.py record <gate> <key> <seconds> <host>
         file a pass of <gate> under <key> (only after `status` computed that key on this machine)
     gate-cache.py corpus-id <folder>
-        a corpus's identity (names, sizes, times), for a `--fact`
+        a corpus's identity (names, sizes, contents), for a `--fact`
     gate-cache.py select-paths <path ...>
         the E2E sub-stages those paths select (`-v` first: why, on stderr); Tools/e2e-affected.sh asks this
 
-**A key is the content a gate reads**, never a branch or a date: the path and blob of every file in its inputs, in the
+**A key is the content a gate reads**, never a branch or a date: the path, mode and blob of every file in its inputs, in the
 working copy's tree (committed or not, as `Tools/source-tree.sh` reads it), plus the facts the caller names (rustc,
 SwiftLint, the corpus). The gates' inputs:
 
@@ -27,8 +27,12 @@ SwiftLint, the corpus). The gates' inputs:
 the gate's most recent pass, so the reader sees why it runs.
 
 **Fail loud**: a record that is missing, unreadable, or has one malformed line, or a pass whose manifest is gone, is no
-pass at all: everything runs, and stderr says why. Never a skip on doubt. A release never reads this cache
-(`Tools/release.sh` asks `Tools/e2e-status.sh require-fresh`, which reads the E2E record of runs only).
+pass at all: everything runs, and stderr says why. Never a skip on doubt.
+
+**E2E passes are not filed here** (2026-10-17): every E2E run, pass and fail, goes to the one E2E ledger
+(`Tools/e2e-ledger.py`), which keys each sub-stage with this file's `inputs` and `key_of`, and from which both the
+development skip and a release's evidence are read. The `e2e:` gates here compute the same keys and nothing records
+them.
 
 The record: `$XDICT_GATE_CACHE` (default ~/.cache/xdict-gates), outside every checkout so all worktrees share it:
 `passes.tsv` (`v1, key, gate, date, seconds, host`) and `manifests/<key>` (the inputs that key stands for).
@@ -63,7 +67,7 @@ def git(*args, env=None):
 
 
 def files():
-    """path -> blob of the working copy's tree, built in an index of its own (as Tools/source-tree.sh does)."""
+    """path -> `mode:blob` of the working copy's tree, built in an index of its own (as Tools/source-tree.sh does)."""
     with tempfile.TemporaryDirectory() as scratch:
         env = dict(os.environ, GIT_INDEX_FILE=os.path.join(scratch, "index"))
         git("read-tree", "HEAD", env=env)
@@ -72,7 +76,9 @@ def files():
     listing = {}
     for line in git("ls-tree", "-r", "--full-tree", tree).splitlines():
         meta, path = line.split("\t", 1)
-        listing[path] = meta.split()[2]
+        mode, _, blob = meta.split()
+        # The mode is content too: `chmod -x` keeps the blob and breaks the script a kit copies (2026-10-17).
+        listing[path] = f"{mode}:{blob}"
     if not listing:
         die("the working copy's tree lists no file")
     return listing
@@ -217,21 +223,48 @@ def record(args):
 
 
 def corpus_id(args):
-    """The corpus's identity, as a fact: every file's path, size and modification time under it, digested. Never its
-    content (tens of GB); a dictionary replaced in place changes its size or time."""
+    """The corpus's identity, as a fact: every file's path, size and **content** (SHA-256 of all its bytes), digested.
+    Size and time alone collide: bytes replaced at equal length with the time put back are another corpus (2026-10-17).
+    Each file's digest is kept in `corpus-digests.tsv` beside the record, keyed by device, inode, size, mtime and ctime
+    in nanoseconds; ctime is the kernel's, moved by any write and settable by no user, so a kept digest is reused only
+    for bytes that cannot have changed."""
     if len(args) != 1 or not os.path.isdir(args[0]):
         die("usage: corpus-id <folder>")
+    kept_path = os.path.join(CACHE, "corpus-digests.tsv")
+    kept = {}
+    try:
+        for line in open(kept_path, encoding="utf-8"):
+            stamp, _, digest = line.rstrip("\n").rpartition("\t")
+            if re.fullmatch(r"[0-9a-f]{64}", digest):
+                kept[stamp] = digest
+    except OSError:
+        pass
     h = hashlib.sha256()
-    count = 0
+    count, fresh = 0, {}
     for root, dirs, names in os.walk(args[0]):
         dirs.sort()
         for name in sorted(names):
             path = os.path.join(root, name)
             st = os.stat(path)
-            h.update(f"{os.path.relpath(path, args[0])} {st.st_size} {int(st.st_mtime)}\n".encode())
+            stamp = f"{os.path.abspath(path)}\t{st.st_dev}\t{st.st_ino}\t{st.st_size}\t{st.st_mtime_ns}\t{st.st_ctime_ns}"
+            digest = kept.get(stamp)
+            if digest is None:
+                content = hashlib.sha256()
+                with open(path, "rb") as source:
+                    for block in iter(lambda: source.read(1 << 20), b""):
+                        content.update(block)
+                digest = content.hexdigest()
+                fresh[stamp] = digest
+            h.update(f"{os.path.relpath(path, args[0])} {st.st_size} {digest}\n".encode())
             count += 1
     if not count:
         die(f"the corpus {args[0]} holds no file")
+    if fresh:
+        os.makedirs(CACHE, exist_ok=True)
+        handle, temporary = tempfile.mkstemp(dir=CACHE, prefix=".corpus-digests.")
+        with os.fdopen(handle, "w", encoding="utf-8") as out:
+            out.writelines(f"{k}\t{v}\n" for k, v in {**kept, **fresh}.items())
+        os.replace(temporary, kept_path)
     print(h.hexdigest()[:16])
 
 

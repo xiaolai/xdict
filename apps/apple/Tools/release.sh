@@ -5,18 +5,22 @@
 #   make release BUILD_NUMBER=<n>            the ordinary release
 #   make release-bootstrap BUILD_NUMBER=<n>  the skeleton's (plan-macos-v1 WI-2)
 #
-# **No upload without end-to-end evidence of this very source** (XiaolaiDict ADR-0024, addendum of 2026-10-11): the
-# ordinary release needs a fresh pass of **every implemented stage** (`Tools/e2e.sh --list-stages`) on a development
-# bundle of this source tree, and the tree committed, so what ships names a commit. **The bootstrap release needs a
-# fresh pass of the `launch` stage alone**: the skeleton has no other stage that means anything yet, and it is what
-# proves the bundle starts and its service answers. It may be cut from a tree not yet committed; it names that tree
-# (`Tools/source-tree.sh`), whose objects are in the repository's store.
+# **No upload without end-to-end evidence of this very content** (XiaolaiDict ADR-0024, addendum of 2026-10-11; by key
+# since 2026-10-17): the ordinary release needs, for **every default sub-stage** and RELEASE_EXTRAS, a pass in the E2E
+# ledger under the key that sub-stage has for this tree, the build host's toolchain, the E2E Mac's macOS build and the
+# corpus, not failed since and within E2E_EVIDENCE_MAX_DAYS (`Tools/e2e-status.sh require-fresh`), and the tree
+# committed, so what ships names a commit. **The bootstrap release needs that of the `launch` stage alone**: the
+# skeleton has no other stage that means anything yet. It may be cut from a tree not yet committed; it names that tree
+# (`Tools/source-tree.sh`), whose objects are in the repository's store. **Whatever the ledger carries, RELEASE_SMOKE
+# runs on the stapled release bundle** (step 2a): no key sees a signature, an entitlement or a ticket.
 #
 #   1. build, signed with a secure timestamp        (the notary refuses a signature without one)
 #   2. notarise the app, staple its ticket          (so a first launch works offline)
+#  2a. the release smoke on the E2E Mac            (`Tools/e2e-status.sh smoke`, on this very stapled bundle)
 #   3. build the disk image from the stapled app
 #   4. sign the disk image                          (a ticket alone is not enough for a .dmg)
 #   5. notarise the disk image, staple its ticket
+#  5a. ask for the evidence once more                (a failure filed during notarisation revokes)
 #   6. ask Gatekeeper, here and on the E2E Mac, and fail unless it says "Notarized Developer ID"
 #
 # The order is load-bearing: each step consumes the one before it, and an image built before its app was stapled
@@ -161,6 +165,15 @@ rm -f "$OUT/XDict.zip"
 staple "$APP"
 codesign --verify --strict --deep "$APP" || fail "stapling broke the app's signature"
 
+# 2a. The release smoke: the stapled, release-signed bundle on the E2E Mac, whatever the ledger carries. Tools/e2e.sh
+# ships .build/XDict.app, so the stapled copy takes its place (the same bundle plus its ticket); its rows are filed as
+# `release` mode, keyed by the bundle's own provenance.
+rm -rf "$BUILT"
+ditto "$APP" "$BUILT"
+# shellcheck disable=SC2046 # the smoke's names, split on purpose
+XDICT_E2E_TREE="$tree" Tools/e2e.sh "$XDICT_E2E_HOST" $(Tools/e2e-status.sh smoke) \
+    || fail "the release smoke ($(Tools/e2e-status.sh smoke)) failed on the release-signed bundle"
+
 # 3. The disk image, from the stapled app, with the usual Applications link to drag it onto.
 dmg=$OUT/XDict-$version-$build.dmg
 staging=$(mktemp -d)
@@ -178,6 +191,10 @@ hdiutil create -quiet -volname "XDict $version" -srcfolder "$staging" -ov -forma
 sign_with_timestamp "$dmg"
 notarize "$dmg"
 staple "$dmg"
+# **Asked once more, after the notarisations and before the image is accepted**: a run filed meanwhile may have revoked
+# a carried pass (a failure under the same key), and that must stop the release here.
+[ "$(Tools/source-tree.sh)" = "$tree" ] || fail "the source tree moved during the release"
+evidence || fail "the evidence changed during notarisation; nothing is released"
 
 # 6. As a reader meets them: the disk image, and the app inside it — not the copy the image was built from.
 gatekeeper "$dmg" -t open --context context:primary-signature

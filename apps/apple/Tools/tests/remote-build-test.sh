@@ -39,6 +39,8 @@ if [ "$FAKE_MODE" != stale ]; then
     done
 fi
 echo '{}' >"$apple/Generated/core-versions.json"
+# The toolchain, as the build's own shell names it right after compiling (Tools/toolchain-facts.sh).
+[ "$FAKE_MODE" = nofacts ] || printf 'fact:xcode=27.1/27B55\nfact:swift=Apple Swift version 6.3\nfact:rust=rustc 1.99.0\n'
 echo "products=$bin"
 EOF
 chmod +x "$scratch/bin/"*
@@ -55,12 +57,13 @@ run() {  # run <mode>: the script's exit, its output in $scratch/out
 
 if run good; then
     if [ -x "$scratch/local/.build/remote-products/XDictService" ] && [ -s "$scratch/local/Generated/core-versions.json" ] \
-        && [ "$(cat "$scratch/local/.build/remote-products/source-tree")" = one ]; then
-        ok "good: the products, Generated/ and the tree they were built of are here"
+        && [ "$(cat "$scratch/local/.build/remote-products/source-tree")" = one ] \
+        && [ "$(cat "$scratch/local/.build/remote-products/toolchain")" = "$(printf 'xcode=27.1/27B55\nswift=Apple Swift version 6.3\nrust=rustc 1.99.0')" ]; then
+        ok "good: the products, Generated/, the tree they were built of and the build's own toolchain are here"
     else bad "good: passed without the products: $(ls -R "$scratch/local" | head -20)"; fi
 else bad "good: $(tail -3 "$scratch/out")"; fi
 
-for mode in missing stale edit; do
+for mode in missing stale edit nofacts; do
     if run $mode; then bad "$mode: passed"
     elif [ -e "$scratch/local/.build/remote-products/source-tree" ]; then bad "$mode: failed but left a stamp"
     else ok "$mode refused: $(tail -1 "$scratch/out")"; fi
