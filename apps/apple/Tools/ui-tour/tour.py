@@ -342,8 +342,13 @@ def walk(variant, name, library, route, steps, folder):
     try:
         try:
             for step in steps:
-                session.step(step)
+                if step[0] != "after":
+                    session.step(step)
             record["shots"], record["findings"] = capture(session, route, folder)
+            # What the route leaves open is closed after its capture, before the app quits (the print panel's Cancel).
+            for step in steps:
+                if step[0] == "after":
+                    session.step(tuple(step[1:]))
             record["parity"] = getattr(session, "parity", [])
             if not record["shots"]:
                 record["failure"] = "no window of XDict on screen"
