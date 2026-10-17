@@ -8,6 +8,8 @@
 	<string>XDict</string>
 	<key>CFBundleExecutable</key>
 	<string>XDict</string>
+	<key>CFBundleIconName</key>
+	<string>XDict</string>
 	<key>CFBundleIdentifier</key>
 	<string>ai.xdict.app</string>
 	<key>CFBundleInfoDictionaryVersion</key>

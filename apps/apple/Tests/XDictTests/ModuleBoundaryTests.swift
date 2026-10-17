@@ -72,7 +72,8 @@ struct ModuleBoundaryTests {
         "XDictEntryViewTests": ["AppKit", "Foundation", "JavaScriptCore", "Testing", "WebKit"],
         "XDictServiceTests": ["Foundation", "Synchronization", "Testing"],
         "XDictClientTests": ["Foundation", "Synchronization", "Testing"],
-        "XDictTests": ["Foundation", "Testing"],
+        // `AppKit`: the menu-bar glyph drawn through CoreSVG and measured (`BundleFactsTests`).
+        "XDictTests": ["AppKit", "Foundation", "Testing"],
     ]
 
     /// **The contract binds Foundation and nothing else, and depends on no target of this package.** Both processes
