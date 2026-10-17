@@ -28,7 +28,7 @@ public struct ProblemStatus: View {
     }
 
     /// The sentence for a dictionary's phase when it cannot be used; nil when it can (or is on its way).
-    public static func sentence(for phase: EntryPhase?) -> LocalizedStringResource? {
+    nonisolated public static func sentence(for phase: EntryPhase?) -> LocalizedStringResource? {
         guard let phase, LibraryRow.isTrouble(phase) else { return nil }
         return LibrarySentences.phase(phase)
     }

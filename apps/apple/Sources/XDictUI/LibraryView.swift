@@ -104,8 +104,8 @@ public struct LibraryView: View {
     /// The bar under a Settings list: add, remove, and the order, icons with their names as tooltips and for VoiceOver.
     private var listBar: some View {
         HStack(spacing: 0) {
+            // ⌘O is File ▸ Add Dictionaries…, which reaches this view (UI review A-04).
             barButton("Add Dictionaries…", symbol: "plus") { choosing = true }
-                .keyboardShortcut("o")
             barButton("Remove", symbol: "minus") { removeSelected() }
                 .disabled(selection == nil)
             Divider().frame(height: 16).padding(.horizontal, 4)
@@ -335,7 +335,7 @@ struct LibraryRow: View {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
-    static func isTrouble(_ phase: EntryPhase) -> Bool {
+    nonisolated static func isTrouble(_ phase: EntryPhase) -> Bool {
         switch phase {
         case .refused, .failed, .missing, .outsideItsFolder: true
         case .waiting, .importing, .cancelling, .opening, .ready, .cancelled: false

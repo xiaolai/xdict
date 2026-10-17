@@ -30,6 +30,11 @@ extension View {
     func settingsPane(width: CGFloat = 480) -> some View { modifier(SettingsPane(width: width)) }
 }
 
+/// The menu-bar item's one preference (UI review S-04): shown unless the reader hides it.
+public enum MenuBarItem {
+    public static let shownKey = "menuBarItem.shown"
+}
+
 /// **Add Dictionaries… asked from anywhere** (UI review A-04, M-10, U-02): File ▸ Add Dictionaries…, the main window's
 /// empty state and the setup board open the Library with its open panel up. The request waits until a Library view is
 /// there to take it.

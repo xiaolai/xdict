@@ -16,6 +16,8 @@ import os
 /// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    /// The reader may hide the menu-bar item (UI review S-04).
+    @AppStorage(MenuBarItem.shownKey) private var showsMenuBarItem = true
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
         ?? MeasureReport.setup(CommandLine.arguments) ?? AppSetup.reader
@@ -33,22 +35,39 @@ struct XDictApp: App {
         .defaultSize(width: 1_000, height: 700)
         .commands {
             SearchCommands()
+            // The standard View items for the sidebar and the toolbar (UI review A-05).
+            SidebarCommands()
+            ToolbarCommands()
             CommandGroup(after: .appSettings) {
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
             AcknowledgementsCommand()
+            // File ▸ Add Dictionaries… (A-04): the Library, with its open panel up.
+            CommandGroup(after: .newItem) {
+                Button("Add Dictionaries…") {
+                    LibraryRequests.shared.requestImport()
+                    MenuBarActions.openLibrary()
+                }
+                .keyboardShortcut("o")
+            }
+            // No help book yet: no Help item that answers "Help isn't available" (A-03).
+            CommandGroup(replacing: .help) {}
         }
 
-        // Every third-party notice (WI-10), from the app menu beside About.
-        Window("Acknowledgements", id: Self.acknowledgementsWindow) {
+        // Every third-party notice (WI-10), from the app menu beside About; not in the Window menu (A-06).
+        Window("Acknowledgments", id: Self.acknowledgementsWindow) {
             AcknowledgementsView(notices: AcknowledgementsView.bundled())
         }
+        .defaultSize(width: 640, height: 560)
+        .commandsRemoved()
 
+        // Sized for its details (UI review L-01): at 452 pt the detail showed a third of itself.
         Window("Library", id: Self.libraryWindow) {
             LibraryView(library: Self.library)
                 .frame(minWidth: 640, minHeight: 400)
                 .task { await LibraryLaunch.once() }
         }
+        .defaultSize(width: 980, height: 680)
         .keyboardShortcut("l", modifiers: [.command, .shift])
 
         // The setup board (WI-9): opened by itself once, on a fresh account, and from the app menu or Settings after.
@@ -59,6 +78,7 @@ struct XDictApp: App {
                 .task { await LibraryLaunch.once() }
         }
         .windowResizability(.contentSize)
+        .commandsRemoved()
 
         Settings {
             TabView {
@@ -79,7 +99,7 @@ struct XDictApp: App {
 
         // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
         // `openWindow` is handed to the panel, which expands into a main window.
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showsMenuBarItem) {
             MenuBarMenu(registrar: LookupAnywhere.shared.registrar,
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
@@ -186,6 +206,15 @@ enum LibraryLaunch {
 
 /// Starts lookup from anywhere once the app has finished launching: the shortcut, the Service, the panel.
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // One window per window: no tab items in View and Window (UI review A-05).
+        NSWindow.allowsAutomaticWindowTabbing = false
+        // The UI tour's appearance, an instrument's argument alone (refused in main.swift otherwise).
+        if case .success(let chosen?) = InstrumentAppearance.parse(Array(CommandLine.arguments.dropFirst())) {
+            MainActor.assumeIsolated { NSApp.appearance = chosen.appearance }
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             LookupAnywhere.shared.start()
@@ -272,7 +301,7 @@ struct AcknowledgementsCommand: Commands {
 
     var body: some Commands {
         CommandGroup(after: .appInfo) {
-            Button { openWindow(id: XDictApp.acknowledgementsWindow) } label: { Text("Acknowledgements…") }
+            Button { openWindow(id: XDictApp.acknowledgementsWindow) } label: { Text("Acknowledgments") }
         }
     }
 }

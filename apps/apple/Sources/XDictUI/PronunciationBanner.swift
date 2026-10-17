@@ -13,7 +13,7 @@ struct PronunciationBanner: View {
     @State private var dismissed: Int?
 
     var body: some View {
-        if let shown = pronunciation.shown, shown.serial != dismissed {
+        if let shown = pronunciation.shown, shown.serial != dismissed, Self.shows(shown.notice, hasTip: shown.tip != nil) {
             let lines = SpeechSentences.lines(shown.notice)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Image(systemName: Self.symbol(shown.notice))
@@ -47,11 +47,12 @@ struct PronunciationBanner: View {
                 .help(Text("Dismiss"))
                 .accessibilityLabel(Text("Dismiss"))
             }
-            .padding(.horizontal, 12)
+            .padding(.horizontal, 14)
             .padding(.vertical, 8)
-            .frame(maxWidth: 520, alignment: .leading)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10))
-            .shadow(radius: 2, y: 1)
+            // A floating control layer: glass, as wide as its words (UI review M-15).
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: 520)
+            .glassEffect(.regular, in: .rect(cornerRadius: 16))
             .padding(12)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("pronunciation-notice")
@@ -68,6 +69,14 @@ struct PronunciationBanner: View {
 
     /// Nothing was heard: the reader has something to do (set a language, add a voice). A Speex recording spoken by
     /// the voice is information, not a fault: four of the 25 are wholly Speex, and every click there would warn.
+    /// Whether a notice is worth showing: not for a word spoken, or a recording played, as asked (UI review M-15).
+    static func shows(_ notice: PronunciationNotice, hasTip: Bool) -> Bool {
+        switch notice {
+        case .recording, .speech(.spoken): hasTip
+        case .speech, .fallback: true
+        }
+    }
+
     static func isProblem(_ notice: PronunciationNotice) -> Bool {
         switch notice {
         case .recording, .speech(.spoken), .fallback(_, .spoken): false
