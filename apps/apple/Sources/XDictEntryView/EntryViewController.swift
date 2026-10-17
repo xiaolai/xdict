@@ -343,9 +343,23 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     // MARK: - Print (Apple parity P32, P44)
 
-    /// File ▸ Print…: the shown entry, through the system's print panel, as a sheet on its window.
+    /// File ▸ Print…: what is shown, through the system's print panel, as a sheet on its window. The All page prints
+    /// whole, every expanded dictionary under its name, as Apple's does (P44); a single entry prints its frame.
     public func printEntry() {
-        guard let webView = focusPane?.view, let window = view.window else { return }
+        guard let window = view.window else { return }
+        if let page {
+            Task { @MainActor in
+                guard let printed = await page.printView() else { return }
+                // A copy: the page's pagination is not every later print's.
+                let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+                info.horizontalPagination = .fit
+                info.verticalPagination = .automatic
+                NSPrintOperation(view: printed, printInfo: info)
+                    .runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+            }
+            return
+        }
+        guard let webView = focusPane?.view else { return }
         let operation = webView.printOperation(with: NSPrintInfo.shared)
         operation.view?.frame = webView.bounds
         operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)

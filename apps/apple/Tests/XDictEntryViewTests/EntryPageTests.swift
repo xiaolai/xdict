@@ -32,6 +32,39 @@ struct EntryPageTests {
         #expect(lower.min() == 7 && lower.max() == 11)
     }
 
+    /// The dividers follow the one text size (parity P15, P29): the name, the band and the triangle scale with it.
+    @Test func dividersFollowTheTextSize() {
+        let divider = EntryPageDivider(name: "Beta", zoom: 2)
+        #expect(divider.label.font?.pointSize == 36)
+        #expect(divider.fittingSize.height == 64)
+        divider.setZoom(1)
+        #expect(divider.label.font?.pointSize == 18)
+        #expect(divider.fittingSize.height == 32)
+        #expect(EntryPageDivider.metrics(zoom: 1.5) == .init(font: 27, height: 48, triangle: 8.25))
+    }
+
+    // MARK: - Print (P44)
+
+    /// A page may end only between lines: the text's line boxes, merged where they overlap, leave the gaps it may end in.
+    @Test func printBreaksFallBetweenLines() {
+        #expect(EntryPrintPlan.breaks(lines: [(10, 30), (28, 50), (60, 80), (0, 5)]) == [5, 50, 80])
+        #expect(EntryPrintPlan.breaks(lines: []) == [])
+        // The largest break between the limit and the proposed bottom; none there, the proposed one.
+        #expect(EntryPrintPlan.pageBottom(proposed: 75, limit: 40, breaks: [5, 50, 80]) == 50)
+        #expect(EntryPrintPlan.pageBottom(proposed: 45, limit: 40, breaks: [5, 50, 80]) == 45)
+    }
+
+    /// Every expanded dictionary prints, in the page's order, each under its name; a collapsed one prints nothing.
+    @Test func everyExpandedFramePrintsUnderItsName() {
+        let plan = EntryPrintPlan.layout([("Alpha", 100, [40, 100]), ("Beta", 50, [50])], collapsed: [false, false])
+        #expect(plan.map(\.name) == ["Alpha", "Beta"])
+        #expect(plan.map(\.top) == [0, EntryPrintPlan.header + 100])
+        #expect(plan.first?.breaks == [EntryPrintPlan.header + 40, EntryPrintPlan.header + 100])
+        let one = EntryPrintPlan.layout([("Alpha", 100, []), ("Beta", 50, [])], collapsed: [true, false])
+        #expect(one.map(\.name) == ["Beta"])
+        #expect(one.first?.top == 0)
+    }
+
     @Test func findStepsAcrossFramesAndWraps() {
         let counts = [2, 0, 3]
         var at = EntryPagePlan.step(from: nil, counts: counts, forward: true)

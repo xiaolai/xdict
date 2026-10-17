@@ -4,9 +4,22 @@ import WebKit
 /// **Apple's divider between two dictionaries** (parity P15, measured on Dictionary.app): a disclosure triangle at the
 /// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
 /// at the system's `large` size. A click anywhere on it, or VoiceOver's press, collapses or expands that dictionary.
+/// Its name, band and triangle follow the one text size, as Apple's do (P15, P29).
 @MainActor
 final class EntryPageDivider: NSView {
     static let height: CGFloat = 32
+
+    /// The divider at a text size: the name's points, the band's height, the triangle's half-width.
+    struct Metrics: Equatable {
+        let font: CGFloat
+        let height: CGFloat
+        let triangle: CGFloat
+    }
+
+    static func metrics(zoom: Double) -> Metrics {
+        let scale = CGFloat(zoom)
+        return Metrics(font: 18 * scale, height: height * scale, triangle: 5.5 * scale)
+    }
     /// The rule: #929292 measured on Apple's page in light; its dark twin keeps the same contrast with #1e1e1e.
     static let ruleColour = NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 0x5c / 255, alpha: 1)
@@ -15,6 +28,8 @@ final class EntryPageDivider: NSView {
 
     let name: String
     let label: NSTextField
+    private var metrics: Metrics
+    private var heightConstraint: NSLayoutConstraint?
     var onToggle: (() -> Void)?
     var collapsed = false {
         didSet {
@@ -24,11 +39,12 @@ final class EntryPageDivider: NSView {
         }
     }
 
-    init(name: String) {
+    init(name: String, zoom: Double = 1) {
         self.name = name
         label = NSTextField(labelWithString: name)
+        metrics = Self.metrics(zoom: zoom)
         super.init(frame: .zero)
-        label.font = .systemFont(ofSize: 18)
+        label.font = .systemFont(ofSize: metrics.font)
         label.textColor = .secondaryLabelColor
         label.lineBreakMode = .byTruncatingTail
         label.alignment = .center
@@ -36,8 +52,10 @@ final class EntryPageDivider: NSView {
         label.setAccessibilityElement(false)
         addSubview(label)
         translatesAutoresizingMaskIntoConstraints = false
+        let height = heightAnchor.constraint(equalToConstant: metrics.height)
+        heightConstraint = height
         NSLayoutConstraint.activate([
-            heightAnchor.constraint(equalToConstant: Self.height),
+            height,
             label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: (Self.ruleStart - Self.trailing) / 2),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             label.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -(Self.ruleStart + Self.trailing + 48)),
@@ -51,6 +69,16 @@ final class EntryPageDivider: NSView {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
+
+    /// The text size changed: the name, the band and the triangle follow it.
+    func setZoom(_ zoom: Double) {
+        let next = Self.metrics(zoom: zoom)
+        guard next != metrics else { return }
+        metrics = next
+        label.font = .systemFont(ofSize: next.font)
+        heightConstraint?.constant = next.height
+        needsDisplay = true
+    }
 
     /// Apple's geometry, in points from the pane's leading edge: the triangle centred at 29, the rule from 45 to 16
     /// short of the trailing edge, a 12 pt gap each side of the name.
@@ -74,7 +102,7 @@ final class EntryPageDivider: NSView {
         rule.line(to: NSPoint(x: bounds.maxX - Self.trailing, y: mid))
         rule.stroke()
         // ▼ expanded, ▶ collapsed, in the label colour at Apple's size (about 11 pt across).
-        let c = NSPoint(x: Self.triangleCentre, y: bounds.height / 2), r: CGFloat = 5.5
+        let c = NSPoint(x: Self.triangleCentre, y: bounds.height / 2), r = metrics.triangle
         let triangle = NSBezierPath()
         if collapsed {
             triangle.move(to: NSPoint(x: c.x - r * 0.8, y: c.y - r))
@@ -117,10 +145,10 @@ final class EntryPageSection {
     var id: UUID { item.id }
     var name: String { item.name }
 
-    init(item: EntryPageItem, collapsed: Bool) {
+    init(item: EntryPageItem, collapsed: Bool, zoom: Double = 1) {
         self.item = item
         self.collapsed = collapsed
-        divider = EntryPageDivider(name: item.name)
+        divider = EntryPageDivider(name: item.name, zoom: zoom)
         holder.translatesAutoresizingMaskIntoConstraints = false
         height = holder.heightAnchor.constraint(equalToConstant: CGFloat(EntryPagePlan.estimatedHeight))
         height.priority = .required
@@ -253,7 +281,8 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 kept.insert(ObjectIdentifier(section))
                 next.append(section)
             } else {
-                next.append(EntryPageSection(item: item, collapsed: preferences.collapsed(for: item.content.binding.dictionary)))
+                next.append(EntryPageSection(item: item, collapsed: preferences.collapsed(for: item.content.binding.dictionary),
+                                             zoom: zoom))
             }
         }
         for section in sections where !kept.contains(ObjectIdentifier(section)) { section.close() }
@@ -393,6 +422,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         for section in sections {
             section.pane?.setZoom(zoom)
             section.setHeight(section.frameHeight * ratio)
+            section.divider.setZoom(zoom)
         }
     }
 
@@ -509,6 +539,42 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         while sections.contains(where: { $0.pane != nil && !$0.finished }), ContinuousClock.now < deadline {
             try? await Task.sleep(for: .milliseconds(20))
         }
+    }
+
+    // MARK: - Print (P44)
+
+    /// The whole page for print: every frame made and loaded, each expanded one drawn (a PDF of its web view, as
+    /// shown) under its dictionary's name; `nil` when a frame could not be made.
+    func printView() async -> NSView? {
+        if let refusal = materialize(all: true) {
+            onRefusal?(refusal)
+            return nil
+        }
+        await loaded()
+        var frames: [(String, Double, [Double])] = []
+        var collapsed: [Bool] = []
+        var images: [NSImage] = []
+        for section in sections {
+            guard !section.collapsed, let pane = section.pane,
+                  let data = try? await pane.view.pdf(configuration: WKPDFConfiguration()),
+                  let image = NSImage(data: data) else {
+                frames.append((section.name, 0, []))
+                collapsed.append(true)
+                continue
+            }
+            let lines = (try? await pane.view.callAsyncJavaScript(EntryPrintPlan.linesScript, arguments: [:], in: nil,
+                                                                   contentWorld: EntryPane.world)) as? [[NSNumber]]
+            let boxes = (lines ?? []).compactMap { box in
+                box.count == 2 ? (box[0].doubleValue * zoom, box[1].doubleValue * zoom) : nil
+            }
+            frames.append((section.name, section.frameHeight, EntryPrintPlan.breaks(lines: boxes)))
+            collapsed.append(false)
+            images.append(image)
+        }
+        let plan = EntryPrintPlan.layout(frames, collapsed: collapsed)
+        guard !plan.isEmpty, plan.count == images.count else { return nil }
+        let width = max(scroll.contentView.bounds.width, 1)
+        return EntryPagePrintView(width: width, sections: Array(zip(plan, images)))
     }
 
     // MARK: - Which frame
