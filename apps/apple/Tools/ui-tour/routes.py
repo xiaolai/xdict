@@ -41,6 +41,9 @@ ROUTES = [
      "...) under it; no sidebar; 'Type a word to look up in…' and the dictionaries' names, centred", []),
     ("window.min", "full", "Ask for a 100 × 100 pt main window (P1)", "It takes Apple's minimum, 400 × 300 pt",
      [("size", 100, 100)]),
+    ("main.w640", "full", "Look up 'apple' at 640 pt (P8)", "Search field, the pairs and the title in the toolbar; "
+     "the scope bar whole or with its »", [("size", 640, 500), ("key", "cmd+opt+f"), ("type", "apple"),
+                                           ("key", "return"), ("wait", 1.5)]),
     ("main.narrow", "full", "Look up 'apple' at the 400 pt minimum (P8)", "The search field and the scope bar (All "
      "and what fits, the rest under ») still there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
