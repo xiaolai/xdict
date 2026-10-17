@@ -171,6 +171,18 @@ out=$(XDICT_AFFECTED_GRAPH=$scratch/stale.json python3 -I "$tool" status $gates 
 [ "$(runs <<<"$out")" = "apple-test core $every" ] && grep -q stale "$scratch/err" \
     && ok "a stale graph selects all, loudly" || bad "stale: $(runs <<<"$out") / $(cat "$scratch/err")"
 
+# A file's mode is part of the key: `chmod -x` keeps its bytes and its blob, and a kit copying a script that no longer
+# executes fails the sub-stage that runs it.
+# (Its passes were recorded at 100644; the mode alone moves it to keys never passed, and back to those that were.)
+chmod +x "$repo/apps/apple/Tools/lookup/x.py"
+out=$(status 2>&1)
+[ "$(runs <<<"$out")" = "apple-test e2e:lookup.core " ] && grep -q 'changed: apps/apple/Tools/lookup/x.py' <<<"$out" \
+    && ok "a mode change alone changes the keys of what the file reaches" || bad "mode: $(runs <<<"$out") / $out"
+record_all
+chmod -x "$repo/apps/apple/Tools/lookup/x.py"
+out=$(status 2>&1)
+[ -z "$(runs <<<"$out")" ] && ok "chmod -x back to a passed mode is that pass's key" || bad "mode back: $(runs <<<"$out")"
+
 # A host fact is part of the key.
 out=$(python3 -I "$tool" status --fact rustc=1.99.1 core 2>&1)
 [ "$(runs <<<"$out")" = "core " ] && ok "a changed toolchain fact runs the gate" || bad "fact: $out"

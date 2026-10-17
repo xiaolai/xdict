@@ -78,7 +78,10 @@ apps/apple/Tools/gallery/*                          none
 # stage's own rule above already selects. So these select a smoke set, a minute in all: the bundle launched, the kit's
 # lab, the fixtures, a lookup window over the corpus (2026-10-16: a lookup driver change with three such lines ran every
 # sub-stage, 46 min). **A change to what every stage shares (the run's setup, the lock, the evidence, `flunk`) names its
-# stages or runs T2.**
+# stages or runs T2.** Since 2026-10-17 every selection and key also adds what the harness derivation finds executes
+# the file, so these narrow lines no longer narrow
+# (Tools/affected_graph.py `harness_uses`: e2e.sh, e2e-run.sh and this Makefile reach every sub-stage; build-lab.sh
+# and what it builds the kit of, every kit sub-stage).
 apps/apple/Tools/build-lab.sh                       hostile.binding hostile.faults lookup.core
 apps/apple/Tools/e2e-run.sh                         launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
 apps/apple/Tools/e2e.sh                             launch service.conformance hostile.binding hostile.faults service.recovery lookup.core
@@ -143,5 +146,7 @@ apps/apple/Sources/XDictUI/LaunchAtLogin.swift      setup
 apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup
 apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup
 # The catalog's text reaches only the checks that compare a reader-facing sentence or run the app in Chinese; the
-# instruments read every other string through `String(localized:)`, so a reworded line cannot fail them.
-apps/apple/Strings/*                                setup launch lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu
+# instruments read every other string through `String(localized:)`, so a reworded line cannot fail them. Audited by
+# Tools/tests/e2e_deps_test.py: every instrument function that renders a catalog string in Chinese (library.generated's
+# refusal sentences among them, 2026-10-17) belongs to a sub-stage named here.
+apps/apple/Strings/*                                setup launch library.generated lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu

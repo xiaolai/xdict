@@ -12,7 +12,9 @@ scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
 export XDICT_E2E_LEDGER=$scratch/ledger/e2e-ledger.tsv XDICT_E2E_CORPUS= XDICT_E2E_STAGES= XDICT_E2E_FULL= \
     XDICT_E2E_RELEASE_NEEDED= XDICT_FACT_XCODE=27.1 XDICT_FACT_SWIFT=6.3 XDICT_FACT_RUST=1.99.0 XDICT_FACT_MACOS=25A1
-printf -- '--fact\nxcode=27.1\n--fact\nswift=6.3\n--fact\nrust=1.99.0\n' >"$scratch/bundle.facts"
+# A bundle as its build names itself (Tools/build-bundle.sh's Provenance.txt), of this very tree.
+mkdir -p "$scratch/XDict.app/Contents/Resources"
+printf 'tree=%s\nxcode=27.1\nswift=6.3\nrust=1.99.0\n' "$(Tools/source-tree.sh)" >"$scratch/XDict.app/Contents/Resources/Provenance.txt"
 defaults=$(bash Tools/e2e-plan.sh substages | sort | tr '\n' ' ')
 
 bash $run pending 2>/dev/null | grep -q '^E2E suggested: .* — .*no pass for their key' && ok "pending names what has no pass" \
@@ -22,9 +24,10 @@ got=$(bash $run select 2>"$scratch/err" | sort | tr '\n' ' ')
 grep -q 'run: no row for it' "$scratch/err" && ok "each says why it runs" || bad "no reason: $(head -3 "$scratch/err")"
 
 # Every one passes, as Tools/e2e.sh files it: the next selection is empty.
-for sub in $defaults; do printf 'RESULT\t%s\tpass\nTIME\t%s\t5\n' "$sub" "$sub"; done >"$scratch/run.log"
-XDICT_E2E_BUNDLE_FACTS=$scratch/bundle.facts bash Tools/e2e-status.sh record 1.2 HOSTUUID "27.0 (25A1)" \
-    "$(Tools/source-tree.sh)" development <"$scratch/run.log" >/dev/null || bad "record failed"
+bash Tools/e2e-plan.sh table | awk -F'\t' -v d=" $defaults" 'index(d, " " $1 " ") { print "RESULT\t" $1 "\tpass\t" $5; t[$1] = 1 }
+    END { for (s in t) print "TIME\t" s "\t5" }' >"$scratch/run.log"
+bash Tools/e2e-status.sh record 1.2 HOSTUUID "27.0 (25A1)" "$(Tools/source-tree.sh)" development "$scratch/XDict.app" \
+    <"$scratch/run.log" >/dev/null || bad "record failed"
 if got=$(bash $run select 2>"$scratch/err"); then
     [ -z "$got" ] && ok "an unchanged tree selects nothing" || bad "unchanged tree selected [$got]"
 else bad "select failed: $(tail -2 "$scratch/err")"; fi

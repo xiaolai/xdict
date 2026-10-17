@@ -24,6 +24,17 @@ list (`Tools/affected-hand.map`); then the path's owning node in the graph; and 
 (fail-safe). Gates read the graph only. A graph whose manifests changed since it was generated is stale: every gate,
 and every path the rules do not name, reaches everything, and stderr says so. Never a narrower selection on doubt.
 
+**What the harness executes is derived, and widens the rules, never narrows them** (2026-10-17, after a refutation
+found shared drivers, kit tools and fixtures reaching only some of the sub-stages that run them). `harness_uses` reads
+`Tools/e2e.sh`: a repository path it names inside an `if needs <need>` block reaches every sub-stage with that need;
+one it names anywhere else, and the run's entry chain (`ENTRY`), reach every sub-stage; a script it names is read the
+same way one level down (the kit's `Tools/build-lab.sh`, the fixtures' `Tools/build-fixtures.sh`), so what the kit is
+built of reaches every sub-stage that needs the kit; a cargo `--test`/`--example` it runs is that file. The hand list's
+`reads <node> <pattern>` says what a node reads at run time that no compiler sees (the fixture writer reads
+`conformance/fixtures`). A path's selection is its rule's (or graph's) answer **united** with these. Correct before
+cheap: a kit tool reaches every kit sub-stage, though most run one product of the kit; splitting the kit by product
+(`$kit/<product>` per sub-stage function) would narrow that later.
+
 **Recorded coverage** (plan-verification §4.2, third bullet) plugs in at `Graph.recorded_coverage`: once an E2E run
 records which files a sub-stage actually executed, that sub-stage's file set narrows to them there. Today it records
 nothing, so it narrows nothing.
@@ -35,6 +46,7 @@ import hashlib
 import html
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -43,6 +55,15 @@ GRAPH = os.environ.get("XDICT_AFFECTED_GRAPH") or os.path.join(HERE, "affected-g
 HAND = os.environ.get("XDICT_AFFECTED_HAND") or os.path.join(HERE, "affected-hand.map")
 MAP = os.environ.get("XDICT_E2E_AFFECTED_MAP") or os.path.join(HERE, "e2e-affected.map")
 CRATE_TEST_DIRS = ("tests/", "benches/", "examples/")
+# The run's entry chain: `make e2e` -> Tools/e2e-run.sh -> Tools/e2e.sh -> Tools/e2e-plan.sh over the catalog. Every
+# sub-stage executes all of them.
+ENTRY = ("apps/apple/Makefile", "apps/apple/Tools/e2e-run.sh", "apps/apple/Tools/e2e.sh", "apps/apple/Tools/e2e-plan.sh",
+         "apps/apple/Tools/e2e-substages.txt")
+HARNESS = "apps/apple/Tools/e2e.sh"
+_REF = re.compile(r"(?<![\w$/.-])((?:\.\./)*(?:apps/apple/)?(?:Tools|Resources|Sources|Strings|conformance|core)/[A-Za-z0-9_./-]*)")
+_CARGO = re.compile(r"-p\s+([A-Za-z0-9_-]+)\s+--(test|example)\s+([A-Za-z0-9_]+)")
+_NEEDS_IF = re.compile(r"^(\s*)if\b.*\bneeds\s+\w+")
+_FI = re.compile(r"^(\s*)fi\b")
 # The gates' inputs (AGENTS.md "Which gates a change needs"): the crates and targets a gate builds and runs, as graph
 # roots, plus the paths it reads that no compiler sees. A gate reaching any crate also reads core/Cargo.toml and
 # core/Cargo.lock. `*` is every node of that kind.
@@ -118,7 +139,7 @@ def dumps(graph):
 # --- the hand list ------------------------------------------------------------------------------------------------------
 
 def read_hand(path):
-    rules, controls, launches, builds, binaries = [], {}, [], {}, {}
+    rules, controls, launches, builds, binaries, reads = [], {}, [], {}, {}, []
     try:
         lines = open(path, encoding="utf-8").read().splitlines()
     except OSError as error:
@@ -136,7 +157,9 @@ def read_hand(path):
             builds[words[1]] = words[2:]
         elif head == "binary" and len(words) == 3:
             binaries[words[1]] = words[2]
-        elif head in ("control", "launches", "builds", "binary"):
+        elif head == "reads" and len(words) == 3:
+            reads.append((words[1], words[2]))
+        elif head in ("control", "launches", "builds", "binary", "reads"):
             die(f"the hand list {path}: malformed `{raw.strip()}`")
         elif len(words) >= 2:
             rules.append((words[0], words[1], words[2:]))
@@ -144,7 +167,73 @@ def read_hand(path):
             die(f"the hand list {path}: a rule with no names: `{raw.strip()}`")
     if not rules or not launches:
         die(f"the hand list {path} has no rule or no `launches` line")
-    return rules, controls, launches, builds, binaries
+    return rules, controls, launches, builds, binaries, reads
+
+
+def _normal(word):
+    """A path the harness names, from the repository's root."""
+    word = word.rstrip("/.")
+    while word.startswith("../"):
+        word = word[3:]
+    if word.startswith(("Tools/", "Resources/", "Sources/", "Strings/")):
+        word = "apps/apple/" + word
+    return os.path.normpath(word) if word else ""
+
+
+def _named(text):
+    """The repository paths and cargo targets a shell text names, line by line: [(line, {path or prefix})]."""
+    out = []
+    for line in text.splitlines():
+        if line.lstrip().startswith("#"):
+            continue
+        found = {_normal(w) for w in _REF.findall(line)}
+        for crate, kind, name in _CARGO.findall(line):
+            found.add(f"core/{crate}/{'tests' if kind == 'test' else 'examples'}/{name}.rs")
+        out.append((line, {f for f in found if f}))
+    return out
+
+
+def harness_uses(repo, listing_paths, needs, order):
+    """path -> the sub-stages that execute it, derived from Tools/e2e.sh (see the module's doc). Empty when the
+    repository has no harness (the tests' scratch repositories)."""
+    try:
+        text = open(os.path.join(repo, HARNESS), encoding="utf-8").read()
+    except OSError:
+        return {}
+    every = set(order)
+
+    def with_need(names):
+        return {s for s in order if set(needs[s]) & names}
+    named = {}   # path or prefix -> sub-stages
+    def add(prefix, subs, depth):
+        named.setdefault(prefix, set()).update(subs)
+        if depth == 0 and prefix.startswith("apps/apple/Tools/") and prefix.endswith(".sh") and prefix != HARNESS:
+            try:
+                inner = open(os.path.join(repo, prefix), encoding="utf-8").read()
+            except OSError:
+                return
+            for _, found in _named(inner):
+                for f in found:
+                    add(f, subs, 1)
+    stack = []   # (indent, need names) of the open `if needs` blocks
+    for line, found in _named(text):
+        opened = _NEEDS_IF.match(line)
+        if opened:
+            stack.append((len(opened.group(1)), set(re.findall(r"\bneeds\s+(\w+)", line))))
+        subs = with_need(stack[-1][1]) if stack else every
+        for f in found:
+            add(f, subs, 0)
+        closed = _FI.match(line)
+        if closed and stack and len(closed.group(1)) == stack[-1][0] and not opened:
+            stack.pop()
+    for path in ENTRY:
+        named.setdefault(path, set()).update(every)
+    uses = {}
+    for prefix, subs in named.items():
+        for path in listing_paths:
+            if path == prefix or path.startswith(prefix + "/"):
+                uses.setdefault(path, set()).update(subs)
+    return uses
 
 
 def read_map(path):
@@ -188,7 +277,7 @@ def plan():
 
 class Graph:
     def __init__(self, listing=None, repo=None):
-        """listing: path -> blob of the tree the selection is for (for staleness); None trusts the graph as is."""
+        """listing: path -> `mode:blob` of the tree the selection is for (for staleness); None trusts the graph as is."""
         try:
             self.data = json.load(open(GRAPH, encoding="utf-8"))
         except (OSError, ValueError) as error:
@@ -196,7 +285,7 @@ class Graph:
         if self.data.get("version") != 1:
             die(f"the graph {GRAPH} is not version 1")
         self.crates, self.targets = self.data["crates"], self.data["targets"]
-        self.rules, self.controls, launches, self.builds, self.binaries = read_hand(HAND)
+        self.rules, self.controls, launches, self.builds, self.binaries, self.reads = read_hand(HAND)
         self.map_rules, map_controls = read_map(MAP)
         for sub, extra in map_controls.items():
             self.controls.setdefault(sub, []).extend(c for c in extra if c not in self.controls.get(sub, []))
@@ -224,13 +313,20 @@ class Graph:
                 die(f"no `launches` line covers the sub-stage {sub}")
         self.sub_nodes = {sub: self.closure(self.sub_roots(sub)) for sub in self.order}
         self.owners = sorted(((c["dir"], name) for name, c in self.crates.items()), key=lambda x: -len(x[0]))
+        for node, _ in self.reads:
+            self.expand_node(node)
+        root = repo or repo_root()
+        paths = list(listing) if listing is not None else subprocess.run(
+            ["git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard"], check=True,
+            capture_output=True, text=True).stdout.splitlines()
+        self.uses = harness_uses(root, paths, self.needs, self.order)
         self.target_dirs = sorted(((t["dir"], name) for name, t in self.targets.items()), key=lambda x: -len(x[0]))
 
     def staleness(self, listing, repo):
         if listing is None:
             return None
         for path, blob in self.data["manifests"].items():
-            if listing.get(path) != blob:
+            if listing.get(path, "").rpartition(":")[2] != blob:
                 return f"{path} is not as it was when the graph was generated"
         for path in listing:
             if (path.startswith("core/") and path.endswith("/Cargo.toml") and path.count("/") == 2
@@ -320,7 +416,18 @@ class Graph:
         return wanted
 
     def why(self, path):
-        """(sub-stages or None for everything, the reason)."""
+        """(sub-stages or None for everything, the reason): the rules' or graph's answer, united with what the harness
+        derivation and the `reads` lines say executes the path."""
+        got, reason = self.base_why(path)
+        extra = set(self.uses.get(path, ()))
+        for node, pattern in self.reads:
+            if fnmatch.fnmatchcase(path, pattern):
+                extra |= {s for s in self.order if node in self.sub_nodes[s]}
+        if got is None or extra <= got:
+            return got, reason
+        return got | extra, f"{reason}; executed by {' '.join(s for s in self.order if s in extra - got)}"
+
+    def base_why(self, path):
         for source, rules in (("map", self.map_rules), ("hand", self.rules)):
             got = self.by_rules(source, rules, path)
             if got is not None:

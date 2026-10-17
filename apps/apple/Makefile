@@ -133,8 +133,8 @@ strings: core
 # **Only what changed since its last pass runs** (Tools/e2e-run.sh select, by Tools/gate-cache.py): nothing at all, and
 # no bundle built, when nothing did. STAGES=<names> forces those; FULL=1 every default sub-stage; RELEASE_NEEDED=1 what a
 # release cannot carry from the ledger. The run is split over both E2E Macs (E2E_HOST_MACOS, E2E_HOST_MACOS_2) unless
-# E2E_SPLIT=0 or E2E_HOST is given. **The bundle's build facts are written beside its tree marker**
-# (`.build/XDict.app.facts`: the build host's Xcode, Swift and Rust), so its rows are keyed with what built it.
+# E2E_SPLIT=0 or E2E_HOST is given. **Its rows are keyed with what the bundle names itself** (Provenance.txt, written by
+# its build: its tree and toolchain; Tools/build-bundle.sh).
 E2E_SPLIT ?= $(if $(filter command line,$(origin E2E_HOST)),0,1)
 FULL ?=
 export XDICT_E2E_HOST_2 := $(E2E_HOST_MACOS_2)
@@ -151,8 +151,7 @@ e2e:
 	if [ -d .build/XDict.app ] && [ "$$(cat .build/XDict.app.source-tree 2>/dev/null)" = "$$tree" ]; then \
 	  echo "e2e: .build/XDict.app is built of this tree already; not building it again"; \
 	else \
-	  $(MAKE) app && { [ "$$(Tools/source-tree.sh)" != "$$tree" ] || \
-	    { Tools/e2e-facts.sh build >.build/XDict.app.facts && echo "$$tree" >.build/XDict.app.source-tree; }; }; \
+	  $(MAKE) app && { [ "$$(Tools/source-tree.sh)" != "$$tree" ] || echo "$$tree" >.build/XDict.app.source-tree; }; \
 	fi && \
 	XDICT_E2E_TREE="$$tree" XDICT_E2E_ONLY="$(E2E_ONLY)" XDICT_E2E_FAILFAST="$(E2E_FAILFAST)" \
 	  Tools/e2e-run.sh run $$stages
@@ -192,6 +191,7 @@ test-tools:
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-ledger-test.sh
+	@python3 -I Tools/tests/e2e_deps_test.py
 	@Tools/tests/e2e-run-test.sh
 	@Tools/tests/land-test.sh
 	@Tools/tests/on-demand-test.sh

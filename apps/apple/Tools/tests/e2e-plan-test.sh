@@ -81,15 +81,17 @@ same "product code brings no control" "$(lines hostile.binding hostile.faults re
 same "the gallery's code selects nothing" "" \
     "$(bash $affected --paths apps/apple/Sources/XDictEntryLab/Gallery.swift apps/apple/Sources/XDictEntryLab/GalleryInvariants.swift \
         apps/apple/Sources/XDictEntryLab/GalleryPhon.swift apps/apple/Tools/gallery/run.sh apps/apple/Tools/gallery/page.py)"
-# A lookup driver change with small harness edits (ba6e081) ran every sub-stage.
-got=$(bash $affected --paths apps/apple/Makefile apps/apple/Tools/build-lab.sh apps/apple/Tools/e2e.sh \
-    apps/apple/Tools/lookup/drive.py apps/apple/Tools/lookup/typing_check.py apps/apple/Tools/tests/lookup_typing_test.py)
-case " $(tr '\n' ' ' <<<"$got") " in
-    *" sound."*|*" library."*|*" hostile.controls "*) bad "a driver change with harness edits selects sound, library or the hostile controls: $got" ;;
-    *" launch "*" lookup.core "*) ok "a driver change with harness edits selects a smoke set and its own stage" ;;
-    *) bad "a driver change with harness edits missed launch or lookup.core: $got" ;; esac
-same "a lookup driver change selects only lookup" "$(lines lookup.core lookup.a11y lookup.paging)" \
-    "$(bash $affected --paths apps/apple/Tools/lookup/drive.py)"
+# **What the harness executes is derived, and widens** (2026-10-17, replacing the smoke sets of 2026-10-16): Tools/e2e.sh
+# runs every sub-stage, so an edit to it selects them all; a driver the kit carries (Tools/build-lab.sh copies
+# Tools/lookup/drive.py into it) selects every sub-stage that needs the kit. Narrower needs the kit split by product.
+got=$(bash $affected --paths apps/apple/Tools/e2e.sh | sort)
+same "a harness edit selects every sub-stage, the extra ones too" "$(bash $plan substages --all | sort)" "$got"
+got=$(bash $affected --paths apps/apple/Tools/lookup/drive.py)
+for sub in lookup.core lookup.a11y lookup.paging hostile.production sound.notices; do
+    case " $(tr '\n' ' ' <<<"$got") " in *" $sub "*) ;; *) bad "a kit driver change missed $sub: $got" ;; esac
+done
+case " $(tr '\n' ' ' <<<"$got") " in *" launch "*|*" library.health "*) bad "a kit driver change selects what needs no kit: $got" ;;
+    *) ok "a kit driver change selects every sub-stage that needs the kit, and none other" ;; esac
 got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryRuleList.swift)
 case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "a confinement layer's change brings the hostile controls" ;;
     *) bad "a confinement layer's change did not bring hostile.controls: $got" ;; esac

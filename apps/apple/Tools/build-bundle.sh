@@ -103,7 +103,8 @@ digest_files() {
 
 bundle_inputs_digest() {
     {
-        printf '%s\0' "$CONFIG" "$BUNDLE_ID" "$XDICT_SIGN_ID" "${XDICT_BUILD_NUMBER:-}"
+        # The source tree too: the bundle names it (Provenance.txt), so a bundle of another tree is not this one's.
+        printf '%s\0' "$CONFIG" "$BUNDLE_ID" "$XDICT_SIGN_ID" "${XDICT_BUILD_NUMBER:-}" "$(Tools/source-tree.sh)"
         find Sources Strings Resources Generated Package.swift Makefile Tools/build-bundle.sh \
             Tools/compiler-warnings.py -type f -print0 | digest_files
     } | shasum -a 256 | cut -d' ' -f1
@@ -154,7 +155,7 @@ verify_required_files() {
     for executable in "Contents/MacOS/$APP_NAME" "$XPC_PATH/Contents/MacOS/$SERVICE"; do
         [ -x "$bundle/$executable" ] || { echo "not executable: $bundle/$executable"; return 1; }
     done
-    for file in Contents/Info.plist "$XPC_PATH/Contents/Info.plist" "$SHIPPED_VERSIONS"; do
+    for file in Contents/Info.plist "$XPC_PATH/Contents/Info.plist" "$SHIPPED_VERSIONS" "$PROVENANCE"; do
         [ -s "$bundle/$file" ] || { echo "missing: $bundle/$file"; return 1; }
     done
     # Exactly the eight faces and two notices, each identical to the tracked file.
@@ -337,7 +338,15 @@ remote_products() {  # $1: the folder
     printf '%s\n' "$1"
 }
 
+# **The bundle names what it was built of** (`Contents/Resources/Provenance.txt`, inside the signature): the source tree
+# read before its products were built, and the toolchain that built them, named by the build's own shell
+# (Tools/toolchain-facts.sh; the build Mac's, from Tools/remote-build.sh). The E2E ledger keys a run with these and
+# nothing else, and refuses a run whose bundle names another tree than the one being keyed (2026-10-17).
+readonly PROVENANCE=Contents/Resources/Provenance.txt
+
 assemble() {
+    local tree toolchain
+    tree=$(Tools/source-tree.sh) || fail "could not read the source tree"
     [ -s "$CORE_VERSIONS" ] && [ -d Generated/xdictFFI.xcframework ] \
         || fail "Generated/ is missing or incomplete: run Tools/build-core.sh (make does)"
     [ -s "$CATALOG" ] || fail "missing string catalog: $CATALOG"
@@ -345,8 +354,10 @@ assemble() {
     if [ -n "${XDICT_REMOTE_PRODUCTS:-}" ]; then
         # Built on BUILD_HOST by Tools/remote-build.sh, which ran this same warnings gate there; held to this very tree.
         products=$(remote_products "$XDICT_REMOTE_PRODUCTS")
+        toolchain=$(cat "$XDICT_REMOTE_PRODUCTS/toolchain" 2>/dev/null) || toolchain=""
     else
         swift build -c "$CONFIG"
+        toolchain=$(Tools/toolchain-facts.sh) || fail "the toolchain that built the products could not be named"
         # **A warning the compiler wrote down fails the bundle, as it fails `make`'s tests**: this reads the build the
         # bundle is made of, which compiles each module whole and no test target.
         python3 Tools/compiler-warnings.py "$RELEASE_DIAGNOSTICS" --whole-module --no-test-targets \
@@ -354,6 +365,9 @@ assemble() {
         products=$(swift build -c "$CONFIG" --show-bin-path)
     fi
     [ -x "$products/$APP_NAME" ] && [ -x "$products/$SERVICE" ] || fail "swift build produced no $APP_NAME or $SERVICE"
+    for name in xcode swift rust; do
+        grep -q "^$name=." <<<"$toolchain" || fail "the products come with no $name version: build again (Tools/toolchain-facts.sh)"
+    done
     # The control for `verify_no_development_lab`'s flag search: the lab this build made must hold the flag.
     LC_ALL=C grep -aqF -- "$LAB_FLAG" "$products/$LAB" \
         || fail "$products/$LAB does not hold $LAB_FLAG, so a search of the app binary for it would see nothing"
@@ -370,6 +384,7 @@ assemble() {
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
     cp -R "$FONTS" "$contents/Resources/"
     cp "$NOTICES" "$contents/Resources/"
+    printf 'tree=%s\n%s\n' "$tree" "$toolchain" >"$STAGE/$PROVENANCE"
 
     # The build number is stamped into the copies, never the tracked files, and read back: PlistBuddy reports success
     # for keys it did not write.
