@@ -26,4 +26,9 @@ struct PopoverParityTests {
         let footerRows: CGFloat = 2 * (8 + 26 + 1) + 8
         #expect(LookupPanelView.chromeHeight == 16 + 24 + 8 + footerRows)
     }
+
+    @Test func theContentIsFrostedByThePopoverMaterial() {
+        let view = PopoverMaterial.make()
+        #expect(view.material == .popover && view.blendingMode == .behindWindow && view.state == .active)
+    }
 }

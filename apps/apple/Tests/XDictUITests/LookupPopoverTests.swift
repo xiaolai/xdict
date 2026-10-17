@@ -7,15 +7,17 @@ import Testing
 /// once shown and once dismissed. And it sits as the system's does: below the word, above where below has no room.
 @MainActor
 struct LookupPopoverTests {
+    /// What XDict's side decides: whether it is the frontmost app, active, and which window is key. (Which other app is
+    /// frontmost is the shared test Mac's, which other runs move: 2026-10-18, a process launched mid-test took it.)
     private struct Focus: Equatable {
-        let front: pid_t?
+        let frontIsThisApp: Bool
         let active: Bool
         let key: ObjectIdentifier?
     }
 
     private func focus() -> Focus {
-        Focus(front: NSWorkspace.shared.frontmostApplication?.processIdentifier, active: NSApp.isActive,
-              key: NSApp.keyWindow.map(ObjectIdentifier.init))
+        Focus(frontIsThisApp: NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid(),
+              active: NSApp.isActive, key: NSApp.keyWindow.map(ObjectIdentifier.init))
     }
 
     private func settle() async { try? await Task.sleep(for: .milliseconds(300)) }
