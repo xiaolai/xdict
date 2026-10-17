@@ -39,7 +39,7 @@ flush() {
 while IFS=$'\t' read -r what views entry; do
     case $what in
         views) [ "$views" = "$group" ] || { flush; group=$views; }; entries+=("$entry") ;;
-        routes) flush; "$apple/Tools/ui-tour/run.sh" --only "$views" || status=1 ;;
+        routes) flush; if "$apple/Tools/ui-tour/run.sh" --only "$views"; then /usr/bin/python3 -I "$tool" record-routes "$views" || status=1; else status=1; fi ;;
     esac
 done <<<"$plan"
 flush

@@ -13,7 +13,15 @@ The gallery's and the UI tour's counterpart of the gates' cache and the E2E sele
                                            `<dict:key@view><TAB><key>` a picture (hot.sh, before it renders)
     render_affected.py record --keys F --report R
                                            a pass for every picture of the report whose checks passed (hot.sh, run.sh)
+    render_affected.py record-routes <id,...>
+                                           a pass for those UI-tour routes on this tree (render-affected.sh, after the tour)
     render_affected.py lab-id              the lab's id for this tree (lab.sh and run.sh stamp the installed lab)
+
+**Since when** (2026-10-18: a merged change whose renders were declined must not vanish): with no --base, --range or
+--paths, the change is everything since the last commit whose every selected picture and route had passed
+(`clean.tsv`, filed by `record` and `record-routes` once nothing is left), else since ANCHOR, the commit render
+selection landed on, said as such. A start that is not in this history, or no history at all (a gate's copy), is
+`Render: cannot compute: …`, exit 2, never "nothing pending".
 
 **What a path selects** is `render-affected.map` (beside this file; the owner's rule of 2026-10-18 is written there):
 one dictionary's change only that dictionary, a shared file one entry a dictionary in light core, windows and menus
@@ -23,12 +31,13 @@ their tour routes, anything else nothing. FULL=1 (`--full`) is the only way to t
 XDictEntryLab's closure in the generated graph, the core included, less the style it is handed; with the core's
 STYLE), the dictionary's files (`gate-cache.py corpus-id` of its folder in the corpus), the entry and the view. A
 picture whose key has a pass in `$XDICT_RENDER_CACHE/passes.tsv` (default ~/.cache/xdict-renders) is carried. No corpus,
-or a record with one malformed line, carries nothing, and says so. Routes have no key: the tour is not keyed.
+or a record with one malformed line, carries nothing, and says so. Routes have no key: a route's pass (`routes.tsv`)
+counts for the source tree it was walked on.
 
 Environment, for the tests: XDICT_RENDER_REPO, XDICT_RENDER_MAP, XDICT_GALLERY_KEYS (a gallery report naming the
 entries; default the main checkout's dev-docs/artifacts/reading-frame/report-core.json, a copy of the E2E Mac's
 gallery-keys.json), XDICT_RENDER_CORPUS (default ~/xdict-corpus/the24), XDICT_RENDER_CACHE, XDICT_RENDER_LAB_ID (the
-lab's id given, not derived).
+lab's id given, not derived), XDICT_RENDER_ANCHOR.
 """
 import datetime
 import fnmatch
@@ -45,16 +54,24 @@ TOOLS = os.path.dirname(HERE)
 
 
 def _repo():
+    """The repository's root: git's, or, in a copy with no history (land's snapshot), four folders above this file."""
     if os.environ.get("XDICT_RENDER_REPO"):
         return os.environ["XDICT_RENDER_REPO"]
-    return subprocess.run(["git", "-C", HERE, "rev-parse", "--show-toplevel"], check=True, capture_output=True,
-                          text=True).stdout.strip()
+    found = subprocess.run(["git", "-C", HERE, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    return found.stdout.strip() if found.returncode == 0 else os.path.dirname(os.path.dirname(os.path.dirname(TOOLS)))
 
 
 REPO = _repo()
 MAP = os.environ.get("XDICT_RENDER_MAP") or os.path.join(HERE, "render-affected.map")
 CACHE = os.environ.get("XDICT_RENDER_CACHE") or os.path.expanduser("~/.cache/xdict-renders")
 PASSES = os.path.join(CACHE, "passes.tsv")
+# The commits whose every selected picture and route had passed, one a line (`v1, commit, date`): pending counts from
+# the last of them that is in this history. Routes have no key: a route's pass is filed under the source tree it saw.
+CLEAN = os.path.join(CACHE, "clean.tsv")
+ROUTE_PASSES = os.path.join(CACHE, "routes.tsv")
+# Until a commit is fully rendered, pending counts from where this selection landed (render-affected's merge, 42ff98c,
+# first parent): everything since is unseen.
+ANCHOR = os.environ.get("XDICT_RENDER_ANCHOR") or "5a010b770264546bdcd301359b9295b7d57191c9"
 PROFILES = "core/xdict-entry/src/roles/profiles.rs"
 LEDGER = "apps/apple/Tools/gallery/style-ledger.tsv"
 STYLE_DIR = "apps/apple/Sources/XDictEntryView/Style/"
@@ -72,7 +89,15 @@ class MapError(Exception):
     pass
 
 
+class CannotCompute(Exception):
+    """No start to count from (no git history, a start commit not in it): said, never read as nothing pending."""
+
+
+LAST_DIE = []
+
+
 def die(text):
+    LAST_DIE.append(text)
     print(f"render: {text}", file=sys.stderr)
     sys.exit(1)
 
@@ -468,40 +493,82 @@ def hunk_lines(diff):
     return lines
 
 
+def short(commit):
+    return commit[:12]
+
+
+def start():
+    """(commit, why) pending counts from: the last fully rendered commit in this history, else the anchor."""
+    if subprocess.run(["git", "-C", REPO, "rev-parse", "--verify", "-q", "HEAD"], capture_output=True).returncode:
+        raise CannotCompute(f"no git history at {REPO} (land's snapshot has none; land says it on the Air)")
+
+    def ancestor(commit):
+        return subprocess.run(["git", "-C", REPO, "merge-base", "--is-ancestor", commit, "HEAD"],
+                              capture_output=True).returncode == 0
+
+    clean = []
+    if os.path.exists(CLEAN):
+        for number, line in enumerate(open(CLEAN, encoding="utf-8").read().splitlines(), 1):
+            f = line.split("\t")
+            if len(f) != 3 or f[0] != "v1" or not re.fullmatch(r"[0-9a-f]{40,64}", f[1]):
+                print(f"render: {CLEAN} is corrupt at line {number}: counting from the anchor", file=sys.stderr)
+                clean = []
+                break
+            clean.append(f[1])
+    for commit in reversed(clean):
+        if ancestor(commit):
+            return commit, f"since {short(commit)}, the last fully rendered commit"
+    if not ancestor(ANCHOR):
+        raise CannotCompute(f"the start commit {short(ANCHOR)} is not in the history at {REPO}")
+    why = "no render has passed yet" if not clean else "no fully rendered commit is in this history"
+    return ANCHOR, f"since {short(ANCHOR)}, where render selection landed ({why})"
+
+
 def change(args):
-    """(paths, hunks, profiles text, ledger text, label) from --base, --range or --paths."""
+    """(paths, hunks, profiles text, ledger text, full, since) from --base, --range, --paths, or the start."""
     full = "--full" in args or os.environ.get("FULL") == "1"
     args = [a for a in args if a != "--full"]
     text = lambda p: open(os.path.join(REPO, p), encoding="utf-8").read() if os.path.exists(os.path.join(REPO, p)) else ""
     if args[:1] == ["--paths"]:
-        return args[1:], {}, text(PROFILES), text(LEDGER), full
+        return args[1:], {}, text(PROFILES), text(LEDGER), full, ""
     if args[:1] == ["--range"] and len(args) == 2 and ".." in args[1]:
         a, b = args[1].split("..", 1)
         paths = git("diff", "--name-only", a, b).split()
         hunks = {p: hunk_lines(git("diff", "-U0", a, b, "--", p)) for p in (PROFILES, LEDGER) if p in paths}
         show = lambda p: subprocess.run(["git", "-C", REPO, "show", f"{b}:{p}"], capture_output=True, text=True).stdout
-        return paths, hunks, show(PROFILES), show(LEDGER), full
-    base = args[1] if args[:1] == ["--base"] and len(args) == 2 else (None if args else "macos-v1")
-    if base is None:
+        return paths, hunks, show(PROFILES), show(LEDGER), full, f"in {args[1]}"
+    if args[:1] == ["--base"] and len(args) == 2:
+        if subprocess.run(["git", "-C", REPO, "rev-parse", "--verify", "-q", args[1]], capture_output=True).returncode:
+            raise CannotCompute(f"no commit {args[1]} in the history at {REPO}")
+        base, since = args[1], f"since {args[1]}"
+    elif args:
         die("usage: [--base REF | --range A..B | --paths P...] [--full]")
+    else:
+        base, since = start()
     merge = git("merge-base", base, "HEAD").strip()
     paths = sorted(set(git("diff", "--name-only", merge, "--").split() +
                        git("ls-files", "--others", "--exclude-standard").split()))
     hunks = {p: hunk_lines(git("diff", "-U0", merge, "--", p)) for p in (PROFILES, LEDGER) if p in paths}
-    return paths, hunks, text(PROFILES), text(LEDGER), full
+    return paths, hunks, text(PROFILES), text(LEDGER), full, since
 
 
 def selection(args):
     m = read_map(MAP)
     ids = route_ids()
-    paths, hunks, ptext, ltext, full = change(args)
+    paths, hunks, ptext, ltext, full, since = change(args)
     try:
         check_map(m, ids, ptext)
     except MapError as error:
         die(str(error))
     keys = gallery_keys(m)
     s = select(paths, m, keys, ledger_repros(os.path.join(REPO, LEDGER)), ids, hunks, ptext, full=full, ledger_text=ltext)
+    s.since = since
     carried = {}
+    if s.routes and not full:
+        done = read_route_passes(ROUTE_PASSES).get(tree_id(listing()), set())
+        for r in list(s.routes):
+            if r in done:
+                del s.routes[r]
     if s.pictures and not full:
         files = listing()
         lab, ids_ = lab_id(files), dict_ids(m)
@@ -513,26 +580,85 @@ def selection(args):
     return m, s, carried, paths
 
 
+def tree_id(files):
+    h = hashlib.sha256()
+    for p in sorted(files):
+        h.update(f"{files[p]} {p}\n".encode())
+    return h.hexdigest()
+
+
+def read_route_passes(path):
+    """tree -> routes that passed on it; empty, and said, when the record has a malformed line."""
+    out = {}
+    if not os.path.exists(path):
+        return out
+    for number, line in enumerate(open(path, encoding="utf-8").read().splitlines(), 1):
+        f = line.split("\t")
+        if len(f) != 4 or f[0] != "v1":
+            print(f"render: the record {path} is corrupt at line {number}: no route is carried", file=sys.stderr)
+            return {}
+        out.setdefault(f[1], set()).add(f[2])
+    return out
+
+
+def advance():
+    """File HEAD as fully rendered when the working copy is HEAD's and nothing since the start is pending."""
+    if git("status", "--porcelain", "--untracked-files=no").strip():
+        return
+    _, s, carried, _ = selection([])
+    if all(p in carried for p in s.pictures) and not s.routes:
+        head = git("rev-parse", "HEAD").strip()
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        os.makedirs(CACHE, exist_ok=True)
+        with open(CLEAN, "a", encoding="utf-8") as out:
+            out.write(f"v1\t{head}\t{now}\n")
+        print(f"render: {short(head)} is fully rendered; pending now counts from it")
+
+
+def try_advance():
+    try:
+        advance()
+    except (CannotCompute, subprocess.CalledProcessError) as error:
+        print(f"render: the fully rendered commit was not moved: {error}", file=sys.stderr)
+
+
 def pending_line(s, carried):
     need = [p for p in s.pictures if p not in carried]
+    since = getattr(s, "since", "")
     if not need and not s.routes:
-        return "Render: nothing pending" + (f" ({len(carried)} carried)" if carried else "")
+        return ("Render: nothing pending" + (f" {since}" if since else "")
+                + (f" ({len(carried)} carried)" if carried else ""))
     why = sorted({w for p in need for w in s.pictures[p]} | {w for r in s.routes for w in s.routes[r]})
     shown = ", ".join(why[:4]) + (f" and {len(why) - 4} more" if len(why) > 4 else "")
     line = (f"Render needed (not run): {len(need)} picture{'s' if len(need) != 1 else ''}"
             f"{f' ({len(carried)} carried)' if carried else ''}, {len(s.routes)} routes — {shown}")
-    return line + (f"; {s.hint}" if s.hint else "")
+    return line + (f"; {s.hint}" if s.hint else "") + (f" ({since})" if since else "")
 
 
 def main():
     if len(sys.argv) < 2:
-        die("usage: select | pending | plan | keys | record | lab-id")
+        die("usage: select | pending | plan | keys | record | record-routes | lab-id")
     command, args = sys.argv[1], sys.argv[2:]
-    if command in ("select", "pending", "plan"):
-        m, s, carried, _ = selection(args)
-        if command == "pending":
-            print(pending_line(s, carried))
-        elif command == "select":
+    if command == "pending":
+        # One line, always: a start that cannot be found is said loudly, never read as nothing pending.
+        try:
+            _, s, carried, _ = selection(args)
+        except CannotCompute as error:
+            print(f"Render: cannot compute: {error}")
+            sys.exit(2)
+        except SystemExit:
+            print(f"Render: cannot compute: {LAST_DIE[-1] if LAST_DIE else 'see the messages above'}")
+            sys.exit(2)
+        except (OSError, subprocess.CalledProcessError) as error:
+            print(f"Render: cannot compute: {error}")
+            sys.exit(2)
+        print(pending_line(s, carried))
+    elif command in ("select", "plan"):
+        try:
+            m, s, carried, _ = selection(args)
+        except CannotCompute as error:
+            die(f"cannot compute: {error}")
+        if command == "select":
             for p in sorted(s.pictures):
                 state = f"carried {carried[p]}" if p in carried else "run"
                 print(f"  {p[0]}:{p[1]}:{s.kinds[(p[0], p[1])]}  {p[2]}  {state}  — {'; '.join(sorted(s.pictures[p]))}")
@@ -597,6 +723,22 @@ def main():
         found = [(keyed[f"{d}:{k}@{v}"], (d, k, v)) for d, k, v in rows if f"{d}:{k}@{v}" in keyed]
         append_passes(PASSES, found)
         print(f"render: recorded {len(found)} passes in {PASSES}")
+        try_advance()
+    elif command == "record-routes":
+        ids = route_ids()
+        wanted = [r for a in args for r in a.split(",") if r]
+        for r in wanted:
+            if r not in ids:
+                die(f"record-routes: no route {r}")
+        if not wanted:
+            die("record-routes: name the routes that passed")
+        tree = tree_id(listing())
+        os.makedirs(CACHE, exist_ok=True)
+        now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        with open(ROUTE_PASSES, "a", encoding="utf-8") as out:
+            out.writelines(f"v1\t{tree}\t{r}\t{now}\n" for r in wanted)
+        print(f"render: recorded {len(wanted)} route passes in {ROUTE_PASSES}")
+        try_advance()
     elif command == "lab-id":
         print(lab_id(listing()))
     else:
