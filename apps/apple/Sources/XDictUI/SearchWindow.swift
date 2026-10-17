@@ -22,6 +22,17 @@ public struct SearchWindow: View {
         NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 480)
+                // The search field in the toolbar over the sidebar, beside what it suggests and finds: room for it at
+                // every width, the detail's toolbar left to the title, the scope and Pronounce.
+                .toolbar {
+                    ToolbarItem(placement: .automatic) {
+                        SearchField(text: state.model.text, prompt: String(localized: "Look Up"),
+                                    focus: state.searchFocus, onChange: { state.typedText($0) },
+                                    onSubmit: { state.submit() }, onMove: { state.move($0) },
+                                    onCancel: { state.cancel() })
+                            .frame(minWidth: 120, idealWidth: 200, maxWidth: 260)
+                    }
+                }
         } detail: {
             EntryDetail(state: state)
         }
@@ -58,12 +69,7 @@ public struct SearchWindow: View {
         ToolbarItem(placement: .primaryAction) {
             PronounceButton(state: state)
         }
-        ToolbarItem(placement: .primaryAction) {
-            SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
-                        onChange: { state.typedText($0) },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .frame(minWidth: 120, idealWidth: 220, maxWidth: 280)
-        }
+
     }
 }
 

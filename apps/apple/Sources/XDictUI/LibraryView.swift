@@ -64,12 +64,15 @@ public struct LibraryView: View {
         case .window:
             // Add, remove and the order under the list, as in Settings, not in the toolbar (UI review L-05).
             NavigationSplitView {
-                VStack(spacing: 0) {
-                    list
-                    Divider()
-                    listBar
-                }
-                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+                list
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        VStack(spacing: 0) {
+                            Divider()
+                            listBar
+                        }
+                        .background(.bar)
+                    }
+                    .navigationSplitViewColumnWidth(min: 260, ideal: 320)
             } detail: {
                 detail
             }
