@@ -16,7 +16,10 @@ over=0
 for step in import entry refused resource; do
     line=$(node "$here/tests/memory/memory.ts" "$work/pkg" "$work/fixture" "$step")
     printf '%s\n' "$line"
-    case $step in import) budget=125 ;; entry) budget=515 ;; refused) budget=360 ;; resource) budget=333 ;; esac
+    # entry and refused re-set on the single build host (2026-10-17): the same core grows wasm memory 2 -> 269 MiB
+    # on both hosts, but Node's own resident memory there sits 3-4 MiB above the Mac mini these were first measured on
+    # (refused 362-363, entry 507-514 on the tree before and after entry-defects alike); ~1% above the highest, as before.
+    case $step in import) budget=125 ;; entry) budget=520 ;; refused) budget=367 ;; resource) budget=333 ;; esac
     within "$line" "$budget" || over=1
 done
 [ "$over" -eq 0 ] || { echo "a step passed its memory budget" >&2; exit 1; }
