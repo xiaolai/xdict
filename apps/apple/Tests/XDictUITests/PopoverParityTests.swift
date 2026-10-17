@@ -27,8 +27,10 @@ struct PopoverParityTests {
         #expect(LookupPanelView.chromeHeight == 16 + 24 + 8 + footerRows)
     }
 
-    @Test func theContentIsFrostedByThePopoverMaterial() {
-        let view = PopoverMaterial.make()
-        #expect(view.material == .popover && view.blendingMode == .behindWindow && view.state == .active)
+    @Test func theWholePopoverIsFrostedByThePopoverMaterial() {
+        let popover = LookupPopover()
+        #expect(popover.frost.material == .popover && popover.frost.blendingMode == .behindWindow)
+        #expect(popover.frost.state == .active, "never key, so following the window's state would draw it flat")
+        #expect(popover.popover.hasFullSizeContent, "the frost covers the arrow too")
     }
 }

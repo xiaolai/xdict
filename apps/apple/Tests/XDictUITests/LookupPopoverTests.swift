@@ -65,4 +65,52 @@ struct LookupPopoverTests {
     @Test func theLastFooterRowKeepsTheBottomInset() {
         #expect(PanelLook.bottomInset == 8)
     }
+
+    /// **Arrow and body are one surface** (orchestrator's eye check, 2026-10-18: in dark the arrow was near-black and
+    /// the body a flat grey). The popover is captured alone, in each appearance, and the arrow's middle and the body
+    /// beside it must be the same colour within a small delta.
+    @Test(arguments: [NSAppearance.Name.aqua, .darkAqua])
+    func theArrowAndTheBodyAreOneSurface(_ appearance: NSAppearance.Name) async throws {
+        NSApplication.shared.setActivationPolicy(.accessory)
+        let popover = LookupPopover()
+        popover.popover.appearance = NSAppearance(named: appearance)
+        popover.show(NSView(frame: CGRect(x: 0, y: 0, width: 390, height: 200)), size: CGSize(width: 390, height: 200),
+                     word: CGRect(x: 600, y: 600, width: 40, height: 14), pointer: .zero,
+                     visible: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        defer { popover.close() }
+        try await Task.sleep(for: .milliseconds(600))
+        let window = try #require(popover.popover.contentViewController?.view.window)
+        #expect(window.frame.width == 416, "a 390 pt body in a 416 pt window, as Apple's")
+        let image = try #require(Self.capture(window.windowNumber))
+        let scale = CGFloat(image.pixelsWide) / window.frame.width
+        // The arrow points up at the word, at the anchor's centre: down that column, the first opaque pixel is its tip;
+        // 4 pt under the tip is the arrow, 40 pt under it the body.
+        let anchorX = (popover.anchor.frame.midX - window.frame.minX) * scale
+        let tip = try #require((0..<image.pixelsHigh).first { (image.colorAt(x: Int(anchorX), y: $0)?.alphaComponent ?? 0) > 0.9 })
+        let arrow = try #require(Self.colour(image, x: anchorX, y: CGFloat(tip) + 4 * scale))
+        let body = try #require(Self.colour(image, x: anchorX, y: CGFloat(tip) + 40 * scale))
+        let delta = zip(arrow, body).map { abs($0 - $1) }.max() ?? 1
+        #expect(delta < 0.08, "arrow \(arrow) and body \(body) differ by \(delta) in \(appearance.rawValue)")
+    }
+
+    @Test func theEntryFadesBeforeTheFootersHairline() {
+        #expect(PanelLook.entryFade == 16)
+    }
+
+    private static func capture(_ window: Int) -> NSBitmapImageRep? {
+        let path = FileManager.default.temporaryDirectory.appendingPathComponent("popover-\(window).png").path
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+        task.arguments = ["-x", "-o", "-l\(window)", path]
+        guard (try? task.run()) != nil else { return nil }
+        task.waitUntilExit()
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        guard let data = FileManager.default.contents(atPath: path) else { return nil }
+        return NSBitmapImageRep(data: data)
+    }
+
+    private static func colour(_ image: NSBitmapImageRep, x: CGFloat, y: CGFloat) -> [CGFloat]? {
+        guard let c = image.colorAt(x: Int(x), y: Int(y))?.usingColorSpace(.sRGB) else { return nil }
+        return [c.redComponent, c.greenComponent, c.blueComponent]
+    }
 }

@@ -18,4 +18,6 @@ public enum PanelLook {
     public static let footerFontSize: CGFloat = 13
     /// Under the last footer row: the popover's 8 pt row spacing (its table's), so the row never sits on the edge.
     public static let bottomInset: CGFloat = 8
+    /// The entry's last 16 pt fade to clear above the footer: scrolled text never meets the footer's hairline.
+    public static let entryFade: CGFloat = 16
 }
