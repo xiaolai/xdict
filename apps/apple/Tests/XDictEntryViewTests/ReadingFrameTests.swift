@@ -24,6 +24,86 @@ struct ReadingFrameTests {
         #expect(dominant("[[0, 100]]")?.isNaN == true)
     }
 
+    /// R7a (WI-11, 2026-10-17): the space before a role-marked block is its role's token. A role's token name, from
+    /// the core's marks; a section is a phrase block when it holds idioms, phrasal verbs, collocations or derived
+    /// words, a heading's otherwise; what no role spaces keeps R7.
+    @Test func eachRoleTakesItsOwnSpace() throws {
+        let context = try Self.core()
+        func space(_ role: String, _ section: String = "") -> String? {
+            context.evaluateScript("XDictFrameCore.spaceOf('\(role)', '\(section)')")?.toString()
+        }
+        #expect(space("sense") == "sense")
+        #expect(space("sensenum") == "sense")
+        #expect(space("example") == "example")
+        #expect(space("trans") == "translation")
+        #expect(space("example-trans") == "translation")
+        #expect(space("subhead") == "subhead")
+        #expect(space("heading") == "heading")
+        #expect(space("pos") == "pos")
+        #expect(space("section", "idioms") == "phrase")
+        #expect(space("section", "phrasal") == "phrase")
+        #expect(space("section", "etym") == "heading")
+        #expect(space("label") == "")
+        #expect(space("headword") == "")
+        // The margin that makes the collapsed gap the token: a larger margin before it is cancelled by a negative
+        // one (margins collapse to the larger positive plus the most negative); a gap too small grows linearly.
+        func next(_ margin: Double, _ gap: Double, _ want: Double) -> Double? {
+            context.evaluateScript("XDictFrameCore.nextMargin(\(margin), \(gap), \(want))")?.toDouble()
+        }
+        #expect(next(12, 24, 12) == -12)
+        #expect(next(12, 12, 12) == 12)
+        #expect(next(12, 8, 12) == 16)
+        #expect(next(-12, 16, 12) == -16)
+        // Two densities (decided 2026-10-17): B in the main window, A in the lookup panel, in em so they follow the
+        // text; chosen by the shell's presentation attribute, never by the pane's width.
+        let type = EntryReadingFrame.typeCSS
+        #expect(type.contains(":root{--xdict-space-translation:0em;--xdict-space-example:0.5em;--xdict-space-sense:0.75em;"))
+        #expect(type.contains(":root[data-xdict-density=panel]{--xdict-space-translation:0em;--xdict-space-example:0.25em;"))
+        #expect(!type.contains("@media"))
+        let reading = EntryScripts.appearance(.light, frame: .all)
+        #expect(reading.contains("roleSpace();"))
+        #expect(reading.contains("DENSITY = 'main'"))
+        #expect(EntryScripts.appearance(.light, frame: EntryReadingFrame.all.union(.panel)).contains("DENSITY = 'panel'"))
+        // Original style has no density: the dictionary's own spacing.
+        #expect(EntryReadingFrame.all.union(.panel).applied(originalStyle: true) == .minimal)
+    }
+
+    /// R16's classes (WI-11, 2026-10-17): an image is classed by what it is, from its natural size, its place and the
+    /// text beside it; no dictionary is named.
+    @Test func imagesAreClassedByWhatTheyAre() throws {
+        let context = try Self.core()
+        func kind(_ facts: String) -> String? { context.evaluateScript("XDictFrameCore.imageClass(\(facts))")?.toString() }
+        #expect(kind("{w: 300, h: 300}") == "illustration")
+        #expect(kind("{w: 125, h: 59, text: true}") == "inline")
+        #expect(kind("{w: 900, h: 600, table: true}") == "table")
+        #expect(kind("{w: 474, h: 431, floated: true}") == "float")
+        #expect(kind("{w: 64, h: 34, floated: true}") == "badge")
+        #expect(kind("{w: 20, h: 20, text: true}") == "icon")
+        #expect(kind("{w: 401, h: 51, text: true}") == "text")
+        #expect(kind("{w: 61, h: 24, text: true}") == "text")
+        #expect(kind("{w: 401, h: 38}") == "text")   // alone on its line too (PEU's intonation)
+        #expect(kind("{w: 0, h: 0}") == "")
+    }
+
+    /// The pictures a dictionary hides itself (owner, 2026-10-17): kept hidden, gathered under one closed XDict fold,
+    /// "Pictures (n)", at the end of the entry. Only an illustration hidden by its own or its picture container's
+    /// `display:none`/`visibility:hidden` (a box with no text); never a control, an icon, a missing picture, or a
+    /// picture inside a hidden block of text (a dictionary's own closed fold).
+    @Test func hiddenPicturesAreGatheredUnderOneFold() throws {
+        let context = try Self.core()
+        func gathered(_ facts: String) -> Bool { context.evaluateScript("XDictFrameCore.gatherable(\(facts))")?.toBool() == true }
+        #expect(gathered("{w: 300, h: 200, hidden: 'image'}"))
+        #expect(gathered("{w: 300, h: 200, hidden: 'container'}"))
+        #expect(!gathered("{w: 300, h: 200, hidden: 'text'}"))
+        #expect(!gathered("{w: 300, h: 200, hidden: ''}"))
+        #expect(!gathered("{w: 300, h: 200, hidden: 'image', control: true}"))
+        #expect(!gathered("{w: 24, h: 24, hidden: 'image'}"))
+        #expect(!gathered("{w: 0, h: 0, hidden: 'image'}"))
+        let reading = EntryScripts.appearance(.light, frame: .all)
+        #expect(reading.contains("var PICTURES = \"Pictures\";"))
+        #expect(reading.contains("pictures();"))
+    }
+
     /// The tokens are the spec's names (`reading-style.md` §1), every one, with a value per theme for the colours.
     @Test func theTokensAreTheSpecsNames() {
         let css = EntryReadingFrame.tokensCSS
@@ -196,7 +276,7 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); }"))
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); pictures(); images(); roleSpace(); }"))
         // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
         #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
         #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))

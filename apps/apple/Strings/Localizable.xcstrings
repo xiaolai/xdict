@@ -3627,6 +3627,23 @@
         }
       }
     },
+    "Pictures" : {
+      "comment" : "The fold at an entry's end holding the pictures the dictionary hides",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pictures"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "图片"
+          }
+        }
+      }
+    },
     "Play American pronunciation" : {
       "localizations" : {
         "en" : {

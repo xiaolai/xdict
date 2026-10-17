@@ -11,7 +11,9 @@
 # The host is E2E_HOST, else local.mk's E2E_HOST_MACOS; corpus and sample are the gallery's on that host. It refuses
 # to start while an xctest run holds the host's screen, and takes the gallery's run lock. Exits non-zero, naming why,
 # unless the report holds every row; the gallery's failures are printed, and fail it too. XDICT_LAB_CONTROL=1|G
-# renders a positive control (GalleryInvariants, GalleryChecks): that run must fail.
+# renders a positive control (GalleryInvariants, GalleryChecks, GallerySpace): that run must fail. XDICT_LAB_DENSITY=panel
+# renders the lookup panel's density; XDICT_LAB_OPEN_PICTURES=1 opens the fold of hidden pictures;
+# XDICT_LAB_WIDTH=<px> pictures another pane width; XDICT_LAB_MODES=core-light,core-dark only those views.
 set -u
 [ $# -gt 0 ] || { echo "usage: hot.sh <dict>:<key>[:<kind>] ..." >&2; exit 2; }
 started=$(date +%s)
@@ -60,7 +62,11 @@ rsync -a "$keys" "$host:$remote/keys.json" || { echo "hot: could not copy the ke
 # A positive control (`XDICT_LAB_CONTROL=1` spacing, `G` the checks G1–G15) goes to the lab's environment.
 control=${XDICT_LAB_CONTROL:-}
 case $control in ''|1|G) ;; *) echo "hot: XDICT_LAB_CONTROL is 1 or G" >&2; exit 2 ;; esac
-ssh "$host" "rm -rf $remote/run; mkdir -p $remote/run; open -n -W ${control:+--env XDICT_LAB_CONTROL=$control} \
+# The density (WI-11 R7a): the main window's, or `XDICT_LAB_DENSITY=panel` for the lookup panel's.
+density=${XDICT_LAB_DENSITY:-}
+case $density in ''|main|panel) ;; *) echo "hot: XDICT_LAB_DENSITY is main or panel" >&2; exit 2 ;; esac
+[ "$density" = main ] && density=
+ssh "$host" "rm -rf $remote/run; mkdir -p $remote/run; open -n -W ${control:+--env XDICT_LAB_CONTROL=$control} ${density:+--env XDICT_LAB_DENSITY=$density} ${XDICT_LAB_OPEN_PICTURES:+--env XDICT_LAB_OPEN_PICTURES=1} ${XDICT_LAB_WIDTH:+--env XDICT_LAB_WIDTH=$XDICT_LAB_WIDTH} ${XDICT_LAB_MODES:+--env XDICT_LAB_MODES=$XDICT_LAB_MODES} \
     --stdout \$HOME/$remote/run/stdout.txt --stderr \$HOME/$remote/run/stderr.txt $lab --args --gallery \$HOME/XDictE2E/corpus \
     --sample \$HOME/XDictE2E/kit/entries-sample.json --keys \$HOME/$remote/keys.json --only $only \
     --style-dir \$HOME/$remote/style --out \$HOME/$remote/run/report.json"

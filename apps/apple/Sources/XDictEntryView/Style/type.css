@@ -86,3 +86,26 @@ a:any-link:not([data-xdict-control=disclosure]),a:any-link:not([data-xdict-contr
 [data-xdict-lead][data-xdict-lead] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label] *)
 {color:inherit !important}
 }
+/* R7a, space by role (WI-11, 2026-10-17; `dev-docs/measurements/2026-10-17-space-images/`): the gap before a */
+/* role-marked block is its role's, the dictionary's vertical margins on it gone. Two densities, decided 2026-10-17: */
+/* B in the main window, A in the lookup panel (`data-xdict-density=panel`, set by the shell, never by width). In em, */
+/* so they follow the text. Space grows with structural distance: translation < example < sense = subhead < heading */
+/* = phrase block < part-of-speech block; a heading binds to its first line (0.25em). */
+:root{--xdict-space-translation:0em;--xdict-space-example:0.5em;--xdict-space-sense:0.75em;
+--xdict-space-subhead:0.75em;--xdict-space-heading:1em;--xdict-space-phrase:1em;--xdict-space-pos:1.5em;
+--xdict-space-after-heading:0.25em;--xdict-space-image:0.75em}
+:root[data-xdict-density=panel]{--xdict-space-translation:0em;--xdict-space-example:0.25em;
+--xdict-space-sense:0.5em;--xdict-space-subhead:0.5em;--xdict-space-heading:0.75em;--xdict-space-phrase:0.75em;
+--xdict-space-pos:1em}
+/* frame.js marks each role block that starts a line (`data-xdict-space`; one that continues a line takes nothing) */
+/* and writes on it the margin that makes the collapsed gap its token (`roleSpace`). */
+[data-xdict-space=sense]{--xdict-space-want:var(--xdict-space-sense)}
+[data-xdict-space=example]{--xdict-space-want:var(--xdict-space-example)}
+[data-xdict-space=translation]{--xdict-space-want:var(--xdict-space-translation)}
+[data-xdict-space=subhead]{--xdict-space-want:var(--xdict-space-subhead)}
+[data-xdict-space=heading]{--xdict-space-want:var(--xdict-space-heading)}
+[data-xdict-space=phrase]{--xdict-space-want:var(--xdict-space-phrase)}
+[data-xdict-space=pos]{--xdict-space-want:var(--xdict-space-pos)}
+[data-xdict-space=after-heading]{--xdict-space-want:var(--xdict-space-after-heading)}
+[data-xdict-space=image]{--xdict-space-want:var(--xdict-space-image)}
+/* The margin itself is column.css's, in the first cascade layer (`xdict-space`). */
