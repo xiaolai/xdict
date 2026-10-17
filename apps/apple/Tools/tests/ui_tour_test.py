@@ -144,6 +144,7 @@ def keys(*items):
 
 
 apple_menus = {"menubar": [
+    {"title": "XDict", "items": [{"title": "Services", "items": []}]},
     {"title": "File", "items": keys(("New Window", "N", 0), ("New Tab", "T", 0), ("Print…", "P", 0))},
     {"title": "Edit", "items": [{"title": "Find", "items": keys(
         ("Search For a New Word…", "F", 2), ("Find…", "F", 0), ("Find Next", "G", 0), ("Find Previous", "G", 1),
@@ -195,6 +196,11 @@ cases = {
     "page.one": (apple_window("Dictionary"), apple_window("Dictionary", *page)),
     "page.find": (apple_window("Dictionary", *page, node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
                   old_window("orange")),
+    # Apple's print panel (print.ax.json): a sheet with Print and Cancel; before P44 XDict printed one frame, no panel
+    # read here.
+    "page.print": (apple_window("Dictionary", node("AXSheet", (80, 337, 1560, 1000), [
+        node("AXButton", (1296, 1248, 140, 48), title="Cancel"),
+        node("AXButton", (1460, 1248, 140, 48), title="Print")])), old_window("orange")),
 }
 cases["search.next"] = cases["search.result"]
 cases["scope.one"][0]["windows"][0]["children"][1]["children"][2]["value"] = "1"
@@ -213,6 +219,10 @@ for route in parity.MENU_RULES:
     assert all(not c["ok"] for c in parity.checks(route, cases[route][1], old_menus)
                if c["id"] in ("P7", "P32", "P33", "P36", "P37", "P38")), route
     assert not any(c["ok"] for c in parity.checks(route, cases[route][0], None) if c["id"] == "P32"), "no menu bar read"
+# P45: a Share item anywhere in the menus is not Apple's, nor an app menu without Services.
+shared = {"menubar": apple_menus["menubar"] + [{"title": "Edit", "items": [{"title": "Share…", "items": []}]}]}
+assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "P45 never red"
+assert parity.menus_share({"menubar": apple_menus["menubar"][1:]}), "P45 without Services"
 print(f"ui_tour_test: parity ok ({sum(len(v) for v in parity.TREE_RULES.values())} tree rules, "
       f"{sum(len(v) for v in parity.MENU_RULES.values())} menu rules)")
 print(f"ui_tour_test: ok ({len(ROUTES)} routes, {len(undriven)} not driven)")

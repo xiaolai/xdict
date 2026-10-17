@@ -1593,6 +1593,7 @@ fn sure_role(sure: profiles::Sure) -> Option<Role> {
         profiles::Sure::Sensenum => Some(Role::Sensenum),
         profiles::Sure::Example => Some(Role::Example),
         profiles::Sure::Heading => Some(Role::Heading),
+        profiles::Sure::Subhead => Some(Role::Subhead),
         profiles::Sure::Trans | profiles::Sure::Keep => None,
     }
 }
@@ -1842,6 +1843,7 @@ impl<'n> Tree<'n> {
             profiles::Sure::Example => f.len > 0 && !(self.example_blocks && node.direct),
             profiles::Sure::Trans => f.len > 0,
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
+            profiles::Sure::Subhead => f.len > 0 && f.len <= 120,
             profiles::Sure::Keep => false,
         };
         ok.then_some(sure)
@@ -2254,6 +2256,21 @@ impl<'n> Tree<'n> {
             let Some(node) = self.node(i) else { continue };
             let d = f(i);
             let t = short(i);
+            // A heading a markup's table names opens an etymology as a generic one does (parity P25): its block is
+            // the section. Only the etymology: the other kinds keep the spacing the tables' headings have had.
+            if self.sure(i) == Some(profiles::Sure::Heading) && r.role(i) == Some(Role::Heading) {
+                let lower = t.to_lowercase();
+                let low = lower.trim_end_matches(|c: char| c.is_whitespace() || ":：.".contains(c));
+                let blk = parent(i);
+                if heading_kind(low) == Some("etym")
+                    && blk != ROOT as usize
+                    && !r.has(blk)
+                    && (f(blk).len as f64) < 0.9 * root_text as f64
+                {
+                    r.mark(blk, Role::Section("etym"));
+                }
+                continue;
+            }
             if t.is_empty() || r.has(i) || d.len > 60 || d.words > 8 || !leads(i) {
                 continue;
             }

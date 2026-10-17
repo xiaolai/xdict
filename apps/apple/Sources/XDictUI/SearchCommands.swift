@@ -23,19 +23,19 @@ public struct SearchCommands: Commands {
                 Divider()
                 Button("Find…") { window?.entry.showFind() }
                     .keyboardShortcut("f")
-                    .disabled(window?.entry.webView == nil)
+                    .disabled(window?.hasEntry != true)
                 Button("Find Next") { window?.entry.stepFind(forward: true) }
                     .keyboardShortcut("g")
-                    .disabled(window?.entry.webView == nil)
+                    .disabled(window?.hasEntry != true)
                 Button("Find Previous") { window?.entry.stepFind(forward: false) }
                     .keyboardShortcut("g", modifiers: [.command, .shift])
-                    .disabled(window?.entry.webView == nil)
+                    .disabled(window?.hasEntry != true)
                 Button("Use Selection for Find") { window?.entry.useSelectionForFind() }
                     .keyboardShortcut("e")
-                    .disabled(window?.entry.webView == nil)
+                    .disabled(window?.hasEntry != true)
                 Button("Jump to Selection") { window?.entry.jumpToSelection() }
                     .keyboardShortcut("j")
-                    .disabled(window?.entry.webView == nil)
+                    .disabled(window?.hasEntry != true)
             }
             Divider()
             Button("Pronounce") { window?.pronounceShown() }
@@ -87,9 +87,9 @@ public struct SearchCommands: Commands {
                 .keyboardShortcut(ScopeShortcut.actualSize, modifiers: [.command, .option])
                 .disabled(window == nil)
             Button("Expand All") { window?.entry.expandAll(true) }
-                .disabled(window?.entry.webView == nil)
+                .disabled(window?.hasEntry != true)
             Button("Collapse All") { window?.entry.expandAll(false) }
-                .disabled(window?.entry.webView == nil)
+                .disabled(window?.hasEntry != true)
             // The current choice checked (UI review A-08).
             Picker(selection: Binding(get: { window?.entry.theme ?? .matchApp }, set: { window?.entry.setTheme($0) })) {
                 ForEach(EntryTheme.allCases, id: \.self) { theme in
@@ -99,14 +99,14 @@ public struct SearchCommands: Commands {
                 Text("Entry Appearance")
             }
             .pickerStyle(.menu)
-            .disabled(window?.entry.webView == nil)
+            .disabled(window?.hasEntry != true)
             Divider()
         }
         // File ▸ Print… (P32, P44): the shown entry.
         CommandGroup(replacing: .printItem) {
             Button("Print…") { window?.entry.printEntry() }
                 .keyboardShortcut("p")
-                .disabled(window?.entry.webView == nil)
+                .disabled(window?.hasEntry != true)
         }
     }
 

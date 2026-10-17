@@ -377,6 +377,26 @@ def menus_go(menubar):
     return keyed(menubar, ["Go", "Back"], "[", CMD) or keyed(menubar, ["Go", "Forward"], "]", CMD)
 
 
+def menus_share(menubar):
+    """P45: Apple's Dictionary has no Share item in any menu; its app menu holds Services."""
+    def titles(items):
+        for entry in items or []:
+            yield str(entry.get("title", ""))
+            yield from titles(entry.get("items"))
+    bar = (menubar or {}).get("menubar", [])
+    shared = [t for top in bar for t in titles(top.get("items")) if t.rstrip("…. ") == "Share"]
+    if shared:
+        return f"a Share item in the menus: {shared}"
+    services = any(t == "Services" for top in bar[:2] for t in titles(top.get("items")))
+    return None if services else "no Services in the app menu"
+
+
+def print_panel(tree):
+    """P44: File ▸ Print… opens the system's print panel over the window, with its Print and Cancel buttons."""
+    names = {str(label(n)) for n in find(tree, "AXButton")}
+    return None if {"Print", "Cancel"} <= names else f"no print panel (buttons {sorted(names)[:12]})"
+
+
 TREE_RULES = {
     "main.start": [("P2", title_dictionary), ("P2", title_no_count), ("P3", toolbar_order), ("P4", toolbar_help),
                    ("P5", search_placeholder), ("P6", scope_bar), ("P9", no_sidebar), ("P14", start_page),
@@ -396,11 +416,13 @@ TREE_RULES = {
     "page.collapse": [("P15", page_collapsed("Beta"))],
     "page.one": [("P15", page_dividers())],
     "page.find": [("P30", find_bar), ("P15", page_dividers("Beta", "Records"))],
+    "page.print": [("P44", print_panel)],
 }
 
 MENU_RULES = {
     "main.start": [("P7", menus_search), ("P36", menus_search), ("P7", menus_view), ("P32", menus_file),
-                   ("P33", menus_find), ("P37", menus_window), ("P38", menus_help), ("P42", menus_go)],
+                   ("P33", menus_find), ("P37", menus_window), ("P38", menus_help), ("P42", menus_go),
+                   ("P45", menus_share)],
 }
 
 

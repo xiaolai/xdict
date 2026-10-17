@@ -534,16 +534,108 @@
       e.style.setProperty('--xdict-space-at', best[i][0] + 'px');
     });
   }
+  // D46: a height cap its text does not fit in is lifted (`XDictFrameCore.lifts`). Reading style only.
+  function overflows() {
+    if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
+    var all = document.body.getElementsByTagName('*');
+    for (var i = 0; i < all.length && i < 65536; i++) {
+      var e = all[i], st = getComputedStyle(e);
+      if (st.maxHeight === 'none' || inline(st)) continue;
+      if (XDictFrameCore.lifts({ maxHeight: st.maxHeight, overflow: st.overflowY, content: e.scrollHeight, box: e.clientHeight })) {
+        e.style.setProperty('max-height', 'none', 'important');
+        if (st.overflowY !== 'visible') e.style.setProperty('overflow-y', 'visible', 'important');
+      }
+    }
+  }
+  // The nearest block around an element: its line's box.
+  function blockOf(e) {
+    for (var b = e.parentElement; b && b !== document.body; b = b.parentElement) if (!inline(getComputedStyle(b))) return b;
+    return document.body;
+  }
+  // Whether nothing drawn comes before `e` in its block `b`: no text, no picture (an empty anchor is nothing).
+  function firstIn(b, e) {
+    for (var n = e; n && n !== b; n = n.parentElement) {
+      for (var s = n.previousSibling; s; s = s.previousSibling) {
+        if (!rendered(s)) continue;
+        if (s.nodeType === 3 || /\S/.test(s.textContent) || s.tagName === 'IMG' || s.querySelector('img')) return false;
+      }
+    }
+    return true;
+  }
+  // Whether nothing follows `n` on its line in its block `b`: the text after it starts on a later line (MED's number
+  // before its definition's block, which hung went under the definition's last line).
+  function lineAlone(n, b) {
+    var r = document.createRange(), nb = n.getBoundingClientRect();
+    r.setStartAfter(n);
+    r.setEnd(b, b.childNodes.length);
+    var rects = r.getClientRects();
+    for (var i = 0; i < rects.length; i++) if (rects[i].width > 0) return rects[i].top >= nb.bottom - 1;
+    return true;
+  }
+  // Parity P22 (2026-10-18): Apple hangs a sense number in a 1em negative indent. A number the core names that starts
+  // its block (`XDictFrameCore.hangs`) moves 1em out and its block's text 1em in from the dictionary's own inset, both
+  // in em, so they follow the text size; a number inside a line keeps its place. Reading style only.
+  function hang() {
+    // Once the dictionary's sheets apply (`load`), as `bullets`: its own inset is read then.
+    if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
+    // The number's 1em is its block's: written as a ratio of the number's own size, measured again at each run, since
+    // the sizes settle only once the dictionary's sheets and the frame's apply (a ratio read early left COBUILD's 1 px off).
+    function hangMeasure(n, b) {
+      var em = parseFloat(getComputedStyle(b).fontSize) || 16, nem = parseFloat(getComputedStyle(n).fontSize) || em;
+      var v = em / nem + 'em';
+      if (n.style.getPropertyValue('--xdict-hang') !== v) n.style.setProperty('--xdict-hang', v);
+    }
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-sure=sensenum]'), function (n, i) {
+      if (i > 4096 || !n.getClientRects().length) return;
+      if (n.hasAttribute('data-xdict-hung')) { hangMeasure(n, blockOf(n)); return; }
+      if (n.parentElement && n.parentElement.closest('[data-xdict-sure=sensenum]')) return;
+      var b = blockOf(n), bs = getComputedStyle(b), ns = getComputedStyle(n);
+      if (b.hasAttribute('data-xdict-hang')) return;
+      // A number the dictionary sets in a table's column (ODECN's `display:table-cell`) is hung by its own layout.
+      var facts = { sure: true, first: firstIn(b, n), body: b === document.body, cell: bs.display === 'table-cell',
+                    floated: ns.float !== 'none' || /absolute|fixed/.test(ns.position), alone: !inline(ns) || lineAlone(n, b),
+                    own: parseFloat(bs.textIndent) < 0 || parseFloat(ns.marginLeft) < 0 || /^table/.test(ns.display)
+                      || /^table/.test(bs.display) };
+      if (!XDictFrameCore.hangs(facts)) return;
+      var em = parseFloat(bs.fontSize) || 16;
+      b.style.setProperty('--xdict-hang-pad', (parseFloat(bs.paddingLeft) || 0) / em + 'em');
+      b.setAttribute('data-xdict-hang', '');
+      n.setAttribute('data-xdict-hung', '');
+      hangMeasure(n, b);
+    });
+  }
+  // Parity P24 (2026-10-18): Apple's thin rule under a section label, drawn under the label's own line
+  // (`XDictFrameCore.ruleOn`): on a heading the core names that is a block, or on its block when the heading is all
+  // that block shows. Parity P25: an etymology section that holds only its label (NOAD's "Origin:", ODE's) is marked
+  // so the text after it sits Apple's 0.2em under it. Reading style only.
+  function words(e) { return (e.textContent || '').replace(/[\s:：]+/g, ''); }
+  function rules() {
+    if (!SPACE_CAP || !document.body) return;
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-sure=heading]'), function (h, i) {
+      if (i > 4096 || !h.getClientRects().length || h.closest('[data-xdict-ruled]') || h.querySelector('[data-xdict-ruled]')) return;
+      var block = !inline(getComputedStyle(h)), b = block ? h : blockOf(h);
+      var on = XDictFrameCore.ruleOn({ block: block, alone: !block && words(b) === words(h), body: b === document.body });
+      var t = on === 'self' ? h : on === 'block' ? b : null;
+      if (t) t.setAttribute('data-xdict-ruled', '');
+    });
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-section=etym]'), function (s) {
+      var label = '';
+      Array.prototype.forEach.call(s.querySelectorAll('[data-xdict-role=heading]'), function (h) {
+        if (!h.parentElement.closest('[data-xdict-role=heading]')) label += words(h);   // an outer heading's words only
+      });
+      if (label && words(s) === label) s.setAttribute('data-xdict-etym-label', '');
+    });
+  }
   // Again when a picture arrives, the pane is resized, the density changes, or a fold opens: at most once in 16 ms.
   var pending = false;
   function later() {
     if (pending || !SPACE_CAP) return;
     pending = true;
     // A timer, not an animation frame: a pane in the background gets no frames, and still resizes.
-    setTimeout(function () { pending = false; pictures(); images(); roleSpace(); }, 16);
+    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); }, 16);
   }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); pictures(); images(); roleSpace(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
   document.addEventListener('click', function () { setTimeout(later, 50); setTimeout(later, 400); });

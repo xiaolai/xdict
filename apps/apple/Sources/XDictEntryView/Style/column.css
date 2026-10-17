@@ -5,6 +5,16 @@
 @layer xdict-space{[data-xdict-space]{margin-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
 [data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}
 [data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
+/* Apple's hanging sense number (parity P22): the block's text 1em in from the dictionary's own inset, the number 1em */
+/* out of it (frame.js `hang`, which writes both measures in em). */
+[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;text-indent:0 !important}
+[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}
+/* Apple's etymology (parity P25): its text close under its label, Apple's 0.2em as the spacing scale's 0.25em (the */
+/* space after a heading; a margin off the scale fails the gallery's invariants), whether the label heads the section's box or is */
+/* the section's whole line (`data-xdict-etym-label`, frame.js `rules`). */
+[data-xdict-section=etym]>[data-xdict-role=heading]+:not(img,[data-xdict-role]){margin-top:var(--xdict-space-after-heading) !important}
+[data-xdict-etym-label]{margin-bottom:0 !important}
+[data-xdict-etym-label]+:not([data-xdict-space]){margin-top:var(--xdict-space-after-heading) !important}
 [data-xdict-space-end]{margin-bottom:0 !important}}
 /* A block inside an inline box (PEU's examples in its inline list items) gets no top margin WebKit honours: its space */
 /* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17); the blocks that end the content */

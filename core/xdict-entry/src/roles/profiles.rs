@@ -24,13 +24,16 @@ pub(crate) enum Sure {
     Heading,
     /// A translation, a sense's or an example's: which of the two is the generic rule's call.
     Trans,
+    /// A run-on head: a phrase or a derived word under the entry (Apple's `span.l`, `span.drv`; parity P24).
+    Subhead,
     /// Inside an example, text that is not the example's own (a gloss, a grammar pattern, a label): it keeps the
     /// dictionary's look. Not a role; written `data-xdict-sure="keep"`, and only inside an example.
     Keep,
 }
 
 impl Sure {
-    pub(crate) const ALL: [Sure; 5] = [Sure::Pos, Sure::Sensenum, Sure::Example, Sure::Heading, Sure::Trans];
+    pub(crate) const ALL: [Sure; 6] =
+        [Sure::Pos, Sure::Sensenum, Sure::Example, Sure::Heading, Sure::Trans, Sure::Subhead];
 }
 
 /// One markup's table.
@@ -54,6 +57,8 @@ pub(crate) struct Profile {
     heading: Sel,
     /// Translations in a bilingual dictionary, of a sense or of an example.
     trans: Sel,
+    /// Run-on heads: an idiom's, a phrasal verb's, a phrase's or a derived word's own words (parity P24).
+    subhead: Sel,
 }
 
 /// A table that names nothing: a role a table leaves out stays the generic rule's.
@@ -67,6 +72,7 @@ const NONE: Profile = Profile {
     example_blocks: false,
     heading: &[],
     trans: &[],
+    subhead: &[],
 };
 
 fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
@@ -86,6 +92,8 @@ impl Profile {
             Some(Sure::Heading)
         } else if matches(self.trans, tag, classes) {
             Some(Sure::Trans)
+        } else if matches(self.subhead, tag, classes) {
+            Some(Sure::Subhead)
         } else if matches(self.example_keep, tag, classes) {
             Some(Sure::Keep)
         } else {
@@ -101,6 +109,7 @@ impl Profile {
             Sure::Example => !self.example.is_empty(),
             Sure::Heading => !self.heading.is_empty(),
             Sure::Trans => !self.trans.is_empty(),
+            Sure::Subhead => !self.subhead.is_empty(),
             Sure::Keep => false,
         }
     }
@@ -127,6 +136,8 @@ pub(crate) const PROFILES: &[Profile] = &[
         ],
         // The English–Chinese edition's `<tran>`, and `<example>`, an example's Chinese inside its `span.example`.
         trans: &[(Some("tran"), &[]), (Some("example"), &[])],
+        // A phrase heading a sense ("be the apple of somebody's eye"), and a derived word after the senses.
+        subhead: &[(Some("span"), &["lexunit"]), (Some("span"), &["deriv"])],
         ..NONE
     },
     // OALD 10: its sense numbers are the sheet's counters, not text.
@@ -137,6 +148,8 @@ pub(crate) const PROFILES: &[Profile] = &[
         example: &[(Some("span"), &["x"])],
         example_keep: &[(Some("span"), &["gloss"])],
         heading: &[(Some("span"), &["box_title"]), (Some("span"), &["idioms_heading"])],
+        // An idiom's words and a phrasal verb's.
+        subhead: &[(Some("span"), &["idm"]), (Some("span"), &["pv"])],
         ..NONE
     },
     // ODE 3 with Chinese (ODECN): `div.pos` heads a part-of-speech block, and may hold its inflections too
@@ -152,6 +165,8 @@ pub(crate) const PROFILES: &[Profile] = &[
         example_blocks: false,
         heading: &[(Some("div"), &["label"])],
         trans: &[(Some("div"), &["cn_def"]), (Some("p"), &["cn"])],
+        // A derived word in its Derivatives box.
+        subhead: &[(Some("h3"), &["inflection"])],
     },
     // Collins English Dictionary.
     Profile {
@@ -230,6 +245,8 @@ pub(crate) const PROFILES: &[Profile] = &[
         sensenum: &[(Some("span"), &["vkq"])],
         example: &[(Some("em"), &["xv4"]), (Some("li"), &["lmn"])],
         heading: &[(Some("span"), &["tki"])],
+        // A derived word: ODE's only `h4` (15,197 records, every text a derived word; census 2026-10-18).
+        subhead: &[(Some("h4"), &[])],
         ..NONE
     },
     // 21st Century English–Chinese (YHDCD).

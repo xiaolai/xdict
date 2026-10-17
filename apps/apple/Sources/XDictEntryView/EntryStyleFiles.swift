@@ -170,6 +170,16 @@ var XDictColourCore = (function () {
 @layer xdict-space{[data-xdict-space]{margin-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
 [data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}
 [data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
+/* Apple's hanging sense number (parity P22): the block's text 1em in from the dictionary's own inset, the number 1em */
+/* out of it (frame.js `hang`, which writes both measures in em). */
+[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;text-indent:0 !important}
+[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}
+/* Apple's etymology (parity P25): its text close under its label, Apple's 0.2em as the spacing scale's 0.25em (the */
+/* space after a heading; a margin off the scale fails the gallery's invariants), whether the label heads the section's box or is */
+/* the section's whole line (`data-xdict-etym-label`, frame.js `rules`). */
+[data-xdict-section=etym]>[data-xdict-role=heading]+:not(img,[data-xdict-role]){margin-top:var(--xdict-space-after-heading) !important}
+[data-xdict-etym-label]{margin-bottom:0 !important}
+[data-xdict-etym-label]+:not([data-xdict-space]){margin-top:var(--xdict-space-after-heading) !important}
 [data-xdict-space-end]{margin-bottom:0 !important}}
 /* A block inside an inline box (PEU's examples in its inline list items) gets no top margin WebKit honours: its space */
 /* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17); the blocks that end the content */
@@ -593,7 +603,22 @@ var XDictFrameCore = (function () {
     var kind = imageClass({ w: f.w, h: f.h });
     return kind === 'illustration';
   }
-  return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin, imageClass: imageClass };
+  // Parity P22 (2026-10-18): Apple hangs a sense number in a 1em negative indent. One the core names (`sure`) hangs
+  // where it starts its block's first line (`first`); one inside a line keeps its place, as does one whose block is the
+  // body or a table cell, a floated one, one alone on its line (`alone`: a block, or MED's number before its definition's block), and one
+  // the dictionary already hangs itself (`own`: a negative indent).
+  function hangs(f) { return !!f.sure && !!f.first && !f.body && !f.cell && !f.floated && !f.alone && !f.own; }
+  // Parity P24: Apple's thin rule under a section label runs under the label's own line: the heading's own box when it
+  // is a block, its block's when the heading is all that block shows; none when it shares its line, or its block is
+  // the body.
+  function ruleOn(f) { return f.block ? 'self' : f.alone && !f.body ? 'block' : ''; }
+  // D46 (2026-10-18): a box the dictionary caps in height (`max-height`) whose text does not fit is let grow: one that
+  // scrolls (MED's related words, `max-height:150px;overflow:auto`) hides rows a frame sized to its document cannot
+  // scroll to, the wheel going to the page; one whose overflow is visible runs its text on under what follows. One
+  // that clips (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+  function lifts(f) { return f.maxHeight !== 'none' && /^(visible|auto|scroll)$/.test(f.overflow) && f.content > f.box + 1; }
+  return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin,
+           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts };
 })();
 
 """#,
@@ -1134,16 +1159,108 @@ var XDictFrameCore = (function () {
       e.style.setProperty('--xdict-space-at', best[i][0] + 'px');
     });
   }
+  // D46: a height cap its text does not fit in is lifted (`XDictFrameCore.lifts`). Reading style only.
+  function overflows() {
+    if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
+    var all = document.body.getElementsByTagName('*');
+    for (var i = 0; i < all.length && i < 65536; i++) {
+      var e = all[i], st = getComputedStyle(e);
+      if (st.maxHeight === 'none' || inline(st)) continue;
+      if (XDictFrameCore.lifts({ maxHeight: st.maxHeight, overflow: st.overflowY, content: e.scrollHeight, box: e.clientHeight })) {
+        e.style.setProperty('max-height', 'none', 'important');
+        if (st.overflowY !== 'visible') e.style.setProperty('overflow-y', 'visible', 'important');
+      }
+    }
+  }
+  // The nearest block around an element: its line's box.
+  function blockOf(e) {
+    for (var b = e.parentElement; b && b !== document.body; b = b.parentElement) if (!inline(getComputedStyle(b))) return b;
+    return document.body;
+  }
+  // Whether nothing drawn comes before `e` in its block `b`: no text, no picture (an empty anchor is nothing).
+  function firstIn(b, e) {
+    for (var n = e; n && n !== b; n = n.parentElement) {
+      for (var s = n.previousSibling; s; s = s.previousSibling) {
+        if (!rendered(s)) continue;
+        if (s.nodeType === 3 || /\S/.test(s.textContent) || s.tagName === 'IMG' || s.querySelector('img')) return false;
+      }
+    }
+    return true;
+  }
+  // Whether nothing follows `n` on its line in its block `b`: the text after it starts on a later line (MED's number
+  // before its definition's block, which hung went under the definition's last line).
+  function lineAlone(n, b) {
+    var r = document.createRange(), nb = n.getBoundingClientRect();
+    r.setStartAfter(n);
+    r.setEnd(b, b.childNodes.length);
+    var rects = r.getClientRects();
+    for (var i = 0; i < rects.length; i++) if (rects[i].width > 0) return rects[i].top >= nb.bottom - 1;
+    return true;
+  }
+  // Parity P22 (2026-10-18): Apple hangs a sense number in a 1em negative indent. A number the core names that starts
+  // its block (`XDictFrameCore.hangs`) moves 1em out and its block's text 1em in from the dictionary's own inset, both
+  // in em, so they follow the text size; a number inside a line keeps its place. Reading style only.
+  function hang() {
+    // Once the dictionary's sheets apply (`load`), as `bullets`: its own inset is read then.
+    if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
+    // The number's 1em is its block's: written as a ratio of the number's own size, measured again at each run, since
+    // the sizes settle only once the dictionary's sheets and the frame's apply (a ratio read early left COBUILD's 1 px off).
+    function hangMeasure(n, b) {
+      var em = parseFloat(getComputedStyle(b).fontSize) || 16, nem = parseFloat(getComputedStyle(n).fontSize) || em;
+      var v = em / nem + 'em';
+      if (n.style.getPropertyValue('--xdict-hang') !== v) n.style.setProperty('--xdict-hang', v);
+    }
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-sure=sensenum]'), function (n, i) {
+      if (i > 4096 || !n.getClientRects().length) return;
+      if (n.hasAttribute('data-xdict-hung')) { hangMeasure(n, blockOf(n)); return; }
+      if (n.parentElement && n.parentElement.closest('[data-xdict-sure=sensenum]')) return;
+      var b = blockOf(n), bs = getComputedStyle(b), ns = getComputedStyle(n);
+      if (b.hasAttribute('data-xdict-hang')) return;
+      // A number the dictionary sets in a table's column (ODECN's `display:table-cell`) is hung by its own layout.
+      var facts = { sure: true, first: firstIn(b, n), body: b === document.body, cell: bs.display === 'table-cell',
+                    floated: ns.float !== 'none' || /absolute|fixed/.test(ns.position), alone: !inline(ns) || lineAlone(n, b),
+                    own: parseFloat(bs.textIndent) < 0 || parseFloat(ns.marginLeft) < 0 || /^table/.test(ns.display)
+                      || /^table/.test(bs.display) };
+      if (!XDictFrameCore.hangs(facts)) return;
+      var em = parseFloat(bs.fontSize) || 16;
+      b.style.setProperty('--xdict-hang-pad', (parseFloat(bs.paddingLeft) || 0) / em + 'em');
+      b.setAttribute('data-xdict-hang', '');
+      n.setAttribute('data-xdict-hung', '');
+      hangMeasure(n, b);
+    });
+  }
+  // Parity P24 (2026-10-18): Apple's thin rule under a section label, drawn under the label's own line
+  // (`XDictFrameCore.ruleOn`): on a heading the core names that is a block, or on its block when the heading is all
+  // that block shows. Parity P25: an etymology section that holds only its label (NOAD's "Origin:", ODE's) is marked
+  // so the text after it sits Apple's 0.2em under it. Reading style only.
+  function words(e) { return (e.textContent || '').replace(/[\s:：]+/g, ''); }
+  function rules() {
+    if (!SPACE_CAP || !document.body) return;
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-sure=heading]'), function (h, i) {
+      if (i > 4096 || !h.getClientRects().length || h.closest('[data-xdict-ruled]') || h.querySelector('[data-xdict-ruled]')) return;
+      var block = !inline(getComputedStyle(h)), b = block ? h : blockOf(h);
+      var on = XDictFrameCore.ruleOn({ block: block, alone: !block && words(b) === words(h), body: b === document.body });
+      var t = on === 'self' ? h : on === 'block' ? b : null;
+      if (t) t.setAttribute('data-xdict-ruled', '');
+    });
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-section=etym]'), function (s) {
+      var label = '';
+      Array.prototype.forEach.call(s.querySelectorAll('[data-xdict-role=heading]'), function (h) {
+        if (!h.parentElement.closest('[data-xdict-role=heading]')) label += words(h);   // an outer heading's words only
+      });
+      if (label && words(s) === label) s.setAttribute('data-xdict-etym-label', '');
+    });
+  }
   // Again when a picture arrives, the pane is resized, the density changes, or a fold opens: at most once in 16 ms.
   var pending = false;
   function later() {
     if (pending || !SPACE_CAP) return;
     pending = true;
     // A timer, not an animation frame: a pane in the background gets no frames, and still resizes.
-    setTimeout(function () { pending = false; pictures(); images(); roleSpace(); }, 16);
+    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); }, 16);
   }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); pictures(); images(); roleSpace(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
   document.addEventListener('click', function () { setTimeout(later, 50); setTimeout(later, 400); });
@@ -1511,10 +1628,17 @@ font-style:normal !important;color:var(--xdict-text-2) !important;background:non
 font-synthesis-style:none !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important}
 /* A section heading a markup table names: one look, Apple's section label (parity P24, 2026-10-17): small capitals */
 /* of the lowercase, 0.03em apart, the body size, the secondary label colour. Its own text only: a link or a list */
-/* inside it keeps its look. Apple's thin rule under the label is not drawn: a heading the core names may be inline. */
+/* inside it keeps its look. */
 [data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 
 :not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;
 font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}
+/* Apple's thin rule under a section label (parity P24, 2026-10-18), on the label's own line (frame.js `rules`): the */
+/* rule colour, 0.3em under the text, drawn as a shadow, not a border, so no box is drawn (G5). */
+[data-xdict-ruled]{box-shadow:inset 0 -1px 0 var(--xdict-rule) !important;padding-bottom:0.3em !important}
+/* A phrase or a derived word a markup table names, weight 600 as Apple's `span.l` and `span.drv` (parity P24). */
+[data-xdict-sure=subhead][data-xdict-sure],[data-xdict-sure=subhead][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon]){font-weight:var(--xdict-weight-bold) !important}
+/* Apple's etymology label in the secondary label colour (parity P25): a heading of an etymology the core names. */
+[data-xdict-section=etym] [data-xdict-role=heading],[data-xdict-section=etym] [data-xdict-role=heading] :not([data-xdict-tag],[data-xdict-icon]){color:var(--xdict-text-2) !important}
 /* A translation a markup table names, a sense's or an example's: upright, in the secondary text colour. */
 [data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}
 [data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] 

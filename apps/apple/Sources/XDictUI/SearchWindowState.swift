@@ -172,6 +172,11 @@ public final class SearchWindowState {
                                    searching: model.isSearching, unsearched: unsearched, pending: pending)
     }
 
+    /// Whether an entry, or the All page, is shown: what the menus' entry commands (Print…, Find…, Expand All…) are
+    /// enabled by. Read from the observed model, never from the entry view's web view, which SwiftUI cannot observe:
+    /// keyed on that, every such item stayed disabled on the All page after a search (UI tour `page.print`, 2026-10-18).
+    public var hasEntry: Bool { model.shown != nil }
+
     /// The dictionary the shown entry is read from: named beside its headword (Codex §5).
     public var shownSourceName: String? {
         model.shown.flatMap { model.source($0.result.dictionary)?.name }
