@@ -71,3 +71,7 @@ for f in failures:
     print("  " + f[:300])
 sys.exit(1 if failures else 0)
 PY
+status=$?
+# Each failure against the style ledger: a known row, or `NEW:` for one to file before it is fixed.
+[ -f "$out/report.json" ] && /usr/bin/python3 -I "$here/Tools/gallery/ledger.py" triage "$out/report.json"
+exit $status
