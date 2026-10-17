@@ -75,6 +75,10 @@ extension GalleryRun {
         // A line box's edge: the inline content's last (or first) fragment, widened by the half-leading.
         function edge(n, last) {
           var el = n.nodeType === 3 ? n.parentElement : n;
+          // An inline box's edge is its content's: around a block it also has empty fragments (PEU's inline items).
+          if (n.nodeType === 1 && getComputedStyle(n).display === 'inline') {
+            for (var c = last ? n.lastChild : n.firstChild; c; c = last ? c.previousSibling : c.nextSibling) if (shown(c)) return edge(c, last);
+          }
           if (n.nodeType === 1 && getComputedStyle(n).display !== 'inline') { var b = n.getBoundingClientRect(); return last ? b.bottom : b.top; }
           var r = document.createRange(); r.selectNodeContents(n); var rs = r.getClientRects();
           if (!rs.length) { var bb = el.getBoundingClientRect(); return last ? bb.bottom : bb.top; }
@@ -109,7 +113,11 @@ extension GalleryRun {
             if (!p) { G.G16.first += 1; return; }
             var want = afterHeading(p) ? PX['after-heading'] : PX[name];
             if (p.nodeType === 1 && blockImage(p)) want = Math.max(want, PX.image);
-            var gap = e.getBoundingClientRect().top - edge(p, true);
+            // A block inside an inline box is spaced by its top padding (WebKit honours no top margin through it): its
+            // gap runs to where its content starts.
+            var inside = false; for (var ia = e.parentElement; ia && ia !== body; ia = ia.parentElement) if (inl(getComputedStyle(ia))) { inside = true; break; }
+            var pad = inside ? parseFloat(st.paddingTop) || 0 : 0;
+            var gap = e.getBoundingClientRect().top + pad - edge(p, true);
             note('G16', Math.abs(gap - want) <= 2, name + ' at ' + WIDTH + ': ' + Math.round(gap) + 'px, want ' + Math.round(want) + ' <' + label(e) + '>');
           });
         }

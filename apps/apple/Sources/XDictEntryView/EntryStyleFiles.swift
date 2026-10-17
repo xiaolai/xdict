@@ -168,7 +168,10 @@ var XDictColourCore = (function () {
 /* outranks every unlayered one, a dictionary's included, and the first layer outranks the later ones (the marks' */
 /* fold-head rule): OED's etymology and OALECD's part of speech kept their own margins (sweep, 2026-10-17). */
 @layer xdict-space{[data-xdict-space]{margin-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
-[data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}}
+[data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}
+[data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}}
+/* A block inside an inline box (PEU's examples in its inline list items) gets no top margin WebKit honours: its space */
+/* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17). */
 html{padding:0 !important;font-size:var(--xdict-base) !important;
 background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
 visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
@@ -987,6 +990,11 @@ var XDictFrameCore = (function () {
   }
   function bottom(n) {
     var rects, parent = n.nodeType === 3 ? n.parentElement : n;
+    // An inline box ends where its last content does: one holding blocks (PEU's inline list items around block
+    // examples) also has empty fragments after them, which sit at the next block's top and made every gap 0.
+    if (n.nodeType === 1 && getComputedStyle(n).display === 'inline') {
+      for (var c = n.lastChild; c; c = c.previousSibling) if (rendered(c)) return bottom(c);
+    }
     // A run of text is measured by its line; an inline-block is a box (MED's slideshow), measured by its border box.
     if (n.nodeType === 3 || getComputedStyle(n).display === 'inline') {
       var r = document.createRange(); r.selectNodeContents(n); rects = r.getClientRects();
@@ -997,6 +1005,10 @@ var XDictFrameCore = (function () {
       return last.bottom + (isNaN(lh) ? 0 : Math.max(0, (lh - last.height) / 2));
     }
     return n.getBoundingClientRect().bottom;
+  }
+  function inInline(e) {
+    for (var a = e.parentElement; a && a !== document.body; a = a.parentElement) if (inline(getComputedStyle(a))) return true;
+    return false;
   }
   function headingBefore(p) {
     if (!p || p.nodeType !== 1) return false;
@@ -1012,7 +1024,7 @@ var XDictFrameCore = (function () {
     SPACES.forEach(function (n) { probe.style.height = 'var(--xdict-space-' + n + ')'; px[n] = parseFloat(getComputedStyle(probe).height) || 0; });
     probe.remove();
     Array.prototype.forEach.call(body.querySelectorAll('[data-xdict-space]'), function (e) {
-      e.removeAttribute('data-xdict-space'); e.style.removeProperty('--xdict-space-at');
+      e.removeAttribute('data-xdict-space'); e.removeAttribute('data-xdict-space-by'); e.style.removeProperty('--xdict-space-at');
     });
     var spaced = [];
     Array.prototype.forEach.call(body.querySelectorAll('[data-xdict-role],img[data-xdict-img]'), function (e, i) {
@@ -1027,6 +1039,9 @@ var XDictFrameCore = (function () {
       }
       if (!name || !blockish(st)) return;
       e.setAttribute('data-xdict-space', name);
+      // WebKit does not honour a top margin that reaches through a block inside an inline box (PEU's examples, blocks
+      // in blocks in inline list items): the gap stayed 0 whatever the margin. Such a block is padded instead.
+      if (inInline(e)) e.setAttribute('data-xdict-space-by', 'padding');
       spaced.push(e);
     });
     var want = spaced.map(function (e) {
@@ -1043,8 +1058,10 @@ var XDictFrameCore = (function () {
     // Up to four rounds: the collapse rule's step first, then the step the last two measurements show (a margin that
     // does not adjoin the one before moves the gap one for one); the margin that came nearest is kept.
     var last = spaced.map(function () { return null; }), best = spaced.map(function () { return null; });
+    // A padded block's gap runs to its padding's end, where its content starts; a padding is never negative.
+    function top(e) { return e.getBoundingClientRect().top + (e.hasAttribute('data-xdict-space-by') ? parseFloat(getComputedStyle(e).paddingTop) || 0 : 0); }
     for (var round = 0; round < 4; round++) {
-      var gaps = spaced.map(function (e, i) { return want[i] ? e.getBoundingClientRect().top - bottom(want[i].prev) : 0; });
+      var gaps = spaced.map(function (e, i) { return want[i] ? top(e) - bottom(want[i].prev) : 0; });
       var moved = false;
       spaced.forEach(function (e, i) {
         if (!want[i]) return;
@@ -1052,6 +1069,7 @@ var XDictFrameCore = (function () {
         if (!best[i] || err < best[i][1]) best[i] = [margin[i], err];
         if (err <= 0.5) return;
         var m = round === 0 ? XDictFrameCore.nextMargin(margin[i], gaps[i], want[i].want) : margin[i] + (want[i].want - gaps[i]);
+        if (e.hasAttribute('data-xdict-space-by')) m = Math.max(0, margin[i] + (want[i].want - gaps[i]));
         if (last[i] && Math.abs(gaps[i] - last[i][1]) < 0.25 && Math.abs(margin[i] - last[i][0]) > 0.5) return;   // the margin does not move it
         last[i] = [margin[i], gaps[i]];
         margin[i] = m;
@@ -1060,7 +1078,7 @@ var XDictFrameCore = (function () {
       });
       if (!moved) break;
     }
-    var finalGaps = spaced.map(function (e, i) { return want[i] ? e.getBoundingClientRect().top - bottom(want[i].prev) : 0; });
+    var finalGaps = spaced.map(function (e, i) { return want[i] ? top(e) - bottom(want[i].prev) : 0; });
     spaced.forEach(function (e, i) {
       if (!want[i] || !best[i] || Math.abs(finalGaps[i] - want[i].want) <= best[i][1]) return;
       e.style.setProperty('--xdict-space-at', best[i][0] + 'px');

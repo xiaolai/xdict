@@ -3,7 +3,10 @@
 /* outranks every unlayered one, a dictionary's included, and the first layer outranks the later ones (the marks' */
 /* fold-head rule): OED's etymology and OALECD's part of speech kept their own margins (sweep, 2026-10-17). */
 @layer xdict-space{[data-xdict-space]{margin-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
-[data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}}
+[data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}
+[data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}}
+/* A block inside an inline box (PEU's examples in its inline list items) gets no top margin WebKit honours: its space */
+/* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17). */
 html{padding:0 !important;font-size:var(--xdict-base) !important;
 background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
 visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
