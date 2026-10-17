@@ -48,8 +48,8 @@ readonly CORE_VERSIONS=Generated/core-versions.json
 readonly SHIPPED_VERSIONS=Contents/Resources/CoreVersions.json
 # XDict's phonetic faces and their SIL OFL notices (EntryFonts), shipped byte for byte as released: never subset.
 readonly FONTS=Resources/Fonts
-# Every third-party notice (Tools/notices.py, held to the lockfile by `make test`), shown by XDict ▸ Acknowledgements.
-readonly NOTICES=Resources/Acknowledgements.txt
+# Every third-party notice (Tools/notices.py, held to the lockfile by `make test`), shown by XDict ▸ Acknowledgments.
+readonly NOTICES=Resources/Acknowledgments.txt
 readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 # `--timestamp` asks Apple's server and fails the way network calls fail (XiaolaiDict lost a release to it); a
 # development build signs offline and succeeds or fails on its first try.

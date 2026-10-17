@@ -68,10 +68,11 @@ struct PronounceButton: View {
             .accessibilityIdentifier("pronounce")
     }
 
-    /// What the button does, short (UI review M-11); a caveat about the voice belongs to the notice after speaking.
+    /// What the button does, in one short line that still claims no sense's pronunciation (R8; UI review M-11); a
+    /// caveat about the voice belongs to the notice after speaking.
     private var help: Text {
         guard let word = state.shownWord else { return Text("Pronounce") }
-        return Text("Pronounce “\(word)”")
+        return Text(SpeechSentences.speakHelp(word: word))
     }
 }
 

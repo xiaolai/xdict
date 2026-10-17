@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The app's third-party notices (plan-macos-v1 WI-10): `Resources/Acknowledgements.txt`, shipped in the bundle and
-shown by XDict ▸ Acknowledgements.
+"""The app's third-party notices (plan-macos-v1 WI-10): `Resources/Acknowledgments.txt`, shipped in the bundle and
+shown by XDict ▸ Acknowledgments.
 
-    python3 -I Tools/notices.py generate              rewrite Resources/Acknowledgements.txt (a Mac with cargo)
+    python3 -I Tools/notices.py generate              rewrite Resources/Acknowledgments.txt (a Mac with cargo)
     python3 -I Tools/notices.py check [--notices F] [--fonts DIR]
                                                       fail unless F is exactly what generate would write, naming every
                                                       linked crate or bundled font it lacks (`make test-tools`)
@@ -30,7 +30,7 @@ import sys
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CORE = os.path.join(os.path.dirname(os.path.dirname(APPLE)), "core")
-NOTICES = os.path.join(APPLE, "Resources", "Acknowledgements.txt")
+NOTICES = os.path.join(APPLE, "Resources", "Acknowledgments.txt")
 FONTS = os.path.join(APPLE, "Resources", "Fonts")
 TRIPLE = "aarch64-apple-darwin"
 ROOT = "xdict-ffi"

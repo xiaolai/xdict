@@ -8,8 +8,8 @@ scratch=$(mktemp -d); trap 'rm -rf "$scratch"' EXIT
 
 python3 -I Tools/notices.py check || fail "the committed notices do not pass"
 
-crate=$(grep -m1 '^crate ' Resources/Acknowledgements.txt) || fail "the notices list no crate"
-grep -vxF "$crate" Resources/Acknowledgements.txt >"$scratch/lacking.txt"
+crate=$(grep -m1 '^crate ' Resources/Acknowledgments.txt) || fail "the notices list no crate"
+grep -vxF "$crate" Resources/Acknowledgments.txt >"$scratch/lacking.txt"
 said=$(python3 -I Tools/notices.py check --notices "$scratch/lacking.txt" 2>&1) && fail "a crate's notice removed, and the check passed"
 grep -qF "lacks ${crate% (*}" <<<"$said" || fail "the check failed without naming ${crate% (*}: $said"
 
