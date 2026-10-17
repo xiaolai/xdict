@@ -12,8 +12,8 @@ public enum PanelNotice: Equatable, Sendable {
     case refused(SelectionRefusal)
 }
 
-/// **The lookup panel's content** (plan-macos-v1 WI-8): the word, the dictionary whose entry is shown — a pop-up of every
-/// result, grouped by dictionary, to read another — "Open in XDict" to expand into the main window, and the entry. Laid out as
+/// **The lookup panel's content** (plan-macos-v1 WI-8): the word, every dictionary's entry for it stacked under its name
+/// (the All page, P41), "Open in XDict" to expand into the main window. Laid out as
 /// the system Look Up popover (P41): a title row over the entry, footer rows under it (PanelLook). **The panel never takes the keyboard** (it must not
 /// swallow the reader's next keystroke), so everything here is for the pointer; the keyboard has Escape, and the lookup
 /// shortcut pressed again, which expands it (`help` says so).
@@ -54,6 +54,8 @@ public struct LookupPanelView: View {
             guard let shown else { return }
             Task { await state.present(shown) }
         }
+        // Each dictionary that answers joins the stack in the reader's order (the All page, P15), as in the window.
+        .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
     }
@@ -64,8 +66,8 @@ public struct LookupPanelView: View {
         + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1) + PanelLook.bottomInset
 
     /// The popover's title row (P41): its 20 pt title, then a rule to the trailing inset. The popover's title is the
-    /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17), and the dictionary's name
-    /// after the rule is the switcher of every result.
+    /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17). No switcher: every
+    /// dictionary is stacked below under its own name, as Apple's popover stacks them (owner, 2026-10-18).
     private var header: some View {
         HStack(spacing: 8) {
             PronounceButton(state: state)
@@ -84,10 +86,6 @@ public struct LookupPanelView: View {
                 .fill(.separator)
                 .frame(minWidth: 8, maxWidth: .infinity, maxHeight: 1)
                 .accessibilityHidden(true)
-            if state.model.sections.contains(where: { if case .results(let r) = $0.status { !r.hits.isEmpty } else { false } }) {
-                ResultPicker(state: state)
-                    .controlSize(.small)
-            }
         }
         .frame(height: PanelLook.titleRow)
         .padding(.top, PanelLook.topSpace)
@@ -186,37 +184,5 @@ private struct FooterRow: View {
             }
             .buttonStyle(.plain)
         }
-    }
-}
-
-/// Every result of the panel's lookup, grouped by dictionary, the shown one checked: choosing one shows its entry.
-/// Closed, it names only the dictionary read from, 80–140 pt, truncated: the headword is beside it (Codex §3).
-struct ResultPicker: View {
-    let state: SearchWindowState
-
-    var body: some View {
-        let sections = state.model.sections.compactMap { section -> (ResultSection, [ResultID])? in
-            guard case .results(let results) = section.status, !results.hits.isEmpty else { return nil }
-            return (section, results.hits.map { ResultID(dictionary: section.id, entry: $0.entry) })
-        }
-        Menu {
-            Picker(selection: Binding(get: { state.model.selection }, set: { state.model.select($0) })) {
-                ForEach(Array(sections.enumerated()), id: \.element.0.id) { index, element in
-                    if index > 0 { Divider() }
-                    ForEach(element.1, id: \.self) { id in
-                        Text(verbatim: "\(element.0.name) — \(state.model.hit(id)?.headword ?? id.entry.key)")
-                            .tag(Optional(id))
-                    }
-                }
-            } label: {
-                Text("Dictionary")
-            }
-            .pickerStyle(.inline)
-        } label: {
-            Text(verbatim: state.shownSourceName ?? "").lineLimit(1).truncationMode(.tail)
-        }
-        .frame(minWidth: 80, maxWidth: 140)
-        .help(Text("The entry shown, and every other result"))
-        .accessibilityIdentifier("panel.results")
     }
 }

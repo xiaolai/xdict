@@ -16,6 +16,7 @@ struct EntryPageTests {
         #expect(EntryPagePlan.hasDivider(at: 0, collapsed: true), "a collapsed first section could never be expanded")
         #expect(EntryPagePlan.hasDivider(at: 1, collapsed: false))
         #expect(EntryPagePlan.hasDivider(at: 5, collapsed: true))
+        #expect(EntryPagePlan.hasDivider(at: 0, collapsed: false, style: .popover), "the popover names every section")
     }
 
     /// 24 dictionaries at the estimated height in a 600 pt viewport: the frames on screen and one screen below, never
@@ -98,13 +99,14 @@ struct EntryPageTests {
 
     // MARK: - The page
 
-    private func page(_ names: [String], collapsed: Set<String> = [], ruleList: Bool = true)
+    private func page(_ names: [String], collapsed: Set<String> = [], ruleList: Bool = true, popover: Bool = false)
         async throws -> (EntryViewController, [FakeContent], UserDefaults, String) {
         let suite = "xdict.page.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         let preferences = EntryPreferences(defaults: defaults)
         for name in collapsed { preferences.setCollapsed(true, for: "lineage-\(name)") }
         var environment = EntryEnvironment(preferences: preferences)
+        if popover { environment.readingFrame = environment.readingFrame.union(.panel) }
         environment.ruleListDirectory = FileManager.default.temporaryDirectory
             .appending(path: "xdict-page-rules-\(UUID().uuidString)")
         if !ruleList {
@@ -232,5 +234,90 @@ struct EntryPageTests {
         _ = await controller.show(EntryReference(key: "alpha"), from: contents[0])
         #expect(controller.pageSections == nil)
         #expect(controller.webView != nil)
+    }
+
+    // MARK: - The lookup popover's stack (P41, owner 2026-10-18)
+
+    /// **The popover stacks every dictionary as Apple's does** (popover.dark.png): every section, the first included,
+    /// under its name (the title row is the headword), in the reader's order, each its own isolated frame.
+    @Test func thePopoverStacksEveryDictionaryUnderItsName() async throws {
+        let (controller, contents, defaults, suite) = try await page(["alpha", "beta", "gamma"], popover: true)
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        #expect(sections.map(\.name) == ["Alpha", "Beta", "Gamma"])
+        #expect(sections.map(\.hasDivider) == [true, true, true], "the popover names its first dictionary too")
+        #expect(sections.allSatisfy { $0.divider.style == .popover })
+        let panes = try #require(controller.pagePanes)
+        #expect(panes.map(\.binding) == contents.map(\.binding))
+        #expect(Set(panes.map { ObjectIdentifier($0.view.configuration.websiteDataStore) }).count == 3)
+    }
+
+    /// Apple's popover sections have no triangle and do not collapse: a dictionary collapsed in the main window is
+    /// still shown in the popover, which has no way to expand it, and the main window's choice is kept.
+    @Test func thePopoverNeitherCollapsesNorDrawsATriangle() async throws {
+        let (controller, _, defaults, suite) = try await page(["alpha", "beta"], collapsed: ["beta"], popover: true)
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        #expect(sections.map(\.collapsed) == [false, false])
+        #expect(sections[1].pane != nil)
+        sections[1].divider.toggle()
+        #expect(!sections[1].collapsed, "a popover divider toggled")
+        #expect(EntryPreferences(defaults: defaults).collapsed(for: "lineage-beta"), "the main window's choice kept")
+    }
+
+    /// **Apple's compact divider** (popover.png, popover.dark.png): the name leading at the title's 24 pt inset, in the
+    /// system font at 20 pt and the label colour, then a hairline to 27 pt from the trailing edge; a 40 pt band (an
+    /// 8 pt gap each side of the 24 pt row), not following the text size, as the title row does not.
+    @Test func thePopoverDividerIsApplesCompactOne() {
+        let divider = EntryPageDivider(name: "LDOC", zoom: 2, style: .popover)
+        #expect(divider.label.font?.pointSize == 20)
+        #expect(divider.label.textColor == .labelColor)
+        #expect(divider.label.alignment == .natural)
+        #expect(divider.fittingSize.height == 40)
+        #expect(divider.accessibilityRole() == .staticText, "nothing to press")
+        #expect(EntryPageDivider.Popover.leading == 24 && EntryPageDivider.Popover.trailing == 27)
+        divider.setZoom(1)
+        #expect(divider.label.font?.pointSize == 20)
+        let window = EntryPageDivider(name: "LDOC", zoom: 1)
+        #expect(window.style == .window && window.label.font?.pointSize == 18)
+    }
+
+    /// **The page's height** (the popover sizes to its stack): every shown divider's band and every expanded frame,
+    /// told whenever a frame's height changes; the popover's page draws nothing of its own under the glass.
+    @Test func thePageReportsItsHeightAsItsFramesGrow() async throws {
+        let (controller, _, defaults, suite) = try await page(["alpha", "beta"], popover: true)
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sections = try #require(controller.pageSections)
+        // Synchronous from here to the last check: a frame's own load cannot move a height in between.
+        var told = 0
+        controller.onContentHeightChanged = { told += 1 }
+        sections[0].setHeight(100_001)
+        sections[1].setHeight(50_001)
+        let expected = 2 * Double(EntryPageDivider.Popover.height) + 150_002
+        #expect(controller.pageHeight == expected)
+        #expect(told == 2)
+        sections[1].setHeight(50_001)
+        #expect(told == 2, "an unchanged height is not news")
+        #expect(controller.pageDrawsBackground == false)
+        let measured = try #require(await controller.documentHeight())
+        #expect(measured == controller.pageHeight, "the popover measures the page, not one frame")
+    }
+
+    @Test func theWindowsPageKeepsItsPaper() async throws {
+        let (controller, _, defaults, suite) = try await page(["alpha"])
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        #expect(controller.pageDrawsBackground == true)
     }
 }

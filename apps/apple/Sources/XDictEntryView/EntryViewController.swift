@@ -241,7 +241,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     private func makePage() -> EntryPage {
-        let page = EntryPage(preferences: environment.preferences, zoom: environment.preferences.zoom()) { [weak self] section in
+        let page = EntryPage(preferences: environment.preferences, zoom: environment.preferences.zoom(),
+                             style: EntryPageStyle(frame: environment.readingFrame)) { [weak self] section in
             guard let self else { return .failure(.ruleListUnavailable("the entry view is gone")) }
             let content = section.item.content
             return EntryPane.open(content: content, confinement: environment.confinement,
@@ -250,6 +251,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
                                   ruleList: ruleList, switches: environment.switches, host: self)
         }
         page.onRefusal = { [weak self] why in self?.refuse(why) }
+        page.onContentHeightChanged = { [weak self] in self?.onContentHeightChanged?() }
         container.addSubview(page.scroll)
         NSLayoutConstraint.activate([
             page.scroll.topAnchor.constraint(equalTo: container.topAnchor),
@@ -277,11 +279,20 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
     }
 
-    /// The shown entry's height in points (its CSS height at its zoom); nil with none shown.
+    /// The shown entry's height in points (its CSS height at its zoom), or the page's (`pageHeight`) while the page is
+    /// shown; nil with none shown.
     public func documentHeight() async -> Double? {
+        if let page { return page.contentHeight }
         guard let height = await pane?.documentHeight() else { return nil }
         return height * zoom
     }
+
+    /// The page's height in points, its dividers and frames (P41: what the popover sizes to); nil with no page.
+    public var pageHeight: Double? { page?.contentHeight }
+    /// Told whenever the page's height may have changed (a frame grew or shrank, sections came or went).
+    public var onContentHeightChanged: (() -> Void)?
+    /// Whether the page paints a paper of its own: in the main window, not on the popover's glass.
+    var pageDrawsBackground: Bool? { page?.scroll.drawsBackground }
 
     /// Each shown document once it has finished loading: the lookup panel measures it then.
     public var onDocumentFinished: (() -> Void)?

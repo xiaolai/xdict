@@ -245,8 +245,22 @@ final class LookupAnywhere {
         // Closed by itself (a click elsewhere in XDict): the same bookkeeping as every other way it closes.
         panel.onClose = { [weak self] in self?.close(why: "clickAway") }
         state.entry.onDocumentFinished = { [weak self] in self?.entryFinished() }
+        state.entry.onContentHeightChanged = { [weak self] in self?.stackChanged() }
         self.panel = panel
         return panel
+    }
+
+    /// **The stack's height changed** (P41): a frame took its document's height, or a dictionary joined. The popover
+    /// follows, once per turn of the run loop however many frames moved, up to its cap, past which the stack scrolls
+    /// as one.
+    @ObservationIgnored private var stackFit: Task<Void, Never>?
+    private func stackChanged() {
+        guard stackFit == nil else { return }
+        stackFit = Task { @MainActor in
+            await Task.yield()
+            self.stackFit = nil
+            await self.fitToEntry(self.shownEntry)
+        }
     }
 
     /// A new entry finished loading: measured now and again as its fonts and images settle (0.4, 1.2 and 3 s), each
