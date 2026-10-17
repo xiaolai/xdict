@@ -14,9 +14,10 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// The body's face, size and leading (R1), and the transcription face (§1.5).
     public static let type = EntryReadingFrame(rawValue: 1 << 1)
 
-    /// The text face the reader chose (ADR-0010 Q7): Serif (New York, Songti SC) instead of the default Sans. A token
-    /// switch on the root, not a layer: it changes `--xdict-font`, nothing else.
-    public static let serif = EntryReadingFrame(rawValue: 1 << 2)
+    /// The text face the reader chose (ADR-0010 Q7): Sans (the system face, PingFang SC) instead of the default Serif
+    /// (New York, Songti SC: Apple's dictionaries' face, parity P18, owner 2026-10-17). A token switch on the root, not a
+    /// layer: it changes `--xdict-font`, `--xdict-font-cjk` and `--xdict-font-phon`, nothing else.
+    public static let sans = EntryReadingFrame(rawValue: 1 << 2)
 
     public static let all: EntryReadingFrame = [.column, .type]
 
@@ -90,31 +91,44 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// theme on `:root[data-xdict-theme=…]`, which the appearance script sets.
     static let tokens: [(String, String)] = [
         ("base", "16px"),
-        ("font-cjk", #""PingFang SC", "Hiragino Sans GB""#),
-        ("font", #"-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif"#),
-        // XDict's own face first (`EntryFonts`: Noto Sans; Charis in Serif, below), then what the Mac may have.
-        ("font-phon", #""\#(EntryFonts.sans)", \#(phonFallbacks)"#),
+        // New York, as Apple's own dictionaries (parity P18); the Sans choice is `sansCSS`.
+        ("font-cjk", #""Songti SC", "STSong""#),
+        ("font", #"ui-serif, "New York", var(--xdict-font-cjk), serif"#),
+        // The system face, for what Apple's dictionaries set in it: the part of speech and sense numbers (P21, P22).
+        ("font-ui", #"-apple-system, system-ui, "Helvetica Neue", "PingFang SC", sans-serif"#),
+        // XDict's own face first (`EntryFonts`: Charis; Noto Sans in Sans, below), then what the Mac may have.
+        ("font-phon", #""\#(EntryFonts.serif)", \#(phonFallbacks)"#),
         // The text face, kept where `--xdict-font` means the phonetic face (inside a transcription, `typeCSS`).
         ("font-text", "var(--xdict-font)"),
         ("font-mono", #"ui-monospace, "SF Mono", Menlo, monospace"#),
         ("fs-xs", "0.75rem"), ("fs-s", "0.875rem"), ("fs-m", "1rem"), ("fs-l", "1.125rem"), ("fs-xl", "1.25rem"),
         ("fs-xxl", "1.5rem"), ("fs-min", "var(--xdict-fs-xs)"), ("fs-max", "var(--xdict-fs-xxl)"),
-        ("leading", "1.6"), ("leading-tight", "1.3"), ("weight-bold", "600"),
+        // The headword: Apple renders NOAD's at 22.7 px at the default size, weight 500 (P19).
+        ("fs-hw", "1.4375rem"), ("weight-headword", "500"),
+        // Apple's dictionaries' `line-height: 140%` (P18).
+        ("leading", "1.4"), ("leading-tight", "1.3"), ("weight-bold", "600"),
         ("space-1", "0.25rem"), ("space-2", "0.5rem"), ("space-3", "0.75rem"), ("space-4", "1rem"), ("space-5", "1.5rem"),
         ("gap", "var(--xdict-space-2)"), ("indent", "1.5em"), ("indent-max", "calc(3 * var(--xdict-indent))"),
-        ("measure", "36em"), ("pad-block", "1.25rem"), ("pad-inline", "clamp(0.75rem, 4vw, 2rem)"),
+        // No measure: the text runs the pane's width at Apple's 16 pt inset (P17, owner 2026-10-17).
+        ("measure", "none"), ("pad-block", "1.25rem"), ("pad-inline", "1rem"),
         ("cell-pad", "0.25em 0.75em"), ("radius", "6px"), ("hit", "24px"), ("icon", "1em"),
-        ("link", "var(--xdict-blue)"), ("phon-colour", "var(--xdict-text)"),
+        // The transcription in the secondary label colour (P20).
+        ("phon-colour", "var(--xdict-text-2)"),
         ("mark", "#ffe36e"), ("mark-current", "#ff9632"),
     ]
 
     /// SIL 7.000 renamed Charis SIL and Gentium Plus; the new names first, the old for an earlier install.
     static let phonFallbacks = #""Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)"#
 
-    /// §1.3: surfaces, text, and eight hue families × deep / plain / tint, light then dark.
+    /// §1.3: surfaces, text, and eight hue families × deep / plain / tint, light then dark. The neutrals and the link
+    /// are the system's (parity P26, P27; owner 2026-10-17): CanvasText, secondaryLabelColor, quaternaryLabelColor and
+    /// linkColor as Apple's Dictionary renders them on its page (#ffffff, dark #1e1e1e), composited opaque. Light's
+    /// secondary label (50% black, #808080) reads 3.95:1 on white, under 4.5:1: it is darkened to the lightest grey
+    /// that holds 4.5:1 on every surface and tint (#6d6d6d; `palette.py`, 2026-10-17). Dark's (54.9% white) holds as is.
     static let colours: [(String, String, String)] = [
-        ("bg", "#ffffff", "#1e1e1e"), ("panel", "#f3f3f5", "#2a2a2c"), ("text", "#1d1d1f", "#e6e6e9"),
-        ("text-2", "#636366", "#a3a3a8"), ("rule", "#d8d8dc", "#3a3a3d"), ("plate", "transparent", "#ececef"),
+        ("bg", "#ffffff", "#1e1e1e"), ("panel", "#f3f3f5", "#2a2a2c"), ("text", "#000000", "#ffffff"),
+        ("text-2", "#6d6d6d", "#9a9a9a"), ("rule", "#e6e6e6", "#343434"), ("plate", "transparent", "#ececef"),
+        ("link", "#0068da", "#419cff"),
         // The one accent every chromatic text colour becomes (owner, 2026-10-16: flatten); the red family's deep tier.
         ("accent", "#055959", "#81ecec"),
         ("red-deep", "#901114", "#fec9c2"), ("red", "#af342f", "#fb988d"), ("red-tint", "#ffebe8", "#3e2724"),
@@ -141,8 +155,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     static var tokensCSS: String {
         func block(_ pairs: [(String, String)]) -> String { pairs.map { "--xdict-\($0.0):\($0.1);" }.joined() }
         return EntryFonts.fontFaceCSS + ":root{\(block(tokens))}" + paletteCSS
-            + #":root[data-xdict-face=serif]{--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;"#
-            + #"--xdict-font-cjk:"Songti SC", "STSong";--xdict-font-phon:"\#(EntryFonts.serif)", \#(phonFallbacks)}"#
+            + #":root[data-xdict-face=sans]{--xdict-font:-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif;"#
+            + #"--xdict-font-cjk:"PingFang SC", "Hiragino Sans GB";--xdict-font-phon:"\#(EntryFonts.sans)", \#(phonFallbacks)}"#
             + ":lang(zh-Hant){--xdict-font-cjk:\"PingFang TC\"}:lang(ja){--xdict-font-cjk:\"Hiragino Sans\"}"
             + ":lang(ko){--xdict-font-cjk:\"Apple SD Gothic Neo\"}"
     }
@@ -219,7 +233,7 @@ extension EntryScripts {
             ? EntryReadingFrame.columnCSS(style) + controls + EntryReadingFrame.marksCSS(style)
                 + EntryReadingFrame.readingLabelsCSS(style) : ""
         let names = ["uk": labels.uk, "us": labels.us, "other": labels.other]
-        let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["link", "phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
+        let tokenNames = (EntryReadingFrame.colours.map(\.0) + ["phon-colour"]).map { "\"\($0)\"" }.joined(separator: ",")
         let namesJSON = (try? JSONSerialization.data(withJSONObject: !frame.isDisjoint(with: [.column, .minimal]) ? names : [:], options: [.sortedKeys]))
             .map { String(decoding: $0, as: UTF8.self) } ?? "{}"
         let type = frame.contains(.type) ? EntryReadingFrame.typeCSS(style) : ""
@@ -227,9 +241,9 @@ extension EntryScripts {
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS(style) + controls + EntryReadingFrame.marksCSS(style)
                 + EntryReadingFrame.originalPhonCSS(style) : ""
-        let tokens = frame.subtracting([.serif, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
+        let tokens = frame.subtracting([.sans, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
         return style.script("frame.js", [
-            "theme": scheme.rawValue, "face": frame.contains(.serif) ? "serif" : "sans", "hue": frame.accent.rawValue,
+            "theme": scheme.rawValue, "face": frame.contains(.sans) ? "sans" : "serif", "hue": frame.accent.rawValue,
             "sheet-tokens": jsString(tokens), "sheet-column": jsString(column), "sheet-type": jsString(type),
             "sheet-minimal": jsString(minimal), "names": namesJSON, "token-names": tokenNames,
             "space-cap": frame.contains(.type) ? "0.25" : "0",

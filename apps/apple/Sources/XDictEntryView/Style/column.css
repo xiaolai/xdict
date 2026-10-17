@@ -11,8 +11,10 @@ html{padding:0 !important;font-size:var(--xdict-base) !important;
 background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
 visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
 zoom:1 !important;position:static !important;writing-mode:horizontal-tb !important}
-body{margin:0 auto !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;
-max-width:calc(var(--xdict-measure) + 2 * var(--xdict-pad-inline)) !important;width:auto !important;
+/* No measure (parity P17, owner 2026-10-17: follow Apple): the text runs the pane's width, left-aligned, 16 pt from */
+/* its edges at the default size, as Apple's Dictionary draws it. */
+body{margin:0 !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;
+max-width:none !important;width:auto !important;
 min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word !important;
 contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;
 filter:none !important;transform:none !important;zoom:1 !important;position:static !important;

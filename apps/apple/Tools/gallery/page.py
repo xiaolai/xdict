@@ -121,7 +121,7 @@ def main(report_path, out_path):
             key = html.escape(next(iter(shots.values()))["key"])
             cells = "".join(
                 f"<figure><img loading=lazy src='{html.escape(shots[m]['image'])}' alt='{key} {m}'><figcaption>{m}</figcaption></figure>"
-                for m in ("before-light", "after-light", "core-light", "coreserif-light", "before-dark", "after-dark", "core-dark", "coreserif-dark") if m in shots)
+                for m in ("before-light", "after-light", "core-light", "coresans-light", "coreserif-light", "before-dark", "after-dark", "core-dark", "coresans-dark", "coreserif-dark") if m in shots)
             entries.append(f"<div class=entry><h3>{kind}: {key}</h3><div class=shots>{cells}</div></div>")
         parts.append(f"<section><h2>{html.escape(name)}</h2><table class=stats>{stats}</table>{''.join(entries)}</section>")
     failures = "".join(f"<li>{html.escape(f)}</li>" for f in report.get("failures", []))
@@ -138,7 +138,7 @@ h1{{font-size:24px}} h2{{border-top:1px solid var(--line);padding-top:16px}} h3{
 figure{{margin:0}} img{{width:100%;border:1px solid var(--line);border-radius:6px}} figcaption{{font-size:12px;color:var(--muted)}}
 </style>
 <h1>XDict reading frame: before and after</h1>
-<p>Before: the dictionary as it styles itself. After: the shell's reading frame alone (reading-style.md §1 tokens, R1, R10, R13), without the core's normalization; frame = Sans (default), serif = the Serif face (ADR-0010 Q7); core = frame + the core's normalization (merged tree), coreserif = the same in Serif. Window 820×900 points; numbers are light-mode means over the
+<p>Before: the dictionary as it styles itself. After: the shell's reading frame alone (reading-style.md §1 tokens, R1, R10, R13), without the core's normalization; frame = Sans (the default before P18), serif = the Serif face (ADR-0010 Q7); core = frame + the core's normalization (merged tree), in New York since parity P18; coresans = the same in Sans (coreserif: Serif before P18). Window 820×900 points; numbers are light-mode means over the
 three entries.</p>
 <h2>Marks (icon sweep §8)</h2><pre>{html.escape(json.dumps(totals(report), indent=1))}</pre>
 {''.join(parts)}

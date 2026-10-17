@@ -75,7 +75,7 @@ def text(path):
 def guard_found(guard, root):
     """Whether the guard exists in the repository, by grep: never assumed."""
     if re.fullmatch(r"G\d+", guard):
-        # G1–G15 are GalleryChecks', G16 and G17 GallerySpace's (WI-11).
+        # G1–G15 and G18 are GalleryChecks', G16 and G17 GallerySpace's (WI-11).
         lab = os.path.join(root, "apps/apple/Sources/XDictEntryLab")
         return any(re.search(r"note\('" + guard + r"'", text(os.path.join(lab, name))) is not None
                    for name in ("GalleryChecks.swift", "GallerySpace.swift"))

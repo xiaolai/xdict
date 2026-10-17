@@ -1,9 +1,10 @@
 import Foundation
 
-/// **The gallery's checks G1–G15** (G16 and G17: `GallerySpace`) (`dev-docs/reading-style.md` §7.2), on a framed page in the reading style, each
+/// **The gallery's checks G1–G15 and G18** (G16 and G17: `GallerySpace`) (`dev-docs/reading-style.md` §7.2; G18 is Apple's
+/// Dictionary's typography, `dev-docs/apple-dictionary-parity.md` P17–P28), on a framed page in the reading style, each
 /// computed in the page from `getComputedStyle` and geometry and reported as characters or elements checked, those
 /// off, and the values off. The run's failures name every check off. `XDICT_LAB_CONTROL=G` writes one known fault for
-/// each check into every page first, their positive control: a run with it must be red in all seventeen
+/// each check into every page first, their positive control: a run with it must be red in all eighteen
 /// (G16 and G17's faults are `GallerySpace`'s).
 ///
 /// Where §7.2 asks for what one framed page cannot show, the check says so in its `note` and measures the rest:
@@ -14,6 +15,7 @@ extension GalleryRun {
     static let checksScript = #"""
         var G = {};
         for (var g = 1; g <= 15; g++) G['G' + g] = { total: 0, off: 0, values: {}, note: '' };
+        G.G18 = { total: 0, off: 0, values: {}, note: '' };
         function note(k, ok, n, value) {
           var c = G[k]; c.total += n;
           if (!ok) { c.off += n; c.values[value] = (c.values[value] || 0) + n; }
@@ -36,8 +38,9 @@ extension GalleryRun {
         var colours = {}, backs = {};
         NAMES.forEach(function (n) { colours[token(n, 'color')] = n; backs[token(n, 'backgroundColor')] = n; });
         var BG = rgba(token('bg', 'backgroundColor')), TEXT2 = token('text-2', 'color'), PLATE = token('plate', 'backgroundColor');
+        var TEXT = token('text', 'color'), PHONC = token('phon-colour', 'color'), UI = token('font-ui', 'fontFamily');
         var FACES = {};
-        ['font', 'font-phon', 'font-text'].forEach(function (n) {
+        ['font', 'font-phon', 'font-text', 'font-ui'].forEach(function (n) {
           var f = token(n, 'fontFamily'); if (f) FACES[f.split(',')[0].replace(/["']/g, '').trim()] = n;
         });
         probe.remove();
@@ -52,7 +55,7 @@ extension GalleryRun {
           return out;
         }
         // Text: G1, G2, G3, G6, G12, G13.
-        var RATIOS = [0.75, 0.875, 1, 1.125, 1.25, 1.5], bySize = {}, chars = 0;
+        var RATIOS = [0.75, 0.875, 1, 1.125, 1.25, 1.4375, 1.5], bySize = {}, chars = 0;
         var w = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
         for (var n = w.nextNode(); n; n = w.nextNode()) {
           var t = n.nodeValue.replace(/\s+/g, ''), el = n.parentElement;
@@ -64,7 +67,7 @@ extension GalleryRun {
           chars += k; bySize[Math.round(fs * 2) / 2] = (bySize[Math.round(fs * 2) / 2] || 0) + k;
           var ratio = fs / base, onScale = RATIOS.some(function (s) { return Math.abs(ratio - s) <= 0.01; });
           note('G1', onScale && fs >= 11.5 && fs <= 24.5, k, Math.round(fs * 10) / 10 + 'px <' + lb + '>');
-          var lh = cs.lineHeight === 'normal' ? NaN : parseFloat(cs.lineHeight) / fs, want = fs >= 19.5 ? 1.3 : 1.6;
+          var lh = cs.lineHeight === 'normal' ? NaN : parseFloat(cs.lineHeight) / fs, want = fs >= 19.5 ? 1.3 : 1.4;
           note('G3', Math.abs(lh - want) <= 0.05, k, (isNaN(lh) ? 'normal' : Math.round(lh * 100) / 100) + ' at ' + Math.round(fs) + 'px <' + lb + '>');
           var fg = rgba(cs.color), bg = effectiveBg(el);
           if (fg) {
@@ -90,16 +93,39 @@ extension GalleryRun {
         }).length;
         G.G12.note = 'Han runs without lang: ' + hanNoLang + '; text-autospace ' + (CSS.supports('text-autospace', 'normal') ? 'supported' : 'unsupported');
         // G4: the column.
-        var measure = parseFloat(getComputedStyle(root).getPropertyValue('--xdict-measure')) * (/rem|em/.test(getComputedStyle(root).getPropertyValue('--xdict-measure')) ? base : 1);
+        // No measure (parity P17, owner 2026-10-17): the column is the pane less Apple's 16 pt (1rem) on each side,
+        // left-aligned at every width.
         var content = col.right - col.left;
-        if (!isNaN(measure)) note('G4', content <= measure + 0.5, 1, 'column ' + Math.round(content) + 'px over measure ' + Math.round(measure) + 'px');
-        if (innerWidth <= 330) note('G4', col.left >= 11.5, 1, 'left inset ' + Math.round(col.left) + 'px at ' + innerWidth);
-        if (innerWidth >= 800 && innerWidth <= 840) {
-          var al = document.createElement('span'); al.textContent = 'abcdefghijklmnopqrstuvwxyz'; al.style.whiteSpace = 'nowrap';
-          body.appendChild(al); var cw = al.getBoundingClientRect().width / 26; al.remove();
-          var cpl = content / cw;
-          note('G4', cpl >= 55 && cpl <= 85, 1, Math.round(cpl) + ' characters per line at ' + innerWidth + 'px');
-        } else G.G4.note = 'characters per line measured at 820px only';
+        note('G4', Math.abs(col.left - base) <= 0.5, 1, 'left inset ' + Math.round(col.left) + 'px, want ' + base + ' at ' + innerWidth);
+        note('G4', Math.abs(innerWidth - col.right - base) <= 0.5 || root.scrollHeight > root.clientHeight && Math.abs(root.clientWidth - col.right - base) <= 0.5,
+          1, 'right inset ' + Math.round(innerWidth - col.right) + 'px, want ' + base + ' at ' + innerWidth);
+        // G18: Apple's Dictionary's typography (parity P19–P24, P28) on the roles the core names.
+        function first(f) { return (f || '').split(',')[0].replace(/["']/g, '').trim(); }
+        function role(sel, want, what) {
+          body.querySelectorAll(sel).forEach(function (e) {
+            if (!seen(e) || e.closest('[data-xdict-control],[data-xdict-tag]')) return;
+            var s = getComputedStyle(e), bad = want(s);
+            note('G18', !bad, 1, what + ' ' + bad + ' <' + label(e) + '>');
+          });
+        }
+        role('[data-xdict-lead]', function (s) {
+          var w = parseInt(s.fontWeight, 10), px = parseFloat(s.fontSize);
+          return w !== 500 ? 'weight ' + w : Math.abs(px - 1.4375 * base) > 0.5 ? px + 'px' : s.color !== TEXT ? s.color : '';
+        }, 'headword (P19)');
+        role('[data-xdict-phon]', function (s) { return s.color !== PHONC ? s.color : ''; }, 'transcription (P20)');
+        role('[data-xdict-sure=pos]', function (s) {
+          var w = parseInt(s.fontWeight, 10);
+          return s.color !== TEXT2 ? s.color : s.fontStyle !== 'normal' ? s.fontStyle : w !== 500 ? 'weight ' + w : first(s.fontFamily) !== first(UI) ? first(s.fontFamily) : '';
+        }, 'part of speech (P21)');
+        role('[data-xdict-sure=sensenum]', function (s) {
+          var w = parseInt(s.fontWeight, 10);
+          return s.color !== TEXT2 ? s.color : w !== 600 ? 'weight ' + w : first(s.fontFamily) !== first(UI) ? first(s.fontFamily) : '';
+        }, 'sense number (P22)');
+        role('[data-xdict-sure=example]', function (s) { return s.color !== TEXT2 ? s.color : ''; }, 'example (P23)');
+        role('[data-xdict-sure=heading]', function (s) {
+          return s.color !== TEXT2 ? s.color : s.fontVariantCaps !== 'small-caps' ? s.fontVariantCaps : '';
+        }, 'section heading (P24)');
+        role('a:any-link', function (s) { return s.textDecorationLine !== 'none' ? 'underlined' : ''; }, 'link (P28)');
         // Elements: G5, G7, G10, G15.
         var all = body.getElementsByTagName('*');
         for (var i = 0; i < all.length && i < 30000; i++) {
@@ -286,12 +312,14 @@ extension GalleryRun {
             // An image with no pixels (bytes no decoder reads): R16's classes leave it alone, as they would resize a
             // picture's fault away, and its box is still the 3000 px G15 must find.
             "<img src='data:image/png;base64,AAAA' style='width:3000px !important;max-width:none !important;height:4px'>",
+            // G18: a part of speech in another colour, slanted (inline !important outranks the frame's layer).
+            "<span data-xdict-sure='pos' style='color:#ff0000 !important;font-style:italic !important'>G18 noun</span>",
         ]
         let html = faults.joined().replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        // G4: the column wider than the measure. G7 shows only in a dark run.
+        // G4: the column off Apple's inset. G7 shows only in a dark run.
         return "var d = document.createElement('div'); d.innerHTML = \"\(html)\";"
             + "var b = document.body || document.documentElement; b.appendChild(d);"
-            + "b.style.setProperty('max-width', '4000px', 'important'); return {};"
+            + "b.style.setProperty('padding-left', '40px', 'important'); return {};"
     }
 
     /// G2: the dominant size (most characters) of each dictionary's pages, per theme, is 16 px ± 0.5.
@@ -315,9 +343,9 @@ extension GalleryRun {
 
     /// Each check off on this page, as a failure line naming its values.
     static func checkFailures(_ checks: [String: Any]?, where place: String) -> [String] {
-        guard let checks else { return ["\(place): G1–G17 were not measured"] }
+        guard let checks else { return ["\(place): G1–G18 were not measured"] }
         // G2 is per dictionary (`dominantSizeFailures`).
-        return (1...17).filter { $0 != 2 }.compactMap { index in
+        return (1...18).filter { $0 != 2 }.compactMap { index in
             let name = "G\(index)"
             guard let c = checks[name] as? [String: Any] else { return "\(place): \(name) missing" }
             guard let off = c["off"] as? Int, off > 0 else { return nil }
