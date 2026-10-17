@@ -54,14 +54,16 @@ set -euo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 readonly SELF
 cd "$(dirname "$SELF")/.."
-# shellcheck source=Tools/e2e-requested.sh
-source Tools/e2e-requested.sh
 readonly PLAN=Tools/e2e-plan.sh
 
+# Prints the plan and runs nothing, so it is answered before the off-by-default refusal: `make test-tools`
+# (e2e-plan-test.sh) reads it from an agent's shell, where every run is refused.
 if [ "${1:-}" = --list-stages ]; then
     bash "$PLAN" substages
     exit 0
 fi
+# shellcheck source=Tools/e2e-requested.sh
+source Tools/e2e-requested.sh
 
 fail() { echo "e2e: FAIL: $*" >&2; exit 1; }
 section() { echo; echo "== $*"; }
