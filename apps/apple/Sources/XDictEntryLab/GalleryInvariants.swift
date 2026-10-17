@@ -2,13 +2,13 @@ import Foundation
 
 /// **Unification R's mechanical invariants** (owner, 2026-10-16; `dev-docs/artifacts/reading-frame/unify/` §11.7), on
 /// a rendered framed entry, every value that breaks one listed: every visible character's size is a step of the scale
-/// (12, 14, 16, 18, 20, 24 px); its leading is 1.6, or 1.3 at 20 px and above; every block's vertical margins are 0
+/// (12, 14, 16, 18, 20, 23, 24 px); its leading is 1.4 (Apple's, parity P18), or 1.3 at 20 px and above; every block's vertical margins are 0
 /// or a space token (4, 8, 12, 16, 24 px, either sign); every transcription character is in the IPA face; every text
 /// colour is text, text-2, link or the accent of the theme.
 extension GalleryRun {
     /// One check's result: characters checked, characters off, and the values off with their characters.
     static let invariantsScript = #"""
-        var SIZES = [12, 14, 16, 18, 20, 24], SPACE = [0, 4, 8, 12, 16, 24];
+        var SIZES = [12, 14, 16, 18, 20, 23, 24], SPACE = [0, 4, 8, 12, 16, 24];
         function near(v, set) { return set.some(function (s) { return Math.abs(Math.abs(v) - s) < 0.51; }); }
         var checks = { size: {}, leading: {}, margin: {}, phonFace: {}, colour: {}, lead: {}, markerInWord: {}, listMarkers: {}, cellWords: {}, punctLine: {}, wordGap: {}, strayMarker: {} };
         Object.keys(checks).forEach(function (k) { checks[k] = { total: 0, off: 0, values: {} }; });
@@ -34,19 +34,19 @@ extension GalleryRun {
           var cs = getComputedStyle(el), fs = parseFloat(cs.fontSize), k = t.length;
           var label = el.tagName.toLowerCase() + (el.className ? '.' + String(el.className).split(' ')[0] : '');
           note('size', near(fs, SIZES), k, Math.round(fs * 10) / 10 + 'px <' + label + '>');
-          var lh = cs.lineHeight === 'normal' ? NaN : parseFloat(cs.lineHeight) / fs, want = fs >= 19.5 ? 1.3 : 1.6;
+          var lh = cs.lineHeight === 'normal' ? NaN : parseFloat(cs.lineHeight) / fs, want = fs >= 19.5 ? 1.3 : 1.4;
           note('leading', Math.abs(lh - want) < 0.03, k, (isNaN(lh) ? 'normal' : Math.round(lh * 100) / 100) + ' at ' + Math.round(fs) + 'px <' + label + '>');
           var phon = el.closest('[data-xdict-phon]');
           if (phon && !/^font:/.test(phon.getAttribute('data-xdict-phon-system') || '') && !el.closest('[data-xdict-tag]')) {
             note('phonFace', cs.fontFamily.split(',')[0].replace(/["']/g, '').trim() === PHON, k, cs.fontFamily.split(',')[0] + ' <' + label + '>');
           }
           if (!/^rgba\(.*,\s*0\)$/.test(cs.color)) note('colour', !!allowed[cs.color], k, cs.color + ' <' + label + '>');
-          // The lead's own text (not a transcription or a label inside it) is the lead's look: 24 px, text colour.
+          // The lead's own text (not a transcription or a label inside it) is the lead's look: 23 px (P19), text colour.
           var lead = el.closest('[data-xdict-lead]');
           if (lead && !el.closest('[data-xdict-phon],[data-xdict-role=label],[data-xdict-tag]')) {
             var role = el.closest('[data-xdict-role]');
             if (role && (role === lead || role.getAttribute('data-xdict-role') === 'headword')) {
-              var ok = Math.abs(fs - 24) < 0.51 && allowed[cs.color] === 'text';
+              var ok = Math.abs(fs - 23) < 0.51 && allowed[cs.color] === 'text';
               note('lead', ok, k, Math.round(fs) + 'px ' + cs.color + ' <' + label + '>');
             }
           }

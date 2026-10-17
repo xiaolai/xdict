@@ -120,7 +120,7 @@ struct ReadingFrameTests {
                      "red-deep", "pink-tint"] {
             #expect(css.contains("--xdict-\(name):"), "\(name)")
         }
-        #expect(css.contains("--xdict-measure:36em;"))
+        #expect(css.contains("--xdict-measure:none;"))
         #expect(css.contains(":root[data-xdict-theme=light]{--xdict-bg:#ffffff;"))
         #expect(css.contains(":root[data-xdict-theme=dark]{--xdict-bg:#1e1e1e;"))
         #expect(!css.contains("--xdict-base-size"))
@@ -130,7 +130,7 @@ struct ReadingFrameTests {
     /// new first, so either installed version sets the transcriptions.
     @Test func thePhoneticFontsAreNamedOldAndNew() {
         #expect(EntryReadingFrame.tokensCSS.contains(
-            #"--xdict-font-phon:"XDict Phonetic Sans", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);"#))
+            #"--xdict-font-phon:"XDict Phonetic Serif", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);"#))
     }
 
     /// R10 and R13: the quirks-mode table reset undone; only an unwrapped data table scrolls itself, no table is made a
@@ -163,14 +163,16 @@ struct ReadingFrameTests {
         String(decoding: try JSONEncoder().encode(string), as: UTF8.self)
     }
 
-    /// Q7 (ADR-0010): the text face is the reader's choice, a token switch: Sans by default, Serif the alternative.
+    /// Q7 (ADR-0010): the text face is the reader's choice, a token switch. P18 (owner, 2026-10-17: follow Apple):
+    /// New York by default, as Apple's own dictionaries set it; Sans the alternative.
     @Test func theFaceIsATokenSwitch() {
         let css = EntryReadingFrame.tokensCSS
-        #expect(css.contains(#":root[data-xdict-face=serif]{--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;"#))
-        #expect(css.contains(#""Songti SC""#))
-        #expect(EntryScripts.appearance(.light, frame: [.column, .type, .serif]).contains("FACE = 'serif'"))
-        #expect(EntryScripts.appearance(.light, frame: .all).contains("FACE = 'sans'"))
-        #expect(!EntryReadingFrame.all.contains(.serif))
+        #expect(css.contains(#"--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;"#))
+        #expect(css.contains(#"--xdict-font-cjk:"Songti SC", "STSong";"#))
+        #expect(css.contains(#":root[data-xdict-face=sans]{--xdict-font:-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif;"#))
+        #expect(EntryScripts.appearance(.light, frame: [.column, .type, .sans]).contains("FACE = 'sans'"))
+        #expect(EntryScripts.appearance(.light, frame: .all).contains("FACE = 'serif'"))
+        #expect(!EntryReadingFrame.all.contains(.sans))
     }
 
     /// Q3: "Original style" per dictionary, off by default; on, the frame steps aside for that dictionary alone.
@@ -190,7 +192,7 @@ struct ReadingFrameTests {
     @Test func switchingOriginalStyleFetchesTheEntryAgain() {
         #expect(EntryPane.restyles(from: .all, to: .minimal))
         #expect(EntryPane.restyles(from: .minimal, to: .all))
-        #expect(!EntryPane.restyles(from: .all, to: [.column, .type, .serif]))
+        #expect(!EntryPane.restyles(from: .all, to: [.column, .type, .sans]))
     }
 
     /// Q3, `reading-style.md` §6: "Original style" keeps a minimal frame: the page's insets and containment, and a
@@ -306,7 +308,8 @@ struct ReadingFrameTests {
         let css = EntryReadingFrame.typeCSS
         #expect(css.contains("@layer xdict-unify{"))
         #expect(css.contains(":not([data-xdict-tag],[data-xdict-icon]){font-family:var(--xdict-font-phon) !important}"))
-        #expect(!css.contains("phon-colour"), "the transcription keeps its colour")
+        // P20 (follow Apple): a transcription is in the secondary label colour, its speaker the link colour.
+        #expect(css.contains("{color:var(--xdict-phon-colour) !important}"))
         // A label's inside takes the label's size, face and colour.
         #expect(css.contains("{font-size:inherit !important;font-family:inherit !important;color:inherit !important;"
             + "line-height:inherit !important}"))
@@ -350,7 +353,7 @@ struct ReadingFrameTests {
         let texts = EntryReadingFrame.colours.map(\.0).filter {
             !surfaces.contains($0) && !$0.hasSuffix("-tint") && $0 != "rule" && $0 != "plate"
         }
-        #expect(texts.count == 19)   // text, text-2, the accent, and 8 hues × plain and deep
+        #expect(texts.count == 20)   // text, text-2, the link, the accent, and 8 hues × plain and deep
         for text in texts {
             for surface in surfaces {
                 let (tl, td) = try #require(table[text]), (sl, sd) = try #require(table[surface])
@@ -577,5 +580,78 @@ struct ReadingFrameTests {
         #expect(after("p") == "none")
         #expect(EntryScripts.installed(.light, frame: .minimal).contains(EntryScripts.pronRunDOM))
         #expect(EntryScripts.installed(.light, frame: .all).contains(EntryScripts.pronRunDOM))
+    }
+
+    // MARK: - Apple's Dictionary, group D (`dev-docs/apple-dictionary-parity.md` P17–P28; owner, 2026-10-17: follow Apple)
+
+    /// P17: no measure: the text runs the pane's width, left-aligned, 16 pt (1rem at the default size) from its edges.
+    @Test func p17TheColumnRunsThePaneAtApplesInsets() {
+        let css = EntryReadingFrame.columnCSS
+        #expect(css.contains("body{margin:0 !important;padding:var(--xdict-pad-block) var(--xdict-pad-inline) !important;"
+            + "max-width:none !important;"))
+        #expect(!css.contains("var(--xdict-measure)"))
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-pad-inline:1rem;"))
+    }
+
+    /// P18: New York at line height 1.4, Apple's dictionaries' `line-height: 140%`.
+    @Test func p18NewYorkAtLeading14() {
+        let css = EntryReadingFrame.tokensCSS
+        #expect(css.contains("--xdict-leading:1.4;"))
+        #expect(css.contains(#"--xdict-font:ui-serif, "New York""#))
+        #expect(css.contains(#"--xdict-font-phon:"XDict Phonetic Serif""#))
+    }
+
+    /// P19: the headword at weight 500 and Apple's size (22.7 px rendered at the default 16: 23 px, 1.4375rem).
+    @Test func p19TheHeadwordIsWeight500AtApplesSize() {
+        let tokens = EntryReadingFrame.tokensCSS, css = EntryReadingFrame.typeCSS
+        #expect(tokens.contains("--xdict-fs-hw:1.4375rem;"))
+        #expect(tokens.contains("--xdict-weight-headword:500;"))
+        #expect(css.contains("[data-xdict-lead]{font-size:var(--xdict-fs-hw) !important;"))
+        #expect(css.contains("font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-headword) !important;"))
+    }
+
+    /// P20–P23: the pronunciation, the part of speech, sense numbers and examples in the secondary label colour; the part
+    /// of speech upright in the system face at 500, sense numbers in it at 600.
+    @Test func p20to23SecondaryRolesFollowApple() {
+        let tokens = EntryReadingFrame.tokensCSS, css = EntryReadingFrame.typeCSS
+        #expect(tokens.contains("--xdict-phon-colour:var(--xdict-text-2);"))
+        #expect(tokens.contains(#"--xdict-font-ui:-apple-system, system-ui, "Helvetica Neue", "PingFang SC", sans-serif;"#))
+        #expect(css.contains("{font-family:var(--xdict-font-ui) !important;font-style:normal !important;"
+            + "font-synthesis-style:none !important;font-weight:500 !important;"))
+        #expect(css.contains("color:var(--xdict-text-2) !important;background:none !important}"))
+        #expect(css.contains("{font-family:var(--xdict-font-ui) !important;font-weight:var(--xdict-weight-bold) !important;"
+            + "font-style:normal !important;color:var(--xdict-text-2) !important;background:none !important}"))
+        #expect(css.contains("[data-xdict-sure=example][data-xdict-sure]{color:var(--xdict-text-2) !important}"))
+        #expect(!css.contains("var(--xdict-accent)"), "no role of Apple's is drawn in the accent")
+    }
+
+    /// P24: a section heading is Apple's label: small capitals of the lowercase, 0.03em apart, secondary colour.
+    @Test func p24SectionHeadingsAreApplesLabels() {
+        let css = EntryReadingFrame.typeCSS
+        #expect(css.contains("font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
+            + "font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;"
+            + "text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}"))
+    }
+
+    /// P26, P27: the system's colours. Light: label black, secondary label darkened from 50% black (#808080, 3.95:1)
+    /// to the lightest grey that reads 4.5:1 on every surface and tint (#6d6d6d), linkColor, quaternary label for rules.
+    /// Dark: white, 54.9% white on #1e1e1e (#9a9a9a), the dark linkColor, 9.8% white.
+    @Test func p26p27SystemColours() {
+        let table = Dictionary(uniqueKeysWithValues: EntryReadingFrame.colours.map { ($0.0, [$0.1, $0.2]) })
+        #expect(table["bg"] == ["#ffffff", "#1e1e1e"])
+        #expect(table["text"] == ["#000000", "#ffffff"])
+        #expect(table["text-2"] == ["#6d6d6d", "#9a9a9a"])
+        #expect(table["link"] == ["#0068da", "#419cff"])
+        #expect(table["rule"] == ["#e6e6e6", "#343434"])
+    }
+
+    /// P28: links carry no underline but on hover; in the lookup panel they are drawn as plain text.
+    @Test func p28LinksUnderlineOnHoverAndArePlainInThePanel() {
+        let css = EntryReadingFrame.typeCSS
+        #expect(css.contains("a:any-link:not([data-xdict-control]){text-decoration:none !important}"))
+        #expect(css.contains("a:any-link:not([data-xdict-control]):hover{text-decoration:underline !important}"))
+        #expect(css.contains(":root[data-xdict-density=panel] a:any-link:not([data-xdict-control]),"
+            + ":root[data-xdict-density=panel] a:any-link:not([data-xdict-control]) :not([data-xdict-role=label],"
+            + "[data-xdict-role=label] *){color:var(--xdict-text) !important}"))
     }
 }
