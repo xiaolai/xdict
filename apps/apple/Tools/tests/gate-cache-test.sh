@@ -171,6 +171,18 @@ out=$(XDICT_AFFECTED_GRAPH=$scratch/stale.json python3 -I "$tool" status $gates 
 [ "$(runs <<<"$out")" = "apple-test core $every" ] && grep -q stale "$scratch/err" \
     && ok "a stale graph selects all, loudly" || bad "stale: $(runs <<<"$out") / $(cat "$scratch/err")"
 
+# A file's mode is part of the key: `chmod -x` keeps its bytes and its blob, and a kit copying a script that no longer
+# executes fails the sub-stage that runs it.
+# (Its passes were recorded at 100644; the mode alone moves it to keys never passed, and back to those that were.)
+chmod +x "$repo/apps/apple/Tools/lookup/x.py"
+out=$(status 2>&1)
+[ "$(runs <<<"$out")" = "apple-test e2e:lookup.core " ] && grep -q 'changed: apps/apple/Tools/lookup/x.py' <<<"$out" \
+    && ok "a mode change alone changes the keys of what the file reaches" || bad "mode: $(runs <<<"$out") / $out"
+record_all
+chmod -x "$repo/apps/apple/Tools/lookup/x.py"
+out=$(status 2>&1)
+[ -z "$(runs <<<"$out")" ] && ok "chmod -x back to a passed mode is that pass's key" || bad "mode back: $(runs <<<"$out")"
+
 # A host fact is part of the key.
 out=$(python3 -I "$tool" status --fact rustc=1.99.1 core 2>&1)
 [ "$(runs <<<"$out")" = "core " ] && ok "a changed toolchain fact runs the gate" || bad "fact: $out"
@@ -202,8 +214,15 @@ for path in apps/apple/Sources/XDictSpeech/s.swift apps/apple/Tools/lookup/x.py 
     [ "$want" = "$got" ] && ok "same as e2e-affected for $path" || bad "$path: e2e-affected [$want], gate-cache [$got]"
 done
 
-# A release never reads the cache: its evidence stays fresh.
-if grep -l 'gate-cache' release.sh e2e-status.sh >/dev/null 2>&1; then bad "release.sh or e2e-status.sh reads the gate cache"
-else ok "the release path does not read the gate cache"; fi
+# **The release reads only the E2E ledger, by key** (2026-10-17; this replaces "a release never reads the gate cache"). The
+# old rule kept release evidence apart from a cache of development skips; now one ledger of every run is both, and what
+# keeps a release honest is that its evidence is a pass under the very key (content and facts) of the tree it ships,
+# not that it ignores recorded passes. So: the release path may not read this cache's record (passes.tsv), and it must
+# reach the ledger. Its own behaviour is Tools/tests/e2e-ledger-test.sh's.
+if grep -l 'passes\.tsv\|XDICT_GATE_CACHE\|gate-cache\.py status\|gate-cache\.py record' release.sh e2e-status.sh e2e-ledger.py \
+    >/dev/null 2>&1; then bad "the release path reads the gate cache's record"
+else ok "the release path does not read the gate cache's record"; fi
+grep -q 'e2e-ledger.py' e2e-status.sh && grep -q 'require-fresh' release.sh \
+    && ok "the release path asks the ledger (e2e-status.sh require-fresh)" || bad "the release path does not reach the ledger"
 
 [ "$failures" -eq 0 ] && echo "gate-cache: all passed" || { echo "gate-cache: $failures failed"; exit 1; }

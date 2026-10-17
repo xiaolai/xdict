@@ -26,8 +26,13 @@
 #                     and is not copied again when the E2E Mac has it
 #   make e2e-quick STAGES=<sub-stages>
 #                     T0: those sub-stages, fail-fast
-#   make e2e-affected T1: the same as `make e2e`, whose default is now only the sub-stages whose inputs changed since
-#                     their last pass (Tools/e2e-run.sh); FULL=1 all of them, STAGES=… those, forced
+#   make e2e-affected T1: the same as `make e2e`, whose default is now only the sub-stages with no pass for their
+#                     current key in the E2E ledger (Tools/e2e-run.sh); FULL=1 all of them, STAGES=… those, forced
+#   make e2e RELEASE_NEEDED=1
+#                     exactly the sub-stages `make release-plan` says must run
+#   make release-plan what a release would carry from the ledger and what it must run, and why, with the minutes
+#   make e2e-ledger [N=30] [STAGE=<sub-stage or stage>]
+#                     what ran when: the ledger's last N rows (~/.local/share/xdict/e2e-ledger.tsv)
 #   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
 #   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`)
 #   make affected-graph [PATHS=<path...>] [BASE=<ref>]
@@ -36,19 +41,20 @@
 #   make affected-graph-update
 #                     rewrite Tools/affected-graph.json from cargo metadata and Package.swift (a build Mac: needs cargo
 #                     and swift); `make test` fails while it is stale
-#   make e2e-status   what each sub-stage last did, how long it took, on which build, of which source tree
+#   make e2e-status   the same as make e2e-ledger
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
-#                     unless every implemented stage last passed fresh on a development bundle of this very source tree,
-#                     and unless that tree is committed
+#                     unless the ledger carries every default sub-stage and RELEASE_EXTRAS by its key for this tree
+#                     (passed last on that key, within E2E_EVIDENCE_MAX_DAYS, default 14), and unless the tree is
+#                     committed; then runs RELEASE_SMOKE (Tools/e2e-status.sh) on the release-signed bundle whatever
 #   make release-bootstrap BUILD_NUMBER=<n>
-#                     the same, requiring fresh evidence of the `launch` stage only (the skeleton's; plan-macos-v1 WI-2)
+#                     the same, requiring evidence of the `launch` stage only (the skeleton's; plan-macos-v1 WI-2)
 #   make clean        remove the bundle and its stage (not SwiftPM's or cargo's caches)
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
 .PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-pending land affected-graph affected-graph-update e2e-status e2e-evidence \
-	e2e-evidence-bootstrap release release-bootstrap clean
+	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO := $(abspath $(APPLE)/../..)
@@ -125,15 +131,18 @@ strings: core
 # tree is still the same after the build, removed by Tools/build-bundle.sh whenever it publishes another bundle): its
 # lint, tests and build ran when it was made.
 # **Only what changed since its last pass runs** (Tools/e2e-run.sh select, by Tools/gate-cache.py): nothing at all, and
-# no bundle built, when nothing did. STAGES=<names> forces those; FULL=1 every default sub-stage. The run is split over
-# both E2E Macs (E2E_HOST_MACOS, E2E_HOST_MACOS_2) unless E2E_SPLIT=0 or E2E_HOST is given; a release's evidence is one
-# Mac's: `make e2e FULL=1 E2E_SPLIT=0`.
+# no bundle built, when nothing did. STAGES=<names> forces those; FULL=1 every default sub-stage; RELEASE_NEEDED=1 what a
+# release cannot carry from the ledger. The run is split over both E2E Macs (E2E_HOST_MACOS, E2E_HOST_MACOS_2) unless
+# E2E_SPLIT=0 or E2E_HOST is given. **Its rows are keyed with what the bundle names itself** (Provenance.txt, written by
+# its build: its tree and toolchain; Tools/build-bundle.sh).
 E2E_SPLIT ?= $(if $(filter command line,$(origin E2E_HOST)),0,1)
 FULL ?=
 export XDICT_E2E_HOST_2 := $(E2E_HOST_MACOS_2)
 export XDICT_E2E_SPLIT := $(E2E_SPLIT)
 export XDICT_E2E_STAGES := $(STAGES)
 export XDICT_E2E_FULL := $(FULL)
+RELEASE_NEEDED ?=
+export XDICT_E2E_RELEASE_NEEDED := $(RELEASE_NEEDED)
 e2e:
 	@[ -n "$(E2E_HOST)" ] || { echo "E2E_HOST_MACOS is not set: put the E2E Mac's SSH name in $(REPO)/local.mk" >&2; exit 1; }
 	@stages=$$(Tools/e2e-run.sh select) || exit 1; stages=$$(echo $$stages); \
@@ -181,6 +190,8 @@ test-tools:
 	@Tools/tests/lab-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
+	@Tools/tests/e2e-ledger-test.sh
+	@python3 -I Tools/tests/e2e_deps_test.py
 	@Tools/tests/e2e-run-test.sh
 	@Tools/tests/land-test.sh
 	@Tools/tests/on-demand-test.sh
@@ -190,8 +201,13 @@ test-tools:
 	@python3 -I Tools/tests/measure_test.py
 	@Tools/tests/notices-test.sh
 
-e2e-status:
-	@Tools/e2e-status.sh show
+N ?= 30
+STAGE ?=
+e2e-status e2e-ledger:
+	@E2E_LEDGER_LAST="$(N)" E2E_LEDGER_STAGE="$(STAGE)" Tools/e2e-status.sh show
+
+release-plan:
+	@Tools/e2e-status.sh plan
 
 # The evidence a release needs, asked before its tests so a missing run costs seconds; Tools/release.sh asks again
 # after its build, before anything is uploaded.
