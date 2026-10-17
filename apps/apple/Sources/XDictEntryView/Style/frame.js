@@ -371,9 +371,11 @@
     list.id = 'xdict-pictures-body';
     list.hidden = true;
     found.forEach(function (img) {
-      var c = document.createElement('img');
-      c.src = img.currentSrc || img.src;
-      c.alt = img.alt || '';
+      // A copy of the image the dictionary wrote, its own URL only: no shell script writes a URL (ReadingTests).
+      var c = img.cloneNode(false);
+      Array.prototype.slice.call(c.attributes).forEach(function (a) {
+        if (!/^(src|srcset|alt)$/.test(a.name)) c.removeAttribute(a.name);
+      });
       list.appendChild(c);
     });
     function toggle() { list.hidden = !list.hidden; head.setAttribute('aria-expanded', list.hidden ? 'false' : 'true'); }
