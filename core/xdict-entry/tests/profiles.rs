@@ -251,3 +251,57 @@ fn a_list_item_with_text_of_its_own_is_not_a_cobuild_example() {
     assert!(!tag_of(&out, "m").contains("data-xdict-sure"), "{out}");
     assert!(tag_of(&out, "ex").contains(r#"data-xdict-sure="example""#), "{out}");
 }
+
+/// Apple's phrases and derived words (`span.l`, `span.drv`) are weight 600 (parity P24): a run-on head a markup's
+/// table names is sure (`data-xdict-sure="subhead"`). OALD's idioms and phrasal verbs, LDOCE's phrases in a sense and
+/// its derived words, ODE's and ODECN's derived words.
+#[test]
+fn a_known_markup_names_its_run_on_heads_sure() {
+    let oald = ".oup_icons{margin:0}.ox3ksym_a1{margin:0}.pos{font-style:italic}";
+    let out = render(
+        oald,
+        r#"<div><h1 class="headword">bloody</h1> <span class="def">covered with blood</span> <div class="idioms"><span class="idm">bloody well</span> <span class="def">used to emphasize</span></div> <span class="pv">bleed out</span></div>"#,
+        "bloody",
+    );
+    assert!(tag_of(&out, "idm").contains(r#"data-xdict-sure="subhead""#), "{out}");
+    assert!(tag_of(&out, "pv").contains(r#"data-xdict-sure="subhead""#), "{out}");
+    let out = render(
+        LONGMAN,
+        r#"<div><span class="hw">apple</span> <span class="sense"><span class="sensenum">2</span><span class="lexunit">be the apple of somebody’s eye</span><span class="def"> to be loved very much</span></span><span class="runon"><span class="deriv"><span>—</span>appleness</span><span class="pos"> noun</span></span></div>"#,
+        "apple",
+    );
+    assert!(tag_of(&out, "lexunit").contains(r#"data-xdict-sure="subhead""#), "{out}");
+    assert!(tag_of(&out, "deriv").contains(r#"data-xdict-sure="subhead""#), "{out}");
+    let odecn = ".odecn{margin:0}.pos_inflections{margin:0}.pos{font-style:italic}";
+    let out = render(
+        odecn,
+        r#"<div class="odecn"><span class="hw">abject</span> <div class="derivatives"><div class="label">Derivatives</div><div class="body"> <h3 class="inflection">abjectly</h3><span class="pos">adverb</span></div></div></div>"#,
+        "abject",
+    );
+    assert!(tag_of(&out, "inflection").contains(r#"data-xdict-sure="subhead""#), "{out}");
+    let ode = ".a8e{margin:0}.aej{margin:0}.xno{font-style:italic}";
+    let out = render(
+        ode,
+        r#"<div><span class="hw">abject</span> <span class="xno">adjective</span> <span class="d">without pride</span> <div class="b6i"><div class="ysl"><h4 class="drv">abjectly</h4></div> <span class="xno">adverb</span></div></div>"#,
+        "abject",
+    );
+    assert!(tag_of(&out, "drv").contains(r#"data-xdict-sure="subhead""#), "{out}");
+}
+
+/// A heading a markup's table names opens its section as a generic heading does (parity P25): ODECN's "Origin" box is
+/// the etymology, which the frame gives Apple's look.
+#[test]
+fn a_sure_heading_names_its_section() {
+    let odecn = ".odecn{margin:0}.pos_inflections{margin:0}.pos{font-style:italic}";
+    let out = render(
+        odecn,
+        r#"<div class="odecn"><span class="hw">happy</span> <span class="pos">adjective</span> <div class="en_def">feeling pleasure</div> <div class="origin"><div class="label">Origin</div><div class="body">Middle English (in the sense ‘lucky’): from the noun hap.</div></div></div>"#,
+        "happy",
+    );
+    assert!(tag_of(&out, "label").contains(r#"data-xdict-sure="heading""#), "{out}");
+    let origin = tag_of(&out, "origin");
+    assert!(
+        origin.contains(r#"data-xdict-role="section""#) && origin.contains(r#"data-xdict-section="etym""#),
+        "{out}"
+    );
+}
