@@ -1024,6 +1024,9 @@ line-height:var(--xdict-leading) !important}
 /* dictionary's (a stress mark's). Its colour reaches its descendants too: NOAD's headword text is a coloured */
 /* span inside the lead, MWU's a link (gallery, 2026-10-16), and the 24's stress marks carry no colour of */
 /* their own (the gallery's lead check), so study fix 3's "keep colour" kept only the dictionaries' hues. */
+/* A plain title the lead restates at once (CALD's title line, then the word with its stress marks and speakers): */
+/* the title is drawn once. Its line break goes with it, or an empty line would open the entry. */
+[data-xdict-restated],[data-xdict-restated]+br{display:none !important}
 [data-xdict-lead]{font-size:var(--xdict-fs-xxl) !important;line-height:var(--xdict-leading-tight) !important;
 font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
 font-style:normal !important;color:var(--xdict-text) !important}
