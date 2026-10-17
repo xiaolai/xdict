@@ -54,7 +54,11 @@ public struct LookupPanelView: View {
     /// In the title-bar row, after the close button: the query, the result pop-up when there are results (P-05), and
     /// Open in XDict as a text button, since no glyph says it (P-04).
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
+            // The speaker first, then the word it says, as in the main window (owner, 2026-10-17).
+            PronounceButton(state: state)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
             Text(verbatim: state.model.lookup?.query ?? "")
                 .font(.headline)
                 .lineLimit(1)
