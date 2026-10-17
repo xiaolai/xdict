@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
 out = sys.argv[1]
-VARIANTS = ["light-en", "dark-en", "light-zh", "dark-zh"]
+VARIANTS = ["light-en", "light-zh"]
 
 
 def routes_md():
@@ -61,9 +61,11 @@ def page():
             body.append(f"<div class='none'>Not driven: {html.escape(NOT_DRIVEN_WHY.get(route, ''))}</div>")
         else:
             figures = []
-            for variant in VARIANTS:
+            seen = sorted({v for (v, name) in by if name == route}) or VARIANTS
+            for variant in seen:
                 r = by.get((variant, route))
-                inner = [f"<figcaption>{variant}</figcaption>"]
+                caption = variant + (" (before)" if any(v == f"{variant}-after" for v in seen) else "")
+                inner = [f"<figcaption>{html.escape(caption)}</figcaption>"]
                 if r is None:
                     inner.append("<div class='none'>not run</div>")
                 else:

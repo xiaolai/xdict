@@ -1,7 +1,7 @@
 """Every user route of XDict's macOS shell the UI tour walks (Tools/ui-tour/tour.py), and those it cannot.
 
 A route is (id, launch, how a user gets there, what should be visible, steps). `launch` is the library the app starts
-over: "full" (the lookup fixtures: alpha, beta, records, slow, and the damaged, gone and locked files) or "empty" (no
+over: "reader" (a real first launch, `tour.py --reader`), "full" (the lookup fixtures: alpha, beta, records, slow, and the damaged, gone and locked files) or "empty" (no
 dictionary). Every route starts from the main window alone, the search field holding the keyboard. Steps:
 
     ("key", combo)                 one key with modifiers, held to the app (`keys press`)
@@ -28,6 +28,8 @@ def look_up(word):
 
 
 ROUTES = [
+    ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
+     "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
     # The main window
     ("main.start", "full", "Launch XDict", "Main window, search field focused, 'Look Up a Word' and 'Type a word and "
      "press Return.'; toolbar Back / Forward / Return to Original Word, Dictionaries picker, Pronounce", []),
@@ -106,17 +108,17 @@ ROUTES = [
      [LIBRARY, ("wait", 1)]),
     ("library.detail", "full", "⇧⌘L, click 'alpha'", "Name, Files, Reading style (fonts, sheets), Health, "
      "Languages, Reading (Original style), About (title, format, entries, edition), Remove from Library",
-     [LIBRARY, ("wait", 1), ("click", "alpha"), ("wait", 1.5)]),
+     [LIBRARY, ("wait", 1), ("click", "alpha", "Alpha"), ("wait", 1.5)]),
     ("library.originalStyle", "full", "... switch Original style on", "The switch on",
-     [LIBRARY, ("wait", 1), ("click", "alpha"), ("wait", 1.2), ("press", "original-style"), ("wait", 0.8)]),
+     [LIBRARY, ("wait", 1), ("click", "alpha", "Alpha"), ("wait", 1.2), ("click", "original-style", "Original style"), ("wait", 0.8)]),
     ("library.damaged", "full", "⇧⌘L, click 'damaged'", "A sentence naming why it cannot be read (bad checksum)",
-     [LIBRARY, ("wait", 1), ("click", "damaged"), ("wait", 1.2)]),
+     [LIBRARY, ("wait", 1), ("click", "damaged", "Damaged"), ("wait", 1.2)]),
     ("library.gone", "full", "⇧⌘L, click 'gone'", "The file is missing, said in a sentence, with what to do",
-     [LIBRARY, ("wait", 1), ("click", "gone"), ("wait", 1.2)]),
+     [LIBRARY, ("wait", 1), ("click", "gone", "Gone"), ("wait", 1.2)]),
     ("library.locked", "full", "⇧⌘L, click 'locked'", "XDict may not read the file, said in a sentence",
-     [LIBRARY, ("wait", 1), ("click", "locked"), ("wait", 1.2)]),
+     [LIBRARY, ("wait", 1), ("click", "locked", "Locked"), ("wait", 1.2)]),
     ("library.records", "full", "⇧⌘L, click 'records'", "A large dictionary's details and health",
-     [LIBRARY, ("wait", 1), ("click", "records"), ("wait", 1.5)]),
+     [LIBRARY, ("wait", 1), ("click", "records", "Records"), ("wait", 1.5)]),
     ("library.addPanel", "full", "⇧⌘L, Add Dictionaries… (⌘O)", "The open panel for .mdx/.mdd and folders",
      [LIBRARY, ("wait", 1), ("key", "cmd+o"), ("wait", 2)]),
     ("library.dropV3", "full", "Drag a format 3.0 file onto the library", "Refused with a sentence naming format 3.0",
@@ -128,17 +130,17 @@ ROUTES = [
      "listed", [LIBRARY, ("wait", 1), ("drop", "file/single.mdx"), ("wait", 4)]),
     # Settings
     ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, Show Setup…",
-     [SETTINGS, ("wait", 1), ("press", "General")]),
+     [SETTINGS, ("wait", 1), ("click", "General")]),
     ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "The library inside Settings, not clipped",
-     [SETTINGS, ("wait", 1), ("press", "Dictionaries"), ("wait", 1)]),
+     [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]),
     ("settings.reading", "full", "⌘, ▸ Reading", "Accent colour with its sentence",
-     [SETTINGS, ("wait", 1), ("press", "Reading")]),
+     [SETTINGS, ("wait", 1), ("click", "Reading")]),
     ("settings.speech", "full", "⌘, ▸ Speech", "English accent, Voice, Open Read & Speak Settings, Use the "
-     "dictionary's recordings", [SETTINGS, ("wait", 1), ("press", "Speech")]),
+     "dictionary's recordings", [SETTINGS, ("wait", 1), ("click", "Speech")]),
     ("settings.lookup", "full", "⌘, ▸ Lookup", "Look up the selection: the shortcut recorder, its sentence",
-     [SETTINGS, ("wait", 1), ("press", "Lookup")]),
+     [SETTINGS, ("wait", 1), ("click", "Lookup")]),
     ("settings.recording", "full", "⌘, ▸ Lookup, click the recorder", "'Type the new shortcut'",
-     [SETTINGS, ("wait", 1), ("press", "Lookup"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
+     [SETTINGS, ("wait", 1), ("click", "Lookup"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
     # Not driven
     ("library.loading", "full", "An import in progress", "Progress and Cancel on the row", None),
     ("lookup.held", "full", "A dictionary slow to answer", "Its section waiting, the others shown", None),
