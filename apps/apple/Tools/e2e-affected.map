@@ -32,6 +32,7 @@ core/xdict-ffi/measure-memory.sh                    none
 apps/apple/Tests/*                                  none
 apps/apple/Tools/tests/*                            none
 apps/apple/Tools/e2e-affected.*                     none
+apps/apple/Tools/ui-tour/*                          none
 apps/apple/Tools/affected*                          none
 apps/apple/Tools/strings.sh                         none
 apps/apple/Tools/compiler-warnings.py               none

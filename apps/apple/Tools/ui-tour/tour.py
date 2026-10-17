@@ -1,0 +1,405 @@
+#!/usr/bin/env python3
+"""The UI tour (owner's request, 2026-10-17): every route of `routes.py` walked on the real app, each state captured for
+review. Runs on the E2E Mac, started by `run.sh` from the Air; not an E2E stage, and writes nothing to the E2E ledger.
+
+    python3 -I tour.py <e2e-home> <out> [--only id,id] [--variants light-en,light-zh] [--reader]
+
+The app is the installed bundle, started with `--lookup-window <work>`: the production main window, menus and Settings
+over **a library of its own** (`<work>/store`, the lookup fixtures, or none), its dictionary service its own. The
+instrument's scenario is never asked to run, so the window is the reader's. XDict's own preferences (`ai.xdict.app`)
+are exported first, deleted before each launch (a fresh reader's state) and imported back at the end, whatever happens.
+
+Per variant and route: `<out>/<variant>/<route>.png` (the window the route is about; more windows as `.2.png` ...),
+`<route>.ax.json` (every window's accessibility tree and what `checks()` found in it) and a line in
+`<out>/results.json`. Appearance is light only (`-NSRequiresAquaSystemAppearance`; dark cannot be set for XDict
+alone, see `Session`); language is XDict's alone (`-AppleLanguages`). Nothing of the Mac's own settings is changed.
+"""
+import json
+import os
+import plistlib
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+
+here = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, here)
+from axcheck import checks  # noqa: E402
+from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
+
+home, out = sys.argv[1:3]
+options = dict(zip([a for a in sys.argv[3:] if a != "--reader"][0::2], [a for a in sys.argv[3:] if a != "--reader"][1::2]))
+only = set(filter(None, options.get("--only", "").split(",")))
+LABEL = options.get("--label", "")
+VARIANTS = options.get("--variants", "light-en,light-zh").split(",")
+app = os.path.join(home, "XDict.app")
+exe = os.path.join(app, "Contents", "MacOS", "XDict")
+kit = os.path.join(home, "kit")
+keys = os.path.join(kit, "lookup", "keys")
+pointer = os.path.join(kit, "pointer")
+dragsource = os.path.join(kit, "dragsource")
+fixtures = os.path.join(home, "fixtures")
+ax_tool = os.path.join(out, ".bin", "ax")
+DOMAIN = "ai.xdict.app"
+DEADLINE = 6.0
+
+zh = {}
+strings = os.path.join(app, "Contents", "Resources", "zh-Hans.lproj", "Localizable.strings")
+if os.path.exists(strings):
+    with open(strings, "rb") as f:
+        zh = plistlib.load(f)
+
+
+class Failed(Exception):
+    pass
+
+
+def run(*args, check=True, wait=60):
+    done = subprocess.run([str(a) for a in args], capture_output=True, text=True, timeout=wait)
+    if check and done.returncode != 0:
+        raise Failed(f"{os.path.basename(str(args[0]))} {' '.join(map(str, args[1:]))}: "
+                     f"{(done.stderr or done.stdout).strip()[:300]}")
+    return done
+
+
+def as_json(done):
+    try:
+        return json.loads(done.stdout)
+    except ValueError:
+        return {}
+
+
+def running():
+    return subprocess.run(["pgrep", "-f", exe], capture_output=True).returncode == 0
+
+
+def translated(title, lang):
+    return f"{zh[title]}|{title}" if lang == "zh" and title in zh else title
+
+
+class Session:
+    """One launch of the app over its own library; asked through `<work>/commands` (LookupWindow.swift)."""
+
+    def __init__(self, variant, library):
+        self.variant, self.library = variant, library
+        self.appearance, self.lang = variant.split("-")
+        self.work = tempfile.mkdtemp(prefix="xdict-tour-")
+        self.commands = os.path.join(self.work, "commands")
+        self.sequence = 0
+        source = os.path.join(fixtures, "lookup")
+        if library == "empty":
+            source = os.path.join(self.work, "nothing")
+            os.makedirs(source)
+        run("defaults", "delete", DOMAIN, check=False)
+        args = ["-ApplePersistenceIgnoreState", "YES", "--lookup-window", self.work, "--fixtures", source]
+        # Dark cannot be given to XDict alone: on macOS 27 (2026-10-17) neither `-AppleInterfaceStyle Dark` in its
+        # argument domain nor in its own preferences reached AppKit (the window stayed light), and the Mac's own
+        # appearance is never changed for a tour. Light is forced, so a dark Mac still gives light captures.
+        if self.appearance != "light":
+            raise Failed("dark is not captured: XDict has no appearance of its own, and the Mac's is not changed")
+        args += ["-NSRequiresAquaSystemAppearance", "YES"]
+        if self.lang == "zh":
+            args += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        run("open", "-n", "--stdout", os.path.join(self.work, "app.out"), "--stderr",
+            os.path.join(self.work, "app.err"), app, "--args", *args)
+        ready = os.path.join(self.commands, "ready.json")
+        for _ in range(900):
+            if os.path.exists(ready):
+                break
+            time.sleep(0.1)
+        else:
+            raise Failed(f"the app never became ready ({self.stderr()})")
+        time.sleep(0.3)
+        self.ready = json.load(open(ready))
+        self.pid = self.ready["pid"]
+
+    def stderr(self):
+        try:
+            return open(os.path.join(self.work, "app.err")).read()[-300:]
+        except OSError:
+            return ""
+
+    def ask(self, op, wait=20):
+        self.sequence += 1
+        path = os.path.join(self.commands, f"{self.sequence:03d}.json")
+        with open(path + ".tmp", "w") as f:
+            json.dump({"op": op}, f)
+        os.replace(path + ".tmp", path)
+        answer = os.path.join(self.commands, f"{self.sequence:03d}.out.json")
+        for _ in range(int(wait * 20)):
+            if os.path.exists(answer):
+                try:
+                    return json.load(open(answer))
+                except ValueError:
+                    pass
+            time.sleep(0.05)
+        raise Failed(f"the app did not answer {op!r}")
+
+    def hold(self, why):
+        """The app frontmost before `why`; otherwise the route fails naming who has the front (reader.py's `hold`)."""
+        deadline = time.time() + DEADLINE
+        while True:
+            front = as_json(run(keys, "front", check=False))
+            if front.get("pid") == self.pid:
+                return
+            if front.get("displayAsleep"):
+                run("caffeinate", "-u", "-t", "1", check=False)
+            if time.time() > deadline:
+                raise Failed(f"before {why!r} XDict could not have the front: {front.get('name')!r} "
+                             f"(pid {front.get('pid')}) holds it")
+            self.ask("front")
+            time.sleep(0.3)
+
+    def ax(self, *args):
+        return as_json(run(ax_tool, args[0], self.pid, *args[1:]))
+
+    def reset(self):
+        for _ in range(2):
+            run(keys, "press", "escape", check=False)
+            time.sleep(0.2)
+        self.ax("reset")
+        time.sleep(0.5)
+
+    def step(self, step):
+        kind = step[0]
+        if kind == "wait":
+            time.sleep(step[1])
+            return
+        if kind != "extra":
+            self.hold(" ".join(map(str, step)))
+        if kind == "key":
+            run(ax_tool, "key", step[1])
+            time.sleep(0.4)
+        elif kind == "type":
+            run(keys, "press", "cmd+a")
+            run(keys, "type", step[1])
+            time.sleep(0.6)
+        elif kind == "menu":
+            self.ax("menu", step[1], *[translated(t, self.lang) for t in step[2:]])
+            time.sleep(1.0)
+        elif kind == "menuopen":
+            self.ax("menu", step[1])
+            time.sleep(0.8)
+        elif kind in ("press", "click"):
+            names = [n for t in step[1:] for n in translated(t, self.lang).split("|")]
+            self.ax(kind, *dict.fromkeys(names))
+            time.sleep(0.5)
+        elif kind == "extra":
+            self.ax("extra")
+            time.sleep(0.8)
+        elif kind == "drop":
+            self.drop(os.path.join(fixtures, "library", step[1]))
+        else:
+            raise Failed(f"unknown step {step}")
+
+    def drop(self, file):
+        """A file dragged in from another window (Tools/library/dragsource) onto the app's Library window."""
+        target = [w for w in self.ax("windows")["windows"] if w["layer"] == 0]
+        if not target:
+            raise Failed("no window to drop onto")
+        x, y, w, h = target[0]["frame"]
+        ready = os.path.join(self.work, "drag.ready")
+        source = subprocess.Popen([dragsource, file, "40", "80", ready])
+        try:
+            for _ in range(100):
+                if os.path.exists(ready) and open(ready).read().strip():
+                    break
+                time.sleep(0.1)
+            else:
+                raise Failed("the drag source window never came up")
+            cx, cy = open(ready).read().split()
+            run(pointer, "drag", cx, cy, int(x + w * 0.6), int(y + h * 0.5))
+            source.wait(timeout=10)
+            if source.returncode != 0:
+                raise Failed(f"the drag ended without a drop (dragsource exited {source.returncode})")
+        finally:
+            if source.poll() is None:
+                source.kill()
+
+    def quit(self):
+        try:
+            self.ask("quit", wait=5)
+        except Failed:
+            pass
+        for _ in range(50):
+            if not running():
+                break
+            time.sleep(0.1)
+        if running():
+            run("pkill", "-f", exe, check=False)
+        shutil.rmtree(self.work, ignore_errors=True)
+
+
+def relative(tree):
+    """Each element's frame also in its window's points (`wframe`, origin the window's top left)."""
+    def walk(node, origin):
+        if node.get("frame"):
+            node["wframe"] = [node["frame"][0] - origin[0], node["frame"][1] - origin[1]] + node["frame"][2:]
+        for kid in node.get("children", []):
+            walk(kid, origin)
+
+    for window in tree.get("windows", []):
+        walk(window, (window.get("frame") or [0, 0])[:2])
+
+
+def capture(session, route, folder):
+    shots = []
+    windows = [w for w in session.ax("windows")["windows"]
+               if w["alpha"] > 0 and w["frame"][2] > 40 and w["frame"][3] > 20]
+    # Menus and panels first (higher layers), then the frontmost normal window; the window list is front to back.
+    windows.sort(key=lambda w: -w["layer"])
+    for index, window in enumerate(windows[:4]):
+        name = f"{route}.png" if index == 0 else f"{route}.{index + 1}.png"
+        path = os.path.join(folder, name)
+        run("screencapture", "-o", "-x", "-l", window["id"], path)
+        run("sips", "-Z", "1600", path, check=False)
+        shots.append(name)
+    tree = session.ax("tree")
+    relative(tree)
+    findings = checks(tree)
+    with open(os.path.join(folder, f"{route}.ax.json"), "w") as f:
+        json.dump({"windows": session.ax("windows")["windows"], "tree": tree, "findings": findings}, f)
+    return shots, findings
+
+
+def tour():
+    results = []
+    for variant in VARIANTS:
+        name = f"{variant}-{LABEL}" if LABEL else variant
+        folder = os.path.join(out, name)
+        os.makedirs(folder, exist_ok=True)
+        for library in ("full", "empty"):
+            routes = [r for r in ROUTES if r[1] == library and r[4] is not None and (not only or r[0] in only)]
+            if not routes:
+                continue
+            try:
+                session = Session(variant, library)
+            except Failed as why:
+                results += [{"variant": name, "route": r[0], "failure": f"launch: {why}"} for r in routes]
+                continue
+            try:
+                for route, _, _, _, steps in routes:
+                    record = {"variant": name, "route": route}
+                    try:
+                        session.reset()
+                        for step in steps:
+                            session.step(step)
+                        record["shots"], record["findings"] = capture(session, route, folder)
+                        if not record["shots"]:
+                            record["failure"] = "no window of XDict on screen"
+                    except (Failed, subprocess.TimeoutExpired, KeyError) as why:
+                        record["failure"] = str(why)
+                        try:
+                            record["shots"], record["findings"] = capture(session, route, folder)
+                        except (Failed, subprocess.TimeoutExpired, KeyError):
+                            pass
+                    if not running():
+                        record["failure"] = (record.get("failure", "") + " — XDict quit: " + session.stderr()).strip()
+                    print(f"{name} {route}: {record.get('failure', 'ok')}", flush=True)
+                    results.append(record)
+                    if not running():
+                        break
+            finally:
+                session.quit()
+    for route, library, _, _, steps in ROUTES:
+        if steps is None and (not only or route in only):
+            results.append({"variant": "-", "route": route, "notDriven": NOT_DRIVEN_WHY.get(route, "")})
+    return results
+
+
+class ReaderSession(Session):
+    """XDict started as a reader starts it (no instrument), over a fresh account's state: its preferences deleted and
+    its library (`~/Library/Application Support/ai.xdict.app`) moved aside, both put back by `main`."""
+
+    def __init__(self):
+        self.variant, self.lang, self.work = "light-en", "en", tempfile.mkdtemp(prefix="xdict-tour-")
+        run("defaults", "delete", DOMAIN, check=False)
+        run("open", "-n", app)
+        for _ in range(150):
+            found = subprocess.run(["pgrep", "-f", exe], capture_output=True, text=True).stdout.split()
+            if found:
+                self.pid = int(found[0])
+                break
+            time.sleep(0.1)
+        else:
+            raise Failed("XDict did not start")
+        time.sleep(5)
+
+    def stderr(self):
+        return ""
+
+    def quit(self):
+        run("osascript", "-e", f'tell application id "{DOMAIN}" to quit', check=False)
+        for _ in range(100):
+            if not running():
+                break
+            time.sleep(0.1)
+        shutil.rmtree(self.work, ignore_errors=True)
+
+
+def reader():
+    """One real first launch, captured as it comes up: the setup board opening by itself, the first window."""
+    library = os.path.expanduser(f"~/Library/Application Support/{DOMAIN}")
+    aside = library + ".ui-tour-aside"
+    if os.path.exists(aside):
+        raise SystemExit(f"tour: {aside} exists from an earlier run; put it back by hand before a reader launch")
+    moved = os.path.exists(library)
+    if moved:
+        os.rename(library, aside)
+    record = {"variant": "light-en", "route": "reader.firstLaunch"}
+    folder = os.path.join(out, "light-en")
+    os.makedirs(folder, exist_ok=True)
+    try:
+        session = ReaderSession()
+        try:
+            record["shots"], record["findings"] = capture(session, "reader.firstLaunch", folder)
+        finally:
+            session.quit()
+    except (Failed, subprocess.TimeoutExpired, KeyError) as why:
+        record["failure"] = str(why)
+    finally:
+        if running():
+            record["failure"] = record.get("failure", "") + " XDict did not quit; its library was not put back"
+        else:
+            shutil.rmtree(library, ignore_errors=True)
+            if moved:
+                os.rename(aside, library)
+    print(f"light-en reader.firstLaunch: {record.get('failure', 'ok')}", flush=True)
+    return [record]
+
+
+def main():
+    if running():
+        raise SystemExit("tour: XDict is already running; the tour does not quit a reader's XDict")
+    if subprocess.run(["pgrep", "-f", "xctest"], capture_output=True).returncode == 0:
+        raise SystemExit("tour: an xctest run holds this Mac; wait for it")
+    if subprocess.run(["pgrep", "-f", "XDictEntryLab.app/"], capture_output=True).returncode == 0:
+        raise SystemExit("tour: another XDict run (XDictEntryLab: a gallery or E2E stage) holds this Mac; wait for it")
+    access = as_json(run(keys, "access", check=False))
+    if not access.get("accessibility") or not access.get("postEvents"):
+        raise SystemExit(f"tour: this session may not drive the window ({access})")
+    os.makedirs(os.path.dirname(ax_tool), exist_ok=True)
+    run("swiftc", "-O", "-o", ax_tool, os.path.join(here, "ax.swift"), wait=300)
+    backup = os.path.join(out, ".prefs-backup.plist")
+    had = run("defaults", "export", DOMAIN, backup, check=False).returncode == 0
+    try:
+        results = reader() if "--reader" in sys.argv else tour()
+    finally:
+        run("defaults", "delete", DOMAIN, check=False)
+        if had:
+            run("defaults", "import", DOMAIN, backup)
+            os.remove(backup)
+        restored = run("defaults", "export", DOMAIN, "-", check=False).stdout
+        print(f"tour: XDict's preferences {'restored' if had else 'removed (none existed before)'}"
+              f" ({len(restored)} bytes now)", flush=True)
+    path = os.path.join(out, "results.json")
+    if "--reader" in sys.argv and os.path.exists(path):
+        results = [r for r in json.load(open(path)) if r["route"] != "reader.firstLaunch"] + results
+    with open(path, "w") as f:
+        json.dump(results, f, indent=1)
+    failed = [r for r in results if r.get("failure")]
+    print(f"tour: {len(results)} route captures, {len(failed)} failures", flush=True)
+
+
+main()
