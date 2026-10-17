@@ -15,7 +15,7 @@ use crate::colour::{self, Role};
 
 /// The version of these rules. Raised whenever what they write changes, so anything that keeps rewritten
 /// output knows it is stale.
-pub const STYLE: u32 = 9;
+pub const STYLE: u32 = 10;
 
 /// Every token the core may write, by `dev-docs/reading-style.md` §1's names: the frame defines exactly these, and a
 /// name not among them would fall back silently. The one list; a test holds every output to it.
@@ -915,6 +915,13 @@ pub(crate) fn finish(
         let value = match act {
             Action::Drop | Action::Keep | Action::LineHeight => None,
             Action::Family => family_value(decl.value, &facts, style, counts),
+            // R4 (2026-10-17): a relative size on the element that wraps the whole entry is the dictionary's base
+            // size, which XDict owns: 1 (ODE's `.Od3{font-size:117%}` set all of it at 18 px).
+            Action::Size if relative_ratio(split_space(decl.value).1).is_some() && style.facts.wraps(&selector) => {
+                counts.size += 1;
+                sized = Some(leading_of(false, decl.value));
+                Some(format!("{}{}", split_space(decl.value).0, step_token(2)))
+            }
             Action::Size => size_value(decl.value, style, counts).map(|(v, large)| {
                 sized = Some(leading_of(large, decl.value));
                 v

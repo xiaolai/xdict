@@ -98,6 +98,8 @@ pub(crate) struct Facts {
     script_words: BTreeSet<String>,
     /// The element (`cb13`, `.entry`, `div.e`) that wraps most entries, when a rule hides it unconditionally.
     pub(crate) revealed: BTreeSet<String>,
+    /// The elements (`div`, `.od3`) most entries start with, hidden or not: the box that wraps the whole entry.
+    wrappers: BTreeSet<String>,
     /// Symbols a rule's `::before`/`::after` draws, by its subject's first class, or element when it has none.
     glyphs: BTreeMap<String, Vec<Glyph>>,
     glyph_count: usize,
@@ -377,6 +379,7 @@ impl Facts {
             if count * 2 < n || count == 0 {
                 continue;
             }
+            self.wrappers.insert(subject.clone());
             let hidden = if let Some(class) = subject.strip_prefix('.') {
                 self.by_class.get(class).is_some_and(|v| {
                     v.iter().any(|s| s.classes.len() == 1 && s.tag.is_none() && s.props.none == Some(true))
@@ -407,6 +410,26 @@ impl Facts {
         }
         let s = selector.trim().to_ascii_lowercase();
         !s.contains([',', ' ', ':', '[', '>', '+', '~']) && self.revealed.contains(&s)
+    }
+
+    /// Whether every selector of `selector` is the element that wraps the entry, written plainly as a compound of the
+    /// tag and classes most entries start with (`.od3`, `div.od3`): a size there is the dictionary's base (R4).
+    pub(crate) fn wraps(&self, selector: &str) -> bool {
+        if self.wrappers.is_empty() {
+            return false;
+        }
+        let s = selector.trim().to_ascii_lowercase();
+        if s.contains([' ', ':', '[', '>', '+', '~', '*', '#']) {
+            return false;
+        }
+        s.split(',').all(|compound| {
+            let compound = compound.trim();
+            let (tag, classes) = compound.split_once('.').map_or((compound, ""), |(t, c)| (t, c));
+            let classes: Vec<&str> = if classes.is_empty() { Vec::new() } else { classes.split('.').collect() };
+            !compound.is_empty()
+                && (tag.is_empty() || self.wrappers.contains(tag))
+                && classes.iter().all(|c| !c.is_empty() && self.wrappers.contains(&format!(".{c}")))
+        })
     }
 }
 
