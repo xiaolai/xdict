@@ -68,6 +68,10 @@ struct ReadingFrameTests {
         #expect(!type.contains("@media"))
         let reading = EntryScripts.appearance(.light, frame: .all)
         #expect(reading.contains("roleSpace();"))
+        // A padded block's gap cannot shrink below the bottom margins that collapse out of the content before it
+        // (D45, OALD's idioms: 16 px for 12): the blocks that end that content give them up. Measured by G16.
+        #expect(reading.contains("if (e.hasAttribute('data-xdict-space-by')) ends(p);"))
+        #expect(EntryReadingFrame.columnCSS.contains("[data-xdict-space-end]{margin-bottom:0 !important}}"))
         #expect(reading.contains("DENSITY = 'main'"))
         #expect(EntryScripts.appearance(.light, frame: EntryReadingFrame.all.union(.panel)).contains("DENSITY = 'panel'"))
         // Original style has no density: the dictionary's own spacing.
