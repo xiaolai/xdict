@@ -60,7 +60,7 @@ public enum Limits {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health: return nil
+             .lineage, .health, .readingStyle: return nil
         }
     }
 
@@ -175,6 +175,9 @@ public enum Deadlines {
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.
         case .resource: .seconds(15)
+        // ADR-0010: at most 64 sampled entries of up to 256 KiB and the edition's sheets (up to 32 MiB) read and
+        // normalized once per edition, then remembered; like a resource, bounded at 15 s.
+        case .readingStyle: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
         case .importPackage, .health: nil
         }

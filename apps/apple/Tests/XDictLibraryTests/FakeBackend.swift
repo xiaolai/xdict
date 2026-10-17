@@ -135,6 +135,21 @@ actor FakeBackend: LibraryBackend {
         heldChecks.removeAll { $0.0 == dict }
     }
 
+    // MARK: - Reading style (ADR-0010)
+
+    /// Every dictionary whose reading style was asked, in order; what it answers.
+    private(set) var stylesAsked: [DictId] = []
+    var styleAnswer: Result<ReadingStyle, ClientFailure> = .success(ReadingStyle(
+        version: 1, basePx: 16, baseFrom: .browserDefault, fonts: [], sheets: [], skipped: [], changes: StyleChanges(
+            important: 0, page: 0, family: 0, size: 0, lineHeight: 0, colour: 0, weight: 0, space: 0, dropped: 0)))
+
+    func setStyleAnswer(_ answer: Result<ReadingStyle, ClientFailure>) { styleAnswer = answer }
+
+    func readingStyle(_ dict: DictId) async -> Result<ReadingStyle, ClientFailure> {
+        stylesAsked.append(dict)
+        return styleAnswer
+    }
+
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure> {
         lineageCalls.append(operation)
         switch operation {

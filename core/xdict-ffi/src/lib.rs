@@ -12,9 +12,10 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, FindingKind, Health, HealthClass,
-    HealthExample, HealthFinding, Hit, HitProblem, How, ImportReason, Imported, IoKind, Limit, Link, LinkOrigin,
-    LookupOptions, MatchMode, Missing, Opened, Page, Problem, Resource, Versions, View,
+    BaseSource, BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, FindingKind,
+    FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem, How, ImportReason, Imported,
+    IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page, Problem, ReadingStyle,
+    Resource, StyleChanges, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -155,6 +156,52 @@ pub enum FindingKind {
     RepeatedEntries,
     OddHeadwords,
     Repaired,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReadingStyle {
+    pub version: u32,
+    pub base_px: f64,
+    pub base_from: BaseSource,
+    pub fonts: Vec<KeptFont>,
+    pub sheets: Vec<String>,
+    pub skipped: Vec<String>,
+    pub changes: StyleChanges,
+}
+
+#[uniffi::remote(Enum)]
+pub enum BaseSource {
+    Page { selector: String },
+    Prose { weight: u64 },
+    Text { chars: u64, share: f64 },
+    BrowserDefault,
+}
+
+#[uniffi::remote(Record)]
+pub struct KeptFont {
+    pub family: String,
+    pub reason: FontReason,
+    pub selector: String,
+}
+
+#[uniffi::remote(Enum)]
+pub enum FontReason {
+    PrivateUse,
+    PseudoContent,
+    Phonetic,
+}
+
+#[uniffi::remote(Record)]
+pub struct StyleChanges {
+    pub important: u64,
+    pub page: u64,
+    pub family: u64,
+    pub size: u64,
+    pub line_height: u64,
+    pub colour: u64,
+    pub weight: u64,
+    pub space: u64,
+    pub dropped: u64,
 }
 
 #[uniffi::remote(Enum)]
@@ -414,6 +461,11 @@ impl Core {
             Some(progress) => self.0.health(dict, &Watcher(progress)),
             None => self.0.health(dict, &core::NoProgress),
         }
+    }
+
+    /// What the reading style does to an open dictionary (ADR-0010): shown in the Library's details pane.
+    pub fn reading_style(&self, dict: String) -> Result<ReadingStyle, CoreError> {
+        self.0.reading_style(dict)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

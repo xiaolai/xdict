@@ -175,4 +175,58 @@ public enum LibrarySentences {
             return LocalizedStringResource("The check could not finish. It runs again when the dictionary next opens.")
         }
     }
+
+    // MARK: - Reading style (ADR-0010)
+
+    /// Where the report is: being made, made (which rules' version), or not made.
+    public static func styleStatus(_ state: StyleState) -> LocalizedStringResource {
+        switch state {
+        case .reading: LocalizedStringResource("Reading the dictionary’s style…")
+        case .read(let style): LocalizedStringResource("XDict reading style, rules version \(style.version).")
+        case .unavailable:
+            LocalizedStringResource("The style report could not be made. It is asked again when these details next show.")
+        }
+    }
+
+    /// The base size and where it was read; a selector is the dictionary's own text, quoted as written.
+    public static func baseSize(px: Double, from source: BaseSource) -> LocalizedStringResource {
+        let size = px.formatted(.number.precision(.fractionLength(0...2)))
+        switch source {
+        case .page(let selector):
+            return LocalizedStringResource("Base size \(size) px, from the dictionary’s page rule “\(selector)”.")
+        case .prose(let weight):
+            return LocalizedStringResource("Base size \(size) px, the size most of its text rules set (\(weight) votes).")
+        case .text(_, let share):
+            let percent = Int((share * 100).rounded())
+            return LocalizedStringResource("Base size \(size) px, the size \(percent)% of a sample of its entries is set in.")
+        case .browserDefault:
+            return LocalizedStringResource("Base size \(size) px: the dictionary sets no size of its own.")
+        }
+    }
+
+    /// Why one of the dictionary's fonts is kept.
+    public static func fontReason(_ reason: FontReason) -> LocalizedStringResource {
+        switch reason {
+        case .privateUse: LocalizedStringResource("Kept: it draws icons no other font has.")
+        case .pseudoContent: LocalizedStringResource("Kept: it draws the dictionary’s marks and symbols.")
+        case .phonetic: LocalizedStringResource("Kept: it draws phonetic symbols.")
+        }
+    }
+
+    /// What normalizing the sheets changed, one line per kind that changed; one line when nothing did.
+    public static func styleChanges(_ c: StyleChanges) -> [LocalizedStringResource] {
+        var lines: [LocalizedStringResource] = []
+        if c.important > 0 { lines.append(LocalizedStringResource("\(c.important) “!important” marks removed")) }
+        if c.page > 0 { lines.append(LocalizedStringResource("\(c.page) page settings dropped")) }
+        if c.family > 0 { lines.append(LocalizedStringResource("\(c.family) fonts replaced with XDict’s")) }
+        if c.size > 0 { lines.append(LocalizedStringResource("\(c.size) font sizes made relative")) }
+        if c.lineHeight > 0 { lines.append(LocalizedStringResource("\(c.lineHeight) line heights made relative")) }
+        if c.colour > 0 { lines.append(LocalizedStringResource("\(c.colour) colours set to XDict’s palette")) }
+        if c.weight > 0 { lines.append(LocalizedStringResource("\(c.weight) font weights set to XDict’s")) }
+        if c.space > 0 { lines.append(LocalizedStringResource("\(c.space) spacings put on XDict’s steps")) }
+        if c.dropped > 0 {
+            lines.append(LocalizedStringResource("\(c.dropped) backgrounds, borders and other declarations dropped"))
+        }
+        return lines.isEmpty ? [LocalizedStringResource("Normalizing changed nothing in its style sheets.")] : lines
+    }
 }

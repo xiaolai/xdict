@@ -36,6 +36,14 @@ public enum HealthState: Hashable, Sendable {
     case unavailable
 }
 
+/// Where one dictionary's reading-style report is (ADR-0010), this session: asked when its details are shown.
+public enum StyleState: Hashable, Sendable {
+    case reading
+    case read(ReadingStyle)
+    /// The service could not answer; asked again when the details are next shown.
+    case unavailable
+}
+
 /// Something the reader should be told once, not kept with any dictionary.
 public enum LibraryNotice: Hashable, Sendable {
     case finder(FinderProblem)
@@ -84,6 +92,8 @@ public final class Library {
     public private(set) var notices: [LibraryNotice] = []
     /// Each open dictionary's health check (WI-12), run one at a time after it opens, below the reader's own calls.
     public private(set) var health: [UUID: HealthState] = [:]
+    /// Each open dictionary's reading-style report (ADR-0010), asked by its details pane and kept this session.
+    public private(set) var readingStyles: [UUID: StyleState] = [:]
     /// Why the stored library could not be read: until it can, nothing is added and nothing is saved.
     public private(set) var unreadable: LibraryStoreError?
 
@@ -457,6 +467,28 @@ public final class Library {
         handles[id] = nil
         phases[id] = nil
         health[id] = nil
+        readingStyles[id] = nil
+    }
+
+    // MARK: - Reading style (ADR-0010)
+
+    /// Asks the service what the reading style does to the open dictionary `id`, unless this session already knows or
+    /// is asking. A dictionary not open has nothing to report.
+    public func loadReadingStyle(_ id: UUID) async {
+        switch readingStyles[id] {
+        case .read, .reading: return
+        case .unavailable, nil: break
+        }
+        guard let dict = handle(id) else { return }
+        readingStyles[id] = .reading
+        let outcome = await backend.readingStyle(dict)
+        guard index(id) != nil, readingStyles[id] == .reading else { return }
+        switch outcome {
+        case .success(let style): readingStyles[id] = .read(style)
+        case .failure(let failure):
+            log.error("the reading style of \(id, privacy: .public) was not reported: \(String(describing: failure), privacy: .public)")
+            readingStyles[id] = .unavailable
+        }
     }
 
     // MARK: - Health (WI-12)
