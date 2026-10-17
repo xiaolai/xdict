@@ -53,6 +53,8 @@ enum EntryScripts {
 
     /// How far down the entry the reader has scrolled, in CSS pixels.
     static let scrollOffset = "return window.scrollY;"
+    /// The shown document's height in CSS pixels: what the lookup panel sizes itself to (UI review P-03).
+    static let documentHeight = "return document.documentElement.scrollHeight;"
 
     static let handlerName = "xdictEntry"
 

@@ -281,6 +281,12 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         return (answer as? NSNumber)?.intValue ?? 0
     }
 
+    func documentHeight() async -> Double? {
+        guard !closed, current != nil else { return nil }
+        return (try? await view.callAsyncJavaScript(EntryScripts.documentHeight, arguments: [:], in: nil,
+                                                    contentWorld: Self.world)) as? Double
+    }
+
     func scrollOffset() async -> Double? {
         guard !closed, current != nil else { return nil }
         return (try? await view.callAsyncJavaScript(EntryScripts.scrollOffset, arguments: [:], in: nil,
