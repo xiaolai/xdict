@@ -216,7 +216,10 @@ def main():
     if os.path.exists(samples_file):
         os.remove(samples_file)
     words = iter(WORDS)
-    take = lambda n: [next(words) for _ in range(n)]  # noqa: E731
+
+    def take(n):
+        return [next(words) for _ in range(n)]
+
     said = launch()
     facts["dictionaries"] = len(said.get("dictionaries", []))
     if not said.get("settled") or facts["dictionaries"] < 24:
