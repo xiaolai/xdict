@@ -40,12 +40,12 @@ public struct SpeechSettings: View {
                 Text("Use the dictionary's recordings")
                 Text("Where a dictionary has its own recording of a word and macOS can play it, play that instead of the system voice.")
             }
+            .accessibilityLabel(Text("Use the dictionary's recordings"))
             .accessibilityIdentifier("use-recordings")
             Text("Each dictionary is spoken in the language set for it in the Library.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
-        .frame(width: 480)
+        .settingsPane()
     }
 }

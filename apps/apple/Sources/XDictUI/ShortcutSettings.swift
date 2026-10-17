@@ -32,8 +32,7 @@ public struct ShortcutSettings: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .formStyle(.grouped)
-        .frame(width: 480)
+        .settingsPane()
     }
 }
 
@@ -49,11 +48,15 @@ struct ShortcutRecorder: View {
             recording ? stop() : start()
         } label: {
             if recording {
-                Text("Type the new shortcut")
+                Text("Type Shortcut")
             } else {
                 Text(verbatim: registrar.current.label())
             }
         }
+        // One width either way, and a name VoiceOver can say (UI review S-06).
+        .frame(minWidth: 140)
+        .accessibilityLabel(recording ? Text("Type Shortcut")
+                            : Text("Lookup shortcut, \(ShortcutDisplay.spoken(registrar.current))"))
         .accessibilityIdentifier("shortcut.recorder")
         .help(Text("Click, then type the combination to use"))
         .onDisappear { stop() }

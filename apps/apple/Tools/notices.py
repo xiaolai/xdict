@@ -114,7 +114,7 @@ def render(own, crates, families):
     out += ["", "Rust crates", "==========="]
     for name, version, licence, _ in crates:
         out.append(f"crate {name} {version} ({licence})")
-    out += ["", "Licence texts", "============="]
+    out += ["", "License texts", "============="]
     for family in sorted(families):
         out += ["", f"--- font {family}", "", families[family].rstrip()]
     users, order = {}, []
