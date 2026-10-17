@@ -19,11 +19,20 @@ printf 'BUILD_HOSTS = stub-a stub-b\nBUILD_HOSTS_XCODE = stub-x\nBUILD_HOST = st
 export XDICT_GATE_CACHE=$scratch/cache XDICT_LAND_CORPUS=$scratch/corpus XDICT_LAND_LOCAL_MK=$scratch/local.mk
 land() { PATH=$scratch/bin:$PATH bash Tools/land.sh >"$scratch/out" 2>&1; }
 
+# A gate's command is part of its key: the same land.sh with one gate's command edited gives that gate other facts.
+cp Tools/land.sh "$scratch/land-edited.sh"
+sed -i.bak 's/cargo test -p xdict-core --no-run -q/cargo test -p xdict-core --no-run/' "$scratch/land-edited.sh"
+mkdir -p "$scratch/Tools" && cp "$scratch/land-edited.sh" "$scratch/Tools/land.sh"
+if [ "$(bash Tools/land.sh --facts-of core x)" != "$(bash "$scratch/Tools/land.sh" --facts-of core x)" ] \
+    && [ "$(bash Tools/land.sh --facts-of mdx-v3 x)" = "$(bash "$scratch/Tools/land.sh" --facts-of mdx-v3 x)" ]; then
+    ok "an edited gate command changes that gate's facts, and no other's"
+else bad "a gate's command is not in its facts"; fi
+
 # Every gate recorded as passed, under the facts land.sh names.
 corpus=$(python3 -I Tools/gate-cache.py corpus-id "$scratch/corpus")
 for g in core apple-test entries lookup-corpus mdx-v3 bindings memory; do
-    facts=(--fact rust=1.99.0)
-    case $g in apple-test) facts+=(--fact swiftlint=0.65.1) ;; entries | lookup-corpus) facts+=(--fact "corpus=$corpus") ;; esac
+    facts=()
+    while IFS= read -r a; do facts+=("$a"); done < <(bash Tools/land.sh --facts-of "$g" "$corpus")
     key=$(python3 -I Tools/gate-cache.py status "${facts[@]}" "$g" 2>/dev/null | cut -f3)
     python3 -I Tools/gate-cache.py record "$g" "$key" 1 test || bad "record $g"
 done
