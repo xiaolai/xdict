@@ -29,7 +29,7 @@ import time
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
-from axcheck import checks  # noqa: E402
+from axcheck import checks, dictionaries_table  # noqa: E402
 from pseudo import pseudo  # noqa: E402
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
@@ -303,6 +303,8 @@ def capture(session, route, folder):
     tree = session.ax("tree")
     relative(tree)
     findings = checks(tree)
+    if route == "settings.dictionaries":
+        findings += [dict(f, parity="P39") for f in dictionaries_table(tree)]
     with open(os.path.join(folder, f"{route}.ax.json"), "w") as f:
         json.dump({"windows": session.ax("windows")["windows"], "tree": tree, "findings": findings}, f)
     return shots, findings
