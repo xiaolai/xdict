@@ -199,12 +199,12 @@ public struct LibraryView: View {
                     }
                     .font(.subheadline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    if notices.count > 1 {
-                        Button("Show Details…") { showsNotices = true }
-                            .controlSize(.small)
-                            .popover(isPresented: $showsNotices) { noticeDetails }
-                    }
+                    // Two lines at most, the whole in Show Details: sized to its words at a narrow width, the bar grew the
+                    // window past its own frame (1,399 pt in the pseudo-language tour, 2026-10-17).
+                    .lineLimit(2)
+                    Button("Show Details…") { showsNotices = true }
+                        .controlSize(.small)
+                        .popover(isPresented: $showsNotices) { noticeDetails }
                     Button("Dismiss") { for notice in notices { library.dismiss(notice) } }
                         .controlSize(.small)
                 }
