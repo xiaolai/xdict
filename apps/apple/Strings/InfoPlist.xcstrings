@@ -1,0 +1,57 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "CFBundleDisplayName" : {
+      "comment" : "The app's name in Finder, the Dock and the menu bar (Info.plist CFBundleDisplayName). A brand: the same in every language.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
+          }
+        }
+      }
+    },
+    "CFBundleName" : {
+      "comment" : "The app's short name, as the application menu shows it (Info.plist CFBundleName). A brand: the same in every language.",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
+          }
+        }
+      }
+    },
+    "NSHumanReadableCopyright" : {
+      "comment" : "The copyright line of the About panel and Finder's Get Info (Info.plist NSHumanReadableCopyright).",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "© 2026 the XDict authors. ISC License."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "© 2026 XDict 作者。ISC 许可证。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

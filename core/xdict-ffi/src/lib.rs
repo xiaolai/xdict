@@ -15,7 +15,7 @@ use xdict_core::{
     BaseSource, BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, FindingKind,
     FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem, How, ImportReason, Imported,
     IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page, Problem, ReadingStyle,
-    Resource, StyleChanges, Versions, View,
+    Resource, SkipReason, SkippedSheet, StyleChanges, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -165,8 +165,22 @@ pub struct ReadingStyle {
     pub base_from: BaseSource,
     pub fonts: Vec<KeptFont>,
     pub sheets: Vec<String>,
-    pub skipped: Vec<String>,
+    pub skipped: Vec<SkippedSheet>,
     pub changes: StyleChanges,
+}
+
+#[uniffi::remote(Record)]
+pub struct SkippedSheet {
+    pub path: String,
+    pub reason: SkipReason,
+}
+
+#[uniffi::remote(Enum)]
+pub enum SkipReason {
+    TooMany { limit: u64 },
+    TooLarge { limit: u64, detail: String },
+    NotFound,
+    Unreadable { detail: String },
 }
 
 #[uniffi::remote(Enum)]

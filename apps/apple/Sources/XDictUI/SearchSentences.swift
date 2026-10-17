@@ -19,7 +19,7 @@ public enum SearchSentences {
         case .noMatch(let query, .link):
             LocalizedStringResource("This dictionary has no entry named “\(query)”.")
         case .unavailable(.indexing(let fraction?)):
-            LocalizedStringResource("Being indexed (\(Int((fraction * 100).rounded()))%).")
+            LocalizedStringResource("Being indexed (\(fraction, format: LibrarySentences.percent)).")
         case .unavailable(.indexing(nil)):
             LocalizedStringResource("Being indexed.")
         case .unavailable(.missingFile(let name)):
@@ -125,7 +125,7 @@ public enum SearchSentences {
     /// How many results a dictionary has, and how many are shown (Q10).
     public static func count(loaded: Int, total: UInt64) -> LocalizedStringResource {
         if UInt64(loaded) >= total {
-            return total == 1 ? LocalizedStringResource("1 result") : LocalizedStringResource("\(total) results")
+            return LocalizedStringResource("\(total) results")
         }
         return LocalizedStringResource("\(loaded) of \(total) shown")
     }

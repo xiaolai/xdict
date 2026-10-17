@@ -96,8 +96,15 @@ struct LibraryDetail: View {
                             Text(verbatim: sheet).font(.caption.monospaced()).textSelection(.enabled)
                         }
                         ForEach(Array(style.skipped.enumerated()), id: \.offset) { _, skipped in
-                            Text(verbatim: skipped).font(.caption.monospaced()).foregroundStyle(.secondary)
-                                .textSelection(.enabled)
+                            // The reader's sentence, then the core's own English beneath it, as a diagnostic only.
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(LibrarySentences.skipped(skipped)).font(.caption)
+                                if let detail = LibrarySentences.skippedDetail(skipped) {
+                                    Text(verbatim: detail).font(.caption2.monospaced()).foregroundStyle(.tertiary)
+                                }
+                            }
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
                         }
                     } label: {
                         Text("Style sheets read: \(style.sheets.count), skipped: \(style.skipped.count)")
