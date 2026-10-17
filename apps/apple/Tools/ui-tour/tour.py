@@ -289,7 +289,21 @@ def relative(tree):
         walk(window, (window.get("frame") or [0, 0])[:2])
 
 
+def park_pointer(session):
+    """The pointer moved off XDict's windows before a capture: a pointer left over a control (the last route's click)
+    draws its rollover look, which reads as a second selected scope (P6, 2026-10-18)."""
+    frames = [w["frame"] for w in session.ax("windows")["windows"] if w.get("layer") == 0]
+    if not frames:
+        return
+    x, y, w, h = frames[0]
+    target = (x - 40, y + h / 2) if x > 60 else (x + w + 40, y + h / 2)
+    run(pointer, "move", int(target[0]), int(target[1]), check=False)
+    time.sleep(0.4)
+
+
 def capture(session, route, folder):
+    if not any(step and step[0] in ("menu", "menuopen", "extra") for step in getattr(session, "steps", [])):
+        park_pointer(session)
     shots = []
     windows = [w for w in session.ax("windows")["windows"]
                if w["alpha"] > 0 and w["frame"][2] > 40 and w["frame"][3] > 20]
@@ -320,6 +334,7 @@ def walk(variant, name, library, route, steps, folder):
     record = {"variant": name, "route": route}
     try:
         session = Session(variant, library)
+        session.steps = steps
     except Failed as why:
         record["failure"] = f"launch: {why}"
         print(f"{name} {route}: {record['failure']}", flush=True)
