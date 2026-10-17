@@ -213,6 +213,9 @@ fn vertical_spacing_goes_onto_the_steps() {
     assert_eq!(css(".a{margin-top:-0.07em}", &s), ".a{margin-top:0}");
     assert_eq!(css(".a{margin-top:-0.5em}", &s), ".a{margin-top:calc(-1 * var(--xdict-space-2, 0.5rem))}");
     assert_eq!(css(".a{margin-top:-3em}", &s), ".a{margin-top:0}");
+    // In any unit (2026-10-17, LDOCE6's `1ex`): an `ex` is half an `em`, the CSS fallback for an x-height.
+    assert_eq!(css(".a{margin-bottom:1ex}", &s), ".a{margin-bottom:var(--xdict-space-2, 0.5rem)}");
+    assert_eq!(css(".a{margin:3ex 0}", &s), ".a{margin:var(--xdict-space-5, 1.5rem) 0 var(--xdict-space-5, 1.5rem)}");
     for kept in [".a{margin-left:2em}", ".a{margin:0 auto}", ".a{margin-top:5%}"] {
         assert_eq!(css(kept, &s), kept);
     }

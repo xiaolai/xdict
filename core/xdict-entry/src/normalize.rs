@@ -1418,11 +1418,15 @@ fn space_token(token: &str, style: &Style) -> Option<String> {
     let rem = if let Some(px) = absolute_px(&lower) {
         px / style.base.px
     } else {
-        let n = lower.strip_suffix("rem").or_else(|| lower.strip_suffix("em"))?;
+        // An `ex` is half an `em`, CSS's own fallback for an x-height: "in any unit" (LDOCE6's `1ex`, 2026-10-17).
+        let (n, scale) = match lower.strip_suffix("ex") {
+            Some(n) => (n, 0.5),
+            None => (lower.strip_suffix("rem").or_else(|| lower.strip_suffix("em"))?, 1.0),
+        };
         if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
             return None;
         }
-        n.parse::<f64>().ok().filter(|x| x.is_finite())?
+        n.parse::<f64>().ok().filter(|x| x.is_finite())? * scale
     };
     if rem == 0.0 {
         return None;
