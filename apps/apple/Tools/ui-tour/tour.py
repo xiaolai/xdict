@@ -11,8 +11,10 @@ are exported first, deleted before each launch (a fresh reader's state) and impo
 
 Per variant and route: `<out>/<variant>/<route>.png` (the window the route is about; more windows as `.2.png` ...),
 `<route>.ax.json` (every window's accessibility tree and what `checks()` found in it) and a line in
-`<out>/results.json`. Appearance is light only (`-NSRequiresAquaSystemAppearance`; dark cannot be set for XDict
-alone, see `Session`); language is XDict's alone (`-AppleLanguages`). Nothing of the Mac's own settings is changed.
+`<out>/results.json`. Appearance is XDict's alone, by the instrument's `--appearance dark|light` (which sets
+`NSApp.appearance`; refused in a reader's launch); language is XDict's alone (`-AppleLanguages`). Nothing of the Mac's
+own settings is changed. **Each route has a launch of its own** (2026-10-17): scope, the find bar, zoom, the last
+entry and open windows never leak from one route into the next (the review's "leftovers").
 """
 import json
 import os
@@ -32,7 +34,7 @@ home, out = sys.argv[1:3]
 options = dict(zip([a for a in sys.argv[3:] if a != "--reader"][0::2], [a for a in sys.argv[3:] if a != "--reader"][1::2]))
 only = set(filter(None, options.get("--only", "").split(",")))
 LABEL = options.get("--label", "")
-VARIANTS = options.get("--variants", "light-en,light-zh").split(",")
+VARIANTS = options.get("--variants", "light-en,light-zh,dark-en,dark-zh").split(",")
 app = os.path.join(home, "XDict.app")
 exe = os.path.join(app, "Contents", "MacOS", "XDict")
 kit = os.path.join(home, "kit")
@@ -93,12 +95,11 @@ class Session:
             os.makedirs(source)
         run("defaults", "delete", DOMAIN, check=False)
         args = ["-ApplePersistenceIgnoreState", "YES", "--lookup-window", self.work, "--fixtures", source]
-        # Dark cannot be given to XDict alone: on macOS 27 (2026-10-17) neither `-AppleInterfaceStyle Dark` in its
-        # argument domain nor in its own preferences reached AppKit (the window stayed light), and the Mac's own
-        # appearance is never changed for a tour. Light is forced, so a dark Mac still gives light captures.
-        if self.appearance != "light":
-            raise Failed("dark is not captured: XDict has no appearance of its own, and the Mac's is not changed")
-        args += ["-NSRequiresAquaSystemAppearance", "YES"]
+        # `-AppleInterfaceStyle` does not reach AppKit for one app on macOS 27, and the Mac's own appearance is never
+        # changed for a tour: the instrument sets XDict's (`--appearance`, XDictUI's InstrumentAppearance).
+        if self.appearance not in ("light", "dark"):
+            raise Failed(f"no appearance {self.appearance!r}: light or dark")
+        args += ["--appearance", self.appearance]
         if self.lang == "zh":
             args += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
         run("open", "-n", "--stdout", os.path.join(self.work, "app.out"), "--stderr",
@@ -154,13 +155,6 @@ class Session:
     def ax(self, *args):
         return as_json(run(ax_tool, args[0], self.pid, *args[1:]))
 
-    def reset(self):
-        for _ in range(2):
-            run(keys, "press", "escape", check=False)
-            time.sleep(0.2)
-        self.ax("reset")
-        time.sleep(0.5)
-
     def step(self, step):
         kind = step[0]
         if kind == "wait":
@@ -185,6 +179,9 @@ class Session:
             names = [n for t in step[1:] for n in translated(t, self.lang).split("|")]
             self.ax(kind, *dict.fromkeys(names))
             time.sleep(0.5)
+        elif kind == "size":
+            self.ax("size", step[1], step[2])
+            time.sleep(0.6)
         elif kind == "extra":
             self.ax("extra")
             time.sleep(0.8)
@@ -263,6 +260,36 @@ def capture(session, route, folder):
     return shots, findings
 
 
+def walk(variant, name, library, route, steps, folder):
+    """One route over a launch of its own, captured; the app quit after, whatever happened."""
+    record = {"variant": name, "route": route}
+    try:
+        session = Session(variant, library)
+    except Failed as why:
+        record["failure"] = f"launch: {why}"
+        print(f"{name} {route}: {record['failure']}", flush=True)
+        return record
+    try:
+        try:
+            for step in steps:
+                session.step(step)
+            record["shots"], record["findings"] = capture(session, route, folder)
+            if not record["shots"]:
+                record["failure"] = "no window of XDict on screen"
+        except (Failed, subprocess.TimeoutExpired, KeyError) as why:
+            record["failure"] = str(why)
+            try:
+                record["shots"], record["findings"] = capture(session, route, folder)
+            except (Failed, subprocess.TimeoutExpired, KeyError):
+                pass
+        if not running():
+            record["failure"] = (record.get("failure", "") + " — XDict quit: " + session.stderr()).strip()
+    finally:
+        session.quit()
+    print(f"{name} {route}: {record.get('failure', 'ok')}", flush=True)
+    return record
+
+
 def tour():
     results = []
     for variant in VARIANTS:
@@ -273,35 +300,8 @@ def tour():
             routes = [r for r in ROUTES if r[1] == library and r[4] is not None and (not only or r[0] in only)]
             if not routes:
                 continue
-            try:
-                session = Session(variant, library)
-            except Failed as why:
-                results += [{"variant": name, "route": r[0], "failure": f"launch: {why}"} for r in routes]
-                continue
-            try:
-                for route, _, _, _, steps in routes:
-                    record = {"variant": name, "route": route}
-                    try:
-                        session.reset()
-                        for step in steps:
-                            session.step(step)
-                        record["shots"], record["findings"] = capture(session, route, folder)
-                        if not record["shots"]:
-                            record["failure"] = "no window of XDict on screen"
-                    except (Failed, subprocess.TimeoutExpired, KeyError) as why:
-                        record["failure"] = str(why)
-                        try:
-                            record["shots"], record["findings"] = capture(session, route, folder)
-                        except (Failed, subprocess.TimeoutExpired, KeyError):
-                            pass
-                    if not running():
-                        record["failure"] = (record.get("failure", "") + " — XDict quit: " + session.stderr()).strip()
-                    print(f"{name} {route}: {record.get('failure', 'ok')}", flush=True)
-                    results.append(record)
-                    if not running():
-                        break
-            finally:
-                session.quit()
+            for route, _, _, _, steps in routes:
+                results.append(walk(variant, name, library, route, steps, folder))
     for route, library, _, _, steps in ROUTES:
         if steps is None and (not only or route in only):
             results.append({"variant": "-", "route": route, "notDriven": NOT_DRIVEN_WHY.get(route, "")})

@@ -77,7 +77,7 @@ public enum SpeechSentences {
 
     /// The speak button's help: the word as written, by the system voice, and no claim to a sense's pronunciation (R8).
     public static func speakHelp(word: String) -> LocalizedStringResource {
-        LocalizedStringResource("Say “\(word)” with the system voice, as written: not the pronunciation of one particular sense.")
+        LocalizedStringResource("Say “\(word)” as written, with the system voice")
     }
 
     public static func accent(_ accent: Accent) -> LocalizedStringResource {

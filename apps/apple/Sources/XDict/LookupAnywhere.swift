@@ -231,8 +231,24 @@ final class LookupAnywhere {
     private func makePanel(_ state: SearchWindowState) -> LookupPanelWindow {
         let panel = LookupPanelWindow(contentRect: CGRect(origin: .zero, size: Self.panelSize))
         panel.contentView = NSHostingView(rootView: PanelRoot(anywhere: self, state: state))
+        state.entry.onDocumentFinished = { [weak self] in self?.fitToEntry() }
         self.panel = panel
         return panel
+    }
+
+    /// The panel as tall as its entry, within bounds (UI review P-03), its top edge kept where it is.
+    private func fitToEntry() {
+        guard let state else { return }
+        Task { @MainActor in
+            let document = await state.entry.documentHeight()
+            guard let panel, panel.isVisible else { return }
+            let height = PanelPlacement.height(document: document, chrome: LookupPanelView.headerHeight + 1)
+            var frame = panel.frame
+            guard abs(frame.height - height) > 1 else { return }
+            frame.origin.y += frame.height - height
+            frame.size.height = height
+            panel.setFrame(frame, display: true, animate: false)
+        }
     }
 
     func close(why: String) {
@@ -326,6 +342,7 @@ final class LookupPanelWindow: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
         isReleasedWhenClosed = false
         setAccessibilityIdentifier("lookupPanel")
+        PanelChrome.apply(to: self)
     }
 
     override var canBecomeKey: Bool { false }
@@ -344,10 +361,14 @@ private struct PanelRoot: View {
 
     var body: some View {
         LookupPanelView(state: state, notice: anywhere.notice,
-                        shortcut: anywhere.registrar.isRegistered ? anywhere.registrar.current.label() : nil) {
-            anywhere.expand()
-        }
-        .padding(.top, 20)  // under the transparent title bar's close button
+                        shortcut: anywhere.registrar.isRegistered ? anywhere.registrar.current.label() : nil,
+                        expand: { anywhere.expand() },
+                        openLibrary: {
+                            anywhere.close(why: "openLibrary")
+                            MenuBarActions.openLibrary()
+                        })
+        // The header sits in the transparent title bar's row, beside the close button (UI review P-02).
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
 

@@ -72,6 +72,11 @@ public enum SearchSentences {
         }
     }
 
+    /// The dictionaries a typed word is not in, said once for all of them (UI review M-08).
+    public static func notIn(_ names: [String]) -> LocalizedStringResource {
+        LocalizedStringResource("Not in \(names.formatted(.list(type: .and))).")
+    }
+
     /// Which of the records under one key a result is, counted from 1.
     public static func record(_ number: Int) -> LocalizedStringResource {
         LocalizedStringResource("record \(number)")

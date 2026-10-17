@@ -26,17 +26,15 @@ public struct MenuBarMenu: View {
             Text(AnywhereSentences.problem(problem))
             Divider()
         }
-        Button {
-            lookUp()
-        } label: {
-            if registrar.isRegistered {
-                Text("Look Up Selection (\(registrar.current.label()))")
-            } else {
-                Text("Look Up Selection")
-            }
+        // The shortcut drawn as the menu draws key equivalents, not written into the title (UI review A-07).
+        if registrar.isRegistered, let key = ShortcutDisplay.keyEquivalent(registrar.current) {
+            Button("Look Up Selection") { lookUp() }
+                .keyboardShortcut(KeyEquivalent(key.key), modifiers: key.modifiers)
+        } else {
+            Button("Look Up Selection") { lookUp() }
         }
         Button("Open XDict") { openMain() }
-        Button("Library…") { openLibrary() }
+        Button("Library") { openLibrary() }
         Divider()
         Button("Settings…") { openSettings() }
         Divider()

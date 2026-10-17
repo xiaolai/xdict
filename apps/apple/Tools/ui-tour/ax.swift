@@ -291,6 +291,19 @@ case "reset":
         }
     }
     emit(["closed": closed])
+case "size":
+    // The main window (the one holding the `scope` picker) set to a width and height in points: the routes at the
+    // window's minimum width.
+    guard arguments.count == 5, let width = Double(arguments[3]), let height = Double(arguments[4]) else {
+        fail("size <pid> <width> <height>", code: 2)
+    }
+    guard let main = windows(app).first(where: { find($0, ["scope"]) != nil }) else { fail("no main window") }
+    var size = CGSize(width: width, height: height)
+    guard let value = AXValueCreate(.cgSize, &size),
+          AXUIElementSetAttributeValue(main, kAXSizeAttribute as CFString, value) == .success else {
+        fail("the main window's size could not be set")
+    }
+    emit(["size": [width, height]])
 case "extra":
     guard let extras = attribute(app, "AXExtrasMenuBar"),
           let item = children(extras as! AXUIElement).first else { fail("the app shows no menu-bar extra") }

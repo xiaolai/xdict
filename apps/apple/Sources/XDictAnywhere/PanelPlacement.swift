@@ -12,6 +12,18 @@ public enum PanelPlacement {
     /// How far right of and below the pointer the panel's top-left corner sits: clear of the cursor's own bitmap.
     public static let pointerGap = CGSize(width: 12, height: 24)
 
+    /// The panel's height bounds (UI review P-03): small for a short entry, capped so a long one scrolls.
+    public static let minimumHeight: CGFloat = 180
+    public static let maximumHeight: CGFloat = 560
+    public static let defaultHeight: CGFloat = 440
+
+    /// The panel's height for an entry `document` points tall under `chrome` points of header; the default when the
+    /// entry could not be measured.
+    public static func height(document: Double?, chrome: CGFloat) -> CGFloat {
+        guard let document, document.isFinite, document > 0 else { return defaultHeight }
+        return min(max(CGFloat(document) + chrome, minimumHeight), maximumHeight)
+    }
+
     public static func frame(size: CGSize, word: CGRect?, pointer: CGPoint, visible: CGRect) -> CGRect {
         let bounds = visible.insetBy(dx: margin, dy: margin)
         guard let word else {

@@ -484,6 +484,29 @@ public final class Library {
         save()
     }
 
+    /// A dictionary as it was when removed, and its place in the order: what Undo puts back (UI review L-09).
+    public struct Removed: Sendable {
+        public let entry: LibraryEntry
+        public let index: Int
+    }
+
+    /// Removes `id` as `remove` does, answering what Undo needs to put it back.
+    public func removeForUndo(_ id: UUID) async -> Removed? {
+        guard let at = index(id) else { return nil }
+        let entry = entries[at]
+        await remove(id)
+        return Removed(entry: entry, index: at)
+    }
+
+    /// Undo of a removal: the dictionary back under its own id (its lineage, and every choice kept under it), at its
+    /// place, opened again.
+    public func restore(_ removed: Removed) {
+        guard index(removed.entry.id) == nil else { return }
+        entries.insert(removed.entry, at: min(removed.index, entries.count))
+        save()
+        enqueue(removed.entry.id)
+    }
+
     private func forget(_ id: UUID) {
         entries.removeAll { $0.id == id }
         handles[id] = nil

@@ -67,7 +67,7 @@ public enum EntrySentences {
     public static func theme(_ theme: EntryTheme) -> LocalizedStringResource {
         switch theme {
         case .matchApp: LocalizedStringResource("Match the App")
-        case .original: LocalizedStringResource("Dictionary’s Own Colours")
+        case .original: LocalizedStringResource("Dictionary’s Own Colors")
         case .dark: LocalizedStringResource("Dark")
         }
     }

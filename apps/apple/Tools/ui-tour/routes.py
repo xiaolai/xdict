@@ -12,14 +12,18 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("press", match...)            AXPress on an element by identifier, title, description or value
     ("click", match...)            a real click at its centre
     ("extra",)                     the menu-bar extra opened
+    ("size", width, height)        the main window set to that size, in points (the 640 pt minimum width)
     ("drop", fixture)              a file of fixtures/library dragged from a source window onto the Library window
     ("wait", seconds)
+
+Each route runs over a launch of its own, so nothing a route leaves behind reaches the next.
 
 Routes with `steps=None` are not driven: their `how` says why, and the index lists them as not captured.
 """
 
 SEARCH = ("key", "cmd+opt+f")
 LIBRARY = ("key", "cmd+shift+l")
+NARROW = ("size", 640, 560)
 SETTINGS = ("key", "cmd+,")
 
 
@@ -31,14 +35,19 @@ ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
     # The main window
-    ("main.start", "full", "Launch XDict", "Main window, search field focused, 'Look Up a Word' and 'Type a word and "
-     "press Return.'; toolbar Back / Forward / Return to Original Word, Dictionaries picker, Pronounce", []),
+    ("main.start", "full", "Launch XDict", "Main window, the toolbar's search field focused, 'Look Up a Word' and "
+     "'Type a word and press Return.'; toolbar Back / Forward / Return to Original Word, Dictionaries picker, "
+     "Pronounce, the search field", []),
+    ("main.narrow", "full", "Look up 'apple' at the 640 pt minimum width", "The search field and the Dictionaries "
+     "picker both still in the toolbar and readable; nothing in an overflow menu that search needs",
+     [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
      "'Open Library' button", []),
     ("search.result", "full", "Type 'apple', Return", "Sidebar sections per dictionary with results and each "
      "unavailable dictionary's status (damaged, gone, locked); the entry rendered in XDict's reading style",
      look_up("apple")),
-    ("search.next", "full", "Type 'apple', Return, then Down", "The next result selected and shown",
+    ("search.next", "full", "Type 'apple', Return, then Down", "The results list takes the keyboard, the shown "
+     "result selected (as Mail does); Down again moves on",
      look_up("apple") + [("key", "down"), ("wait", 1)]),
     ("search.suggestions", "full", "Type 'take o' without Return", "Suggestions list under the field, 'take off' "
      "among them", [SEARCH, ("type", "take o"), ("wait", 1.5)]),
@@ -61,6 +70,8 @@ ROUTES = [
                          ("wait", 1)]),
     ("scope.picker", "full", "Click the Dictionaries picker in the toolbar", "A menu: All Dictionaries and each "
      "dictionary by name", [("click", "scope"), ("wait", 0.8)]),
+    ("scope.narrow", "full", "At 640 pt, click the Dictionaries picker", "The menu, the picker and the search field "
+     "both visible", [NARROW, ("click", "scope"), ("wait", 0.8)]),
     ("scope.one", "full", "Look up 'apple', then ⌥⌘2", "Only the second dictionary's section; the picker says so",
      look_up("apple") + [("key", "cmd+opt+2"), ("wait", 1.2)]),
     ("entry.find", "full", "Look up 'apple', ⌘F, type 'a'", "The entry's find bar with a match count",
@@ -72,7 +83,7 @@ ROUTES = [
     ("speech.pronounce", "full", "Look up 'apple', ⌥⌘P", "Spoken (volume 0 here); a notice if no voice or recording",
      look_up("apple") + [("key", "cmd+opt+p"), ("wait", 1.5)]),
     # Menus
-    ("menu.app", "full", "Click the XDict menu", "About XDict, Acknowledgements…, Settings…, Set Up XDict…, "
+    ("menu.app", "full", "Click the XDict menu", "About XDict, Acknowledgments…, Settings…, Set Up XDict…, "
      "Services, Hide, Quit", [("menuopen", 1)]),
     ("menu.file", "full", "Click File", "New Window and the app's file items", [("menuopen", 2)]),
     ("menu.edit", "full", "Click Edit", "Find in Entry… ⌘F, Find Next ⌘G, Find Previous ⇧⌘G, Pronounce ⌥⌘P",
@@ -89,8 +100,8 @@ ROUTES = [
     ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Library…, "
      "Settings…, Quit XDict", [("extra",)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
-    ("acknowledgements", "full", "XDict ▸ Acknowledgements…", "Every third-party notice, readable",
-     [("menu", 1, "Acknowledgements…")]),
+    ("acknowledgments", "full", "XDict ▸ Acknowledgments…", "Every third-party notice, readable",
+     [("menu", 1, "Acknowledgments…")]),
     ("setup.board", "full", "XDict ▸ Set Up XDict…", "Each setup row with its live state and action",
      [("menu", 1, "Set Up XDict…")]),
     ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library", "The Dictionaries row not done, "
@@ -99,6 +110,12 @@ ROUTES = [
     ("panel.selection", "full", "Select 'apple' in the search field, ⌃⌥D", "The lookup panel: the query, the "
      "dictionary picker, the entry, 'Open in XDict'", look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"),
                                                                         ("wait", 2)]),
+    ("panel.expand", "full", "The panel's Open in XDict", "The main window with the panel's word, dictionary and "
+     "entry, the search field focused", look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2),
+                                                           ("press", "panel.expand"), ("wait", 1.5)]),
+    ("panel.expandNarrow", "full", "Open in XDict into a 640 pt main window", "As panel.expand, at the minimum width",
+     [NARROW] + look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"),
+                                    ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
      [("type", "apple"), ("key", "cmd+a"), ("key", "ctrl+opt+d"), ("wait", 2)]),
     # The library
@@ -110,7 +127,8 @@ ROUTES = [
      "Languages, Reading (Original style), About (title, format, entries, edition), Remove from Library",
      [LIBRARY, ("wait", 1), ("click", "alpha", "Alpha"), ("wait", 1.5)]),
     ("library.originalStyle", "full", "... switch Original style on", "The switch on",
-     [LIBRARY, ("wait", 1), ("click", "alpha", "Alpha"), ("wait", 1.2), ("click", "original-style", "Original style"), ("wait", 0.8)]),
+     [LIBRARY, ("wait", 1.5), ("click", "alpha", "Alpha"), ("wait", 1.5), ("click", "original-style"),
+      ("wait", 0.8)]),
     ("library.damaged", "full", "⇧⌘L, click 'damaged'", "A sentence naming why it cannot be read (bad checksum)",
      [LIBRARY, ("wait", 1), ("click", "damaged", "Damaged"), ("wait", 1.2)]),
     ("library.gone", "full", "⇧⌘L, click 'gone'", "The file is missing, said in a sentence, with what to do",
@@ -121,8 +139,12 @@ ROUTES = [
      [LIBRARY, ("wait", 1), ("click", "records", "Records"), ("wait", 1.5)]),
     ("library.addPanel", "full", "⇧⌘L, Add Dictionaries… (⌘O)", "The open panel for .mdx/.mdd and folders",
      [LIBRARY, ("wait", 1), ("key", "cmd+o"), ("wait", 2)]),
-    ("library.dropV3", "full", "Drag a format 3.0 file onto the library", "Refused with a sentence naming format 3.0",
-     [LIBRARY, ("wait", 1), ("drop", "refused/v3/v3.mdx"), ("wait", 3)]),
+    ("library.dropV3", "full", "Drag a format 3.0 .mdx onto the library", "Imported and Ready: XDict reads format "
+     "3.0 dictionaries (ADR-0005)", [LIBRARY, ("wait", 1), ("drop", "refused/v3/v3.mdx"), ("wait", 3)]),
+    ("library.dropV3Mdd", "full", "Drag a folder holding a format 3.0 .mdx and its .mdd onto the library",
+     "The dictionary imported, and its .mdd refused on it with the sentence naming format 3.0 resources",
+     [LIBRARY, ("wait", 1), ("drop", "refused/v3"), ("wait", 3), ("click", "v3", "V3", "Format Three Resources"),
+      ("wait", 1.2)]),
     ("library.dropEncrypted", "full", "Drag a registration-code file onto the library", "Refused, or asking for the "
      "reader's own code, with a sentence", [LIBRARY, ("wait", 1), ("drop", "refused/regcode/regcode.mdx"),
                                             ("wait", 3)]),

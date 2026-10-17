@@ -178,6 +178,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         return shown
     }
 
+    /// The shown entry's height in points (its CSS height at its zoom); nil with none shown.
+    public func documentHeight() async -> Double? {
+        guard let height = await pane?.documentHeight() else { return nil }
+        return height * zoom
+    }
+
+    /// Each shown document once it has finished loading: the lookup panel measures it then.
+    public var onDocumentFinished: (() -> Void)?
+
     /// How far down the shown entry the reader has scrolled, in CSS pixels; nil with none shown (the trail keeps it).
     public func scrollOffset() async -> Double? {
         await pane?.scrollOffset()
@@ -364,7 +373,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     func documentFinished(_ pane: EntryPane) {
-        guard pane === self.pane, !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }
+        guard pane === self.pane else { return }
+        onDocumentFinished?()
+        guard !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }
         performFind(findBar.field.stringValue)
     }
 }
@@ -382,9 +393,9 @@ private final class AppearanceTrackingView: NSView {
 @MainActor
 final class EntryFindBar: NSView {
     let field = NSSearchField()
-    private let count = NSTextField(labelWithString: "")
-    private let previous = NSButton()
-    private let next = NSButton()
+    let count = NSTextField(labelWithString: "")
+    /// Previous and Next as one chevron pair, as Safari's and TextEdit's find bars draw them (UI review M-14).
+    let steps = NSSegmentedControl()
     private let done = NSButton()
     var onQuery: ((String) -> Void)?
     var onStep: ((Bool) -> Void)?
@@ -398,23 +409,37 @@ final class EntryFindBar: NSView {
         field.sendsSearchStringImmediately = false
         field.target = self
         field.action = #selector(queried)
-        for (button, title, action) in [(previous, EntrySentences.previous, #selector(stepBack)),
-                                        (next, EntrySentences.next, #selector(stepOn)),
-                                        (done, EntrySentences.done, #selector(finish))] {
-            button.title = String(localized: title)
-            button.bezelStyle = .push
-            button.target = self
-            button.action = action
+        steps.segmentCount = 2
+        steps.trackingMode = .momentary
+        steps.segmentStyle = .separated
+        for (segment, symbol, name) in [(0, "chevron.left", EntrySentences.previous), (1, "chevron.right", EntrySentences.next)] {
+            let title = String(localized: name)
+            steps.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: title), forSegment: segment)
+            steps.setToolTip(title, forSegment: segment)
+            steps.setWidth(26, forSegment: segment)
         }
-        let row = NSStackView(views: [field, count, previous, next, done])
+        steps.target = self
+        steps.action = #selector(stepped)
+        done.title = String(localized: EntrySentences.done)
+        done.bezelStyle = .push
+        done.target = self
+        done.action = #selector(finish)
+        let row = NSStackView(views: [field, count, steps, done])
         row.orientation = .horizontal
         row.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
         row.translatesAutoresizingMaskIntoConstraints = false
+        // The bar's edge against the entry under it.
+        let edge = NSBox()
+        edge.boxType = .separator
+        edge.translatesAutoresizingMaskIntoConstraints = false
         addSubview(row)
+        addSubview(edge)
         NSLayoutConstraint.activate([
             row.topAnchor.constraint(equalTo: topAnchor), row.bottomAnchor.constraint(equalTo: bottomAnchor),
             row.leadingAnchor.constraint(equalTo: leadingAnchor), row.trailingAnchor.constraint(equalTo: trailingAnchor),
             field.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
+            edge.leadingAnchor.constraint(equalTo: leadingAnchor), edge.trailingAnchor.constraint(equalTo: trailingAnchor),
+            edge.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
     }
 
@@ -422,14 +447,14 @@ final class EntryFindBar: NSView {
     required init?(coder: NSCoder) { nil }
 
     @objc private func queried() { onQuery?(field.stringValue) }
-    @objc private func stepBack() { onStep?(false) }
-    @objc private func stepOn() { onStep?(true) }
+    @objc private func stepped() { onStep?(steps.selectedSegment == 1) }
     @objc private func finish() { onDone?() }
 
     func show(_ result: EntryFindResult?, query: String) {
         self.result = result
         guard let result, !query.trimmingCharacters(in: .whitespaces).isEmpty else {
             count.stringValue = ""
+            count.setAccessibilityLabel(nil)
             return
         }
         var text = result.visible == 0 ? String(localized: EntrySentences.noMatches)

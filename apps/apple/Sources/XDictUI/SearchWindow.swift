@@ -4,19 +4,22 @@ import XDictEntryView
 import XDictLibrary
 import XDictSearch
 
-/// **The main window** (plan-macos-v1 WI-6): the search field and the results in the sidebar, the entry beside them.
-/// Plain macOS: a split view, a toolbar with Back, Forward and the original word (I8) on its leading side and the
-/// dictionaries a typed word is looked up in in its middle (Q1: the scope is always in sight), the speak button on its
-/// trailing side (WI-7), and the Go, Dictionaries and View menus for the keyboard (`SearchCommands`).
+/// **The main window** (plan-macos-v1 WI-6): the results in the sidebar, the entry beside them. Plain macOS: a split
+/// view, a toolbar with Back, Forward and the original word (I8) on its leading side, the dictionaries a typed word is
+/// looked up in in its middle (Q1: the scope is always in sight), the speak button and the search field at its trailing
+/// end (M1; owner's choice of 2026-10-17, after Codex's refutation), and the Go, Dictionaries and View menus for the
+/// keyboard (`SearchCommands`). The field is the AppKit one, so focus, Return, the arrows and Escape keep their
+/// contract; what it suggests shows in the sidebar, which typing reveals when it is collapsed.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
+    @State private var columns = NavigationSplitViewVisibility.all
 
     public init(state: SearchWindowState) {
         self.state = state
     }
 
     public var body: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
                 .navigationSplitViewColumnWidth(min: 220, ideal: 300, max: 480)
         } detail: {
@@ -30,6 +33,9 @@ public struct SearchWindow: View {
             guard let shown else { return }
             Task { await state.present(shown) }
         }
+        .onChange(of: state.placeholder) { state.placeholderChanged() }
+        // What the reader types shows in the sidebar: typing reveals it (Codex condition 2).
+        .onChange(of: state.typed) { if columns == .detailOnly { columns = .all } }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -52,6 +58,12 @@ public struct SearchWindow: View {
         ToolbarItem(placement: .primaryAction) {
             PronounceButton(state: state)
         }
+        ToolbarItem(placement: .primaryAction) {
+            SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
+                        onChange: { state.typedText($0) },
+                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
+                .frame(minWidth: 140, idealWidth: 220, maxWidth: 280)
+        }
     }
 }
 
@@ -67,12 +79,11 @@ struct PronounceButton: View {
             .accessibilityIdentifier("pronounce")
     }
 
-    /// Two sentences already in the reader's language, joined, so the help is read whole.
+    /// What the button does, in one short line that still claims no sense's pronunciation (R8; UI review M-11); a
+    /// caveat about the voice belongs to the notice after speaking.
     private var help: Text {
         guard let word = state.shownWord else { return Text("Pronounce") }
-        let said = String(localized: SpeechSentences.speakHelp(word: word))
-        guard let caveat = state.pronunciation.caveat(for: state.presentedLanguage) else { return Text(verbatim: said) }
-        return Text(verbatim: said + "\n" + String(localized: SpeechSentences.caveat(caveat)))
+        return Text(SpeechSentences.speakHelp(word: word))
     }
 }
 
@@ -87,13 +98,18 @@ struct ScopePicker: View {
             let enabled = state.model.known.filter(\.enabled)
             if !enabled.isEmpty { Divider() }
             ForEach(enabled) { source in
+                // One that cannot answer is shown, not offered (UI review M-13).
                 Text(verbatim: source.name).tag(SearchScope.one(source.id))
+                    .disabled(source.handle == nil)
             }
         } label: {
             Text("Dictionaries")
         }
         .pickerStyle(.menu)
-        .fixedSize()
+        // Readable beside the field at the minimum width, a long name truncated rather than pushing search out.
+        .frame(minWidth: 110, maxWidth: 200)
+        .disabled(state.model.known.isEmpty)
+        .accessibilityLabel(Text("Dictionaries"))
         .accessibilityIdentifier("scope")
         .help(Text("The dictionaries a typed word is looked up in"))
     }
@@ -110,34 +126,34 @@ struct EntryDetail: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        let model = state.model
-        if state.library.entries.isEmpty, state.library.unreadable == nil {
+        switch state.placeholder {
+        case .noDictionaries:
             ContentUnavailableView {
                 Label("No Dictionaries", systemImage: "books.vertical")
             } description: {
-                Text("XDict reads the MDict dictionaries you have. Add them in the Library, then look words up here.")
+                Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
+                Button("Add Dictionaries…") {
+                    LibraryRequests.shared.requestImport()
+                    state.openLibrary?(nil)
+                }
+                .buttonStyle(.borderedProminent)
                 Button("Open Library") { state.openLibrary?(nil) }
             }
-            .background(.background)
-        } else if model.lookup == nil {
+            .coversPane()
+        case .start:
             ContentUnavailableView {
                 Label("Look Up a Word", systemImage: "character.book.closed")
             } description: {
                 Text("Type a word and press Return.")
             }
-            .background(.background)
-        } else if model.selection == nil, !model.isSearching, let lookup = model.lookup {
-            ContentUnavailableView {
-                Label {
-                    Text("No Results for “\(lookup.query)”")
-                } icon: {
-                    Image(systemName: "magnifyingglass")
-                }
-            } description: {
-                Text("The list beside says what each dictionary found, or why it could not look.")
-            }
-            .background(.background)
+            .coversPane()
+        case .noResults(let query):
+            ContentUnavailableView.search(text: query).coversPane()
+        case .searching:
+            ProgressView().controlSize(.small).coversPane()
+        case .none:
+            EmptyView()
         }
     }
 }
