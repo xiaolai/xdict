@@ -399,7 +399,8 @@
     if (n.nodeType === 3) { if (!/\S/.test(n.nodeValue)) return false; var r = document.createRange(); r.selectNodeContents(n); return r.getClientRects().length > 0; }
     if (n.nodeType !== 1 || !n.getClientRects().length) return false;
     var st = getComputedStyle(n);
-    return st.float === 'none' && !/absolute|fixed/.test(st.position);
+    // An empty block of no height is no content: margins collapse through it (MED's empty related-entries container).
+    return st.float === 'none' && !/absolute|fixed/.test(st.position) && !(blockish(st) && n.getBoundingClientRect().height === 0);
   }
   function before(e) {
     for (var n = e; n && n !== document.body; n = n.parentElement) {

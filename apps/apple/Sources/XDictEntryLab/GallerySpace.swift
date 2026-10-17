@@ -48,7 +48,7 @@ extension GalleryRun {
         function shown(n) {
           if (n.nodeType === 3) { if (!/\S/.test(n.nodeValue)) return false; var r = document.createRange(); r.selectNodeContents(n); return r.getClientRects().length > 0; }
           if (n.nodeType !== 1 || !n.getClientRects().length) return false;
-          var s = getComputedStyle(n); return s.float === 'none' && s.position !== 'absolute' && s.position !== 'fixed';
+          var s = getComputedStyle(n); return s.float === 'none' && s.position !== 'absolute' && s.position !== 'fixed' && !(block(s) && n.getBoundingClientRect().height === 0);
         }
         function block(s) { return /^(block|list-item|flow-root|table|flex|grid)$/.test(s.display) && s.float === 'none' && s.position !== 'absolute' && s.position !== 'fixed'; }
         // The content before a block: a shown sibling of it, or of an ancestor it is the first content of; none when it
