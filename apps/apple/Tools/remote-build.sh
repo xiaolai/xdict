@@ -9,9 +9,10 @@
 #    files or local.mk.
 # 3. There: `make lint test-swift` (the core, SwiftLint, swift test and its warnings gate), the third-party notices
 #    held to the crates the service links (`Tools/notices.py check`: needs cargo, so there and not here), `swift build
-#    -c release` and the compiler-warnings gate on that release build, exactly as `build-bundle.sh` runs it here.
-# 4. Back here, only: the app, the service and the entry lab into .build/remote-products/, and Generated/ (the core's
-#    versions and binding, which the bundle's checks and its input digest read).
+#    -c release` and the compiler-warnings gate on that release build, exactly as `build-bundle.sh` runs it here; and
+#    the app icon compiled by actool (`Tools/compile-icon.sh`), which needs Xcode and so a build Mac.
+# 4. Back here, only: the app, the service and the entry lab into .build/remote-products/, the icon's Assets.car beside
+#    them, and Generated/ (the core's versions and binding, which the bundle's checks and its input digest read).
 #    The products are deleted on the host before its release build, so an unchanged tree relinks them (seconds) and
 #    whatever comes back was made by this run, never left over from an earlier one.
 #    And the toolchain the build compiled with, named by its own shell right after `swift build` (Tools/toolchain-facts.sh,
@@ -57,6 +58,7 @@ python3 -I Tools/notices.py check >&2
 bin=\$(swift build -c release --show-bin-path)
 rm -f$(for p in $NAMES; do printf ' "$bin/%s"' "$p"; done)
 swift build -c release >&2
+bash Tools/compile-icon.sh .build/icon >&2
 bash Tools/toolchain-facts.sh | sed 's/^/fact:/'
 python3 Tools/compiler-warnings.py .build/out/Intermediates.noindex/XDict.build/Release --whole-module --no-test-targets >&2
 echo products=\$bin") || fail "the build on $host failed"
@@ -69,6 +71,7 @@ done
 
 files=("$remote/apps/apple/.build/remote-build.marker")
 for p in $NAMES; do files+=("$bin/$p"); done
+files+=("$remote/apps/apple/.build/icon/Assets.car")
 for f in "${files[@]}"; do
     "$RSYNC" -a "$host:$f" "$PRODUCTS/" || fail "$host has no $(basename "$f") after its build"
 done
@@ -78,6 +81,8 @@ for p in $NAMES; do
     [ -x "$PRODUCTS/$p" ] || fail "$p came back missing or not executable"
     [ "$PRODUCTS/$p" -nt "$PRODUCTS/remote-build.marker" ] || fail "$p is older than this run's build on $host"
 done
+[ -s "$PRODUCTS/Assets.car" ] || fail "the app icon's Assets.car came back missing or empty"
+[ "$PRODUCTS/Assets.car" -nt "$PRODUCTS/remote-build.marker" ] || fail "Assets.car is older than this run's build on $host"
 [ "$($TREE_CMD)" = "$tree" ] || fail "the source tree changed while $host built: build again"
 printf '%s\n' "$toolchain" >"$PRODUCTS/toolchain"
 printf '%s\n' "$tree" >"$PRODUCTS/source-tree"
