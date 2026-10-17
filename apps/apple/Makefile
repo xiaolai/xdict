@@ -34,7 +34,9 @@
 #   make e2e-ledger [N=30] [STAGE=<sub-stage or stage>]
 #                     what ran when: the ledger's last N rows (~/.local/share/xdict/e2e-ledger.tsv)
 #   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
-#   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`)
+#   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`);
+#                     and the icon sets held to their source (Tools/tests/icons-test.sh)
+#   make icons        every platform's icon set regenerated from Resources/XDict.icon into apps/*/icons/ (BUILD_HOST)
 #   make affected-graph [PATHS=<path...>] [BASE=<ref>]
 #                     the picture of what a change reaches (file -> crate/target -> gate/sub-stage), with PATHS or the
 #                     change since BASE (default macos-v1) lit: dev-docs/artifacts/affected/index.html, opened
@@ -53,7 +55,7 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app remote-build test test-swift test-tools core lint strings e2e e2e-quick e2e-affected e2e-pending land affected-graph affected-graph-update e2e-status e2e-evidence \
+.PHONY: app remote-build test test-swift test-tools icons core lint strings e2e e2e-quick e2e-affected e2e-pending land affected-graph affected-graph-update e2e-status e2e-evidence \
 	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -201,6 +203,15 @@ test-tools:
 	@python3 -I Tools/tests/measure_test.py
 	@python3 -I Tools/tests/ui_tour_test.py
 	@Tools/tests/notices-test.sh
+	@Tools/tests/icons-test.sh
+
+# Every platform's icon set from Resources/XDict.icon and Resources/MenuBarIcon.svg (Tools/icons/README.md), written
+# into apps/*/icons/, on BUILD_HOST: the generator compiles Swift and rasterises, which the Air never does. **Unset is
+# refused, not run here**: a worktree has no local.mk, and a quiet fallback once ran it on the Air. On a build Mac
+# itself, run `Tools/icons.sh generate`.
+icons:
+	@[ -n "$(BUILD_HOST)" ] || { echo "icons: BUILD_HOST is not set (local.mk, or BUILD_HOST=<build Mac>); on a build Mac run Tools/icons.sh generate" >&2; exit 1; }
+	@Tools/icons.sh remote "$(BUILD_HOST)"
 
 N ?= 30
 STAGE ?=
