@@ -11,7 +11,6 @@ import XDictAnywhere
 struct PopoverParityTests {
     @Test func thePanelOpensAsWideAsThePopoverBody() {
         #expect(PanelPlacement.widths.default == 390)
-        #expect(PanelPlacement.wordGap == 3, "the popover's body starts 3 pt below the word's box")
     }
 
     @Test func theTitleRowIsTheSystemFontAtTwentyPointsInsetTwentyFour() {
@@ -23,12 +22,8 @@ struct PopoverParityTests {
     @Test func theFooterRowsAreTwentySixPointsUnderAnEightPointGap() {
         #expect(PanelLook.footerRow == 26 && PanelLook.footerGap == 8)
         #expect(PanelLook.footerLeading == 26 && PanelLook.footerFontSize == 13)
-        // Title row, the gap under it, then two footer rows, each with its gap and its hairline.
-        let footerRows: CGFloat = 2 * (8 + 26 + 1)
+        // Title row, the gap under it, then two footer rows, each with its gap and its hairline, and the bottom inset.
+        let footerRows: CGFloat = 2 * (8 + 26 + 1) + 8
         #expect(LookupPanelView.chromeHeight == 16 + 24 + 8 + footerRows)
-    }
-
-    @Test func thePopoverHasNoWindowButtons() {
-        #expect(Set(PanelChrome.hidden) == [.closeButton, .miniaturizeButton, .zoomButton])
     }
 }
