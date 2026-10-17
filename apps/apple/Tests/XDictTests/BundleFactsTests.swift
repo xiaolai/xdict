@@ -57,6 +57,39 @@ struct BundleFactsTests {
         #expect(FileManager.default.fileExists(atPath: document.path(percentEncoded: false)))
     }
 
+    /// **The icon's mark is the default reading accent** (owner, 2026-10-17): teal, light and dark, as
+    /// `EntryReadingFrame.Accent.teal` declares it. Both are read from source, so changing either alone fails here
+    /// rather than drifting. Every platform's set is generated from `icon.json` (`Tools/icons`), so they follow.
+    @Test func theIconsMarkIsTheReadingAccent() throws {
+        let frame = try String(contentsOf: Manifest.package.appending(path: "Sources/XDictEntryView/EntryReadingFrame.swift"),
+                               encoding: .utf8)
+        let declared = try #require(frame.firstMatch(of: /case \.teal: \("(#[0-9a-fA-F]{6})", "(#[0-9a-fA-F]{6})"\)/))
+        let (light, dark) = (String(declared.1).uppercased(), String(declared.2).uppercased())
+
+        let data = try Data(contentsOf: Manifest.package.appending(path: "Resources/XDict.icon/icon.json"))
+        let document = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let groups = try #require(document["groups"] as? [[String: Any]])
+        let layers = groups.flatMap { $0["layers"] as? [[String: Any]] ?? [] }
+        #expect(!layers.isEmpty)
+        for layer in layers {
+            let fills = try #require(layer["fill-specializations"] as? [[String: Any]], "\(layer["name"] ?? "a layer")")
+            var found: [String: String] = [:]
+            for fill in fills {
+                let solid = try #require((fill["value"] as? [String: Any])?["solid"] as? String)
+                found[fill["appearance"] as? String ?? "default"] = try Self.hex(solid)
+            }
+            #expect(found["default"] == light, "\(layer["name"] ?? "") default is \(found["default"] ?? "none"), not \(light)")
+            #expect(found["dark"] == dark, "\(layer["name"] ?? "") dark is \(found["dark"] ?? "none"), not \(dark)")
+        }
+    }
+
+    /// `srgb:r,g,b,a` (0...1) as `#RRGGBB`.
+    static func hex(_ srgb: String) throws -> String {
+        let parts = try #require(srgb.hasPrefix("srgb:") ? srgb.dropFirst(5).split(separator: ",").compactMap { Double($0) } : nil)
+        try #require(parts.count == 4)
+        return "#" + parts.prefix(3).map { String(format: "%02X", Int(($0 * 255).rounded())) }.joined()
+    }
+
     /// **The menu-bar glyph is a template, sized as one**: black on transparency (macOS reads its alpha alone), a
     /// 22 pt box, and ink about 16 pt of it on both axes — fitted on both, touching no edge. Measured off the pixels
     /// CoreSVG draws at 2x, which is what the menu bar draws on a Retina screen.
