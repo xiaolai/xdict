@@ -41,13 +41,6 @@ struct ParityWindowTests {
         #expect(ToolbarLayout.titleYields(window: 444, sidebar: 183), "Apple's narrow window")
         #expect(!ToolbarLayout.titleYields(window: 859, sidebar: 183))
         #expect(!ToolbarLayout.titleYields(window: 640, sidebar: 0))
-        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled, .resizable],
-                              backing: .buffered, defer: true)
-        WindowTitle.apply(window)
-        #expect(window.titleVisibility == .hidden)
-        window.setFrame(NSRect(x: 0, y: 0, width: 859, height: 500), display: false)
-        WindowTitle.apply(window)
-        #expect(window.titleVisibility == .visible)
     }
 
     /// **P2**: the title is "Dictionary" always; "N found" under it counts the list, in the reader's grammar, and is

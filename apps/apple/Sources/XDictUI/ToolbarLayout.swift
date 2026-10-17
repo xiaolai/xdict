@@ -17,8 +17,8 @@ public enum ToolbarLayout {
     public static func titleYields(width: CGFloat) -> Bool { width < 560 }
 
     /// The title sits over the content column, beside the field: it gives way when that column, the window less the
-    /// sidebar, is narrow. With the sidebar a search brings, a 583 pt window left a 400 pt column and still showed
-    /// the title (UI tour `main.narrow`, 2026-10-18); Apple's 444 pt window with its sidebar shows none.
+    /// sidebar, is narrow. A 583 pt window with the 183 pt sidebar a search brings leaves a 400 pt column; Apple's
+    /// 444 pt window with its sidebar shows no title.
     public static func titleYields(window: CGFloat, sidebar: CGFloat) -> Bool { titleYields(width: window - sidebar) }
 
     /// The window's title, always.

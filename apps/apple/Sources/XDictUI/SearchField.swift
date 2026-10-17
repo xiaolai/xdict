@@ -83,31 +83,16 @@ final class KeyboardSearchField: NSSearchField {
 
 
     private var resizeObserver: (any NSObjectProtocol)?
-    /// The sidebar coming or going changes the content column without resizing the window: the title follows it (P8).
-    private var splitObserver: (any NSObjectProtocol)?
 
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        for observer in [resizeObserver, splitObserver].compactMap({ $0 }) {
-            NotificationCenter.default.removeObserver(observer)
-        }
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
         resizeObserver = nil
-        splitObserver = nil
         if let window {
-            splitObserver = NotificationCenter.default.addObserver(forName: NSSplitView.didResizeSubviewsNotification,
-                                                                   object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.window.map(WindowTitle.apply) }
-            }
-            DispatchQueue.main.async { [weak self] in
-                self.map(ToolbarPriority.apply)
-                self?.window.map(WindowTitle.apply)
-            }
+            DispatchQueue.main.async { [weak self] in self.map(ToolbarPriority.apply) }
             resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification,
                                                                     object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated {
-                    self.map(ToolbarPriority.apply)
-                    self?.window.map(WindowTitle.apply)
-                }
+                MainActor.assumeIsolated { self.map(ToolbarPriority.apply) }
             }
         }
         guard wantsKeyboard, window != nil else { return }

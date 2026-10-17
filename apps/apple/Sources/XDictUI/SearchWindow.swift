@@ -12,6 +12,8 @@ import XDictSearch
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
+    /// The content column's width: the title over it yields when it is narrow (P8).
+    @State private var column: CGFloat = 1_000
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -28,9 +30,13 @@ public struct SearchWindow: View {
         } detail: {
             EntryDetail(state: state)
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
         }
         .toolbar { toolbar }
-        // Narrow, the title gives way so the search field stays (P8): set on the window by `WindowTitle`.
+        // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
+        // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
+        // the title back over a 400 pt column (UI tour `main.narrow`, 2026-10-18).
+        .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
         .navigationTitle(Text(ToolbarLayout.windowTitle))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)

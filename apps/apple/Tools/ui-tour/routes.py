@@ -102,7 +102,7 @@ ROUTES = [
      "names, bands and triangles with them", look_up("orange") + [("key", "cmd+="), ("key", "cmd+="), ("wait", 1)]),
     ("page.print", "full", "Type 'orange', Return, then File ▸ Print… (P44)", "The system's print panel over the window; "
      "its preview the whole page: Alpha's, Beta's and Records' entries, each under its name, no triangles or rules",
-     look_up("orange") + [("key", "cmd+p"), ("wait", 3), ("after", "key", "escape")]),
+     look_up("orange") + [("menu", 2, "Print…"), ("wait", 6), ("after", "key", "escape")]),
     ("speech.pronounce", "full", "Look up 'apple', ⌥⌘P", "Spoken (volume 0 here); a notice if no voice or recording",
      look_up("apple") + [("key", "cmd+opt+p"), ("wait", 1.5)]),
     # Menus
