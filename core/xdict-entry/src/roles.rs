@@ -1044,6 +1044,8 @@ impl<'s> Roles<'s> {
         }
         if self.key.is_some() {
             let mut led: Option<u64> = None;
+            // Where the role loop below writes a sure mark: a mark it does not write is written alone after it.
+            let mut wrote_sure = vec![false; self.nodes.len()];
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
                 if *role == Role::Headword {
@@ -1071,6 +1073,9 @@ impl<'s> Roles<'s> {
                 }
                 if let Some(sure) = sure {
                     attr.push_str(&format!(" data-xdict-sure=\"{sure}\""));
+                    if let Some(w) = wrote_sure.get_mut(i) {
+                        *w = true;
+                    }
                 }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
@@ -1087,6 +1092,18 @@ impl<'s> Roles<'s> {
                 }
                 *decided.roles.entry(counted).or_default() += 1;
                 decided.edits.push((node.attr_at, node.attr_at, attr));
+            }
+            // Inside a sure example, what keeps the dictionary's look and a Chinese block (its translation) carry
+            // their mark whatever role the generic rule gave them, or none.
+            for (i, node) in self.nodes.iter().enumerate().skip(1) {
+                let mark = match t.sure(i) {
+                    Some(profiles::Sure::Keep) => "keep",
+                    Some(profiles::Sure::Trans) if node.profiled.is_none() => "trans",
+                    _ => continue,
+                };
+                if !wrote_sure.get(i).copied().unwrap_or(true) {
+                    decided.edits.push((node.attr_at, node.attr_at, format!(" data-xdict-sure=\"{mark}\"")));
+                }
             }
         }
         decided
@@ -1495,7 +1512,7 @@ fn sure_role(sure: profiles::Sure) -> Option<Role> {
         profiles::Sure::Sensenum => Some(Role::Sensenum),
         profiles::Sure::Example => Some(Role::Example),
         profiles::Sure::Heading => Some(Role::Heading),
-        profiles::Sure::Trans => None,
+        profiles::Sure::Trans | profiles::Sure::Keep => None,
     }
 }
 
@@ -1723,7 +1740,17 @@ impl<'n> Tree<'n> {
     /// The role the markup's table makes sure for the element, once its text passes the role's check: a part of
     /// speech is 1–40 characters (and a part-of-speech word where the table asks); a sense number is a number.
     fn sure(&self, i: usize) -> Option<profiles::Sure> {
-        let sure = self.nodes.get(i)?.profiled?;
+        let node = self.nodes.get(i)?;
+        let Some(sure) = node.profiled else {
+            // A block inside a sure example whose text is Chinese with no Latin letter is its translation (COBUILD's
+            // unclassed `<p>` after the English one).
+            let f = self.feat.get(i)?;
+            let block = matches!(&*node.name, "p" | "div");
+            return (block && f.cjk > 0.0 && f.lat == 0.0 && self.in_example(i)).then_some(profiles::Sure::Trans);
+        };
+        if sure == profiles::Sure::Keep {
+            return self.in_example(i).then_some(sure);
+        }
         let f = self.feat.get(i)?;
         let t = f.short.as_deref().unwrap_or("");
         let ok = match sure {
@@ -1731,8 +1758,24 @@ impl<'n> Tree<'n> {
             profiles::Sure::Sensenum => numbered(t),
             profiles::Sure::Example | profiles::Sure::Trans => f.len > 0,
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
+            profiles::Sure::Keep => false,
         };
         ok.then_some(sure)
+    }
+
+    /// Whether an element is inside an element the table makes a sure example.
+    fn in_example(&self, i: usize) -> bool {
+        let mut at = self.nodes.get(i).map(|n| n.parent as usize);
+        for _ in 0..MAX_DEPTH {
+            let Some(p) = at.filter(|p| *p != ROOT as usize) else { return false };
+            if self.nodes.get(p).and_then(|n| n.profiled) == Some(profiles::Sure::Example)
+                && self.feat.get(p).is_some_and(|f| f.len > 0)
+            {
+                return true;
+            }
+            at = self.nodes.get(p).map(|n| n.parent as usize);
+        }
+        false
     }
 
     /// An element's whole text, spaces collapsed, when it is no longer than the rules read.
