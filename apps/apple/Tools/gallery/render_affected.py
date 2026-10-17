@@ -19,8 +19,8 @@ The gallery's and the UI tour's counterpart of the gates' cache and the E2E sele
 
 **Since when** (2026-10-18: a merged change whose renders were declined must not vanish): with no --base, --range or
 --paths, the change is everything since the last commit whose every selected picture and route had passed
-(`clean.tsv`, filed by `record` and `record-routes` once nothing is left), else since ANCHOR, the commit render
-selection landed on, said as such. A start that is not in this history, or no history at all (a gate's copy), is
+(`clean.tsv`, filed by `record` and `record-routes` once nothing is left), else since ANCHOR, the last tree
+whose changes were seen (136da3f), said as such. A start that is not in this history, or no history at all (a gate's copy), is
 `Render: cannot compute: …`, exit 2, never "nothing pending".
 
 **What a path selects** is `render-affected.map` (beside this file; the owner's rule of 2026-10-18 is written there):
@@ -71,7 +71,9 @@ CLEAN = os.path.join(CACHE, "clean.tsv")
 ROUTE_PASSES = os.path.join(CACHE, "routes.tsv")
 # Until a commit is fully rendered, pending counts from where this selection landed (render-affected's merge, 42ff98c,
 # first parent): everything since is unseen.
-ANCHOR = os.environ.get("XDICT_RENDER_ANCHOR") or "5a010b770264546bdcd301359b9295b7d57191c9"
+# The last tree whose changes were seen (136da3f, 2026-10-18): parity-rest, d47 and popover-stack merged after it and
+# their renders were declined by the owner, so they stay pending until rendered or a clean pass moves the start.
+ANCHOR = os.environ.get("XDICT_RENDER_ANCHOR") or "136da3fe473908a1ccdd1634340df36a80aa78c1"
 PROFILES = "core/xdict-entry/src/roles/profiles.rs"
 LEDGER = "apps/apple/Tools/gallery/style-ledger.tsv"
 STYLE_DIR = "apps/apple/Sources/XDictEntryView/Style/"
@@ -521,7 +523,7 @@ def start():
     if not ancestor(ANCHOR):
         raise CannotCompute(f"the start commit {short(ANCHOR)} is not in the history at {REPO}")
     why = "no render has passed yet" if not clean else "no fully rendered commit is in this history"
-    return ANCHOR, f"since {short(ANCHOR)}, where render selection landed ({why})"
+    return ANCHOR, f"since {short(ANCHOR)}, the last tree whose changes were seen ({why})"
 
 
 def change(args):
