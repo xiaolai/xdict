@@ -27,6 +27,11 @@ if [ "$installed" != "$tree" ]; then
     echo "run.sh: note: the installed bundle is of tree ${installed:-unknown}, this working copy is $tree" >&2
 fi
 
+# One tour at a time: a second would replace the first's kit and wipe its output and preferences backup.
+if ssh "$host" 'pgrep -f ui-tour-kit/tour.py' >/dev/null; then
+    echo "run.sh: another UI tour is running on $host; wait for it" >&2
+    exit 1
+fi
 rsync -a --delete Tools/ui-tour/ "$host:XDictE2E/ui-tour-kit/"
 # The catalog the `pseudo` variant is made from (tour.py, pseudo_app).
 rsync -a Strings/Localizable.xcstrings "$host:XDictE2E/ui-tour-kit/"
