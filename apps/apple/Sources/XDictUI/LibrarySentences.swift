@@ -14,8 +14,8 @@ public enum LibrarySentences {
             LocalizedStringResource("This resource file (.mdd) uses MDict format 3.0, which XDict cannot read yet.")
         case .registrationCode:
             LocalizedStringResource("""
-                This dictionary is locked with a registration code. XDict opens it only with your own code, and cannot \
-                take codes yet.
+                This dictionary is locked to its buyer with a registration code. XDict does not open locked \
+                dictionaries.
                 """)
         case .encrypted:
             LocalizedStringResource("This dictionary is encrypted in a way XDict does not read.")
