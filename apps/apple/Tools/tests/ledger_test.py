@@ -29,6 +29,7 @@ class Check(unittest.TestCase):
         files = {
             "apps/apple/Sources/XDictEntryLab/GalleryChecks.swift": "note('G14', ok, 1, 'inset');\n",
             "apps/apple/Sources/XDictEntryLab/GalleryInvariants.swift": "var checks = { strayMarker: {} };\n",
+            "apps/apple/Sources/XDictEntryLab/GallerySpace.swift": "note('G16', ok, gap);\n",
             "apps/apple/Tests/T/FrameTests.swift": "struct FrameTests {\n    @Test func holds() {}\n}\n",
             "core/xdict-entry/tests/roles.rs": "#[test]\nfn a_rule_holds() {}\n",
         }
@@ -69,9 +70,10 @@ class Check(unittest.TestCase):
     def test_a_good_ledger_is_green(self):
         r = self.check(self.row(), self.row(id="D2", guard="FrameTests.holds"),
                        self.row(id="D3", guard="xdict_entry::a_rule_holds"), self.row(id="D4", guard="strayMarker"),
-                       self.row(id="D5", status="open", guard="-", commit="-", repro="-"))
+                       self.row(id="D5", status="open", guard="-", commit="-", repro="-"),
+                       self.row(id="D6", guard="G16"))
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("5 rows (4 fixed, 1 open, 0 wontfix), 0 problems", r.stdout)
+        self.assertIn("6 rows (5 fixed, 1 open, 0 wontfix), 0 problems", r.stdout)
 
     def test_fixed_without_guard_or_commit(self):
         self.red("fixed without a guard and a commit", self.row(guard="-"))
