@@ -57,9 +57,10 @@ public final class SearchWindowState {
     public func focusSearch() { searchFocus += 1 }
     public func focusResults() { resultsFocus += 1 }
 
-    /// A link in the shown entry: looked up in link mode in that entry's dictionary.
+    /// A link in the shown entry: looked up in link mode in that entry's dictionary (on the All page, the dictionary
+    /// of the frame it is in).
     public func follow(_ query: String, anchor: String?) {
-        guard let from = presented else { return }
+        guard let from = entry.activeItem ?? presented else { return }
         model.follow(query, anchor: anchor, from: from)
     }
 
@@ -67,8 +68,8 @@ public final class SearchWindowState {
 
     /// The language the shown entry's dictionary is declared in (the library's, WI-5): what its sounds are spoken in.
     public var presentedLanguage: String? {
-        guard let presented else { return nil }
-        return library.entries.first { $0.id == presented }?.languages.pair.search
+        guard let dictionary = entry.activeItem ?? presented else { return nil }
+        return library.entries.first { $0.id == dictionary }?.languages.pair.search
     }
 
     /// The shown entry's word: its headword as its dictionary gives it, else its key.
@@ -99,8 +100,13 @@ public final class SearchWindowState {
         speak(word)
     }
 
-    /// Shows the model's entry in the pane, from its dictionary as the library has it now.
+    /// Shows the model's entry in the pane, from its dictionary as the library has it now: for a typed word over every
+    /// dictionary, the All page (P15) with every dictionary's entry, the shown one among them.
     public func present(_ shown: SearchModel.Shown) async {
+        if let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode) {
+            await presentPage(shown)
+            return
+        }
         guard let source = model.source(shown.result.dictionary),
               let content = ServiceEntryContent(source: source, backend: backend, preferences: entry.preferences) else {
             onPresented?(shown, false)
@@ -115,6 +121,44 @@ public final class SearchWindowState {
         let reference = EntryReference(key: shown.result.entry.key, occurrence: shown.result.entry.occurrence)
         let done = await entry.show(reference, from: content, landing: landing)
         onPresented?(shown, done)
+    }
+
+    // MARK: - The All page (P15)
+
+    /// The entries the All page holds now: changes as each dictionary answers, so the page grows in the reader's order.
+    /// Nil when no page is due.
+    public var pageResults: [ResultID]? {
+        guard let shown = model.shown, let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode)
+        else { return nil }
+        return AllPage.results(sections: model.sections, shown: shown.result, headword: model.hit(shown.result)?.headword)
+    }
+
+    private func pageItems(_ results: [ResultID]) -> [EntryPageItem] {
+        results.compactMap { result in
+            guard let source = model.source(result.dictionary),
+                  let content = ServiceEntryContent(source: source, backend: backend, preferences: entry.preferences)
+            else { return nil }
+            return EntryPageItem(id: source.id, name: source.name, content: content,
+                                 reference: EntryReference(key: result.entry.key, occurrence: result.entry.occurrence))
+        }
+    }
+
+    private func presentPage(_ shown: SearchModel.Shown) async {
+        guard let results = pageResults, model.source(shown.result.dictionary) != nil else {
+            onPresented?(shown, false)
+            return
+        }
+        presented = shown.result.dictionary
+        let landing: EntryLanding = if case .offset(let y) = shown.landing { .offset(y) } else { .top }
+        let done = await entry.showPage(pageItems(results), primary: shown.result.dictionary, landing: landing)
+        onPresented?(shown, done)
+    }
+
+    /// Another dictionary answered while the page is shown: the page again, its frames kept, the new ones in place.
+    public func pageResultsChanged() {
+        guard let results = pageResults, entry.pageFrames != nil else { return }
+        let primary = model.shown?.result.dictionary
+        Task { await entry.showPage(pageItems(results), primary: primary) }
     }
 
     /// What covers the entry pane now (UI review X1): "No entries found." only once the list has settled empty, so it

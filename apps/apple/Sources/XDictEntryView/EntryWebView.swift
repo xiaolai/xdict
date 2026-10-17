@@ -41,6 +41,17 @@ public enum EntryMenu {
 @MainActor
 public final class EntryWebView: WKWebView {
     var onMenu: ((_ kept: [String], _ removed: [String]) -> Void)?
+    /// A frame of the All page (parity P15) is as tall as its document, so the page scrolls, not the frame: the wheel
+    /// goes to the page's scroll view.
+    var passesScrollToPage = false
+
+    override public func scrollWheel(with event: NSEvent) {
+        if passesScrollToPage, let page = enclosingScrollView {
+            page.scrollWheel(with: event)
+        } else {
+            super.scrollWheel(with: event)
+        }
+    }
 
     override public func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
         let (kept, removed) = EntryMenu.filter(menu)

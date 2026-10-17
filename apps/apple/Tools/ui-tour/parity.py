@@ -275,6 +275,28 @@ def find_bar(tree):
     return None if len(fields) >= 2 else "no find bar's field beside the search field"
 
 
+def dividers(tree):
+    """The All page's dividers (P15), top to bottom: (name, expanded)."""
+    found = [n for n in find(tree, "AXDisclosureTriangle", visible=False)
+             if str(n.get("identifier", "")).startswith("page.divider.")]
+    found.sort(key=lambda n: (n.get("frame") or [0, 0])[1])
+    return [(label(n), str(n.get("value")) not in ("0", "False", "false")) for n in found]
+
+
+def page_dividers(*names):
+    def rule(tree):
+        got = [name for name, _ in dividers(tree)]
+        return None if got == list(names) else f"dividers {got}, not {list(names)}"
+    return rule
+
+
+def page_collapsed(name):
+    def rule(tree):
+        state = dict(dividers(tree)).get(name)
+        return None if state is False else f"{name}'s divider is {'missing' if state is None else 'expanded'}"
+    return rule
+
+
 # ---- the menu bar ----
 
 def menu(menubar, title):
@@ -370,6 +392,10 @@ TREE_RULES = {
     "main.narrow": [("P8", narrow)],
     "scope.one": [("P7", scope_selected(1))],
     "entry.find": [("P30", find_bar)],
+    "page.all": [("P15", page_dividers("Beta", "Records")), ("P16", title_dictionary)],
+    "page.collapse": [("P15", page_collapsed("Beta"))],
+    "page.one": [("P15", page_dividers())],
+    "page.find": [("P30", find_bar), ("P15", page_dividers("Beta", "Records"))],
 }
 
 MENU_RULES = {
