@@ -18,6 +18,11 @@ cd "$(dirname "$0")/../.."
 common=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 host=$(sed -n 's/^E2E_HOST_MACOS *= *//p' "$common/local.mk" 2>/dev/null | head -1)
 [ -n "$host" ] || { echo "run.sh: E2E_HOST_MACOS is not set in $common/local.mk" >&2; exit 1; }
+# The host's run lock (Tools/host-lock.sh): E2E, the gates, the gallery and the lab take it too, and since 2026-10-17
+# that Mac also builds, so the tour waits for them, and they for it.
+. Tools/host-lock.sh
+host_lock "$host" ui-tour || exit 3
+trap 'host_unlock "$host"' EXIT
 out="$common/dev-docs/artifacts/ui-tour"
 mkdir -p "$out"
 

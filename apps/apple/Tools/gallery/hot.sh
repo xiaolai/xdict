@@ -50,9 +50,9 @@ busy=$(ssh "$host" 'pgrep -fl xctest') && { echo "hot: $host is running xctest, 
 ssh "$host" "[ -x $lab/Contents/MacOS/XDictEntryLab ]" \
     || { echo "hot: no lab at $host:$lab; install one with Tools/gallery/run.sh" >&2; exit 2; }
 
-lock="${TMPDIR:-/tmp}/xdict-e2e-$(printf '%s' "$host" | tr -c 'A-Za-z0-9' '_').lock"
-/usr/bin/shlock -f "$lock" -p $$ || { echo "hot: $host is held by another run (lock: $lock)" >&2; exit 3; }
-trap 'rm -f "$keys" "$lock"' EXIT
+. "$apple/Tools/host-lock.sh"
+host_lock "$host" hot || exit 3
+trap 'rm -f "$keys"; host_unlock "$host"' EXIT
 
 rsync -a --delete --include '*.css' --include '*.js' --exclude '*' "$apple/Sources/XDictEntryView/Style/" \
     "$host:$remote/style/" || { echo "hot: could not copy the style" >&2; exit 4; }

@@ -17,14 +17,9 @@ lab="$here/.build/e2e-kit/XDictEntryLab.app"
 remote=XDictE2E/gallery-run
 
 # The same lock Tools/e2e.sh takes for this host: one run against a host at a time.
-lock="${TMPDIR:-/tmp}/xdict-e2e-$(printf '%s' "$host" | tr -c 'A-Za-z0-9' '_').lock"
-tries=0
-until /usr/bin/shlock -f "$lock" -p $$; do
-    tries=$((tries + 1))
-    [ "$tries" -gt 180 ] && { echo "gallery: $host is held by another run (lock: $lock)" >&2; exit 3; }
-    sleep 20
-done
-trap 'rm -f "$lock"' EXIT
+. "$here/Tools/host-lock.sh"
+host_lock "$host" gallery || exit 3
+trap 'host_unlock "$host"' EXIT
 
 args=""
 while [ $# -gt 0 ]; do
