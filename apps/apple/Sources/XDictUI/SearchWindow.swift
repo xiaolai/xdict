@@ -12,7 +12,6 @@ import XDictSearch
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
-    @State private var width: CGFloat = 1_000
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -31,9 +30,7 @@ public struct SearchWindow: View {
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
         }
         .toolbar { toolbar }
-        // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field).
-        .toolbar(removing: ToolbarLayout.titleYields(width: width) ? .title : nil)
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        // Narrow, the title gives way so the search field stays (P8): set on the window by `WindowTitle`.
         .navigationTitle(Text(ToolbarLayout.windowTitle))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)
