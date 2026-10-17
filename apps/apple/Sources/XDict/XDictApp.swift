@@ -79,15 +79,16 @@ struct XDictApp: App {
         .commandsRemoved()
 
         Settings {
+            // Dictionaries first: Apple's Settings opens on its dictionary list (parity P39). The other panes are XDict's
+            // own (Lookup Anywhere, speech, the reading accent, login), at Apple's width.
             TabView {
+                Tab("Dictionaries", systemImage: "books.vertical") {
+                    SettingsDictionaries(library: Self.library, openLibrary: { MenuBarActions.openLibrary() })
+                        .task { await LibraryLaunch.once() }
+                }
                 Tab("General", systemImage: "gearshape") {
                     GeneralSettings(login: Self.loginItem, defaults: .standard, domain: XDictIdentity.app,
                                     openSetup: { MenuBarActions.openSetup() })
-                }
-                Tab("Dictionaries", systemImage: "books.vertical") {
-                    LibraryView(library: Self.library, layout: .settings)
-                        .frame(width: 720, height: 460)
-                        .task { await LibraryLaunch.once() }
                 }
                 Tab("Reading", systemImage: "book") { ReadingSettings() }
                 Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
