@@ -11,6 +11,17 @@ import AppKit
 public final class LookupPopover: NSObject, NSPopoverDelegate {
     public let anchor = PopoverAnchor()
     public let popover = NSPopover()
+    /// **The frosting, one surface with the arrow** (P41, 2026-10-18): the system's popover material under the whole
+    /// popover, arrow included (`hasFullSizeContent`), blending what is behind the window, so the entry's text holds
+    /// 4.5:1 over a busy desktop where the bare glass did not, and the arrow is never a second, clearer surface. Active
+    /// always: the popover is never key, so following the window's state would draw it inactive, flat.
+    let frost: NSVisualEffectView = {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }()
     /// Told when the popover closed by itself (transient behaviour), not by `close()`.
     public var onClose: (() -> Void)?
     private var closing = false
@@ -19,12 +30,22 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
         super.init()
         popover.behavior = .transient
         popover.animates = false
+        popover.hasFullSizeContent = true
         popover.delegate = self
     }
 
     public var isShown: Bool { popover.isShown }
     /// The popover's window frame, arrow and shadow included: what the instruments record.
     public var frame: CGRect? { popover.isShown ? popover.contentViewController?.view.window?.frame : nil }
+
+    /// With full-size content the popover's size includes its arrow and its shadow's margins, 26 pt each way (measured:
+    /// a 390 pt content showed a 364 pt body); the body keeps the measured 390 pt, its window 416 as Apple's.
+    static let chrome = CGSize(width: 26, height: 26)
+    static func outer(_ body: CGSize) -> CGSize { CGSize(width: body.width + chrome.width, height: body.height + chrome.height) }
+    /// The body's size: what the reader sees, without the arrow and the shadow's margins.
+    public var bodySize: CGSize {
+        CGSize(width: popover.contentSize.width - Self.chrome.width, height: popover.contentSize.height - Self.chrome.height)
+    }
 
     /// The anchor: the word, or a point at the pointer when no word could be read.
     public static func anchorRect(word: CGRect?, pointer: CGPoint) -> CGRect {
@@ -39,12 +60,27 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 
     /// Shows `content` at `size` by the word (or the pointer), or resizes it in place when already shown.
     public func show(_ content: NSView, size: CGSize, word: CGRect?, pointer: CGPoint, visible: CGRect) {
-        if popover.contentViewController?.view !== content {
+        if content.superview !== frost {
+            content.removeFromSuperview()
+            content.translatesAutoresizingMaskIntoConstraints = false
+            frost.addSubview(content)
+            let guide = frost.safeAreaLayoutGuide
+            NSLayoutConstraint.activate([
+                content.leadingAnchor.constraint(equalTo: guide.leadingAnchor),
+                content.trailingAnchor.constraint(equalTo: guide.trailingAnchor),
+                content.topAnchor.constraint(equalTo: guide.topAnchor),
+                content.bottomAnchor.constraint(equalTo: guide.bottomAnchor),
+            ])
             let controller = NSViewController()
-            controller.view = content
+            controller.view = frost
             popover.contentViewController = controller
         }
-        popover.contentSize = size
+        // The content's own fitting size is none (it fills the frost by constraints): the popover is sized here, its
+        // full-size content holding the arrow and the shadow's margins too.
+        let outer = Self.outer(size)
+        frost.frame = CGRect(origin: .zero, size: outer)
+        popover.contentViewController?.preferredContentSize = outer
+        popover.contentSize = outer
         let rect = Self.anchorRect(word: word, pointer: pointer)
         anchor.setFrame(rect, display: false)
         anchor.orderFrontRegardless()
@@ -55,7 +91,9 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 
     /// The entry's height arrived: the popover keeps its anchor and edge, AppKit moves the body.
     public func resize(height: CGFloat) {
-        popover.contentSize = CGSize(width: popover.contentSize.width, height: height)
+        let size = CGSize(width: popover.contentSize.width, height: Self.outer(CGSize(width: 0, height: height)).height)
+        popover.contentViewController?.preferredContentSize = size
+        popover.contentSize = size
     }
 
     public func close() {

@@ -37,10 +37,17 @@ public struct LookupPanelView: View {
         VStack(spacing: 0) {
             header
             EntryHost(controller: state.entry)
+                // The entry fades out above the footer, so scrolled text never runs into its hairline (P41).
+                .mask {
+                    VStack(spacing: 0) {
+                        Rectangle()
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: PanelLook.entryFade)
+                    }
+                }
                 .overlay { placeholder }
             footer
         }
-        .background(PopoverMaterial())
         // The popover has no title bar: the title row starts 16 pt from the top, the hidden title bar only a drag area.
         .ignoresSafeArea(.container, edges: .top)
         .onChange(of: state.model.shown) { _, shown in
@@ -150,23 +157,6 @@ public struct LookupPanelView: View {
             }
         }
     }
-}
-
-/// **The frosting under the popover's content** (P41, 2026-10-18): the entry is drawn on the glass with no page of its
-/// own, and over a busy desktop the bare glass left the entry's text under 4.5:1 (measured 1.2–3.1 from a capture over
-/// the E2E Mac's wallpaper). The system's popover material, blending what is behind the window, frosts it as Apple's
-/// Look Up popover is frosted, without an opaque page.
-struct PopoverMaterial: NSViewRepresentable {
-    static func make() -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .popover
-        view.blendingMode = .behindWindow
-        view.state = .active
-        return view
-    }
-
-    func makeNSView(context: Context) -> NSVisualEffectView { Self.make() }
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 /// One footer row of the popover (P41): an 8 pt gap, a hairline across the insets, then 26 pt of a semibold 13 pt title

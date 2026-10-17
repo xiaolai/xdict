@@ -225,7 +225,7 @@ final class LookupAnywhere {
         let visible = screen?.visibleFrame ?? CGRect(origin: .zero, size: Self.panelSize)
         // While shown, the popover keeps its size (its entry's) and its anchor; a new showing opens at the default.
         if !panel.isShown || notice != .reading, let content {
-            let size = panel.isShown ? panel.popover.contentSize : Self.panelSize
+            let size = panel.isShown ? panel.bodySize : Self.panelSize
             panel.show(content, size: size, word: word, pointer: pointer, visible: visible)
         }
         let frame = panel.frame ?? .zero
@@ -275,7 +275,7 @@ final class LookupAnywhere {
         let visible = (panel.anchor.screen ?? NSScreen.main)?.visibleFrame ?? .zero
         let height = PanelPlacement.height(document: document, chrome: LookupPanelView.chromeHeight,
                                            available: visible.height - 2 * PanelPlacement.margin)
-        guard fit.accepts(height: height, current: panel.popover.contentSize.height, entry: entry) else { return }
+        guard fit.accepts(height: height, current: panel.bodySize.height, entry: entry) else { return }
         panel.resize(height: height)
     }
 
