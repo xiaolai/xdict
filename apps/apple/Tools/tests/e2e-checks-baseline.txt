@@ -182,6 +182,11 @@ setup.grantCompletesRow
 setup.loginItemRegisters
 setup.choicesPersist
 setup.chineseOnly
+# added by WI-10 (the measurement, an extra sub-stage)
+measure.warm
+measure.cold
+measure.panel
+measure.memory
 # moved below E2E (plan-verification step 4), each to a test of the same name's facts that `make test` runs:
 # idle.workSpanningTheTimer idle.racingRequestsAnsweredOnce -> IdleServiceTests; paging.everyRecord ->
 # LookupScenarioTests; refusal.noHandle refusal.pipe refusal.writable refusal.otherFile refusal.control

@@ -48,6 +48,8 @@ readonly CORE_VERSIONS=Generated/core-versions.json
 readonly SHIPPED_VERSIONS=Contents/Resources/CoreVersions.json
 # XDict's phonetic faces and their SIL OFL notices (EntryFonts), shipped byte for byte as released: never subset.
 readonly FONTS=Resources/Fonts
+# Every third-party notice (Tools/notices.py, held to the lockfile by `make test`), shown by XDict ▸ Acknowledgements.
+readonly NOTICES=Resources/Acknowledgements.txt
 readonly LOGIN_KEYCHAIN=$HOME/Library/Keychains/login.keychain-db
 # `--timestamp` asks Apple's server and fails the way network calls fail (XiaolaiDict lost a release to it); a
 # development build signs offline and succeeds or fails on its first try.
@@ -160,6 +162,7 @@ verify_required_files() {
     for file in "$FONTS"/*; do
         cmp -s "$file" "$bundle/Contents/$file" || { echo "missing or changed: Contents/$file"; return 1; }
     done
+    cmp -s "$NOTICES" "$bundle/Contents/$NOTICES" || { echo "missing or changed: Contents/$NOTICES"; return 1; }
     # A translation that never reached the bundle is a reader still reading English.
     for language in $LANGUAGES; do
         for table in Localizable ServicesMenu; do
@@ -366,6 +369,7 @@ assemble() {
     cp Resources/DictionaryService-Info.plist "$xpc/Contents/Info.plist"
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
     cp -R "$FONTS" "$contents/Resources/"
+    cp "$NOTICES" "$contents/Resources/"
 
     # The build number is stamped into the copies, never the tracked files, and read back: PlistBuddy reports success
     # for keys it did not write.
