@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import json  # noqa: E402
 
 import axcheck  # noqa: E402
+import parity  # noqa: E402
 import pseudo  # noqa: E402
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
@@ -96,4 +97,112 @@ for key, entry in catalog["strings"].items():
         pseudo.DIRECTIVE.findall(a) == pseudo.DIRECTIVE.findall(b) for a, b in zip(source, made)), (key, made)
     assert all(m.startswith("⟦") and m != s for s, m in zip(source, made)), (key, made)
 print(f"ui_tour_test: pseudo ok ({len(built['strings'])} keys)")
+
+# The Apple Dictionary parity checks (parity.py): every rule green on trees shaped as Apple's Dictionary measured
+# (dev-docs/artifacts/apple-dictionary/apple/*.ax.json, menubar.json) and red on trees shaped as XDict's main window was
+# before the parity work (the UI tour's captures of 2026-10-17). Every route a rule names is a driven route.
+def node(role, frame=(0, 0, 10, 10), children=(), **attrs):
+    return dict(role=role, frame=list(frame), children=list(children), **attrs)
+
+
+def button(name, x, help_text):
+    return node("AXButton", (x, 8, 36, 36), description=name, help=help_text)
+
+
+def rowed(*words, semibold=0):
+    return node("AXTable", (0, 52, 183, 600), [
+        node("AXRow", (0, 52 + 28 * i, 183, 28), [node("AXCell", (16, 52 + 28 * i, 151, 28), [
+            node("AXStaticText", (19, 57 + 28 * i, 149, 18), value=w,
+                 font=[{"name": ".AppleSystemUIFontDemi" if i == semibold else ".AppleSystemUIFont", "size": 13}])])])
+        for i, w in enumerate(words)], description="search results")
+
+
+def apple_window(title, *extra):
+    return {"windows": [node("AXWindow", (0, 0, 859, 837), [
+        node("AXToolbar", (0, 0, 859, 52), [
+            button("Back", 100, "Show the previous result"), button("Forward", 136, "Show the next result"),
+            button("Smaller Text", 440, "Decrease font size"), button("Bigger Text", 476, "Increase font size"),
+            node("AXTextField", (520, 7, 327, 38), subrole="AXSearchField", placeholder="Search"),
+            node("AXStaticText", (180, 0, 200, 52), value="Dictionary")]),
+        node("AXRadioGroup", (183, 52, 676, 36), [node("AXRadioButton", (190 + 60 * i, 59, 60, 22), title=t,
+                                                       value="1" if i == 0 else "0")
+                                                  for i, t in enumerate(["All", "Alpha", "Beta"])]),
+        *extra], subrole="AXStandardWindow", title=title)]}
+
+
+def old_window(title, *extra):
+    return {"windows": [node("AXWindow", (0, 0, 1000, 700), [
+        node("AXToolbar", (0, 0, 1000, 52), [
+            button("Back", 330, "Back"), button("Forward", 360, "Forward"),
+            node("AXPopUpButton", (600, 8, 150, 30), description="Dictionaries", identifier="scope"),
+            node("AXTextField", (760, 7, 240, 38), subrole="AXSearchField", placeholder="Look Up")]),
+        *extra], subrole="AXStandardWindow", title=title)]}
+
+
+def keys(*items):
+    return [dict(title=t, key=k, mods=m) for t, k, m in items]
+
+
+apple_menus = {"menubar": [
+    {"title": "File", "items": keys(("New Window", "N", 0), ("New Tab", "T", 0), ("Print…", "P", 0))},
+    {"title": "Edit", "items": [{"title": "Find", "items": keys(
+        ("Search For a New Word…", "F", 2), ("Find…", "F", 0), ("Find Next", "G", 0), ("Find Previous", "G", 1),
+        ("Use Selection for Find", "E", 0), ("Jump to Selection", "J", 0))}]},
+    {"title": "View", "items": keys(("Bigger Text", "+", 0), ("Actual Size", "0", 2))},
+    {"title": "Go", "items": keys(("Back", "[", 0), ("Forward", "]", 0))},
+    {"title": "Search", "items": keys(("All Dictionaries", "0", 0), ("Alpha", "1", 0), ("Beta", "2", 0),
+                                      ("Select Next Dictionary", "}", 0), ("Select Previous Dictionary", "{", 0))},
+    {"title": "Window", "items": keys(("Show Tab Bar", None, 0))},
+    {"title": "Help", "items": keys(("XDict Help", None, 0))}]}
+old_menus = {"menubar": [
+    {"title": "File", "items": keys(("New Window", "N", 0), ("Add Dictionaries…", "O", 0))},
+    {"title": "Edit", "items": keys(("Find in Entry…", "F", 0), ("Find Next", "G", 0), ("Pronounce", "P", 2))},
+    {"title": "View", "items": keys(("Zoom In", "+", 0), ("Actual Size", "0", 0))},
+    {"title": "Go", "items": keys(("Back", "[", 0), ("Forward", "]", 0), ("Search", "F", 2))},
+    {"title": "Dictionaries", "items": keys(("All Dictionaries", "0", 2), ("Alpha", "1", 2), ("Beta", "2", 2))},
+    {"title": "Window", "items": keys(("Library", "L", 1))},
+    {"title": "Help", "items": []}]}
+
+start_text = [node("AXStaticText", value="Type a word to look up in…"), node("AXStaticText", value="Alpha"),
+              node("AXStaticText", value="Beta")]
+cases = {
+    "main.start": (apple_window("Dictionary", *start_text), old_window("Look Up")),
+    "search.result": (apple_window("Dictionary", rowed("apple", "Apple", "apple pie"),
+                                   node("AXGroup", (200, 90, 400, 20), identifier="status"),
+                                   node("AXStaticText", value="2 found")),
+                      old_window("apple", node("AXOutline", (0, 52, 220, 600), [node("AXStaticText", value="Alpha")]),
+                                 node("AXStaticText", value="Not Searched"))),
+    "search.live": (apple_window("Dictionary", rowed("take off", "take on"), node("AXStaticText", value="2 found")),
+                    old_window("Look Up", node("AXStaticText", value="Suggestions"))),
+    "search.didyoumean": (apple_window("Dictionary", node("AXStaticText", value="Did you mean?"),
+                                       rowed("accomplished")), old_window("Look Up")),
+    "search.none": (apple_window("Dictionary", rowed(), node("AXStaticText", (200, 98, 220, 30),
+                                                             value="No entries found.")),
+                    old_window("zzqxjv", node("AXStaticText", (500, 300, 200, 30), value="No Results for “zzqxjv”"))),
+    "window.min": ({"windows": [node("AXWindow", (0, 0, 400, 300), subrole="AXStandardWindow")]},
+                   {"windows": [node("AXWindow", (0, 0, 640, 420), subrole="AXStandardWindow")]}),
+    "main.narrow": (apple_window("Dictionary"), old_window("apple")),
+    "scope.one": (apple_window("Dictionary"), old_window("apple")),
+    "entry.find": (apple_window("Dictionary", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
+                   old_window("apple")),
+}
+cases["search.next"] = cases["search.result"]
+cases["scope.one"][0]["windows"][0]["children"][1]["children"][2]["value"] = "1"
+cases["window.min"][0]["windows"][0]["frame"] = [0, 0, 400, 300]
+cases["main.narrow"][0]["windows"][0]["frame"] = [0, 0, 859, 837]
+driven = {r[0] for r in ROUTES if r[4] is not None}
+for route in parity.TREE_RULES:
+    assert route in driven, f"parity names {route}, which the tour does not drive"
+    good, bad = cases[route]
+    for check in parity.checks(route, good, apple_menus):
+        assert check["ok"], (route, check)
+    red = [c for c in parity.checks(route, bad, old_menus) if not c["ok"]]
+    assert red, f"{route}: no parity rule is red on XDict's old window"
+for route in parity.MENU_RULES:
+    assert all(c["ok"] for c in parity.checks(route, cases[route][0], apple_menus)), route
+    assert all(not c["ok"] for c in parity.checks(route, cases[route][1], old_menus)
+               if c["id"] in ("P7", "P32", "P33", "P36", "P37", "P38")), route
+    assert not any(c["ok"] for c in parity.checks(route, cases[route][0], None) if c["id"] == "P32"), "no menu bar read"
+print(f"ui_tour_test: parity ok ({sum(len(v) for v in parity.TREE_RULES.values())} tree rules, "
+      f"{sum(len(v) for v in parity.MENU_RULES.values())} menu rules)")
 print(f"ui_tour_test: ok ({len(ROUTES)} routes, {len(undriven)} not driven)")
