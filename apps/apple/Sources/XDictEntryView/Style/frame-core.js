@@ -59,5 +59,20 @@ var XDictFrameCore = (function () {
     var kind = imageClass({ w: f.w, h: f.h });
     return kind === 'illustration';
   }
-  return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin, imageClass: imageClass };
+  // Parity P22 (2026-10-18): Apple hangs a sense number in a 1em negative indent. One the core names (`sure`) hangs
+  // where it starts its block's first line (`first`); one inside a line keeps its place, as does one whose block is the
+  // body or a table cell, a floated one, one alone on its line (`alone`: a block, or MED's number before its definition's block), and one
+  // the dictionary already hangs itself (`own`: a negative indent).
+  function hangs(f) { return !!f.sure && !!f.first && !f.body && !f.cell && !f.floated && !f.alone && !f.own; }
+  // Parity P24: Apple's thin rule under a section label runs under the label's own line: the heading's own box when it
+  // is a block, its block's when the heading is all that block shows; none when it shares its line, or its block is
+  // the body.
+  function ruleOn(f) { return f.block ? 'self' : f.alone && !f.body ? 'block' : ''; }
+  // D46 (2026-10-18): a box the dictionary caps in height (`max-height`) whose text does not fit is let grow: one that
+  // scrolls (MED's related words, `max-height:150px;overflow:auto`) hides rows a frame sized to its document cannot
+  // scroll to, the wheel going to the page; one whose overflow is visible runs its text on under what follows. One
+  // that clips (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+  function lifts(f) { return f.maxHeight !== 'none' && /^(visible|auto|scroll)$/.test(f.overflow) && f.content > f.box + 1; }
+  return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin,
+           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts };
 })();

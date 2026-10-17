@@ -68,10 +68,17 @@ font-style:normal !important;color:var(--xdict-text-2) !important;background:non
 font-synthesis-style:none !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important}
 /* A section heading a markup table names: one look, Apple's section label (parity P24, 2026-10-17): small capitals */
 /* of the lowercase, 0.03em apart, the body size, the secondary label colour. Its own text only: a link or a list */
-/* inside it keeps its look. Apple's thin rule under the label is not drawn: a heading the core names may be inline. */
+/* inside it keeps its look. */
 [data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 
 :not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;
 font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}
+/* Apple's thin rule under a section label (parity P24, 2026-10-18), on the label's own line (frame.js `rules`): the */
+/* rule colour, 0.3em under the text, drawn as a shadow, not a border, so no box is drawn (G5). */
+[data-xdict-ruled]{box-shadow:inset 0 -1px 0 var(--xdict-rule) !important;padding-bottom:0.3em !important}
+/* A phrase or a derived word a markup table names, weight 600 as Apple's `span.l` and `span.drv` (parity P24). */
+[data-xdict-sure=subhead][data-xdict-sure],[data-xdict-sure=subhead][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon]){font-weight:var(--xdict-weight-bold) !important}
+/* Apple's etymology label in the secondary label colour (parity P25): a heading of an etymology the core names. */
+[data-xdict-section=etym] [data-xdict-role=heading],[data-xdict-section=etym] [data-xdict-role=heading] :not([data-xdict-tag],[data-xdict-icon]){color:var(--xdict-text-2) !important}
 /* A translation a markup table names, a sense's or an example's: upright, in the secondary text colour. */
 [data-xdict-sure=trans][data-xdict-sure]{color:var(--xdict-text-2) !important}
 [data-xdict-sure=trans][data-xdict-sure],[data-xdict-sure=trans][data-xdict-sure] 
