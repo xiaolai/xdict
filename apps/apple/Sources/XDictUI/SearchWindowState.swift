@@ -117,6 +117,20 @@ public final class SearchWindowState {
         onPresented?(shown, done)
     }
 
+    /// What covers the entry pane now (UI review X1).
+    public var placeholder: EntryPlaceholder {
+        EntryPlaceholder.of(noDictionaries: library.entries.isEmpty && library.unreadable == nil,
+                            query: model.lookup?.query, selection: model.selection, searching: model.isSearching)
+    }
+
+    /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
+    /// entry either (UI review X1). Called when the placeholder changes.
+    public func placeholderChanged() {
+        guard placeholder.clearsEntry, entry.reference != nil else { return }
+        entry.closeEntry()
+        presented = nil
+    }
+
     /// What a section's next action does (Q11).
     public func perform(_ next: NextAction) {
         switch next {

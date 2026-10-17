@@ -30,6 +30,7 @@ public struct SearchWindow: View {
             guard let shown else { return }
             Task { await state.present(shown) }
         }
+        .onChange(of: state.placeholder) { state.placeholderChanged() }
     }
 
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
@@ -67,12 +68,10 @@ struct PronounceButton: View {
             .accessibilityIdentifier("pronounce")
     }
 
-    /// Two sentences already in the reader's language, joined, so the help is read whole.
+    /// What the button does, short (UI review M-11); a caveat about the voice belongs to the notice after speaking.
     private var help: Text {
         guard let word = state.shownWord else { return Text("Pronounce") }
-        let said = String(localized: SpeechSentences.speakHelp(word: word))
-        guard let caveat = state.pronunciation.caveat(for: state.presentedLanguage) else { return Text(verbatim: said) }
-        return Text(verbatim: said + "\n" + String(localized: SpeechSentences.caveat(caveat)))
+        return Text("Pronounce “\(word)”")
     }
 }
 
@@ -87,13 +86,17 @@ struct ScopePicker: View {
             let enabled = state.model.known.filter(\.enabled)
             if !enabled.isEmpty { Divider() }
             ForEach(enabled) { source in
+                // One that cannot answer is shown, not offered (UI review M-13).
                 Text(verbatim: source.name).tag(SearchScope.one(source.id))
+                    .disabled(source.handle == nil)
             }
         } label: {
             Text("Dictionaries")
         }
         .pickerStyle(.menu)
         .fixedSize()
+        .disabled(state.model.known.isEmpty)
+        .accessibilityLabel(Text("Dictionaries"))
         .accessibilityIdentifier("scope")
         .help(Text("The dictionaries a typed word is looked up in"))
     }
@@ -110,34 +113,34 @@ struct EntryDetail: View {
     }
 
     @ViewBuilder private var placeholder: some View {
-        let model = state.model
-        if state.library.entries.isEmpty, state.library.unreadable == nil {
+        switch state.placeholder {
+        case .noDictionaries:
             ContentUnavailableView {
                 Label("No Dictionaries", systemImage: "books.vertical")
             } description: {
-                Text("XDict reads the MDict dictionaries you have. Add them in the Library, then look words up here.")
+                Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
+                Button("Add Dictionaries…") {
+                    LibraryRequests.shared.requestImport()
+                    state.openLibrary?(nil)
+                }
+                .buttonStyle(.borderedProminent)
                 Button("Open Library") { state.openLibrary?(nil) }
             }
-            .background(.background)
-        } else if model.lookup == nil {
+            .coversPane()
+        case .start:
             ContentUnavailableView {
                 Label("Look Up a Word", systemImage: "character.book.closed")
             } description: {
                 Text("Type a word and press Return.")
             }
-            .background(.background)
-        } else if model.selection == nil, !model.isSearching, let lookup = model.lookup {
-            ContentUnavailableView {
-                Label {
-                    Text("No Results for “\(lookup.query)”")
-                } icon: {
-                    Image(systemName: "magnifyingglass")
-                }
-            } description: {
-                Text("The list beside says what each dictionary found, or why it could not look.")
-            }
-            .background(.background)
+            .coversPane()
+        case .noResults(let query):
+            ContentUnavailableView.search(text: query).coversPane()
+        case .searching:
+            ProgressView().controlSize(.small).coversPane()
+        case .none:
+            EmptyView()
         }
     }
 }
