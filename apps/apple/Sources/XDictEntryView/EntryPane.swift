@@ -46,7 +46,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private var loads = EntryDocumentLoads()
     private(set) var current: URL?
     private var generation = 0
-    private var scheme: EntryColourScheme
+    private(set) var scheme: EntryColourScheme
     private var frame: EntryReadingFrame
     private let style: EntryStyle
     private var restartedAfterCrash = false

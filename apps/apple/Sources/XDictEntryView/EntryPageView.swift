@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import os
 
 /// **Apple's divider between two dictionaries** (parity P15, measured on Dictionary.app): a disclosure triangle at the
 /// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
@@ -551,16 +552,33 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             return nil
         }
         await loaded()
+        // On paper, as Apple's prints: a frame shown dark is drawn light for print, then shown as it was.
+        let dark = sections.compactMap(\.pane).filter { $0.scheme == .dark }
+        if !dark.isEmpty {
+            for section in sections where section.pane.map({ pane in dark.contains { $0 === pane } }) == true { section.finished = false }
+            for pane in dark { pane.setScheme(.light) }
+            await loaded()
+        }
+        defer {
+            for pane in dark { pane.setScheme(.dark) }
+        }
         var frames: [(String, Double, [Double])] = []
         var collapsed: [Bool] = []
         var images: [NSImage] = []
         for section in sections {
-            guard !section.collapsed, let pane = section.pane,
-                  let data = try? await pane.view.pdf(configuration: WKPDFConfiguration()),
-                  let image = NSImage(data: data) else {
+            guard !section.collapsed, let pane = section.pane else {
                 frames.append((section.name, 0, []))
                 collapsed.append(true)
                 continue
+            }
+            let image: NSImage
+            do {
+                let data = try await pane.view.pdf(configuration: WKPDFConfiguration())
+                guard let drawn = NSImage(data: data) else { throw CocoaError(.fileReadCorruptFile) }
+                image = drawn
+            } catch {
+                EntryLog.logger.error("print: a frame could not be drawn: \(error.localizedDescription, privacy: .public)")
+                return nil
             }
             let lines = (try? await pane.view.callAsyncJavaScript(EntryPrintPlan.linesScript, arguments: [:], in: nil,
                                                                    contentWorld: EntryPane.world)) as? [[NSNumber]]
@@ -572,7 +590,10 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             images.append(image)
         }
         let plan = EntryPrintPlan.layout(frames, collapsed: collapsed)
-        guard !plan.isEmpty, plan.count == images.count else { return nil }
+        guard !plan.isEmpty, plan.count == images.count else {
+            EntryLog.logger.error("print: \(plan.count) sections planned for \(images.count) drawings")
+            return nil
+        }
         let width = max(scroll.contentView.bounds.width, 1)
         return EntryPagePrintView(width: width, sections: Array(zip(plan, images)))
     }
