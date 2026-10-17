@@ -6,10 +6,10 @@
 
 use std::path::Path;
 
-use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
+use xdict_entry::{Entry, STYLE, Style, css_normalized_within, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (11, 0xc0e2_6a1c_5c1e_997c);
+const PINNED: (u32, u64) = (12, 0x2622_d356_128a_37c4);
 
 const BASE: &str = "xdict://d/";
 
@@ -169,6 +169,10 @@ fn style_is_raised_with_any_change_to_the_output() {
         fnv(&mut digest, html.as_bytes());
         fnv(&mut digest, &[0]);
     }
+    // An edition's sheet under its own entries: the relative size most text sits at is the base (STYLE 12, D48).
+    let sheet = "body{font-size:.95em} def{font-size:110%} def chn{font-size:90%}";
+    let edition = Style::of_edition([sheet], ["<h-g><sn><def>a round fruit <chn>苹果</chn></def></sn></h-g>"]);
+    fnv(&mut digest, css_normalized_within(sheet, BASE, "", &edition, usize::MAX).unwrap().0.as_bytes());
     let (pinned_style, pinned_digest) = PINNED;
     assert!(
         digest != pinned_digest || STYLE == pinned_style,

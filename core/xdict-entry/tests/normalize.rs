@@ -192,6 +192,38 @@ fn a_relative_size_on_the_entry_wrapper_is_the_base() {
     assert_eq!(css(".Od3{font-size:117%}", &Style::of_sheets([])), format!(".Od3{{{l}}}"));
 }
 
+/// R4 (2026-10-18, D48): a relative size the sampled entries only ever meet over the page's size sets that size times
+/// its ratio, a size in pixels, and goes onto the scale against the base as an absolute size does. OALECD's
+/// `body{font-size:.95em}` is dropped and its `def{font-size:110%}`, the definitions, went to l by the ratio alone, at
+/// 18 px, though they are the base text (15.2 px times 1.1). A relative size nested in another one still snaps by its
+/// own ratio, as does one the sample never met or met in both places.
+#[test]
+fn a_relative_size_over_the_page_snaps_against_the_base() {
+    let sheet = "body{font-size:0.95em} def{font-size:110%} def chn{font-size:90%} x{font-size:115%} \
+                 idm-g def{font-size:110%} b{font-size:130%}";
+    let entry = "<h-g><h>apple</h><sn><def>a round fruit with shiny red or green skin and firm white flesh \
+                 <chn>苹果</chn></def><x>an apple tree</x><b>c</b><x><b>d</b></x></sn></h-g>";
+    let s = Style::of_edition([sheet], [entry, entry]);
+    assert_eq!(s.base().px, 16.72, "the definitions are the base text");
+    let lead = "line-height:var(--xdict-leading, 1.6)";
+    let m = format!("font-size:var(--xdict-fs-m, 1rem);{lead}");
+    let s_ = format!("font-size:var(--xdict-fs-s, 0.875rem);{lead}");
+    let l = format!("font-size:var(--xdict-fs-l, 1.125rem);{lead}");
+    let xl = "font-size:var(--xdict-fs-xl, 1.25rem);line-height:var(--xdict-leading-tight, 1.3)";
+    assert_eq!(
+        css(sheet, &s),
+        format!("body{{}} def{{{m}}} def chn{{{s_}}} x{{{m}}} idm-g def{{{l}}} b{{{xl}}}"),
+        "def and x are 16.72 and 17.48 px against a 16.72 base; def chn is nested, idm-g def unmet, b met in both"
+    );
+    // A size over a sized element snaps by its ratio; the one over the page by what it sets: 19.2 px against the
+    // 21.12 of the text, so that the text renders at s times l, the base size.
+    let sheet = "sn{font-size:120%} def{font-size:110%}";
+    let s = Style::of_edition([sheet], ["<div><sn><def>a round fruit with shiny red or green skin</def></sn></div>"]);
+    assert_eq!(css(sheet, &s), format!("sn{{{s_}}} def{{{l}}}"));
+    // Without entries nothing was met: the ratio alone, as before.
+    assert_eq!(css(sheet, &Style::of_sheets([])), format!("sn{{{xl}}} def{{{l}}}"));
+}
+
 /// R5: line heights are the frame's, everywhere (unification R, 2026-10-16).
 #[test]
 fn line_heights_are_dropped() {
