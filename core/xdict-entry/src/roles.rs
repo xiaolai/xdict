@@ -633,6 +633,14 @@ pub(crate) struct Roles<'s> {
     line_starts: Vec<u32>,
     /// Nothing but space written since the last box began or ended: the next inline element starts a line.
     line_open: bool,
+    /// Visible text written since the last box began or ended, or the last break.
+    line_text: bool,
+    /// Private Use characters of a known markup, where they are written and their Unicode ([`minion`]).
+    unicode: Vec<(usize, usize, &'static str)>,
+    /// Elements of Minion's markup (`class="MinionNew"`), whose Private Use characters [`minion`] writes as Unicode.
+    minions: Vec<u32>,
+    /// Elements no visible text on their line comes before: they start a line. In order, as the nodes are.
+    fresh: Vec<u32>,
 }
 
 /// What the tree decided: its edits, the strip counts it owns, and the roles written.
@@ -704,6 +712,10 @@ impl<'s> Roles<'s> {
             lead_break: None,
             line_starts: Vec::new(),
             line_open: true,
+            line_text: false,
+            unicode: Vec::new(),
+            minions: Vec::new(),
+            fresh: Vec::new(),
         }
     }
 
@@ -774,6 +786,7 @@ impl<'s> Roles<'s> {
         let boxed = props.inline.map_or_else(|| block_tag(&lower), |i| !i);
         if boxed || lower == "br" {
             self.line_open = true;
+            self.line_text = false;
         } else if !void {
             if self.line_open && self.line_starts.len() < MAX_NODES {
                 self.line_starts.push(self.nodes.len() as u32);
@@ -846,6 +859,12 @@ impl<'s> Roles<'s> {
         let profiled = self.profile.and_then(|p| p.sure(&lower, &classes));
         let id = self.nodes.len() as u32;
         let at = self.buf_at();
+        if !self.line_text {
+            self.fresh.push(id);
+        }
+        if classes.iter().any(|c| c == "minionnew") {
+            self.minions.push(id);
+        }
         self.nodes.push(Node {
             name: lower.into_boxed_str(),
             hom: classes.iter().any(|c| c.contains("hom")),
@@ -935,6 +954,17 @@ impl<'s> Roles<'s> {
                 self.moves.push((n, at, p.to_owned()));
             }
         }
+        if let Some(at) = at
+            && !self.minions.is_empty()
+            && self.stack.iter().rev().any(|id| self.minions.binary_search(id).is_ok())
+            && self.unicode.len() < MAX_NODES
+        {
+            for (i, c) in raw.char_indices() {
+                if let Some(written) = minion(c) {
+                    self.unicode.push((at + i, at + i + c.len_utf8(), written));
+                }
+            }
+        }
         if let (Some(at), Some(&top)) = (at, self.stack.last()) {
             let first = self.nodes.get(top as usize).is_some_and(|n| !n.direct);
             icons::written(raw, at, top, first, &mut self.glyphs);
@@ -959,6 +989,7 @@ impl<'s> Roles<'s> {
         let Some(node) = self.nodes.get_mut(top as usize) else { return };
         node.direct |= !blank;
         self.line_open &= blank;
+        self.line_text |= !blank;
         match node.kids.last_mut() {
             Some(Kid::Text { words: w, blank: b }) => {
                 *w = w.saturating_add(words);
@@ -995,6 +1026,7 @@ impl<'s> Roles<'s> {
                 }
                 if n.boxed {
                     self.line_open = true;
+                    self.line_text = false;
                 }
             }
         }
@@ -1044,6 +1076,9 @@ impl<'s> Roles<'s> {
         for &(from, to) in &self.gaps {
             decided.edits.push((from, to, String::new()));
         }
+        for &(from, to, written) in &self.unicode {
+            decided.edits.push((from, to, written.to_owned()));
+        }
         for &(from, to) in &self.spaces {
             decided.edits.push((from, to, " ".into()));
         }
@@ -1057,7 +1092,7 @@ impl<'s> Roles<'s> {
             decided.edits.push((*at, *at + punct.len(), String::new()));
         }
         if self.key.is_some() {
-            let mut led: Option<u64> = None;
+            let mut led: Option<(u64, u32, usize)> = None;
             // Where the role loop below writes a sure mark: a mark it does not write is written alone after it.
             let mut wrote_sure = vec![false; self.nodes.len()];
             for (i, role) in roles.iter().enumerate() {
@@ -1095,9 +1130,35 @@ impl<'s> Roles<'s> {
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
                 // navigation, and the entry's own headword follows it. A later headword in the lead's own markup is a
                 // homograph's (OALD's `h1.headword` of *bloody²*): a lead too, so homographs look alike (WI-11 Q2).
-                if *role == Role::Headword && !self.linked(i) && led.is_none_or(|sig| sig == node.sig) {
-                    attr.push_str(" data-xdict-lead");
-                    led = Some(node.sig);
+                //
+                // A later headword is a lead only where it starts a line: inside a line of text it is a mention ("1
+                // chat or chat away", a word builder's "–Adjectives: considerable"). One that restates the lead at
+                // once, nothing visible written between them (CALD's plain title line, then the word with its stress
+                // marks and speakers), takes the lead, and the plain one is marked restated: the frame hides it, so
+                // the title is drawn once. A hidden one never does.
+                if *role == Role::Headword && !self.linked(i) {
+                    let take = match &led {
+                        None => true,
+                        Some((sig, end, _)) => {
+                            let after = node.text.0 >= *end;
+                            let between = self.buf.get(*end as usize..node.text.0 as usize).unwrap_or("x");
+                            let restates = between.trim().is_empty() && !node.flags.hidden;
+                            if after && self.fresh.binary_search(&(i as u32)).is_ok() && restates {
+                                if let Some((_, _, edit)) = led.take()
+                                    && let Some(e) = decided.edits.get_mut(edit)
+                                {
+                                    e.2 = e.2.replace(" data-xdict-lead", " data-xdict-restated");
+                                }
+                                true
+                            } else {
+                                after && self.fresh.binary_search(&(i as u32)).is_ok() && *sig == node.sig
+                            }
+                        }
+                    };
+                    if take {
+                        attr.push_str(" data-xdict-lead");
+                        led = Some((node.sig, node.text.1, decided.edits.len()));
+                    }
                 }
                 let mut counted = name.to_owned();
                 if let Some((attribute, value)) = kind {
@@ -1166,6 +1227,12 @@ impl<'s> Roles<'s> {
                 }
                 (None, None) => continue,
             };
+            // Inside a link already, the element is that link's drawing: a link wrapped around it would be a link
+            // in a link, which HTML closes at the inner one, a second speaker beside the first (MED's
+            // `<a href="sound://…"><img data-src-mp3="https://…"></a>`).
+            if &*node.name != "a" && self.in_link(i) {
+                continue;
+            }
             let Some(url) = url else { continue };
             let written = match crate::rewrite::literal(&url, &self.base, &self.dir, usize::MAX) {
                 Ok((Some(text), _)) => text,
@@ -2457,6 +2524,20 @@ pub fn roles_marked(text: &str, key: &str, style: &crate::Style, base: &str) -> 
     }
     out.push_str(text.get(from..).unwrap_or(""));
     out
+}
+
+/// What a Private Use character of Minion's markup is in Unicode: AHD's pronunciation key, drawn by a Minion that is
+/// not on a Mac (the gallery sweep of 2026-10-17 drew boxes; reading-style R3's edge). The two tied vowels with their
+/// combining tie (U+035E double macron, U+035D double breve), and the primary stress, a bold prime beside the light
+/// prime (U+2032) the markup writes for secondary stress. Read from the entries: `bassoon` (bə-so͞on′),
+/// `hurdswoman` (-wo͝om′-), `alone` (ə-lōn′).
+fn minion(c: char) -> Option<&'static str> {
+    match c {
+        '\u{e012}' => Some("o\u{35d}o"),
+        '\u{e013}' => Some("o\u{35e}o"),
+        '\u{e01f}' => Some("<b>\u{2032}</b>"),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

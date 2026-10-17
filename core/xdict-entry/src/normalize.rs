@@ -15,7 +15,7 @@ use crate::colour::{self, Role};
 
 /// The version of these rules. Raised whenever what they write changes, so anything that keeps rewritten
 /// output knows it is stale.
-pub const STYLE: u32 = 8;
+pub const STYLE: u32 = 9;
 
 /// Every token the core may write, by `dev-docs/reading-style.md` §1's names: the frame defines exactly these, and a
 /// name not among them would fall back silently. The one list; a test holds every output to it.
