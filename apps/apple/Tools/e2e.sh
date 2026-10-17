@@ -95,11 +95,12 @@ to_host() { rsync -a -e "$SSH -o BatchMode=yes -o ConnectTimeout=15" "$@"; }
 
 # **One run at a time against a host**: two runs share the remote installation and would quit each other's app
 # mid-assertion. shlock's pid file, because macOS has no flock(1); a lock left by a killed run is taken over.
-RUN_LOCK="${TMPDIR:-/tmp}/xdict-e2e-$(printf '%s' "$host" | tr -c 'A-Za-z0-9' '_').lock"
-readonly RUN_LOCK
-/usr/bin/shlock -f "$RUN_LOCK" -p $$ || fail "another e2e run is already using $host (lock: $RUN_LOCK)"
+# The lock is Tools/host-lock.sh's, which the gates (make land), the gallery, the lab and the UI tour take too: since
+# 2026-10-17 one Mac builds and runs E2E, so a run waits for them, saying who holds the host.
+. Tools/host-lock.sh
+host_lock "$host" e2e || fail "another XDict run is using $host"
 scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"; rm -f "$RUN_LOCK"' EXIT
+trap 'rm -rf "$scratch"; host_unlock "$host"' EXIT
 
 # ---------------------------------------------------------------------------------------------------------------------
 # **The remote scripts are parsed here, before anything is shipped.** They are quoted heredocs, which `bash -n` on this
