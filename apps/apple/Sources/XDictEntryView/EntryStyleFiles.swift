@@ -169,9 +169,11 @@ var XDictColourCore = (function () {
 /* fold-head rule): OED's etymology and OALECD's part of speech kept their own margins (sweep, 2026-10-17). */
 @layer xdict-space{[data-xdict-space]{margin-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
 [data-xdict-space]:not([data-xdict-space=image]){margin-bottom:0 !important}
-[data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}}
+[data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
+[data-xdict-space-end]{margin-bottom:0 !important}}
 /* A block inside an inline box (PEU's examples in its inline list items) gets no top margin WebKit honours: its space */
-/* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17). */
+/* is a top padding instead (`data-xdict-space-by`, frame.js `roleSpace`; 2026-10-17); the blocks that end the content */
+/* before it give up their bottom margins, which collapse into the gap where no padding can take them back (D45). */
 html{padding:0 !important;font-size:var(--xdict-base) !important;
 background:var(--xdict-bg) !important;color:var(--xdict-text) !important;display:block !important;
 visibility:visible !important;opacity:1 !important;filter:none !important;transform:none !important;
@@ -1026,6 +1028,21 @@ var XDictFrameCore = (function () {
     }
     return n.getBoundingClientRect().bottom;
   }
+  // The blocks that end `n` with their bottom margins adjoining what follows it: `n` itself when a block, then its last
+  // content, down through inline boxes and through blocks with no bottom padding or border and visible overflow.
+  function ends(n) {
+    while (n && n.nodeType === 1) {
+      var st = getComputedStyle(n);
+      if (!inline(st)) {
+        if (!/^(block|list-item)$/.test(st.display) || st.float !== 'none') return;
+        n.setAttribute('data-xdict-space-end', '');
+        if (st.overflow !== 'visible' || parseFloat(st.paddingBottom) > 0 || parseFloat(st.borderBottomWidth) > 0) return;
+      }
+      var c = n.lastChild;
+      while (c && !rendered(c)) c = c.previousSibling;
+      n = c;
+    }
+  }
   function inInline(e) {
     for (var a = e.parentElement; a && a !== document.body; a = a.parentElement) if (inline(getComputedStyle(a))) return true;
     return false;
@@ -1046,6 +1063,7 @@ var XDictFrameCore = (function () {
     Array.prototype.forEach.call(body.querySelectorAll('[data-xdict-space]'), function (e) {
       e.removeAttribute('data-xdict-space'); e.removeAttribute('data-xdict-space-by'); e.style.removeProperty('--xdict-space-at');
     });
+    Array.prototype.forEach.call(body.querySelectorAll('[data-xdict-space-end]'), function (e) { e.removeAttribute('data-xdict-space-end'); });
     var spaced = [];
     Array.prototype.forEach.call(body.querySelectorAll('[data-xdict-role],img[data-xdict-img]'), function (e, i) {
       if (i > 65536 || e.closest('[data-xdict-control]') || !e.getClientRects().length) return;
@@ -1070,6 +1088,11 @@ var XDictFrameCore = (function () {
       if (!p) return null;
       var w = headingBefore(p) && name !== 'image' ? px['after-heading'] : px[name];
       if (p.nodeType === 1 && p.getAttribute('data-xdict-space') === 'image') w = Math.max(w, px.image);
+      // A padded block's gap can only grow: a bottom margin that ends the content before it (OALD's examples list, the
+      // last block of the idiom before; `type.css`'s list margin) collapses out of that content's box into the gap, and
+      // no padding takes it back (D45: 16 px for 12). The blocks that end that content and whose bottom margins adjoin
+      // the gap give theirs up (`data-xdict-space-end`, column.css); the padding then makes the whole gap.
+      if (e.hasAttribute('data-xdict-space-by')) ends(p);
       return { prev: p, want: w };
     });
     var margin = spaced.map(function (e, i) { return want[i] ? want[i].want : 0; });
