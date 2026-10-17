@@ -534,7 +534,10 @@ var XDictFrameCore = (function () {
   // section is a phrase block when it holds idioms, phrasal verbs, collocates or derived words.
   var ROLE_SPACE = { sense: 'sense', sensenum: 'sense', example: 'example', 'example-trans': 'translation',
                      trans: 'translation', subhead: 'subhead', heading: 'heading', pos: 'pos' };
-  function spaceOf(role, section) {
+  // A section or heading inside a sense is that sense's note (OALD's "synonym proviso", "see also", D43): it keeps
+  // the dictionary's own gap, as its "Topics" line does, never a heading's.
+  function spaceOf(role, section, inSense) {
+    if (inSense && (role === 'section' || role === 'heading')) return '';
     if (role === 'section') return /^(idioms|phrasal|colloc|derivatives)$/.test(section || '') ? 'phrase' : 'heading';
     return Object.prototype.hasOwnProperty.call(ROLE_SPACE, role) ? ROLE_SPACE[role] : '';
   }
@@ -1033,7 +1036,8 @@ var XDictFrameCore = (function () {
       if (i > 65536 || e.closest('[data-xdict-control]') || !e.getClientRects().length) return;
       var st = getComputedStyle(e);
       var name = e.tagName === 'IMG' ? (st.display === 'block' && st.float === 'none' ? 'image' : '')
-        : XDictFrameCore.spaceOf(e.getAttribute('data-xdict-role'), e.getAttribute('data-xdict-section'));
+        : XDictFrameCore.spaceOf(e.getAttribute('data-xdict-role'), e.getAttribute('data-xdict-section'),
+            !!(e.parentElement && e.parentElement.closest('li,[data-xdict-role=sense]')));
       // A block picture is spaced by its outermost holder, a block with it (`data-xdict-img-holder`).
       if (name === 'image') {
         for (var up = e.parentElement; up && up.hasAttribute('data-xdict-img-holder'); up = up.parentElement) e = up;

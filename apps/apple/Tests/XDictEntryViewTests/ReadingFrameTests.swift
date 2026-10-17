@@ -29,9 +29,15 @@ struct ReadingFrameTests {
     /// words, a heading's otherwise; what no role spaces keeps R7.
     @Test func eachRoleTakesItsOwnSpace() throws {
         let context = try Self.core()
-        func space(_ role: String, _ section: String = "") -> String? {
-            context.evaluateScript("XDictFrameCore.spaceOf('\(role)', '\(section)')")?.toString()
+        func space(_ role: String, _ section: String = "", inSense: Bool = false) -> String? {
+            context.evaluateScript("XDictFrameCore.spaceOf('\(role)', '\(section)', \(inSense))")?.toString()
         }
+        // A section or heading inside a sense is the sense's note (OALD's "synonym proviso", D43): no heading's gap.
+        #expect(space("section", "thesaurus", inSense: true) == "")
+        #expect(space("section", "idioms", inSense: true) == "")
+        #expect(space("heading", inSense: true) == "")
+        #expect(space("example", inSense: true) == "example")
+        #expect(space("section", "thesaurus") == "heading")
         #expect(space("sense") == "sense")
         #expect(space("sensenum") == "sense")
         #expect(space("example") == "example")
