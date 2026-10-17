@@ -267,6 +267,45 @@ extension GalleryRun {
           if (ps.content === 'none' || ps.display === 'none') return;
           note('G14', ps.backgroundColor === TEXT2, 1, 'marker ' + ps.backgroundColor + ' <' + label(m) + '>');
         });
+        // G14 (D47, 2026-10-18): a bullet sits on its item's first line: its vertical centre within 0.25em of the middle
+        // of the first line of the item's text. XDict's dot is placed from the item's top, so a top padding inside the item (a
+        // padded run-on head, OALD's idioms) left it above the text. The dictionary's own bullet, as the item's first
+        // visible box, is held the same way.
+        var GLYPH = /^[•◦▪■●○‣·]$/;
+        function firstLine(li, skip) {
+          var w = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+          for (var x = w.nextNode(); x; x = w.nextNode()) {
+            if (!/\S/.test(x.nodeValue) || (skip && skip.contains(x))) continue;
+            var rr = document.createRange(); rr.selectNodeContents(x);
+            var rs = rr.getClientRects();
+            for (var k = 0; k < rs.length; k++) if (rs[k].width > 0) return rs[k];
+          }
+          return null;
+        }
+        function onFirstLine(li, centre, skip) {
+          var line = firstLine(li, skip), em = parseFloat(getComputedStyle(li).fontSize) || 16;
+          if (!line) return;
+          // Against the line's middle, not its whole box: a 1.5-line box holds a dot raised by a 12 px padding (D47).
+          var off = centre - (line.top + line.bottom) / 2;
+          note('G14', Math.abs(off) <= 0.25 * em, 1, 'bullet centre ' + Math.round(off) + 'px off its first line\'s middle <' + label(li) + '>');
+        }
+        body.querySelectorAll('[data-xdict-before=marker]').forEach(function (m) {
+          if (!seen(m)) return;
+          var ps = getComputedStyle(m, '::before');
+          if (ps.content === 'none' || ps.display === 'none') return;
+          var r = m.getBoundingClientRect();
+          var top = ps.position === 'absolute' ? r.top + m.clientTop + parseFloat(ps.top) : NaN;
+          if (isFinite(top)) onFirstLine(m, top + (parseFloat(ps.height) || 0) / 2);
+        });
+        body.querySelectorAll('li').forEach(function (li) {
+          if (!seen(li) || li.hasAttribute('data-xdict-before')) return;
+          var w = document.createTreeWalker(li, NodeFilter.SHOW_TEXT), x = w.nextNode();
+          while (x && !/\S/.test(x.nodeValue)) x = w.nextNode();
+          var b = x && x.parentElement;
+          if (!b || b === li || !GLYPH.test((b.textContent || '').trim()) || !seen(b)) return;
+          var br = b.getBoundingClientRect();
+          onFirstLine(li, (br.top + br.bottom) / 2, b);
+        });
         // G9: every fold head opens and closes its fold, and is left as it was. Last: it clicks the page.
         // A head's fold is the one the frame syncs it with (disclosure-core.js): `aria-controls`, else the next sibling
         // of the head or of one of its three nearest ancestors.
@@ -334,6 +373,8 @@ extension GalleryRun {
             "<i style='font-synthesis:style !important;font-style:italic !important'>G12 汉字</i>",
             "<p style='font-family:Courier !important'>G13 another face</p>",
             "<ul style='padding-left:100px !important;margin-left:0 !important'><li>G14 deep</li></ul>",
+            // G14 (D47): a dot above its item's first line, the text padded down under it.
+            "<ul><li data-xdict-before='marker'><div style='padding-top:40px !important'>G14 raised</div></li></ul>",
             // An image with no pixels (bytes no decoder reads): R16's classes leave it alone, as they would resize a
             // picture's fault away, and its box is still the 3000 px G15 must find.
             "<img src='data:image/png;base64,AAAA' style='width:3000px !important;max-width:none !important;height:4px'>",

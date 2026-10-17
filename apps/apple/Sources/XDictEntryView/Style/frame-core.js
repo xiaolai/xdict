@@ -72,7 +72,10 @@ var XDictFrameCore = (function () {
   // scrolls (MED's related words, `max-height:150px;overflow:auto`) hides rows a frame sized to its document cannot
   // scroll to, the wheel going to the page; one whose overflow is visible runs its text on under what follows. One
   // that clips (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+  // D47: XDict's dot sits half a line below its item's top; a top padding the spacing put above the item's first line
+  // (on the item, or on the block it opens with) drops it by as much. Only a padded first block moves it.
+  function markerDrop(f) { return f.padded && f.first ? Math.max(0, f.contentTop - f.markerTop) : 0; }
   function lifts(f) { return f.maxHeight !== 'none' && /^(visible|auto|scroll)$/.test(f.overflow) && f.content > f.box + 1; }
   return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin,
-           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts };
+           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts, markerDrop: markerDrop };
 })();

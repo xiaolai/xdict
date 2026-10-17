@@ -616,9 +616,12 @@ var XDictFrameCore = (function () {
   // scrolls (MED's related words, `max-height:150px;overflow:auto`) hides rows a frame sized to its document cannot
   // scroll to, the wheel going to the page; one whose overflow is visible runs its text on under what follows. One
   // that clips (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+  // D47: XDict's dot sits half a line below its item's top; a top padding the spacing put above the item's first line
+  // (on the item, or on the block it opens with) drops it by as much. Only a padded first block moves it.
+  function markerDrop(f) { return f.padded && f.first ? Math.max(0, f.contentTop - f.markerTop) : 0; }
   function lifts(f) { return f.maxHeight !== 'none' && /^(visible|auto|scroll)$/.test(f.overflow) && f.content > f.box + 1; }
   return { dominant: dominant, opaque: opaque, gatherable: gatherable, spaceOf: spaceOf, nextMargin: nextMargin,
-           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts };
+           imageClass: imageClass, hangs: hangs, ruleOn: ruleOn, lifts: lifts, markerDrop: markerDrop };
 })();
 
 """#,
@@ -1159,6 +1162,21 @@ var XDictFrameCore = (function () {
       e.style.setProperty('--xdict-space-at', best[i][0] + 'px');
     });
   }
+  // D47: a dot placed from its item's top follows the padding the spacing put above the item's first line (OALD's idiom
+  // heads, padded because they are blocks in an inline span), `--xdict-marker-drop` in marks.css. Reading style only.
+  function markerDrops() {
+    if (!SPACE_CAP || !document.body) return;
+    Array.prototype.forEach.call(document.body.querySelectorAll('[data-xdict-before=marker]'), function (m, i) {
+      if (i > 65536) return;
+      m.style.removeProperty('--xdict-marker-drop');
+      var d = m.hasAttribute('data-xdict-space-by') ? m : m.querySelector('[data-xdict-space-by]');
+      if (!d || !m.getClientRects().length) return;
+      var drop = XDictFrameCore.markerDrop({ padded: true, first: d === m || firstIn(m, d),
+        contentTop: d.getBoundingClientRect().top + d.clientTop + (parseFloat(getComputedStyle(d).paddingTop) || 0),
+        markerTop: m.getBoundingClientRect().top + m.clientTop });
+      if (drop > 0) m.style.setProperty('--xdict-marker-drop', drop + 'px');
+    });
+  }
   // D46: a height cap its text does not fit in is lifted (`XDictFrameCore.lifts`). Reading style only.
   function overflows() {
     if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;
@@ -1257,10 +1275,10 @@ var XDictFrameCore = (function () {
     if (pending || !SPACE_CAP) return;
     pending = true;
     // A timer, not an animation frame: a pane in the background gets no frames, and still resizes.
-    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); }, 16);
+    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }, 16);
   }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
   document.addEventListener('click', function () { setTimeout(later, 50); setTimeout(later, 400); });
@@ -1315,7 +1333,7 @@ text-indent:0 !important;list-style:none !important}
 /* The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text. */
 [data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}
 [data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
+inset-block-start:calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
 /* 4. The disclosure chevron, drawn from `aria-expanded`, which the disclosure script keeps to the fold. */
 [data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 0.25em 0 0 !important;
 margin-inline:0 0.25em !important;transition:transform 0.15s !important}
