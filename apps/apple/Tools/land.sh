@@ -25,6 +25,33 @@ APPLE=$PWD
 REPO=$(cd ../.. && pwd)
 fail() { echo "land: $*" >&2; exit 1; }
 readonly RUST=1.99.0 SWIFTLINT=0.65.1
+
+# command_of <gate> <corpus folder on the host>: run from the copy's root, cargo pinned to $RUST.
+command_of() {
+    local corpus=\$HOME/$2
+    case $1 in
+        core) echo "cd core && cargo fmt --check && cargo test && cargo clippy --all-targets && cargo test -p xdict-core --no-run -q" ;;
+        # The tool tests read git (the source tree): the copy has none, so it gets a snapshot.
+        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
+        entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
+        lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
+        mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
+        # run1 <log name> <command>: the binding toolchain's PATH and JAVA_HOME; its log is ~/logs/<name>.log there.
+        bindings) echo "export TAILN=30; ~/bin/run1 land-swift core/xdict-ffi/test-swift.sh && ~/bin/run1 land-kotlin core/xdict-ffi/test-kotlin.sh && ~/bin/run1 land-worker core/xdict-wasm/test-worker.sh" ;;
+        memory) echo "export TAILN=30; ~/bin/run1 land-memory-swift core/xdict-ffi/measure-memory.sh && ~/bin/run1 land-memory-worker core/xdict-wasm/measure-memory.sh" ;;
+    esac
+}
+# The facts a gate's key holds besides its inputs, one `--fact` argument a line; Tools/tests/land-test.sh reads them
+# here rather than repeating them. What the gate runs is one: a changed command is a gate never passed.
+facts_of() {
+    echo "--fact"; echo "rust=$RUST"
+    echo "--fact"; echo "command=$(command_of "$1" corpus | shasum -a 256 | cut -c1-16)"
+    case $1 in
+        apple-test) echo "--fact"; echo "swiftlint=$SWIFTLINT" ;;
+        entries | lookup-corpus) echo "--fact"; echo "corpus=$2" ;;
+    esac
+}
+if [ "${1:-}" = --facts-of ]; then facts_of "${2:?gate}" "${3:-}"; exit 0; fi
 readonly CORPUS_NAME=the24
 # The tests name others (Tools/tests/land-test.sh).
 readonly AIR_CORPUS=${XDICT_LAND_CORPUS:-$HOME/xdict-corpus/$CORPUS_NAME}
@@ -58,8 +85,8 @@ full=()
 [ "${FULL:-}" != 1 ] || full=(--full)
 : >"$OUT/todo"
 for g in $gates; do
-    facts=(--fact "rust=$RUST")
-    case $g in apple-test) facts+=(--fact "swiftlint=$SWIFTLINT") ;; entries | lookup-corpus) facts+=(--fact "corpus=$corpus_id") ;; esac
+    facts=()
+    while IFS= read -r a; do facts+=("$a"); done < <(facts_of "$g" "$corpus_id")
     row=$(python3 -I Tools/gate-cache.py status ${full[@]+"${full[@]}"} "${facts[@]}" "$g") || fail "the gate cache failed for $g"
     IFS=$'\t' read -r action _ key why <<<"$row"
     if [ "$action" = skip ]; then
@@ -133,21 +160,6 @@ PY
 ) || fail "could not place the gates"
 
 # --- The gates -------------------------------------------------------------------------------------------------------
-# command_of <gate> <corpus folder on the host>: run from the copy's root, cargo pinned to $RUST.
-command_of() {
-    local corpus=\$HOME/$2
-    case $1 in
-        core) echo "cd core && cargo fmt --check && cargo test && cargo clippy --all-targets && cargo test -p xdict-core --no-run -q" ;;
-        # The tool tests read git (the source tree): the copy has none, so it gets a snapshot.
-        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
-        entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
-        lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
-        mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
-        # run1 <log name> <command>: the binding toolchain's PATH and JAVA_HOME; its log is ~/logs/<name>.log there.
-        bindings) echo "export TAILN=30; ~/bin/run1 land-swift core/xdict-ffi/test-swift.sh && ~/bin/run1 land-kotlin core/xdict-ffi/test-kotlin.sh && ~/bin/run1 land-worker core/xdict-wasm/test-worker.sh" ;;
-        memory) echo "export TAILN=30; ~/bin/run1 land-memory-swift core/xdict-ffi/measure-memory.sh && ~/bin/run1 land-memory-worker core/xdict-wasm/measure-memory.sh" ;;
-    esac
-}
 # A green run that measured nothing is not a pass: each corpus test must print the line only a measured run prints
 # (the files' "not measured" lines belong to other variables of the same test files, so their absence proves nothing).
 measured() {
