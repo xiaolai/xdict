@@ -13,9 +13,9 @@ public enum PanelChrome {
 }
 
 /// **One size rule for every Settings pane and the setup board** (UI review X2, S-01, U-01): a grouped form as tall as
-/// its rows, at one width, so the window fits the pane — none clipped, none swimming in white space.
+/// its rows, at one width (Apple's Settings window, 600 pt: parity P39), so the window fits the pane — none clipped.
 struct SettingsPane: ViewModifier {
-    var width: CGFloat = 480
+    var width: CGFloat = SettingsDictionaries.paneWidth
 
     func body(content: Content) -> some View {
         content
@@ -27,7 +27,7 @@ struct SettingsPane: ViewModifier {
 }
 
 extension View {
-    func settingsPane(width: CGFloat = 480) -> some View { modifier(SettingsPane(width: width)) }
+    func settingsPane(width: CGFloat = SettingsDictionaries.paneWidth) -> some View { modifier(SettingsPane(width: width)) }
 }
 
 /// **Add Dictionaries… asked from anywhere** (UI review A-04, M-10, U-02): File ▸ Add Dictionaries…, the main window's

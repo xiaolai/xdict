@@ -1955,6 +1955,22 @@
         }
       }
     },
+    "Drag reference sources into the order you prefer:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drag reference sources into the order you prefer:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将参考来源拖移到您偏好的顺序："
+          }
+        }
+      }
+    },
     "Each dictionary is spoken in the language set for it in the Library." : {
       "localizations" : {
         "en" : {
@@ -4075,6 +4091,22 @@
         }
       }
     },
+    "Select a dictionary to see its options." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a dictionary to see its options."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择一部词典以查看它的选项。"
+          }
+        }
+      }
+    },
     "Select a word anywhere and press the shortcut to look it up." : {
       "localizations" : {
         "en" : {
@@ -4281,6 +4313,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在词库中显示"
+          }
+        }
+      }
+    },
+    "Show in Library…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show in Library…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在词库中显示…"
           }
         }
       }

@@ -186,7 +186,7 @@ ROUTES = [
     # Settings
     ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, Show Setup…",
      [SETTINGS, ("wait", 1), ("click", "General")]),
-    ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "The library inside Settings, not clipped",
+    ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table, options box below (P39, P40)",
      [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]),
     ("settings.reading", "full", "⌘, ▸ Reading", "Accent colour with its sentence",
      [SETTINGS, ("wait", 1), ("click", "Reading")]),
