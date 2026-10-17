@@ -147,6 +147,19 @@ out=$(status 2>&1)
     && ok "the fixtures' crate selects what needs the kit, not launch" || bad "fixtures change: $(runs <<<"$out")"
 record_all
 
+# The reason names an edited file before one that only joined or left the gate's inputs, and says which it is.
+echo 'fn b() {}' >"$repo/core/xdict-wasm/src/a.rs"
+echo '// y' >>"$repo/core/xdict-wasm/src/lib.rs"
+out=$(status 2>&1)
+grep -q '^run	core	.*changed: core/xdict-wasm/src/lib.rs' <<<"$out" \
+    && ok "an edited input is named before an added one" || bad "edit and add: $(grep '	core	' <<<"$out")"
+record_all
+rm "$repo/core/xdict-wasm/src/a.rs"
+out=$(status 2>&1)
+grep -q '^run	core	.*left the inputs: core/xdict-wasm/src/a.rs' <<<"$out" \
+    && ok "a path that left the inputs is not called changed" || bad "removed: $(grep '	core	' <<<"$out")"
+record_all
+
 # A stale graph (a manifest it no longer matches) reaches everything, and says so.
 python3 -I - "$scratch/graph.json" "$scratch/stale.json" <<'PY'
 import json, sys
