@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import XDictLibrary
@@ -12,6 +13,9 @@ public struct LibraryView: View {
     @State private var selection: UUID?
     @State private var choosing = false
     @State private var dropping = false
+    @State private var showsNotices = false
+    @Environment(\.undoManager) private var undoManager
+    private let requests = LibraryRequests.shared
 
     private let layout: Layout
 
@@ -35,6 +39,12 @@ public struct LibraryView: View {
         .fileImporter(isPresented: $choosing, allowedContentTypes: Self.chooseable, allowsMultipleSelection: true) { result in
             if case .success(let urls) = result { selectFirst(of: library.add(urls)) }
         }
+        // The open panel's button says what happens (UI review L-19).
+        .fileDialogConfirmationLabel(Text("Add"))
+        // Add Dictionaries… asked from the File menu, the main window or the setup board (A-04, M-10, U-02).
+        .onChange(of: requests.importWanted, initial: true) {
+            if requests.takeImport() { choosing = true }
+        }
         .dropDestination(for: URL.self) { urls, _ in
             let fileURLs = urls.filter(\.isFileURL)
             selectFirst(of: library.add(fileURLs))
@@ -46,32 +56,24 @@ public struct LibraryView: View {
                     .allowsHitTesting(false)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { banners }
+        .safeAreaInset(edge: .top, spacing: 0) { unreadableBanner }
     }
 
     @ViewBuilder private var arranged: some View {
         switch layout {
         case .window:
+            // Add, remove and the order under the list, as in Settings, not in the toolbar (UI review L-05).
             NavigationSplitView {
-                list
-                    .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+                VStack(spacing: 0) {
+                    list
+                    Divider()
+                    listBar
+                }
+                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
             } detail: {
                 detail
             }
             .navigationTitle(Text("Library"))
-            .toolbar {
-                ToolbarItemGroup {
-                    Button { choosing = true } label: { Label("Add Dictionaries…", systemImage: "plus") }
-                        .keyboardShortcut("o")
-                        .help(Text("Add MDict files (.mdx, .mdd) or a folder of them"))
-                    Button { selection.map(library.moveUp) } label: { Label("Move Up", systemImage: "arrow.up") }
-                        .keyboardShortcut(.upArrow, modifiers: [.command, .option])
-                        .disabled(!canMoveUp)
-                    Button { selection.map(library.moveDown) } label: { Label("Move Down", systemImage: "arrow.down") }
-                        .keyboardShortcut(.downArrow, modifiers: [.command, .option])
-                        .disabled(!canMoveDown)
-                }
-            }
         case .settings:
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
@@ -89,11 +91,10 @@ public struct LibraryView: View {
 
     @ViewBuilder private var detail: some View {
         if let id = selection, let entry = library.entries.first(where: { $0.id == id }) {
-            LibraryDetail(library: library, entry: entry)
+            LibraryDetail(library: library, entry: entry, remove: { removeSelected() }, locate: { choosing = true })
                 .id(entry.preferencesKey)
         } else {
-            Text("Select a dictionary to see its details.")
-                .foregroundStyle(.secondary)
+            ContentUnavailableView("No Dictionary Selected", systemImage: "books.vertical")
         }
     }
 
@@ -129,21 +130,32 @@ public struct LibraryView: View {
         .accessibilityLabel(Text(name))
     }
 
+    /// Removes the selected dictionary; Edit ▸ Undo puts it back where it was (UI review L-09).
     private func removeSelected() {
         guard let id = selection else { return }
         selection = nil
-        Task { await library.remove(id) }
+        let undo = undoManager
+        let library = library
+        Task {
+            guard let removed = await library.removeForUndo(id) else { return }
+            undo?.registerUndo(withTarget: library) { library in
+                MainActor.assumeIsolated { library.restore(removed) }
+            }
+            undo?.setActionName(String(localized: "Remove Dictionary"))
+        }
     }
 
     private var list: some View {
         List(selection: $selection) {
             ForEach(library.entries) { entry in
-                LibraryRow(library: library, entry: entry, phase: library.phases[entry.id])
+                LibraryRow(library: library, entry: entry, phase: library.phases[entry.id], locate: { choosing = true })
                     .tag(entry.id)
+                    .listRowSeparator(.hidden)
             }
             .onMove { library.move(fromOffsets: $0, toOffset: $1) }
         }
         .onDeleteCommand { removeSelected() }
+        .safeAreaInset(edge: .bottom, spacing: 0) { noticeBar }
         .overlay {
             if library.entries.isEmpty, library.unreadable == nil {
                 ContentUnavailableView {
@@ -160,15 +172,60 @@ public struct LibraryView: View {
         }
     }
 
-    @ViewBuilder private var banners: some View {
-        VStack(spacing: 0) {
-            if let unreadable = library.unreadable {
-                Banner(text: LibrarySentences.unreadable(unreadable), symbol: "exclamationmark.triangle", dismiss: nil)
-            }
-            ForEach(Array(library.notices.enumerated()), id: \.offset) { _, notice in
-                Banner(text: LibrarySentences.notice(notice), symbol: "info.circle") { library.dismiss(notice) }
-            }
+    @ViewBuilder private var unreadableBanner: some View {
+        if let unreadable = library.unreadable {
+            Banner(text: LibrarySentences.unreadable(unreadable), symbol: "exclamationmark.triangle", dismiss: nil)
         }
+    }
+
+    /// **What the last addition could not do, as one line under the list** (UI review X7): never over the list or the
+    /// empty state; one notice says itself, several are counted, each listed with its reason behind Show Details.
+    @ViewBuilder private var noticeBar: some View {
+        let notices = library.notices
+        if !notices.isEmpty {
+            VStack(spacing: 0) {
+                Divider()
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                    Group {
+                        if notices.count == 1, let only = notices.first {
+                            Text(LibrarySentences.notice(only))
+                        } else {
+                            Text(LibrarySentences.noticesHeadline(notices.count))
+                        }
+                    }
+                    .font(.subheadline)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    if notices.count > 1 {
+                        Button("Show Details…") { showsNotices = true }
+                            .controlSize(.small)
+                            .popover(isPresented: $showsNotices) { noticeDetails }
+                    }
+                    Button("Dismiss") { for notice in notices { library.dismiss(notice) } }
+                        .controlSize(.small)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+            }
+            .background(.bar)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("library.notices")
+        }
+    }
+
+    private var noticeDetails: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(library.notices.enumerated()), id: \.offset) { _, notice in
+                    Text(LibrarySentences.notice(notice)).fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                }
+            }
+            .padding()
+        }
+        .frame(width: 360)
+        .frame(maxHeight: 320)
     }
 
     private func selectFirst(of added: [UUID]) {
@@ -202,6 +259,7 @@ struct LibraryRow: View {
     let library: Library
     let entry: LibraryEntry
     let phase: EntryPhase?
+    var locate: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .center, spacing: 8) {
@@ -211,18 +269,25 @@ struct LibraryRow: View {
             .labelsHidden()
             .toggleStyle(.checkbox)
             .help(Text("Use in lookups"))
+            // Not offered where it cannot work (UI review L-08).
+            .disabled(phase.map(Self.isTrouble) ?? false)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: entry.displayName).lineLimit(1)
                 status
             }
             Spacer(minLength: 4)
-            if entry.languages.needsAsking || entry.offer != nil {
-                Image(systemName: "questionmark.circle")
-                    .foregroundStyle(.orange)
-                    .help(Text("A question awaits your answer in the details"))
-                    .accessibilityLabel(Text("A question awaits your answer in the details"))
-            }
             action
+            // A fixed slot, so the badge never moves with the row's action (L-07); secondary, since a caution colour on
+            // nearly every row stops meaning anything (L-06).
+            Group {
+                if entry.languages.needsAsking || entry.offer != nil {
+                    Image(systemName: "questionmark.circle")
+                        .foregroundStyle(.secondary)
+                        .help(Text("A question awaits your answer in the details"))
+                        .accessibilityLabel(Text("A question awaits your answer in the details"))
+                }
+            }
+            .frame(width: 16)
         }
         .padding(.vertical, 2)
     }
@@ -235,26 +300,39 @@ struct LibraryRow: View {
             }
             .controlSize(.small)
         case .some(let phase):
-            Text(LibrarySentences.phase(phase))
-                .font(.caption)
-                .foregroundStyle(Self.isTrouble(phase) ? Color.orange : Color.secondary)
-                .lineLimit(2)
+            if let sentence = ProblemStatus.sentence(for: phase) {
+                ProblemStatus(sentence: sentence, compact: true)
+            } else {
+                Text(LibrarySentences.phase(phase))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
         case .none:
             EmptyView()
         }
     }
 
+    /// The action the row's problem needs (UI review L-04).
     @ViewBuilder private var action: some View {
-        switch phase {
-        case .waiting, .importing:
-            Button("Cancel") { Task { await library.cancelImport(entry.id) } }
+        if let action = LibraryRowAction.for(phase) {
+            Button(action.title) { perform(action) }
                 .controlSize(.small)
-        case .cancelled, .failed, .refused, .missing, .outsideItsFolder:
-            Button("Retry") { library.retry(entry.id) }
-                .controlSize(.small)
-        default:
-            EmptyView()
         }
+    }
+
+    private func perform(_ action: LibraryRowAction) {
+        switch action {
+        case .cancel: Task { await library.cancelImport(entry.id) }
+        case .locate: locate()
+        case .showInFinder: Self.showInFinder(entry)
+        case .tryAgain: library.retry(entry.id)
+        }
+    }
+
+    static func showInFinder(_ entry: LibraryEntry) {
+        guard let path = entry.mdx?.location.path else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
     static func isTrouble(_ phase: EntryPhase) -> Bool {
