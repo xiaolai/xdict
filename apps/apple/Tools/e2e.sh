@@ -54,6 +54,8 @@ set -euo pipefail
 SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 readonly SELF
 cd "$(dirname "$SELF")/.."
+# shellcheck source=Tools/e2e-requested.sh
+source Tools/e2e-requested.sh
 readonly PLAN=Tools/e2e-plan.sh
 
 if [ "${1:-}" = --list-stages ]; then
