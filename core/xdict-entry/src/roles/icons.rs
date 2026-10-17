@@ -534,6 +534,18 @@ const NOT_FOLD: [&str; 15] = [
     "window", "wordform",
 ];
 
+/// The first element of box `i`, when a kept script names it by a class and an element follows it in the box (the
+/// fold it opens): the head a click on which the script binds.
+fn caption(nodes: &[Node], i: usize, facts: &Facts) -> Option<usize> {
+    let mut els = nodes.get(i)?.kids.iter().filter_map(|k| match k {
+        Kid::El(c) => Some(*c as usize),
+        Kid::Text { .. } => None,
+    });
+    let first = els.next()?;
+    let named = nodes.get(first).is_some_and(|c| facts.script_named(&c.name, false, &c.icon.classes));
+    (named && els.next().is_some()).then_some(first)
+}
+
 /// §7.3: a clickable whose handler names a fold, and is not about an image, a popup, a tip, a tab, audio, a window or
 /// a pronunciation key; or an element a kept script names by a class that says it folds. Marked `disclosure`.
 fn disclosures(
@@ -559,10 +571,17 @@ fn disclosures(
                 ["fold", "toggle", "expand", "collaps"].iter().any(|w| c.contains(w))
                     && facts.script_named(&node.name, false, std::slice::from_ref(c))
             });
-        if by_handler || by_class {
-            decided.edits.push((node.attr_at, node.attr_at, " data-xdict-control=\"disclosure\"".into()));
+        // A box named by its folded state folds by a click on its first child when the script names that child too
+        // (COBUILD's `$('.trend > .caption').on('click', …)` on `div.trend.folded`): the child is the head, so a click
+        // on XDict's chevron reaches the handler, and the fold is the child's next sibling.
+        let head = if by_class { caption(nodes, i, facts).unwrap_or(i) } else { i };
+        if (by_handler || by_class)
+            && let Some(h) = nodes.get(head)
+            && !marked.get(head).copied().unwrap_or(true)
+        {
+            decided.edits.push((h.attr_at, h.attr_at, " data-xdict-control=\"disclosure\"".into()));
             *count.entry("disclosure".into()).or_default() += 1;
-            if let Some(m) = marked.get_mut(i) {
+            if let Some(m) = marked.get_mut(head) {
                 *m = true;
             }
         }

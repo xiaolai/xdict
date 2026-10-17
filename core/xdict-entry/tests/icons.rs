@@ -256,6 +256,24 @@ fn a_fold_control_is_marked_disclosure_and_keeps_its_hook() {
     assert!(o.starts_with(r#"<div data-xdict-control="disclosure" class="cc_addon_foldButton">"#), "{o}");
 }
 
+/// A box a script names by its folded state (COBUILD's `div.trend.folded`) folds by a click on its caption, the child
+/// the script binds (`$('.trend > .caption').on('click', …)`): the caption is the head, so a click on XDict's chevron
+/// or "expand all" reaches the handler, and the fold is the caption's next sibling (G9, gallery 2026-10-17).
+#[test]
+fn a_box_folded_by_its_caption_has_the_caption_for_its_head() {
+    let mut s = Style::of_sheets([".trend{margin:0}.caption{cursor:pointer}.trendContent{height:0}"]);
+    s.add_scripts([
+        "$('.collins_en_cn.trend > .caption').off().on('click', function() { $(this).parents('.trend').toggleClass('folded unfolded') })",
+    ]);
+    let (o, _) = entry_with(
+        r#"<div class="collins_en_cn addon trend folded"><div class="caption"><span>Trends of run</span></div><div class="trendContent">chart</div></div>"#,
+        &s,
+        None,
+    );
+    assert!(o.contains(r#"<div data-xdict-control="disclosure" class="caption">"#), "{o}");
+    assert!(!o.contains(r#"<div data-xdict-control="disclosure" class="collins_en_cn"#), "{o}");
+}
+
 #[test]
 fn a_fold_heads_own_sign_goes_where_xdicts_chevron_is_drawn() {
     // COBUILD's "Trends of …" head: a drawn plus inside the head, its lines boxes with no word (written here).
