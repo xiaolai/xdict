@@ -294,3 +294,30 @@ extension XDictContract.FindingKind {
         }
     }
 }
+
+// MARK: - Reading style (ADR-0010)
+
+extension XDictContract.ReadingStyle {
+    init(_ style: XDictCore.ReadingStyle) {
+        let base: XDictContract.BaseSource = switch style.baseFrom {
+        case .page(let selector): .page(selector: selector)
+        case .prose(let weight): .prose(weight: weight)
+        case .text(let chars, let share): .text(chars: chars, share: share)
+        case .browserDefault: .browserDefault
+        }
+        let c = style.changes
+        self.init(version: style.version, basePx: style.basePx, baseFrom: base,
+                  fonts: style.fonts.map {
+                      let reason: XDictContract.FontReason = switch $0.reason {
+                      case .privateUse: .privateUse
+                      case .pseudoContent: .pseudoContent
+                      case .phonetic: .phonetic
+                      }
+                      return XDictContract.KeptFont(family: $0.family, reason: reason, selector: $0.selector)
+                  },
+                  sheets: style.sheets, skipped: style.skipped,
+                  changes: XDictContract.StyleChanges(important: c.important, page: c.page, family: c.family, size: c.size,
+                                                      lineHeight: c.lineHeight, colour: c.colour, weight: c.weight,
+                                                      space: c.space, dropped: c.dropped))
+    }
+}

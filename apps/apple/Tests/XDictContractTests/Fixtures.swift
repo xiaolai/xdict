@@ -58,9 +58,10 @@ enum Fixtures {
         .splitLineage(edition: edition, newLineage: newLineage),
         .lineageOf(edition: edition),
         .health(dict: dict),
+        .readingStyle(dict: dict),
     ]
 
-    static let operationCases = 14
+    static let operationCases = 15
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -77,6 +78,7 @@ enum Fixtures {
         case .splitLineage: 11
         case .lineageOf: 12
         case .health: 13
+        case .readingStyle: 14
         }
     }
 
@@ -124,6 +126,7 @@ enum Fixtures {
         .lineage(lineage),
         .lineage(nil),
         .health(health),
+        .readingStyle(readingStyle),
     ]
 
     static let health = Health(version: 1, entries: 706_524, findings: [
@@ -132,7 +135,14 @@ enum Fixtures {
         HealthFinding(kind: .repaired, count: 764, name: nil, examples: []),
     ], classes: [HealthClass(name: "text.repaired", count: 764)])
 
-    static let answerCases = 12
+    static let readingStyle = ReadingStyle(
+        version: 1, basePx: 14, baseFrom: .text(chars: 6_120, share: 0.81),
+        fonts: [KeptFont(family: "Kingsoft Phonetic Plain", reason: .phonetic, selector: ".phon")],
+        sheets: ["oalecd.css", "in/icons.css"], skipped: ["big.css: larger than 32 MiB"],
+        changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
+                              dropped: 11))
+
+    static let answerCases = 13
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -147,6 +157,7 @@ enum Fixtures {
         case .resource: 9
         case .lineage: 10
         case .health: 11
+        case .readingStyle: 12
         }
     }
 

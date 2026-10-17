@@ -38,6 +38,7 @@ struct LibraryDetail: View {
             reading
             about
             health
+            readingStyle
             if !entry.notes.isEmpty {
                 Section("Problems") {
                     ForEach(Array(entry.notes.enumerated()), id: \.offset) { _, note in
@@ -57,6 +58,48 @@ struct LibraryDetail: View {
             }
         }
         .formStyle(.grouped)
+    }
+
+    /// What the reading style does to this dictionary (ADR-0010, owner's decision of 2026-10-17): asked of the service
+    /// when these details show. The dictionary's own words (families, selectors, sheet paths) are shown as written.
+    @ViewBuilder private var readingStyle: some View {
+        Section("Reading style") {
+            if let state = library.readingStyles[entry.id] {
+                Text(LibrarySentences.styleStatus(state)).textSelection(.enabled)
+                if case .read(let style) = state {
+                    Text(LibrarySentences.baseSize(px: style.basePx, from: style.baseFrom)).textSelection(.enabled)
+                    if !style.fonts.isEmpty {
+                        DisclosureGroup {
+                            ForEach(Array(style.fonts.enumerated()), id: \.offset) { _, font in
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(verbatim: font.family).font(.callout.bold())
+                                    Text(LibrarySentences.fontReason(font.reason)).font(.caption)
+                                    Text(verbatim: font.selector).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                }
+                                .textSelection(.enabled)
+                            }
+                        } label: {
+                            Text("Fonts kept: \(style.fonts.count)")
+                        }
+                    }
+                    DisclosureGroup {
+                        ForEach(Array(style.sheets.enumerated()), id: \.offset) { _, sheet in
+                            Text(verbatim: sheet).font(.caption.monospaced()).textSelection(.enabled)
+                        }
+                        ForEach(Array(style.skipped.enumerated()), id: \.offset) { _, skipped in
+                            Text(verbatim: skipped).font(.caption.monospaced()).foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    } label: {
+                        Text("Style sheets read: \(style.sheets.count), skipped: \(style.skipped.count)")
+                    }
+                    ForEach(Array(LibrarySentences.styleChanges(style.changes).enumerated()), id: \.offset) { _, line in
+                        Text(line).textSelection(.enabled)
+                    }
+                }
+            }
+        }
+        .task(id: entry.id) { await library.loadReadingStyle(entry.id) }
     }
 
     /// What the health check found (WI-12): where it is, then one sentence per finding, each opening to its places.

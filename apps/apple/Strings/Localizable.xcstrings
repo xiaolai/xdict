@@ -321,6 +321,38 @@
         }
       }
     },
+    "%llu backgrounds, borders and other declarations dropped" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu backgrounds, borders and other declarations dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去掉了 %llu 处背景、边框等样式声明"
+          }
+        }
+      }
+    },
+    "%llu colours set to XDict’s palette" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu colours set to XDict’s palette"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处颜色改用 XDict 的配色"
+          }
+        }
+      }
+    },
     "%llu cross-references point to words this dictionary does not have." : {
       "localizations" : {
         "en" : {
@@ -433,6 +465,54 @@
         }
       }
     },
+    "%llu font sizes made relative" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu font sizes made relative"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处字号改为相对大小"
+          }
+        }
+      }
+    },
+    "%llu font weights set to XDict’s" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu font weights set to XDict’s"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处字重改用 XDict 的字重"
+          }
+        }
+      }
+    },
+    "%llu fonts replaced with XDict’s" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu fonts replaced with XDict’s"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处字体换成 XDict 的字体"
+          }
+        }
+      }
+    },
     "%llu headwords hold extra spaces, invisible characters or HTML code." : {
       "localizations" : {
         "en" : {
@@ -445,6 +525,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%llu 个词头含有多余的空格、不可见字符或 HTML 代码。"
+          }
+        }
+      }
+    },
+    "%llu line heights made relative" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu line heights made relative"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处行高改为相对值"
+          }
+        }
+      }
+    },
+    "%llu page settings dropped" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu page settings dropped"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去掉了 %llu 处页面设置"
           }
         }
       }
@@ -541,6 +653,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%llu 条结果"
+          }
+        }
+      }
+    },
+    "%llu spacings put on XDict’s steps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu spacings put on XDict’s steps"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu 处间距对齐到 XDict 的间距档位"
+          }
+        }
+      }
+    },
+    "%llu “!important” marks removed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%llu “!important” marks removed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "去掉了 %llu 处“!important”标记"
           }
         }
       }
@@ -813,6 +957,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "后退"
+          }
+        }
+      }
+    },
+    "Base size %@ px, from the dictionary’s page rule “%@”." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base size %1$@ px, from the dictionary’s page rule “%2$@”."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基准字号 %1$@ px，取自词典的页面规则“%2$@”。"
+          }
+        }
+      }
+    },
+    "Base size %@ px, the size %lld%% of a sample of its entries is set in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base size %1$@ px, the size %2$lld%% of a sample of its entries is set in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基准字号 %1$@ px：抽样词条中 %2$lld%% 的文字用这个字号。"
+          }
+        }
+      }
+    },
+    "Base size %@ px, the size most of its text rules set (%llu votes)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base size %1$@ px, the size most of its text rules set (%2$llu votes)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基准字号 %1$@ px：多数正文样式规则设定的字号（%2$llu 票）。"
+          }
+        }
+      }
+    },
+    "Base size %@ px: the dictionary sets no size of its own." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Base size %@ px: the dictionary sets no size of its own."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "基准字号 %@ px：词典没有设定自己的字号。"
           }
         }
       }
@@ -1425,6 +1633,22 @@
         }
       }
     },
+    "Fonts kept: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fonts kept: %lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留的字体：%lld 种"
+          }
+        }
+      }
+    },
     "Format" : {
       "localizations" : {
         "en" : {
@@ -1677,6 +1901,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已作为与被替换文件相同的词典保留。"
+          }
+        }
+      }
+    },
+    "Kept: it draws icons no other font has." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept: it draws icons no other font has."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留原因：它绘制的图标其他字体没有。"
+          }
+        }
+      }
+    },
+    "Kept: it draws phonetic symbols." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept: it draws phonetic symbols."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留原因：它用来显示音标符号。"
+          }
+        }
+      }
+    },
+    "Kept: it draws the dictionary’s marks and symbols." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Kept: it draws the dictionary’s marks and symbols."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留原因：它用来显示词典的标记和符号。"
           }
         }
       }
@@ -2241,6 +2513,22 @@
         }
       }
     },
+    "Normalizing changed nothing in its style sheets." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Normalizing changed nothing in its style sheets."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "统一样式时，它的样式表没有需要改动的地方。"
+          }
+        }
+      }
+    },
     "Not Set" : {
       "localizations" : {
         "en" : {
@@ -2737,6 +3025,38 @@
         }
       }
     },
+    "Reading style" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading style"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读样式"
+          }
+        }
+      }
+    },
+    "Reading the dictionary’s style…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading the dictionary’s style…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在读取词典的样式…"
+          }
+        }
+      }
+    },
     "Reading the selection in %@ took too long. Try again." : {
       "localizations" : {
         "en" : {
@@ -3185,6 +3505,22 @@
         }
       }
     },
+    "Style sheets read: %lld, skipped: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Style sheets read: %1$lld, skipped: %2$lld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取的样式表：%1$lld 个，跳过：%2$lld 个"
+          }
+        }
+      }
+    },
     "Suggestions" : {
       "localizations" : {
         "en" : {
@@ -3549,6 +3885,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "声音输出未能启动，这段录音（%@）无法播放。"
+          }
+        }
+      }
+    },
+    "The style report could not be made. It is asked again when these details next show." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The style report could not be made. It is asked again when these details next show."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未能生成样式报告。下次显示这些详情时会重新获取。"
           }
         }
       }
@@ -4287,6 +4639,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录时会打开 XDict。"
+          }
+        }
+      }
+    },
+    "XDict reading style, rules version %u." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict reading style, rules version %u."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 阅读样式，规则版本 %u。"
           }
         }
       }

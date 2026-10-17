@@ -37,7 +37,9 @@ public enum Contract {
     /// 2 (2026-10-14): `Missing` gained the raw values `edition` and `lineage`, which the core's lineage operations
     /// report (ADR-0002 decision 3, as amended that day).
     /// 3 (2026-10-16): the operation `health` and its answer, the core's health check of an open dictionary (WI-12).
-    public static let version: UInt32 = 3
+    /// 4 (2026-10-17): the operation `readingStyle` and its answer, the core's report of what the reading style does to
+    /// an open dictionary (ADR-0010, owner's decision of 2026-10-17), shown in the Library's details pane.
+    public static let version: UInt32 = 4
 }
 
 // MARK: - The request
@@ -188,13 +190,16 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// its index, so asking again answers at once. Like an import it has no deadline, reports progress as events, and
     /// `cancel` stops it; the service runs it below the reader's calls.
     case health(dict: DictId)
+    /// What the reading style does to an open dictionary (ADR-0010): its base size, the fonts it keeps, the sheets read
+    /// and skipped, and what normalizing them changed. Computed in the service, which reads the sheets; a short call.
+    case readingStyle(dict: DictId)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health: nil
+             .lineageOf, .health, .readingStyle: nil
         }
     }
 
@@ -203,7 +208,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health: nil
+             .lineageOf, .health, .readingStyle: nil
         }
     }
 
@@ -212,7 +217,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
-             .splitLineage, .lineageOf, .health: false
+             .splitLineage, .lineageOf, .health, .readingStyle: false
         }
     }
 
@@ -222,7 +227,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
-        case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health: nil
+        case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
+             .readingStyle: nil
         }
     }
 
@@ -231,7 +237,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     func filesRead(filesOf: [DictId: [UUID]]) -> [UUID] {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
-        case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict):
+        case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
+             .readingStyle(let dict):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf: []
@@ -252,6 +259,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .resource: .resource
         case .joinLineage, .splitLineage, .lineageOf: .lineage
         case .health: .health
+        case .readingStyle: .readingStyle
         }
     }
 
@@ -261,7 +269,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage, .health: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf: false
+             .splitLineage, .lineageOf, .readingStyle: false
         }
     }
 }
@@ -377,13 +385,15 @@ public enum Answer: Codable, Hashable, Sendable {
     case lineage(LineageId?)
     /// What the health check found.
     case health(Health)
+    /// What the reading style does to the dictionary.
+    case readingStyle(ReadingStyle)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health: false
+             .lineage, .health, .readingStyle: false
         }
     }
 
@@ -410,6 +420,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .resource: .resource
         case .lineage: .lineage
         case .health: .health
+        case .readingStyle: .readingStyle
         }
     }
 }
@@ -425,6 +436,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
+    case readingStyle
 }
 
 // MARK: - Events

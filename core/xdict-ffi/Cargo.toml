@@ -23,5 +23,11 @@ bindgen = ["uniffi/cli"]
 uniffi.workspace = true
 xdict-core = { path = "../xdict-core" }
 
+# The on-demand style-report parity case only (`examples/style-report-case.rs`, `style-report-parity.sh`).
+[dev-dependencies]
+serde_json.workspace = true
+xdict-core = { path = "../xdict-core", features = ["serde"] }
+xdict-mdx-writer = { path = "../xdict-mdx-writer" }
+
 [lints]
 workspace = true

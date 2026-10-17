@@ -14,7 +14,8 @@ final class ServiceContext: Sendable {
     let bulk = WorkGate(ceiling: WorkGate.ceiling(for: .bulk))
     let lookups = WorkGate(ceiling: WorkGate.ceiling(for: .lookup))
     let queue = DispatchQueue(label: "ai.xdict.app.DictionaryService.core", qos: .userInitiated, attributes: .concurrent)
-    /// Where health checks run (WI-12): below the reader's calls, which they must never hold up.
+    /// Where health checks and reading-style reports run (WI-12, ADR-0010): below the reader's calls, which they must
+    /// never hold up.
     let background = DispatchQueue(label: "ai.xdict.app.DictionaryService.health", qos: .utility, attributes: .concurrent)
     let log = Logger(subsystem: XDictIdentity.dictionaryService, category: "service")
     private let connections = Atomic<UInt64>(0)
@@ -114,8 +115,10 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
             answer(Response(id: request.id, outcome: outcome), payload: payload, credit: credit, reply: reply)
         }
         guard let creditClass = operation.creditClass else {
-            if case .health = operation { return context.background.async(execute: job) }
-            return context.queue.async(execute: job)
+            switch operation {
+            case .health, .readingStyle: return context.background.async(execute: job)
+            default: return context.queue.async(execute: job)
+            }
         }
         context.gate(for: creditClass).enter(connection: number, run: { [context] in context.queue.async(execute: job) }, dropped: {
             [self] in

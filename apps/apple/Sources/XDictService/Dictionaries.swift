@@ -111,6 +111,9 @@ final class Dictionaries: Sendable {
             case .health(let dict):
                 let health = try core.health(dict: dict.rawValue, progress: progress)
                 return (.answer(.health(XDictContract.Health(health))), nil)
+            // ADR-0010: the service reads the sheets and computes the report; the app only shows it.
+            case .readingStyle(let dict):
+                return (.answer(.readingStyle(XDictContract.ReadingStyle(try core.readingStyle(dict: dict.rawValue)))), nil)
             // `cancel` is the connection's, never the core's (`ConnectionSession`).
             case .cancel:
                 return (.failure(.refused(.unsupportedOperation)), nil)

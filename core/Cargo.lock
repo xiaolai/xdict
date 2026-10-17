@@ -1167,8 +1167,10 @@ dependencies = [
 name = "xdict-ffi"
 version = "0.0.1"
 dependencies = [
+ "serde_json",
  "uniffi",
  "xdict-core",
+ "xdict-mdx-writer",
 ]
 
 [[package]]

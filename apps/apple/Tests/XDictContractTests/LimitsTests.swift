@@ -158,6 +158,15 @@ struct LimitsTests {
         #expect(!ServiceOperation.lookup(query: "a", dicts: [], options: LookupOptions(limit: 1, offset: 0, mode: .reader,
                                                                                          generation: nil)).reportsProgress)
         #expect(health.creditClass == nil && !health.isBulk && health.packageSpec == nil)
-        #expect(Contract.version == 3)
+    }
+
+    /// ADR-0010 (owner's decision of 2026-10-17; contract 4): the reading style's report of an open dictionary is one
+    /// short call with a deadline, holding no credit, reading the files of the dictionary it names.
+    @Test func aReadingStyleReportIsAShortCallOnTheNamedDictionary() {
+        let report = ServiceOperation.readingStyle(dict: Fixtures.dict)
+        #expect(Deadlines.deadline(for: report, onFreshConnection: false) == .seconds(15))
+        #expect(!report.reportsProgress && report.creditClass == nil && !report.isBulk && report.packageSpec == nil)
+        #expect(report.render == nil)
+        #expect(Contract.version == 4)
     }
 }
