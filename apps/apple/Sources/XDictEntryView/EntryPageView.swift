@@ -1,0 +1,525 @@
+import AppKit
+import WebKit
+
+/// **Apple's divider between two dictionaries** (parity P15, measured on Dictionary.app): a disclosure triangle at the
+/// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
+/// at the system's `large` size. A click anywhere on it, or VoiceOver's press, collapses or expands that dictionary.
+@MainActor
+final class EntryPageDivider: NSView {
+    static let height: CGFloat = 32
+    /// The rule: #929292 measured on Apple's page in light; its dark twin keeps the same contrast with #1e1e1e.
+    static let ruleColour = NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 0x5c / 255, alpha: 1)
+            : NSColor(white: 0x92 / 255, alpha: 1)
+    }
+
+    let name: String
+    let label: NSTextField
+    var onToggle: (() -> Void)?
+    var collapsed = false {
+        didSet {
+            needsDisplay = true
+            setAccessibilityValue(collapsed ? 0 : 1)
+            setAccessibilityExpanded(!collapsed)
+        }
+    }
+
+    init(name: String) {
+        self.name = name
+        label = NSTextField(labelWithString: name)
+        super.init(frame: .zero)
+        label.font = .systemFont(ofSize: 18)
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.alignment = .center
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setAccessibilityElement(false)
+        addSubview(label)
+        translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: Self.height),
+            label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: (Self.ruleStart - Self.trailing) / 2),
+            label.centerYAnchor.constraint(equalTo: centerYAnchor),
+            label.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -(Self.ruleStart + Self.trailing + 48)),
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.disclosureTriangle)
+        setAccessibilityLabel(name)
+        setAccessibilityIdentifier("page.divider.\(name)")
+        setAccessibilityValue(1)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    /// Apple's geometry, in points from the pane's leading edge: the triangle centred at 29, the rule from 45 to 16
+    /// short of the trailing edge, a 12 pt gap each side of the name.
+    static let triangleCentre: CGFloat = 29
+    static let ruleStart: CGFloat = 45
+    static let trailing: CGFloat = 16
+    static let gap: CGFloat = 12
+
+    override var isFlipped: Bool { true }
+
+    override func draw(_ dirtyRect: NSRect) {
+        let mid = (bounds.height / 2).rounded(.down) + 0.5
+        let colour = Self.ruleColour
+        colour.setStroke()
+        let text = label.frame.insetBy(dx: -Self.gap, dy: 0)
+        let rule = NSBezierPath()
+        rule.lineWidth = 1
+        rule.move(to: NSPoint(x: Self.ruleStart, y: mid))
+        rule.line(to: NSPoint(x: max(Self.ruleStart, text.minX), y: mid))
+        rule.move(to: NSPoint(x: min(bounds.maxX - Self.trailing, text.maxX), y: mid))
+        rule.line(to: NSPoint(x: bounds.maxX - Self.trailing, y: mid))
+        rule.stroke()
+        // ▼ expanded, ▶ collapsed, in the label colour at Apple's size (about 11 pt across).
+        let c = NSPoint(x: Self.triangleCentre, y: bounds.height / 2), r: CGFloat = 5.5
+        let triangle = NSBezierPath()
+        if collapsed {
+            triangle.move(to: NSPoint(x: c.x - r * 0.8, y: c.y - r))
+            triangle.line(to: NSPoint(x: c.x + r * 0.9, y: c.y))
+            triangle.line(to: NSPoint(x: c.x - r * 0.8, y: c.y + r))
+        } else {
+            triangle.move(to: NSPoint(x: c.x - r, y: c.y - r * 0.8))
+            triangle.line(to: NSPoint(x: c.x + r, y: c.y - r * 0.8))
+            triangle.line(to: NSPoint(x: c.x, y: c.y + r * 0.9))
+        }
+        triangle.close()
+        NSColor.secondaryLabelColor.setFill()
+        triangle.fill()
+    }
+
+    override func mouseDown(with event: NSEvent) { toggle() }
+    override func accessibilityPerformPress() -> Bool {
+        toggle()
+        return true
+    }
+
+    func toggle() { onToggle?() }
+}
+
+/// **One dictionary's part of the page**: its divider, and its frame — a pane of its own (`EntryPane`), made when it is
+/// first needed, sized to its document so it never scrolls inside.
+@MainActor
+final class EntryPageSection {
+    let item: EntryPageItem
+    let divider: EntryPageDivider
+    /// What the frame's web view sits in, at the document's height.
+    let holder = NSView()
+    private let height: NSLayoutConstraint
+    private(set) var pane: EntryPane?
+    var collapsed: Bool { didSet { apply() } }
+    var hasDivider = true { didSet { apply() } }
+    /// The frame's document has loaded at least once, and the frame has taken its height.
+    var finished = false
+
+    var id: UUID { item.id }
+    var name: String { item.name }
+
+    init(item: EntryPageItem, collapsed: Bool) {
+        self.item = item
+        self.collapsed = collapsed
+        divider = EntryPageDivider(name: item.name)
+        holder.translatesAutoresizingMaskIntoConstraints = false
+        height = holder.heightAnchor.constraint(equalToConstant: CGFloat(EntryPagePlan.estimatedHeight))
+        height.priority = .required
+        height.isActive = true
+        apply()
+    }
+
+    /// The frame's height in points, as laid out now.
+    var frameHeight: Double { Double(height.constant) }
+
+    func setHeight(_ points: Double) {
+        let clamped = CGFloat(min(max(points, 1), EntryPage.maximumFrameHeight))
+        guard abs(height.constant - clamped) >= 0.5 else { return }
+        height.constant = clamped
+    }
+
+    func attach(_ pane: EntryPane) {
+        self.pane = pane
+        let view = pane.view
+        view.translatesAutoresizingMaskIntoConstraints = false
+        view.passesScrollToPage = true
+        holder.addSubview(view)
+        NSLayoutConstraint.activate([
+            view.topAnchor.constraint(equalTo: holder.topAnchor),
+            view.bottomAnchor.constraint(equalTo: holder.bottomAnchor),
+            view.leadingAnchor.constraint(equalTo: holder.leadingAnchor),
+            view.trailingAnchor.constraint(equalTo: holder.trailingAnchor),
+        ])
+    }
+
+    func close() {
+        pane?.close()
+        pane = nil
+        divider.removeFromSuperview()
+        holder.removeFromSuperview()
+    }
+
+    private func apply() {
+        divider.collapsed = collapsed
+        divider.isHidden = !hasDivider
+        holder.isHidden = collapsed
+    }
+}
+
+/// A view whose origin is its top-left, as a page's is.
+private final class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
+
+/// **The All page** (parity P15): every dictionary's entry for the headword, stacked in the reader's order in one
+/// scrolling page, each in its own frame. Frames are made for the screen and one screen beyond (`EntryPagePlan`), the
+/// rest as the reader scrolls.
+@MainActor
+final class EntryPage: NSObject, WKScriptMessageHandler {
+    /// A frame never grows past this, in points: past it the frame scrolls inside, so a hostile document claiming a
+    /// height of millions cannot make a web view that size.
+    static let maximumFrameHeight: Double = 200_000
+    static let heightHandler = "xdictPageHeight"
+
+    let scroll = NSScrollView()
+    private let document = FlippedView()
+    private let stack = NSStackView()
+    private(set) var sections: [EntryPageSection] = []
+    private let make: (EntryPageSection) -> Result<EntryPane, EntryRefusal>
+    private let preferences: EntryPreferences
+    private var zoom: Double
+    /// Where to land once the frames above it have loaded: a page offset in points.
+    private var pendingOffset: Double?
+    /// Find across the frames: the query, each section's visible match count, and the current match.
+    private var findQuery = ""
+    private var findCounts: [Int] = []
+    private var findCurrent: (section: Int, match: Int)?
+    private var findHidden = 0
+    var onRefusal: ((EntryRefusal) -> Void)?
+    /// The moment the page was asked for, and when its first frame finished: first paint, for the measurement.
+    private(set) var asked = ContinuousClock.now
+    private(set) var firstPaint: Duration?
+
+    init(preferences: EntryPreferences, zoom: Double, make: @escaping (EntryPageSection) -> Result<EntryPane, EntryRefusal>) {
+        self.preferences = preferences
+        self.zoom = zoom
+        self.make = make
+        super.init()
+        stack.orientation = .vertical
+        stack.alignment = .width
+        stack.spacing = 0
+        stack.detachesHiddenViews = true
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        document.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(stack)
+        scroll.documentView = document
+        scroll.hasVerticalScroller = true
+        scroll.hasHorizontalScroller = false
+        scroll.autohidesScrollers = true
+        scroll.drawsBackground = true
+        scroll.backgroundColor = NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 30 / 255, alpha: 1) : .white
+        }
+        scroll.translatesAutoresizingMaskIntoConstraints = false
+        let clip = scroll.contentView
+        NSLayoutConstraint.activate([
+            document.topAnchor.constraint(equalTo: clip.topAnchor),
+            document.leadingAnchor.constraint(equalTo: clip.leadingAnchor),
+            document.widthAnchor.constraint(equalTo: clip.widthAnchor),
+            stack.topAnchor.constraint(equalTo: document.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+        ])
+        clip.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.boundsDidChangeNotification,
+                                               object: clip)
+        scroll.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.frameDidChangeNotification,
+                                               object: scroll)
+    }
+
+    var panes: [EntryPane] { sections.compactMap(\.pane) }
+
+    // MARK: - Showing
+
+    /// Shows `items` in this order: a section whose dictionary, binding and record are unchanged keeps its frame as it
+    /// is; the others are made afresh. Returns the first refusal, if a frame could not be made with every layer.
+    func show(_ items: [EntryPageItem], landing offset: Double?) -> EntryRefusal? {
+        let old = Dictionary(sections.map { ($0.item.identity, $0) }, uniquingKeysWith: { first, _ in first })
+        var kept: Set<ObjectIdentifier> = []
+        var next: [EntryPageSection] = []
+        for item in items {
+            if let section = old[item.identity], !kept.contains(ObjectIdentifier(section)) {
+                kept.insert(ObjectIdentifier(section))
+                next.append(section)
+            } else {
+                next.append(EntryPageSection(item: item, collapsed: preferences.collapsed(for: item.content.binding.dictionary)))
+            }
+        }
+        for section in sections where !kept.contains(ObjectIdentifier(section)) { section.close() }
+        if kept.isEmpty {
+            asked = .now
+            firstPaint = nil
+            clearFindState()
+        }
+        sections = next
+        for (index, section) in next.enumerated() {
+            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed)
+            section.divider.onToggle = { [weak self, weak section] in
+                guard let self, let section else { return }
+                self.toggle(section)
+            }
+        }
+        let views = next.flatMap { [$0.divider as NSView, $0.holder] }
+        if stack.arrangedSubviews != views {
+            for view in stack.arrangedSubviews where !views.contains(view) { stack.removeArrangedSubview(view) }
+            for (index, view) in views.enumerated() {
+                stack.insertArrangedSubview(view, at: index)
+            }
+        }
+        if let offset { pendingOffset = offset } else if kept.isEmpty { scrollTo(0) }
+        return materialize()
+    }
+
+    func close() {
+        NotificationCenter.default.removeObserver(self)
+        for section in sections { section.close() }
+        sections = []
+        scroll.removeFromSuperview()
+    }
+
+    /// Collapses or expands one dictionary, and keeps the choice for it.
+    func toggle(_ section: EntryPageSection) {
+        section.collapsed.toggle()
+        preferences.setCollapsed(section.collapsed, for: section.item.content.binding.dictionary)
+        if let index = sections.firstIndex(where: { $0 === section }) {
+            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed)
+        }
+        if let refusal = materialize() { onRefusal?(refusal) }
+    }
+
+    /// Makes the frames the viewport wants (or every frame, for find); the first refusal stops it.
+    @discardableResult
+    func materialize(all: Bool = false) -> EntryRefusal? {
+        document.layoutSubtreeIfNeeded()
+        let indices: [Int]
+        if all {
+            indices = Array(sections.indices)
+        } else {
+            let tops = sections.map { Double($0.holder.frame.minY) }
+            let heights = sections.map(\.frameHeight)
+            let visible = scroll.contentView.bounds
+            let height = visible.height > 0 ? Double(visible.height) : Double(scroll.frame.height)
+            indices = EntryPagePlan.wanted(tops: tops, heights: heights, collapsed: sections.map(\.collapsed),
+                                           top: Double(visible.minY), height: max(height, 1)).sorted()
+        }
+        for index in indices where sections[index].pane == nil {
+            let section = sections[index]
+            switch make(section) {
+            case .failure(let why): return why
+            case .success(let pane):
+                section.attach(pane)
+                pane.setZoom(zoom)
+                pane.view.configuration.userContentController.add(self, contentWorld: EntryPane.world,
+                                                                  name: Self.heightHandler)
+                Task { _ = await pane.show(section.item.reference) }
+            }
+        }
+        return nil
+    }
+
+    @objc private func scrolled() {
+        if let refusal = materialize() { onRefusal?(refusal) }
+    }
+
+    // MARK: - Heights
+
+    /// A frame's document finished loading: measured, and watched for any later change of its height (a fold opened,
+    /// an image arrived, the width or text size changed).
+    func finished(_ pane: EntryPane) {
+        guard let section = sections.first(where: { $0.pane === pane }) else { return }
+        if firstPaint == nil { firstPaint = .now - asked }
+        Task { @MainActor in
+            let height = try? await pane.view.callAsyncJavaScript(Self.watchHeight, arguments: [:], in: nil,
+                                                                  contentWorld: EntryPane.world) as? Double
+            if let height { section.setHeight(height * zoom) }
+            section.finished = true
+            landIfReady()
+            if let refusal = materialize() { onRefusal?(refusal) }
+        }
+    }
+
+    /// The document's height in CSS pixels, and a watcher posting it again whenever it changes: in the shell's world,
+    /// whose handler the page cannot see or call. The body's contents to their last line, plus the body's and the
+    /// root's bottom padding: never `scrollHeight`, which is never less than the frame and so could never shrink it.
+    static let watchHeight = """
+        const measure = () => {
+            const body = document.body; if (!body) { return 0; }
+            const range = document.createRange(); range.selectNodeContents(body);
+            const b = getComputedStyle(body), h = getComputedStyle(document.documentElement);
+            const text = range.getBoundingClientRect().bottom + window.scrollY + parseFloat(b.paddingBottom || "0")
+                + parseFloat(b.marginBottom || "0") + parseFloat(h.paddingBottom || "0");
+            // The root's own box: it holds a last paragraph's bottom margin, which collapses through the body and
+            // which the text's rectangle leaves out (the lab saw a frame scroll by that margin).
+            const root = document.documentElement.getBoundingClientRect().bottom + window.scrollY
+                + parseFloat(h.marginBottom || "0");
+            return Math.ceil(Math.max(text, root));
+        };
+        if (!window.__xdictPageHeight && window.ResizeObserver) {
+            let last = 0;
+            window.__xdictPageHeight = new ResizeObserver(() => {
+                const now = measure();
+                if (now !== last) { last = now; window.webkit.messageHandlers.xdictPageHeight.postMessage(now); }
+            });
+            window.__xdictPageHeight.observe(document.documentElement);
+            if (document.body) { window.__xdictPageHeight.observe(document.body); }
+        }
+        return measure();
+        """
+
+    nonisolated func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+        MainActor.assumeIsolated {
+            guard message.world == EntryPane.world, let height = (message.body as? NSNumber)?.doubleValue,
+                  let view = message.webView,
+                  let section = sections.first(where: { $0.pane?.view === view }) else { return }
+            section.setHeight(height * zoom)
+        }
+    }
+
+    func setZoom(_ zoom: Double) {
+        guard zoom != self.zoom else { return }
+        let ratio = zoom / self.zoom
+        self.zoom = zoom
+        for section in sections {
+            section.pane?.setZoom(zoom)
+            section.setHeight(section.frameHeight * ratio)
+        }
+    }
+
+    // MARK: - Scrolling
+
+    /// How far down the page the reader is, in points.
+    var offset: Double { Double(scroll.contentView.bounds.minY) }
+
+    func scrollTo(_ y: Double) {
+        let maxY = max(0, document.frame.height - scroll.contentView.bounds.height)
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: min(max(0, y), maxY)))
+        scroll.reflectScrolledClipView(scroll.contentView)
+    }
+
+    /// Lands at the pending offset once every frame made so far has loaded (their heights decide where it is).
+    private func landIfReady() {
+        guard let target = pendingOffset, sections.allSatisfy({ $0.pane == nil || $0.finished }) else { return }
+        pendingOffset = nil
+        document.layoutSubtreeIfNeeded()
+        scrollTo(target)
+    }
+
+    /// Scrolls the page so a point of a frame's document (CSS pixels from its top) is in the middle of the view.
+    func reveal(_ section: EntryPageSection, documentY: Double) {
+        document.layoutSubtreeIfNeeded()
+        let y = Double(section.holder.frame.minY) + documentY * zoom
+        scrollTo(y - Double(scroll.contentView.bounds.height) / 2)
+    }
+
+    // MARK: - Find, across frames (R3, P30)
+
+    private func clearFindState() {
+        findQuery = ""
+        findCounts = []
+        findCurrent = nil
+        findHidden = 0
+    }
+
+    /// Finds `query` in every frame (each made first), the first match current; collapsed dictionaries' matches are
+    /// counted as hidden, as folded ones are.
+    func find(_ query: String) async -> EntryFindResult? {
+        if let refusal = materialize(all: true) {
+            onRefusal?(refusal)
+            return nil
+        }
+        await loaded()
+        findQuery = query
+        var counts: [Int] = [], hidden = 0
+        for section in sections {
+            guard let pane = section.pane, let result = await pane.find(query) else {
+                counts.append(0)
+                continue
+            }
+            hidden += result.hidden + (section.collapsed ? result.visible : 0)
+            counts.append(section.collapsed ? 0 : result.visible)
+            await clearCurrent(pane)
+        }
+        findCounts = counts
+        findCurrent = nil
+        findHidden = hidden
+        return await move(to: EntryPagePlan.step(from: nil, counts: counts, forward: true))
+    }
+
+    func findStep(forward: Bool) async -> EntryFindResult? {
+        guard !findQuery.isEmpty else { return nil }
+        return await move(to: EntryPagePlan.step(from: findCurrent, counts: findCounts, forward: forward),
+                          forward: forward)
+    }
+
+    func clearFind() async {
+        clearFindState()
+        for pane in panes { await pane.clearFind() }
+    }
+
+    private func move(to next: (section: Int, match: Int)?, forward: Bool = true) async -> EntryFindResult? {
+        let hidden = findHidden
+        let total = findCounts.reduce(0, +)
+        guard let next, let pane = sections[next.section].pane else {
+            findCurrent = nil
+            return EntryFindResult(visible: total, hidden: hidden, current: 0)
+        }
+        if let current = findCurrent, current.section == next.section {
+            _ = await pane.findStep(forward: forward)
+        } else {
+            if let current = findCurrent, let old = sections[current.section].pane { await clearCurrent(old) }
+            _ = await pane.find(findQuery)
+            for _ in 0..<next.match { _ = await pane.findStep(forward: true) }
+        }
+        findCurrent = next
+        if let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
+                                                             contentWorld: EntryPane.world) as? Double {
+            reveal(sections[next.section], documentY: y)
+        }
+        return EntryFindResult(visible: total, hidden: hidden, current: EntryPagePlan.position(next, counts: findCounts))
+    }
+
+    /// The current match's top in its document, in CSS pixels: read off the highlight find.js paints.
+    static let currentMatchTop = """
+        const h = window.CSS && CSS.highlights && CSS.highlights.get("xdict-find-current");
+        if (!h) { return null; }
+        for (const r of h) { const b = r.getBoundingClientRect(); return b.top + window.scrollY + b.height / 2; }
+        return null;
+        """
+
+    private func clearCurrent(_ pane: EntryPane) async {
+        _ = try? await pane.view.callAsyncJavaScript(
+            "if (window.CSS && CSS.highlights) { CSS.highlights.delete('xdict-find-current'); } return 0;",
+            arguments: [:], in: nil, contentWorld: EntryPane.world)
+    }
+
+    /// Returns once every frame made has loaded its document, or after two seconds.
+    private func loaded() async {
+        let deadline = ContinuousClock.now + .seconds(2)
+        while sections.contains(where: { $0.pane != nil && !$0.finished }), ContinuousClock.now < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+    }
+
+    // MARK: - Which frame
+
+    /// The frame the reader is in: the one holding the keyboard, else the one at the top of the view.
+    func frameInFocus(window: NSWindow?) -> EntryPane? {
+        if let responder = window?.firstResponder as? NSView,
+           let pane = panes.first(where: { responder === $0.view || responder.isDescendant(of: $0.view) }) {
+            return pane
+        }
+        let top = scroll.contentView.bounds.minY
+        return sections.first { !$0.collapsed && $0.pane != nil && $0.holder.frame.maxY > top }?.pane ?? panes.first
+    }
+}

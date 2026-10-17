@@ -165,6 +165,10 @@ old_menus = {"menubar": [
 
 start_text = [node("AXStaticText", value="Type a word to look up in…"), node("AXStaticText", value="Alpha"),
               node("AXStaticText", value="Beta")]
+page = [node("AXDisclosureTriangle", (183, 300, 676, 32), identifier="page.divider.Beta", description="Beta",
+              value="1"),
+        node("AXDisclosureTriangle", (183, 500, 676, 32), identifier="page.divider.Records", description="Records",
+              value="1")]
 cases = {
     "main.start": (apple_window("Dictionary", *start_text), old_window("Look Up")),
     "search.result": (apple_window("Dictionary", rowed("apple", "Apple", "apple pie"),
@@ -185,6 +189,12 @@ cases = {
     "scope.one": (apple_window("Dictionary"), old_window("apple")),
     "entry.find": (apple_window("Dictionary", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
                    old_window("apple")),
+    # Apple's page: dividers named by the dictionaries after the first; XDict's old window had one entry, no divider.
+    "page.all": (apple_window("Dictionary", *page), old_window("orange")),
+    "page.collapse": (apple_window("Dictionary", dict(page[0], value="0"), page[1]), old_window("orange")),
+    "page.one": (apple_window("Dictionary"), apple_window("Dictionary", *page)),
+    "page.find": (apple_window("Dictionary", *page, node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
+                  old_window("orange")),
 }
 cases["search.next"] = cases["search.result"]
 cases["scope.one"][0]["windows"][0]["children"][1]["children"][2]["value"] = "1"

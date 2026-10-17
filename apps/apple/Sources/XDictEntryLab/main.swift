@@ -65,6 +65,9 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
         case .gallery:
             try Report.write(try await GalleryRun.run(options: options, core: core), to: out)
             exit(0)
+        case .page:
+            try Report.write(try await PageMeasure.run(options: options, core: core), to: out)
+            exit(0)
         case nil:
             throw LabFailure(description: "no mode")
         }

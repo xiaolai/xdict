@@ -59,6 +59,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     private var environment: EntryEnvironment
     private var pane: EntryPane?
+    /// The All page (parity P15), while one is shown instead of a single entry: one frame, one pane, per dictionary.
+    private var page: EntryPage?
+    /// The page's dictionary whose entry the window counts as shown (its sidebar row).
+    private var primaryItem: UUID?
+    /// The frame a link, a sound or a spoken word last came from.
+    private weak var activePane: EntryPane?
     private var ruleList: Result<WKContentRuleList, EntryRefusal>?
     private let gate = RemoteOpenGate()
     let container = NSView()
@@ -74,10 +80,43 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// The consent prompt on screen, if one is: the E2E stage clicks its buttons as a reader would.
     public private(set) var presentedPrompt: NSAlert?
     /// The read-back of the switches on the current web view's preferences, for the record.
-    public var switchesReadBack: [String: Bool] { pane?.switchesReadBack ?? [:] }
-    /// The current web view, if one exists: for the window's focus and for the E2E lab's instruments.
-    public var webView: WKWebView? { pane?.view }
-    public var binding: EntryBinding? { pane?.binding }
+    public var switchesReadBack: [String: Bool] { shownPane?.switchesReadBack ?? [:] }
+    /// The current web view, if one exists: for the window's focus and for the E2E lab's instruments. On the All page,
+    /// the shown dictionary's frame.
+    public var webView: WKWebView? { shownPane?.view }
+    /// The dictionary the last link, sound or spoken word came from: on the All page, that frame's; else the shown one.
+    public var binding: EntryBinding? { (activePane.flatMap { owns($0) ? $0 : nil } ?? shownPane)?.binding }
+    /// On the All page, the item (`EntryPageItem.id`) whose frame the last link, sound or spoken word came from.
+    public var activeItem: UUID? {
+        guard let page else { return nil }
+        if let activePane, let section = page.sections.first(where: { $0.pane === activePane }) { return section.id }
+        return primaryItem
+    }
+    /// The single entry's pane, or the All page's shown dictionary's frame.
+    private var shownPane: EntryPane? {
+        if let pane { return pane }
+        guard let page else { return nil }
+        return page.sections.first { $0.id == primaryItem }?.pane ?? page.panes.first
+    }
+    /// The pane a command about "the entry" means: the single entry's, or the page's frame in focus.
+    private var focusPane: EntryPane? { pane ?? page?.frameInFocus(window: view.window) }
+    /// Every pane shown: the single entry's, or each frame of the page.
+    private var allPanes: [EntryPane] { pane.map { [$0] } ?? page?.panes ?? [] }
+    /// The All page's sections, while it is shown (tests and instruments).
+    var pageSections: [EntryPageSection]? { page?.sections }
+    var pagePanes: [EntryPane]? { page?.panes }
+    /// How long the All page took from being asked to its first frame's document loaded: first paint (P15).
+    public var pageFirstPaint: Duration? { page?.firstPaint }
+    /// How many of the page's frames exist, of how many dictionaries: frames are made lazily.
+    public var pageFrames: (made: Int, of: Int)? { page.map { ($0.panes.count, $0.sections.count) } }
+    /// The page's frames that exist, top to bottom (the lab's measurement).
+    public var pageWebViews: [WKWebView] { page?.panes.map(\.view) ?? [] }
+    /// Whether every frame made so far has loaded its document.
+    public var pageLoaded: Bool { page?.sections.allSatisfy { $0.pane == nil || $0.finished } ?? false }
+
+    private func owns(_ pane: EntryPane) -> Bool {
+        pane === self.pane || page?.panes.contains { $0 === pane } == true
+    }
     /// Where this view's per-dictionary choices are kept: the content it shows reads "Original style" from the same.
     public var preferences: EntryPreferences { environment.preferences }
     /// A choice changed elsewhere (the Library's "Original style") reaches the shown entry at once.
@@ -135,13 +174,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public func show(_ reference: EntryReference, from content: any EntryContent, landing: EntryLanding = .top) async
         -> Bool {
         _ = view
-        if ruleList == nil, environment.confinement.ruleList {
-            do {
-                ruleList = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
-            } catch {
-                ruleList = .failure(.ruleListUnavailable(String(describing: error)))
-            }
-        }
+        await compileRuleList()
+        closePage()
         if let pane, pane.binding != content.binding || pane.closed {
             pane.close()
             self.pane = nil
@@ -178,6 +212,70 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         return shown
     }
 
+    // MARK: - The All page (parity P15)
+
+    /// **Shows every dictionary's entry on one page** (parity P15; ADR-0010 amendment of 2026-10-18), in `items`'
+    /// order, each in a frame of its own made by the same gate as a single entry's (`EntryPane.open`): every
+    /// confinement layer per frame. `primary` is the item the window counts as shown. Showing the page again keeps
+    /// the frames whose dictionary and record are unchanged. A frame that cannot be made with every layer refuses the
+    /// whole page. Returns whether the page was handed to WebKit.
+    @discardableResult
+    public func showPage(_ items: [EntryPageItem], primary: UUID?, landing: EntryLanding = .top) async -> Bool {
+        _ = view
+        await compileRuleList()
+        if let pane {
+            pane.close()
+            self.pane = nil
+        }
+        let page = self.page ?? makePage()
+        primaryItem = primary
+        let offset: Double? = if case .offset(let y) = landing { y } else { nil }
+        if let refusal = page.show(items, landing: offset) {
+            refuse(refusal)
+            return false
+        }
+        refusal = nil
+        message.isHidden = true
+        return !items.isEmpty
+    }
+
+    private func makePage() -> EntryPage {
+        let page = EntryPage(preferences: environment.preferences, zoom: environment.preferences.zoom()) { [weak self] section in
+            guard let self else { return .failure(.ruleListUnavailable("the entry view is gone")) }
+            let content = section.item.content
+            return EntryPane.open(content: content, confinement: environment.confinement,
+                                  scheme: currentScheme(for: content.binding.dictionary),
+                                  frame: currentFrame(for: content.binding.dictionary), style: environment.style,
+                                  ruleList: ruleList, switches: environment.switches, host: self)
+        }
+        page.onRefusal = { [weak self] why in self?.refuse(why) }
+        container.addSubview(page.scroll)
+        NSLayoutConstraint.activate([
+            page.scroll.topAnchor.constraint(equalTo: container.topAnchor),
+            page.scroll.bottomAnchor.constraint(equalTo: container.bottomAnchor),
+            page.scroll.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            page.scroll.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+        ])
+        view.layoutSubtreeIfNeeded()
+        self.page = page
+        return page
+    }
+
+    private func closePage() {
+        page?.close()
+        page = nil
+        primaryItem = nil
+    }
+
+    private func compileRuleList() async {
+        guard ruleList == nil, environment.confinement.ruleList else { return }
+        do {
+            ruleList = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
+        } catch {
+            ruleList = .failure(.ruleListUnavailable(String(describing: error)))
+        }
+    }
+
     /// The shown entry's height in points (its CSS height at its zoom); nil with none shown.
     public func documentHeight() async -> Double? {
         guard let height = await pane?.documentHeight() else { return nil }
@@ -189,22 +287,28 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     /// How far down the shown entry the reader has scrolled, in CSS pixels; nil with none shown (the trail keeps it).
     public func scrollOffset() async -> Double? {
-        await pane?.scrollOffset()
+        if let page { return page.offset }
+        return await pane?.scrollOffset()
     }
 
     /// "Expand All" and "Collapse All" (ADR-0010 Q4): every fold of the shown entry, as the reader's clicks would.
     @discardableResult
     public func expandAll(_ open: Bool = true) -> Task<Int, Never> {
-        Task { @MainActor in await pane?.expandAll(open) ?? 0 }
+        Task { @MainActor in
+            var clicked = 0
+            for pane in allPanes { clicked += await pane.expandAll(open) }
+            return clicked
+        }
     }
 
     /// The entry the view shows or is loading.
-    public var reference: EntryReference? { pane?.reference }
+    public var reference: EntryReference? { shownPane?.reference }
 
     /// Closes the web view: nothing in flight is answered after this.
     public func closeEntry() {
         pane?.close()
         pane = nil
+        closePage()
     }
 
     private func refuse(_ why: EntryRefusal) {
@@ -212,6 +316,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         record(.refusedToRender(why))
         pane?.close()
         pane = nil
+        closePage()
         say(EntrySentences.refusal(why))
     }
 
@@ -233,37 +338,38 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public func setZoom(_ value: Double) {
         environment.preferences.setZoom(value)
         pane?.setZoom(environment.preferences.zoom())
+        page?.setZoom(environment.preferences.zoom())
     }
 
     // MARK: - Print (Apple parity P32, P44)
 
     /// File ▸ Print…: the shown entry, through the system's print panel, as a sheet on its window.
     public func printEntry() {
-        guard let webView = pane?.view, let window = view.window else { return }
+        guard let webView = focusPane?.view, let window = view.window else { return }
         let operation = webView.printOperation(with: NSPrintInfo.shared)
         operation.view?.frame = webView.bounds
         operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     public var theme: EntryTheme {
-        guard let binding = pane?.binding else { return .matchApp }
+        guard let binding = focusPane?.binding else { return .matchApp }
         return environment.preferences.theme(for: binding.dictionary)
     }
 
     public func setTheme(_ theme: EntryTheme) {
-        guard let pane else { return }
+        guard let pane = focusPane else { return }
         environment.preferences.setTheme(theme, for: pane.binding.dictionary)
         applyPreferences()
     }
 
     /// Whether this dictionary is shown in its own style, without the reading frame (ADR-0010 Q3).
     public var originalStyle: Bool {
-        guard let binding = pane?.binding else { return false }
+        guard let binding = focusPane?.binding else { return false }
         return environment.preferences.originalStyle(for: binding.dictionary)
     }
 
     public func setOriginalStyle(_ original: Bool) {
-        guard let pane else { return }
+        guard let pane = focusPane else { return }
         environment.preferences.setOriginalStyle(original, for: pane.binding.dictionary)
         applyPreferences()
     }
@@ -279,10 +385,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     private func applyPreferences() {
-        guard let pane else { return }
-        pane.setZoom(environment.preferences.zoom())
-        pane.setFrame(currentFrame(for: pane.binding.dictionary))
-        pane.setScheme(currentScheme(for: pane.binding.dictionary))
+        pane?.setZoom(environment.preferences.zoom())
+        page?.setZoom(environment.preferences.zoom())
+        for pane in allPanes {
+            pane.setFrame(currentFrame(for: pane.binding.dictionary))
+            pane.setScheme(currentScheme(for: pane.binding.dictionary))
+        }
     }
 
     // MARK: - Find (R3)
@@ -302,15 +410,17 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     public func hideFind() {
         setFindShown(false)
-        Task { await pane?.clearFind() }
-        if let webView = pane?.view { view.window?.makeFirstResponder(webView) }
+        Task {
+            if let page { await page.clearFind() } else { await pane?.clearFind() }
+        }
+        if let webView = focusPane?.view { view.window?.makeFirstResponder(webView) }
     }
 
     /// Finds `query` in the shown entry and returns the count; the find bar shows it too.
     @discardableResult
     public func performFind(_ query: String) -> Task<EntryFindResult?, Never> {
         Task { @MainActor in
-            let result = await pane?.find(query)
+            let result = if let page { await page.find(query) } else { await pane?.find(query) }
             findBar.show(result, query: query)
             return result
         }
@@ -320,7 +430,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     @discardableResult
     public func useSelectionForFind() -> Task<EntryFindResult?, Never> {
         Task { @MainActor in
-            guard let selected = await pane?.selectedText(), !selected.isEmpty else { return nil }
+            guard let selected = await focusPane?.selectedText(), !selected.isEmpty else { return nil }
             setFindShown(true)
             findBar.field.stringValue = selected
             return await performFind(selected).value
@@ -329,13 +439,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     /// Edit ▸ Find ▸ Jump to Selection (⌘J, P33): the entry scrolled to its selection.
     public func jumpToSelection() {
-        Task { @MainActor in await pane?.jumpToSelection() }
+        Task { @MainActor in await focusPane?.jumpToSelection() }
     }
 
     @discardableResult
     public func stepFind(forward: Bool) -> Task<EntryFindResult?, Never> {
         Task { @MainActor in
-            let result = await pane?.findStep(forward: forward)
+            let result = if let page { await page.findStep(forward: forward) } else {
+                await pane?.findStep(forward: forward)
+            }
             findBar.show(result, query: findBar.field.stringValue)
             return result
         }
@@ -349,7 +461,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     func perform(_ action: EntryLinkAction, from pane: EntryPane) {
-        guard pane === self.pane else { return }
+        guard owns(pane) else { return }
+        activePane = pane
         switch action {
         case .lookup(let query, let anchor): onLookup?(query, anchor)
         case .sound(let path): onSound?(path)
@@ -359,7 +472,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     func askReader(_ url: URL, from pane: EntryPane) {
-        guard pane === self.pane else { return }
+        guard owns(pane) else { return }
         guard let window = view.window else {
             record(.remotePromptDropped(url: url.absoluteString))
             return
@@ -397,6 +510,11 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     }
 
     func documentFinished(_ pane: EntryPane) {
+        if let page, page.panes.contains(where: { $0 === pane }) {
+            page.finished(pane)
+            if pane === shownPane { onDocumentFinished?() }
+            return
+        }
         guard pane === self.pane else { return }
         onDocumentFinished?()
         guard !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }

@@ -81,6 +81,18 @@ public struct EntryPreferences: @unchecked Sendable {
         defaults.set(theme.rawValue, forKey: Self.themeKey(dictionary))
     }
 
+    static func collapsedKey(_ dictionary: String) -> String { "entry.page.collapsed.\(dictionary)" }
+
+    /// Whether this dictionary's section of the All page is collapsed to its divider (parity P15), as the reader last
+    /// left it. Expanded unless chosen.
+    public func collapsed(for dictionary: String) -> Bool {
+        defaults.bool(forKey: Self.collapsedKey(dictionary))
+    }
+
+    public func setCollapsed(_ collapsed: Bool, for dictionary: String) {
+        defaults.set(collapsed, forKey: Self.collapsedKey(dictionary))
+    }
+
     /// The next step up or down from `zoom`, within the range.
     public static func step(_ zoom: Double, up: Bool) -> Double {
         if up { return zoomSteps.first { $0 > zoom + 0.001 } ?? zoomRange.upperBound }
