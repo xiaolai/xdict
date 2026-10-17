@@ -342,7 +342,8 @@ def menus_find(menubar):
 
 def menus_window(menubar):
     titles = [e.get("title") for e in menu(menubar, "Window") or []]
-    return None if "Show Tab Bar" in titles or "Show All Tabs" in titles else f"no tab items in Window: {titles}"
+    tabs = {"Show Tab Bar", "Show All Tabs", "Show Previous Tab", "Merge All Windows"}
+    return None if tabs & set(titles) else f"no tab items in Window: {titles}"
 
 
 def menus_help(menubar):
@@ -363,7 +364,7 @@ TREE_RULES = {
     "search.live": [("P10", rows_include("take off")), ("P2", title_found)],
     "search.next": [("P11", sidebar_table)],
     "search.didyoumean": [("P13", lambda t: None if "Did you mean?" in texts(t) else "no 'Did you mean?'"),
-                          ("P13", rows_include("accomplished"))],
+                          ("P13", rows_include("banana"))],
     "search.none": [("P12", no_entries_line), ("P2", title_no_count)],
     "window.min": [("P1", minimum_size)],
     "main.narrow": [("P8", narrow)],

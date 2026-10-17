@@ -12,6 +12,7 @@ import XDictSearch
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
+    @State private var width: CGFloat = 1_000
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -20,6 +21,8 @@ public struct SearchWindow: View {
     public var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
+                // Apple's window has no sidebar button: the sidebar comes with a search (P3, P9).
+                .toolbar(removing: .sidebarToggle)
                 .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .navigationSplitViewColumnWidth(min: ToolbarLayout.sidebar.min, ideal: ToolbarLayout.sidebar.ideal,
                                                 max: ToolbarLayout.sidebar.max)
@@ -27,8 +30,10 @@ public struct SearchWindow: View {
             EntryDetail(state: state)
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
         }
-        .toolbar(removing: .sidebarToggle)
         .toolbar { toolbar }
+        // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field).
+        .toolbar(removing: ToolbarLayout.titleYields(width: width) ? .title : nil)
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .navigationTitle(Text(ToolbarLayout.windowTitle))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)
@@ -88,6 +93,7 @@ struct EntryDetail: View {
         VStack(spacing: 0) {
             ScopeBar(state: state)
                 .frame(height: ScopeBarLayout.height)
+                .background { FindKeys(state: state) }
             PageNotices(state: state)
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
