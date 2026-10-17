@@ -35,7 +35,8 @@
 #                     what ran when: the ledger's last N rows (~/.local/share/xdict/e2e-ledger.tsv)
 #   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
 #   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`);
-#                     and the icon sets held to their source (Tools/tests/icons-test.sh)
+#                     and the icon sets held to their source (Tools/tests/icons-test.sh), and the style ledger
+#                     (Tools/gallery/style-ledger.tsv) held to its guards and commits by Tools/gallery/ledger.py check
 #   make icons        every platform's icon set regenerated from Resources/XDict.icon into apps/*/icons/ (BUILD_HOST)
 #   make affected-graph [PATHS=<path...>] [BASE=<ref>]
 #                     the picture of what a change reaches (file -> crate/target -> gate/sub-stage), with PATHS or the
@@ -202,6 +203,8 @@ test-tools:
 	@python3 -I Tools/tests/lookup_typing_test.py
 	@python3 -I Tools/tests/measure_test.py
 	@python3 -I Tools/tests/ui_tour_test.py
+	@python3 -I Tools/tests/ledger_test.py
+	@python3 -I Tools/gallery/ledger.py check
 	@Tools/tests/notices-test.sh
 	@Tools/tests/icons-test.sh
 
