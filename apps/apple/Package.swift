@@ -112,7 +112,7 @@ let package = Package(
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
-                                                        "XDictSpeech", "XDictUI"]),
+                                                        "XDictSpeech", "XDictTestSupport", "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.
         .testTarget(name: "XDictLibraryTests", dependencies: ["XDictClient", "XDictContract", "XDictLibrary"]),

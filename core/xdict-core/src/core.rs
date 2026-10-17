@@ -98,7 +98,7 @@ pub struct EditionStyle {
     /// The sheets read, by path.
     pub sheets: Vec<String>,
     /// Sheets not read, and why: never passed over silently.
-    pub skipped: Vec<String>,
+    pub skipped: Vec<SkippedSheet>,
 }
 
 /// What the normalization does to one edition, for the gallery and the About pane (ADR-0010).
@@ -602,7 +602,7 @@ impl Core {
         let (mut texts, mut sheets, mut skipped, mut total) = (Vec::new(), Vec::new(), Vec::new(), 0usize);
         for path in paths {
             if sheets.len() >= STYLE_SHEETS {
-                skipped.push(format!("{path}: past the first {STYLE_SHEETS} sheets"));
+                skipped.push(SkippedSheet { path, reason: SkipReason::TooMany { limit: STYLE_SHEETS as u64 } });
                 continue;
             }
             // What is left of the budget is the ceiling: a sheet past it is passed over from its declared size,
@@ -618,11 +618,12 @@ impl Core {
                     sheets.push(path);
                 }
                 Err(CoreError::TooLarge { detail, .. }) => {
-                    skipped.push(format!("{path}: past the {STYLE_BYTES} bytes read ({detail})"));
+                    let reason = SkipReason::TooLarge { limit: STYLE_BYTES as u64, detail };
+                    skipped.push(SkippedSheet { path, reason });
                 }
-                Ok(None) => skipped.push(format!("{path}: not found")),
+                Ok(None) => skipped.push(SkippedSheet { path, reason: SkipReason::NotFound }),
                 Err(e @ CoreError::SourceChanged { .. }) => return Err(e),
-                Err(e) => skipped.push(format!("{path}: {e}")),
+                Err(e) => skipped.push(SkippedSheet { path, reason: SkipReason::Unreadable { detail: e.to_string() } }),
             }
         }
         // The base is measured on a fixed, evenly spaced sample of the edition's entries (ADR-0010 d.4): the same

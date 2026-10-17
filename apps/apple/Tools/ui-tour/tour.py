@@ -2,7 +2,7 @@
 """The UI tour (owner's request, 2026-10-17): every route of `routes.py` walked on the real app, each state captured for
 review. Runs on the E2E Mac, started by `run.sh` from the Air; not an E2E stage, and writes nothing to the E2E ledger.
 
-    python3 -I tour.py <e2e-home> <out> [--only id,id] [--variants light-en,light-zh] [--reader]
+    python3 -I tour.py <e2e-home> <out> [--only id,id] [--variants light-en,light-zh,light-pseudo] [--reader]
 
 The app is the installed bundle, started with `--lookup-window <work>`: the production main window, menus and Settings
 over **a library of its own** (`<work>/store`, the lookup fixtures, or none), its dictionary service its own. The
@@ -13,7 +13,9 @@ Per variant and route: `<out>/<variant>/<route>.png` (the window the route is ab
 `<route>.ax.json` (every window's accessibility tree and what `checks()` found in it) and a line in
 `<out>/results.json`. Appearance is XDict's alone, by the instrument's `--appearance dark|light` (which sets
 `NSApp.appearance`; refused in a reader's launch); language is XDict's alone (`-AppleLanguages`). Nothing of the Mac's
-own settings is changed. **Each route has a launch of its own** (2026-10-17): scope, the find bar, zoom, the last
+own settings is changed. The `pseudo` language (`light-pseudo`, not in the default variants) is English made ~40% longer
+and accented (`pseudo.py`), compiled into a copy of the installed app beside it (`XDict-pseudo/XDict.app`) and never
+into XDict.app: what clips in a longer language shows. **Each route has a launch of its own** (2026-10-17): scope, the find bar, zoom, the last
 entry and open windows never leak from one route into the next (the review's "leftovers").
 """
 import json
@@ -28,6 +30,7 @@ import time
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
 from axcheck import checks  # noqa: E402
+from pseudo import pseudo  # noqa: E402
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
 home, out = sys.argv[1:3]
@@ -72,12 +75,51 @@ def as_json(done):
         return {}
 
 
-def running():
-    return subprocess.run(["pgrep", "-f", exe], capture_output=True).returncode == 0
+def running(executable=exe):
+    return subprocess.run(["pgrep", "-f", executable], capture_output=True).returncode == 0
 
 
 def translated(title, lang):
+    # Only a catalog key is translated; an identifier or a menu index ("#0") is matched as written.
+    if lang == "pseudo":
+        keys = zh_keys()
+        base = title if title in keys else title.rstrip("…")
+        return f"{pseudo(base)}|{title}" if base in keys else title
     return f"{zh[title]}|{title}" if lang == "zh" and title in zh else title
+
+
+def zh_keys():
+    """The catalog's keys (the kit's copy), which the pseudo language translates."""
+    with open(os.path.join(here, "Localizable.xcstrings"), encoding="utf-8") as f:
+        return json.load(f)["strings"].keys()
+
+
+PSEUDO_APP = os.path.join(home, "XDict-pseudo", "XDict.app")
+
+
+def pseudo_app():
+    """A copy of the installed app whose English is the pseudo language, made once per tour from the catalog the kit
+    carries (`run.sh` copies Strings/Localizable.xcstrings beside this file). The copy only: XDict.app is never changed.
+    Its signature no longer seals its resources, which a local launch does not check; the executables are untouched."""
+    catalog = os.path.join(here, "Localizable.xcstrings")
+    if not os.path.exists(catalog):
+        raise SystemExit("tour: the kit carries no Localizable.xcstrings; run.sh copies it")
+    shutil.rmtree(os.path.dirname(PSEUDO_APP), ignore_errors=True)
+    os.makedirs(os.path.dirname(PSEUDO_APP))
+    run("ditto", app, PSEUDO_APP)
+    scratch = tempfile.mkdtemp(prefix="xdict-pseudo-")
+    try:
+        source = os.path.join(scratch, "Localizable.xcstrings")
+        run("/usr/bin/python3", "-I", os.path.join(here, "pseudo.py"), catalog, source)
+        run("xcrun", "xcstringstool", "compile", source, "--output-directory", scratch)
+        english = os.path.join(PSEUDO_APP, "Contents", "Resources", "en.lproj")
+        for table in ("Localizable.strings", "Localizable.stringsdict"):
+            built = os.path.join(scratch, "en.lproj", table)
+            if not os.path.exists(built):
+                raise SystemExit(f"tour: the pseudo catalog compiled no {table}")
+            shutil.copyfile(built, os.path.join(english, table))
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 class Session:
@@ -86,6 +128,8 @@ class Session:
     def __init__(self, variant, library):
         self.variant, self.library = variant, library
         self.appearance, self.lang = variant.split("-")
+        self.app = PSEUDO_APP if self.lang == "pseudo" else app
+        self.exe = os.path.join(self.app, "Contents", "MacOS", "XDict")
         self.work = tempfile.mkdtemp(prefix="xdict-tour-")
         self.commands = os.path.join(self.work, "commands")
         self.sequence = 0
@@ -102,8 +146,12 @@ class Session:
         args += ["--appearance", self.appearance]
         if self.lang == "zh":
             args += ["-AppleLanguages", "(zh-Hans)", "-AppleLocale", "zh_CN"]
+        elif self.lang == "pseudo":
+            args += ["-AppleLanguages", "(en)"]
+        elif self.lang != "en":
+            raise Failed(f"no language {self.lang!r}: en, zh or pseudo")
         run("open", "-n", "--stdout", os.path.join(self.work, "app.out"), "--stderr",
-            os.path.join(self.work, "app.err"), app, "--args", *args)
+            os.path.join(self.work, "app.err"), self.app, "--args", *args)
         ready = os.path.join(self.commands, "ready.json")
         for _ in range(900):
             if os.path.exists(ready):
@@ -220,11 +268,11 @@ class Session:
         except Failed:
             pass
         for _ in range(50):
-            if not running():
+            if not running(self.exe):
                 break
             time.sleep(0.1)
-        if running():
-            run("pkill", "-f", exe, check=False)
+        if running(self.exe):
+            run("pkill", "-f", self.exe, check=False)
         shutil.rmtree(self.work, ignore_errors=True)
 
 
@@ -282,7 +330,7 @@ def walk(variant, name, library, route, steps, folder):
                 record["shots"], record["findings"] = capture(session, route, folder)
             except (Failed, subprocess.TimeoutExpired, KeyError):
                 pass
-        if not running():
+        if not running(session.exe):
             record["failure"] = (record.get("failure", "") + " — XDict quit: " + session.stderr()).strip()
     finally:
         session.quit()
@@ -292,6 +340,8 @@ def walk(variant, name, library, route, steps, folder):
 
 def tour():
     results = []
+    if any(v.endswith("-pseudo") for v in VARIANTS):
+        pseudo_app()
     for variant in VARIANTS:
         name = f"{variant}-{LABEL}" if LABEL else variant
         folder = os.path.join(out, name)
@@ -314,6 +364,7 @@ class ReaderSession(Session):
 
     def __init__(self):
         self.variant, self.lang, self.work = "light-en", "en", tempfile.mkdtemp(prefix="xdict-tour-")
+        self.app, self.exe = app, exe
         run("defaults", "delete", DOMAIN, check=False)
         run("open", "-n", app)
         for _ in range(150):

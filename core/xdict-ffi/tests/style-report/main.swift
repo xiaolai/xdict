@@ -25,11 +25,19 @@ func reason(_ r: FontReason) -> String {
     case .phonetic: "phonetic"
     }
 }
+func skipped(_ r: SkipReason) -> Any {
+    switch r {
+    case .tooMany(let limit): ["tooMany": ["limit": limit]]
+    case .tooLarge(let limit, let detail): ["tooLarge": ["limit": limit, "detail": detail]]
+    case .notFound: "notFound"
+    case .unreadable(let detail): ["unreadable": ["detail": detail]]
+    }
+}
 let c = s.changes
 let json: [String: Any] = [
     "version": s.version, "basePx": s.basePx, "baseFrom": baseFrom,
     "fonts": s.fonts.map { ["family": $0.family, "reason": reason($0.reason), "selector": $0.selector] },
-    "sheets": s.sheets, "skipped": s.skipped,
+    "sheets": s.sheets, "skipped": s.skipped.map { ["path": $0.path, "reason": skipped($0.reason)] },
     "changes": ["important": c.important, "page": c.page, "family": c.family, "size": c.size, "lineHeight": c.lineHeight,
                 "colour": c.colour, "weight": c.weight, "space": c.space, "dropped": c.dropped],
 ]

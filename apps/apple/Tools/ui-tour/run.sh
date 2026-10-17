@@ -4,6 +4,8 @@
 # Not an E2E stage: nothing is recorded in the E2E ledger, and nothing is built or opened on this Mac.
 #
 #   Tools/ui-tour/run.sh [--only id,id] [--variants light-en,light-zh]
+#   Tools/ui-tour/run.sh --variants light-pseudo   English made ~40% longer and accented (pseudo.py), in a copy of the
+#                                       installed app: what clips in a longer language
 #   Tools/ui-tour/run.sh --label after --only settings.general,...   captures kept beside the earlier ones as
 #                                       <variant>-after (a before/after pair on the index)
 #   Tools/ui-tour/run.sh --reader      one real first launch (no instrument) over a fresh state, added to the results
@@ -26,6 +28,8 @@ if [ "$installed" != "$tree" ]; then
 fi
 
 rsync -a --delete Tools/ui-tour/ "$host:XDictE2E/ui-tour-kit/"
+# The catalog the `pseudo` variant is made from (tour.py, pseudo_app).
+rsync -a Strings/Localizable.xcstrings "$host:XDictE2E/ui-tour-kit/"
 # `--reader` adds one capture to the last tour's results; anything else starts them afresh.
 case " $* " in
     *" --reader "*) ssh "$host" 'mkdir -p XDictE2E/ui-tour-out' ;;

@@ -385,7 +385,11 @@ fn style_skips_a_sheet_past_its_budget_unread() {
     read.store(0, Ordering::SeqCst);
     let report = core.style_report(dict).unwrap();
     let styled = read.load(Ordering::SeqCst);
-    assert!(report.edition.skipped.iter().any(|s| s.starts_with("big.css: ")), "{:?}", report.edition.skipped);
+    assert!(
+        report.edition.skipped.iter().any(|s| s.path == "big.css" && matches!(s.reason, SkipReason::TooLarge { .. })),
+        "{:?}",
+        report.edition.skipped
+    );
     assert!(styled < 1 << 20, "the reading style read {styled} bytes to skip a sheet");
 }
 

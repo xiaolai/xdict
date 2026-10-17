@@ -386,9 +386,31 @@ record! {
         pub fonts: Vec<KeptFont>,
         /// The sheets read, by path; those not read, each with why.
         pub sheets: Vec<String>,
-        pub skipped: Vec<String>,
+        pub skipped: Vec<SkippedSheet>,
         /// What normalizing the edition's own sheets changed.
         pub changes: StyleChanges,
+    }
+
+    /// A sheet the reading style did not read, and why: never passed over silently.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct SkippedSheet {
+        /// The path as the dictionary names it.
+        pub path: String,
+        pub reason: SkipReason,
+    }
+
+    /// Why a sheet was not read: a kind each shell words in the reader's language (ADR-0007 decision 10). A `detail`
+    /// is the core's own diagnostic, in English, never the sentence a reader is given.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum SkipReason {
+        /// Past the first `limit` sheets an edition's style reads.
+        TooMany { limit: u64 },
+        /// Past the `limit` bytes an edition's style reads in all.
+        TooLarge { limit: u64, detail: String },
+        /// Named by the dictionary, but not among its files.
+        NotFound,
+        /// There, but could not be read.
+        Unreadable { detail: String },
     }
 
     /// Where an edition's base size was read.

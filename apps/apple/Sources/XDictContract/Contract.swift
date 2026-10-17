@@ -39,7 +39,9 @@ public enum Contract {
     /// 3 (2026-10-16): the operation `health` and its answer, the core's health check of an open dictionary (WI-12).
     /// 4 (2026-10-17): the operation `readingStyle` and its answer, the core's report of what the reading style does to
     /// an open dictionary (ADR-0010, owner's decision of 2026-10-17), shown in the Library's details pane.
-    public static let version: UInt32 = 4
+    /// 5 (2026-10-17): `ReadingStyle.skipped` became typed (`SkippedSheet`, a path and a `SkipReason`), so the shell
+    /// words why a sheet was not read in the reader's language instead of showing the core's English.
+    public static let version: UInt32 = 5
 }
 
 // MARK: - The request

@@ -42,6 +42,8 @@ readonly LOCK=.build/bundle.lock
 readonly CATALOG=Strings/Localizable.xcstrings
 # The Service's menu title (Info.plist NSServices): macOS reads its translation from ServicesMenu.strings (plan-macos-v1 WI-8).
 readonly SERVICES_CATALOG=Strings/ServicesMenu.xcstrings
+# What the system shows of the app's Info.plist (its name, the About panel's copyright): InfoPlist.strings.
+readonly INFOPLIST_CATALOG=Strings/InfoPlist.xcstrings
 readonly LANGUAGES="en zh-Hans"
 # What the service must answer: the core's versions, read by `Tools/build-core.sh` through the same binding and archive.
 readonly CORE_VERSIONS=Generated/core-versions.json
@@ -171,9 +173,14 @@ verify_required_files() {
     cmp -s "$MENU_BAR_ICON" "$bundle/Contents/$MENU_BAR_ICON" || { echo "missing or changed: Contents/$MENU_BAR_ICON"; return 1; }
     # A translation that never reached the bundle is a reader still reading English.
     for language in $LANGUAGES; do
-        for table in Localizable ServicesMenu; do
+        for table in Localizable ServicesMenu InfoPlist; do
             [ -s "$bundle/Contents/Resources/$language.lproj/$table.strings" ] \
                 || { echo "missing: $language.lproj/$table.strings"; return 1; }
+        done
+        # Every Info.plist string the system shows, translated: a key the table lacks is shown in English.
+        for key in CFBundleDisplayName CFBundleName NSHumanReadableCopyright; do
+            plutil -extract "$key" raw "$bundle/Contents/Resources/$language.lproj/InfoPlist.strings" >/dev/null 2>&1 \
+                || { echo "missing: $key in $language.lproj/InfoPlist.strings"; return 1; }
         done
     done
 }
@@ -425,6 +432,8 @@ assemble() {
         || fail "the string catalog did not compile"
     xcrun xcstringstool compile "$SERVICES_CATALOG" --output-directory "$contents/Resources" \
         || fail "the Services menu's catalog did not compile"
+    xcrun xcstringstool compile "$INFOPLIST_CATALOG" --output-directory "$contents/Resources" \
+        || fail "the Info.plist catalog did not compile"
 
     # Inside out: the service, then the app that seals it.
     sign_part Resources/DictionaryService.entitlements "$xpc"
