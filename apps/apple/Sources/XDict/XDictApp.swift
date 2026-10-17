@@ -66,7 +66,7 @@ struct XDictApp: App {
                                     openSetup: { MenuBarActions.openSetup() })
                 }
                 Tab("Dictionaries", systemImage: "books.vertical") {
-                    LibraryView(library: Self.library)
+                    LibraryView(library: Self.library, layout: .settings)
                         .frame(width: 720, height: 460)
                         .task { await LibraryLaunch.once() }
                 }
