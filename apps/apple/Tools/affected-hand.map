@@ -33,3 +33,7 @@ apps/apple/Resources/DictionaryService*             target:XDictService
 apps/apple/Resources/Fonts/*                        target:XDictEntryView
 apps/apple/Resources/*                              target:XDict
 apps/apple/Strings/*                                target:XDict
+
+# What a node reads at run time that no compiler sees: the core's fixture writer reads conformance/fixtures
+# (`xdict_conformance::fixtures`), so whatever runs the writer reaches them.
+reads crate:xdict-conformance conformance/fixtures/*

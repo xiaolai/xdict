@@ -2,12 +2,12 @@
 # The end-to-end evidence, read from and written to the one E2E ledger (Tools/e2e-ledger.py): a row per sub-stage
 # (`Tools/e2e-substages.txt`) per run, pass and fail, under the sub-stage's content key.
 #
-#   e2e-status.sh record <build> <host> <os> <tree> <mode>
+#   e2e-status.sh record <build> <host> <os> <tree> <mode> <bundle>
 #                            file the `RESULT<TAB>sub-stage<TAB>pass|fail[<TAB>check]` lines on stdin, with each
 #                            sub-stage's seconds from its `TIME<TAB>sub-stage<TAB>seconds` line (Tools/e2e.sh). Keyed with
-#                            the facts the bundle was built with (XDICT_E2E_BUNDLE_FACTS, else Tools/e2e-facts.sh bundle),
-#                            the E2E Mac's macOS build (from <os>, `version (build)`) and the corpus; with no bundle facts
-#                            of this tree the rows are filed unkeyed, as history, and are no one's evidence
+#                            the facts the tested bundle names itself (its Provenance.txt: its tree and the toolchain
+#                            its build used), the E2E Mac's macOS build (from <os>, `version (build)`) and the corpus. A
+#                            bundle of another tree than <tree> is refused; with no tree, the rows are filed unkeyed
 #   e2e-status.sh show       the ledger's last rows (Tools/e2e-ledger.py show; E2E_LEDGER_LAST, E2E_LEDGER_STAGE)
 #   e2e-status.sh required [--bootstrap]
 #                            the sub-stages a release needs evidence of: every default one and RELEASE_EXTRAS; with
@@ -42,20 +42,16 @@ facts=()
 args_of() { local line; facts=(); while IFS= read -r line; do [ -z "$line" ] || facts+=("$line"); done <<<"$1"; }
 
 record() {
-    local ran=$1 host=$2 os=$3 tree=$4 mode=$5 bundle build corpus
-    if [ -n "${XDICT_E2E_BUNDLE_FACTS:-}" ]; then
-        bundle=$(cat "$XDICT_E2E_BUNDLE_FACTS") || fail "no bundle facts at $XDICT_E2E_BUNDLE_FACTS"
-    else bundle=$(Tools/e2e-facts.sh bundle) || bundle=""; fi
+    local ran=$1 host=$2 os=$3 tree=$4 mode=$5 app=$6 build corpus
     build=$(sed -n 's/.*(\([A-Za-z0-9]*\))$/\1/p' <<<"$os")
-    if [ -z "$bundle" ] || [ -z "$build" ] || [ "$tree" = - ]; then
-        echo "e2e-status: no build facts of this tree's bundle, no macOS build or no tree: the rows are filed unkeyed" >&2
+    if [ -z "$build" ] && [ "$tree" != - ]; then
+        echo "e2e-status: the E2E Mac named no macOS build ($os): the rows are filed unkeyed" >&2
         tree=-
-        bundle=$(printf -- '--fact\n%s\n' xcode=- swift=- rust=-)
-        build=unknown
     fi
     corpus=$(Tools/e2e-facts.sh corpus) || fail "see above"
-    args_of "$bundle"$'\n'"--fact"$'\n'"macos=$build"$'\n'"$corpus"
-    python3 -I Tools/e2e-ledger.py record "${facts[@]}" --build "$ran" --host "$host" --os "$os" --tree "$tree" --mode "$mode"
+    args_of "--fact"$'\n'"macos=${build:-unknown}"$'\n'"$corpus"
+    python3 -I Tools/e2e-ledger.py record "${facts[@]}" --bundle "$app" --build "$ran" --host "$host" --os "$os" \
+        --tree "$tree" --mode "$mode"
 }
 
 required() {
@@ -96,7 +92,7 @@ require_fresh() {
 
 case ${1:-} in
     record)
-        [ $# -eq 6 ] || { echo "usage: e2e-status.sh record <build> <host> <os> <tree> <mode>" >&2; exit 64; }
+        [ $# -eq 7 ] || { echo "usage: e2e-status.sh record <build> <host> <os> <tree> <mode> <bundle>" >&2; exit 64; }
         shift; record "$@" ;;
     show) python3 -I Tools/e2e-ledger.py show --last "${E2E_LEDGER_LAST:-30}" ${E2E_LEDGER_STAGE:+--stage "$E2E_LEDGER_STAGE"} ;;
     required) required "${2:-}" ;;

@@ -275,6 +275,9 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
     section "corpus"
     [ -d "$XDICT_E2E_CORPUS" ] || fail "XDICT_E2E_CORPUS is not a folder: $XDICT_E2E_CORPUS"
     corpus=$(cd "$XDICT_E2E_CORPUS" && pwd)
+    # The sample and the editions are kept per source tree **and corpus content** (`gate-cache.py corpus-id`, the
+    # ledger's corpus fact): a dictionary replaced at the same path is another corpus, whatever its folder's name.
+    corpus_id=$(python3 -I Tools/gate-cache.py corpus-id "$corpus") || fail "could not read the corpus's identity"
     # The cargo work on the corpus runs where cargo may run (Tools/core-on-host.sh), on that Mac's own copy of it:
     # BUILD_CORPUS in local.mk, `<build Mac>:<folder>` (a build Mac that holds the 25), or this Mac's corpus here.
     cargo_host=$(Tools/core-on-host.sh where) || fail "the corpus's cargo work has nowhere to run"
@@ -287,7 +290,7 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
     fi
     if needs sample; then
         sample=$(pwd)/.build/entries-sample.json
-        if made_of "$sample.source-tree" && [ "$(cat "$sample.corpus" 2>/dev/null)" = "$corpus" ] && [ -s "$sample" ]; then
+        if made_of "$sample.source-tree" && [ "$(cat "$sample.corpus" 2>/dev/null)" = "$corpus_id" ] && [ -s "$sample" ]; then
             echo "entries_corpus's sample of this tree is made already"
         else
             rm -f "$sample.source-tree"
@@ -298,7 +301,7 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
                 || fail "entries_corpus failed, so its sample is not one: $(tail -3 "$scratch/sampled/log" 2>/dev/null)"
             cp "$scratch/sampled/sample.json" "$sample" 2>/dev/null || fail "entries_corpus wrote no sample"
             [ -s "$sample" ] || fail "entries_corpus wrote no sample"
-            printf '%s\n' "$corpus" >"$sample.corpus"
+            printf '%s\n' "$corpus_id" >"$sample.corpus"
             [ "$source_tree" = - ] || printf '%s\n' "$source_tree" >"$sample.source-tree"
         fi
         on_host "mkdir -p '$REMOTE_DIR/kit'" && to_host "$sample" "$host:$REMOTE_DIR/kit/entries-sample.json" \
@@ -307,7 +310,7 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
     fi
     if needs editions; then
         editions=$(pwd)/.build/library-editions.json
-        if made_of "$editions.source-tree" && [ "$(cat "$editions.corpus" 2>/dev/null)" = "$corpus" ] && [ -s "$editions" ]; then
+        if made_of "$editions.source-tree" && [ "$(cat "$editions.corpus" 2>/dev/null)" = "$corpus_id" ] && [ -s "$editions" ]; then
             echo "index_bench's editions of this tree are computed already"
         else
             rm -f "$editions.source-tree"
@@ -319,7 +322,7 @@ if { needs corpus || needs sample || needs editions; } && [ -n "${XDICT_E2E_CORP
                 || fail "index_bench gave no edition for every dictionary: $(tail -3 "$scratch/benched/log" 2>/dev/null)"
             cp "$scratch/benched/editions.json" "$editions" || fail "index_bench's editions did not come back"
             cp "$scratch/benched/log" "$scratch/index-bench.log"
-            printf '%s\n' "$corpus" >"$editions.corpus"
+            printf '%s\n' "$corpus_id" >"$editions.corpus"
             [ "$source_tree" = - ] || printf '%s\n' "$source_tree" >"$editions.source-tree"
             echo "index_bench: $(tail -1 "$scratch/index-bench.log")"
         fi
@@ -1390,7 +1393,7 @@ if [ -n "$expected_override" ] || [ -n "$only" ]; then
 fi
 # The tree likewise: one that moved while the stages ran is no tree this run tested.
 [ "$source_tree" = - ] || [ "$source_tree" = "$(Tools/source-tree.sh)" ] || source_tree=-
-Tools/e2e-status.sh record "$remote_version" "$remote_uuid" "$e2e_os" "$source_tree" "$build_mode" <"$RUN_LOG"
+Tools/e2e-status.sh record "$remote_version" "$remote_uuid" "$e2e_os" "$source_tree" "$build_mode" "$APP" <"$RUN_LOG"
 echo
 Tools/e2e-status.sh show
 exit "$remote_status"
