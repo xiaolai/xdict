@@ -198,18 +198,23 @@ extension GalleryRun {
           }
           return { ctx: e, out: out };
         }
-        var texts = [], tw2 = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
-        for (var t2 = tw2.nextNode(); t2 && texts.length < 20000; t2 = tw2.nextNode()) {
+        // Every laid-out text a line holds (`lines`), a control's too: a transcription inside a speaker (COBUILD's
+        // prefix speakers) is the neighbour of the "&" between two of them. The words measured for gaps (`texts`)
+        // are those outside XDict's controls.
+        var lines = [], tw2 = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+        for (var t2 = tw2.nextNode(); t2 && lines.length < 20000; t2 = tw2.nextNode()) {
           if (!t2.nodeValue.trim() || !t2.parentElement) continue;
-          if (t2.parentElement.closest('[data-xdict-control],[data-xdict-tag],td,th,svg')) continue;
+          if (t2.parentElement.closest('[data-xdict-tag],td,th,svg')) continue;
           var r2 = document.createRange(); r2.selectNodeContents(t2);
           var rs = Array.prototype.filter.call(r2.getClientRects(), function (q) { return q.width > 0; });
           if (rs.length) {
             var f2 = flow(t2.parentElement);
-            texts.push({ n: t2, first: rs[0], last: rs[rs.length - 1], ctx: f2.ctx, out: f2.out,
-              fs: parseFloat(getComputedStyle(t2.parentElement).fontSize) });
+            lines.push({ n: t2, first: rs[0], last: rs[rs.length - 1], ctx: f2.ctx, out: f2.out,
+              fs: parseFloat(getComputedStyle(t2.parentElement).fontSize),
+              control: !!t2.parentElement.closest('[data-xdict-control]') });
           }
         }
+        var texts = lines.filter(function (x) { return !x.control; });
         // What draws between two words without being text: XDict's controls, icons, tags, images. Not a label: its
         // words are measured as words, and its box's padding and margin are spacing (OALECD's "especially US    ˌ…").
         var boxes = Array.prototype.map.call(document.querySelectorAll('[data-xdict-control],[data-xdict-icon],[data-xdict-tag],img,svg'),
@@ -249,21 +254,26 @@ extension GalleryRun {
             note('wordGap', w <= x.fs + 0.5, 1, Math.round(w) + 'px of space in ' + JSON.stringify(v.trim().slice(0, 16)));
           }
         });
-        texts.forEach(function (x, k) {
-          var prev = texts[k - 1], next = texts[k + 1];
-          // One line: the two boxes overlap over most of the shorter one's height (faces and sizes differ in a line).
-          var same = function (a, b) {
-            if (!a || !b) return false;
-            var overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
-            return overlap > 0.5 * Math.min(a.height, b.height);
-          };
+        // One line: the two boxes overlap over most of the shorter one's height (faces and sizes differ in a line).
+        var same = function (a, b) {
+          if (!a || !b) return false;
+          var overlap = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+          return overlap > 0.5 * Math.min(a.height, b.height);
+        };
+        lines.forEach(function (x, k) {
+          var prev = lines[k - 1], next = lines[k + 1];
           // A separator row of bullets or stars is a line of its own by design.
           // A headword that is punctuation ("@", "&") is the entry's own line.
-          if (/^[\s\p{P}\p{S}]+$/u.test(x.n.nodeValue) && !/^[\s•·*⁂‧∙]+$/.test(x.n.nodeValue)
+          if (!x.control && /^[\s\p{P}\p{S}]+$/u.test(x.n.nodeValue) && !/^[\s•·*⁂‧∙]+$/.test(x.n.nodeValue)
               && !x.n.parentElement.closest('[data-xdict-lead],[data-xdict-role=headword]')) {
             var alone = !same(prev && prev.last, x.first) && !same(x.last, next && next.first);
-            note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line');
+            note('punctLine', !alone, 1, JSON.stringify(x.n.nodeValue.trim()) + ' alone on a line'
+              + (alone ? ' [after ' + JSON.stringify(prev ? prev.n.nodeValue.slice(-16) : '') + ' <'
+                 + x.n.parentElement.tagName.toLowerCase() + '.' + String(x.n.parentElement.className).split(' ')[0] + '>]' : ''));
           }
+        });
+        texts.forEach(function (x, k) {
+          var prev = texts[k - 1];
           // A gap between words is measured only inside one line box: one formatting context, neither word floated
           // or positioned (a float, a cell or a right-aligned button beside a line is not a gap in it).
           if (prev && prev.ctx === x.ctx && !prev.out && !x.out && same(prev.last, x.first)
