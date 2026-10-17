@@ -2,9 +2,12 @@
 // the E2E Mac only, compiled there by tour.py (`swiftc -O ax.swift`); never on the build Mac, whose screen is the owner's.
 // Every command prints one JSON object.
 //
-//   ax windows <pid>                    the app's on-screen windows: CGWindowID, layer, bounds (top-left origin)
+//   ax windows <pid>                    the app's on-screen windows: CGWindowID, layer, bounds (top-left origin),
+//                                       the backing scale factor of the screen they are on
 //   ax tree <pid>                       every AX window of the app (and its menu bar's open menu, if any) as a tree:
 //                                       role, subrole, title, description, value, identifier, help, enabled, frame
+//                                       (screen points); a text's font runs (name, size) or "not exposed"; what a
+//                                       button shows ("text", "image", "both")
 //   ax press <pid> <match>...           AXPress on the first element, in any window, whose identifier, title or
 //                                       description equals one of the matches
 //   ax click <pid> <match>...           a real click (HID) at the centre of that element
@@ -12,6 +15,8 @@
 //                                       (each title may be "a|b" for alternatives); without, the menu left open
 //   ax menubar <pid>                    every menu bar item and its items' titles (one level of submenus)
 //   ax reset <pid>                      every window but the main one closed by its close button
+//   ax key <combo>                      one key with modifiers (cmd, opt, shift, ctrl), US layout: letters, digits,
+//                                       = - [ ] , . / and return, tab, space, escape, arrows
 //   ax extra <pid>                    the app's menu-bar extra opened (AXExtrasMenuBar), left open
 //
 // The grant: started over SSH, TCC judges it as `sshd-keygen-wrapper`, which holds Accessibility on the E2E Mac. Without
@@ -59,6 +64,26 @@ func frame(_ element: AXUIElement) -> [Double]? {
 
 var budget = 6000
 
+/// The font of a text's first run, as Accessibility gives it (`AXAttributedStringForRange` over its whole value); a
+/// sentence saying so where it does not.
+func font(_ element: AXUIElement) -> Any {
+    guard let count = attribute(element, kAXNumberOfCharactersAttribute) as? Int, count > 0 else { return "not exposed" }
+    var range = CFRange(location: 0, length: min(count, 2_000))
+    guard let rangeValue = AXValueCreate(.cfRange, &range) else { return "not exposed" }
+    var value: AnyObject?
+    guard AXUIElementCopyParameterizedAttributeValue(element, kAXAttributedStringForRangeParameterizedAttribute as CFString,
+                                                     rangeValue, &value) == .success,
+          let text = value as? NSAttributedString, text.length > 0 else { return "not exposed" }
+    var runs: [[String: Any]] = []
+    text.enumerateAttribute(NSAttributedString.Key("AXFont"),
+                            in: NSRange(location: 0, length: text.length)) { attr, range, _ in
+        guard let info = attr as? [String: Any], runs.count < 4 else { return }
+        runs.append(["name": info["AXFontName"] ?? "", "size": info["AXFontSize"] ?? 0,
+                     "length": range.length])
+    }
+    return runs.isEmpty ? "not exposed" : runs
+}
+
 func node(_ element: AXUIElement, depth: Int) -> [String: Any] {
     budget -= 1
     var out: [String: Any] = [:]
@@ -73,6 +98,13 @@ func node(_ element: AXUIElement, depth: Int) -> [String: Any] {
     if let enabled = attribute(element, kAXEnabledAttribute) as? Bool, !enabled { out["enabled"] = false }
     if let box = frame(element) { out["frame"] = box }
     let kids = children(element)
+    if role == "AXStaticText" || role == "AXTextField" { out["font"] = font(element) }
+    if role == "AXButton" || role == "AXPopUpButton" || role == "AXMenuButton" || role == "AXRadioButton" {
+        let roles = Set(kids.compactMap { string($0, kAXRoleAttribute) })
+        let text = !(string(element, kAXTitleAttribute) ?? "").isEmpty || roles.contains("AXStaticText")
+        let image = roles.contains("AXImage")
+        out["shows"] = text && image ? "both" : text ? "text" : image ? "image" : "unknown (no text or image child)"
+    }
     // An entry's page is the web view's to draw; its elements are counted, not walked.
     if role == "AXWebArea" {
         out["childCount"] = kids.count
@@ -125,7 +157,45 @@ func menuItems(_ menu: AXUIElement, depth: Int) -> [[String: Any]] {
     }
 }
 
+/// ANSI key codes of the US layout, for `key`.
+let keyCodes: [String: CGKeyCode] = {
+    var table: [String: CGKeyCode] = ["return": 36, "tab": 48, "space": 49, "delete": 51, "escape": 53, "left": 123,
+                                      "right": 124, "down": 125, "up": 126, "=": 24, "-": 27, "[": 33, "]": 30,
+                                      ",": 43, ".": 47, "/": 44, ";": 41, "'": 39, "`": 50, "\\": 42]
+    let letters = "asdfhgzxcv_bqweryt123465_97_80_ou_ip_lj_k____nm"
+    for (code, char) in letters.enumerated() where char != "_" { table[String(char)] = CGKeyCode(code) }
+    return table
+}()
+
+/// One key with modifiers ("cmd+opt+p", "ctrl+opt+d", "cmd+,"), posted into the HID stream.
+func press(_ combo: String) {
+    var parts = combo.split(separator: "+", omittingEmptySubsequences: false).map(String.init)
+    if combo.hasSuffix("++") { parts = Array(parts.dropLast(2)) + ["="] }
+    guard let name = parts.last, let code = keyCodes[name] else { fail("no key \(combo)") }
+    var flags = CGEventFlags()
+    for modifier in parts.dropLast() {
+        switch modifier {
+        case "cmd": flags.insert(.maskCommand)
+        case "opt": flags.insert(.maskAlternate)
+        case "shift": flags.insert(.maskShift)
+        case "ctrl": flags.insert(.maskControl)
+        default: fail("no modifier \(modifier)")
+        }
+    }
+    for down in [true, false] {
+        let event = CGEvent(keyboardEventSource: nil, virtualKey: code, keyDown: down)
+        event?.flags = flags
+        event?.post(tap: .cghidEventTap)
+        usleep(30_000)
+    }
+}
+
 let arguments = CommandLine.arguments
+if arguments.count == 3, arguments[1] == "key" {
+    guard AXIsProcessTrusted() else { fail("this session holds no Accessibility grant", code: 3) }
+    press(arguments[2])
+    emit(["pressed": arguments[2]])
+}
 guard arguments.count >= 3, let pidNumber = Int32(arguments[2]) else {
     fail("usage: ax windows|tree|press|click|menu|menubar|extra <pid> …", code: 2)
 }
@@ -139,7 +209,15 @@ case "windows":
         as? [[String: Any]]) ?? []
     let mine = list.filter { ($0[kCGWindowOwnerPID as String] as? Int32) == pid }.map { info -> [String: Any] in
         let bounds = info[kCGWindowBounds as String] as? [String: Double] ?? [:]
-        return ["id": info[kCGWindowNumber as String] ?? 0, "layer": info[kCGWindowLayer as String] ?? 0,
+        let box = CGRect(x: bounds["X"] ?? 0, y: bounds["Y"] ?? 0, width: bounds["Width"] ?? 0,
+                         height: bounds["Height"] ?? 0)
+        // NSScreen frames are bottom-left; the main screen's height flips them to the window list's top-left.
+        let top = NSScreen.screens.first?.frame.height ?? 0
+        let screen = NSScreen.screens.first { screen in
+            let f = screen.frame
+            return CGRect(x: f.minX, y: top - f.maxY, width: f.width, height: f.height).contains(CGPoint(x: box.midX, y: box.midY))
+        }
+        return ["id": info[kCGWindowNumber as String] ?? 0, "scale": screen?.backingScaleFactor ?? 0, "layer": info[kCGWindowLayer as String] ?? 0,
                 "name": info[kCGWindowName as String] ?? "", "alpha": info[kCGWindowAlpha as String] ?? 1,
                 "frame": [bounds["X"] ?? 0, bounds["Y"] ?? 0, bounds["Width"] ?? 0, bounds["Height"] ?? 0]]
     }

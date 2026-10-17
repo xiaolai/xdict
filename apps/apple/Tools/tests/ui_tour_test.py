@@ -32,7 +32,7 @@ assert kinds(window({"role": "AXButton", "subrole": "AXCloseButton", "frame": [4
 
 ids = [r[0] for r in ROUTES]
 assert len(ids) == len(set(ids)), "route ids repeat"
-assert all(r[1] in ("full", "empty") for r in ROUTES)
+assert all(r[1] in ("full", "empty", "reader") for r in ROUTES)
 undriven = {r[0] for r in ROUTES if r[4] is None}
 assert undriven == set(NOT_DRIVEN_WHY), undriven ^ set(NOT_DRIVEN_WHY)
 print(f"ui_tour_test: ok ({len(ROUTES)} routes, {len(undriven)} not driven)")
