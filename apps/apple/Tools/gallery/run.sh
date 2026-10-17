@@ -35,6 +35,15 @@ while [ $# -gt 0 ]; do
 done
 
 rsync -a --delete "$lab" "$host:$remote-lab/" || { echo "gallery: could not copy the lab" >&2; exit 4; }
+# The lab's render id beside it, for hot.sh and for the passes below: known only when the kit is of this tree.
+render_lab_id=unknown
+if [ "$(cat "$here/.build/e2e-kit.source-tree" 2>/dev/null)" = "$("$here/Tools/source-tree.sh")" ]; then
+    render_lab_id=$(/usr/bin/python3 -I "$here/Tools/gallery/render_affected.py" lab-id) || render_lab_id=unknown
+fi
+printf '%s\n' "$render_lab_id" | ssh "$host" "cat > $remote-lab/render-lab-id" \
+    || { echo "gallery: could not stamp the lab's render id" >&2; exit 4; }
+case " $args " in *" --style-dir "* | *" --original-style "*) render_lab_id=unknown ;; esac
+[ -z "${XDICT_LAB_CONTROL:-}${XDICT_LAB_DENSITY:-}${XDICT_LAB_OPEN_PICTURES:-}${XDICT_LAB_WIDTH:-}" ] || render_lab_id=unknown
 ssh "$host" "rm -rf $remote; mkdir -p $remote; open -n -W --stdout \$HOME/$remote/stdout.txt --stderr \$HOME/$remote/stderr.txt \
     $remote-lab/XDictEntryLab.app --args --gallery $args --out \$HOME/$remote/report.json"
 opened=$?
@@ -68,6 +77,11 @@ for f in failures:
 sys.exit(1 if failures else 0)
 PY
 status=$?
+# A render pass for every picture whose checks passed (Tools/gallery/render_affected.py), when the lab is of this tree.
+if [ "$render_lab_id" != unknown ] && [ -f "$out/report.json" ]; then
+    /usr/bin/python3 -I "$here/Tools/gallery/render_affected.py" record --lab-id "$render_lab_id" --report "$out/report.json" \
+        || echo "gallery: the render passes were not recorded"
+fi
 # Each failure against the style ledger: a known row, or `NEW:` for one to file before it is fixed.
 [ -f "$out/report.json" ] && /usr/bin/python3 -I "$here/Tools/gallery/ledger.py" triage "$out/report.json"
 exit $status
