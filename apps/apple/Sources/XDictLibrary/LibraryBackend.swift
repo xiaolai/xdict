@@ -51,6 +51,8 @@ public protocol LibraryBackend: Sendable {
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure>
     /// Checks an open dictionary's edition (WI-12); `progress` hears records checked of all.
     func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> HealthJob
+    /// What the reading style does to an open dictionary (ADR-0010), as the service computed it.
+    func readingStyle(_ dict: DictId) async -> Result<ReadingStyle, ClientFailure>
 }
 
 extension ServiceClient: LibraryBackend {
@@ -77,6 +79,15 @@ extension ServiceClient: LibraryBackend {
                 return .success(health)
             }
         }, cancel: { [self] in _ = await cancelImport(ticket) })
+    }
+
+    public func readingStyle(_ dict: DictId) async -> Result<ReadingStyle, ClientFailure> {
+        await call(.readingStyle(dict: dict)).flatMap { delivered in
+            guard case .readingStyle(let style) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not a reading style")))
+            }
+            return .success(style)
+        }
     }
 
     public func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure> {

@@ -719,6 +719,11 @@ impl Core {
         })
     }
 
+    /// [`Self::style_report`], flat, for the bindings: what the Library's details pane shows (ADR-0010).
+    pub fn reading_style(&self, dict: String) -> Result<ReadingStyle, CoreError> {
+        self.style_report(dict).map(|report| ReadingStyle::from(&report))
+    }
+
     /// What the health check finds in an open dictionary's edition (plan-macos-v1 WI-12).
     /// Every record is read once, in file order, and checked (`xdict-health`); `progress` hears records done of all
     /// after each chunk, and answering `false` cancels the check, which then keeps nothing. The report is kept beside
@@ -1256,6 +1261,54 @@ impl SplitMix {
     }
 }
 
+impl From<&StyleReport> for ReadingStyle {
+    fn from(report: &StyleReport) -> Self {
+        use xdict_entry::{BaseFrom, KeptReason};
+        let base = report.edition.style.base();
+        let base_from = match &base.from {
+            BaseFrom::Page { selector } => BaseSource::Page { selector: selector.clone() },
+            BaseFrom::Prose { weight } => BaseSource::Prose { weight: *weight },
+            BaseFrom::Text { chars, share } => BaseSource::Text { chars: *chars, share: *share },
+            BaseFrom::Default => BaseSource::BrowserDefault,
+        };
+        let fonts = report
+            .edition
+            .style
+            .kept()
+            .iter()
+            .map(|k| KeptFont {
+                family: k.family.clone(),
+                reason: match k.reason {
+                    KeptReason::PrivateUse => FontReason::PrivateUse,
+                    KeptReason::PseudoContent => FontReason::PseudoContent,
+                    KeptReason::Phonetic => FontReason::Phonetic,
+                },
+                selector: k.selector.clone(),
+            })
+            .collect();
+        let c = &report.counts;
+        Self {
+            version: report.version,
+            base_px: base.px,
+            base_from,
+            fonts,
+            sheets: report.edition.sheets.clone(),
+            skipped: report.edition.skipped.clone(),
+            changes: StyleChanges {
+                important: c.important,
+                page: c.page,
+                family: c.family,
+                size: c.size,
+                line_height: c.line_height,
+                colour: c.colour,
+                weight: c.weight,
+                space: c.space,
+                dropped: c.dropped,
+            },
+        }
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
@@ -1468,7 +1521,18 @@ mod tests {
             String::from_utf8(bytes).unwrap(),
             "body{} .p{font-size:var(--xdict-fs-s, 0.875rem) !important;line-height:var(--xdict-leading, 1.6)}"
         );
-        let report = core.style_report(dict).unwrap();
+        let report = core.style_report(dict.clone()).unwrap();
+        // What the Library's details pane shows: the same report, flat, as the bindings carry it.
+        let shown = core.reading_style(dict).unwrap();
+        assert_eq!((shown.version, shown.base_px), (STYLE, 14.0));
+        assert_eq!(shown.base_from, BaseSource::Text { chars: 6, share: 1.0 });
+        assert_eq!(shown.sheets, ["side.css", "in/icons.css"]);
+        assert_eq!(
+            (shown.fonts[0].family.as_str(), shown.fonts[0].reason, shown.fonts.len()),
+            ("Ic", FontReason::PrivateUse, report.edition.style.kept().len())
+        );
+        assert_eq!(shown.skipped, report.edition.skipped);
+        assert_eq!((shown.changes.page, shown.changes.important, shown.changes.size), (2, 0, 1));
         assert_eq!(report.version, STYLE);
         assert_eq!(report.edition.style.base().px, 14.0);
         assert_eq!(report.edition.sheets, ["side.css", "in/icons.css"]);
