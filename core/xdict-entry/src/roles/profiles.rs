@@ -47,6 +47,9 @@ pub(crate) struct Profile {
     example: Sel,
     /// Inside an example, what is not its own text (`Sure::Keep`).
     example_keep: Sel,
+    /// An example's text is in blocks inside it: an element the example selector takes that has text of its own is
+    /// not one (COBUILD's `li`, against COBUILD-EC's sense menu `<li>1. FINANCE AND STORAGE</li>`).
+    pub(crate) example_blocks: bool,
     /// Section headings: a box's or a block's title ("Word Origin", "EXAMPLES FROM THE CORPUS").
     heading: Sel,
     /// Translations in a bilingual dictionary, of a sense or of an example.
@@ -61,6 +64,7 @@ const NONE: Profile = Profile {
     sensenum: &[],
     example: &[],
     example_keep: &[],
+    example_blocks: false,
     heading: &[],
     trans: &[],
 };
@@ -145,6 +149,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         // `p.en`, an example's English; a grammar note inside it ("with clause") is a label.
         example: &[(Some("p"), &["en"])],
         example_keep: &[(Some("span"), &["grammatical-note"])],
+        example_blocks: false,
         heading: &[(Some("div"), &["label"])],
         trans: &[(Some("div"), &["cn_def"]), (Some("p"), &["cn"])],
     },
@@ -169,6 +174,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         // `tips_sentence`, a grammar pattern after it ("[+ to]").
         example: &[(Some("li"), &[])],
         example_keep: &[(Some("span"), &["tips_sentence"])],
+        example_blocks: true,
         heading: &[(Some("div"), &["cc_addon_text"]), (Some("span"), &["ginfotitle"])],
         trans: &[(Some("span"), &["chinese-text"])],
         ..NONE

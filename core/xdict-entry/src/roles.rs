@@ -1013,7 +1013,13 @@ impl<'s> Roles<'s> {
                 n.text.1 = len;
             }
         }
-        let t = Tree::new(&self.nodes, &self.buf, self.key.as_deref(), self.profile.is_some_and(|p| p.pos_words));
+        let t = Tree::new(
+            &self.nodes,
+            &self.buf,
+            self.key.as_deref(),
+            self.profile.is_some_and(|p| p.pos_words),
+            self.profile.is_some_and(|p| p.example_blocks),
+        );
         let mut decided = Decided {
             edits: Vec::new(),
             audio_links: 0,
@@ -1689,10 +1695,12 @@ struct Tree<'n> {
     feat: Vec<Feat>,
     /// The markup's part-of-speech selector holds other labels too: its elements need the part-of-speech words.
     pos_words: bool,
+    /// The markup's examples hold their text in blocks: an element of the selector with text of its own is not one.
+    example_blocks: bool,
 }
 
 impl<'n> Tree<'n> {
-    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>, pos_words: bool) -> Self {
+    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>, pos_words: bool, example_blocks: bool) -> Self {
         let key_norm = key.map(norm_key).unwrap_or_default();
         let forms = key.map(key_forms).unwrap_or_default();
         let mut order = 0u32;
@@ -1742,7 +1750,7 @@ impl<'n> Tree<'n> {
                 order,
             });
         }
-        Self { nodes, buf, feat, pos_words }
+        Self { nodes, buf, feat, pos_words, example_blocks }
     }
 
     /// The role the markup's table makes sure for the element, once its text passes the role's check: a part of
@@ -1764,7 +1772,8 @@ impl<'n> Tree<'n> {
         let ok = match sure {
             profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
             profiles::Sure::Sensenum => numbered(t),
-            profiles::Sure::Example | profiles::Sure::Trans => f.len > 0,
+            profiles::Sure::Example => f.len > 0 && !(self.example_blocks && node.direct),
+            profiles::Sure::Trans => f.len > 0,
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
             profiles::Sure::Keep => false,
         };
