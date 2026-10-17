@@ -102,7 +102,6 @@ ax.unavailable.records
 ax.unavailable.slow
 ax.unavailable.gone
 ax.unavailable.damaged
-ax.unavailable.locked
 ax.delay
 ax.paging
 launch.searchFocused

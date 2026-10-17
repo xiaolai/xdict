@@ -62,7 +62,7 @@
 
 @ lookup.a11y default kit,fixtures,corpus group=lookup
     ax.scope ax.order ax.folding ax.suggestions ax.unavailable.records ax.unavailable.slow ax.unavailable.gone
-    ax.unavailable.damaged ax.unavailable.locked ax.delay
+    ax.unavailable.damaged ax.delay
     launch.searchFocused keyboard.typed keyboard.firstQueryNoPointer voiceover.resultsNameTheirDictionary
     keyboard.results keyboard.entry keyboard.linkFollowed voiceover.linkFocused keyboard.back keyboard.forwardAndOrigin
     keyboard.searchCommand keyboard.scope voiceover.scopeVisible keyboard.scopeAll keyboard.suggestion driver.ran

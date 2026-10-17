@@ -121,19 +121,70 @@ struct LibraryTests {
     }
 
     @Test func aRefusalIsKeptWithItsReasonAndNotRetriedAtLaunch() async throws {
+        try dir.files("v4.mdx")
+        await backend.fail("v4.mdx", with: .wire(.core(.unsupported(feature: .formatVersion(version: "4.0"), detail: ""))))
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "v4.mdx")]).first)
+        await library.settle()
+        #expect(library.phases[id] == .refused(.formatVersion("4.0")))
+        #expect(library.entries.first?.refusal == .formatVersion("4.0"))
+        let relaunched = self.library()
+        await relaunched.start()
+        await relaunched.settle()
+        #expect(relaunched.phases[id] == .refused(.formatVersion("4.0")))
+        #expect(await backend.imports == ["v4.mdx"], "a permanent refusal is not asked again at launch")
+    }
+
+    /// **A dictionary locked with a registration code is not added at all** (owner, 2026-10-17; ADR-0005 decision 4):
+    /// no entry, nothing kept, and the reader is told once why.
+    @Test func aLockedFileIsNotAddedAndTheReaderIsToldWhy() async throws {
         try dir.files("locked.mdx")
         await backend.fail("locked.mdx", with: .wire(.core(.unsupported(feature: .registrationCode, detail: ""))))
         let library = library()
         await library.start()
         let id = try #require(library.add([dir.url.appending(path: "locked.mdx")]).first)
         await library.settle()
-        #expect(library.phases[id] == .refused(.registrationCode))
-        #expect(library.entries.first?.refusal == .registrationCode)
-        let relaunched = self.library()
+        #expect(library.entries.isEmpty && library.phases[id] == nil)
+        #expect(library.notices == [.locked(fileName: "locked.mdx")])
+        #expect(try LibraryStore(directory: storeDir).load()?.entries.isEmpty == true)
+    }
+
+    /// A locked file an earlier XDict kept, refused and never opened, leaves the library at the next launch, told once.
+    @Test func aLockedFileKeptFromBeforeIsRemovedAtLaunch() async throws {
+        try dir.files("locked.mdx")
+        await backend.fail("locked.mdx", with: .wire(.core(.malformed(detail: ""))))
+        let earlier = library()
+        await earlier.start()
+        _ = earlier.add([dir.url.appending(path: "locked.mdx")])
+        await earlier.settle()
+        var kept = try #require(try LibraryStore(directory: storeDir).load())
+        try #require(kept.entries.count == 1 && kept.entries[0].edition == nil)
+        kept.entries[0].refusal = .registrationCode
+        try LibraryStore(directory: storeDir).save(kept)
+        let relaunched = library()
         await relaunched.start()
         await relaunched.settle()
-        #expect(relaunched.phases[id] == .refused(.registrationCode))
-        #expect(await backend.imports == ["locked.mdx"], "a permanent refusal is not asked again at launch")
+        #expect(relaunched.entries.isEmpty)
+        #expect(relaunched.notices == [.locked(fileName: "locked.mdx")])
+        #expect(try LibraryStore(directory: storeDir).load()?.entries.isEmpty == true)
+    }
+
+    /// A dictionary that once opened (an edition, a lineage, the reader's settings kept under it) and whose file is now
+    /// locked is kept, refused: removing it would drop what the reader chose for that lineage (ADR-0002), so only the
+    /// reader removes it.
+    @Test func aDictionaryThatOnceOpenedAndIsNowLockedIsKeptRefused() async throws {
+        try dir.files("r/r.mdx")
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "r")]).first)
+        await library.settle()
+        try Data("rewritten".utf8).write(to: dir.url.appending(path: "r/r.mdx"))
+        await backend.fail("r.mdx", with: .wire(.core(.unsupported(feature: .registrationCode, detail: ""))))
+        await library.refresh()
+        await library.settle()
+        #expect(library.phases[id] == .refused(.registrationCode))
+        #expect(library.entries.first?.lineage != nil && library.notices.isEmpty)
     }
 
     @Test func anUnreadableVolumeBecomesANoteNamingIt() async throws {
