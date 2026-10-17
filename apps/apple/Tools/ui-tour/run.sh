@@ -1,6 +1,6 @@
 #!/bin/bash
 # The UI tour (owner's request, 2026-10-17), started from the Air: every route of routes.py walked on the E2E Mac's
-# installed XDict (`~/XDictE2E/XDict.app`) and captured, in light (dark cannot be set for XDict alone; see tour.py) and in English and Simplified Chinese.
+# installed XDict (`~/XDictE2E/XDict.app`) and captured, in light and dark (XDict's own, by `--appearance`) and in English and Simplified Chinese.
 # Not an E2E stage: nothing is recorded in the E2E ledger, and nothing is built or opened on this Mac.
 #
 #   Tools/ui-tour/run.sh [--only id,id] [--variants light-en,light-zh]
@@ -51,5 +51,12 @@ esac
 rm -f "$previous"
 [ "$status" -eq 0 ] || { echo "run.sh: the tour stopped (exit $status); what it captured is in $out" >&2; exit "$status"; }
 [ -s "$out/results.json" ] || { echo "run.sh: the tour wrote no results.json" >&2; exit 1; }
-python3 -I Tools/ui-tour/index.py "$out"
+# A labelled round beside the review's captures (`results-before.json`, kept from that round) gets the before | after
+# page; any other run, the plain one.
+label=$(printf '%s\n' "$@" | sed -n '/^--label$/{n;p;}' | head -1)
+if [ -n "$label" ] && [ -s "$out/results-before.json" ]; then
+    python3 -I Tools/ui-tour/index.py "$out" --before "$out/results-before.json" --label "$label"
+else
+    python3 -I Tools/ui-tour/index.py "$out"
+fi
 echo "$out/index.html"

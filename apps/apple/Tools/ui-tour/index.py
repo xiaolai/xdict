@@ -3,6 +3,9 @@
 
     python3 -I index.py <out>            writes <out>/index.html (self-contained; images relative)
     python3 -I index.py <out> --routes   writes <out>/routes.md only (needs no results)
+    python3 -I index.py <out> --before <results.json> --label <label>
+                                         a before | after page: each route's earlier capture (light only) beside this
+                                         round's, `<appearance>-<lang>-<label>`, in light and dark
 """
 import html
 import json
@@ -13,7 +16,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
 out = sys.argv[1]
-VARIANTS = ["light-en", "light-zh"]
+VARIANTS = ["light-en", "light-zh", "dark-en", "dark-zh"]
+options = dict(zip(sys.argv[2::2], sys.argv[3::2])) if "--routes" not in sys.argv else {}
 
 
 def routes_md():
@@ -44,6 +48,9 @@ img{max-width:100%;border:1px solid var(--line);border-radius:6px;background:rep
 transparent 0 50%) 0 0/16px 16px}
 .fail{color:var(--bad);font-weight:600;white-space:pre-wrap}.warn{color:var(--warn);font-size:12px}
 .none{color:var(--muted);font-style:italic;font-size:12px}nav a{margin-right:10px}
+.pair{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:12px;align-items:start}
+@media(max-width:900px){.pair{grid-template-columns:1fr}}
+.lang{font-size:12px;font-weight:600;margin-top:12px}
 """
 
 
@@ -95,6 +102,57 @@ def page():
         f.write(doc)
 
 
+def figure(variant, record, route, caption):
+    inner = [f"<figcaption>{html.escape(caption)}</figcaption>"]
+    if record is None:
+        inner.append("<div class='none'>not captured</div>")
+    else:
+        for shot in record.get("shots", []):
+            src = html.escape(f"{variant}/{shot}")
+            inner.append(f"<a href='{src}'><img loading='lazy' src='{src}' alt='{route} {variant}'></a>")
+        if record.get("failure"):
+            inner.append(f"<div class='fail'>{html.escape(record['failure'])}</div>")
+    return "<figure>" + "".join(inner) + "</figure>"
+
+
+def compared(before_path, label):
+    """Each route, per language: the earlier capture (light; Settings from its own later round where it has one), then
+    this round's light and dark."""
+    before = {(r["variant"], r["route"]): r for r in json.load(open(before_path))}
+    after = {(r["variant"], r["route"]): r for r in json.load(open(os.path.join(out, "results.json")))}
+    failures = sum(1 for r in after.values() if r.get("failure"))
+    shots = sum(len(r.get("shots", [])) for r in after.values())
+    cards = []
+    for route, library, how, expect, steps in ROUTES:
+        body = [f"<h2 id='{route}'>{html.escape(route)}</h2>",
+                f"<div><b>How:</b> {html.escape(how)} <span class='muted'>(library: {library})</span></div>",
+                f"<div><b>Should show:</b> {html.escape(expect)}</div>"]
+        if steps is None:
+            body.append(f"<div class='none'>Not driven: {html.escape(NOT_DRIVEN_WHY.get(route, ''))}</div>")
+        for lang in ("en", "zh"):
+            if steps is None:
+                break
+            earlier = next(((v, before[(v, route)]) for v in (f"light-{lang}-after", f"light-{lang}")
+                            if (v, route) in before), (f"light-{lang}", None))
+            row = [figure(earlier[0], earlier[1], route, f"before ({earlier[0]})")]
+            for appearance in ("light", "dark"):
+                variant = f"{appearance}-{lang}-{label}"
+                row.append(figure(variant, after.get((variant, route)), route, f"after, {appearance}"))
+            body.append(f"<div class='lang'>{'English' if lang == 'en' else 'Chinese'}</div>"
+                        "<div class='pair'>" + "".join(row) + "</div>")
+        cards.append("<section class='card'>" + "".join(body) + "</section>")
+    nav = "".join(f"<a href='#{r[0]}'>{r[0]}</a>" for r in ROUTES)
+    doc = (f"<!doctype html><html lang='en'><meta charset='utf-8'><meta name='viewport' "
+           f"content='width=device-width,initial-scale=1'><title>XDict UI tour: before and after</title>"
+           f"<style>{CSS}</style><header><h1>XDict UI tour: before | after</h1><div class='muted'>{len(ROUTES)} routes; "
+           f"this round {shots} captures, {failures} failures. Before: the review's light captures. After: this "
+           f"round, light and dark.</div><nav class='muted'>{nav}</nav></header><main>{''.join(cards)}</main></html>")
+    with open(os.path.join(out, "index.html"), "w") as f:
+        f.write(doc)
+
+
 routes_md()
-if "--routes" not in sys.argv:
+if "--before" in options:
+    compared(options["--before"], options.get("--label", "fixed"))
+elif "--routes" not in sys.argv:
     page()

@@ -3,8 +3,14 @@
 //
 // A development instrument is chosen by its flag before any window exists, and exits when it has answered.
 import SwiftUI
+import XDictUI
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+// `--appearance` belongs to the UI tour's instrument: a reader's launch that carries it is refused, not themed.
+if case .failure(let refusal) = InstrumentAppearance.parse(arguments) {
+    FileHandle.standardError.write(Data("XDict: --appearance is refused (\(refusal)); it is \(InstrumentAppearance.instrument)'s alone, as dark or light\n".utf8))
+    exit(2)
+}
 if arguments.contains(HandshakeReport.flag) {
     HandshakeReport.run()
 }

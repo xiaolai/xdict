@@ -36,7 +36,7 @@ public enum LibrarySentences {
         case .changedDuringImport:
             LocalizedStringResource("The file changed while XDict was reading it. Try again.")
         case .cancelled:
-            LocalizedStringResource("Import cancelled.")
+            LocalizedStringResource("Import canceled.")
         case .serviceFailed:
             LocalizedStringResource("The dictionary service stopped before it finished. Try again.")
         }
@@ -80,7 +80,7 @@ public enum LibrarySentences {
         case .finder(.outsideChosenFolder(let name)):
             LocalizedStringResource("“\(name)” points outside the folder you chose, so it was not added.")
         case .finder(.unreadable(let name)):
-            LocalizedStringResource("“\(name)” could not be read.")
+            LocalizedStringResource("“\(name)” could not be added: it was moved or deleted, or XDict does not have permission to read it.")
         case .alreadyInLibrary(let name):
             LocalizedStringResource("Already in your library, as “\(name)”.")
         case .relinked(let name):
@@ -90,6 +90,12 @@ public enum LibrarySentences {
         case .notSaved:
             LocalizedStringResource("Your library could not be saved.")
         }
+    }
+
+    /// The one line several notices are gathered into (UI review X7); each is listed, with its reason, behind it.
+    public static func noticesHeadline(_ count: Int) -> LocalizedStringResource {
+        count == 1 ? LocalizedStringResource("1 file could not be added.")
+            : LocalizedStringResource("\(count) files could not be added.")
     }
 
     /// Why the library itself cannot be used, and that it was left alone.
@@ -107,7 +113,7 @@ public enum LibrarySentences {
         switch phase {
         case .waiting: LocalizedStringResource("Waiting to import")
         case .importing: LocalizedStringResource("Importing…")
-        case .cancelling: LocalizedStringResource("Cancelling…")
+        case .cancelling: LocalizedStringResource("Canceling…")
         case .opening: LocalizedStringResource("Opening…")
         case .ready: LocalizedStringResource("Ready")
         case .cancelled: refusal(.cancelled)
@@ -169,6 +175,9 @@ public enum LibrarySentences {
         case .checking(let done, let total):
             let percent = total > 0 ? Int(done * 100 / total) : 0
             return LocalizedStringResource("Checking entries… \(percent)%")
+        case .checked(let health) where health.entries == 1:
+            return health.findings.allSatisfy({ $0.kind == .repaired })
+                ? LocalizedStringResource("Healthy. Checked its 1 entry.") : LocalizedStringResource("Checked its 1 entry.")
         case .checked(let health) where health.findings.allSatisfy({ $0.kind == .repaired }):
             return LocalizedStringResource("Healthy. Checked all \(health.entries) entries.")
         case .checked(let health):
@@ -200,7 +209,7 @@ public enum LibrarySentences {
             return LocalizedStringResource("Base size \(size) px, the size most of its text rules set (\(weight) votes).")
         case .text(_, let share):
             let percent = Int((share * 100).rounded())
-            return LocalizedStringResource("Base size \(size) px, the size \(percent)% of a sample of its entries is set in.")
+            return LocalizedStringResource("Text size \(size) px: \(percent)% of a sample of its entries are set in it.")
         case .browserDefault:
             return LocalizedStringResource("Base size \(size) px: the dictionary sets no size of its own.")
         }
@@ -223,7 +232,7 @@ public enum LibrarySentences {
         if c.family > 0 { lines.append(LocalizedStringResource("\(c.family) fonts replaced with XDict’s")) }
         if c.size > 0 { lines.append(LocalizedStringResource("\(c.size) font sizes made relative")) }
         if c.lineHeight > 0 { lines.append(LocalizedStringResource("\(c.lineHeight) line heights made relative")) }
-        if c.colour > 0 { lines.append(LocalizedStringResource("\(c.colour) colours set to XDict’s palette")) }
+        if c.colour > 0 { lines.append(LocalizedStringResource("\(c.colour) colors set to XDict’s palette")) }
         if c.weight > 0 { lines.append(LocalizedStringResource("\(c.weight) font weights set to XDict’s")) }
         if c.space > 0 { lines.append(LocalizedStringResource("\(c.space) spacings put on XDict’s steps")) }
         if c.dropped > 0 {

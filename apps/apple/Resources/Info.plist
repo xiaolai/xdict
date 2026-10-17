@@ -21,6 +21,8 @@
 	</array>
 	<key>CFBundleName</key>
 	<string>XDict</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2026 the XDict authors. ISC License.</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

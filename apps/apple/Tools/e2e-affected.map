@@ -67,7 +67,7 @@ apps/apple/Tools/hostile/*                          check:hostile.production hos
 apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
 apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
 apps/apple/Tools/lookup/*                           check:lookup
-apps/apple/Resources/Acknowledgements.txt           launch
+apps/apple/Resources/Acknowledgments.txt           launch
 apps/apple/Tools/measure/*                          check:measure.protocol
 apps/apple/Tools/notices.py                         none
 apps/apple/Tools/notices/*                          none

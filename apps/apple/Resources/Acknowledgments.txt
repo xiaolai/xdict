@@ -99,7 +99,7 @@ crate xxhash-rust 0.8.19 (BSL-1.0)
 crate zlib-rs 0.6.8 (Zlib)
 crate zmij 1.0.23 (MIT)
 
-Licence texts
+License texts
 =============
 
 --- font Charis

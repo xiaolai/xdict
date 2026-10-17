@@ -2,7 +2,7 @@ import SwiftUI
 import XDictContract
 import XDictSearch
 
-/// **The sidebar**: the search field, then what was typed suggests (Q6, Q7) while the reader types, or the results of
+/// **The sidebar**: what the toolbar's search field suggests (Q6, Q7) while the reader types, or the results of
 /// the lookup made, one section per dictionary in the reader's order, each painted as it answers (Q12), each result
 /// with why it matched (Q4), every record under a key (Q10), and for a dictionary with nothing to show, why, and what
 /// the reader can do (Q11).
@@ -12,16 +12,6 @@ struct SearchSidebar: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
-                        onChange: { text in
-                            state.model.text = text
-                            state.highlighted = nil
-                            state.model.textDidChange()
-                        },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-            Divider()
             if state.model.showsSuggestions {
                 SuggestionList(state: state)
             } else {
@@ -48,19 +38,18 @@ struct SuggestionList: View {
 
     var body: some View {
         ScrollViewReader { proxy in
-            List {
+            // The List's own selection draws the highlight ↑ and ↓ move (UI review M-12); a click looks the key up.
+            List(selection: Binding(get: { state.highlighted }, set: { key in
+                state.highlighted = key
+                if let key { state.model.submit(key) }
+            })) {
                 Section {
                     ForEach(state.model.suggestions, id: \.self) { key in
-                        Button { state.model.submit(key) } label: {
-                            Text(verbatim: key)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .listRowBackground(state.highlighted == key ? Color.accentColor.opacity(0.25) : Color.clear)
-                        .accessibilityIdentifier("suggestion")
-                        .accessibilityAddTraits(state.highlighted == key ? .isSelected : [])
-                        .id(key)
+                        Text(verbatim: key)
+                            .tag(key)
+                            .accessibilityIdentifier("suggestion")
+                            .accessibilityAddTraits(state.highlighted == key ? .isSelected : [])
+                            .id(key)
                     }
                 } header: {
                     Text("Suggestions")
@@ -79,16 +68,66 @@ struct ResultList: View {
     let state: SearchWindowState
 
     var body: some View {
+        let sections = state.model.sections
+        let notFound = sections.filter(Self.isNotFound)
+        let gathered = notFound.count > 1
+        let notSearched = sections.filter(Self.isUnavailable)
         List(selection: Binding(get: { state.model.selection }, set: { state.model.select($0) })) {
-            ForEach(state.model.sections) { section in
+            ForEach(sections.filter { !Self.isUnavailable($0) && !(gathered && Self.isNotFound($0)) }) { section in
                 Section {
                     rows(section)
                 } header: {
                     SectionHeader(section: section)
                 }
             }
+            // Several dictionaries without the word: said once, with one hint (UI review M-08).
+            if gathered {
+                Section {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(SearchSentences.notIn(notFound.map(\.name))).foregroundStyle(.secondary)
+                        Text(SearchSentences.action(.checkSpelling)).font(.subheadline).foregroundStyle(.tertiary)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    .selectionDisabled()
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("status")
+                }
+            }
+            // Dictionaries that could not look, after those that did: one row each and one way on (UI review M-05).
+            if !notSearched.isEmpty {
+                Section {
+                    ForEach(notSearched) { section in
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(verbatim: section.name).lineLimit(1)
+                            if let sentence = SearchSentences.status(section.status) {
+                                ProblemStatus(sentence: sentence, compact: true)
+                            }
+                        }
+                        .selectionDisabled()
+                        .accessibilityElement(children: .combine)
+                        .accessibilityIdentifier("status")
+                    }
+                    Button("Show in Library") { state.openLibrary?(notSearched.first?.id) }
+                        .controlSize(.small)
+                        .selectionDisabled()
+                } header: {
+                    Text("Not Searched")
+                }
+            }
         }
         .accessibilityIdentifier("results")
+    }
+
+    static func isUnavailable(_ section: ResultSection) -> Bool {
+        switch section.status {
+        case .unavailable(.indexing): false
+        case .unavailable: true
+        default: false
+        }
+    }
+
+    static func isNotFound(_ section: ResultSection) -> Bool {
+        if case .noMatch(_, .reader) = section.status { true } else { false }
     }
 
     @ViewBuilder private func rows(_ section: ResultSection) -> some View {
@@ -104,7 +143,7 @@ struct ResultList: View {
                 MoreRow(state: state, section: section, results: results)
             }
             if let failure = results.moreFailed, let sentence = SearchSentences.status(.failed(failure)) {
-                Text(sentence).font(.caption).foregroundStyle(.secondary).selectionDisabled()
+                Text(sentence).font(.subheadline).foregroundStyle(.secondary).selectionDisabled()
             }
         default:
             StatusRow(state: state, section: section)
@@ -123,6 +162,8 @@ struct SectionHeader: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
             Text(verbatim: section.name).fontWeight(.semibold).lineLimit(1)
+                // The header's text on the rows' text edge (UI review M-07).
+                .padding(.leading, 2)
             if let edition = SearchSentences.inlineEdition(section) {
                 Text(verbatim: edition)
                     .font(.caption.monospaced())
@@ -131,7 +172,7 @@ struct SectionHeader: View {
             Spacer(minLength: 4)
             if case .results(let results) = section.status {
                 Text(SearchSentences.count(loaded: results.hits.count, total: results.total))
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
@@ -156,10 +197,13 @@ struct ResultRow: View {
             HStack(spacing: 4) {
                 Text(verbatim: hit.headword).lineLimit(1)
                 if let record {
-                    Text(SearchSentences.record(record)).font(.caption).foregroundStyle(.secondary)
+                    Text(SearchSentences.record(record)).font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            Text(SearchSentences.reason(hit.how)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            // Why it matched, only where that is news: an exact hit is one line (UI review M-06).
+            if hit.how != .exact {
+                Text(SearchSentences.reason(hit.how)).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+            }
         }
         // One element, read as text (without the trait its role is unknown to VoiceOver): the headword, the record,
         // why it matched and the dictionary it is in (R11).
@@ -197,18 +241,24 @@ struct StatusRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(spacing: 6) {
-                if section.status == .searching { ProgressView().controlSize(.small) }
-                if let sentence = SearchSentences.status(section.status) {
-                    Text(sentence).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            if section.status == .searching {
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    if let sentence = SearchSentences.status(section.status) {
+                        Text(sentence).foregroundStyle(.secondary)
+                    }
                 }
+            } else if case .failed = section.status, let sentence = SearchSentences.status(section.status) {
+                ProblemStatus(sentence: sentence)
+            } else if let sentence = SearchSentences.status(section.status) {
+                Text(sentence).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             }
             if let next = section.next {
                 if SearchSentences.isButton(next) {
                     Button(SearchSentences.action(next)) { state.perform(next) }
                         .controlSize(.small)
                 } else {
-                    Text(SearchSentences.action(next)).font(.caption).foregroundStyle(.tertiary)
+                    Text(SearchSentences.action(next)).font(.subheadline).foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

@@ -67,7 +67,8 @@ struct ModuleBoundaryTests {
         "XDictTestSupport": ["Foundation"],
         "XDictBaseTests": ["Foundation", "Testing"],
         "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
-        "XDictUITests": ["Carbon.HIToolbox", "Foundation", "Testing"],
+        // AppKit and SwiftUI: the search field's AppKit coordinator and the menu's key equivalents, tested as they are.
+        "XDictUITests": ["AppKit", "Carbon.HIToolbox", "Foundation", "SwiftUI", "Testing"],
         // WebKit's preferences and rule-list store, never a web view; JavaScriptCore for the shell's scripts.
         "XDictEntryViewTests": ["AppKit", "Foundation", "JavaScriptCore", "Testing", "WebKit"],
         "XDictServiceTests": ["Foundation", "Synchronization", "Testing"],

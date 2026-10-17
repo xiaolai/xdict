@@ -36,8 +36,8 @@ public struct SetupView: View {
                     .font(.callout)
             }
         }
-        .formStyle(.grouped)
-        .frame(width: 560)
+        // As tall as its rows (UI review U-01).
+        .settingsPane(width: 560)
         .navigationTitle(Text("Set Up XDict"))
         .task {
             while !Task.isCancelled {
@@ -70,7 +70,13 @@ public struct SetupView: View {
     private func action(_ step: SetupBoard.Step, _ state: SetupBoard.State) -> some View {
         switch step {
         case .dictionaries:
-            Button { openLibrary() } label: { Text(state == .done ? "Open Library" : "Add Dictionaries…") }
+            // Add Dictionaries… opens the open panel itself (UI review U-02), in the Library.
+            Button {
+                if state != .done { LibraryRequests.shared.requestImport() }
+                openLibrary()
+            } label: {
+                Text(state == .done ? "Open Library" : "Add Dictionaries…")
+            }
                 .accessibilityIdentifier("setup.dictionaries.action")
         case .accessibility:
             if state != .done {

@@ -50,8 +50,10 @@ public struct SearchCommands: Commands {
                 if index < 9 {
                     Toggle(isOn: scoped(.one(source.id))) { Text(verbatim: source.name) }
                         .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: [.command, .option])
+                        .disabled(source.handle == nil)
                 } else {
                     Toggle(isOn: scoped(.one(source.id))) { Text(verbatim: source.name) }
+                        .disabled(source.handle == nil)
                 }
             }
         }
@@ -69,11 +71,15 @@ public struct SearchCommands: Commands {
                 .disabled(window?.entry.webView == nil)
             Button("Collapse All") { window?.entry.expandAll(false) }
                 .disabled(window?.entry.webView == nil)
-            Menu("Entry Appearance") {
+            // The current choice checked (UI review A-08).
+            Picker(selection: Binding(get: { window?.entry.theme ?? .matchApp }, set: { window?.entry.setTheme($0) })) {
                 ForEach(EntryTheme.allCases, id: \.self) { theme in
-                    Button(EntrySentences.theme(theme)) { window?.entry.setTheme(theme) }
+                    Text(EntrySentences.theme(theme)).tag(theme)
                 }
+            } label: {
+                Text("Entry Appearance")
             }
+            .pickerStyle(.menu)
             .disabled(window?.entry.webView == nil)
             Divider()
         }
