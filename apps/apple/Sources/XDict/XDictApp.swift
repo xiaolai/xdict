@@ -27,7 +27,8 @@ struct XDictApp: App {
     var body: some Scene {
         WindowGroup(id: Self.mainWindow) {
             MainWindow()
-                .frame(minWidth: 640, minHeight: 420)
+                // Apple's Dictionary's minimum (parity P1): AX asked for 100 × 100 and took 400 × 300.
+                .frame(minWidth: ToolbarLayout.minimumWindow.width, minHeight: ToolbarLayout.minimumWindow.height)
                 .task { await LibraryLaunch.once() }
         }
         .defaultSize(width: 1_000, height: 700)
@@ -40,16 +41,7 @@ struct XDictApp: App {
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
             AcknowledgmentsCommand()
-            // File ▸ Add Dictionaries… (A-04): the Library, with its open panel up.
-            CommandGroup(after: .newItem) {
-                Button("Add Dictionaries…") {
-                    LibraryRequests.shared.requestImport()
-                    MenuBarActions.openLibrary()
-                }
-                .keyboardShortcut("o")
-            }
-            // No help book yet: no Help item that answers "Help isn't available" (A-03).
-            CommandGroup(replacing: .help) {}
+            FileAndHelpCommands()
         }
 
         // Every third-party notice (WI-10), from the app menu beside About; not in the Window menu (A-06).
@@ -206,8 +198,9 @@ enum LibraryLaunch {
 /// Starts lookup from anywhere once the app has finished launching: the shortcut, the Service, the panel.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
-        // One window per window: no tab items in View and Window (UI review A-05).
-        NSWindow.allowsAutomaticWindowTabbing = false
+        // Main windows take tabs, as Apple's Dictionary's do (parity P32, P37): File ▸ New Tab and the Window menu's
+        // tab items.
+        NSWindow.allowsAutomaticWindowTabbing = true
         // The UI tour's appearance, an instrument's argument alone (refused in main.swift otherwise).
         if case .success(let chosen?) = InstrumentAppearance.parse(Array(CommandLine.arguments.dropFirst())) {
             MainActor.assumeIsolated { NSApp.appearance = chosen.appearance }
@@ -302,5 +295,54 @@ struct AcknowledgmentsCommand: Commands {
         CommandGroup(after: .appInfo) {
             Button { openWindow(id: XDictApp.acknowledgmentsWindow) } label: { Text("Acknowledgments") }
         }
+    }
+}
+
+/// **File ▸ New Tab (⌘T) and Add Dictionaries… (⌘O), and Help ▸ XDict Help** (parity P32, P38; UI review A-04). New Tab
+/// opens a main window as a tab of the one in front, as Apple's Dictionary's does. Help opens XDict's site in the
+/// browser: no help book is bundled, and nothing of a dictionary's goes with it.
+struct FileAndHelpCommands: Commands {
+    @Environment(\.openWindow) private var openWindow
+    @Environment(\.openURL) private var openURL
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("New Tab") { NewTab.open { openWindow(id: XDictApp.mainWindow) } }
+                .keyboardShortcut("t")
+            Button("Add Dictionaries…") {
+                LibraryRequests.shared.requestImport()
+                MenuBarActions.openLibrary()
+            }
+            .keyboardShortcut("o")
+        }
+        CommandGroup(replacing: .help) {
+            Button("XDict Help") {
+                if let site = URL(string: "https://xdict.ai") { openURL(site) }
+            }
+        }
+    }
+}
+
+/// A new main window, put in the front main window's tab group once SwiftUI has made it.
+@MainActor
+enum NewTab {
+    static func open(_ make: () -> Void) {
+        let host = NSApp.keyWindow.flatMap { isMain($0) ? $0 : nil }
+        let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+        make()
+        Task { @MainActor in
+            for _ in 0..<80 {
+                if let made = NSApp.windows.first(where: { !before.contains(ObjectIdentifier($0)) && isMain($0) }) {
+                    if let host, host !== made { host.addTabbedWindow(made, ordered: .above) }
+                    made.makeKeyAndOrderFront(nil)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+        }
+    }
+
+    private static func isMain(_ window: NSWindow) -> Bool {
+        window.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true
     }
 }
