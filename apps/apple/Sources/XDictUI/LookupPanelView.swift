@@ -53,7 +53,7 @@ public struct LookupPanelView: View {
     /// Everything around the entry, in points: the title row under its space and over its gap, and the two footer rows,
     /// each under a gap and a hairline (PanelLook).
     public static let chromeHeight: CGFloat = PanelLook.topSpace + PanelLook.titleRow + PanelLook.footerGap
-        + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1)
+        + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1) + PanelLook.bottomInset
 
     /// The popover's title row (P41): its 20 pt title, then a rule to the trailing inset. The popover's title is the
     /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17), and the dictionary's name
@@ -99,6 +99,7 @@ public struct LookupPanelView: View {
             FooterRow(title: Text("Configure Dictionaries"), symbol: "gearshape", action: openLibrary)
                 .accessibilityIdentifier("panel.configure")
         }
+        .padding(.bottom, PanelLook.bottomInset)
     }
 
     /// System Settings › Privacy & Security › Accessibility.

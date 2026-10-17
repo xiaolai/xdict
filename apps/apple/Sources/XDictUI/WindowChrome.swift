@@ -1,17 +1,6 @@
 import AppKit
 import SwiftUI
 
-/// **The lookup panel's title-bar buttons**: none, as the system Look Up popover has none (P41, 2026-10-17; UI review
-/// P-01 had kept the close button). Escape and a click away close it, as they close the popover.
-public enum PanelChrome {
-    public static let hidden: [NSWindow.ButtonType] = [.closeButton, .miniaturizeButton, .zoomButton]
-
-    @MainActor
-    public static func apply(to window: NSWindow) {
-        for kind in hidden { window.standardWindowButton(kind)?.isHidden = true }
-    }
-}
-
 /// **One size rule for every Settings pane and the setup board** (UI review X2, S-01, U-01): a grouped form as tall as
 /// its rows, at one width (Apple's Settings window, 600 pt: parity P39), so the window fits the pane — none clipped.
 struct SettingsPane: ViewModifier {
