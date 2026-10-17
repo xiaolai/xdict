@@ -422,6 +422,24 @@ struct LibraryTests {
         #expect(await backend.closed.count == 1)
         #expect(try LibraryStore(directory: storeDir).load()?.entries.isEmpty == true)
     }
+
+    /// **Remove can be undone** (UI review L-09): the dictionary returns with its id (its lineage and everything kept
+    /// under it), at its place in the order, and opens again.
+    @Test func aRemovedDictionaryComesBackWhereItWas() async throws {
+        try dir.files("a.mdx", "b.mdx")
+        let library = library()
+        await library.start()
+        let ids = library.add([dir.url.appending(path: "a.mdx"), dir.url.appending(path: "b.mdx")])
+        await library.settle()
+        let first = try #require(ids.first)
+        let removed = try #require(await library.removeForUndo(first))
+        #expect(library.entries.map(\.id) == [ids[1]])
+        library.restore(removed)
+        await library.settle()
+        #expect(library.entries.map(\.id) == ids)
+        #expect(library.phases[first] == .ready)
+        #expect(try LibraryStore(directory: storeDir).load()?.entries.map(\.id) == ids)
+    }
 }
 
 extension FakeBackend {
