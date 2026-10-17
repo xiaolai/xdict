@@ -101,3 +101,6 @@ ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
 /* No transition on a classed picture or a spaced block: frame.js measures the gap it set at once, and a dictionary's */
 /* `transition: All 0.3s` (ODECN's `.ode3img`) left it measuring a margin partway there (2026-10-17). */
 img[data-xdict-img],[data-xdict-space],[data-xdict-img-holder]{transition:none !important}
+/* P41 (2026-10-18): in the lookup popover (`data-xdict-density=panel`) the page is clear, the entry on the popover's */
+/* glass as Apple's is; the theme's page colour (appearance.js) stays everywhere else. */
+:root[data-xdict-density=panel]{background-color:transparent !important}

@@ -80,7 +80,7 @@ final class LookupAnywhere {
         NSApp.servicesProvider = ServicesProvider.shared
         NSUpdateDynamicServices()
         registrar.registerSaved()
-        state = XDictApp.windowState()
+        state = XDictApp.windowState(panel: true)
     }
 
     // MARK: - Asking
