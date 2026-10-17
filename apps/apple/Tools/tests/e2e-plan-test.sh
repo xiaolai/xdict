@@ -46,7 +46,7 @@ same "all adds the extra ones" "$(bash $plan substages --all)" "$(bash $plan exp
 refuses "an unknown stage is refused" bash $plan expand hostil
 refuses "an unknown sub-stage is refused" bash $plan expand hostile.prod
 same "E2E_ONLY's checks select their owners" "$(lines service.recovery lookup.paging)" \
-    "$(bash $plan only paging.everyRecord,kill.typedError)"
+    "$(bash $plan only ax.paging,kill.typedError)"
 refuses "an unknown check is refused" bash $plan only paging.everything
 same "what sub-stages need" "$(lines corpus editions)" "$(bash $plan needs library.corpus library.control)"
 

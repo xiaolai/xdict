@@ -133,10 +133,17 @@ public final class LookupScenario {
         return findings
     }
 
-    /// Every check, in an order that leaves each one's state for the next only where it says so. `pagingToo: false`
-    /// leaves out `paging.everyRecord` (and its checkpoint), the longest check by far, for an E2E run that did not ask
-    /// for it (`Tools/e2e.sh`'s `lookup.paging`); no later check reads what paging leaves but the word it searches last.
-    public func run(pagingToo: Bool = true) async -> Findings {
+    /// How much of the 66,355 records a run pages. `everyRecord` walks them all (`paging.everyRecord`, the longest check
+    /// by far): the headless run through the service (`LookupScenarioTests`, plan-verification step 4) does. `firstPage`
+    /// asks only the first page and its checkpoint, for the window's Accessibility reading of it (`ax.paging`, which needs
+    /// the app): the E2E `lookup.paging` sub-stage. `none` leaves paging out, for an E2E run that did not ask for it.
+    public enum Paging: Sendable {
+        case none, firstPage, everyRecord
+    }
+
+    /// Every check, in an order that leaves each one's state for the next only where it says so; no later check reads
+    /// what paging leaves but the word it searches last.
+    public func run(paging: Paging = .everyRecord) async -> Findings {
         var findings = Findings()
         await scope(&findings)
         await order(&findings)
@@ -145,10 +152,10 @@ public final class LookupScenario {
         await internalKeys(&findings)
         await unavailable(&findings)
         await delay(&findings)
-        if pagingToo {
-            await paging(&findings)
-        } else {
-            await search("apple")   // where paging leaves the window, so the trail starts as it always does
+        switch paging {
+        case .everyRecord: await self.paging(&findings, everyRecord: true)
+        case .firstPage: await self.paging(&findings, everyRecord: false)
+        case .none: await search("apple")   // where paging leaves the window, so the trail starts as it always does
         }
         await trail(&findings)
         return findings

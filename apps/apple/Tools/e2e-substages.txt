@@ -45,8 +45,6 @@
     sentence.registrationCode sentence.damaged drop.registered
 
 @ service.recovery default fixtures
-    refusal.noHandle refusal.pipe refusal.writable refusal.otherFile refusal.control refusal.missingToken
-    supersede.lateReply supersede.queuedNeverSent stall.timedOut stall.newConnection stall.answeredWhileTheStalledRun
     kill.typedError kill.nextLookupSucceeds service.connect.inside service.connect.outside service.clientRequirement
 
 @ reader default kit
@@ -71,7 +69,7 @@
     ax.entryBelowToolbar ax.entryInset
 
 @ lookup.paging default kit,fixtures,corpus group=lookup
-    paging.everyRecord ax.paging
+    ax.paging
 
 @ service.idle default fixtures
     idle.exitsWhenQuiet

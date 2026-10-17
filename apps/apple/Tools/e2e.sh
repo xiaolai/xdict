@@ -639,9 +639,9 @@ substage_launch() {
 # ---------------------------------------------------------------------------------------------------------------------
 # **service.***: this bundle's own signed dictionary service, asked through the app's `ServiceClient` by an instrument
 # LaunchServices started (`XDict --service-report`, plan-macos-v1 WI-3), its `--checks` groups split three ways:
-# `conformance/`'s `tiny` and `matrix`; the refusals, supersession, a stalled bulk call, `kill -9` mid-lookup, then who
-# reaches the service by name and the client requirement it holds every connection to; the idle exit under launchd (the
-# race and the work spanning the timer are `IdleServiceTests`).
+# `conformance/`'s `tiny` and `matrix`; `kill -9` mid-lookup, then who reaches the service by name and the client
+# requirement it holds every connection to; the idle exit under launchd. The refusals, supersession, a stalled bulk call
+# (`ServiceContractTests`), the idle race and work spanning the timer (`IdleServiceTests`) run in-process, below E2E.
 
 # bounded <seconds> <command...>: the command's status, or 124 once it has run that long (and it is killed).
 bounded() {
@@ -691,8 +691,10 @@ substage_service_idle() { service_report idle; }
 substage_service_recovery() {
     local since
     since=$(date '+%Y-%m-%d %H:%M:%S')
-    service_report "$(service_group refusals refusal.)" "$(service_group supersede supersede.lateReply)" \
-        "$(service_group drop supersede.queuedNeverSent)" "$(service_group stall stall.)" "$(service_group kill kill.)"
+    # Only the kill: launchd starting the signed service again after `kill -9`. The refusals, supersession and the stalled
+    # bulk call are the client's and the session's logic, checked through the service in-process by ServiceContractTests
+    # (plan-verification step 4).
+    service_report "$(service_group kill kill.)"
 
     # **Who reaches the service by name.** The executable in the bundle, run from this shell, does: the control. The same
     # executable copied out of the bundle does not, and starts no service: an embedded XPC service is found in the asking
@@ -1092,7 +1094,8 @@ substage_library_health() {
 # order, folding, phrases, internal keys (LDOCE's with the corpus), five unavailable states each with its own sentence, a
 # held dictionary delaying no other, a five-hop trail returned exactly; then entries asked for faster than WebKit
 # answers, none of the replaced loads taken for a link (`lookup.core`); each checkpoint read through the Accessibility
-# API against what the window must show (`lookup.a11y`). 66,355 records paged (`lookup.paging`), left out when not asked:
+# API against what the window must show (`lookup.a11y`). The first of 66,355 records' pages read through it (`lookup.paging`;
+# every record is paged by `LookupScenarioTests`, through the service), left out when not asked:
 # the scenario is the driver's to start, so `lookup.core` and `lookup.a11y` always run together.
 substage_lookup() {
     local results="$home/results/lookup" work="$reports/lookup" access paging=--no-paging corpus=()
