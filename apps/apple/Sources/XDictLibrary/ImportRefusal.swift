@@ -11,7 +11,7 @@ public enum ImportRefusal: Codable, Hashable, Sendable {
     case formatVersion(String)
     /// A format 3.0 resource library (`.mdd`), which XDict cannot read yet (ADR-0005).
     case resourceLibraryV3
-    /// Locked with a registration code: opened with the reader's own code or not at all, never forced (AGENTS.md).
+    /// Locked with a registration code: refused at import, always; XDict never takes a code (owner, 2026-10-17; ADR-0005).
     case registrationCode
     /// Encrypted in a way XDict does not read.
     case encrypted

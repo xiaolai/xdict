@@ -51,6 +51,8 @@ public enum LibraryNotice: Hashable, Sendable {
     case alreadyInLibrary(name: String)
     /// What was added is the edition of a dictionary whose files were missing: that dictionary was found again.
     case relinked(name: String)
+    /// What was added is locked to its buyer with a registration code, so it was not added (ADR-0005 decision 4).
+    case locked(fileName: String)
     /// The library could not be written.
     case notSaved(LibraryStoreError)
 }
@@ -156,7 +158,9 @@ public final class Library {
             return
         }
         for entry in entries {
-            if let refusal = entry.refusal {
+            if Self.isLockedAtImport(entry) {
+                dropLocked(entry.id)
+            } else if let refusal = entry.refusal {
                 set(entry.id, .refused(refusal))
             } else if entry.edition == nil {
                 enqueue(entry.id)
@@ -305,6 +309,8 @@ public final class Library {
         guard let at = index(id) else { return }
         if refusal == .cancelled {
             set(id, .cancelled)
+        } else if refusal == .registrationCode, entries[at].edition == nil {
+            dropLocked(id)
         } else if refusal.isPermanent {
             entries[at].refusal = refusal
             save()
@@ -314,6 +320,22 @@ public final class Library {
         } else {
             set(id, .failed(refusal))
         }
+    }
+
+    /// A file locked with a registration code that never opened: XDict does not take it at all (owner, 2026-10-17;
+    /// ADR-0005 decision 4). One that once opened has an edition and a lineage the reader's settings are kept under
+    /// (ADR-0002), so it stays, refused, until the reader removes it.
+    private static func isLockedAtImport(_ entry: LibraryEntry) -> Bool {
+        entry.refusal == .registrationCode && entry.edition == nil
+    }
+
+    /// Takes a locked file out of the library, and says so once.
+    private func dropLocked(_ id: UUID) {
+        guard let at = index(id) else { return }
+        let name = entries[at].mdx?.fileName ?? entries[at].displayName
+        forget(id)
+        save()
+        notices.append(.locked(fileName: name))
     }
 
     /// A finished import: its edition, lineage, header and problems — or, when its edition is already in the library,
