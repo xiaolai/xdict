@@ -77,8 +77,9 @@ public struct SearchWindow: View {
             SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .frame(minWidth: ToolbarLayout.searchWidth.min, idealWidth: ToolbarLayout.searchWidth.ideal,
-                       maxWidth: ToolbarLayout.searchWidth.max)
+                // No ideal width: the toolbar takes a hosted item's ideal as its floor, which sent the field to
+                // the overflow at 400 pt (P8). The toolbar grows it up to Apple's 327 pt instead (P5).
+                .frame(minWidth: ToolbarLayout.searchWidth.min, maxWidth: ToolbarLayout.searchWidth.ideal)
         }
         .visibilityPriority(.high)
     }

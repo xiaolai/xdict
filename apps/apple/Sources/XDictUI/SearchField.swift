@@ -82,8 +82,19 @@ final class KeyboardSearchField: NSSearchField {
     }
 
 
+    private var resizeObserver: (any NSObjectProtocol)?
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        resizeObserver = nil
+        if let window {
+            DispatchQueue.main.async { [weak self] in self.map(ToolbarPriority.apply) }
+            resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification,
+                                                                    object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self.map(ToolbarPriority.apply) }
+            }
+        }
         guard wantsKeyboard, window != nil else { return }
         wantsKeyboard = false
         DispatchQueue.main.async { [weak self] in self?.takeKeyboard() }
