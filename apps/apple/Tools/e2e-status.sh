@@ -1,121 +1,108 @@
 #!/bin/bash
-# The end-to-end record: one row per sub-stage (`Tools/e2e-substages.txt`), against the build, the E2E Mac and the source tree it ran on. Adapted from
-# XiaolaiDict's `Tools/e2e-status.sh` (its ADR-0024 and the addenda of 2026-10-11); its carrying of unchanged stages is
-# not carried over, so every row is a run.
+# The end-to-end evidence, read from and written to the one E2E ledger (Tools/e2e-ledger.py): a row per sub-stage
+# (`Tools/e2e-substages.txt`) per run, pass and fail, under the sub-stage's content key.
 #
 #   e2e-status.sh record <build> <host> <os> <tree> <mode>
 #                            file the `RESULT<TAB>sub-stage<TAB>pass|fail[<TAB>check]` lines on stdin, with each
-#                            sub-stage's seconds from its `TIME<TAB>sub-stage<TAB>seconds` line
-#   e2e-status.sh show       what each stage last did, and whether it is evidence of the tree here now
+#                            sub-stage's seconds from its `TIME<TAB>sub-stage<TAB>seconds` line (Tools/e2e.sh). Keyed with
+#                            the facts the bundle was built with (XDICT_E2E_BUNDLE_FACTS, else Tools/e2e-facts.sh bundle),
+#                            the E2E Mac's macOS build (from <os>, `version (build)`) and the corpus; with no bundle facts
+#                            of this tree the rows are filed unkeyed, as history, and are no one's evidence
+#   e2e-status.sh show       the ledger's last rows (Tools/e2e-ledger.py show; E2E_LEDGER_LAST, E2E_LEDGER_STAGE)
+#   e2e-status.sh required [--bootstrap]
+#                            the sub-stages a release needs evidence of: every default one and RELEASE_EXTRAS; with
+#                            --bootstrap, BOOTSTRAP_STAGES
+#   e2e-status.sh smoke      RELEASE_SMOKE: what a release runs on its own signed bundle whatever the ledger says
+#   e2e-status.sh plan [--bootstrap]
+#                            per required sub-stage, `carried <date> <host> <key>` or `run — <why>`, and the minutes the
+#                            runs take by their recorded seconds (`make release-plan`)
+#   e2e-status.sh run-set [--bootstrap]
+#                            the plan's `run` sub-stages, one a line (`make e2e RELEASE_NEEDED=1`)
 #   e2e-status.sh require-fresh [--bootstrap]
-#                            exit 1 unless every default sub-stage (`Tools/e2e.sh --list-stages`) and RELEASE_EXTRAS — with --bootstrap,
-#                            the skeleton's `launch` alone — last passed on a development bundle of this very source tree,
-#                            all on one E2E Mac and one macOS build. What a release asks before it builds and again before
-#                            it uploads anything
+#                            exit 1 unless the plan carries every required sub-stage. What a release asks before it
+#                            builds and again before it uploads anything
 #
-# A row is `sub-stage, result, build, when, host, os, tree, mode, seconds`, tab-separated (rows of before the split have
-# no seconds and name whole stages, which nothing requires now). `host` is the E2E Mac's hardware UUID,
-# `os` its macOS version and build, `tree` the source tree the bundle was built from (`Tools/source-tree.sh`) or `-`
-# where it moved during the run or was not given, and `mode` is `development` or `release`, read from the build number.
+# **Release evidence is by key, not by tree** (owner, 2026-10-17): a sub-stage whose inputs and facts are what they were
+# when it last passed is not run again for a release. The key holds the files that reach it, the build host's Xcode,
+# Swift and Rust, the E2E Mac's macOS build, the corpus and the graph; a carried pass must be younger than
+# E2E_EVIDENCE_MAX_DAYS (default 14). What no key can see, the release's signature and notarisation, is RELEASE_SMOKE on
+# the release-signed bundle and Gatekeeper on the disk image, both in Tools/release.sh, always.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-readonly STATUS=.build/e2e-status.tsv
 # The stage the skeleton's bootstrap release rests on (plan-macos-v1 WI-2).
 readonly BOOTSTRAP_STAGES="launch"
 # Extra sub-stages the ordinary release needs too: the WI-10 measurement (warm p95 within 1 s is part of done).
 readonly RELEASE_EXTRAS="measure.protocol"
+# Run on the release-signed, notarised bundle by every release, carried or not: keys cannot see signing.
+readonly RELEASE_SMOKE="launch"
+fail() { echo "e2e-status: $*" >&2; exit 1; }
 
-# A stage passes only if every assertion in it passed: the last result per stage once marked a stage green whose
-# earlier check had failed (XiaolaiDict). A run that emitted no RESULT line leaves the record untouched; its own exit
-# status says it went wrong.
+# args_of <output of e2e-facts.sh>: its lines into the array `facts` (bash 3.2 has no mapfile).
+facts=()
+args_of() { local line; facts=(); while IFS= read -r line; do [ -z "$line" ] || facts+=("$line"); done <<<"$1"; }
+
 record() {
-    local ran=$1 host=$2 os=$3 tree=$4 mode=$5 now name result seconds
-    now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-    mkdir -p "$(dirname "$STATUS")"
-    # Two E2E Macs of one split run file their rows at once (Tools/e2e-run.sh): one writer at a time, or a row is lost.
-    local lock=$STATUS.lock waited=0
-    until /usr/bin/shlock -f "$lock" -p $$; do
-        waited=$((waited + 1))
-        [ "$waited" -lt 300 ] || { echo "e2e-status: $lock held for 5 min; nothing recorded" >&2; return 1; }
-        sleep 1
-    done
-    trap 'rm -f "$lock"' EXIT
-    { grep "^RESULT	\|^TIME	" || true; } | awk -F'\t' '
-        $1 == "TIME" { took[$2] = $3; next }
-        { if ($3 == "fail") seen[$2] = "fail"; else if (!($2 in seen)) seen[$2] = "pass" }
-        END { for (n in seen) print n "\t" seen[n] "\t" (n in took ? took[n] : "-") }' \
-    | while IFS=$'\t' read -r name result seconds; do
-        [ -n "${name:-}" ] || continue
-        if [ -f "$STATUS" ]; then grep -v "^$name	" "$STATUS" >"$STATUS.new" || true; else : >"$STATUS.new"; fi
-        printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$name" "$result" "$ran" "$now" "$host" "$os" "$tree" "$mode" "$seconds" \
-            >>"$STATUS.new"
-        mv "$STATUS.new" "$STATUS"
-    done
+    local ran=$1 host=$2 os=$3 tree=$4 mode=$5 bundle build corpus
+    if [ -n "${XDICT_E2E_BUNDLE_FACTS:-}" ]; then
+        bundle=$(cat "$XDICT_E2E_BUNDLE_FACTS") || fail "no bundle facts at $XDICT_E2E_BUNDLE_FACTS"
+    else bundle=$(Tools/e2e-facts.sh bundle) || bundle=""; fi
+    build=$(sed -n 's/.*(\([A-Za-z0-9]*\))$/\1/p' <<<"$os")
+    if [ -z "$bundle" ] || [ -z "$build" ] || [ "$tree" = - ]; then
+        echo "e2e-status: no build facts of this tree's bundle, no macOS build or no tree: the rows are filed unkeyed" >&2
+        tree=-
+        bundle=$(printf -- '--fact\n%s\n' xcode=- swift=- rust=-)
+        build=unknown
+    fi
+    corpus=$(Tools/e2e-facts.sh corpus) || fail "see above"
+    args_of "$bundle"$'\n'"--fact"$'\n'"macos=$build"$'\n'"$corpus"
+    python3 -I Tools/e2e-ledger.py record "${facts[@]}" --build "$ran" --host "$host" --os "$os" --tree "$tree" --mode "$mode"
 }
 
-show() {
-    local tree
-    tree=$(Tools/source-tree.sh)
-    [ -s "$STATUS" ] || { echo "no end-to-end run is recorded"; return 0; }
-    printf '%-20s %-6s %6s %-22s %-21s %-8s %-18s %s\n' SUB-STAGE RESULT SECS BUILD WHEN HOST MACOS "OF THIS TREE"
-    while IFS=$'\t' read -r name result ran when host os stage_tree mode seconds; do
-        local of=no
-        [ "$stage_tree" != "$tree" ] || of=yes
-        printf '%-20s %-6s %6s %-22s %-21s %-8s %-18s %s (%s)\n' "$name" "$result" "${seconds:--}" "$ran" "$when" "${host:0:8}" "$os" "$of" "$mode"
-    done <"$STATUS"
+required() {
+    if [ "${1:-}" = --bootstrap ]; then echo "$BOOTSTRAP_STAGES"; return; fi
+    local stages
+    stages=$(Tools/e2e.sh --list-stages | paste -sd' ' -)
+    [ -n "$stages" ] || fail "Tools/e2e.sh listed no stages"
+    echo "$stages $RELEASE_EXTRAS"
 }
 
-# Every reason a release may not go out on this record, one per line; nothing where it may.
-refusals() {
-    local tree=$1; shift
-    local stage row result tree_of mode host os first=""
-    for stage in "$@"; do
-        row=$( [ -f "$STATUS" ] && awk -F'\t' -v s="$stage" '$1 == s' "$STATUS" || true)
-        if [ -z "$row" ]; then echo "$stage: never recorded"; continue; fi
-        IFS=$'\t' read -r _ result _ _ host os tree_of mode _ <<<"$row"
-        if [ "$result" != pass ]; then echo "$stage: last result $result"
-        elif [ "$tree_of" = - ] || [ -z "$tree_of" ]; then
-            echo "$stage: its last pass recorded no source tree (run by hand, or the tree moved during the run)"
-        elif [ "$tree_of" != "$tree" ]; then
-            echo "$stage: stale — its last pass was of source tree ${tree_of:0:12}, not this one, ${tree:0:12}"
-        elif [ "$mode" != development ]; then
-            echo "$stage: its last pass ran a $mode bundle; the evidence is a development bundle of this tree"
-        elif [ -z "$host" ] || [ "$host" = - ] || [ -z "$os" ] || [ "$os" = - ]; then
-            echo "$stage: its last pass recorded no E2E Mac or macOS build"
-        elif [ -z "$first" ]; then first="$stage|$host|$os"
-        elif [ "${first#*|}" != "$host|$os" ]; then
-            echo "$stage: passed on another E2E Mac or macOS build than ${first%%|*}; the evidence is one Mac's, on one build"
-        fi
-    done
+# plan_rows [--bootstrap] [--human]: the ledger's plan for a release built now and run on XDICT_E2E_HOST.
+plan_rows() {
+    local bootstrap="" human="" out stages
+    [ "${1:-}" != --bootstrap ] || { bootstrap=--bootstrap; shift; }
+    [ "${1:-}" != --human ] || human=--human
+    [ -n "${XDICT_E2E_HOST:-}" ] || [ -n "${XDICT_FACT_MACOS:-}" ] || fail "XDICT_E2E_HOST is not set: the plan keys on its macOS build"
+    out=$(Tools/e2e-facts.sh plan "${XDICT_E2E_HOST:-}") || fail "the facts could not be read"
+    args_of "$out"
+    stages=$(required $bootstrap) || exit 1
+    # shellcheck disable=SC2086 # the stage names are words, split on purpose
+    python3 -I Tools/e2e-ledger.py plan --release --max-days "${E2E_EVIDENCE_MAX_DAYS:-14}" ${human:+"$human"} "${facts[@]}" $stages
 }
 
 require_fresh() {
-    local mode=full stages tree problems
-    [ "${1:-}" != --bootstrap ] || mode=bootstrap
-    if [ "$mode" = bootstrap ]; then
-        stages=$BOOTSTRAP_STAGES
-    else
-        stages=$(Tools/e2e.sh --list-stages | paste -sd' ' -)
-        [ -n "$stages" ] || { echo "e2e-status: Tools/e2e.sh listed no stages" >&2; return 1; }
-        stages="$stages $RELEASE_EXTRAS"
-    fi
-    tree=$(Tools/source-tree.sh)
-    # shellcheck disable=SC2086 # the stage names are words, split on purpose
-    problems=$(refusals "$tree" $stages)
-    if [ -n "$problems" ]; then
-        echo "no fresh end-to-end pass of this source tree (${tree:0:12}) for the $mode release:" >&2
-        sed 's/^/  /' <<<"$problems" >&2
-        echo "run make e2e FULL=1 E2E_SPLIT=0 on this tree (one E2E Mac, every sub-stage) and make e2e STAGES=\"$RELEASE_EXTRAS\" E2E_HOST=<that Mac>, then release" >&2
+    local what=full rows runs
+    [ "${1:-}" != --bootstrap ] || what=bootstrap
+    rows=$(plan_rows ${1:+"$1"}) || fail "the plan failed"
+    runs=$(awk -F'\t' '$1 == "run" { print "  " $2 ": " $4 }' <<<"$rows")
+    if [ -n "$runs" ]; then
+        echo "no end-to-end evidence for the $what release of this source tree; these must run:" >&2
+        echo "$runs" >&2
+        echo "make e2e RELEASE_NEEDED=1 runs exactly those (make release-plan shows the whole plan), then release" >&2
         return 1
     fi
-    echo "end-to-end evidence for the $mode release: $stages — each passed on a development bundle of this tree (${tree:0:12})"
+    echo "end-to-end evidence for the $what release: $(awk -F'\t' '{ printf "%s ", $2 }' <<<"$rows")— each carried by its" \
+        "key (the release still runs $RELEASE_SMOKE on its signed bundle)"
 }
 
 case ${1:-} in
     record)
         [ $# -eq 6 ] || { echo "usage: e2e-status.sh record <build> <host> <os> <tree> <mode>" >&2; exit 64; }
         shift; record "$@" ;;
-    show) show ;;
+    show) python3 -I Tools/e2e-ledger.py show --last "${E2E_LEDGER_LAST:-30}" ${E2E_LEDGER_STAGE:+--stage "$E2E_LEDGER_STAGE"} ;;
+    required) required "${2:-}" ;;
+    smoke) echo "$RELEASE_SMOKE" ;;
+    plan) shift; plan_rows "$@" --human ;;
+    run-set) shift; rows=$(plan_rows "$@") || exit 1; awk -F'\t' '$1 == "run" { print $2 }' <<<"$rows" ;;
     require-fresh) require_fresh "${2:-}" ;;
-    *) echo "usage: e2e-status.sh record|show|require-fresh [--bootstrap]" >&2; exit 64 ;;
+    *) echo "usage: e2e-status.sh record|show|required|smoke|plan|run-set|require-fresh [--bootstrap]" >&2; exit 64 ;;
 esac
