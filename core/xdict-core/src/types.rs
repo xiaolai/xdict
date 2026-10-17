@@ -370,3 +370,70 @@ record! {
         Repaired,
     }
 }
+
+record! {
+    /// What the reading style does to one edition, flat, as the bindings carry it to the Library's details pane
+    /// (ADR-0010, "Reported", owner's decision of 2026-10-17). Dictionary text (selectors, families, paths) is
+    /// quoted as the dictionary wrote it.
+    #[derive(Debug, Clone, PartialEq)]
+    pub struct ReadingStyle {
+        /// The rules' version ([`crate::STYLE`]).
+        pub version: u32,
+        /// The base size in CSS pixels, and where it was read.
+        pub base_px: f64,
+        pub base_from: BaseSource,
+        /// The dictionary's own fonts kept.
+        pub fonts: Vec<KeptFont>,
+        /// The sheets read, by path; those not read, each with why.
+        pub sheets: Vec<String>,
+        pub skipped: Vec<String>,
+        /// What normalizing the edition's own sheets changed.
+        pub changes: StyleChanges,
+    }
+
+    /// Where an edition's base size was read.
+    #[derive(Debug, Clone, PartialEq)]
+    pub enum BaseSource {
+        /// The page's own size (`body`, `html` or `:root`).
+        Page { selector: String },
+        /// The absolute size most prose rules set, each selector one vote.
+        Prose { weight: u64 },
+        /// The size most of a sample of entries' visible text is set in: `chars` characters, `share` of all.
+        Text { chars: u64, share: f64 },
+        /// No absolute size at all: a browser's default.
+        BrowserDefault,
+    }
+
+    /// A font the dictionary keeps, why, and the rule that showed it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct KeptFont {
+        pub family: String,
+        pub reason: FontReason,
+        pub selector: String,
+    }
+
+    /// Why a dictionary's font is kept.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum FontReason {
+        /// It draws Private Use Area characters: an icon font.
+        PrivateUse,
+        /// A bundled face draws a pseudo-element's `content`.
+        PseudoContent,
+        /// A bundled face draws phonetic symbols.
+        Phonetic,
+    }
+
+    /// What normalizing an edition's sheets changed, by kind.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+    pub struct StyleChanges {
+        pub important: u64,
+        pub page: u64,
+        pub family: u64,
+        pub size: u64,
+        pub line_height: u64,
+        pub colour: u64,
+        pub weight: u64,
+        pub space: u64,
+        pub dropped: u64,
+    }
+}

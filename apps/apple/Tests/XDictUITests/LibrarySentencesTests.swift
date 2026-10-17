@@ -58,6 +58,28 @@ struct LibrarySentencesTests {
                 != String(localized: LibrarySentences.unreadable(.newerVersion(2))))
     }
 
+    /// ADR-0010: where the base size came from, why a font is kept and what changed are each their own sentence; the
+    /// dictionary's own words (a selector, a family) are quoted, never translated.
+    @Test func theReadingStyleIsToldInSentences() {
+        let sources: [BaseSource] = [.page(selector: "body"), .prose(weight: 12), .text(chars: 900, share: 0.75),
+                                     .browserDefault]
+        let said = sources.map { String(localized: LibrarySentences.baseSize(px: 14, from: $0)) }
+        #expect(Set(said).count == sources.count, "\(said)")
+        #expect(said[0].contains("body") && said[0].contains("14"))
+        #expect(said[2].contains("75"))
+        let reasons = FontReason.allCases.map { String(localized: LibrarySentences.fontReason($0)) }
+        #expect(Set(reasons).count == FontReason.allCases.count)
+        let none = StyleChanges(important: 0, page: 0, family: 0, size: 0, lineHeight: 0, colour: 0, weight: 0, space: 0,
+                                dropped: 0)
+        #expect(LibrarySentences.styleChanges(none).count == 1, "nothing changed is said once")
+        let some = StyleChanges(important: 3, page: 0, family: 9, size: 40, lineHeight: 0, colour: 0, weight: 0, space: 0,
+                                dropped: 0)
+        let changes = LibrarySentences.styleChanges(some).map { String(localized: $0) }
+        #expect(changes.count == 3 && changes.contains { $0.contains("40") }, "\(changes)")
+        #expect(String(localized: LibrarySentences.styleStatus(.unavailable))
+                != String(localized: LibrarySentences.styleStatus(.reading)))
+    }
+
     /// WI-12: one sentence per kind of finding, each its own and each saying how many; a missing file is named.
     @Test func eachHealthFindingIsItsOwnSentenceWithItsCount() {
         let findings = FindingKind.allCases.map {

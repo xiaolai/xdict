@@ -182,6 +182,7 @@ test-tools:
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-run-test.sh
 	@Tools/tests/land-test.sh
+	@Tools/tests/on-demand-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py

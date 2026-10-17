@@ -32,7 +32,10 @@
    "deps": [
     "xdict-core"
    ],
-   "dev": [],
+   "dev": [
+    "xdict-core",
+    "xdict-mdx-writer"
+   ],
    "dir": "core/xdict-ffi/"
   },
   "xdict-health": {
@@ -93,7 +96,7 @@
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
   "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
-  "core/xdict-ffi/Cargo.toml": "063b81ab46c6d9a3b11a5f5aa40f9e85dd08a350",
+  "core/xdict-ffi/Cargo.toml": "ac303ff831d1e474a26e106112c7a12aeffbd293",
   "core/xdict-health/Cargo.toml": "42b7213a18cb38c66a647483ab58e8328fca29ec",
   "core/xdict-identity/Cargo.toml": "fe9b3bdd505aea5b91e4e19c7ed033d31fc3d18a",
   "core/xdict-lookup/Cargo.toml": "96edf6336ff7032b686767131bd122b25e76916d",

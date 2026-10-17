@@ -321,3 +321,81 @@ public enum FindingKind: String, Codable, Hashable, Sendable, CaseIterable {
     case missingFile, missingSounds, missingImages, missingWords, codeAsText, commentMarks, styleAsText, brokenRedirects
     case doubleEncoded, undecodable, emptyEntries, hugeEntries, repeatedEntries, oddHeadwords, repaired
 }
+
+// MARK: - Reading style (ADR-0010, owner's decision of 2026-10-17; contract 4)
+
+/// What the reading style does to an open dictionary: the core's report, computed in the service. Selectors, families
+/// and paths are the dictionary's own text, shown as written.
+public struct ReadingStyle: Codable, Hashable, Sendable {
+    /// The rules' version (`xdict_core::STYLE`).
+    public let version: UInt32
+    /// The base size in CSS pixels, and where it was read.
+    public let basePx: Double
+    public let baseFrom: BaseSource
+    /// The dictionary's own fonts kept, each with why.
+    public let fonts: [KeptFont]
+    /// The sheets read, by path; those not read, each with why.
+    public let sheets: [String]
+    public let skipped: [String]
+    /// What normalizing the dictionary's sheets changed.
+    public let changes: StyleChanges
+
+    public init(version: UInt32, basePx: Double, baseFrom: BaseSource, fonts: [KeptFont], sheets: [String],
+                skipped: [String], changes: StyleChanges) {
+        self.version = version
+        self.basePx = basePx
+        self.baseFrom = baseFrom
+        self.fonts = fonts
+        self.sheets = sheets
+        self.skipped = skipped
+        self.changes = changes
+    }
+}
+
+/// Where a dictionary's base size was read (`xdict-core`'s `BaseSource`).
+public enum BaseSource: Codable, Hashable, Sendable {
+    /// The page's own size (`body`, `html` or `:root`).
+    case page(selector: String)
+    /// The size most prose rules set, each selector one vote.
+    case prose(weight: UInt64)
+    /// The size most of a sample of entries' text is set in: `chars` characters, `share` of all.
+    case text(chars: UInt64, share: Double)
+    /// No absolute size at all: a browser's default.
+    case browserDefault
+}
+
+/// A font the dictionary keeps, why, and the rule that showed it.
+public struct KeptFont: Codable, Hashable, Sendable {
+    public let family: String
+    public let reason: FontReason
+    public let selector: String
+
+    public init(family: String, reason: FontReason, selector: String) {
+        self.family = family
+        self.reason = reason
+        self.selector = selector
+    }
+}
+
+/// Why a dictionary's font is kept (`xdict-core`'s `FontReason`).
+public enum FontReason: String, Codable, Hashable, Sendable, CaseIterable {
+    case privateUse, pseudoContent, phonetic
+}
+
+/// What normalizing a dictionary's sheets changed, by kind.
+public struct StyleChanges: Codable, Hashable, Sendable {
+    public let important, page, family, size, lineHeight, colour, weight, space, dropped: UInt64
+
+    public init(important: UInt64, page: UInt64, family: UInt64, size: UInt64, lineHeight: UInt64, colour: UInt64,
+                weight: UInt64, space: UInt64, dropped: UInt64) {
+        self.important = important
+        self.page = page
+        self.family = family
+        self.size = size
+        self.lineHeight = lineHeight
+        self.colour = colour
+        self.weight = weight
+        self.space = space
+        self.dropped = dropped
+    }
+}

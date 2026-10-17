@@ -76,6 +76,31 @@ struct LibraryTests {
         #expect(library.health[id] == nil)
     }
 
+    /// ADR-0010 (owner's decision of 2026-10-17): the details pane asks the service for an open dictionary's reading
+    /// style once and keeps the report this session; a failed ask is told and asked again next time.
+    @Test func aDictionarysReadingStyleIsAskedOnceAndKept() async throws {
+        try dir.files("a.mdx")
+        let report = ReadingStyle(version: 1, basePx: 14, baseFrom: .page(selector: "body"),
+                                  fonts: [KeptFont(family: "Ic", reason: .privateUse, selector: ".i")], sheets: ["a.css"],
+                                  skipped: [], changes: StyleChanges(important: 1, page: 2, family: 0, size: 3, lineHeight: 0,
+                                                                     colour: 0, weight: 0, space: 0, dropped: 0))
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        await backend.setStyleAnswer(.failure(.wire(.core(.cancelled(detail: "x")))))
+        await library.loadReadingStyle(id)
+        #expect(library.readingStyles[id] == .unavailable)
+        await backend.setStyleAnswer(.success(report))
+        await library.loadReadingStyle(id)
+        await library.loadReadingStyle(id)
+        #expect(library.readingStyles[id] == .read(report))
+        #expect(await backend.stylesAsked == [dict, dict], "a kept report is not asked for again")
+        await library.remove(id)
+        #expect(library.readingStyles[id] == nil)
+    }
+
     @Test func cancelThenRetryCompletes() async throws {
         try dir.files("a.mdx")
         let library = library()
