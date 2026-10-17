@@ -26,6 +26,8 @@ struct ParityWindowTests {
         #expect(ToolbarLayout.searchWidth.ideal == 327)
         // Apple's sidebar is 183 pt at an 859 pt window (P9).
         #expect(ToolbarLayout.sidebar.ideal == 183)
+        // P8: at the 400 pt minimum the title yields to the search field; at Apple's 859 pt it shows.
+        #expect(ToolbarLayout.titleYields(width: 400) && !ToolbarLayout.titleYields(width: 859))
     }
 
     /// **P2**: the title is "Dictionary" always; "N found" under it counts the list, in the reader's grammar, and is

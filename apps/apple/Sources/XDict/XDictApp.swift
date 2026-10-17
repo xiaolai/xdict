@@ -28,7 +28,7 @@ struct XDictApp: App {
         WindowGroup(id: Self.mainWindow) {
             MainWindow()
                 // Apple's Dictionary's minimum (parity P1): AX asked for 100 × 100 and took 400 × 300.
-                .frame(minWidth: ToolbarLayout.minimumWindow.width, minHeight: ToolbarLayout.minimumWindow.height)
+                .frame(minWidth: ToolbarLayout.minimumWindow.width, minHeight: ToolbarLayout.minimumContentHeight)
                 .task { await LibraryLaunch.once() }
         }
         .defaultSize(width: 1_000, height: 700)

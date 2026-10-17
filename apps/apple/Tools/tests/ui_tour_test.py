@@ -175,7 +175,7 @@ cases = {
     "search.live": (apple_window("Dictionary", rowed("take off", "take on"), node("AXStaticText", value="2 found")),
                     old_window("Look Up", node("AXStaticText", value="Suggestions"))),
     "search.didyoumean": (apple_window("Dictionary", node("AXStaticText", value="Did you mean?"),
-                                       rowed("accomplished")), old_window("Look Up")),
+                                       rowed("banana")), old_window("Look Up")),
     "search.none": (apple_window("Dictionary", rowed(), node("AXStaticText", (200, 98, 220, 30),
                                                              value="No entries found.")),
                     old_window("zzqxjv", node("AXStaticText", (500, 300, 200, 30), value="No Results for “zzqxjv”"))),

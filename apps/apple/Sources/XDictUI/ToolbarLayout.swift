@@ -8,8 +8,13 @@ import XDictSearch
 /// the search field does (P8).
 public enum ToolbarLayout {
     public static let minimumWindow: (width: CGFloat, height: CGFloat) = (400, 300)
-    public static let searchWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (140, 327, 420)
+    /// The content's minimum height: the window's less the 52 pt toolbar (measured: 300 pt content made a 352 pt window).
+    public static let minimumContentHeight: CGFloat = minimumWindow.height - 52
+    public static let searchWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (110, 327, 420)
     public static let sidebar: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (150, 183, 320)
+
+    /// Below this window width the title gives way to the search field (P8).
+    public static func titleYields(width: CGFloat) -> Bool { width < 560 }
 
     /// The window's title, always.
     public static var windowTitle: LocalizedStringResource { LocalizedStringResource("Dictionary") }

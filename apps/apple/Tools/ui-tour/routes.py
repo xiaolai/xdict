@@ -53,8 +53,8 @@ ROUTES = [
      "holding the keyboard", look_up("apple") + [("key", "down"), ("wait", 1)]),
     ("search.live", "full", "Type 'take o' without Return (P10)", "'take off' shown at once, the list of 'take o…' "
      "headwords in the sidebar", [SEARCH, ("type", "take o"), ("wait", 1.5)]),
-    ("search.didyoumean", "full", "Type 'acomplished', Return (P13)", "'Did you mean?' over 'accomplished', its "
-     "entry shown", look_up("acomplished")),
+    ("search.didyoumean", "full", "Type 'bananna', Return (P13)", "'Did you mean?' over 'banana', its "
+     "entry shown", look_up("bananna")),
     ("search.phrase", "full", "Type 'take o', Down, Return", "The phrase 'take off' looked up and shown",
      [SEARCH, ("type", "take o"), ("wait", 1.2), ("key", "down"), ("key", "return"), ("wait", 1.5)]),
     ("search.many", "full", "Type 'a', Return", "Many results; the sidebar's 'more' row where a section is cut",
