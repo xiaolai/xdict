@@ -1282,6 +1282,39 @@ substage_anywhere() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# **measure.protocol** (plan-macos-v1 WI-10, extra): the real app over the 24 (`XDict --measure`), driven by
+# `Tools/measure/drive.py`: typed lookup warm and cold, Return to WebKit's first paint with the harness's overhead
+# subtracted; selection key to panel; memory of app and service. Its numbers are kept in results/measure.
+substage_measure_protocol() {
+    local results="$home/results/measure" work="$reports/measure"
+    rm -rf "$results" "$work"
+    mkdir -p "$results" "$work"
+    if [ ! -d "$home/corpus" ]; then
+        flunk - "measure: no corpus on the E2E Mac (set XDICT_E2E_CORPUS on the build Mac); nothing was measured"
+        return 0
+    fi
+    if is_running "$exe"; then
+        flunk - "measure: XDict is already running (pid ${PIDS[*]}), so the app measured would not be this run's"
+        return 0
+    fi
+    if python3 -I "$kit/measure/drive.py" "$kit" "$work" "$app" "$home/corpus" "$work/driver.json" \
+        >"$results/drive.log" 2>&1; then
+        echo "      measured: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
+    else
+        STOPPED="the driver stopped: $(sed -n 's/^drive: //p' "$results/drive.log" | tail -1)"
+        flunk - "measure: $STOPPED"
+    fi
+    quit_bundle >/dev/null 2>&1 || true
+    if [ -s "$work/driver.json" ]; then
+        findings "$work/driver.json"
+        plutil -extract facts.table raw -o - "$work/driver.json" 2>/dev/null | sed 's/^/      /'
+    else
+        flunk - "measure: the driver wrote no findings ($(tail -c 300 "$results/drive.log" 2>/dev/null))"
+    fi
+    cp "$work"/*.json "$work"/*.jsonl "$results/" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # **The run**: each sub-stage asked for, in the plan's order; a group's launch once, for all of its sub-stages asked.
 # Each is timed (`TIME` lines, for the recorder), and each fails by name for a check it never reported.
 ran_groups=" "

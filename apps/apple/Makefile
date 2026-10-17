@@ -172,7 +172,8 @@ affected-graph:
 affected-graph-update:
 	@python3 -I Tools/affected_graph.py generate
 
-# The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects.
+# The E2E plan's own tests (Tools/tests/e2e-plan-test.sh): what the sub-stages own and what a change selects; the
+# WI-10 measurement's arithmetic; every linked crate and bundled font with its notice (Tools/notices.py, needs cargo).
 test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/affected-graph-test.sh
@@ -185,6 +186,8 @@ test-tools:
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py
+	@python3 -I Tools/tests/measure_test.py
+	@Tools/tests/notices-test.sh
 
 e2e-status:
 	@Tools/e2e-status.sh show
@@ -197,10 +200,13 @@ e2e-evidence:
 e2e-evidence-bootstrap:
 	@Tools/e2e-status.sh require-fresh --bootstrap
 
-release: e2e-evidence lint test-swift
+# **Built where `app` builds** (BUILD_HOST: Tools/remote-build.sh, whose products Tools/build-bundle.sh requires to be of
+# this very tree), never compiled on this Mac when a build host is set; without one, here, with the notices check too.
+RELEASE_BUILD := $(if $(BUILD_HOST),remote-build,lint test-tools test-swift)
+release: e2e-evidence $(RELEASE_BUILD)
 	@Tools/release.sh
 
-release-bootstrap: e2e-evidence-bootstrap lint test-swift
+release-bootstrap: e2e-evidence-bootstrap $(RELEASE_BUILD)
 	@Tools/release.sh --bootstrap
 
 clean:
