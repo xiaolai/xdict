@@ -8,14 +8,14 @@
 //! cost is linear in the sheet. Which fonts are kept and the base size are decided once per edition from all of
 //! its sheets ([`Style::of_sheets`]), never from whichever entry is opened first.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Exceeded;
 use crate::colour::{self, Role};
 
 /// The version of these rules. Raised whenever what they write changes, so anything that keeps rewritten
 /// output knows it is stale.
-pub const STYLE: u32 = 11;
+pub const STYLE: u32 = 12;
 
 /// Every token the core may write, by `dev-docs/reading-style.md` §1's names: the frame defines exactly these, and a
 /// name not among them would fall back silently. The one list; a test holds every output to it.
@@ -88,6 +88,9 @@ const SELECTOR_CHARS: usize = 160;
 #[derive(Debug, Clone, PartialEq)]
 pub struct Style {
     base: Base,
+    /// The page's size calibration read, and the selectors whose relative size the sample met only over it (R4, D48).
+    page_px: f64,
+    over_page: BTreeSet<String>,
     kept: Vec<Kept>,
     /// `kept`'s families as compared: lower case, unquoted, spaces collapsed.
     keys: BTreeMap<String, usize>,
@@ -362,22 +365,36 @@ impl Style {
         };
         let calibrating = rules.iter().zip(&linked).filter(|(_, l)| **l).map(|(r, _)| r);
         let entries: Vec<&str> = entries.into_iter().collect();
-        let base = match crate::calibrate::measure(calibrating, page_px, entries.iter().copied()) {
-            Some(m) => Base { px: m.px, from: BaseFrom::Text { chars: m.chars, share: m.share } },
-            None => voted,
+        let (base, over_page) = match crate::calibrate::measure(calibrating, page_px, entries.iter().copied()) {
+            Some(m) => (Base { px: m.px, from: BaseFrom::Text { chars: m.chars, share: m.share } }, m.over_page),
+            None => (voted, BTreeSet::new()),
         };
         let mut list: Vec<Kept> = kept.into_values().collect();
         list.sort_by(|a, b| a.family.cmp(&b.family));
         let keys = list.iter().enumerate().map(|(i, k)| (key(&k.family), i)).collect();
         let mut facts = crate::facts::Facts::of_rules(&rules);
         facts.find_wrapper(entries.iter().copied());
-        Self { base, kept: list, keys, facts }
+        Self { base, page_px, over_page, kept: list, keys, facts }
+    }
+
+    /// R4 (D48): the step a relative size `ratio` on `selector` takes when every selector of it sized, in the sample,
+    /// only elements whose parent was at the page's size. What it sets is then known in pixels, the page's size times
+    /// the ratio, and goes onto the scale against the base as an absolute size does; `None` otherwise.
+    fn over_page_step(&self, selector: &str, ratio: f64) -> Option<usize> {
+        if self.over_page.is_empty() || ratio <= 0.0 || self.base.px <= 0.0 {
+            return None;
+        }
+        let mut all =
+            selector.split(',').map(|s| s.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase());
+        all.all(|s| self.over_page.contains(&s)).then(|| snap(self.page_px * ratio / self.base.px))
     }
 
     /// No font kept, a browser's default base.
     fn neutral() -> Self {
         Self {
             base: Base { px: DEFAULT_PX, from: BaseFrom::Default },
+            page_px: DEFAULT_PX,
+            over_page: BTreeSet::new(),
             kept: Vec::new(),
             keys: BTreeMap::new(),
             facts: crate::facts::Facts::default(),
@@ -921,6 +938,17 @@ pub(crate) fn finish(
                 counts.size += 1;
                 sized = Some(leading_of(false, decl.value));
                 Some(format!("{}{}", split_space(decl.value).0, step_token(2)))
+            }
+            // R4 (2026-10-18, D48): a relative size only ever met over the page's size is that size times its ratio,
+            // snapped against the base as an absolute size is (OALECD's `def{font-size:110%}` under
+            // `body{font-size:.95em}`, its definitions, went to l by the ratio alone, at 18 px).
+            Action::Size
+                if let Some(i) =
+                    relative_ratio(split_space(decl.value).1).and_then(|r| style.over_page_step(&selector, r)) =>
+            {
+                counts.size += 1;
+                sized = Some(leading_of(i >= 4, decl.value));
+                Some(format!("{}{}", split_space(decl.value).0, step_token(i)))
             }
             Action::Size => size_value(decl.value, style, counts).map(|(v, large)| {
                 sized = Some(leading_of(large, decl.value));

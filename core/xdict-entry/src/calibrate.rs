@@ -10,7 +10,7 @@
 //! Hidden text (`display:none`, `visibility:hidden`) does not count, except where an entry's text is mostly hidden:
 //! there a script reveals it (Chambers hides its whole `cb13` until its script runs), and all of it counts.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use crate::normalize::{Rule, absolute_px, keyword_px, relative_ratio};
 
@@ -64,6 +64,8 @@ impl Compound {
 
 /// A selector, subject last, and what its rule sets.
 struct Sized {
+    /// The selector as written: trimmed, lower case, its spaces collapsed.
+    selector: String,
     compounds: Vec<Compound>,
     size: Size,
     hidden: bool,
@@ -72,6 +74,9 @@ struct Sized {
 /// What the text says: the size most characters are set in, how many are, and their share of all.
 pub(crate) struct Measured {
     pub(crate) px: f64,
+    /// The selectors whose relative size, wherever the sample met it, sized an element whose parent was at the page's
+    /// size: what they set is the page's size times their ratio (R4, D48).
+    pub(crate) over_page: BTreeSet<String>,
     pub(crate) chars: u64,
     pub(crate) share: f64,
 }
@@ -131,17 +136,22 @@ fn selectors(rule: &Rule, size: Size, hidden: bool, out: &mut Vec<Sized>) {
         }
         let compounds: Option<Vec<Compound>> = parts.iter().map(|p| compound(p)).collect();
         if let Some(compounds) = compounds {
-            out.push(Sized { compounds, size, hidden });
+            let selector = selector.split_whitespace().collect::<Vec<_>>().join(" ").to_ascii_lowercase();
+            out.push(Sized { selector, compounds, size, hidden });
         }
     }
 }
 
-/// One open element: what it is, its size in pixels, and whether it is hidden.
+/// One open element: what it is, its size in pixels, whether that is still the page's, and whether it is hidden.
 struct Open {
     element: Element,
     px: f64,
+    at_page: bool,
     hidden: bool,
 }
+
+/// By selector, how many elements its relative size sized over a parent at the page's size, and over any other.
+type Applied = HashMap<String, (u64, u64)>;
 
 /// The size most of `entries`' visible text is set in under `rules`, the page at `page_px`; `None` when they hold no
 /// text.
@@ -172,10 +182,11 @@ pub(crate) fn measure<'a, 'r>(
         index.entry(key).or_default().push(i);
     }
     let mut chars: BTreeMap<u64, u64> = BTreeMap::new();
+    let mut applied = Applied::new();
     let mut budget = MATCH_BUDGET;
     for entry in entries {
         let end = (0..=entry.len().min(ENTRY_BYTES)).rev().find(|&i| entry.is_char_boundary(i)).unwrap_or(0);
-        let (visible, all) = scan(entry.get(..end).unwrap_or(""), page_px, &sized, &index, &mut budget);
+        let (visible, all) = scan(entry.get(..end).unwrap_or(""), page_px, &sized, &index, &mut applied, &mut budget);
         let (v, a): (u64, u64) = (visible.values().sum(), all.values().sum());
         // Mostly hidden: a script reveals it.
         let counted = if v * 2 < a { all } else { visible };
@@ -188,7 +199,8 @@ pub(crate) fn measure<'a, 'r>(
     }
     let total: u64 = chars.values().sum();
     let (&key, &most) = chars.iter().max_by(|a, b| a.1.cmp(b.1).then_with(|| b.0.cmp(a.0)))?;
-    (total > 0).then(|| Measured { px: key as f64 / 100.0, chars: most, share: most as f64 / total as f64 })
+    let over_page = applied.into_iter().filter(|(_, (page, other))| *page > 0 && *other == 0).map(|(s, _)| s).collect();
+    (total > 0).then(|| Measured { px: key as f64 / 100.0, over_page, chars: most, share: most as f64 / total as f64 })
 }
 
 type Counted = BTreeMap<u64, u64>;
@@ -199,6 +211,7 @@ fn scan(
     page_px: f64,
     sized: &[Sized],
     index: &HashMap<String, Vec<usize>>,
+    applied: &mut Applied,
     budget: &mut u64,
 ) -> (Counted, Counted) {
     let (mut visible, mut all) = (Counted::new(), Counted::new());
@@ -264,7 +277,7 @@ fn scan(
             deep += 1;
             continue;
         }
-        let open = element(name, tag, &stack, page_px, sized, index, budget);
+        let open = element(name, tag, &stack, page_px, (sized, index), applied, budget);
         stack.push(open);
     }
     count(rest, &stack);
@@ -289,13 +302,14 @@ fn ancestors_match(compounds: &[Compound], ancestors: &[Open], budget: &mut u64)
 }
 
 /// An element's size and visibility: its parent's, then each matching rule's in source order, then its own style.
+/// Each relative size a rule gives it is counted in `applied`, by whether its parent was at the page's size.
 fn element(
     name: String,
     tag: &str,
     stack: &[Open],
     page_px: f64,
-    sized: &[Sized],
-    index: &HashMap<String, Vec<usize>>,
+    (sized, index): (&[Sized], &HashMap<String, Vec<usize>>),
+    applied: &mut Applied,
     budget: &mut u64,
 ) -> Open {
     let classes: Vec<String> = crate::phon::attribute_of(tag, "class")
@@ -303,7 +317,8 @@ fn element(
         .unwrap_or_default();
     let id = crate::phon::attribute_of(tag, "id").map(str::to_ascii_lowercase);
     let element = Element { tag: name, classes, id };
-    let (parent_px, parent_hidden) = stack.last().map_or((page_px, false), |o| (o.px, o.hidden));
+    let (parent_px, parent_at_page, parent_hidden) =
+        stack.last().map_or((page_px, true, false), |o| (o.px, o.at_page, o.hidden));
     let mut candidates: Vec<usize> = Vec::new();
     let keys = element
         .classes
@@ -320,7 +335,7 @@ fn element(
     }
     candidates.sort_unstable();
     candidates.dedup();
-    let (mut px, mut hidden) = (parent_px, parent_hidden);
+    let (mut px, mut at_page, mut hidden) = (parent_px, parent_at_page, parent_hidden);
     for i in candidates {
         if *budget == 0 {
             break;
@@ -333,8 +348,12 @@ fn element(
         }
         hidden |= s.hidden;
         match s.size {
-            Size::Absolute(v) => px = v,
-            Size::Relative(r) => px = parent_px * r,
+            Size::Absolute(v) => (px, at_page) = (v, false),
+            Size::Relative(r) => {
+                (px, at_page) = (parent_px * r, false);
+                let seen = applied.entry(s.selector.clone()).or_default();
+                if parent_at_page { seen.0 += 1 } else { seen.1 += 1 }
+            }
             Size::Unset => {}
         }
     }
@@ -345,14 +364,14 @@ fn element(
             hidden |= hides(&n, v);
             if n == "font-size" {
                 match size_of(v) {
-                    Size::Absolute(v) => px = v,
-                    Size::Relative(r) => px = parent_px * r,
+                    Size::Absolute(v) => (px, at_page) = (v, false),
+                    Size::Relative(r) => (px, at_page) = (parent_px * r, false),
                     Size::Unset => {}
                 }
             }
         }
     }
-    Open { element, px, hidden }
+    Open { element, px, at_page, hidden }
 }
 
 /// Where `needle` (ASCII) first starts in `haystack`, compared ignoring case: one forward pass.
