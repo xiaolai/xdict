@@ -22,6 +22,7 @@ struct SearchField: NSViewRepresentable {
         let field = KeyboardSearchField()
         field.placeholderString = prompt
         field.setAccessibilityIdentifier("search-field")
+        field.setAccessibilityLabel(prompt)
         field.delegate = context.coordinator
         field.sendsWholeSearchString = true
         return field
@@ -47,6 +48,9 @@ struct SearchField: NSViewRepresentable {
         }
 
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
+            // While an input method composes (marked text), its keys are its own: Return commits the candidate, the
+            // arrows move among candidates, Escape cancels the composition (owner's toolbar move, Codex condition 5).
+            if textView.hasMarkedText() { return false }
             switch selector {
             case #selector(NSResponder.insertNewline(_:)):
                 parent?.onSubmit()
@@ -77,8 +81,17 @@ final class KeyboardSearchField: NSSearchField {
         currentEditor()?.selectAll(nil)
     }
 
+    /// The toolbar item holding the field is the last to go into the overflow menu as the window narrows, so search
+    /// stays directly usable down to the window's minimum width (Codex condition on the toolbar move).
+    private func keepInToolbar() {
+        for item in window?.toolbar?.items ?? [] where item.view.map(isDescendant(of:)) == true {
+            item.visibilityPriority = .high
+        }
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
+        DispatchQueue.main.async { [weak self] in self?.keepInToolbar() }
         guard wantsKeyboard, window != nil else { return }
         wantsKeyboard = false
         DispatchQueue.main.async { [weak self] in self?.takeKeyboard() }

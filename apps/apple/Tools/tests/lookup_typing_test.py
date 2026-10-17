@@ -72,5 +72,19 @@ class Typing(unittest.TestCase):
             run(mac)
 
 
+class SearchFocus(unittest.TestCase):
+    """`launch.searchFocused` (drive.py) with the field in the toolbar: green when both readings name the field, and
+    the positive control, red when the entry has the keyboard."""
+
+    def test_the_field_focused_in_the_toolbar(self):
+        self.assertTrue(typing_check.search_focused({"responder": "search"}, {"id": "search-field", "role": "AXTextField"}))
+
+    def test_the_entry_focused_fails_the_check(self):
+        self.assertFalse(typing_check.search_focused({"responder": "entry"}, {"id": "", "role": "AXWebArea"}))
+        self.assertFalse(typing_check.search_focused({"responder": "search"}, {"id": "", "role": "AXWebArea"}))
+        self.assertFalse(typing_check.search_focused({"responder": "entry"}, {"id": "search-field"}))
+        self.assertFalse(typing_check.search_focused({}, None))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=1)
