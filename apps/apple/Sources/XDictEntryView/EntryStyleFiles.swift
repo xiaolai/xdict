@@ -184,8 +184,10 @@ padding-bottom:var(--xdict-space-2)}
 [data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
 :not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
 img{max-width:100%;height:auto}
-/* One indent a list level (R9, G14): 1.5em of the list, whatever margin or padding the dictionary gave it. */
-ul,ol{margin-inline-start:0 !important;padding-inline-start:1.5em !important}
+/* A list level (R9, G14; owner, 2026-10-17): flush when its items show no number or bullet, one indent (1.5em) */
+/* when they do, whatever margin or padding the dictionary gave it. `data-xdict-list` is frame.js's reading. */
+ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
+[data-xdict-list=marked]{padding-inline-start:1.5em !important}
 /* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
 /* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
 :where(a:any-link){color:var(--xdict-link)}
@@ -666,8 +668,37 @@ var XDictFrameCore = (function () {
       }
     }
   }
+  // G14 (owner, 2026-10-17): a list level whose items show no number or bullet starts flush; one with a visible
+  // marker indents 1.5em (column.css, `data-xdict-list`). A marker is XDict's dot, a rendered list style, generated
+  // content before the item, or the dictionary's own number or bullet as the item's first visible box.
+  var NUMBER = /^(\(?[0-9]{1,3}[.)]?|\(?[a-z][.)]|\(?[ivx]{1,4}[.)]|[•◦▪■□●○◆◇‣·*–-])$/i;
+  function drawn(e) {
+    var p = getComputedStyle(e, '::before'), c = p.content;
+    return p.display !== 'none' && !!c && c !== 'none' && c !== 'normal' && c !== '""';
+  }
+  function marked(li) {
+    if (li.getAttribute('data-xdict-before') === 'marker') return true;
+    var st = getComputedStyle(li);
+    // A list style counts when its marker draws: OALD's single sense hides the `ol`'s number (`::marker` at 0).
+    if (st.display === 'list-item' && (st.listStyleType !== 'none' || st.listStyleImage !== 'none')
+        && parseFloat(getComputedStyle(li, '::marker').fontSize) > 0) return true;
+    if (drawn(li)) return true;
+    for (var c = li.firstElementChild, k = 0; c && k < 3; c = c.firstElementChild, k++) {
+      if (drawn(c) || NUMBER.test((c.textContent || '').trim())) return true;
+    }
+    return false;
+  }
+  function lists() {
+    if (!document.body) return;
+    var all = document.body.querySelectorAll('ul,ol');
+    for (var i = 0; i < all.length && i < 4096; i++) {
+      var items = Array.prototype.filter.call(all[i].children, function (x) { return x.tagName === 'LI'; });
+      var v = items.some(marked) ? 'marked' : 'plain';
+      if (all[i].getAttribute('data-xdict-list') !== v) all[i].setAttribute('data-xdict-list', v);
+    }
+  }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); }
+  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
   else start();
   window.addEventListener('load', start, { once: true });

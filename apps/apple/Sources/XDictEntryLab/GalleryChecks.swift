@@ -160,9 +160,29 @@ extension GalleryRun {
           if (icons[0]) note('G11', getComputedStyle(icons[0]).color === getComputedStyle(sp).color, 1, 'glyph ' + getComputedStyle(icons[0]).color + ' vs ' + getComputedStyle(sp).color);
         });
         G.G11.note = 'accent tags against the census: not measured here';
-        // G14: each level of a list starts one indent (1.5em of the list) inside the content box it sits in, so a list
-        // at depth n starts n indents in; XDict's marker gutter is the item's own, inside its content. A list laid out
-        // as a row (flex, grid, inline) is not a column of items and has no indent. XDict's markers are text-2.
+        // G14 (owner, 2026-10-17): a list level whose items show no number or bullet starts flush with the content box
+        // it sits in; a level with a visible marker starts one indent (1.5em of the list) in. A visible marker is a
+        // rendered `::marker` or list style that is not `none`, XDict's dot, generated content before the item, or the
+        // dictionary's own number or bullet element as the item's first visible box. A list laid out as a row (flex,
+        // grid, inline) is not a column of items and is not measured. XDict's markers are text-2.
+        var NUMBER = /^(\(?[0-9]{1,3}[.)]?|\(?[a-z][.)]|\(?[ivx]{1,4}[.)]|[•◦▪■□●○◆◇‣·*–-])$/i;
+        function before(e) { var p = getComputedStyle(e, '::before'); return p.display !== 'none' && !!p.content && p.content !== 'none' && p.content !== 'normal' && p.content !== '""' || (e.getAttribute('data-xdict-before') === 'marker' && p.display !== 'none'); }
+        function showsMarker(li) {
+          if (!seen(li)) return false;
+          var st = getComputedStyle(li);
+          if (st.display === 'list-item' && (st.listStyleType !== 'none' || st.listStyleImage !== 'none')
+              && parseFloat(getComputedStyle(li, '::marker').fontSize) > 0) return true;
+          if (before(li)) return true;
+          var first = null, w = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+          for (var x = w.nextNode(); x; x = w.nextNode()) {
+            var rr = document.createRange(); rr.selectNodeContents(x);
+            if (/\S/.test(x.nodeValue) && rr.getClientRects().length) { first = x.parentElement; break; }
+          }
+          for (var e = first; e && e !== li; e = e.parentElement) {
+            if (before(e) || NUMBER.test((e.textContent || '').trim())) return true;
+          }
+          return false;
+        }
         body.querySelectorAll('ul,ol').forEach(function (l) {
           if (!seen(l) || l.closest('[data-xdict-control]') || !l.parentElement) return;
           var ls = getComputedStyle(l);
@@ -173,8 +193,10 @@ extension GalleryRun {
                           : pr.left + parseFloat(ps.paddingLeft) + parseFloat(ps.borderLeftWidth);
           var inner = rtl ? lr.right - parseFloat(ls.paddingRight) - parseFloat(ls.borderRightWidth)
                           : lr.left + parseFloat(ls.paddingLeft) + parseFloat(ls.borderLeftWidth);
-          var inset = rtl ? start - inner : inner - start, want = 1.5 * parseFloat(ls.fontSize);
-          note('G14', Math.abs(inset - want) <= 1, 1, 'inset ' + Math.round(inset) + 'px, want ' + Math.round(want) + ' <' + label(l) + '>');
+          var shows = Array.prototype.some.call(l.children, function (x) { return x.tagName === 'LI' && showsMarker(x); });
+          var inset = rtl ? start - inner : inner - start, want = shows ? 1.5 * parseFloat(ls.fontSize) : 0;
+          note('G14', Math.abs(inset - want) <= 1, 1, 'inset ' + Math.round(inset) + 'px, want ' + Math.round(want)
+            + (shows ? ' (marked)' : ' (no marker)') + ' <' + label(l) + '>');
         });
         body.querySelectorAll('[data-xdict-before=marker],[data-xdict-after=marker]').forEach(function (m) {
           if (!seen(m)) return;

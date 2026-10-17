@@ -196,7 +196,9 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); }"))
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); }"))
+        // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
+        #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
         #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))
         #expect(EntryReadingFrame.marksCSS.contains("[data-xdict-lone-bullet]{display:none !important}"))
         let start = try #require(reading.range(of: "var GLYPHS = "))
