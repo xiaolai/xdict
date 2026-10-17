@@ -67,12 +67,28 @@ case $control in ''|1|G) ;; *) echo "hot: XDICT_LAB_CONTROL is 1 or G" >&2; exit
 density=${XDICT_LAB_DENSITY:-}
 case $density in ''|main|panel) ;; *) echo "hot: XDICT_LAB_DENSITY is main or panel" >&2; exit 2 ;; esac
 [ "$density" = main ] && density=
+# The render key of each picture (Tools/gallery/render_affected.py), taken before the style is copied: the installed
+# lab's id (stamped by lab.sh or run.sh) with this working copy's style. Only the standard views are keyed: a control,
+# the panel's density, opened pictures or another width are other pictures.
+render_keys=""
+lab_id=$(ssh "$host" "cat $(dirname "$lab")/render-lab-id 2>/dev/null")
+if [ -n "$control$density${XDICT_LAB_OPEN_PICTURES:-}${XDICT_LAB_WIDTH:-}" ]; then
+    echo "hot: a variant view: no render pass will be recorded"
+elif [ -z "$lab_id" ] || [ "$lab_id" = unknown ]; then
+    echo "hot: the installed lab has no render-lab-id (install it with lab.sh): no render pass will be recorded"
+else
+    render_keys=$(mktemp -t xdict-render-keys) || exit 4
+    /usr/bin/python3 -I "$apple/Tools/gallery/render_affected.py" keys --lab-id "$lab_id" \
+        ${XDICT_LAB_MODES:+--views "$XDICT_LAB_MODES"} "$@" >"$render_keys" \
+        || { echo "hot: could not key the pictures: no render pass will be recorded"; rm -f "$render_keys"; render_keys=""; }
+fi
 ssh "$host" "rm -rf $remote/run; mkdir -p $remote/run; open -n -W ${control:+--env XDICT_LAB_CONTROL=$control} ${density:+--env XDICT_LAB_DENSITY=$density} ${XDICT_LAB_OPEN_PICTURES:+--env XDICT_LAB_OPEN_PICTURES=1} ${XDICT_LAB_WIDTH:+--env XDICT_LAB_WIDTH=$XDICT_LAB_WIDTH} ${XDICT_LAB_MODES:+--env XDICT_LAB_MODES=$XDICT_LAB_MODES} \
     --stdout \$HOME/$remote/run/stdout.txt --stderr \$HOME/$remote/run/stderr.txt $lab --args --gallery \$HOME/XDictE2E/corpus \
     --sample \$HOME/XDictE2E/kit/entries-sample.json --keys \$HOME/$remote/keys.json --only $only \
     --style-dir \$HOME/$remote/style --out \$HOME/$remote/run/report.json"
 opened=$?
 mkdir -p "$out"
+rm -f "$out/report.json"   # never read an earlier run's report as this one's
 rsync -a --include 'images/' --include '*.jpg' --include 'report.json' --include 'stderr.txt' --exclude '*' \
     "$host:$remote/run/" "$out/" || { echo "hot: could not copy the results back" >&2; exit 4; }
 
@@ -94,3 +110,11 @@ for f in failures:
 print(f"hot: {len(rows)} pictures, {len(failures)} failures, {int(time.time()) - started} s from the command")
 sys.exit(1 if failures else 0)
 PY
+status=$?
+# A pass for every picture whose checks passed (a failed one, or a run with an unattributed failure, records nothing).
+if [ -n "$render_keys" ] && [ -f "$out/report.json" ]; then
+    /usr/bin/python3 -I "$apple/Tools/gallery/render_affected.py" record --keys "$render_keys" --report "$out/report.json" \
+        || echo "hot: the render passes were not recorded"
+fi
+[ -z "$render_keys" ] || rm -f "$render_keys"
+exit $status

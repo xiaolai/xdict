@@ -46,6 +46,9 @@ trap 'host_unlock "$host"; [ -z "${e2e:-}" ] || host_unlock "$e2e"' EXIT
 host_lock "$host" lab || exit 3
 
 tree=$($TREE_CMD) || fail "could not read the source tree"
+# The lab's render id (Tools/gallery/render_affected.py), stamped beside the installed lab: hot.sh keys its pictures
+# with it. Taken now, for the tree this build is of (a tree changed while it builds is refused below).
+render_lab_id=$(python3 -I Tools/gallery/render_affected.py lab-id 2>/dev/null) || render_lab_id=unknown
 rm -rf "$PRODUCTS"
 mkdir -p "$PRODUCTS"
 "$RSYNC" -a --delete --exclude target --exclude .build --exclude node_modules --exclude '*.mdx' --exclude '*.mdd' \
@@ -82,4 +85,6 @@ e2e=${E2E_HOST:-$(setting E2E_HOST_MACOS)}
 host_lock "$e2e" lab || exit 3
 "$RSYNC" -a --delete "$LOCAL/.build/lab-kit/$LAB.app" "$e2e:XDictE2E/gallery-run-lab/" \
     || fail "could not install the lab on $e2e"
+printf '%s\n' "$render_lab_id" | "$SSH" "$e2e" "cat > XDictE2E/gallery-run-lab/render-lab-id" \
+    || fail "could not stamp the lab's render id on $e2e"
 took "installed for hot.sh"

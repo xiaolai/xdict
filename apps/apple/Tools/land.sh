@@ -11,7 +11,8 @@
 # runs after a change of nothing: every gate cached, in seconds, and no host asked.
 #
 # **No E2E** (owner, 2026-10-17: E2E runs only on the owner's demand). The last line says what is pending
-# (`Tools/e2e-run.sh pending`): `E2E suggested: <sub-stages> — <changed paths>`, or `E2E: nothing pending`.
+# (`Tools/e2e-run.sh pending`): `E2E suggested: <sub-stages> — <changed paths>`, or `E2E: nothing pending`; then the
+# renders (`Tools/gallery/render_affected.py pending`): `Render needed (not run): …`, or `Render: nothing pending`.
 #
 # Hosts come from local.mk (BUILD_HOSTS, BUILD_HOSTS_XCODE; one Mac since 2026-10-17), each locked, then probed once: Rust 1.99.0 with rustfmt and clippy,
 # SwiftLint 0.65.1 and Xcode for `make test`, the 24 for the corpus tests, `~/bin/run1` for the bindings, and no cargo
@@ -255,4 +256,6 @@ echo "land: wall-clock $(( $(date +%s) - started )) s; logs in $OUT"
 for g in $failed; do echo "re-run only $g: make -C apps/apple land ONLY=$g   (log: $OUT/$g.log)"; done
 echo
 XDICT_E2E_CORPUS=$AIR_CORPUS Tools/e2e-run.sh pending || echo "E2E: could not say what is pending (see above)"
+# What renders the change needs, never rendered here (owner, 2026-10-18: renders only as permitted).
+python3 -I Tools/gallery/render_affected.py pending || echo "Render: could not say what is pending (see above)"
 [ -z "$failed" ]
