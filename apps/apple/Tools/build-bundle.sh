@@ -62,6 +62,10 @@ readonly LAB=XDictEntryLab
 readonly LAB_FLAG=--disable-layer
 # The lab's gallery reads the reading style from a directory (`--style-dir`); the app compiles it in and reads none.
 readonly LAB_STYLE_FLAG=--style-dir
+# The app icon: Icon Composer's document, compiled by actool into Assets.car under this name (Tools/compile-icon.sh, on
+# a build Mac), which Info.plist's CFBundleIconName names. And the menu-bar glyph, a template image read at run time.
+readonly ICON_NAME=XDict
+readonly MENU_BAR_ICON=Resources/MenuBarIcon.svg
 
 fail() { echo "build-bundle: $*" >&2; exit 1; }
 note() { echo "$*"; }
@@ -106,7 +110,7 @@ bundle_inputs_digest() {
         # The source tree too: the bundle names it (Provenance.txt), so a bundle of another tree is not this one's.
         printf '%s\0' "$CONFIG" "$BUNDLE_ID" "$XDICT_SIGN_ID" "${XDICT_BUILD_NUMBER:-}" "$(Tools/source-tree.sh)"
         find Sources Strings Resources Generated Package.swift Makefile Tools/build-bundle.sh \
-            Tools/compiler-warnings.py -type f -print0 | digest_files
+            Tools/compiler-warnings.py Tools/compile-icon.sh -type f -print0 | digest_files
     } | shasum -a 256 | cut -d' ' -f1
 }
 
@@ -164,6 +168,7 @@ verify_required_files() {
         cmp -s "$file" "$bundle/Contents/$file" || { echo "missing or changed: Contents/$file"; return 1; }
     done
     cmp -s "$NOTICES" "$bundle/Contents/$NOTICES" || { echo "missing or changed: Contents/$NOTICES"; return 1; }
+    cmp -s "$MENU_BAR_ICON" "$bundle/Contents/$MENU_BAR_ICON" || { echo "missing or changed: Contents/$MENU_BAR_ICON"; return 1; }
     # A translation that never reached the bundle is a reader still reading English.
     for language in $LANGUAGES; do
         for table in Localizable ServicesMenu; do
@@ -301,10 +306,25 @@ verify_service_boundaries() {
         || { echo "the service binds a UI framework"; return 1; }
 }
 
+# **The bundle carries its icon**: Info.plist names it, and the catalogue holds that name as a layered icon. Without this,
+# a bundle with no icon builds, signs and verifies, and the Dock shows the generic app tile. `assetutil` must be seen to
+# read the catalogue (it lists the name) before a missing IconImageStack means anything.
+verify_icon() {
+    local bundle=$1 catalogue
+    [ "$(plist_value "$bundle/Contents/Info.plist" CFBundleIconName)" = "$ICON_NAME" ] \
+        || { echo "the app's CFBundleIconName is not $ICON_NAME"; return 1; }
+    [ -s "$bundle/Contents/Resources/Assets.car" ] || { echo "missing: $bundle/Contents/Resources/Assets.car (the app icon)"; return 1; }
+    catalogue=$(xcrun assetutil --info "$bundle/Contents/Resources/Assets.car" 2>/dev/null) \
+        || { echo "assetutil cannot read the app icon's Assets.car"; return 1; }
+    grep -q "\"Name\" : \"$ICON_NAME\"" <<<"$catalogue" || { echo "Assets.car holds no asset named $ICON_NAME"; return 1; }
+    grep -q IconImageStack <<<"$catalogue" || { echo "Assets.car holds no IconImageStack: no layered app icon"; return 1; }
+}
+
 verify_bundle() {
     local bundle=$1
     verify_required_files "$bundle" || return 1
     verify_bundle_metadata "$bundle" || return 1
+    verify_icon "$bundle" || return 1
     verify_binaries "$bundle" || return 1
     verify_no_development_lab "$bundle" || return 1
     verify_signatures "$bundle" || return 1
@@ -350,11 +370,12 @@ assemble() {
     [ -s "$CORE_VERSIONS" ] && [ -d Generated/xdictFFI.xcframework ] \
         || fail "Generated/ is missing or incomplete: run Tools/build-core.sh (make does)"
     [ -s "$CATALOG" ] || fail "missing string catalog: $CATALOG"
-    local products
+    local products icon_car
     if [ -n "${XDICT_REMOTE_PRODUCTS:-}" ]; then
         # Built on BUILD_HOST by Tools/remote-build.sh, which ran this same warnings gate there; held to this very tree.
         products=$(remote_products "$XDICT_REMOTE_PRODUCTS")
         toolchain=$(cat "$XDICT_REMOTE_PRODUCTS/toolchain" 2>/dev/null) || toolchain=""
+        icon_car=$products/Assets.car
     else
         swift build -c "$CONFIG"
         toolchain=$(Tools/toolchain-facts.sh) || fail "the toolchain that built the products could not be named"
@@ -363,7 +384,10 @@ assemble() {
         python3 Tools/compiler-warnings.py "$RELEASE_DIAGNOSTICS" --whole-module --no-test-targets \
             || fail "the bundle's build has a warning the compiler did not fail it on, or its diagnostics could not be read"
         products=$(swift build -c "$CONFIG" --show-bin-path)
+        Tools/compile-icon.sh .build/icon || fail "the app icon did not compile"
+        icon_car=.build/icon/Assets.car
     fi
+    [ -s "$icon_car" ] || fail "there is no compiled app icon at $icon_car"
     [ -x "$products/$APP_NAME" ] && [ -x "$products/$SERVICE" ] || fail "swift build produced no $APP_NAME or $SERVICE"
     for name in xcode swift rust; do
         grep -q "^$name=." <<<"$toolchain" || fail "the products come with no $name version: build again (Tools/toolchain-facts.sh)"
@@ -384,6 +408,8 @@ assemble() {
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
     cp -R "$FONTS" "$contents/Resources/"
     cp "$NOTICES" "$contents/Resources/"
+    cp "$icon_car" "$contents/Resources/Assets.car"
+    cp "$MENU_BAR_ICON" "$contents/Resources/"
     printf 'tree=%s\n%s\n' "$tree" "$toolchain" >"$STAGE/$PROVENANCE"
 
     # The build number is stamped into the copies, never the tracked files, and read back: PlistBuddy reports success

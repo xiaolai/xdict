@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XDictAnywhere
 import XDictBase
@@ -198,7 +199,7 @@ struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Image(systemName: "character.book.closed")
+        Self.icon
             .accessibilityLabel(Text(verbatim: "XDict"))
             .task {
                 LookupAnywhere.shared.openMainWindow = { openWindow(id: XDictApp.mainWindow) }
@@ -207,6 +208,23 @@ struct MenuBarLabel: View {
                 SetupLaunch.openOnAFreshAccount()
             }
     }
+
+    /// The designer's 22 pt glyph (`Resources/MenuBarIcon.svg`, ported from XiaolaiDict with the app icon), marked as a
+    /// template so the system draws it in the menu bar's own colour: only its alpha is read. `Tools/build-bundle.sh`
+    /// refuses a bundle without it; outside a bundle (`swift run`) there is no resource, and a symbol beats an empty
+    /// slot, which would leave the menu unreachable.
+    private static let icon: Image = {
+        guard let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "svg"),
+              let image = NSImage(contentsOf: url)
+        else {
+            Logger(subsystem: XDictIdentity.app, category: "launch")
+                .error("MenuBarIcon.svg is not in the bundle; the menu bar shows a system symbol")
+            return Image(systemName: "character.book.closed")
+        }
+        image.isTemplate = true
+        image.size = NSSize(width: 22, height: 22)
+        return Image(nsImage: image)
+    }()
 }
 
 /// What the menu-bar menu opens, through the label's `openWindow`.
