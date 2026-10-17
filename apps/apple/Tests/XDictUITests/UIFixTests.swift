@@ -104,9 +104,5 @@ struct UIFixTests {
         #expect(InstrumentAppearance.parse(["--lookup-window", "/w", "--appearance"]) == .failure(.unknown("")))
     }
 
-    // MARK: - P-01: the panel shows only its close button
-
-    @Test func thePanelHidesMinimizeAndZoom() {
-        #expect(PanelChrome.hidden == [.miniaturizeButton, .zoomButton])
-    }
+    // P-01 (the panel showed only its close button) gave way to P41: no window buttons, PopoverParityTests.
 }

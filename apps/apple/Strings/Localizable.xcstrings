@@ -1797,6 +1797,22 @@
         }
       }
     },
+    "Configure Dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configure Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "配置词典"
+          }
+        }
+      }
+    },
     "Confirm" : {
       "localizations" : {
         "en" : {
