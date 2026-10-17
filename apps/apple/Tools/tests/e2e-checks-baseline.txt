@@ -15,17 +15,6 @@ launch.quitsOnTerm
 # stage service: SERVICE_CHECKS, then the shell's three
 conformance.tiny
 conformance.matrix
-refusal.noHandle
-refusal.pipe
-refusal.writable
-refusal.otherFile
-refusal.control
-refusal.missingToken
-supersede.lateReply
-supersede.queuedNeverSent
-stall.timedOut
-stall.newConnection
-stall.answeredWhileTheStalledRun
 kill.typedError
 kill.nextLookupSucceeds
 idle.exitsWhenQuiet
@@ -100,7 +89,6 @@ unavailable.toldApart
 unavailable.indexingEnds
 delay.othersNotHeld
 delay.entryKeepsTheOrder
-paging.everyRecord
 link.followedInLinkMode
 trail.backReturnsExactly
 trail.forwardReturnsExactly
@@ -194,3 +182,8 @@ setup.grantCompletesRow
 setup.loginItemRegisters
 setup.choicesPersist
 setup.chineseOnly
+# moved below E2E (plan-verification step 4), each to a test of the same name's facts that `make test` runs:
+# idle.workSpanningTheTimer idle.racingRequestsAnsweredOnce -> IdleServiceTests; paging.everyRecord ->
+# LookupScenarioTests; refusal.noHandle refusal.pipe refusal.writable refusal.otherFile refusal.control
+# refusal.missingToken supersede.lateReply supersede.queuedNeverSent stall.timedOut stall.newConnection
+# stall.answeredWhileTheStalledRun -> ServiceContractTests.

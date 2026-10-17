@@ -234,8 +234,9 @@ extension LookupScenario {
     // MARK: - Every record (Q10)
 
     /// `paging.everyRecord`: `EC` in Records answers a first page and its total, 66,355, then page after page until
-    /// every record is loaded, each once, in order, every row naming its record.
-    func paging(_ findings: inout Findings) async {
+    /// every record is loaded, each once, in order, every row naming its record. With `everyRecord` false, only the first
+    /// page and its checkpoint (`ax.paging`), and no `paging.everyRecord`.
+    func paging(_ findings: inout Findings, everyRecord: Bool) async {
         guard let records = ids["records"] else {
             findings.check("paging.everyRecord", false, "no Records")
             return
@@ -243,6 +244,10 @@ extension LookupScenario {
         await search("EC", scope: .one(records))
         let first = results("records")
         findings.merge(await stage.checkpoint("paging"))
+        guard everyRecord else {
+            await search("apple")
+            return
+        }
         let began = ContinuousClock.now
         // Bounded by progress, not by the clock: a page that fails (on a heavily loaded Mac, one passing the client's
         // 5 s lookup deadline) is asked again, as the reader's Retry would, and only `pageAttempts` failures in a row at
