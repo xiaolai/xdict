@@ -33,7 +33,7 @@ apple=$(ls -d "$FAKE_HOST"/xdict-build/lab-*/apps/apple)
 bin=$apple/.build/release
 rm -rf "$bin"; mkdir -p "$bin"
 if [ "$FAKE_MODE" = stale ]; then echo x >"$bin/XDictEntryLab"; chmod +x "$bin/XDictEntryLab"; touch -t 202001010000 "$bin/XDictEntryLab"; fi
-mkdir -p "$apple/.build"; touch "$apple/.build/lab-build.marker"; sleep 1
+mkdir -p "$apple/.build"; touch -t 202001010001 "$apple/.build/lab-build.marker"  # fixed, not a sleep: past a stale product
 [ "$FAKE_MODE" = edit ] && echo changed >"$FAKE_TREE"
 if [ "$FAKE_MODE" = good ] || [ "$FAKE_MODE" = edit ]; then echo x >"$bin/XDictEntryLab"; chmod +x "$bin/XDictEntryLab"; fi
 echo "products=$bin"

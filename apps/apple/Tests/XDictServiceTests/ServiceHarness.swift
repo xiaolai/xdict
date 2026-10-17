@@ -6,7 +6,8 @@ import XDictContract
 @testable import XDictService
 
 /// **The service, in this process**: its own listener delegate (`ServiceListener`) behind an anonymous NSXPC listener,
-/// its core's storage in a directory of the test's own, an idle exit that never fires. Clients reach it over a real
+/// its core's storage in a directory of the test's own, an idle exit that never fires unless the test brings its own
+/// (`IdleServiceTests`, with the test's clock and timer). Clients reach it over a real
 /// NSXPC connection, through the real `ServiceClient`.
 final class ServiceHarness: Sendable {
     let listener: Box
@@ -26,9 +27,9 @@ final class ServiceHarness: Sendable {
         }
     }
 
-    init(check: ClientCheck = .anyoneForTests) throws {
+    init(check: ClientCheck = .anyoneForTests, idle: IdleExit? = nil) throws {
         storage = FileManager.default.temporaryDirectory.appending(path: "xdict-service-\(UUID().uuidString)")
-        let idle = IdleExit(quiet: .seconds(86_400), now: { ContinuousClock.now }, arm: { _ in }, exit: { _ in })
+        let idle = idle ?? IdleExit(quiet: .seconds(86_400), now: { ContinuousClock.now }, arm: { _ in }, exit: { _ in })
         context = ServiceContext(dictionaries: Dictionaries(storage: Dictionaries.Storage(
             indexes: storage.appending(path: "indexes"), registry: storage.appending(path: "registry"))), idle: idle)
         listener = Box(service: ServiceListener(context: context, check: check))

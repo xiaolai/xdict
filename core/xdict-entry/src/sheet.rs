@@ -49,11 +49,14 @@ impl StyleSheet {
         let mut open: Option<&str> = None;
         let mut rest = record;
         while let Some(at) = rest.find('`') {
+            crate::work::scanned(at + 1);
             out.push_str(rest.get(..at).unwrap_or(""))?;
             let after = rest.get(at + 1..).unwrap_or("");
             // A marker is digits between backticks; one naming no style, a number too large for any among them, is
             // kept whole, both backticks.
-            let marker = after.find('`').and_then(|end| {
+            let closing = after.find('`');
+            crate::work::scanned(closing.map_or(after.len(), |e| e + 1));
+            let marker = closing.and_then(|end| {
                 let digits = after.get(..end)?;
                 if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
                     return None;
@@ -123,9 +126,10 @@ mod tests {
     fn an_expansion_past_its_ceiling_is_refused_early() {
         let sheet = StyleSheet::parse(&format!("1\n{}\n\n", "x".repeat(1000)));
         let record = "`1`".repeat(1_000_000);
-        let started = std::time::Instant::now();
-        assert_eq!(sheet.apply_within(&record, 1 << 20), Err(crate::Exceeded));
-        assert!(started.elapsed() < std::time::Duration::from_secs(2), "took {:?}", started.elapsed());
+        // Refused early: read about as far as its first MiB of expansion (some 3 KiB of record), not to the end.
+        let (refused, read) = crate::work::counting(|| sheet.apply_within(&record, 1 << 20));
+        assert_eq!(refused, Err(crate::Exceeded));
+        assert!((1..=64 << 10).contains(&read), "read {read} of the record's {} bytes", record.len());
         let ordinary = "`1`run and `2`more";
         let whole = sheet.apply(ordinary);
         assert_eq!(sheet.apply_within(ordinary, whole.len()).as_deref(), Ok(whole.as_ref()));

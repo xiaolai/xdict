@@ -285,6 +285,7 @@ fn html_out<'s>(
     // Links open around the scanner, for images that are controls.
     let mut links = 0u32;
     while let Some(at) = rest.find('<') {
+        crate::work::scanned(at + 1);
         if out.text.exceeded {
             return out;
         }
@@ -589,6 +590,7 @@ fn tag<'a>(from: &'a str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<(S
         return None;
     }
     let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());
+    crate::work::scanned(name_len);
     let name = inner.get(..name_len)?.to_owned();
     // Presentational attributes (R22) become declarations, put before the element's own `style`, which follows them,
     // or added as one; they and the ones dropped outright are not written.
@@ -912,11 +914,13 @@ fn srcset(value: &str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<Strin
             break;
         }
         let url_end = rest.find(|c: char| c.is_ascii_whitespace()).unwrap_or(rest.len());
+        crate::work::scanned(url_end + 1);
         let (url, after) = rest.split_at(url_end);
         let (url, descriptor, after) = match url.strip_suffix(',') {
             Some(url) => (url.trim_end_matches(','), "", after),
             None => {
                 let end = after.find(',').unwrap_or(after.len());
+                crate::work::scanned(end + 1);
                 let (descriptor, after) = after.split_at(end);
                 (url, descriptor.trim_ascii(), after)
             }
@@ -952,6 +956,7 @@ fn unescape(value: &str) -> String {
     let mut out = String::with_capacity(value.len());
     let mut rest = value;
     while let Some(at) = rest.find('&') {
+        crate::work::scanned(at + 1);
         out.push_str(rest.get(..at).unwrap_or(""));
         let after = rest.get(at + 1..).unwrap_or("");
         match reference(after, &mut out) {
@@ -974,6 +979,7 @@ fn reference(after: &str, out: &mut String) -> Option<usize> {
     if bytes.first() == Some(&b'#') {
         let (radix, start) = if matches!(bytes.get(1), Some(b'x' | b'X')) { (16, 2) } else { (10, 1) };
         let digits = bytes.get(start..)?.iter().take_while(|b| char::from(**b).is_digit(radix)).count();
+        crate::work::scanned(start + digits);
         if digits == 0 {
             return None;
         }
@@ -991,6 +997,7 @@ fn reference(after: &str, out: &mut String) -> Option<usize> {
         return Some(start + digits + usize::from(bytes.get(start + digits) == Some(&b';')));
     }
     let run = bytes.iter().take(LONGEST).take_while(|b| b.is_ascii_alphanumeric()).count();
+    crate::work::scanned(run + 1);
     if bytes.get(run) == Some(&b';')
         && let Some(text) = named(after.get(..=run)?)
     {
@@ -1196,6 +1203,7 @@ fn css_out<'s>(
     let mut css = Css { text, base, dir, out, i: 0, copied: 0, parens: Vec::new(), blocks };
     let mut importing = false;
     while let Some(&b) = text.as_bytes().get(css.i) {
+        crate::work::scanned(1);
         if css.out.text.exceeded {
             return css.out;
         }
@@ -1291,7 +1299,9 @@ impl Css<'_, '_> {
 
     /// A comment: text, read past its `*/`.
     fn comment(&mut self) {
+        let from = self.i;
         self.i = self.text.get(self.i + 2..).and_then(|r| r.find("*/")).map_or(self.text.len(), |e| self.i + 2 + e + 2);
+        crate::work::scanned(self.i.saturating_sub(from));
     }
 
     /// A string: a URL just after `@import` (`importing`) or in an image function, text anywhere else.
@@ -1449,11 +1459,14 @@ fn string_end(body: &str, close: char) -> usize {
                     chars.next_if(|(_, l)| *l == '\n');
                 }
             }
-            _ if css_newline(c) && close != ')' => return i,
-            _ if c == close => return i,
+            _ if css_newline(c) && close != ')' || c == close => {
+                crate::work::scanned(i + 1);
+                return i;
+            }
             _ => {}
         }
     }
+    crate::work::scanned(body.len());
     body.len()
 }
 
@@ -1578,13 +1591,15 @@ fn end_tag(body: &str, name: &str) -> usize {
 /// stops there, so a caller resuming after each match reads its text once in all.
 fn first_of(haystack: &str, needles: &[&str]) -> Option<(usize, usize)> {
     let h = haystack.as_bytes();
-    (0..h.len()).find_map(|i| {
+    let found = (0..h.len()).find_map(|i| {
         let tail = h.get(i..)?;
         needles
             .iter()
             .position(|n| tail.get(..n.len()).is_some_and(|w| !n.is_empty() && w.eq_ignore_ascii_case(n.as_bytes())))
             .map(|which| (i, which))
-    })
+    });
+    crate::work::scanned(found.map_or(h.len(), |(i, _)| i + 1));
+    found
 }
 
 #[cfg(test)]
@@ -1864,11 +1879,9 @@ mod tests {
     /// A value of many `&` and no `;` decodes in one pass.
     #[test]
     fn many_ampersands_are_decoded_in_one_pass() {
-        let started = std::time::Instant::now();
-        let r = html(&format!(r#"<a href="entry://{}">x</a>"#, "&".repeat(1_000_000)), BASE);
-        assert_eq!(r.links.len(), 1);
-        // Searching each `&`'s whole rest is some 5·10¹¹ bytes here; one bounded pass, well under a second.
-        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
+        let text = format!(r#"<a href="entry://{}">x</a>"#, "&".repeat(20_000));
+        // Searching each `&`'s whole rest reads some 2·10⁸ bytes here; one bounded pass, a few a byte.
+        reads_each_byte_boundedly("ampersands", text.len(), 4, || assert_eq!(html(&text, BASE).links.len(), 1));
     }
 
     /// What a view gets is what the measured rewrite writes: only the URLs met are left out.
@@ -1970,24 +1983,31 @@ mod tests {
         assert_eq!(html(kept, BASE).text, kept, "an unchanged handler is written as found");
     }
 
-    /// That `bounded` refuses, in under half the time `whole` takes on the same input on this machine: what a
-    /// fixed duration cannot tell (a slow runner once took 530 ms for a 500 ms bound), a refusal that stops early
-    /// against one that is written whole first can.
+    /// That `bounded` refuses having read under half of what `whole` reads of the same input (`crate::work`): a
+    /// refusal that stops early against one written whole first. Counted, not timed: a slow runner once took 530 ms
+    /// for a 500 ms bound, and a ratio of two times still moved with the machine's load.
     fn stops_early(what: &str, whole: impl Fn() -> String, bounded: impl Fn() -> Result<String, crate::Exceeded>) {
-        let started = std::time::Instant::now();
-        let written = whole();
-        let full = started.elapsed();
+        let (written, full) = crate::work::counting(whole);
         assert!(!written.is_empty(), "{what}");
-        let started = std::time::Instant::now();
-        assert_eq!(bounded(), Err(crate::Exceeded), "{what}");
-        let refused = started.elapsed();
-        assert!(refused * 2 < full, "{what}: refused in {refused:?}, written whole in {full:?}");
+        let (refusal, refused) = crate::work::counting(bounded);
+        assert_eq!(refusal, Err(crate::Exceeded), "{what}");
+        assert!(full > 0, "{what}: the whole rewrite reported no bytes read; the count sees nothing");
+        assert!(refused * 2 < full, "{what}: refused having read {refused} bytes, written whole having read {full}");
+    }
+
+    /// That `run` read at least half and at most `per_byte` times each of the `len` bytes it was given
+    /// (`crate::work`): a scan that reads its text again at every match reads it some `len` times over.
+    fn reads_each_byte_boundedly(what: &str, len: usize, per_byte: u64, run: impl FnOnce()) {
+        let ((), read) = crate::work::counting(run);
+        let len = len as u64;
+        assert!(read >= len / 2, "{what}: {read} bytes read of {len}; the count sees nothing");
+        assert!(read <= per_byte * len, "{what}: {read} bytes read of {len}, over {per_byte} a byte");
     }
 
     /// Held to `max`, the rewrite stops as soon as its text would pass it; under it, it is the unbounded text.
     #[test]
     fn a_rewrite_past_its_ceiling_is_refused_early() {
-        let entry = "<img src=a><a href='entry://b'>b</a><style>p{background:url(c.png)}</style>".repeat(200_000);
+        let entry = "<img src=a><a href='entry://b'>b</a><style>p{background:url(c.png)}</style>".repeat(40_000);
         stops_early("entry", || html_text(&entry, BASE, ""), || html_text_within(&entry, BASE, "", 1 << 20));
         let sheet = "p{background:url(c.png)}".repeat(200_000);
         assert_eq!(css_text_within(&sheet, BASE, "", 1 << 20), Err(crate::Exceeded));
@@ -2012,7 +2032,7 @@ mod tests {
     /// would not fit. Under the ceiling, each is written exactly as without one.
     #[test]
     fn a_value_rewritten_on_the_way_is_held_to_the_room_left() {
-        let n = 4 << 20;
+        let n = 1 << 16;
         let handler = format!("<a onclick=\"{}\">x</a>", "gdau://".repeat(n));
         let srcset = format!("<img srcset=\"{}\">", "a.png 1x, ".repeat(n / 2));
         for (what, page) in [("handler", &handler), ("srcset", &srcset)] {
@@ -2081,23 +2101,21 @@ mod tests {
     /// A run of `<` that opens no tag is read once: each `<` looked for its tag's name to the end of the entry.
     #[test]
     fn a_run_of_angle_brackets_is_linear() {
-        let started = std::time::Instant::now();
-        let text = "<<".repeat(200_000);
-        assert_eq!(html(&text, BASE).text, text);
-        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
+        let text = "<<".repeat(20_000);
+        reads_each_byte_boundedly("angle brackets", text.len(), 4, || assert_eq!(html(&text, BASE).text, text));
     }
 
     /// Each match is found once: searching the rest for every needle at every match made a large script or
     /// stylesheet quadratic, and a dictionary's resource can be 64 MiB.
     #[test]
     fn many_matches_are_rewritten_in_one_pass() {
-        let n = 40_000;
-        let started = std::time::Instant::now();
-        let r = script(&"location='entry://a';".repeat(n), BASE);
-        assert_eq!(r.text.matches("xdict://d/entry/a").count(), n);
-        let r = css(&"b{background:url(a.png)}".repeat(n), BASE, "");
-        assert_eq!(r.links.len(), n);
-        // Quadratic, this ran over 600 s; linear, well under one. Ten leaves room for a loaded machine.
-        assert!(started.elapsed() < std::time::Duration::from_secs(10), "took {:?}", started.elapsed());
+        let n = 4_000;
+        let js = "location='entry://a';".repeat(n);
+        reads_each_byte_boundedly("script", js.len(), 4, || {
+            assert_eq!(script(&js, BASE).text.matches("xdict://d/entry/a").count(), n);
+        });
+        // Quadratic, the 40,000 of this once ran over 600 s: each match searched the rest for every needle.
+        let sheet = "b{background:url(a.png)}".repeat(n);
+        reads_each_byte_boundedly("stylesheet", sheet.len(), 4, || assert_eq!(css(&sheet, BASE, "").links.len(), n));
     }
 }

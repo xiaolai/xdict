@@ -42,7 +42,7 @@ enum LookupWindowReport {
         }
         let corpus = Instrument.value(after: "--corpus", in: arguments).map(URL.init(fileURLWithPath:))
         let run = LookupWindowRun(work: work, fixtures: fixtures, corpus: corpus,
-                                  pagingToo: !arguments.contains("--no-paging"))
+                                  paging: arguments.contains("--no-paging") ? .none : .firstPage)
         LookupWindowRun.shared = run
         XDictApp.windowMade = { state in run.windowMade(state) }
     }
@@ -58,8 +58,9 @@ final class LookupWindowRun: LookupStage {
     let work: URL
     let fixtures: URL
     let corpus: URL?
-    /// Whether the scenario pages the 66,355 records: `--no-paging` leaves it out, for an E2E run without `lookup.paging`.
-    let pagingToo: Bool
+    /// How much of the 66,355 records the scenario pages: the first page, for `ax.paging` (every record is walked by
+    /// `LookupScenarioTests`, through the service); `--no-paging` leaves it out, for an E2E run without `lookup.paging`.
+    let paging: LookupScenario.Paging
     var commands: URL { work.appending(path: "commands") }
     private var state: SearchWindowState?
     private var scenario: LookupScenario?
@@ -78,11 +79,11 @@ final class LookupWindowRun: LookupStage {
     private var timeline: [String] = []
     private let began = ContinuousClock.now
 
-    init(work: URL, fixtures: URL, corpus: URL?, pagingToo: Bool) {
+    init(work: URL, fixtures: URL, corpus: URL?, paging: LookupScenario.Paging) {
         self.work = work
         self.fixtures = fixtures
         self.corpus = corpus
-        self.pagingToo = pagingToo
+        self.paging = paging
     }
 
     func note(_ event: EntryEvent) {
@@ -174,7 +175,7 @@ final class LookupWindowRun: LookupStage {
         note("the scenario begins")
         var findings = setupFindings
         if setupFindings.passed {
-            findings.merge(await scenario.run(pagingToo: pagingToo))
+            findings.merge(await scenario.run(paging: paging))
             findings.merge(await supersededLoads())
             findings.merge(await originalStyleSwitch())
             findings.merge(await accentSwitch())
