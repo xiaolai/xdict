@@ -7,13 +7,15 @@ import XDictAnywhere
 import XDictContract
 import XDictLibrary
 import XDictSearch
+import XDictTestSupport
 import XDictUI
 
 /// **The UI review's behaviour fixes** (plan-macos-v1 WI-13, the fix round of 2026-10-17): each the decision a view
 /// makes, without a window (the build Mac opens none). Layout is checked by the tour's re-capture, not here.
 struct UIFixTests {
+    /// In English, through the compiled catalog, so plural forms are chosen as the reader sees them.
     static func text(_ resource: LocalizedStringResource?) -> String {
-        resource.map { String(localized: $0) } ?? ""
+        resource.map { (try? CompiledCatalog.text($0, in: "en")) ?? "the catalog did not compile" } ?? ""
     }
 
     // MARK: - X1: a placeholder covers, and clears, the previous entry

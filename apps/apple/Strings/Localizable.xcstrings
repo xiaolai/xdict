@@ -182,7 +182,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%1$@'s window is too large to search for a selection (over %2$lld elements). Select the word again and try once more."
+            "value" : "%1$@'s window is too large to search for a selection (over %2$#@n@). Select the word again and try once more."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg element"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg elements"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -276,15 +298,33 @@
     "%lld files beside the dictionary were left out: one dictionary takes at most 64 files." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld files beside the dictionary were left out: one dictionary takes at most 64 files."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file beside the dictionary was left out: one dictionary takes at most 64 files."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files beside the dictionary were left out: one dictionary takes at most 64 files."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "词典旁有 %lld 个文件未被纳入：一部词典最多包含 64 个文件。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "词典旁有 %lld 个文件未被纳入：一部词典最多包含 64 个文件。"
+                }
+              }
+            }
           }
         }
       }
@@ -292,15 +332,33 @@
     "%lld files could not be added." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld files could not be added."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld file could not be added."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld files could not be added."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个文件未能添加。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld 个文件未能添加。"
+                }
+              }
+            }
           }
         }
       }
@@ -308,15 +366,33 @@
     "%lld more in folded sections" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld more in folded sections"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more in folded sections"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld more in folded sections"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "折叠部分中还有 %lld 处"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "折叠部分中还有 %lld 处"
+                }
+              }
+            }
           }
         }
       }
@@ -356,15 +432,33 @@
     "%llu backgrounds, borders and other declarations dropped" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu backgrounds, borders and other declarations dropped"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu background, border or other declaration dropped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu backgrounds, borders and other declarations dropped"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去掉了 %llu 处背景、边框等样式声明"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "去掉了 %llu 处背景、边框等样式声明"
+                }
+              }
+            }
           }
         }
       }
@@ -372,15 +466,33 @@
     "%llu colors set to XDict’s palette" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu colors set to XDict’s palette"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu color set to XDict’s palette"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu colors set to XDict’s palette"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处颜色改用 XDict 的配色"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处颜色改用 XDict 的配色"
+                }
+              }
+            }
           }
         }
       }
@@ -388,15 +500,33 @@
     "%llu cross-references point to words this dictionary does not have." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu cross-references point to words this dictionary does not have."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu cross-reference points to a word this dictionary does not have."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu cross-references point to words this dictionary does not have."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处互见指向本词典没有的词。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处互见指向本词典没有的词。"
+                }
+              }
+            }
           }
         }
       }
@@ -404,31 +534,71 @@
     "%llu entries are empty." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu entries are empty."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entry is empty."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entries are empty."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词条是空的。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词条是空的。"
+                }
+              }
+            }
           }
         }
       }
     },
-    "%llu entries are larger than 1 MB and may be slow to show." : {
+    "%llu entries are larger than %@ and may be slow to show." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%llu entries are larger than 1 MB and may be slow to show."
+            "value" : "%1$#@n@ larger than %2$@ and may be slow to show."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 1,
+              "formatSpecifier" : "llu",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg entry is"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg entries are"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "%llu 个词条大于 1 MB，显示时可能较慢。"
+            "value" : "%1$llu 个词条大于 %2$@，显示时可能较慢。"
           }
         }
       }
@@ -436,15 +606,33 @@
     "%llu entries are stored twice under the same headword." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu entries are stored twice under the same headword."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entry is stored twice under the same headword."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entries are stored twice under the same headword."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词条在同一词头下存了两遍。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词条在同一词头下存了两遍。"
+                }
+              }
+            }
           }
         }
       }
@@ -452,15 +640,33 @@
     "%llu entries hold bytes that are not text in the dictionary’s encoding." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu entries hold bytes that are not text in the dictionary’s encoding."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entry holds bytes that are not text in the dictionary’s encoding."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entries hold bytes that are not text in the dictionary’s encoding."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词条含有按词典的编码无法读成文字的字节。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词条含有按词典的编码无法读成文字的字节。"
+                }
+              }
+            }
           }
         }
       }
@@ -468,15 +674,33 @@
     "%llu entries redirect to an entry that does not exist, or back to themselves." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu entries redirect to an entry that does not exist, or back to themselves."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entry redirects to an entry that does not exist, or back to itself."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entries redirect to an entry that does not exist, or back to themselves."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词条跳转到不存在的词条，或跳回自身。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词条跳转到不存在的词条，或跳回自身。"
+                }
+              }
+            }
           }
         }
       }
@@ -484,15 +708,33 @@
     "%llu entries show style rules as text. This is in the dictionary file itself." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu entries show style rules as text. This is in the dictionary file itself."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entry shows style rules as text. This is in the dictionary file itself."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu entries show style rules as text. This is in the dictionary file itself."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词条把样式规则显示成了文字。问题出在词典文件本身。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词条把样式规则显示成了文字。问题出在词典文件本身。"
+                }
+              }
+            }
           }
         }
       }
@@ -500,15 +742,33 @@
     "%llu font sizes made relative" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu font sizes made relative"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu font size made relative"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu font sizes made relative"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处字号改为相对大小"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处字号改为相对大小"
+                }
+              }
+            }
           }
         }
       }
@@ -516,15 +776,33 @@
     "%llu font weights set to XDict’s" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu font weights set to XDict’s"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu font weight set to XDict’s"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu font weights set to XDict’s"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处字重改用 XDict 的字重"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处字重改用 XDict 的字重"
+                }
+              }
+            }
           }
         }
       }
@@ -532,15 +810,33 @@
     "%llu fonts replaced with XDict’s" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu fonts replaced with XDict’s"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu font replaced with XDict’s"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu fonts replaced with XDict’s"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处字体换成 XDict 的字体"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处字体换成 XDict 的字体"
+                }
+              }
+            }
           }
         }
       }
@@ -548,15 +844,33 @@
     "%llu headwords hold extra spaces, invisible characters or HTML code." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu headwords hold extra spaces, invisible characters or HTML code."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu headword holds extra spaces, invisible characters or HTML code."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu headwords hold extra spaces, invisible characters or HTML code."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个词头含有多余的空格、不可见字符或 HTML 代码。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个词头含有多余的空格、不可见字符或 HTML 代码。"
+                }
+              }
+            }
           }
         }
       }
@@ -564,15 +878,33 @@
     "%llu line heights made relative" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu line heights made relative"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu line height made relative"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu line heights made relative"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处行高改为相对值"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处行高改为相对值"
+                }
+              }
+            }
           }
         }
       }
@@ -580,15 +912,33 @@
     "%llu page settings dropped" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu page settings dropped"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu page setting dropped"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu page settings dropped"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去掉了 %llu 处页面设置"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "去掉了 %llu 处页面设置"
+                }
+              }
+            }
           }
         }
       }
@@ -596,15 +946,33 @@
     "%llu pictures are not among the dictionary’s files." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu pictures are not among the dictionary’s files."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu picture is not among the dictionary’s files."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu pictures are not among the dictionary’s files."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 张图片不在词典的文件里。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 张图片不在词典的文件里。"
+                }
+              }
+            }
           }
         }
       }
@@ -612,15 +980,33 @@
     "%llu places show HTML code as text. This is in the dictionary file itself." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu places show HTML code as text. This is in the dictionary file itself."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu place shows HTML code as text. This is in the dictionary file itself."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu places show HTML code as text. This is in the dictionary file itself."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处把 HTML 代码显示成了文字。问题出在词典文件本身。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处把 HTML 代码显示成了文字。问题出在词典文件本身。"
+                }
+              }
+            }
           }
         }
       }
@@ -628,15 +1014,33 @@
     "%llu places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the dictionary file itself." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the dictionary file itself."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu place shows comment marks such as “-->” as text, or hides text in a broken comment. This is in the dictionary file itself."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu places show comment marks such as “-->” as text, or hide text in a broken comment. This is in the dictionary file itself."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处把“-->”之类的注释符号显示成了文字，或把文字藏进了残缺的注释。问题出在词典文件本身。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处把“-->”之类的注释符号显示成了文字，或把文字藏进了残缺的注释。问题出在词典文件本身。"
+                }
+              }
+            }
           }
         }
       }
@@ -644,15 +1048,33 @@
     "%llu places show garbled characters: their text was encoded twice when the dictionary was made." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu places show garbled characters: their text was encoded twice when the dictionary was made."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu place shows garbled characters: its text was encoded twice when the dictionary was made."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu places show garbled characters: their text was encoded twice when the dictionary was made."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处显示为乱码：制作词典时这些文字被编码了两次。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处显示为乱码：制作词典时这些文字被编码了两次。"
+                }
+              }
+            }
           }
         }
       }
@@ -660,15 +1082,33 @@
     "%llu pronunciations point to sound files that are not here. Add the dictionary’s .mdd file." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu pronunciations point to sound files that are not here. Add the dictionary’s .mdd file."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu pronunciation points to a sound file that is not here. Add the dictionary’s .mdd file."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu pronunciations point to sound files that are not here. Add the dictionary’s .mdd file."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 个发音指向不在这里的声音文件。请加入词典的 .mdd 文件。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 个发音指向不在这里的声音文件。请加入词典的 .mdd 文件。"
+                }
+              }
+            }
           }
         }
       }
@@ -676,15 +1116,33 @@
     "%llu results" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu results"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu result"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu results"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 条结果"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 条结果"
+                }
+              }
+            }
           }
         }
       }
@@ -692,15 +1150,33 @@
     "%llu spacings put on XDict’s steps" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu spacings put on XDict’s steps"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu spacing put on XDict’s steps"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu spacings put on XDict’s steps"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu 处间距对齐到 XDict 的间距档位"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 处间距对齐到 XDict 的间距档位"
+                }
+              }
+            }
           }
         }
       }
@@ -708,47 +1184,33 @@
     "%llu “!important” marks removed" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%llu “!important” marks removed"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu “!important” mark removed"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu “!important” marks removed"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "去掉了 %llu 处“!important”标记"
-          }
-        }
-      }
-    },
-    "1 file could not be added." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 file could not be added."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 个文件未能添加。"
-          }
-        }
-      }
-    },
-    "1 result" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 result"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "1 条结果"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "去掉了 %llu 处“!important”标记"
+                }
+              }
+            }
           }
         }
       }
@@ -1014,7 +1476,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Base size %1$@ px, the size most of its text rules set (%2$llu votes)."
+            "value" : "Base size %1$@ px, the size most of its text rules set (%2$#@n@)."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "llu",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg vote"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg votes"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -1041,18 +1525,18 @@
         }
       }
     },
-    "Being indexed (%lld%%)." : {
+    "Being indexed (%@)." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Being indexed (%lld%%)."
+            "value" : "Being indexed (%@)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "正在建立索引（%lld%%）。"
+            "value" : "正在建立索引（%@）。"
           }
         }
       }
@@ -1140,47 +1624,49 @@
     "Checked all %llu entries." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checked all %llu entries."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Checked its %llu entry."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Checked all %llu entries."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已检查全部 %llu 个词条。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "已检查全部词条（共 %llu 个）。"
+                }
+              }
+            }
           }
         }
       }
     },
-    "Checked its 1 entry." : {
+    "Checking entries… %@" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Checked its 1 entry."
+            "value" : "Checking entries… %@"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "已检查其 1 个词条。"
-          }
-        }
-      }
-    },
-    "Checking entries… %lld%%" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Checking entries… %lld%%"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在检查词条…… %lld%%"
+            "value" : "正在检查词条…… %@"
           }
         }
       }
@@ -1860,31 +2346,33 @@
     "Healthy. Checked all %llu entries." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Healthy. Checked all %llu entries."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Healthy. Checked its %llu entry."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Healthy. Checked all %llu entries."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状况良好。已检查全部 %llu 个词条。"
-          }
-        }
-      }
-    },
-    "Healthy. Checked its 1 entry." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Healthy. Checked its 1 entry."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "状况良好。已检查其 1 个词条。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "状况良好。已检查全部词条（共 %llu 个）。"
+                }
+              }
+            }
           }
         }
       }
@@ -3572,15 +4060,33 @@
     "Show %llu More" : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show %llu More"
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %llu More"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Show %llu More"
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "再显示 %llu 条"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "再显示 %llu 条"
+                }
+              }
+            }
           }
         }
       }
@@ -3777,18 +4283,18 @@
         }
       }
     },
-    "Text size %@ px: %lld%% of a sample of its entries are set in it." : {
+    "Text size %@ px: %@ of a sample of its entries are set in it." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Text size %@ px: %lld%% of a sample of its entries are set in it."
+            "value" : "Text size %1$@ px: %2$@ of a sample of its entries are set in it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "文字大小 %@ 像素：抽样词条中有 %lld%% 使用此大小。"
+            "value" : "文字大小 %1$@ 像素：抽样词条中有 %2$@ 使用此大小。"
           }
         }
       }
@@ -4070,7 +4576,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The selection in %1$@ is %2$lld characters long, more than XDict looks up at once. Select a word or a phrase."
+            "value" : "The selection in %1$@ is %2$#@n@ long, more than XDict looks up at once. Select a word or a phrase."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "lld",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg character"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg characters"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -4125,6 +4653,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未能生成样式报告。下次显示这些详情时会重新获取。"
+          }
+        }
+      }
+    },
+    "The system did not change whether XDict opens when you log in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The system did not change whether XDict opens when you log in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统未能更改 XDict 是否在你登录时打开。"
           }
         }
       }
@@ -4742,15 +5286,33 @@
     "XDict cleans up %llu stray control characters and line breaks when it shows these entries." : {
       "localizations" : {
         "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict cleans up %llu stray control characters and line breaks when it shows these entries."
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "XDict cleans up %llu stray control character or line break when it shows these entries."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "XDict cleans up %llu stray control characters and line breaks when it shows these entries."
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示这些词条时，XDict 会清理 %llu 个多余的控制字符和换行符。"
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "显示这些词条时，XDict 会清理 %llu 个多余的控制字符和换行符。"
+                }
+              }
+            }
           }
         }
       }
@@ -5075,6 +5637,22 @@
         }
       }
     },
+    "“%@” could not be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” could not be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取“%@”。"
+          }
+        }
+      }
+    },
     "“%@” has become a link or has left its folder, so XDict will not read it." : {
       "localizations" : {
         "en" : {
@@ -5128,7 +5706,29 @@
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "“%1$@” is not in this dictionary’s folder, but its entries use it %2$llu times, so they may look unstyled or not work. Put the file next to the .mdx to fix this."
+            "value" : "“%1$@” is not in this dictionary’s folder, but its entries use it %2$#@n@, so they may look unstyled or not work. Put the file next to the .mdx to fix this."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "llu",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "once"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg times"
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         "zh-Hans" : {
@@ -5183,6 +5783,76 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”指向你所选文件夹之外，因此未被添加。"
+          }
+        }
+      }
+    },
+    "“%@” was not read: XDict reads at most %@ of a dictionary’s style sheets." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@” was not read: XDict reads at most %2$@ of a dictionary’s style sheets."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未读取“%1$@”：一部词典的样式表，XDict 最多读取 %2$@。"
+          }
+        }
+      }
+    },
+    "“%@” was not read: XDict reads at most %llu style sheets of a dictionary." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%1$@” was not read: XDict reads at most %2$#@n@ of a dictionary."
+          },
+          "substitutions" : {
+            "n" : {
+              "argNum" : 2,
+              "formatSpecifier" : "llu",
+              "variations" : {
+                "plural" : {
+                  "one" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg style sheet"
+                    }
+                  },
+                  "other" : {
+                    "stringUnit" : {
+                      "state" : "translated",
+                      "value" : "%arg style sheets"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未读取“%1$@”：XDict 最多读取一部词典的 %2$llu 个样式表。"
+          }
+        }
+      }
+    },
+    "“%@” was not read: it is not among the dictionary’s files." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” was not read: it is not among the dictionary’s files."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未读取“%@”：它不在词典的文件中。"
           }
         }
       }
