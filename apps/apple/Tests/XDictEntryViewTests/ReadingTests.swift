@@ -173,29 +173,41 @@ struct ReadingTests {
         #expect(Set(EntryTheme.allCases.map { String(localized: EntrySentences.theme($0)) }).count == 3)
     }
 
-    // MARK: - Zoom and appearance, per dictionary, kept (R2, R4)
+    // MARK: - Text size, one for every dictionary (Apple parity P29); appearance per dictionary (R4)
 
-    @Test func zoomAndThemeAreKeptPerDictionaryAndHeldToRange() throws {
+    /// Since the Apple parity (owner, 2026-10-17) the text size is one, for every dictionary, as Apple's Dictionary
+    /// has it; it was per dictionary (ADR-0010 d.3). The appearance stays per dictionary.
+    @Test func textSizeIsOneForEveryDictionaryAndThemeIsKeptPerDictionary() throws {
         let suite = "xdict-entry-tests-\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
         let preferences = EntryPreferences(defaults: defaults)
-        #expect(preferences.zoom(for: "a") == 1.0)
+        #expect(preferences.zoom() == 1.0)
         #expect(preferences.theme(for: "a") == .matchApp)
-        preferences.setZoom(1.25, for: "a")
+        preferences.setZoom(1.25)
         preferences.setTheme(.original, for: "a")
-        #expect(preferences.zoom(for: "a") == 1.25)
-        #expect(preferences.zoom(for: "b") == 1.0, "one dictionary's zoom leaked into another's")
+        #expect(preferences.zoom() == 1.25)
         #expect(preferences.theme(for: "a") == .original)
         #expect(preferences.theme(for: "b") == .matchApp)
         // Read again through a new instance, as after a relaunch.
-        #expect(EntryPreferences(defaults: defaults).zoom(for: "a") == 1.25)
-        preferences.setZoom(40, for: "a")
-        #expect(preferences.zoom(for: "a") == 3.0)
-        defaults.set(-2.0, forKey: EntryPreferences.zoomKey("c"))
+        #expect(EntryPreferences(defaults: defaults).zoom() == 1.25)
+        preferences.setZoom(40)
+        #expect(preferences.zoom() == 3.0)
+        defaults.set(-2.0, forKey: EntryPreferences.zoomKey)
         defaults.set("neon", forKey: EntryPreferences.themeKey("c"))
-        #expect(preferences.zoom(for: "c") == 1.0)
+        #expect(preferences.zoom() == 1.0)
         #expect(preferences.theme(for: "c") == .matchApp)
+    }
+
+    /// **P30**: Apple's find look: the page dimmed while there are matches, each match white, the current one yellow
+    /// (`findHighlightColor`, #ffff00).
+    @Test func findDrawsMatchesAsApplesFindDoes() {
+        let find = EntryStyle.bundled.script("find.js")
+        #expect(find.contains("::highlight(xdict-find-current){background-color:#ffff00"))
+        #expect(find.contains("::highlight(xdict-find){background-color:#ffffff"))
+        #expect(find.contains("xdict-finding"), "the page is not dimmed while finding")
+        #expect(!find.contains("#ff9632") && !find.contains("#ffe36e"))
+        #expect(find.contains("selection: function") && find.contains("jump: function"), "⌘E and ⌘J have nothing to ask")
     }
 
     /// The accent (Settings ▸ Reading): teal unless chosen, kept across launches, teal for a value it does not know;

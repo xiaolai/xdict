@@ -465,11 +465,14 @@ var XDictFindCore = (function () {
     if (document.getElementById('xdict-find-style')) return;
     var s = document.createElement('style');
     s.id = 'xdict-find-style';
-    s.textContent = '::highlight(xdict-find){background-color:#ffe36e;color:#000}'
-      + '::highlight(xdict-find-current){background-color:#ff9632;color:#000}';
+    // Apple's find (parity P30): the page dimmed, every match a white lozenge, the current one yellow.
+    s.textContent = '::highlight(xdict-find){background-color:#ffffff;color:#000}'
+      + '::highlight(xdict-find-current){background-color:#ffff00;color:#000}'
+      + 'html.xdict-finding,html.xdict-finding body{background-color:color-mix(in srgb,Canvas 78%,#000)!important}';
     (document.head || document.documentElement).appendChild(s);
   }
   function paint() {
+    document.documentElement.classList.toggle('xdict-finding', state.ranges.length > 0);
     if (typeof Highlight === 'undefined' || !window.CSS || !CSS.highlights) return;
     CSS.highlights.set('xdict-find', new Highlight(...state.ranges));
     if (state.current >= 0) CSS.highlights.set('xdict-find-current', new Highlight(state.ranges[state.current]));
@@ -501,8 +504,18 @@ var XDictFindCore = (function () {
     },
     clear: function () {
       state = { ranges: [], hidden: 0, current: -1 };
+      document.documentElement.classList.remove('xdict-finding');
       if (window.CSS && CSS.highlights) { CSS.highlights.delete('xdict-find'); CSS.highlights.delete('xdict-find-current'); }
       return report();
+    },
+    // Edit ▸ Find ▸ Use Selection for Find (⌘E) and Jump to Selection (⌘J), as Apple's Dictionary has them (P33).
+    selection: function () { return String(window.getSelection() || ''); },
+    jump: function () {
+      var s = window.getSelection();
+      if (!s || !s.rangeCount) return false;
+      var n = s.getRangeAt(0).startContainer, el = n.nodeType === 1 ? n : n.parentElement;
+      if (el) el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      return !!el;
     }
   };
 })();
