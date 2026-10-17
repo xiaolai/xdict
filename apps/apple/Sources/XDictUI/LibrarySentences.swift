@@ -85,6 +85,8 @@ public enum LibrarySentences {
             LocalizedStringResource("Already in your library, as “\(name)”.")
         case .relinked(let name):
             LocalizedStringResource("Found “\(name)” again.")
+        case .locked(let name):
+            LocalizedStringResource("\(name) was not added: it is locked to its buyer with a registration code.")
         case .notSaved:
             LocalizedStringResource("Your library could not be saved.")
         }

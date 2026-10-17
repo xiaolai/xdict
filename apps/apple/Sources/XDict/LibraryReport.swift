@@ -52,7 +52,7 @@ enum LibraryReport {
         var findings = Findings()
         let shown: [(String, LocalizedStringResource)] = [
             ("sentence.resourceLibraryV3", LibrarySentences.note(.volumeUnreadable(fileName: "v3.mdd", reason: .resourceLibraryV3))),
-            ("sentence.registrationCode", LibrarySentences.phase(.refused(.registrationCode))),
+            ("sentence.registrationCode", LibrarySentences.notice(.locked(fileName: "regcode.mdx"))),
             ("sentence.damaged", LibrarySentences.phase(.refused(.damaged))),
         ]
         for (name, resource) in shown {

@@ -145,6 +145,22 @@
         }
       }
     },
+    "%@ was not added: it is locked to its buyer with a registration code." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ was not added: it is locked to its buyer with a registration code."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 未添加：它用注册码锁定给了购买者。"
+          }
+        }
+      }
+    },
     "%@ works now but could not be saved, so it will not survive a restart." : {
       "localizations" : {
         "en" : {
