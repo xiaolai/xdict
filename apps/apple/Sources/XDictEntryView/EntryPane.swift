@@ -251,6 +251,20 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         _ = await callFind("return window.__xdictFind.clear()", [:])
     }
 
+    /// The entry's selected text, for Use Selection for Find.
+    func selectedText() async -> String? {
+        guard !closed else { return nil }
+        return try? await view.callAsyncJavaScript("return window.__xdictFind.selection()", arguments: [:], in: nil,
+                                                   contentWorld: Self.world) as? String
+    }
+
+    /// Scrolls the entry to its selection, for Jump to Selection.
+    func jumpToSelection() async {
+        guard !closed else { return }
+        _ = try? await view.callAsyncJavaScript("return window.__xdictFind.jump()", arguments: [:], in: nil,
+                                                contentWorld: Self.world)
+    }
+
     private func callFind(_ body: String, _ arguments: [String: Any]) async -> EntryFindResult? {
         guard !closed, let answer = try? await view.callAsyncJavaScript(body, arguments: arguments, in: nil,
                                                                          contentWorld: Self.world),

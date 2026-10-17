@@ -10,26 +10,9 @@ import XDictSearch
 /// incomplete searches, recent lookups. Each a decision a view makes, without a window.
 @MainActor
 struct UXSpecTests {
-    // MARK: - §1 narrow window
-
-    /// The rule reads the detail column's width: at a 820 pt window with the sidebar open (540 pt) the scope is a
-    /// symbol; with it hidden (820 pt) it is the full picker.
-    @Test func aDetailUnderFiveHundredSixtyPointsMakesTheScopeASymbol() {
-        #expect(ToolbarLayout.isCompact(width: 420))
-        #expect(ToolbarLayout.isCompact(width: 540))
-        #expect(!ToolbarLayout.isCompact(width: 560))
-        #expect(!ToolbarLayout.isCompact(width: 820))
-        #expect(ToolbarLayout.searchWidth == (min: 200, ideal: 240, max: 280))
-        // The 640 pt window holds the sidebar at its ideal and the detail at its minimum without squeezing either.
-        #expect(ToolbarLayout.detailMinimum + ToolbarLayout.sidebar.ideal == 640)
-    }
-
-    // MARK: - §2 title
-
-    @Test func theWindowTitleIsTheShownHeadwordOrLookUp() {
-        #expect(ToolbarLayout.windowTitle(headword: nil) == String(localized: "Look Up"))
-        #expect(ToolbarLayout.windowTitle(headword: "banana") == "banana")
-    }
+    // §1 (the 640 pt window, the scope as a symbol) and §2 (the headword as the title) were replaced by the owner's
+    // Apple parity decisions of 2026-10-17 (P1, P2, P6): `ParityWindowTests` holds the window now. §5's recent lookups
+    // went with the sidebar that showed them (P9: Apple's has none).
 
     // MARK: - §5 incomplete searches
 
@@ -42,23 +25,6 @@ struct UXSpecTests {
         #expect(partial == .noResultsIncomplete("zz", unsearched: 2))
         #expect(partial.clearsEntry)
         #expect(String(localized: SearchSentences.unsearched(2)) == "2 dictionaries couldn’t be searched")
-    }
-
-    // MARK: - §5 recent lookups
-
-    @Test func recentLookupsAreEightNewestFirstWithoutRepeats() throws {
-        let suite = "xdict.tests.recent.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let recent = RecentLookups(defaults: defaults)
-        for word in ["a", "b", "c", "d", "e", "f", "g", "h", "i"] { recent.add(word) }
-        recent.add("c")
-        #expect(recent.words == ["c", "i", "h", "g", "f", "e", "d", "b"])
-        recent.add("  ")
-        #expect(recent.words.count == 8)
-        #expect(RecentLookups(defaults: defaults).words == recent.words, "kept across launches")
-        recent.clear()
-        #expect(recent.words.isEmpty && RecentLookups(defaults: defaults).words.isEmpty)
     }
 
     // MARK: - §3 panel

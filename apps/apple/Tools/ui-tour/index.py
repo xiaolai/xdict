@@ -85,7 +85,7 @@ def page():
                     for found in r.get("findings", []):
                         kinds.setdefault(found["kind"], []).append(found)
                     for kind, items in kinds.items():
-                        sample = "; ".join(html.escape(str(i.get("text") or i.get("a") or i["where"]))[:80]
+                        sample = "; ".join(html.escape(str(i.get("text") or i.get("a") or i.get("where", "")))[:80]
                                            for i in items[:3])
                         inner.append(f"<div class='warn'>AX {kind}: {len(items)} ({sample})</div>")
                 figures.append("<figure>" + "".join(inner) + "</figure>")

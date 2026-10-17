@@ -391,6 +391,40 @@
         }
       }
     },
+    "%lld found" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld found"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld found"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "找到 %lld 个"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld more in folded sections" : {
       "localizations" : {
         "en" : {
@@ -1371,6 +1405,22 @@
         }
       }
     },
+    "All" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部"
+          }
+        }
+      }
+    },
     "All Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -1569,6 +1619,22 @@
         }
       }
     },
+    "Bigger Text" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bigger Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "放大文字"
+          }
+        }
+      }
+    },
     "British English" : {
       "localizations" : {
         "en" : {
@@ -1679,22 +1745,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查词条…… %@"
-          }
-        }
-      }
-    },
-    "Clear Recent Lookups" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear Recent Lookups"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除最近查询"
           }
         }
       }
@@ -1843,6 +1893,22 @@
         }
       }
     },
+    "Decrease font size" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Decrease font size"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "减小字号"
+          }
+        }
+      }
+    },
     "Description" : {
       "localizations" : {
         "en" : {
@@ -1919,6 +1985,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典自己的配色"
+          }
+        }
+      }
+    },
+    "Did you mean?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Did you mean?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你要找的是不是："
           }
         }
       }
@@ -2227,6 +2309,22 @@
         }
       }
     },
+    "Find" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Find"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找"
+          }
+        }
+      }
+    },
     "Find Next" : {
       "localizations" : {
         "en" : {
@@ -2275,18 +2373,18 @@
         }
       }
     },
-    "Find in Entry…" : {
+    "Find…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Find in Entry…"
+            "value" : "Find…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在词条中查找…"
+            "value" : "查找…"
           }
         }
       }
@@ -2533,6 +2631,22 @@
         }
       }
     },
+    "Increase font size" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Increase font size"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "增大字号"
+          }
+        }
+      }
+    },
     "Indigo" : {
       "localizations" : {
         "en" : {
@@ -2561,6 +2675,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "准备就绪后会立即查询它。"
+          }
+        }
+      }
+    },
+    "Jump to Selection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Jump to Selection"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跳到所选内容"
           }
         }
       }
@@ -2725,22 +2855,6 @@
         }
       }
     },
-    "Look Up" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look Up"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查询"
-          }
-        }
-      }
-    },
     "Look Up Selection" : {
       "localizations" : {
         "en" : {
@@ -2757,22 +2871,6 @@
         }
       }
     },
-    "Look Up a Word" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look Up a Word"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查一个词"
-          }
-        }
-      }
-    },
     "Look Up “%@” in Every Dictionary" : {
       "localizations" : {
         "en" : {
@@ -2785,22 +2883,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在所有词典中查询“%@”"
-          }
-        }
-      }
-    },
-    "Look up in %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look up in %@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在%@中查询"
           }
         }
       }
@@ -3029,6 +3111,22 @@
         }
       }
     },
+    "New Tab" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Tab"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建标签页"
+          }
+        }
+      }
+    },
     "Next" : {
       "localizations" : {
         "en" : {
@@ -3157,6 +3255,22 @@
         }
       }
     },
+    "No entries found." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No entries found."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未找到词条。"
+          }
+        }
+      }
+    },
     "No entry for “%@”." : {
       "localizations" : {
         "en" : {
@@ -3233,22 +3347,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "统一样式时，它的样式表没有需要改动的地方。"
-          }
-        }
-      }
-    },
-    "Not Searched" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not Searched"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未查询"
           }
         }
       }
@@ -3756,6 +3854,22 @@
         }
       }
     },
+    "Print…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打印…"
+          }
+        }
+      }
+    },
     "Problems" : {
       "localizations" : {
         "en" : {
@@ -3884,22 +3998,6 @@
         }
       }
     },
-    "Recent Lookups" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent Lookups"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近查询"
-          }
-        }
-      }
-    },
     "Red" : {
       "localizations" : {
         "en" : {
@@ -4012,22 +4110,6 @@
         }
       }
     },
-    "Return to the word you typed" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Return to the word you typed"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "返回你输入的词"
-          }
-        }
-      }
-    },
     "Same Dictionary" : {
       "localizations" : {
         "en" : {
@@ -4076,6 +4158,22 @@
         }
       }
     },
+    "Search For a New Word…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search For a New Word…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索新单词…"
+          }
+        }
+      }
+    },
     "Search in" : {
       "localizations" : {
         "en" : {
@@ -4104,6 +4202,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在查询…"
+          }
+        }
+      }
+    },
+    "Select Next Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select Next Dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择下一个词典"
+          }
+        }
+      }
+    },
+    "Select Previous Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select Previous Dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择上一个词典"
           }
         }
       }
@@ -4350,6 +4480,54 @@
         }
       }
     },
+    "Show more dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show more dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示更多词典"
+          }
+        }
+      }
+    },
+    "Show the next result" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the next result"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示下一个结果"
+          }
+        }
+      }
+    },
+    "Show the previous result" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the previous result"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示上一个结果"
+          }
+        }
+      }
+    },
     "Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way." : {
       "localizations" : {
         "en" : {
@@ -4362,6 +4540,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按这部词典自带的样式表显示词条，而不用 XDict 的阅读样式。链接和防护在两种样式下都一样。"
+          }
+        }
+      }
+    },
+    "Smaller Text" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Smaller Text"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "缩小文字"
           }
         }
       }
@@ -4426,22 +4620,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "读取的样式表：%1$lld 个，跳过：%2$lld 个"
-          }
-        }
-      }
-    },
-    "Suggestions" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Suggestions"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "建议"
           }
         }
       }
@@ -4522,22 +4700,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典中带颜色的文字所用的颜色。"
-          }
-        }
-      }
-    },
-    "The dictionaries a typed word is looked up in" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The dictionaries a typed word is looked up in"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入的词会在这些词典中查询"
           }
         }
       }
@@ -5268,18 +5430,18 @@
         }
       }
     },
-    "Type a word and press Return." : {
+    "Type a word to look up in…" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Type a word and press Return."
+            "value" : "Type a word to look up in…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入一个词，然后按回车键。"
+            "value" : "输入单词，在以下词典中查找…"
           }
         }
       }
@@ -5330,6 +5492,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销"
+          }
+        }
+      }
+    },
+    "Use Selection for Find" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Selection for Find"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用所选内容查找"
           }
         }
       }
@@ -5442,6 +5620,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典自带某个词的录音、且 macOS 能播放时，播放录音而不用系统语音。"
+          }
+        }
+      }
+    },
+    "XDict Help" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict Help"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 帮助"
           }
         }
       }
@@ -5720,54 +5914,6 @@
         }
       }
     },
-    "Your lookup results appear here." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Your lookup results appear here."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查询结果将显示在这里。"
-          }
-        }
-      }
-    },
-    "Zoom In" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zoom In"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "放大"
-          }
-        }
-      }
-    },
-    "Zoom Out" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Zoom Out"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "缩小"
-          }
-        }
-      }
-    },
     "macOS cannot find XDict to open at login." : {
       "localizations" : {
         "en" : {
@@ -5784,6 +5930,22 @@
         }
       }
     },
+    "more dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "more dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多词典"
+          }
+        }
+      }
+    },
     "record %lld" : {
       "localizations" : {
         "en" : {
@@ -5796,6 +5958,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "第 %lld 条记录"
+          }
+        }
+      }
+    },
+    "search results" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "search results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索结果"
           }
         }
       }

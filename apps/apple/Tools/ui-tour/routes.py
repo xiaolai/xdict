@@ -12,18 +12,19 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("press", match...)            AXPress on an element by identifier, title, description or value
     ("click", match...)            a real click at its centre
     ("extra",)                     the menu-bar extra opened
-    ("size", width, height)        the main window set to that size, in points (the 640 pt minimum width)
+    ("size", width, height)        the main window set to that size, in points (Apple's 400 × 300 pt minimum)
     ("drop", fixture)              a file of fixtures/library dragged from a source window onto the Library window
     ("wait", seconds)
 
 Each route runs over a launch of its own, so nothing a route leaves behind reaches the next.
 
-Routes with `steps=None` are not driven: their `how` says why, and the index lists them as not captured.
+Routes with `steps=None` are not driven: their `how` says why, and the index lists them as not captured. The main
+window's routes are also held to Apple's Dictionary by `parity.py` (the parity ledger's ids), on English variants.
 """
 
 SEARCH = ("key", "cmd+opt+f")
 LIBRARY = ("key", "cmd+shift+l")
-NARROW = ("size", 640, 560)
+NARROW = ("size", 400, 300)
 SETTINGS = ("key", "cmd+,")
 
 
@@ -35,60 +36,34 @@ ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
     # The main window
-    ("main.start", "full", "Launch XDict", "Main window, the toolbar's search field focused, 'Look Up a Word' and "
-     "'Type a word and press Return.'; toolbar Back / Forward / Return to Original Word, Dictionaries picker, "
-     "Pronounce, the search field", []),
-    ("main.w640", "full", "Look up 'accomplished' at 640 pt (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 640, 600)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w640.closed", "full", "Look up 'accomplished' at 640 pt, sidebar hidden (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 640, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w720", "full", "Look up 'accomplished' at 720 pt (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 720, 600)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w720.closed", "full", "Look up 'accomplished' at 720 pt, sidebar hidden (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 720, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w820", "full", "Look up 'accomplished' at 820 pt (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 820, 600)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w820.closed", "full", "Look up 'accomplished' at 820 pt, sidebar hidden (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 820, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w1000", "full", "Look up 'accomplished' at 1000 pt (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 1000, 600)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.w1000.closed", "full", "Look up 'accomplished' at 1000 pt, sidebar hidden (Codex §1)",
-     "Search at least 200 pt, Back and Forward and the scope in the toolbar; below 820 pt the scope a book symbol and "
-     "Return in the overflow", [("size", 1000, 600)] + [("key", "ctrl+cmd+s"), ("wait", 0.6)]
-     + [("key", "cmd+opt+f"), ("type", "accomplished"), ("key", "return"), ("wait", 1.5)]),
-    ("main.narrow", "full", "Look up 'apple' at the 640 pt minimum width", "The search field and the Dictionaries "
-     "picker both still in the toolbar and readable; nothing in an overflow menu that search needs",
+    ("main.start", "full", "Launch XDict", "As Apple's Dictionary (P2–P6, P14): the title 'Dictionary'; Back / "
+     "Forward, Smaller / Bigger Text and the search field ('Search') in the toolbar; the scope bar (All, Alpha, Beta, "
+     "...) under it; no sidebar; 'Type a word to look up in…' and the dictionaries' names, centred", []),
+    ("window.min", "full", "Ask for a 100 × 100 pt main window (P1)", "It takes Apple's minimum, 400 × 300 pt",
+     [("size", 100, 100)]),
+    ("main.w640", "full", "Look up 'apple' at 640 pt (P8)", "Search field, the pairs and the title in the toolbar; "
+     "the scope bar whole or with its »", [("size", 640, 500), ("key", "cmd+opt+f"), ("type", "apple"),
+                                           ("key", "return"), ("wait", 1.5)]),
+    ("main.narrow", "full", "Look up 'apple' at the 400 pt minimum (P8)", "The search field and the scope bar (All "
+     "and what fits, the rest under ») still there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
      "'Open Library' button", []),
-    ("search.result", "full", "Type 'apple', Return", "Sidebar sections per dictionary with results and each "
-     "unavailable dictionary's status (damaged, gone, locked); the entry rendered in XDict's reading style",
-     look_up("apple")),
-    ("search.next", "full", "Type 'apple', Return, then Down", "The results list takes the keyboard, the shown "
-     "result selected (as Mail does); Down again moves on",
-     look_up("apple") + [("key", "down"), ("wait", 1)]),
-    ("search.suggestions", "full", "Type 'take o' without Return", "Suggestions list under the field, 'take off' "
-     "among them", [SEARCH, ("type", "take o"), ("wait", 1.5)]),
+    ("search.result", "full", "Type 'apple', Return", "As Apple's (P2, P9, P43): 'N found' under the title; the "
+     "sidebar one flat list of headwords (28 pt rows, 13 pt, the selected one semibold); the damaged and gone "
+     "dictionaries said in the page, above the entry", look_up("apple")),
+    ("search.next", "full", "Type 'apple', Return, then Down (P11)", "The next headword chosen and shown, the list "
+     "holding the keyboard", look_up("apple") + [("key", "down"), ("wait", 1)]),
+    ("search.live", "full", "Type 'take o' without Return (P10)", "'take off' shown at once, the list of 'take o…' "
+     "headwords in the sidebar", [SEARCH, ("type", "take o"), ("wait", 1.5)]),
+    ("search.didyoumean", "full", "Type 'bananna', Return (P13)", "'Did you mean?' over 'banana', its "
+     "entry shown", look_up("bananna")),
     ("search.phrase", "full", "Type 'take o', Down, Return", "The phrase 'take off' looked up and shown",
      [SEARCH, ("type", "take o"), ("wait", 1.2), ("key", "down"), ("key", "return"), ("wait", 1.5)]),
     ("search.many", "full", "Type 'a', Return", "Many results; the sidebar's 'more' row where a section is cut",
      look_up("a")),
-    ("search.none", "full", "Type 'zzqxjv', Return", "'No Results for “zzqxjv”' and the sidebar saying what each "
-     "dictionary found", look_up("zzqxjv")),
+    ("search.none", "full", "Type 'zzqxjv', Return (P12)", "Apple's grey 'No entries found.' at the pane's top left; "
+     "no count", look_up("zzqxjv")),
     ("search.noneEmpty", "empty", "Type 'apple', Return over an empty library", "'No Dictionaries', not a blank page",
      look_up("apple")),
     ("trail.followed", "full", "Look up 'apple', Tab into the entry, Tab to its first link, Return", "The linked "
@@ -100,15 +75,14 @@ ROUTES = [
     ("trail.origin", "full", "... then Return to Original Word (⌥⌘[)", "The typed word's entry",
      look_up("apple") + [("key", "tab"), ("key", "tab"), ("key", "return"), ("wait", 1.2), ("key", "cmd+opt+["),
                          ("wait", 1)]),
-    ("scope.picker", "full", "Click the Dictionaries picker in the toolbar", "A menu: All Dictionaries and each "
-     "dictionary by name", [("click", "scope"), ("wait", 0.8)]),
-    ("scope.narrow", "full", "At 640 pt, click the Dictionaries picker", "The menu, the picker and the search field "
-     "both visible", [NARROW, ("click", "scope"), ("wait", 0.8)]),
-    ("scope.one", "full", "Look up 'apple', then ⌥⌘2", "Only the second dictionary's section; the picker says so",
-     look_up("apple") + [("key", "cmd+opt+2"), ("wait", 1.2)]),
-    ("entry.find", "full", "Look up 'apple', ⌘F, type 'a'", "The entry's find bar with a match count",
+    ("scope.one", "full", "Look up 'apple', then ⌘2 (P7)", "The scope bar's Beta chosen; the list and entry Beta's",
+     look_up("apple") + [("key", "cmd+2"), ("wait", 1.2)]),
+    ("scope.click", "full", "Look up 'apple', click Beta in the scope bar (P6)", "Beta chosen on its grey capsule",
+     look_up("apple") + [("click", "Beta"), ("wait", 1.2)]),
+    ("entry.find", "full", "Look up 'apple', ⌘F, type 'a' (P30)", "The find bar under the scope bar with a match "
+     "count; the page dimmed, the matches white, the current one yellow",
      look_up("apple") + [("key", "cmd+f"), ("wait", 0.6), ("key", "a"), ("wait", 0.8)]),
-    ("entry.zoomIn", "full", "Look up 'apple', ⌘= twice", "The entry larger, nothing clipped",
+    ("entry.zoomIn", "full", "Look up 'apple', ⌘= twice (P29)", "The entry larger, nothing clipped",
      look_up("apple") + [("key", "cmd+="), ("key", "cmd+="), ("wait", 0.8)]),
     ("entry.collapse", "full", "Look up 'apple', View ▸ Collapse All", "The entry's sections collapsed",
      look_up("apple") + [("menu", 4, "Collapse All"), ("wait", 0.8)]),
@@ -117,16 +91,18 @@ ROUTES = [
     # Menus
     ("menu.app", "full", "Click the XDict menu", "About XDict, Acknowledgments, Settings…, Set Up XDict…, "
      "Services, Hide, Quit", [("menuopen", 1)]),
-    ("menu.file", "full", "Click File", "New Window and the app's file items", [("menuopen", 2)]),
-    ("menu.edit", "full", "Click Edit", "Find in Entry… ⌘F, Find Next ⌘G, Find Previous ⇧⌘G, Pronounce ⌥⌘P",
-     [("menuopen", 3)]),
-    ("menu.view", "full", "Click View", "Zoom In, Zoom Out, Actual Size, Expand All, Collapse All", [("menuopen", 4)]),
-    ("menu.go", "full", "Click Go", "Back ⌘[, Forward ⌘], Return to Original Word ⌥⌘[, Search ⌥⌘F",
-     [("menuopen", 5)]),
-    ("menu.dictionaries", "full", "Click Dictionaries", "All Dictionaries ⌥⌘0 and each dictionary ⌥⌘1…",
-     [("menuopen", 6)]),
-    ("menu.window", "full", "Click Window", "Library ⇧⌘L and the window list", [("menuopen", 7)]),
-    ("menu.help", "full", "Click Help", "The help search field and XDict Help", [("menuopen", 8)]),
+    ("menu.file", "full", "Click File (P32)", "New Window, New Tab ⌘T, Add Dictionaries… ⌘O, Close, Print… ⌘P",
+     [("menuopen", 2)]),
+    ("menu.edit", "full", "Click Edit (P33)", "Find ▸ (Search For a New Word… ⌥⌘F, Find… ⌘F, Find Next ⌘G, Find "
+     "Previous ⇧⌘G, Use Selection for Find ⌘E, Jump to Selection ⌘J), Pronounce ⌥⌘P", [("menuopen", 3)]),
+    ("menu.editFind", "full", "Click Edit ▸ Find (P33)", "Apple's Find submenu", [("menu", 3, "Find"), ("wait", 0.4)]),
+    ("menu.view", "full", "Click View", "Bigger Text ⌘+, Smaller Text ⌘-, Actual Size ⌥⌘0, Expand All, Collapse "
+     "All", [("menuopen", 4)]),
+    ("menu.go", "full", "Click Go", "Back ⌘[, Forward ⌘], Return to Original Word ⌥⌘[", [("menuopen", 5)]),
+    ("menu.search", "full", "Click Search (P7, P36)", "All Dictionaries ⌘0, each dictionary ⌘1…, Select Next "
+     "Dictionary ⌘}, Select Previous Dictionary ⌘{", [("menuopen", 6)]),
+    ("menu.window", "full", "Click Window (P37)", "Library ⇧⌘L, the tab items and the window list", [("menuopen", 7)]),
+    ("menu.help", "full", "Click Help (P38)", "The help search field and XDict Help", [("menuopen", 8)]),
     ("menu.services", "full", "Select the search field's word, XDict ▸ Services", "The Services submenu, XDict's "
      "own lookup among them", look_up("apple") + [SEARCH, ("menu", 1, "Services|服务")]),
     ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Library…, "
@@ -145,7 +121,7 @@ ROUTES = [
     ("panel.expand", "full", "The panel's Open in XDict", "The main window with the panel's word, dictionary and "
      "entry, the search field focused", look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2),
                                                            ("press", "panel.expand"), ("wait", 1.5)]),
-    ("panel.expandNarrow", "full", "Open in XDict into a 640 pt main window", "As panel.expand, at the minimum width",
+    ("panel.expandNarrow", "full", "Open in XDict into a 400 pt main window", "As panel.expand, at the minimum width",
      [NARROW] + look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"),
                                     ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
