@@ -74,7 +74,7 @@
     paging.everyRecord ax.paging
 
 @ service.idle default fixtures
-    idle.exitsWhenQuiet idle.workSpanningTheTimer idle.racingRequestsAnsweredOnce
+    idle.exitsWhenQuiet
 
 @ hostile.app default kit
     hostile.app

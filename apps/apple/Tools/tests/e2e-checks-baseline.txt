@@ -29,8 +29,6 @@ stall.answeredWhileTheStalledRun
 kill.typedError
 kill.nextLookupSucceeds
 idle.exitsWhenQuiet
-idle.workSpanningTheTimer
-idle.racingRequestsAnsweredOnce
 service.connect.inside
 service.connect.outside
 service.clientRequirement
