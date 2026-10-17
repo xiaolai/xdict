@@ -15,6 +15,7 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("size", width, height)        the main window set to that size, in points (Apple's 400 × 300 pt minimum)
     ("drop", fixture)              a file of fixtures/library dragged from a source window onto the Library window
     ("wait", seconds)
+    ("after", step...)            a step run after the capture (the print panel cancelled before the app quits)
 
 Each route runs over a launch of its own, so nothing a route leaves behind reaches the next.
 
@@ -97,6 +98,11 @@ ROUTES = [
     ("page.find", "full", "... then ⌘F, type 'fruit' (P15, P30)", "Matches in every frame counted together; the "
      "first one current, yellow", look_up("orange") + [("key", "cmd+f"), ("wait", 0.6), ("type", "fruit"),
                                                        ("key", "return"), ("wait", 1)]),
+    ("page.zoomIn", "full", "Type 'orange', Return, then ⌘= twice (P15, P29)", "Every frame larger, and the dividers' "
+     "names, bands and triangles with them", look_up("orange") + [("key", "cmd+="), ("key", "cmd+="), ("wait", 1)]),
+    ("page.print", "full", "Type 'orange', Return, then File ▸ Print… (P44)", "The system's print panel over the window; "
+     "its preview the whole page: Alpha's, Beta's and Records' entries, each under its name, no triangles or rules",
+     look_up("orange") + [("key", "cmd+p"), ("wait", 3), ("after", "key", "escape")]),
     ("speech.pronounce", "full", "Look up 'apple', ⌥⌘P", "Spoken (volume 0 here); a notice if no voice or recording",
      look_up("apple") + [("key", "cmd+opt+p"), ("wait", 1.5)]),
     # Menus
