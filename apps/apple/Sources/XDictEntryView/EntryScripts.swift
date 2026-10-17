@@ -53,8 +53,17 @@ enum EntryScripts {
 
     /// How far down the entry the reader has scrolled, in CSS pixels.
     static let scrollOffset = "return window.scrollY;"
-    /// The shown document's height in CSS pixels: what the lookup panel sizes itself to (UI review P-03).
-    static let documentHeight = "return document.documentElement.scrollHeight;"
+    /// The shown document's content height in CSS pixels: what the lookup panel sizes itself to (UI review P-03). Not
+    /// `documentElement.scrollHeight`, which is never less than the viewport: in a 440 pt panel a one-line entry
+    /// measured the panel itself, and the panel never shrank. The body's contents, to their last line, plus the
+    /// body's bottom padding and margin.
+    static let documentHeight = """
+        const body = document.body; if (!body) { return null; }
+        const range = document.createRange(); range.selectNodeContents(body);
+        const style = getComputedStyle(body);
+        return Math.ceil(range.getBoundingClientRect().bottom + window.scrollY
+            + parseFloat(style.paddingBottom || "0") + parseFloat(style.marginBottom || "0"));
+        """
 
     static let handlerName = "xdictEntry"
 
