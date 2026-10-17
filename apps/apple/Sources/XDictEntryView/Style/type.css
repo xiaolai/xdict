@@ -12,6 +12,12 @@ body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !importan
 :where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}
 :where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
 :where(button,input,select,textarea){font:inherit}
+/* A relative size a dictionary's script writes at run time, which the core never sees (COBUILD's trend chart, */
+/* `font-size:smaller`, 13.3 px), is a step of the scale (G1). */
+[style*="font-size:smaller"],[style*="font-size: smaller"]{font-size:var(--xdict-fs-s) !important;
+line-height:var(--xdict-leading) !important}
+[style*="font-size:larger"],[style*="font-size: larger"]{font-size:var(--xdict-fs-l) !important;
+line-height:var(--xdict-leading) !important}
 :where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}
 :where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}
 @layer xdict-unify{
