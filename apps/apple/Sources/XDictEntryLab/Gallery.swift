@@ -90,6 +90,7 @@ enum GalleryRun {
                     }
                     if !mode.frame.isEmpty, let accent = accentCandidate { _ = await run(accent, controller.webView) }
                     if !mode.frame.isEmpty, let control = positiveControl { _ = await run(control, controller.webView) }
+                    if !mode.frame.isEmpty, !mode.original, let control = checksControl { _ = await run(control, controller.webView) }
                     try await Task.sleep(for: .milliseconds(500))
                     let file = "\(name)-\(kind)-\(mode.name).jpg"
                     let measured = await measure(controller.webView)
@@ -153,8 +154,13 @@ enum GalleryRun {
                             failures.append("\(name) \(mode.name) \(entry.key): the chevron does not match its fold \(wrong)")
                         }
                     }
+                    // §7.2's G1–G15, last: G9 clicks the fold heads.
+                    let checks = mode.frame.isEmpty || mode.original ? nil : await run(checksScript, controller.webView)
+                    if !mode.frame.isEmpty && !mode.original {
+                        failures += checkFailures(checks, where: "\(name) \(mode.name) \(entry.key)")
+                    }
                     rows.append(["dict": name, "kind": kind, "key": entry.key, "mode": mode.name, "image": "images/\(file)",
-                                 "measure": measured ?? NSNull(), "marks": marked ?? NSNull(),
+                                 "measure": measured ?? NSNull(), "marks": marked ?? NSNull(), "checks": checks ?? NSNull(),
                                  "layout": layout ?? NSNull(), "phon": phon ?? NSNull(),
                                  "invariants": invariants ?? NSNull()])
                 }
@@ -162,6 +168,7 @@ enum GalleryRun {
                 window.close()
             }
         }
+        failures += dominantSizeFailures(rows)
         return ["mode": "gallery", "style": options.styleDir?.path ?? "bundled", "rows": rows, "expected": expected, "failures": failures,
                 "folding": try await CorpusRun.folding(root: root, core: core)]
     }
@@ -400,7 +407,9 @@ enum GalleryRun {
             if (!/\S/.test(n.nodeValue) || !n.parentElement || !seen(n.parentElement)) { if (/\s/.test(n.nodeValue)) prev = null; continue; }
             k += 1;
             // A space the dictionary's own sheet draws after the element (`::after{content:" "}`) is the source's.
-            var drawnSpace = prev && /^"\s+"$/.test(getComputedStyle(prev.parentElement, '::after').content);
+            // So is any text it draws there (ODE's examples end with a generated closing quote, `em.xv4::after`): the
+            // punctuation is set against that, not against a space.
+            var drawnSpace = prev && /^"[^"]+"$/.test(getComputedStyle(prev.parentElement, '::after').content);
             // Punctuation set after a control (CED's speaker after a transcription) is against the control, not the text.
             var afterControl = false;
             if (prev) { var cg = document.createRange(); cg.setStartAfter(prev); cg.setEnd(n, 0);

@@ -10,7 +10,8 @@
 #
 # The host is E2E_HOST, else local.mk's E2E_HOST_MACOS; corpus and sample are the gallery's on that host. It refuses
 # to start while an xctest run holds the host's screen, and takes the gallery's run lock. Exits non-zero, naming why,
-# unless the report holds every row; the gallery's failures are printed, and fail it too.
+# unless the report holds every row; the gallery's failures are printed, and fail it too. XDICT_LAB_CONTROL=1|G
+# renders a positive control (GalleryInvariants, GalleryChecks): that run must fail.
 set -u
 [ $# -gt 0 ] || { echo "usage: hot.sh <dict>:<key>[:<kind>] ..." >&2; exit 2; }
 started=$(date +%s)
@@ -56,8 +57,11 @@ trap 'rm -f "$keys" "$lock"' EXIT
 rsync -a --delete --include '*.css' --include '*.js' --exclude '*' "$apple/Sources/XDictEntryView/Style/" \
     "$host:$remote/style/" || { echo "hot: could not copy the style" >&2; exit 4; }
 rsync -a "$keys" "$host:$remote/keys.json" || { echo "hot: could not copy the keys" >&2; exit 4; }
-ssh "$host" "rm -rf $remote/run; mkdir -p $remote/run; open -n -W --stdout \$HOME/$remote/run/stdout.txt \
-    --stderr \$HOME/$remote/run/stderr.txt $lab --args --gallery \$HOME/XDictE2E/corpus \
+# A positive control (`XDICT_LAB_CONTROL=1` spacing, `G` the checks G1–G15) goes to the lab's environment.
+control=${XDICT_LAB_CONTROL:-}
+case $control in ''|1|G) ;; *) echo "hot: XDICT_LAB_CONTROL is 1 or G" >&2; exit 2 ;; esac
+ssh "$host" "rm -rf $remote/run; mkdir -p $remote/run; open -n -W ${control:+--env XDICT_LAB_CONTROL=$control} \
+    --stdout \$HOME/$remote/run/stdout.txt --stderr \$HOME/$remote/run/stderr.txt $lab --args --gallery \$HOME/XDictE2E/corpus \
     --sample \$HOME/XDictE2E/kit/entries-sample.json --keys \$HOME/$remote/keys.json --only $only \
     --style-dir \$HOME/$remote/style --out \$HOME/$remote/run/report.json"
 opened=$?

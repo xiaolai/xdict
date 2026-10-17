@@ -196,7 +196,9 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); }"))
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); }"))
+        // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
+        #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
         #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))
         #expect(EntryReadingFrame.marksCSS.contains("[data-xdict-lone-bullet]{display:none !important}"))
         let start = try #require(reading.range(of: "var GLYPHS = "))
@@ -335,7 +337,9 @@ struct ReadingFrameTests {
         }
         #expect(!css.contains("=drop]"))
         // XDict's own drawings are the only content written, and they are empty boxes painted by a mask or a fill.
-        let contents = css.components(separatedBy: "content:").dropFirst().map { String($0.prefix(while: { $0 != ";" && $0 != "}" })) }
+        // The `content` property only, not one ending in it (`justify-content:`).
+        let contents = css.ranges(of: /[;{\n]content:([^;}]*)/).map { String(css[$0].drop(while: { $0 != ":" }).dropFirst()) }
+        #expect(!contents.isEmpty)
         for value in contents { #expect(value == "none !important" || value == "\"\" !important", "\(value)") }
         // The generic controls' layout leaves a fold head's own block alone.
         #expect(EntryReadingFrame.controlsCSS().contains("[data-xdict-control]:not([data-xdict-control=disclosure]){"))
@@ -471,6 +475,20 @@ struct ReadingFrameTests {
         #expect(run("s") == "none")
         #expect(run("s  ") == "none")
         #expect(EntryReadingFrame.marksCSS.contains("[data-xdict-pron-run]{white-space:nowrap !important}"))
+        // A transcription with its speakers after it (PEU's `/ˈraɪdə(r)/<div data-xdict-speakers>`), 'b' a speakers box:
+        // the run is the transcription through the last speaker or box; a word between ends it.
+        context.evaluateScript("""
+            is.speakers = function (n) { return n.kind === 'b'; };
+            function after(kinds) {
+              var r = XDictPronRunCore.after(chain(kinds)[0], is);
+              return r ? r.first.i + '-' + r.last.i : 'none';
+            }
+            """)
+        func after(_ kinds: String) -> String? { context.evaluateScript("after('\(kinds)')")?.toString() }
+        #expect(after("pb") == "0-1")
+        #expect(after("p s s") == "0-4", "a transcription and the two speakers after it")
+        #expect(after("p w s") == "none", "a word between: not its speakers")
+        #expect(after("p") == "none")
         #expect(EntryScripts.installed(.light, frame: .minimal).contains(EntryScripts.pronRunDOM))
         #expect(EntryScripts.installed(.light, frame: .all).contains(EntryScripts.pronRunDOM))
     }
