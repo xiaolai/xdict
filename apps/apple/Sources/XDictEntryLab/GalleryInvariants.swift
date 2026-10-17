@@ -81,7 +81,9 @@ extension GalleryRun {
           if (e.closest('[data-xdict-control],[data-xdict-icon],svg') || !e.getClientRects().length) continue;
           var es = getComputedStyle(e);
           if (/^inline|^contents|^none|^table-cell|^table-row/.test(es.display)) continue;
-          [es.marginTop, es.marginBottom].forEach(function (m) {
+          // A block R7a spaces (`data-xdict-space`) carries the margin that makes its gap a token, not a token: its gap
+          // is G16's, and its end margin is 0.
+          [e.hasAttribute('data-xdict-space') ? '0px' : es.marginTop, es.marginBottom].forEach(function (m) {
             var v = parseFloat(m);
             note('margin', near(v, SPACE), 1, Math.round(v * 10) / 10 + 'px <' + e.tagName.toLowerCase() + (e.className ? '.' + String(e.className).split(' ')[0] : '') + '>');
           });

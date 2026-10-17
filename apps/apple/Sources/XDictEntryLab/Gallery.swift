@@ -10,7 +10,9 @@ import XDictEntryView
 @MainActor
 enum GalleryRun {
     static let candidates = 12
-    static let size = NSSize(width: 820, height: 900)
+    /// 820 px wide; `XDICT_LAB_WIDTH=<px>` (lab only, 320–1600) pictures another pane width.
+    static let size = NSSize(width: ProcessInfo.processInfo.environment["XDICT_LAB_WIDTH"].flatMap(Double.init)
+        .flatMap { (320...1600).contains($0) ? $0 : nil } ?? 820, height: 900)
     /// The shell's world: the frame's `measure()` lives there.
     static let shellWorld = WKContentWorld.world(name: "xdict-entry")
 
@@ -34,6 +36,16 @@ enum GalleryRun {
                                 Mode(name: "original-light", frame: .minimal, theme: .original, original: true),
                                 Mode(name: "core-dark", frame: .all, theme: .dark),
                                 Mode(name: "original-dark", frame: .minimal, theme: .dark, original: true)]
+
+    /// Lab only: `XDICT_LAB_DENSITY=panel` renders the lookup panel's density (`EntryReadingFrame.panel`).
+    static var panelDensity: Bool { ProcessInfo.processInfo.environment["XDICT_LAB_DENSITY"] == "panel" }
+
+    /// Lab only: `XDICT_LAB_MODES=core-light,core-dark` renders only those views (a picture needs no other).
+    static func only(_ all: [Mode]) -> [Mode] {
+        guard let names = ProcessInfo.processInfo.environment["XDICT_LAB_MODES"]?.split(separator: ",").map(String.init),
+              !names.isEmpty else { return all }
+        return all.filter { names.contains($0.name) }
+    }
 
     static func run(options: LabOptions, core: LabCore) async throws -> [String: Any] {
         guard let root = options.fixture, let samplePath = options.sample, let out = options.out else {
@@ -62,12 +74,13 @@ enum GalleryRun {
                 chosen = await choose(byDict[name] ?? [], content: content, failures: &failures)
             }
             let original = options.originalStyle ? try core.open(root.appending(path: name), originalStyle: true) : nil
-            expected += chosen.count * (options.originalStyle ? originalModes : modes).count
-            for mode in options.originalStyle ? originalModes : modes {
+            let shown = only(options.originalStyle ? originalModes : modes)
+            expected += chosen.count * shown.count
+            for mode in shown {
                 let content = mode.original ? original ?? content : content
                 let log = EventLog()
                 var environment = CorpusRun.environment("gallery-\(mode.name)", log: log)
-                environment.readingFrame = mode.frame
+                environment.readingFrame = mode.frame.contains(.type) && panelDensity ? mode.frame.union(.panel) : mode.frame
                 environment.style = style
                 let controller = EntryViewController(environment: environment)
                 let window = labWindow("\(name) \(mode.name)", frame: NSRect(origin: NSPoint(x: 80, y: 60), size: size),
@@ -89,6 +102,7 @@ enum GalleryRun {
                         }
                     }
                     if !mode.frame.isEmpty, let accent = accentCandidate { _ = await run(accent, controller.webView) }
+                    if !mode.frame.isEmpty, !mode.original, let open = openPictures { _ = await run(open, controller.webView) }
                     if !mode.frame.isEmpty, let control = positiveControl { _ = await run(control, controller.webView) }
                     if !mode.frame.isEmpty, !mode.original, let control = checksControl { _ = await run(control, controller.webView) }
                     try await Task.sleep(for: .milliseconds(500))
@@ -154,8 +168,14 @@ enum GalleryRun {
                             failures.append("\(name) \(mode.name) \(entry.key): the chevron does not match its fold \(wrong)")
                         }
                     }
-                    // §7.2's G1–G15, last: G9 clicks the fold heads.
-                    let checks = mode.frame.isEmpty || mode.original ? nil : await run(checksScript, controller.webView)
+                    // §7.2's G1–G17, last: G9 clicks the fold heads.
+                    var checks = mode.frame.isEmpty || mode.original ? nil : await run(checksScript, controller.webView)
+                    // G16 and G17 at their widths, after the fold clicks (`GallerySpace`).
+                    if checks != nil {
+                        for (name, value) in await spaceChecks(controller.webView, window: window, control: checksControl != nil) {
+                            checks?[name] = value
+                        }
+                    }
                     if !mode.frame.isEmpty && !mode.original {
                         failures += checkFailures(checks, where: "\(name) \(mode.name) \(entry.key)")
                     }

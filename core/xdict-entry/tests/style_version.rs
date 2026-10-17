@@ -9,12 +9,12 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (9, 0x8d81_420a_cb6f_7f3b);
+const PINNED: (u32, u64) = (10, 0xc42a_1f24_a267_0950);
 
 const BASE: &str = "xdict://d/";
 
 /// Inputs shaped to reach each part of the rules, keyed where the roles need a key.
-const SHAPED: [(&str, &str); 16] = [
+const SHAPED: [(&str, &str); 17] = [
     ("", r#"<p style="font-size:18px;color:#f00;font-family:Arial">plain <b>bold</b> <font size="+1">big</font></p>"#),
     ("", r#"<table><tr><td>a</td><td>b</td></tr></table><img src="x.png"><a href="entry://hue#s1">hue</a>"#),
     ("", r#"<span class="phon">/ˈæp(ə)l/</span> <b>[<i>ˈ</i>&#230;pl]</b> <em>\ˈa-pəl\</em>"#),
@@ -53,6 +53,8 @@ const SHAPED: [(&str, &str); 16] = [
     ("x", r#"<a href="sound://x.mp3"><img data-src-mp3="y.mp3" src="uk.png"></a>"#),
     // Minion's Private Use as Unicode (STYLE 9).
     ("", "(bə-s<span class=\"MinionNew\">\u{e013}</span>n<span class=\"MinionNew\">\u{e01f}</span>)"),
+    // A vertical space in `ex`, snapped as half an `em` (STYLE 10, with R4's entry wrapper at the base size).
+    ("", r#"<p style="margin-top:1ex">ex</p>"#),
 ];
 
 /// FNV-1a, 64 bits: stable across platforms and releases, which `DefaultHasher` does not promise.
