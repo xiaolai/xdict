@@ -220,6 +220,46 @@ fn the_first_headword_and_its_homographs_are_leads() {
     assert!(!none.contains("data-xdict-lead"), "{none}");
 }
 
+/// A headword restated at once, with nothing written between (CALD's plain title line, then the same word with its
+/// stress marks and speakers: `<b><font>avert</font></b><br><font><b>aˈvert</b></font> 🔊`, 29 of 40 sampled entries),
+/// is one title: the restatement is the lead and the plain title is marked `data-xdict-restated`, which the frame
+/// hides. A hidden restatement (a dictionary's `display:none` syllable copy) never takes the lead.
+#[test]
+fn a_headword_restated_at_once_is_one_title() {
+    let cald = r##"<b><font size="4">avert</font></b><br>
+<font size="3"><font color="#055959"><b>aˈvert</b></font> <a href="sound://uk.spx"><img src="uk.gif"></a></font><br><div class="d">to turn away</div>"##;
+    let (out, _) = entry(cald, "avert");
+    assert_eq!(out.matches("data-xdict-lead").count(), 1, "{out}");
+    let lead = out.find("data-xdict-lead").unwrap();
+    assert!(out[lead..].starts_with("data-xdict-lead>aˈvert"), "the restatement is the lead: {out}");
+    let restated = out.find("data-xdict-restated").expect("the plain title is marked restated");
+    assert!(restated < lead, "{out}");
+    let style = Style::of_sheets([".syl{display:none}"]);
+    let hidden = r#"<span class="hw">avert</span><span class="syl">a·vert</span> <span class="d">to turn away</span>"#;
+    let out = entry_normalized_within(
+        hidden,
+        BASE,
+        "",
+        &style,
+        &Entry { key: "avert", resource: None, is_key: None, strip_off_for_tests: false, original: false },
+        usize::MAX,
+    )
+    .unwrap()
+    .0;
+    assert!(!out.contains("data-xdict-restated"), "{out}");
+    assert!(out.contains(r#"data-xdict-lead class="hw""#), "{out}");
+}
+
+/// A later headword is a lead only where it starts a line: the same word inside a line of text is a mention, not a
+/// homograph's title (CALD's "–Adjectives: <b>considerable</b>, …" in its word builder; MED's "1 <b>chat</b> or chat
+/// away"; the gallery sweep of 2026-10-17 drew each at the headword's size).
+#[test]
+fn a_headword_inside_a_line_is_no_lead() {
+    let builder = r#"<div><b>considerable</b> <span class="d">large</span></div><div>–Adjectives: <b>considerable</b>, <b>considerate</b></div>"#;
+    let (out, _) = entry(builder, "considerable");
+    assert_eq!(out.matches("data-xdict-lead").count(), 1, "{out}");
+}
+
 /// A line break before anything else in a block goes: the block already starts a line, so the break only drew a blank
 /// one (COBUILD-EC's `<div><br>【语法信息】：V n</div>`, WI-11 R8). A break after text stays, and so does one alone in its
 /// block, a spacer the dictionary meant.

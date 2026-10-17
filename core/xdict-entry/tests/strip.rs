@@ -108,6 +108,45 @@ fn s5_audio_in_attributes_becomes_a_sound_link() {
     assert_eq!(html(fold, &s), marked, "a fold's handler stays (and it is marked a fold control)");
 }
 
+/// S5 never puts a link inside a link: an image whose attribute names a recording, inside a sound link already, is that
+/// link's drawing. HTML does not nest `<a>`, so a parser closes the outer link at the inner one, and the reader saw a
+/// second speaker, raised above the line (MED's `<a href="sound://…"><img data-src-mp3="https://…" src="uk.png"></a>`,
+/// 30 of 40 sampled entries; the gallery sweep of 2026-10-17).
+#[test]
+fn s5_never_wraps_an_image_already_in_a_link() {
+    let s = plain();
+    for inner in [
+        r#"<img data-src-mp3="https://example.com/a.mp3" src="uk.png">"#,
+        r#"<img data-src-mp3="snd/a.mp3" src="uk.png">"#,
+    ] {
+        let out = html(&format!(r#"<span class="p"><a href="sound://a_uk.mp3">{inner}</a></span>"#), &s);
+        assert_eq!(out.matches("<a ").count(), 1, "a link inside a link: {out}");
+        assert_eq!(out.matches("data-xdict-icon=\"speaker\"").count(), 1, "one speaker: {out}");
+    }
+}
+
+/// AHD's pronunciation key in Minion's Private Use Area (`<span class="MinionNew">` U+E01F, U+E013, U+E012; 595 of 839
+/// sampled entries) has no glyph on a Mac, so the reader saw boxes. Written as Unicode: U+E013 o͞o and U+E012 o͝o (the
+/// tie bars above), U+E01F the primary stress, a bold prime, beside the light prime AHD writes for secondary stress.
+/// A Private Use character outside that markup is the dictionary's and stays.
+#[test]
+fn minion_private_use_is_written_as_unicode() {
+    let s = plain();
+    let out = html(
+        "(lə-k<span class=\"MinionNew\">\u{e013}</span><span class=\"MinionNew\">\u{e01f}</span>nə, \
+         w<span class=\"MinionNew\">\u{e012}</span>m)",
+        &s,
+    );
+    assert!(!out.chars().any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c)), "Private Use left: {out}");
+    assert!(out.contains("o\u{35e}o"), "{out}");
+    assert!(out.contains("o\u{35d}o"), "{out}");
+    // Not a `<b>`: a dictionary rule on its bold (AHD's `.runseg b::before`, a bullet) would draw on it too.
+    assert!(out.contains("<span style=\"font-weight:bold\">\u{2032}</span>"), "{out}");
+    assert!(!out.contains("<b>"), "{out}");
+    let other = html("<span class=\"icon\">\u{e01f}</span>", &s);
+    assert!(other.contains('\u{e01f}'), "{other}");
+}
+
 /// S6: a `javascript:` link does nothing: its `href` goes, its text stays.
 #[test]
 fn s6_javascript_links_are_unlinked() {
