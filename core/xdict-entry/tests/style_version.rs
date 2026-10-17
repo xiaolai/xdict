@@ -9,12 +9,12 @@ use std::path::Path;
 use xdict_entry::{Entry, STYLE, Style, entry_normalized_within, html_normalized_within};
 
 /// `(STYLE, digest of the output)`, as last raised. Change both together, never one.
-const PINNED: (u32, u64) = (8, 0x59cd_01d0_4c22_50c5);
+const PINNED: (u32, u64) = (9, 0x8d81_420a_cb6f_7f3b);
 
 const BASE: &str = "xdict://d/";
 
 /// Inputs shaped to reach each part of the rules, keyed where the roles need a key.
-const SHAPED: [(&str, &str); 13] = [
+const SHAPED: [(&str, &str); 16] = [
     ("", r#"<p style="font-size:18px;color:#f00;font-family:Arial">plain <b>bold</b> <font size="+1">big</font></p>"#),
     ("", r#"<table><tr><td>a</td><td>b</td></tr></table><img src="x.png"><a href="entry://hue#s1">hue</a>"#),
     ("", r#"<span class="phon">/ˈæp(ə)l/</span> <b>[<i>ˈ</i>&#230;pl]</b> <em>\ˈa-pəl\</em>"#),
@@ -44,6 +44,15 @@ const SHAPED: [(&str, &str); 13] = [
         "run",
         r#"<b class="hw">run</b> <span class="d">to move</span> <span class="example">She ran. <span class="gloss">(= went)</span><p>她跑了。</p></span>"#,
     ),
+    // A headword restated at once, and one inside a line of text (STYLE 9: one lead, the plain title restated).
+    (
+        "run",
+        r#"<b>run</b><br><font><b>ˈrun</b> <a href="sound://r.mp3"><img src="s.png"></a></font><div>verbs: <b>run</b></div>"#,
+    ),
+    // No link inside a sound link (STYLE 9).
+    ("x", r#"<a href="sound://x.mp3"><img data-src-mp3="y.mp3" src="uk.png"></a>"#),
+    // Minion's Private Use as Unicode (STYLE 9).
+    ("", "(bə-s<span class=\"MinionNew\">\u{e013}</span>n<span class=\"MinionNew\">\u{e01f}</span>)"),
 ];
 
 /// FNV-1a, 64 bits: stable across platforms and releases, which `DefaultHasher` does not promise.
