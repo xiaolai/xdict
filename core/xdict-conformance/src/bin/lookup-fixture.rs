@@ -8,6 +8,7 @@
 //! - `beta/`: `abbé` alone (found typed `abbe`, and by a link to `abbe` through tier 2), `apple`, and `see-abbe`, whose link
 //!   names `abbe`.
 //! - `records/`: 66,355 records under the one key `EC`, as the sentence library files them (ADR-0007 row 23).
+//! - `orange` in `alpha/`, `beta/` and `records/`: a headword three dictionaries have, for the All page (parity P15).
 //! - `damaged/`: a wrong header checksum; `locked/`: the registration-code bit: refused, each for its reason.
 //! - `gone/`: a good dictionary, deleted after it is imported, so its file is missing.
 //! - `slow/`: a good dictionary whose import the check holds, so it is indexing while it is asked.
@@ -55,6 +56,15 @@ fn write_all(out: &Path) -> Result<(), String> {
         Entry::text("take", "<b>take</b>"),
         Entry::text("take off", "<b>take off</b>: to leave the ground."),
         Entry::text("take on", "<b>take on</b>: to accept."),
+        // The All page (Apple parity P15): `orange` is in Alpha, Beta and Records, each frame its own. Alpha's own CSS
+        // would reach the others' entries if the frames were not isolated.
+        Entry::text(
+            "orange",
+            &format!(
+                "<style>p{{color:#b35900}} b{{letter-spacing:0.3em}}</style><b>orange</b> in Alpha.{}",
+                (1..=8).map(|n| format!("<p>Sense {n} of orange: a round citrus fruit.</p>")).collect::<String>()
+            ),
+        ),
     ];
     let internal =
         (0..INTERNAL).map(|i| Entry::text(&format!("@take_box_{i:03}"), "an internal box, reached by a link"));
@@ -68,11 +78,13 @@ fn write_all(out: &Path) -> Result<(), String> {
         &[
             Entry::text("abbé", "<b>abbé</b> in Beta, which has no unaccented key."),
             Entry::text("apple", "<b>apple</b> in Beta."),
+            Entry::text("orange", "<b>orange</b> in Beta.<p>The fruit, and its colour.</p>"),
             Entry::text("see-abbe", "See <a id=\"abbe\" href=\"entry://abbe\">abbe</a>."),
         ],
     )?;
 
-    let records: Vec<Entry> = (0..RECORDS).map(|i| Entry::text("EC", &format!("sentence {i}"))).collect();
+    let mut records: Vec<Entry> = (0..RECORDS).map(|i| Entry::text("EC", &format!("sentence {i}"))).collect();
+    records.push(Entry::text("orange", "<b>orange</b> in Records: a fruit in one sentence."));
     file(&out.join("records/records.mdx"), &titled("Records"), &records)?;
 
     file(

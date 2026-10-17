@@ -42,6 +42,8 @@ public struct SearchWindow: View {
             guard let shown else { return }
             Task { await state.present(shown) }
         }
+        // The All page grows as each dictionary answers (P15).
+        .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
         // No sidebar before a search; the first search brings it (P9).
         .onChange(of: state.model.listing != nil, initial: true) { _, listed in
