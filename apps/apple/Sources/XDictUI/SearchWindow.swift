@@ -22,18 +22,21 @@ public struct SearchWindow: View {
     public var body: some View {
         NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
+                // At the 220 pt minimum the column must lay its content out at its own width, not clip a wider one.
+                .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
                 .navigationSplitViewColumnWidth(min: ToolbarLayout.sidebar.min, ideal: ToolbarLayout.sidebar.ideal,
                                                 max: ToolbarLayout.sidebar.max)
         } detail: {
             EntryDetail(state: state)
                 .frame(minWidth: ToolbarLayout.detailMinimum)
+                // The toolbar's items sit over the detail column, so its width, not the window's, picks the layout.
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         }
         .toolbar { toolbar }
         // The headword is shown beside its speaker in the toolbar's leading item; the window's own title says it
         // for the Window menu and VoiceOver (Codex §2).
         .toolbar(removing: .title)
         .navigationTitle(Text(verbatim: ToolbarLayout.windowTitle(headword: state.shownWord)))
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
         .focusedSceneValue(\.searchWindow, state)
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
         .onChange(of: state.model.shown) { _, shown in
@@ -71,6 +74,8 @@ public struct SearchWindow: View {
             EntryTitle(state: state)
         }
         .sharedBackgroundVisibility(.hidden)
+        // The title yields before search and the scope: the window's title still names the word.
+        .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
             ScopePicker(state: state, compact: compact)
         }
@@ -78,7 +83,9 @@ public struct SearchWindow: View {
             SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .frame(minWidth: ToolbarLayout.searchWidth.min, idealWidth: ToolbarLayout.searchWidth.ideal,
+                // Compact, the field asks for its minimum, so the scope symbol fits beside it.
+                .frame(minWidth: ToolbarLayout.searchWidth.min,
+                       idealWidth: compact ? ToolbarLayout.searchWidth.min : ToolbarLayout.searchWidth.ideal,
                        maxWidth: ToolbarLayout.searchWidth.max)
         }
         .visibilityPriority(.high)

@@ -12,13 +12,16 @@ import XDictSearch
 struct UXSpecTests {
     // MARK: - §1 narrow window
 
-    @Test func belowEightHundredTwentyPointsTheScopeIsASymbol() {
-        #expect(ToolbarLayout.isCompact(width: 640))
-        #expect(ToolbarLayout.isCompact(width: 819))
+    /// The rule reads the detail column's width: at a 820 pt window with the sidebar open (540 pt) the scope is a
+    /// symbol; with it hidden (820 pt) it is the full picker.
+    @Test func aDetailUnderFiveHundredSixtyPointsMakesTheScopeASymbol() {
+        #expect(ToolbarLayout.isCompact(width: 420))
+        #expect(ToolbarLayout.isCompact(width: 540))
+        #expect(!ToolbarLayout.isCompact(width: 560))
         #expect(!ToolbarLayout.isCompact(width: 820))
-        #expect(!ToolbarLayout.isCompact(width: 1_000))
         #expect(ToolbarLayout.searchWidth == (min: 200, ideal: 240, max: 280))
-        #expect(ToolbarLayout.detailMinimum == 360)
+        // The 640 pt window holds the sidebar at its ideal and the detail at its minimum without squeezing either.
+        #expect(ToolbarLayout.detailMinimum + ToolbarLayout.sidebar.ideal == 640)
     }
 
     // MARK: - §2 title
