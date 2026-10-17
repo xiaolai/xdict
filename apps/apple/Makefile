@@ -33,7 +33,13 @@
 #   make release-plan what a release would carry from the ledger and what it must run, and why, with the minutes
 #   make e2e-ledger [N=30] [STAGE=<sub-stage or stage>]
 #                     what ran when: the ledger's last N rows (~/.local/share/xdict/e2e-ledger.tsv)
-#   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh)
+#   make land         every gate the tree needs, in parallel on the build Macs, cached (Tools/land.sh); ends with what
+#                     E2E and renders are pending, running neither
+#   make render-pending [BASE=<ref>] [FULL=1]
+#                     the pictures and UI-tour routes the change since BASE needs, less those whose render key passed
+#                     (Tools/gallery/render_affected.py, render-affected.map), rendering nothing
+#   make render-affected [BASE=<ref>] [FULL=1]
+#                     renders exactly that (an agent: only with XDICT_RENDER_REQUESTED=1, on the owner's yes)
 #   make test-tools   the E2E plan's own tests: every check in one sub-stage, what a change selects (part of `test`);
 #                     and the icon sets held to their source (Tools/tests/icons-test.sh), and the style ledger
 #                     (Tools/gallery/style-ledger.tsv) held to its guards and commits by Tools/gallery/ledger.py check
@@ -56,7 +62,7 @@
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
-.PHONY: app remote-build test test-swift test-tools icons core lint strings e2e e2e-quick e2e-affected e2e-pending land affected-graph affected-graph-update e2e-status e2e-evidence \
+.PHONY: app remote-build test test-swift test-tools icons core lint strings e2e e2e-quick e2e-affected e2e-pending land render-pending render-affected affected-graph affected-graph-update e2e-status e2e-evidence \
 	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
@@ -184,6 +190,15 @@ e2e-pending:
 land:
 	@Tools/land.sh
 
+# **Renders only as permitted** (owner, 2026-10-18): what a change needs pictured, and why, rendering nothing
+# (Tools/gallery/render_affected.py, render-affected.map); FULL=1 the whole gallery (288). `render-affected` renders
+# exactly that, and from an agent's shell only with XDICT_RENDER_REQUESTED=1, set by the orchestrator on the owner's yes.
+render-pending:
+	@python3 -I Tools/gallery/render_affected.py pending --base "$(BASE)" $(if $(filter 1,$(FULL)),--full)
+
+render-affected:
+	@Tools/gallery/render-affected.sh --base "$(BASE)" $(if $(filter 1,$(FULL)),--full)
+
 # What a change reaches, drawn (Tools/affected_graph.py; no request leaves the page).
 BASE ?= macos-v1
 affected-graph:
@@ -216,6 +231,7 @@ test-tools:
 	@python3 -I Tools/tests/measure_test.py
 	@python3 -I Tools/tests/ui_tour_test.py
 	@python3 -I Tools/tests/ledger_test.py
+	@python3 -I Tools/tests/render_affected_test.py
 	@python3 -I Tools/gallery/ledger.py check $(if $(XDICT_KNOWN_COMMITS),--known-commits $(XDICT_KNOWN_COMMITS))
 	@Tools/tests/notices-test.sh
 	@Tools/tests/icons-test.sh

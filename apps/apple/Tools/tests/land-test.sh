@@ -17,6 +17,11 @@ for tool in ssh rsync; do
 done
 printf 'BUILD_HOSTS = stub-a stub-b\nBUILD_HOSTS_XCODE = stub-x\nBUILD_HOST = stub-x\n' >"$scratch/local.mk"
 export XDICT_GATE_CACHE=$scratch/cache XDICT_LAND_CORPUS=$scratch/corpus XDICT_LAND_LOCAL_MK=$scratch/local.mk
+# The gallery's keys and the render record, scratch ones (Tools/gallery/render_affected.py pending ends land's output).
+python3 -I -c 'import json, sys
+dicts = [l.split()[1:] for l in open("Tools/gallery/render-affected.map") if l.startswith("dicts ")][0]
+json.dump({"rows": [{"dict": d, "kind": "long", "key": d} for d in dicts]}, open(sys.argv[1], "w"))' "$scratch/keys.json"
+export XDICT_GALLERY_KEYS=$scratch/keys.json XDICT_RENDER_CACHE=$scratch/renders XDICT_RENDER_CORPUS=$scratch/no-corpus
 land() { PATH=$scratch/bin:$PATH bash Tools/land.sh >"$scratch/out" 2>&1; }
 
 # A gate's command is part of its key: the same land.sh with one gate's command edited gives that gate other facts.
@@ -40,7 +45,9 @@ done
 if land; then ok "every gate cached: exit 0"; else bad "all cached exited non-zero: $(tail -5 "$scratch/out")"; fi
 [ "$(grep -c 'cached pass' "$scratch/out")" -ge 7 ] && ok "each gate says cached pass" || bad "cached lines: $(grep -c 'cached pass' "$scratch/out")"
 [ ! -s "$scratch/called" ] && ok "all cached asks no host" || bad "called: $(cat "$scratch/called")"
-tail -1 "$scratch/out" | grep -q '^E2E' && ok "the last line says what E2E is pending" || bad "last line: $(tail -1 "$scratch/out")"
+tail -2 "$scratch/out" | head -1 | grep -q '^E2E' && ok "the line before last says what E2E is pending" \
+    || bad "line before last: $(tail -2 "$scratch/out" | head -1)"
+tail -1 "$scratch/out" | grep -q '^Render' && ok "the last line says what renders are pending" || bad "last line: $(tail -1 "$scratch/out")"
 grep -q 'make e2e\b' "$scratch/out" && bad "land ran or offered an E2E run" || ok "land runs no E2E"
 
 # A corrupt record: everything runs. While another XDict run (an E2E run, the gallery, a tour) holds a host's lock,
