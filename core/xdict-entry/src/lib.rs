@@ -18,6 +18,7 @@ mod strip;
 mod symbols;
 mod tables;
 mod url;
+mod work;
 
 pub use calibrate::{file_name, linked_sheets};
 pub use normalize::{

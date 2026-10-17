@@ -218,6 +218,7 @@ impl Rgb {
 pub(crate) fn literal(text: &str) -> Option<(Rgb, usize)> {
     if let Some(hex) = text.strip_prefix('#') {
         let len = hex.bytes().take_while(u8::is_ascii_hexdigit).count();
+        crate::work::scanned(len + 1);
         let digits = hex.get(..len)?;
         let at = |i: usize, n: usize| u32::from_str_radix(digits.get(i..i + n)?, 16).ok();
         let (r, g, b, a) = match len {
@@ -234,11 +235,14 @@ pub(crate) fn literal(text: &str) -> Option<(Rgb, usize)> {
         return Some((Rgb { r, g, b, a }, 1 + len));
     }
     let name_len = text.bytes().take_while(|b| b.is_ascii_alphabetic()).count();
+    crate::work::scanned(name_len + 1);
     let name = text.get(..name_len)?.to_ascii_lowercase();
     if text.as_bytes().get(name_len) == Some(&b'(') {
         let window = text.get(name_len..)?;
         let window = window.get(..window.len().min(96)).unwrap_or(window);
-        let close = window.find(')')? + name_len;
+        let close = window.find(')');
+        crate::work::scanned(close.map_or(window.len(), |e| e + 1));
+        let close = close? + name_len;
         let args = text.get(name_len + 1..close)?;
         let rgb = match name.as_str() {
             "rgb" | "rgba" => rgb_function(args)?,
@@ -307,11 +311,14 @@ pub(crate) fn map_value(value: &str, role: Role, chip: Option<Rgb>) -> Option<St
         let rest = value.get(i..).unwrap_or("");
         match b {
             b'"' | b'\'' => {
-                i += 1 + rest.get(1..).and_then(|r| r.find(char::from(b))).map_or(rest.len(), |e| e + 1);
+                let quoted = 1 + rest.get(1..).and_then(|r| r.find(char::from(b))).map_or(rest.len(), |e| e + 1);
+                crate::work::scanned(quoted);
+                i += quoted;
                 continue;
             }
             b'#' | b'a'..=b'z' | b'A'..=b'Z' => {
                 let word = rest.bytes().take_while(|c| c.is_ascii_alphanumeric() || *c == b'-' || *c == b'_').count();
+                crate::work::scanned(word);
                 let previous = i.checked_sub(1).and_then(|p| bytes.get(p)).copied().unwrap_or(b' ');
                 let starts = b == b'#' || !(previous.is_ascii_alphanumeric() || previous == b'-' || previous == b'_');
                 let name = rest.get(..word).unwrap_or("").to_ascii_lowercase();
@@ -321,7 +328,9 @@ pub(crate) fn map_value(value: &str, role: Role, chip: Option<Rgb>) -> Option<St
                     && !name.ends_with("gradient")
                 {
                     // Another function: passed over whole.
-                    i += rest.find(')').map_or(rest.len(), |e| e + 1);
+                    let function = rest.find(')').map_or(rest.len(), |e| e + 1);
+                    crate::work::scanned(function);
+                    i += function;
                     continue;
                 }
                 if starts
@@ -337,7 +346,10 @@ pub(crate) fn map_value(value: &str, role: Role, chip: Option<Rgb>) -> Option<St
                 }
                 i += word.max(1);
             }
-            _ => i += rest.chars().next().map_or(1, char::len_utf8),
+            _ => {
+                crate::work::scanned(1);
+                i += rest.chars().next().map_or(1, char::len_utf8);
+            }
         }
     }
     out.push_str(value.get(copied..).unwrap_or(""));
@@ -702,14 +714,18 @@ mod tests {
     }
 
     #[test]
+    /// Hostile values cost their length: each byte is read a bounded number of times (`crate::work`), however many
+    /// colours, unclosed functions or long words they hold. A colour function is read only to a window's end.
     fn hostile_values_are_bounded() {
-        let started = std::time::Instant::now();
-        let many = "#abc ".repeat(1 << 14);
+        let many = "#abc ".repeat(1 << 12);
+        let parens = "rgb(".repeat(1 << 12);
+        let words = "a".repeat(1 << 16);
+        for (what, value) in [("colours", &many), ("unclosed functions", &parens), ("one long word", &words)] {
+            let (_, read) = crate::work::counting(|| map_value(value, Role::Text, None));
+            let len = value.len() as u64;
+            assert!(read >= len / 2, "{what}: {read} bytes read of {len}; the count sees nothing");
+            assert!(read <= 32 * len, "{what}: {read} bytes read of {len}");
+        }
         assert!(map_value(&many, Role::Text, None).is_some());
-        let parens = "rgb(".repeat(1 << 16);
-        let _ = map_value(&parens, Role::Text, None);
-        let words = "a".repeat(1 << 20);
-        let _ = map_value(&words, Role::Text, None);
-        assert!(started.elapsed() < std::time::Duration::from_secs(10), "{:?}", started.elapsed());
     }
 }

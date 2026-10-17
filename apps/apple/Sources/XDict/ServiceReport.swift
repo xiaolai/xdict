@@ -9,19 +9,18 @@ import XDictInstruments
 /// one JSON object (`Findings`: every check with its detail, and the facts measured) and exits 0 when every check passed.
 /// `<fixtures>` is `Tools/build-fixtures.sh`'s directory. Opens no window and reads only the fixtures it is pointed at.
 ///
-/// Ends the service's process several times (the kill, and each idle exit) and takes three to seven minutes, most of it
-/// the idle check's quiet periods; `--checks` names a subset, by the names in `checks`, for working on one.
+/// Ends the service's process twice (the kill, and the idle exit) and takes about a minute, most of it the idle check's
+/// quiet period; `--checks` names a subset, by the names in `checks`, for working on one.
 enum ServiceReport {
     static let flag = "--service-report"
     static let checks = ["conformance", "refusals", "supersede", "drop", "stall", "kill", "idle"]
 
     static func run(_ arguments: [String]) -> Never {
         Task.detached {
-            // **Held out of App Nap and timer coalescing for the whole run**: the idle check aims requests at the
-            // service's timer to the millisecond, and an instrument with no window, left to the system, woke 1.5 s late
-            // (2026-10-14).
+            // **Held out of App Nap and timer coalescing for the whole run**: the idle check measures the service's quiet
+            // period, and an instrument with no window, left to the system, woke 1.5 s late (2026-10-14).
             let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical],
-                                                                 reason: "the service's checks time requests to the millisecond")
+                                                                 reason: "the service's checks measure its quiet period")
             let findings = await report(arguments)
             ProcessInfo.processInfo.endActivity(activity)
             do {
@@ -73,7 +72,7 @@ enum ServiceReport {
             case "drop": findings.merge(await service.queuedSupersededIsNeverSent())
             case "stall": findings.merge(await service.stalledBulkFreesTheClient())
             case "kill": findings.merge(await service.killMidLookup())
-            case "idle": findings.merge(await service.idleExitRaced())
+            case "idle": findings.merge(await service.idleExitUnderLaunchd())
             default: break
             }
         }
