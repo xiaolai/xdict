@@ -39,6 +39,7 @@ extension GalleryRun {
         NAMES.forEach(function (n) { colours[token(n, 'color')] = n; backs[token(n, 'backgroundColor')] = n; });
         var BG = rgba(token('bg', 'backgroundColor')), TEXT2 = token('text-2', 'color'), PLATE = token('plate', 'backgroundColor');
         var TEXT = token('text', 'color'), PHONC = token('phon-colour', 'color'), UI = token('font-ui', 'fontFamily');
+        var RULE = token('rule', 'color');
         var FACES = {};
         ['font', 'font-phon', 'font-text', 'font-ui'].forEach(function (n) {
           var f = token(n, 'fontFamily'); if (f) FACES[f.split(',')[0].replace(/["']/g, '').trim()] = n;
@@ -126,6 +127,30 @@ extension GalleryRun {
           return s.color !== TEXT2 ? s.color : s.fontVariantCaps !== 'small-caps' ? s.fontVariantCaps : '';
         }, 'section heading (P24)');
         role('a:any-link', function (s) { return s.textDecorationLine !== 'none' ? 'underlined' : ''; }, 'link (P28)');
+        // P24 (2026-10-18): phrases and derived words at 600; the thin rule under a section label, the rule colour.
+        role('[data-xdict-sure=subhead]', function (s) {
+          var w = parseInt(s.fontWeight, 10); return w !== 600 ? 'weight ' + w : '';
+        }, 'phrase or derived word (P24)');
+        role('[data-xdict-ruled]', function (s) { return s.boxShadow.indexOf(RULE) < 0 ? 'no rule: ' + s.boxShadow : ''; },
+          'rule under a section label (P24)');
+        // P25: an etymology's label in the secondary label colour.
+        role('[data-xdict-section=etym] [data-xdict-role=heading]', function (s) { return s.color !== TEXT2 ? s.color : ''; },
+          'etymology label (P25)');
+        // P22: a hung sense number sits 1em (its block's) out of its block's text.
+        body.querySelectorAll('[data-xdict-hung]').forEach(function (n) {
+          if (!seen(n)) return;
+          var b = n.parentElement;
+          while (b && b !== body && /^inline/.test(getComputedStyle(b).display)) b = b.parentElement;
+          var bs = getComputedStyle(b), em = parseFloat(bs.fontSize);
+          var text = b.getBoundingClientRect().left + parseFloat(bs.borderLeftWidth) + parseFloat(bs.paddingLeft);
+          // The layout box, not a transform's: COBUILD's numbers are drawn skewed (a slant transform), which put their
+          // bounding box 1.25 px left of where they are laid out (measured 2026-10-18).
+          var was = n.style.getPropertyValue('transform'), prio = n.style.getPropertyPriority('transform');
+          n.style.setProperty('transform', 'none', 'important');
+          var off = n.getBoundingClientRect().left - (text - em);
+          if (was) n.style.setProperty('transform', was, prio); else n.style.removeProperty('transform');
+          note('G18', Math.abs(off) <= 1, 1, 'sense number ' + Math.round(off) + 'px off its 1em hang (P22) <' + label(n) + '>');
+        });
         // Elements: G5, G7, G10, G15.
         var all = body.getElementsByTagName('*');
         for (var i = 0; i < all.length && i < 30000; i++) {
@@ -314,6 +339,9 @@ extension GalleryRun {
             "<img src='data:image/png;base64,AAAA' style='width:3000px !important;max-width:none !important;height:4px'>",
             // G18: a part of speech in another colour, slanted (inline !important outranks the frame's layer).
             "<span data-xdict-sure='pos' style='color:#ff0000 !important;font-style:italic !important'>G18 noun</span>",
+            // G18 (P22, P24): a run-on head at 400, and a sense number marked hung that sits in the line.
+            "<span data-xdict-sure='subhead' style='font-weight:400 !important'>G18 run-on</span>",
+            "<div><span data-xdict-hung style='margin-left:0 !important'>9</span> G18 not hung</div>",
         ]
         let html = faults.joined().replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
         // G4: the column off Apple's inset. G7 shows only in a dark run.

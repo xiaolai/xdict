@@ -288,7 +288,7 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); pictures(); images(); roleSpace(); }"))
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }"))
         // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
         #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
         #expect(reading.contains("if (!SPACE_CAP || !document.body || document.readyState !== 'complete') return;\n    var all"))
@@ -635,6 +635,76 @@ struct ReadingFrameTests {
         #expect(css.contains("font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
             + "font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;"
             + "text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}"))
+    }
+
+    /// P22: a sense number the core names hangs in Apple's 1em negative indent where it starts its block, the block's
+    /// text 1em in from the dictionary's own inset; one inside a line keeps its place, as does one in the body, in a
+    /// table cell, floated, or one the dictionary already hangs itself.
+    @Test func p22SenseNumbersHangWhereTheyStartTheirBlock() throws {
+        let context = try Self.core()
+        func hangs(_ facts: String) -> Bool { context.evaluateScript("XDictFrameCore.hangs(\(facts))")?.toBool() == true }
+        #expect(hangs("{sure: true, first: true}"))
+        #expect(!hangs("{sure: true, first: false}"), "a number inside a line")
+        #expect(!hangs("{sure: false, first: true}"), "a guess of the generic rule")
+        #expect(!hangs("{sure: true, first: true, body: true}"))
+        #expect(!hangs("{sure: true, first: true, cell: true}"))
+        #expect(!hangs("{sure: true, first: true, floated: true}"))
+        #expect(!hangs("{sure: true, first: true, alone: true}"), "a number alone on its line")
+        #expect(!hangs("{sure: true, first: true, own: true}"), "the dictionary hangs it already")
+        let column = EntryReadingFrame.columnCSS
+        #expect(column.contains("[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;"
+            + "text-indent:0 !important}"))
+        #expect(column.contains("[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}"))
+        let reading = EntryScripts.appearance(.light, frame: .all)
+        #expect(reading.contains("function start() { install(); name(document); bullets(); loneBullets(); spacing(); "
+            + "lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); }"))
+    }
+
+    /// P24: Apple's thin rule under a section label, on the label's own line: the heading's when it is a block, its
+    /// block's when the heading is all that block shows, none when it shares a line. Phrases and derived words the core
+    /// names are weight 600, as Apple's `span.l` and `span.drv`.
+    @Test func p24ARuleUnderASectionLabelAndRunOnsAt600() throws {
+        let context = try Self.core()
+        func rule(_ facts: String) -> String? { context.evaluateScript("XDictFrameCore.ruleOn(\(facts))")?.toString() }
+        #expect(rule("{block: true}") == "self")
+        #expect(rule("{block: false, alone: true}") == "block")
+        #expect(rule("{block: false, alone: false}") == "")
+        #expect(rule("{block: false, alone: true, body: true}") == "")
+        let css = EntryReadingFrame.typeCSS
+        #expect(css.contains("[data-xdict-ruled]{box-shadow:inset 0 -1px 0 var(--xdict-rule) !important;"
+            + "padding-bottom:0.3em !important}"))
+        #expect(css.contains("[data-xdict-sure=subhead][data-xdict-sure],[data-xdict-sure=subhead][data-xdict-sure] "
+            + ":not([data-xdict-tag],[data-xdict-icon]){font-weight:var(--xdict-weight-bold) !important}"))
+        #expect(EntryScripts.appearance(.light, frame: .all).contains("function rules() {"))
+    }
+
+    /// P25: Apple's etymology: its label in the secondary label colour, its text close under the label (Apple's 0.2em
+    /// as the spacing scale's 0.25em, the space after a heading: a margin off the scale fails the gallery's invariants).
+    @Test func p25TheEtymologysLabelIsSecondaryAndItsTextCloseUnder() {
+        #expect(EntryReadingFrame.typeCSS.contains("[data-xdict-section=etym] [data-xdict-role=heading],"
+            + "[data-xdict-section=etym] [data-xdict-role=heading] :not([data-xdict-tag],[data-xdict-icon])"
+            + "{color:var(--xdict-text-2) !important}"))
+        let column = EntryReadingFrame.columnCSS
+        #expect(column.contains("[data-xdict-section=etym]>[data-xdict-role=heading]+:not(img,[data-xdict-role])"
+            + "{margin-top:var(--xdict-space-after-heading) !important}"))
+        #expect(column.contains("[data-xdict-etym-label]{margin-bottom:0 !important}"))
+        #expect(column.contains("[data-xdict-etym-label]+:not([data-xdict-space]){margin-top:var(--xdict-space-after-heading) "
+            + "!important}"))
+    }
+
+    /// D46: a box the dictionary caps in height whose text does not fit grows: a scroller (MED's related words,
+    /// `max-height:150px;overflow:auto`) hid rows a frame sized to its document cannot scroll to. One that clips
+    /// (`hidden`) is a fold the dictionary opens itself, and keeps its cap.
+    @Test func aCappedBoxWhoseTextRunsOnIsLetGrow() throws {
+        let context = try Self.core()
+        func lifts(_ facts: String) -> Bool { context.evaluateScript("XDictFrameCore.lifts(\(facts))")?.toBool() == true }
+        #expect(lifts("{maxHeight: '220px', overflow: 'visible', content: 300, box: 220}"))
+        #expect(!lifts("{maxHeight: 'none', overflow: 'visible', content: 300, box: 220}"))
+        #expect(lifts("{maxHeight: '150px', overflow: 'auto', content: 381, box: 150}"))
+        #expect(lifts("{maxHeight: '150px', overflow: 'scroll', content: 381, box: 150}"))
+        #expect(!lifts("{maxHeight: '220px', overflow: 'hidden', content: 300, box: 220}"))
+        #expect(!lifts("{maxHeight: '220px', overflow: 'visible', content: 220.5, box: 220}"))
+        #expect(EntryScripts.appearance(.light, frame: .all).contains("function overflows() {"))
     }
 
     /// P26, P27: the system's colours. Light: label black, secondary label darkened from 50% black (#808080, 3.95:1)

@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import os
 
 /// What the entry view is given: where preferences live, how a consented remote link is opened, the confinement (the
 /// app passes `.production` and nothing else), where its rule list is compiled, and who listens to its events.
@@ -343,9 +344,31 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     // MARK: - Print (Apple parity P32, P44)
 
-    /// File ▸ Print…: the shown entry, through the system's print panel, as a sheet on its window.
+    /// File ▸ Print…: what is shown, through the system's print panel, as a sheet on its window. The All page prints
+    /// whole, every expanded dictionary under its name, as Apple's does (P44); a single entry prints its frame.
     public func printEntry() {
-        guard let webView = focusPane?.view, let window = view.window else { return }
+        guard let window = view.window else {
+            EntryLog.logger.error("print: no window")
+            return
+        }
+        if let page {
+            Task { @MainActor in
+                guard let printed = await page.printView() else {
+                    EntryLog.logger.error("print: the All page could not be drawn for print")
+                    return
+                }
+                // A copy: the page's pagination is not every later print's.
+                let info = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+                info.horizontalPagination = .fit
+                info.verticalPagination = .automatic
+                // From the top of the paper, as Apple's prints, not centred on it.
+                info.isVerticallyCentered = false
+                NSPrintOperation(view: printed, printInfo: info)
+                    .runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+            }
+            return
+        }
+        guard let webView = focusPane?.view else { return }
         let operation = webView.printOperation(with: NSPrintInfo.shared)
         operation.view?.frame = webView.bounds
         operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)

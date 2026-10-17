@@ -33,6 +33,16 @@ struct ParityWindowTests {
         #expect(ToolbarLayout.titleYields(width: 400) && !ToolbarLayout.titleYields(width: 859))
     }
 
+    /// **P8**: when the content column is under 560 pt the title and its count give way, as Apple's slide under the
+    /// search field; wider, they show. The column is the window less the sidebar: a search's sidebar widened a 400 pt
+    /// window to 583 pt and the title came back over a 400 pt column (UI tour `main.narrow`, 2026-10-18).
+    @Test func narrowTheTitleAndItsCountGiveWay() {
+        #expect(ToolbarLayout.titleYields(window: 583, sidebar: 183))
+        #expect(ToolbarLayout.titleYields(window: 444, sidebar: 183), "Apple's narrow window")
+        #expect(!ToolbarLayout.titleYields(window: 859, sidebar: 183))
+        #expect(!ToolbarLayout.titleYields(window: 640, sidebar: 0))
+    }
+
     /// **P2**: the title is "Dictionary" always; "N found" under it counts the list, in the reader's grammar, and is
     /// absent for no result and for spelling guesses.
     @Test func theTitleIsDictionaryWithTheCountUnderIt() {
