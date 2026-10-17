@@ -8,6 +8,7 @@
 # the run meant to write (`expected`). The lab's stdout and stderr are kept beside the report. A `--keys` argument
 # naming a local file is copied to the host first.
 set -u
+. "$(dirname "$0")/../render-requested.sh"
 host=${1:?usage: run.sh <ssh-host> <out-dir> <lab gallery args...>}
 out=${2:?usage: run.sh <ssh-host> <out-dir> <lab gallery args...>}
 shift 2

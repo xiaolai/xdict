@@ -15,6 +15,7 @@
 # renders the lookup panel's density; XDICT_LAB_OPEN_PICTURES=1 opens the fold of hidden pictures;
 # XDICT_LAB_WIDTH=<px> pictures another pane width; XDICT_LAB_MODES=core-light,core-dark only those views.
 set -u
+. "$(dirname "$0")/../render-requested.sh"
 [ $# -gt 0 ] || { echo "usage: hot.sh <dict>:<key>[:<kind>] ..." >&2; exit 2; }
 started=$(date +%s)
 apple=$(cd "$(dirname "$0")/../.." && pwd)

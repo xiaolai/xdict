@@ -14,6 +14,7 @@
 # copy is never quit) or an xctest run holds that Mac. Output: dev-docs/artifacts/ui-tour/<variant>/<route>.png and
 # .ax.json, results.json and index.html, beside routes.md.
 set -euo pipefail
+. "$(dirname "$0")/../render-requested.sh"
 cd "$(dirname "$0")/../.."
 common=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
 host=$(sed -n 's/^E2E_HOST_MACOS *= *//p' "$common/local.mk" 2>/dev/null | head -1)
