@@ -143,9 +143,15 @@ def changed(gate, manifest, latest):
             continue
         blob, path = line.rstrip("\n").split(" ", 1)
         before[path] = blob
-    for path in sorted(set(before) | set(manifest)):
-        if before.get(path) != manifest.get(path):
+    # An edit first: a path that only joined or left the inputs (a new file, or the graph redrawing a gate's reach)
+    # is named as that, never as changed.
+    for path in sorted(set(before) & set(manifest)):
+        if before[path] != manifest[path]:
             return f"changed: {path}"
+    for path in sorted(set(manifest) - set(before)):
+        return f"joined the inputs: {path}"
+    for path in sorted(set(before) - set(manifest)):
+        return f"left the inputs: {path}"
     return "changed: a fact (toolchain, host or corpus)"
 
 
