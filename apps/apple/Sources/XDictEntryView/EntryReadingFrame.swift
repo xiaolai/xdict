@@ -241,7 +241,8 @@ extension EntryScripts {
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS(style) + controls + EntryReadingFrame.marksCSS(style)
                 + EntryReadingFrame.originalPhonCSS(style) : ""
-        let tokens = frame.subtracting([.sans, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS
+        let tokens = (frame.subtracting([.sans, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS)
+            + (frame.contains(.panel) ? EntryReadingFrame.popoverColoursCSS : "")
         return style.script("frame.js", [
             "theme": scheme.rawValue, "face": frame.contains(.sans) ? "sans" : "serif", "hue": frame.accent.rawValue,
             "sheet-tokens": jsString(tokens), "sheet-column": jsString(column), "sheet-type": jsString(type),
