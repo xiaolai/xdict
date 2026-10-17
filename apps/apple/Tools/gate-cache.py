@@ -27,8 +27,12 @@ SwiftLint, the corpus). The gates' inputs:
 the gate's most recent pass, so the reader sees why it runs.
 
 **Fail loud**: a record that is missing, unreadable, or has one malformed line, or a pass whose manifest is gone, is no
-pass at all: everything runs, and stderr says why. Never a skip on doubt. A release never reads this cache
-(`Tools/release.sh` asks `Tools/e2e-status.sh require-fresh`, which reads the E2E record of runs only).
+pass at all: everything runs, and stderr says why. Never a skip on doubt.
+
+**E2E passes are not filed here** (2026-10-17): every E2E run, pass and fail, goes to the one E2E ledger
+(`Tools/e2e-ledger.py`), which keys each sub-stage with this file's `inputs` and `key_of`, and from which both the
+development skip and a release's evidence are read. The `e2e:` gates here compute the same keys and nothing records
+them.
 
 The record: `$XDICT_GATE_CACHE` (default ~/.cache/xdict-gates), outside every checkout so all worktrees share it:
 `passes.tsv` (`v1, key, gate, date, seconds, host`) and `manifests/<key>` (the inputs that key stands for).

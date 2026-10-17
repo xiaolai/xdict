@@ -202,8 +202,15 @@ for path in apps/apple/Sources/XDictSpeech/s.swift apps/apple/Tools/lookup/x.py 
     [ "$want" = "$got" ] && ok "same as e2e-affected for $path" || bad "$path: e2e-affected [$want], gate-cache [$got]"
 done
 
-# A release never reads the cache: its evidence stays fresh.
-if grep -l 'gate-cache' release.sh e2e-status.sh >/dev/null 2>&1; then bad "release.sh or e2e-status.sh reads the gate cache"
-else ok "the release path does not read the gate cache"; fi
+# **The release reads only the E2E ledger, by key** (2026-10-17; this replaces "a release never reads the gate cache"). The
+# old rule kept release evidence apart from a cache of development skips; now one ledger of every run is both, and what
+# keeps a release honest is that its evidence is a pass under the very key (content and facts) of the tree it ships,
+# not that it ignores recorded passes. So: the release path may not read this cache's record (passes.tsv), and it must
+# reach the ledger. Its own behaviour is Tools/tests/e2e-ledger-test.sh's.
+if grep -l 'passes\.tsv\|XDICT_GATE_CACHE\|gate-cache\.py status\|gate-cache\.py record' release.sh e2e-status.sh e2e-ledger.py \
+    >/dev/null 2>&1; then bad "the release path reads the gate cache's record"
+else ok "the release path does not read the gate cache's record"; fi
+grep -q 'e2e-ledger.py' e2e-status.sh && grep -q 'require-fresh' release.sh \
+    && ok "the release path asks the ledger (e2e-status.sh require-fresh)" || bad "the release path does not reach the ledger"
 
 [ "$failures" -eq 0 ] && echo "gate-cache: all passed" || { echo "gate-cache: $failures failed"; exit 1; }
