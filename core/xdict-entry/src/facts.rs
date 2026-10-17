@@ -116,11 +116,15 @@ pub(crate) const ANCESTOR_DEPTH: usize = 32;
 pub(crate) struct Compound {
     pub(crate) tag: Option<String>,
     pub(crate) classes: Vec<String>,
+    /// Classes a `:not(.class)` excludes (COBUILD's `.example:not(.no-before)`).
+    pub(crate) not: Vec<String>,
 }
 
 impl Compound {
     pub(crate) fn matches(&self, tag: &str, classes: &[String]) -> bool {
-        self.tag.as_deref().is_none_or(|t| t == tag) && self.classes.iter().all(|c| classes.contains(c))
+        self.tag.as_deref().is_none_or(|t| t == tag)
+            && self.classes.iter().all(|c| classes.contains(c))
+            && !self.not.iter().any(|c| classes.contains(c))
     }
 }
 
@@ -443,8 +447,18 @@ fn compound(text: &str) -> Option<Compound> {
     }
     let mut pieces = plain.split(':');
     let head = pieces.next().unwrap_or("");
+    let mut not = Vec::new();
     for piece in pieces {
         let name = piece.split('(').next().unwrap_or("");
+        // `:not(.class)`, one class: held when matching; any other argument is not read (as before).
+        if name == "not"
+            && let Some(arg) = piece.strip_prefix("not(").and_then(|r| r.strip_suffix(')'))
+            && let Some(class) = arg.strip_prefix('.')
+            && !class.is_empty()
+            && class.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            not.push(class.to_owned());
+        }
         if !matches!(
             name,
             "" | "before"
@@ -477,7 +491,7 @@ fn compound(text: &str) -> Option<Compound> {
             classes.push(name.to_owned());
         }
     }
-    (classes.len() <= MAX_CLASSES).then_some(Compound { tag, classes })
+    (classes.len() <= MAX_CLASSES).then_some(Compound { tag, classes, not })
 }
 
 /// The first element of an entry (past `link`, `script`, `style`, `meta` and the page's tags): its element and each
@@ -519,6 +533,19 @@ mod tests {
             grouped: false,
             decls: decls.iter().map(|(n, v)| ((*n).into(), (*v).into())).collect(),
         }
+    }
+
+    /// A glyph rule's `:not(.class)` holds: COBUILD's `.example:not(.no-before) li:before` draws no bullet in its usage
+    /// note (`.note.type-usage.no-before.example`), so that note's items are not the bullet's (gallery, 2026-10-17).
+    #[test]
+    fn a_glyph_rules_not_class_holds() {
+        let f = Facts::of_rules(&[rule(".example:not(.no-before) li:before", &[("content", "\"❑\"")])]);
+        let note = |c: &[&str]| c.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let held = |classes: &[&str]| {
+            f.glyphs("li", &[]).next().map(|g| g.ancestors.iter().all(|a| a.matches("div", &note(classes))))
+        };
+        assert_eq!(held(&["note", "example"]), Some(true));
+        assert_eq!(held(&["note", "no-before", "example"]), Some(false));
     }
 
     #[test]
