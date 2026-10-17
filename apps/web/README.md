@@ -12,7 +12,7 @@ hand: run `cd apps/apple && make icons`. Where it plugs in, once the site exists
 <link rel="icon" href="/icons/favicon.ico" sizes="16x16 32x32 48x48">
 <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
-<link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#23407A">
+<link rel="mask-icon" href="/icons/safari-pinned-tab.svg" color="#055959">
 <link rel="manifest" href="/manifest.webmanifest">
 ```
 

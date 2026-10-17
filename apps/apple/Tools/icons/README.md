@@ -4,7 +4,7 @@ One source, every platform.
 
 | Source | What it is |
 |---|---|
-| `apps/apple/Resources/XDict.icon` | The app icon, an Icon Composer document ported from XiaolaiDict: a D with a sparkle in it, flat (no glass, specular or shadow), the ground and the mark coloured per appearance in `icon.json` |
+| `apps/apple/Resources/XDict.icon` | The app icon, an Icon Composer document ported from XiaolaiDict: a D with a sparkle in it, flat (no glass, specular or shadow), the ground and the mark coloured per appearance in `icon.json`. The mark is the default reading accent, teal `#055959` and dark `#81ECEC` (`EntryReadingFrame.Accent.teal`; `BundleFactsTests` holds the two together) |
 | `apps/apple/Resources/MenuBarIcon.svg` | The designer's small-size glyph: the D solid with the sparkle cut out, one even-odd path. At 22 pt an 8-unit stroke is under 2 px and the sparkle's waist under 1, so mass survives where lines don't |
 
 The D's contour is a filled outline: the stroke-8 path, offset 4 units each way. As a stroke, Icon Composer's
