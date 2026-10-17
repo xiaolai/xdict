@@ -17,17 +17,8 @@ public struct LibraryView: View {
     @Environment(\.undoManager) private var undoManager
     private let requests = LibraryRequests.shared
 
-    private let layout: Layout
-
-    /// Where the list is shown. **The window** is a split view with its own toolbar. **Settings** has a toolbar of its
-    /// own, its tabs: a split view there would put a sidebar toggle and these buttons beside the tabs and rename the
-    /// window, so Settings gets a list with the + − ↑ ↓ bar under it and the details beside it, as macOS's own Settings
-    /// panes do (owner, 2026-10-17).
-    public enum Layout: Sendable { case window, settings }
-
-    public init(library: Library, layout: Layout = .window) {
+    public init(library: Library) {
         self.library = library
-        self.layout = layout
     }
 
     /// What Add Dictionaries… offers: folders, and MDict's two kinds of file (typed by extension, since no app
@@ -59,37 +50,23 @@ public struct LibraryView: View {
         .safeAreaInset(edge: .top, spacing: 0) { unreadableBanner }
     }
 
-    @ViewBuilder private var arranged: some View {
-        switch layout {
-        case .window:
-            // Add, remove and the order under the list, as in Settings, not in the toolbar (UI review L-05).
-            NavigationSplitView {
-                list
-                    .safeAreaInset(edge: .bottom, spacing: 0) {
-                        VStack(spacing: 0) {
-                            Divider()
-                            listBar
-                        }
-                        .background(.bar)
+    /// Add, remove and the order under the list, not in the toolbar (UI review L-05). Settings has a list of its own,
+    /// Apple's (`SettingsDictionaries`, parity P39).
+    private var arranged: some View {
+        NavigationSplitView {
+            list
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    VStack(spacing: 0) {
+                        Divider()
+                        listBar
                     }
-                    .navigationSplitViewColumnWidth(min: 260, ideal: 320)
-            } detail: {
-                detail
-            }
-            .navigationTitle(Text("Library"))
-        case .settings:
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    list
-                    Divider()
-                    listBar
+                    .background(.bar)
                 }
-                .frame(minWidth: 240, idealWidth: 280, maxWidth: 320)
-                Divider()
-                detail
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+        } detail: {
+            detail
         }
+        .navigationTitle(Text("Library"))
     }
 
     @ViewBuilder private var detail: some View {
@@ -104,7 +81,7 @@ public struct LibraryView: View {
     private var canMoveUp: Bool { selection != nil && library.entries.first?.id != selection }
     private var canMoveDown: Bool { selection != nil && library.entries.last?.id != selection }
 
-    /// The bar under a Settings list: add, remove, and the order, icons with their names as tooltips and for VoiceOver.
+    /// The bar under the list: add, remove, and the order, icons with their names as tooltips and for VoiceOver.
     private var listBar: some View {
         HStack(spacing: 0) {
             // ⌘O is File ▸ Add Dictionaries…, which reaches this view (UI review A-04).

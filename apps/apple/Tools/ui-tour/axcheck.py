@@ -49,3 +49,34 @@ def checks(tree):
     for window in tree.get("windows", []):
         walk(window, window.get("frame") if window.get("role") == "AXWindow" else None, False, "")
     return found[:60]
+
+
+def dictionaries_table(tree):
+    """Parity P39: Settings ▸ Dictionaries is Apple's table (settings.ax.json, 2026-10-17): an AXTable described
+    "Dictionaries" (in English; XDict's by its identifier in any language), a checkbox in every row, rows 20 pt tall."""
+    tables = []
+
+    def find(node):
+        if node.get("role") == "AXTable" and (node.get("description") == "Dictionaries"
+                                               or node.get("identifier") == "settings.dictionaries"):
+            tables.append(node)
+        for kid in node.get("children", []):
+            find(kid)
+
+    def has_checkbox(node):
+        return any(kid.get("role") == "AXCheckBox" or has_checkbox(kid) for kid in node.get("children", []))
+
+    for window in tree.get("windows", []):
+        find(window)
+    if not tables:
+        return [{"kind": "no-dictionaries-table"}]
+    rows = [kid for kid in tables[0].get("children", []) if kid.get("role") == "AXRow"]
+    if not rows:
+        return [{"kind": "no-rows"}]
+    found = []
+    for index, row in enumerate(rows):
+        if not has_checkbox(row):
+            found.append({"kind": "row-without-checkbox", "row": index})
+        if row.get("frame") and abs(row["frame"][3] - 20) > 0.5:
+            found.append({"kind": "row-height", "row": index, "height": row["frame"][3]})
+    return found

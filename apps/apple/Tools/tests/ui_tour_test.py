@@ -33,6 +33,32 @@ assert kinds(window({"role": "AXStaticText", "value": "a", "frame": [10, 10, 60,
 # The window's own buttons carry no title by design.
 assert kinds(window({"role": "AXButton", "subrole": "AXCloseButton", "frame": [4, 4, 12, 12]})) == []
 
+# Parity P39: Settings ▸ Dictionaries is Apple's table: described "Dictionaries", a checkbox in every row, 20 pt rows.
+def row(height=20, box=True):
+    kids = [{"role": "AXCheckBox", "title": "Use in lookups", "value": 1, "frame": [4, 0, 19, 17]}] if box else []
+    return {"role": "AXRow", "frame": [0, 0, 560, height], "children": kids}
+
+
+def table(*rows, description="Dictionaries"):
+    return window({"role": "AXScrollArea", "frame": [0, 0, 400, 200],
+                   "children": [{"role": "AXTable", "description": description, "frame": [0, 0, 400, 200],
+                                 "children": list(rows)}]})
+
+
+def p39(tree):
+    return sorted(f["kind"] for f in axcheck.dictionaries_table(tree))
+
+
+assert p39(table(row(), row())) == [], p39(table(row(), row()))
+assert p39(table(row(), description="search results")) == ["no-dictionaries-table"]
+assert p39(table(row(), row(box=False))) == ["row-without-checkbox"]
+assert p39(table(row(height=28))) == ["row-height"]
+assert p39(table()) == ["no-rows"]
+# In Chinese the description is 词典: XDict's table is found by its identifier.
+zh = table(row(), description="词典")
+zh["windows"][0]["children"][0]["children"][0]["identifier"] = "settings.dictionaries"
+assert p39(zh) == [], p39(zh)
+
 ids = [r[0] for r in ROUTES]
 assert len(ids) == len(set(ids)), "route ids repeat"
 assert all(r[1] in ("full", "empty", "reader") for r in ROUTES)
