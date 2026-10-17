@@ -194,10 +194,10 @@ land:
 # (Tools/gallery/render_affected.py, render-affected.map); FULL=1 the whole gallery (288). `render-affected` renders
 # exactly that, and from an agent's shell only with XDICT_RENDER_REQUESTED=1, set by the orchestrator on the owner's yes.
 render-pending:
-	@python3 -I Tools/gallery/render_affected.py pending --base "$(BASE)" $(if $(filter 1,$(FULL)),--full)
+	@python3 -I Tools/gallery/render_affected.py pending $(if $(filter command line environment,$(origin BASE)),--base "$(BASE)") $(if $(filter 1,$(FULL)),--full)
 
 render-affected:
-	@Tools/gallery/render-affected.sh --base "$(BASE)" $(if $(filter 1,$(FULL)),--full)
+	@Tools/gallery/render-affected.sh $(if $(filter command line environment,$(origin BASE)),--base "$(BASE)") $(if $(filter 1,$(FULL)),--full)
 
 # What a change reaches, drawn (Tools/affected_graph.py; no request leaves the page).
 BASE ?= macos-v1
@@ -232,6 +232,7 @@ test-tools:
 	@python3 -I Tools/tests/ui_tour_test.py
 	@python3 -I Tools/tests/ledger_test.py
 	@python3 -I Tools/tests/render_affected_test.py
+	@python3 -I Tools/tests/render_history_test.py
 	@python3 -I Tools/gallery/ledger.py check $(if $(XDICT_KNOWN_COMMITS),--known-commits $(XDICT_KNOWN_COMMITS))
 	@Tools/tests/notices-test.sh
 	@Tools/tests/icons-test.sh

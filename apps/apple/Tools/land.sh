@@ -256,6 +256,8 @@ echo "land: wall-clock $(( $(date +%s) - started )) s; logs in $OUT"
 for g in $failed; do echo "re-run only $g: make -C apps/apple land ONLY=$g   (log: $OUT/$g.log)"; done
 echo
 XDICT_E2E_CORPUS=$AIR_CORPUS Tools/e2e-run.sh pending || echo "E2E: could not say what is pending (see above)"
-# What renders the change needs, never rendered here (owner, 2026-10-18: renders only as permitted).
-python3 -I Tools/gallery/render_affected.py pending || echo "Render: could not say what is pending (see above)"
+# What renders the change needs, never rendered here (owner, 2026-10-18: renders only as permitted). Computed here, in
+# the checkout with its history, not in a gate's copy (which has none); always one line, `cannot compute` included.
+render_line=$(python3 -I Tools/gallery/render_affected.py pending 2>"$OUT/render.log")
+echo "${render_line:-Render: cannot compute: the selection printed nothing (see $OUT/render.log)}"
 [ -z "$failed" ]
