@@ -52,18 +52,20 @@ public struct SearchWindow: View {
             .disabled(!state.model.canReturnToOrigin)
             .help(Text("Return to the word you typed"))
         }
+        // The speaker right before the title, the word it says (owner, 2026-10-17).
+        ToolbarItem(placement: .navigation) {
+            PronounceButton(state: state)
+        }
         ToolbarItem(placement: .principal) {
             ScopePicker(state: state)
-        }
-        ToolbarItem(placement: .primaryAction) {
-            PronounceButton(state: state)
         }
         ToolbarItem(placement: .primaryAction) {
             SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                .frame(minWidth: 140, idealWidth: 220, maxWidth: 280)
+                .frame(minWidth: 120, idealWidth: 220, maxWidth: 280)
         }
+
     }
 }
 
@@ -107,7 +109,8 @@ struct ScopePicker: View {
         }
         .pickerStyle(.menu)
         // Readable beside the field at the minimum width, a long name truncated rather than pushing search out.
-        .frame(minWidth: 110, maxWidth: 200)
+        .frame(minWidth: 110, maxWidth: 180)
+        .background(ToolbarPriorityProbe())
         .disabled(state.model.known.isEmpty)
         .accessibilityLabel(Text("Dictionaries"))
         .accessibilityIdentifier("scope")

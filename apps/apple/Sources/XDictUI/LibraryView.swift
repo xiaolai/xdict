@@ -64,12 +64,15 @@ public struct LibraryView: View {
         case .window:
             // Add, remove and the order under the list, as in Settings, not in the toolbar (UI review L-05).
             NavigationSplitView {
-                VStack(spacing: 0) {
-                    list
-                    Divider()
-                    listBar
-                }
-                .navigationSplitViewColumnWidth(min: 260, ideal: 320)
+                list
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        VStack(spacing: 0) {
+                            Divider()
+                            listBar
+                        }
+                        .background(.bar)
+                    }
+                    .navigationSplitViewColumnWidth(min: 260, ideal: 320)
             } detail: {
                 detail
             }
@@ -196,12 +199,12 @@ public struct LibraryView: View {
                     }
                     .font(.subheadline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .fixedSize(horizontal: false, vertical: true)
-                    if notices.count > 1 {
-                        Button("Show Details…") { showsNotices = true }
-                            .controlSize(.small)
-                            .popover(isPresented: $showsNotices) { noticeDetails }
-                    }
+                    // Two lines at most, the whole in Show Details: sized to its words at a narrow width, the bar grew the
+                    // window past its own frame (1,399 pt in the pseudo-language tour, 2026-10-17).
+                    .lineLimit(2)
+                    Button("Show Details…") { showsNotices = true }
+                        .controlSize(.small)
+                        .popover(isPresented: $showsNotices) { noticeDetails }
                     Button("Dismiss") { for notice in notices { library.dismiss(notice) } }
                         .controlSize(.small)
                 }

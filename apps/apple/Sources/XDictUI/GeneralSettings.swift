@@ -9,8 +9,6 @@ public struct GeneralSettings: View {
     private let domain: String
     @State private var language: InterfaceLanguage
     private let openSetup: () -> Void
-    /// The menu-bar item, which the reader may hide (UI review S-04).
-    @AppStorage(MenuBarItem.shownKey) private var showsMenuBarItem = true
 
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, openSetup: @escaping () -> Void) {
         self.login = login
@@ -48,12 +46,6 @@ public struct GeneralSettings: View {
             }
             .accessibilityIdentifier("interface-language")
             .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
-            Toggle(isOn: $showsMenuBarItem) {
-                Text("Show XDict in the menu bar")
-                Text("Look Up Selection, the Library and Settings, from the menu bar.")
-            }
-            .accessibilityLabel(Text("Show XDict in the menu bar"))
-            .accessibilityIdentifier("menu-bar-item")
             LabeledContent {
                 Button { openSetup() } label: { Text("Show Setup…") }
                     .accessibilityIdentifier("show-setup")

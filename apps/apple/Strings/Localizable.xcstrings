@@ -2681,22 +2681,6 @@
         }
       }
     },
-    "Look Up Selection, the Library and Settings, from the menu bar." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Look Up Selection, the Library and Settings, from the menu bar."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在菜单栏中查询所选内容，打开词典库和设置。"
-          }
-        }
-      }
-    },
     "Look Up a Word" : {
       "localizations" : {
         "en" : {
@@ -4119,22 +4103,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示设置向导…"
-          }
-        }
-      }
-    },
-    "Show XDict in the menu bar" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show XDict in the menu bar"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在菜单栏中显示 XDict"
           }
         }
       }

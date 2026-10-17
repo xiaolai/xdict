@@ -16,8 +16,6 @@ import os
 /// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    /// The reader may hide the menu-bar item (UI review S-04).
-    @AppStorage(MenuBarItem.shownKey) private var showsMenuBarItem = true
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
         ?? MeasureReport.setup(CommandLine.arguments) ?? AppSetup.reader
@@ -99,7 +97,7 @@ struct XDictApp: App {
 
         // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
         // `openWindow` is handed to the panel, which expands into a main window.
-        MenuBarExtra(isInserted: $showsMenuBarItem) {
+        MenuBarExtra {
             MenuBarMenu(registrar: LookupAnywhere.shared.registrar,
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
