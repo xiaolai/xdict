@@ -20,7 +20,7 @@ var XDictFrameCore = (function () {
     return p.length < 4 || parseFloat(p[3]) > 0.05;
   }
   // R7a (WI-11, 2026-10-17): the space token a role-marked block takes (`--xdict-space-<name>`), '' for none. A
-  // section is a phrase block when it holds idioms, phrasal verbs, collocations or derived words.
+  // section is a phrase block when it holds idioms, phrasal verbs, collocates or derived words.
   var ROLE_SPACE = { sense: 'sense', sensenum: 'sense', example: 'example', 'example-trans': 'translation',
                      trans: 'translation', subhead: 'subhead', heading: 'heading', pos: 'pos' };
   function spaceOf(role, section) {

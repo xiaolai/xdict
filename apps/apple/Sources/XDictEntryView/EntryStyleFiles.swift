@@ -531,7 +531,7 @@ var XDictFrameCore = (function () {
     return p.length < 4 || parseFloat(p[3]) > 0.05;
   }
   // R7a (WI-11, 2026-10-17): the space token a role-marked block takes (`--xdict-space-<name>`), '' for none. A
-  // section is a phrase block when it holds idioms, phrasal verbs, collocations or derived words.
+  // section is a phrase block when it holds idioms, phrasal verbs, collocates or derived words.
   var ROLE_SPACE = { sense: 'sense', sensenum: 'sense', example: 'example', 'example-trans': 'translation',
                      trans: 'translation', subhead: 'subhead', heading: 'heading', pos: 'pos' };
   function spaceOf(role, section) {
@@ -945,9 +945,11 @@ var XDictFrameCore = (function () {
     list.id = 'xdict-pictures-body';
     list.hidden = true;
     found.forEach(function (img) {
-      var c = document.createElement('img');
-      c.src = img.currentSrc || img.src;
-      c.alt = img.alt || '';
+      // A copy of the image the dictionary wrote, its own URL only: no shell script writes a URL (ReadingTests).
+      var c = img.cloneNode(false);
+      Array.prototype.slice.call(c.attributes).forEach(function (a) {
+        if (!/^(src|srcset|alt)$/.test(a.name)) c.removeAttribute(a.name);
+      });
       list.appendChild(c);
     });
     function toggle() { list.hidden = !list.hidden; head.setAttribute('aria-expanded', list.hidden ? 'false' : 'true'); }
