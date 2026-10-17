@@ -43,8 +43,26 @@ if land; then ok "every gate cached: exit 0"; else bad "all cached exited non-ze
 tail -1 "$scratch/out" | grep -q '^E2E' && ok "the last line says what E2E is pending" || bad "last line: $(tail -1 "$scratch/out")"
 grep -q 'make e2e\b' "$scratch/out" && bad "land ran or offered an E2E run" || ok "land runs no E2E"
 
-# A corrupt record: everything runs; no host answers, so every gate fails, red, with its re-run command.
+# A corrupt record: everything runs. While another XDict run (an E2E run, the gallery, a tour) holds a host's lock,
+# land waits for it, says who holds it, and asks no host; given no time to wait, it fails red.
 echo garbage >>"$scratch/cache/passes.tsv"
+mkdir -p "$scratch/tmp"
+sleep 300 &
+holder=$!
+. Tools/host-lock.sh
+TMPDIR=$scratch/tmp /usr/bin/shlock -f "$(TMPDIR=$scratch/tmp host_lock_file stub-x)" -p "$holder"
+: >"$scratch/called"
+if TMPDIR=$scratch/tmp XDICT_HOST_LOCK_WAIT=0 land; then bad "land ran while another run held the host"
+else ok "land fails while another run holds the host"; fi
+grep -q "stub-x is held by another XDict run (pid $holder" "$scratch/out" && ok "it names who holds the host" \
+    || bad "holder not named: $(tail -3 "$scratch/out")"
+[ ! -s "$scratch/called" ] && ok "a held host is not asked" || bad "called while held: $(cat "$scratch/called")"
+kill "$holder"; wait "$holder" 2>/dev/null
+TMPDIR=$scratch/tmp XDICT_HOST_LOCK_WAIT=0 land
+grep -q 'held by another' "$scratch/out" && bad "the lock outlived its holder" || ok "a released host is taken"
+grep -q 'ssh' "$scratch/called" && ok "a released host is asked" || bad "no host asked once released"
+ls "$scratch/tmp"/xdict-e2e-* >/dev/null 2>&1 && bad "land left its lock behind" || ok "land removes its lock"
+
 if land; then bad "a corrupt cache with no reachable host exited 0"; else ok "a corrupt cache runs every gate, and red here"; fi
 grep -q 'corrupt' "$scratch/out" && ok "the corruption is said" || bad "corruption not said"
 grep -q 'stub-a skipped: unreachable' "$scratch/out" && ok "an unfit host is skipped with its reason" || bad "no skip reason"
