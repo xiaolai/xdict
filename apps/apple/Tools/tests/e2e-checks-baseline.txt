@@ -196,3 +196,7 @@ setup.grantCompletesRow
 setup.loginItemRegisters
 setup.choicesPersist
 setup.chineseOnly
+measure.warm
+measure.cold
+measure.panel
+measure.memory

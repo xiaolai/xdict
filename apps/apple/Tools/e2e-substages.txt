@@ -144,3 +144,10 @@
 
 @ shortcut.rebind default kit,fixtures group=anywhere
     shortcut.rebindPersists shortcut.clashRestores
+
+# The WI-10 measurement (plan-macos-v1 WI-10, "Measurement protocol"): one launch of the real app over the 24
+# (`XDict --measure`), driven by `Tools/measure/drive.py`: typed lookup warm (10 + 200) and cold (20), Return to WebKit's
+# first paint, overhead subtracted; selection key to panel (20, TextEdit; needs XDict.app's Accessibility, so the
+# default E2E Mac); memory of app and service. Extra: about 15 min, run when the owner asks, never by a bare stage list.
+@ measure.protocol extra kit,corpus
+    measure.warm measure.cold measure.panel measure.memory

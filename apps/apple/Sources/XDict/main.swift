@@ -42,4 +42,7 @@ if arguments.contains(LookupWindowReport.flag) {
 if arguments.contains(AnywhereReport.flag) {
     AnywhereReport.prepare(arguments)
 }
+if arguments.contains(MeasureReport.flag) {
+    MeasureReport.prepare(arguments)
+}
 XDictApp.main()
