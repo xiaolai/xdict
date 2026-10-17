@@ -86,6 +86,17 @@ ROUTES = [
      look_up("apple") + [("key", "cmd+="), ("key", "cmd+="), ("wait", 0.8)]),
     ("entry.collapse", "full", "Look up 'apple', View ▸ Collapse All", "The entry's sections collapsed",
      look_up("apple") + [("menu", 4, "Collapse All"), ("wait", 0.8)]),
+    # The All page (P15, P16): `orange` is in Alpha, Beta and Records
+    ("page.all", "full", "Type 'orange', Return (P15)", "Alpha's, Beta's and Records' entries on one page in the "
+     "reader's order, each in its own frame sized to it; Alpha's with no divider, then Apple's divider (triangle, grey "
+     "rule, the name centred) before Beta and Records; one scroller, the page's", look_up("orange")),
+    ("page.collapse", "full", "... then click Beta's divider (P15)", "Beta collapsed to its divider, the triangle "
+     "pointing right; Records moved up under it", look_up("orange") + [("press", "page.divider.Beta"), ("wait", 0.8)]),
+    ("page.one", "full", "... then ⌘2, Beta alone (P15)", "Only Beta's entry, no divider", look_up("orange")
+     + [("key", "cmd+2"), ("wait", 1.2)]),
+    ("page.find", "full", "... then ⌘F, type 'fruit' (P15, P30)", "Matches in every frame counted together; the "
+     "first one current, yellow", look_up("orange") + [("key", "cmd+f"), ("wait", 0.6), ("type", "fruit"),
+                                                       ("key", "return"), ("wait", 1)]),
     ("speech.pronounce", "full", "Look up 'apple', ⌥⌘P", "Spoken (volume 0 here); a notice if no voice or recording",
      look_up("apple") + [("key", "cmd+opt+p"), ("wait", 1.5)]),
     # Menus
