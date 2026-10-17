@@ -21,6 +21,12 @@ public struct Shortcut: Hashable, Codable, Sendable {
     /// Duplicate, Bookmark, Don't Save). ⌃⌥ with a letter is close to unclaimed. The cost is
     /// known: VoiceOver's own modifier is ⌃⌥, so a VoiceOver user meets a clash on first use,
     /// which is one reason the shortcut is a setting and the setup pane names it.
+    /// Which modifiers it holds, in macOS's order ⌃⌥⇧⌘: for those who show it without Carbon.
+    public var control: Bool { modifiers & UInt32(controlKey) != 0 }
+    public var option: Bool { modifiers & UInt32(optionKey) != 0 }
+    public var shift: Bool { modifiers & UInt32(shiftKey) != 0 }
+    public var command: Bool { modifiers & UInt32(cmdKey) != 0 }
+
     public static let defaultLookUp = Shortcut(keyCode: UInt32(kVK_ANSI_D), modifiers: UInt32(controlKey | optionKey))
 
     /// ⌘, ⌃ or ⌥ is required: a shortcut of a bare key, or of ⇧ and a key, would fire while typing.
