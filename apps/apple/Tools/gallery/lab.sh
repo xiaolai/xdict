@@ -39,6 +39,12 @@ remote=xdict-build/lab-$(basename "$repo")
 step=$(date +%s)
 took() { local now; now=$(date +%s); echo "lab: $1: $((now - step)) s"; step=$now; }
 
+# The build host's run lock (Tools/host-lock.sh): since 2026-10-17 it is also the E2E Mac, so the build waits for an
+# E2E run, a gate or a gallery there, and they for it.
+. Tools/host-lock.sh
+trap 'host_unlock "$host"; [ -z "${e2e:-}" ] || host_unlock "$e2e"' EXIT
+host_lock "$host" lab || exit 3
+
 tree=$($TREE_CMD) || fail "could not read the source tree"
 rm -rf "$PRODUCTS"
 mkdir -p "$PRODUCTS"
@@ -73,14 +79,7 @@ took "signed here"
 
 e2e=${E2E_HOST:-$(setting E2E_HOST_MACOS)}
 [ -n "$e2e" ] || fail "no E2E_HOST and no E2E_HOST_MACOS in local.mk"
-lock="${TMPDIR:-/tmp}/xdict-e2e-$(printf '%s' "$e2e" | tr -c 'A-Za-z0-9' '_').lock"
-tries=0
-until /usr/bin/shlock -f "$lock" -p $$; do
-    tries=$((tries + 1))
-    [ "$tries" -gt 180 ] && fail "$e2e is held by another run (lock: $lock)"
-    sleep 20
-done
-trap 'rm -f "$lock"' EXIT
+host_lock "$e2e" lab || exit 3
 "$RSYNC" -a --delete "$LOCAL/.build/lab-kit/$LAB.app" "$e2e:XDictE2E/gallery-run-lab/" \
     || fail "could not install the lab on $e2e"
 took "installed for hot.sh"

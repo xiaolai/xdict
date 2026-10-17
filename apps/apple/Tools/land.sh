@@ -13,10 +13,11 @@
 # **No E2E** (owner, 2026-10-17: E2E runs only on the owner's demand). The last line says what is pending
 # (`Tools/e2e-run.sh pending`): `E2E suggested: <sub-stages> — <changed paths>`, or `E2E: nothing pending`.
 #
-# Hosts come from local.mk (BUILD_HOSTS, BUILD_HOSTS_XCODE), each probed once: Rust 1.99.0 with rustfmt and clippy,
+# Hosts come from local.mk (BUILD_HOSTS, BUILD_HOSTS_XCODE; one Mac since 2026-10-17), each locked, then probed once: Rust 1.99.0 with rustfmt and clippy,
 # SwiftLint 0.65.1 and Xcode for `make test`, the 24 for the corpus tests, `~/bin/run1` for the bindings, and no cargo
 # or swift build of anyone else's running. An unfit host is skipped with its reason. Each gate gets its own host where
-# one is free; the tree is copied once per host, to `xdict-build/<checkout>-land/`. Never the Air: it only orchestrates.
+# one is free; on a host, `make test` and the cargo gates run side by side, each lane in its own copy of the tree,
+# `xdict-build/<checkout>-land-swift/` and `-land-cargo/`. Never the Air: it only orchestrates.
 #
 # **It never re-runs anything.** On a failure it prints the command that runs only that gate (or those sub-stages).
 set -uo pipefail
@@ -31,8 +32,9 @@ command_of() {
     local corpus=\$HOME/$2
     case $1 in
         core) echo "cd core && cargo fmt --check && cargo test && cargo clippy --all-targets && cargo test -p xdict-core --no-run -q" ;;
-        # The tool tests read git (the source tree): the copy has none, so it gets a snapshot.
-        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
+        # The tool tests read git (the source tree): the copy has none, so it gets a snapshot. No hooks: a host's own
+        # global hooks (the build Mac's, 2026-10-17) judge commits meant for a repository, not this throwaway one.
+        apple-test) echo "rm -rf .git && git init -q && git add -A && git -c core.hooksPath=/dev/null -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && make test" ;;
         entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
         lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
         mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
@@ -110,6 +112,15 @@ echo "corpus=$(n=$(ls -d xdict-corpus/the24/*/ 2>/dev/null | wc -l | tr -d " ");
 echo "run1=$(test -x bin/run1 && echo yes)"
 echo "busy=$(pgrep -x "cargo|rustc|swift-build|swift-frontend" 2>/dev/null | wc -l | tr -d " ")"'
 hosts=$(printf '%s\n' $BUILD_HOSTS $BUILD_HOSTS_XCODE | awk '!seen[$0]++')
+# **The host's run lock first** (Tools/host-lock.sh, the one E2E, the gallery, the lab and the tour take): builds and
+# E2E share one Mac, so a gate waits for an E2E run there and an E2E run for the gates. Taken in name order.
+. Tools/host-lock.sh
+locked=""
+trap 'for h in $locked; do host_unlock "$h"; done' EXIT
+for h in $(printf '%s\n' $hosts | sort); do
+    host_lock "$h" land || fail "$h is busy with another XDict run; nothing was run"
+    locked="$locked $h"
+done
 for h in $hosts; do
     ( ssh -o BatchMode=yes -o ConnectTimeout=10 -- "$h" "$probe" >"$OUT/probe.$h" 2>/dev/null || echo "unreachable=yes" >"$OUT/probe.$h" ) &
 done
@@ -118,7 +129,9 @@ wait
 for h in $hosts; do
     p() { sed -n "s/^$1=//p" "$OUT/probe.$h"; }
     if grep -q '^unreachable=yes' "$OUT/probe.$h"; then echo "land: $h skipped: unreachable"; continue; fi
-    if [ "$(p busy)" != 0 ]; then echo "land: $h skipped: a cargo or swift build is running there"; continue; fi
+    # Every XDict run holds the lock taken above, so a build running there now is another project's: slower, not unfit
+    # (one Mac since 2026-10-17; skipping it would leave no host).
+    [ "$(p busy)" = 0 ] || echo "land: $h: $(p busy) cargo or swift processes of another project are running there"
     caps=""
     if [ "$(p rust)" = "$RUST" ] && [ "$(p fmt)" = yes ] && [ "$(p clippy)" = yes ]; then caps="rust"
     else echo "land: $h: no Rust $RUST with rustfmt and clippy (rustc $(p rust); fmt $(p fmt); clippy $(p clippy)): no cargo gate there"; fi
@@ -154,8 +167,12 @@ for g in sorted(todo, key=lambda g: len(fit[g])):
     free = sorted(fit[g], key=lambda h: (len(jobs.get(h, [])), h == e2e_build, len(hosts[h])))
     h = free[0]
     jobs.setdefault(h, []).append(g)
+# Two lanes a host, each in a copy of its own: `make test` beside the cargo gates, which run in turn (they share one
+# target folder, whose cargo lock would only queue them). One Mac runs every gate since 2026-10-17.
 for h, gs in jobs.items():
-    print(f"{' '.join(gs)}\t{h}")
+    for lane, part in (("swift", [g for g in gs if g == "apple-test"]), ("cargo", [g for g in gs if g != "apple-test"])):
+        if part:
+            print(f"{' '.join(part)}\t{h}\t{lane}")
 PY
 ) || fail "could not place the gates"
 
@@ -170,28 +187,29 @@ measured() {
     esac
 }
 
-# host_job <host> <gate...>: copy once, then each gate there in turn.
+# host_job <host> <lane> <gate...>: copy once, to the lane's own folder, then each gate there in turn.
 host_job() {
-    local host=$1 g corpus t0 status key line
-    shift
+    local host=$1 lane=$2 remote=$REMOTE-$2 g corpus t0 status key line
+    shift 2
+    local rlog=$OUT/rsync.$host.$lane
     corpus=$(awk -F'\t' -v h="$host" '$1 == h' "$OUT/hosts" | tr ',' '\n' | sed -n 's/^corpus=//p')
     if ! rsync -a --delete --exclude target --exclude .build --exclude node_modules --exclude '*.mdx' --exclude '*.mdd' \
-        --exclude /local.mk --exclude .git "$REPO/" "$host:$REMOTE/" >"$OUT/rsync.$host" 2>&1; then
-        for g in "$@"; do printf '%s\t%s\tran\t0\tcould not copy the tree: %s\n' "$g" "$host" "$(tail -1 "$OUT/rsync.$host")" >"$OUT/$g.result"; done
+        --exclude /local.mk --exclude .git "$REPO/" "$host:$remote/" >"$rlog" 2>&1; then
+        for g in "$@"; do printf '%s\t%s\tran\t0\tcould not copy the tree: %s\n' "$g" "$host" "$(tail -1 "$rlog")" >"$OUT/$g.result"; done
         return
     fi
     for g in "$@"; do
         # The format-3.0 test's file is an .mdx, which the copy leaves out: sent alone (it is MDXBuilder's, not content).
         # dev-docs/ is untracked, so a worktree has none: the main checkout's.
         if [ "$g" = mdx-v3 ]; then
-            rsync -a "$MAIN/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$REMOTE/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$OUT/rsync.$host" 2>&1
+            rsync -a "$MAIN/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$remote/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$rlog" 2>&1
         fi
         t0=$(date +%s)
         # The toolchain pinned only where the default is another: a pinned name can be a second install without the
         # default's targets (wasm32 on the bindings' host, 2026-10-17).
         ssh -o BatchMode=yes -- "$host" "set -o pipefail; export PATH=\$HOME/bin:\$HOME/.cargo/bin:/opt/homebrew/bin:\$PATH
 [ \"\$(rustc --version 2>/dev/null | awk '{print \$2}')\" = $RUST ] || export RUSTUP_TOOLCHAIN=$RUST
-cd $REMOTE && $(command_of "$g" "$corpus")" >"$OUT/$g.log" 2>&1
+cd $remote && $(command_of "$g" "$corpus")" >"$OUT/$g.log" 2>&1
         status=$?
         [ "$status" != 0 ] || measured "$g" "$OUT/$g.log" || status=97
         line=$(grep -v '^[[:space:]]*$' "$OUT/$g.log" | tail -1 | cut -c1-90)
@@ -205,15 +223,15 @@ cd $REMOTE && $(command_of "$g" "$corpus")" >"$OUT/$g.log" 2>&1
 }
 
 pids=()
-while IFS=$'\t' read -r gs host; do
+while IFS=$'\t' read -r gs host lane; do
     [ -n "$gs" ] || continue
     if [ "$host" = - ]; then
         printf '%s\t-\tnot run\t0\tFAIL no fit host (see the probe lines above)\n' "$gs" >"$OUT/$gs.result"
         continue
     fi
-    echo "land: $host: $gs"
+    echo "land: $host ($lane): $gs"
     # shellcheck disable=SC2086 # gate names, split on purpose
-    host_job "$host" $gs &
+    host_job "$host" "$lane" $gs &
     pids+=($!)
 done <<<"$plan"
 for p in ${pids[@]+"${pids[@]}"}; do wait "$p"; done
