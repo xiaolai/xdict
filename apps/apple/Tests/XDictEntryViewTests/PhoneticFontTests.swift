@@ -71,10 +71,11 @@ struct PhoneticFontTests {
             #expect(css.contains(#"@font-face{font-family:"\#(family)";src:url("xdict://d/font/\#(face.file)") format("truetype");"#
                                  + "font-weight:\(face.weight);font-style:\(face.italic ? "italic" : "normal")}"), "\(face.file)")
         }
-        #expect(css.contains(#"--xdict-font-phon:"XDict Phonetic Sans", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "#
+        // New York by default since parity P18 (2026-10-17), Charis with it; Sans the reader's alternative.
+        #expect(css.contains(#"--xdict-font-phon:"XDict Phonetic Serif", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "#
                              + #""Gentium Plus", var(--xdict-font);"#))
-        #expect(css.contains(#":root[data-xdict-face=serif]{--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;"#
-                             + #"--xdict-font-cjk:"Songti SC", "STSong";--xdict-font-phon:"XDict Phonetic Serif", "Charis", "#))
+        #expect(css.contains(#":root[data-xdict-face=sans]{--xdict-font:-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif;"#
+                             + #"--xdict-font-cjk:"PingFang SC", "Hiragino Sans GB";--xdict-font-phon:"XDict Phonetic Sans", "Charis", "#))
     }
 
     /// A dictionary rule inside a transcription that the core normalized to XDict's text face (OALD's, MWU's) is the

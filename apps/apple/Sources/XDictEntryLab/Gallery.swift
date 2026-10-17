@@ -28,8 +28,8 @@ enum GalleryRun {
     /// a run of the merged tree renders the frame + core views and reuses an earlier report's entries (`--keys`).
     static let modes = [Mode(name: "core-light", frame: .all, theme: .original),
                         Mode(name: "core-dark", frame: .all, theme: .dark),
-                        Mode(name: "coreserif-light", frame: [.column, .type, .serif], theme: .original),
-                        Mode(name: "coreserif-dark", frame: [.column, .type, .serif], theme: .dark)]
+                        Mode(name: "coresans-light", frame: [.column, .type, .sans], theme: .original),
+                        Mode(name: "coresans-dark", frame: [.column, .type, .sans], theme: .dark)]
 
     /// `--original-style`: the same entries in XDict's reading style and in the dictionary's own, side by side.
     static let originalModes = [Mode(name: "core-light", frame: .all, theme: .original),
@@ -168,7 +168,7 @@ enum GalleryRun {
                             failures.append("\(name) \(mode.name) \(entry.key): the chevron does not match its fold \(wrong)")
                         }
                     }
-                    // §7.2's G1–G17, last: G9 clicks the fold heads.
+                    // §7.2's G1–G18, last: G9 clicks the fold heads.
                     var checks = mode.frame.isEmpty || mode.original ? nil : await run(checksScript, controller.webView)
                     // G16 and G17 at their widths, after the fold clicks (`GallerySpace`).
                     if checks != nil {
