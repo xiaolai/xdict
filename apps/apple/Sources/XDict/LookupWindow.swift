@@ -427,7 +427,7 @@ final class LookupWindowRun: LookupStage {
             "window": true, "pid": Int(ProcessInfo.processInfo.processIdentifier), "active": NSApp.isActive,
             "mainIsKey": mainWindow?.isKeyWindow == true, "responder": responder(), "query": model.lookup?.query ?? "",
             "text": model.text, "mode": model.lookup.map { $0.mode == .reader ? "reader" : "link" } ?? "",
-            "scope": scope, "sections": sections, "suggestions": model.showsSuggestions ? model.suggestions : [],
+            "scope": scope, "sections": sections, "suggestions": model.listing?.headwords ?? [],
             "trailIndex": model.trail.index, "trailCount": model.trail.visits.count, "canGoBack": model.canGoBack,
             "canGoForward": model.canGoForward, "canReturnToOrigin": model.canReturnToOrigin, "keys": keys,
             "routed": routed, "entryFinished": finished, "findings": FileManager.default.fileExists(
@@ -533,43 +533,35 @@ final class LookupWindowRun: LookupStage {
         return findings
     }
 
-    /// What the window must show at a checkpoint, as VoiceOver reads it: the first three sections' headers, in order;
-    /// each one's first results, or its sentence and next action; and what the checkpoint itself is about. An entry
-    /// `#id:text` is an element of that identifier with that text.
+    /// What the window must show at a checkpoint, as VoiceOver reads it, since the Apple parity (2026-10-17): the
+    /// list's first rows (the sidebar holds headwords, one each, P9); each dictionary that could not search, its sentence
+    /// and next action, in the page; and the scope bar's choice. An entry `#id:text` is an element of that identifier
+    /// with that text.
     private func expectations(_ name: String) -> [String: [String]] {
         guard let model = state?.model else { return [:] }
         if name == "suggestions" {
-            // The suggestions stand where the results were.
+            // The keys beginning with the typed text are the list's rows.
             return ["present": Array(model.suggestions.prefix(5)), "absent": ["@take_box_000"], "ordered": []]
         }
-        var present: [String] = [], absent: [String] = [], ordered: [String] = []
-        for section in model.sections.prefix(3) {
+        var present = Array((model.listing?.headwords ?? []).prefix(3))
+        for section in model.sections {
             switch section.status {
-            case .results(let results):
-                ordered.append(String(localized: SearchSentences.header(section)))
-                let repeated = results.repeatedKeys
-                present += results.hits.prefix(3).map { hit in
-                    Self.label(hit, in: section.name, record: repeated.contains(hit.entry.key) ? Int(hit.entry.occurrence) + 1 : nil)
-                }
-                if results.hasMore {
-                    present.append(String(localized: SearchSentences.more(1_000, remaining: results.total - UInt64(results.hits.count))))
-                }
-            default:
-                ordered.append(String(localized: SearchSentences.header(section)))
+            case .unavailable(.indexing), .results, .noMatch, .searching:
+                continue
+            case .unavailable, .failed:
+                present.append(section.name)
                 if let sentence = SearchSentences.status(section.status) { present.append(String(localized: sentence)) }
-                if let next = section.next { present.append(String(localized: SearchSentences.action(next))) }
-                if section.status == .searching, let query = model.lookup?.query {
-                    absent.append(String(localized: SearchSentences.result(headword: query, how: .exact, record: nil,
-                                                                           dictionary: section.name)))
+                if let next = section.next, SearchSentences.isButton(next) {
+                    present.append(String(localized: SearchSentences.action(next)))
                 }
             }
         }
         if case .one(let id) = model.scope, let source = model.source(id) {
             present.append("#scope:\(source.name)")
         } else {
-            present.append("#scope:\(String(localized: SearchSentences.allDictionaries))")
+            present.append("#scope:\(String(localized: "All"))")
         }
-        return ["present": present, "absent": absent, "ordered": ordered]
+        return ["present": present, "absent": [], "ordered": []]
     }
 }
 

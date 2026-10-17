@@ -338,8 +338,10 @@ struct SearchModelTests {
         #expect(model.trail.current?.result == Fixture.result(2, "B", "apple"))
     }
 
-    // MARK: - Suggestions (Q6, Q7)
+    // MARK: - Suggestions (Q6, Q7), now the list's completions (parity P9, P10)
 
+    /// Asked once typing pauses, only for the latest text, over the dictionaries in scope. Since the Apple parity
+    /// (2026-10-17) they are the sidebar's list, kept after Return, rather than a menu Return put away.
     @Test func suggestionsAreAskedOnceTypingPausesAndOnlyForTheLatestText() async {
         let backend = Self.apples()
         await backend.setSuggest { prefix, _ in prefix == "take o" ? ["take off", "take on"] : ["stale"] }
@@ -350,13 +352,14 @@ struct SearchModelTests {
         model.textDidChange()
         model.text = "take o"
         model.textDidChange()
-        #expect(await eventually { model.showsSuggestions })
+        #expect(await eventually { model.listing?.settled == true })
         #expect(model.suggestions == ["take off", "take on"])
+        #expect(model.listing?.headwords == ["take off", "take on"])
         let asked = await backend.suggestions
         #expect(asked.map(\.prefix) == ["take o"], "the first text's suggestions were asked: \(asked)")
         #expect(asked.first?.dicts == [Fixture.handle("A"), Fixture.handle("B")])
         model.submit()
-        #expect(!model.showsSuggestions && model.suggestions.isEmpty)
+        #expect(model.listing?.headwords == ["take off", "take on"], "Return keeps the list")
     }
 
     // MARK: - Links and the trail (I7, I8)

@@ -169,7 +169,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         guard let pane else { return false }
         refusal = nil
         message.isHidden = true
-        pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
+        pane.setZoom(environment.preferences.zoom())
         pane.setFrame(currentFrame(for: pane.binding.dictionary))
         let shown = await pane.show(reference, landing: landing)
         if !shown, self.pane === pane, pane.reference != reference {
@@ -220,21 +220,29 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         message.isHidden = false
     }
 
-    // MARK: - Zoom and appearance (R2, R4), per dictionary, kept across launches
+    // MARK: - Text size (Apple parity P29: one for every dictionary) and appearance (R4, per dictionary), kept
 
-    public var zoom: Double {
-        guard let binding = pane?.binding else { return 1 }
-        return environment.preferences.zoom(for: binding.dictionary)
-    }
+    public var zoom: Double { environment.preferences.zoom() }
 
     public func zoomIn() { setZoom(EntryPreferences.step(zoom, up: true)) }
     public func zoomOut() { setZoom(EntryPreferences.step(zoom, up: false)) }
     public func resetZoom() { setZoom(1) }
 
+    /// The text size for every dictionary; with none shown it is kept for the next entry. Other windows follow through
+    /// the defaults' change notice.
     public func setZoom(_ value: Double) {
-        guard let pane else { return }
-        environment.preferences.setZoom(value, for: pane.binding.dictionary)
-        pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
+        environment.preferences.setZoom(value)
+        pane?.setZoom(environment.preferences.zoom())
+    }
+
+    // MARK: - Print (Apple parity P32, P44)
+
+    /// File ▸ Print…: the shown entry, through the system's print panel, as a sheet on its window.
+    public func printEntry() {
+        guard let webView = pane?.view, let window = view.window else { return }
+        let operation = webView.printOperation(with: NSPrintInfo.shared)
+        operation.view?.frame = webView.bounds
+        operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
     }
 
     public var theme: EntryTheme {
@@ -272,7 +280,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     private func applyPreferences() {
         guard let pane else { return }
-        pane.setZoom(environment.preferences.zoom(for: pane.binding.dictionary))
+        pane.setZoom(environment.preferences.zoom())
         pane.setFrame(currentFrame(for: pane.binding.dictionary))
         pane.setScheme(currentScheme(for: pane.binding.dictionary))
     }
@@ -306,6 +314,22 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             findBar.show(result, query: query)
             return result
         }
+    }
+
+    /// Edit ▸ Find ▸ Use Selection for Find (⌘E, P33): the entry's selected text becomes the find bar's query.
+    @discardableResult
+    public func useSelectionForFind() -> Task<EntryFindResult?, Never> {
+        Task { @MainActor in
+            guard let selected = await pane?.selectedText(), !selected.isEmpty else { return nil }
+            setFindShown(true)
+            findBar.field.stringValue = selected
+            return await performFind(selected).value
+        }
+    }
+
+    /// Edit ▸ Find ▸ Jump to Selection (⌘J, P33): the entry scrolled to its selection.
+    public func jumpToSelection() {
+        Task { @MainActor in await pane?.jumpToSelection() }
     }
 
     @discardableResult

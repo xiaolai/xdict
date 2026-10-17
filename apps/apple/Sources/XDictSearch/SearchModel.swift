@@ -21,6 +21,10 @@ import XDictContract
 /// - **The trail** (I7, I8): a typed word adds a place, a link followed adds one (looked up in link mode, in the
 ///   dictionary the link is in), Back and Forward restore a place with its scroll, and one step returns to the word last
 ///   typed. Steps through the trail run one at a time, each after the last.
+/// - **The list and live search** (Apple Dictionary parity P9, P10, P13): once typing pauses, the typed text is looked
+///   up and its first match shown, without Return; the place it makes is replaced while the reader goes on typing, and
+///   Return only confirms it. The sidebar's list (`listing`) is every matching headword, one row each, or the spelling
+///   guesses the library has.
 @MainActor
 @Observable
 public final class SearchModel {
@@ -29,9 +33,12 @@ public final class SearchModel {
         public var firstPage: UInt32 = 100
         /// Hits in each further page: the core's whole page (`MAX_PAGE`).
         public var furtherPage: UInt32 = 1_000
-        public var suggestionLimit: UInt32 = 20
-        /// How long typing must pause before suggestions are asked for.
+        /// Keys beginning with the typed text, in the list after its own matches.
+        public var suggestionLimit: UInt32 = 100
+        /// How long typing must pause before the typed text is looked up and listed.
         public var suggestionDelay: Duration = .milliseconds(120)
+        /// Spelling guesses checked against the library for "Did you mean?".
+        public var guessLimit = 5
 
         public init() {}
     }
@@ -81,9 +88,12 @@ public final class SearchModel {
     public private(set) var selection: ResultID?
     public private(set) var shown: Shown?
     public private(set) var trail = Trail()
+    /// The keys beginning with the listed text, as the dictionaries in scope suggested them.
     public private(set) var suggestions: [String] = []
-    /// The reader is typing: the sidebar offers suggestions rather than results.
-    public private(set) var suggesting = false
+    /// The sidebar's list; nil before the first search, when the sidebar is hidden.
+    public private(set) var listing: Listing?
+    /// The row the reader chose, or the typed place's first match; nil to read it off the entry shown.
+    private var chosenHeadword: String?
     /// The dictionaries as the model last read them, in the reader's order.
     public private(set) var known: [SearchSource] = []
     private var asked: [UUID: Asked] = [:]
@@ -98,23 +108,31 @@ public final class SearchModel {
     @ObservationIgnored private let options: Options
     @ObservationIgnored private let searchCaller: Caller
     @ObservationIgnored private let suggestCaller: Caller
+    @ObservationIgnored private let guessCaller: Caller
+    @ObservationIgnored private let guesser: (any SpellingGuesser)?
     @ObservationIgnored private var serial = 0
     @ObservationIgnored private var shownSerial = 0
-    @ObservationIgnored private var suggestionSerial = 0
+    @ObservationIgnored private var listSerial = 0
+    /// The keys for the listed text, once suggested.
+    @ObservationIgnored private var listedKeys: [String]?
+    /// The current place was made by typing and not yet confirmed: more typing replaces it.
+    @ObservationIgnored private var provisional = false
     /// The landing of a result the model will choose itself, once due; nil when the reader has chosen, or nothing is due.
     @ObservationIgnored private var autoSelect: Landing?
-    @ObservationIgnored private var suggestionTask: Task<Void, Never>?
+    @ObservationIgnored private var liveTask: Task<Void, Never>?
     @ObservationIgnored private var navigation: Task<Void, Never>?
     @ObservationIgnored private var lookups: [Task<Void, Never>] = []
 
     /// `window` names this window's callers, so two windows never supersede each other's lookups.
     public init(backend: any SearchBackend, window: String, options: Options = Options(),
-                sources: @escaping @MainActor () -> [SearchSource]) {
+                guesser: (any SpellingGuesser)? = nil, sources: @escaping @MainActor () -> [SearchSource]) {
         self.backend = backend
         self.sources = sources
         self.options = options
+        self.guesser = guesser
         searchCaller = Caller("search.\(window)")
         suggestCaller = Caller("suggest.\(window)")
+        guessCaller = Caller("guess.\(window)")
         known = sources()
     }
 
@@ -152,8 +170,16 @@ public final class SearchModel {
         sections.contains { $0.status == .searching }
     }
 
-    /// The suggestions are what the sidebar shows.
-    public var showsSuggestions: Bool { suggesting && !suggestions.isEmpty }
+    /// The sidebar's selected row: the one chosen, else the headword of the entry shown.
+    public var selectedHeadword: String? {
+        chosenHeadword ?? shown.flatMap { hit($0.result)?.headword }
+    }
+
+    /// How many headwords the list found ("N found" under the window's title): none for guesses or an empty list.
+    public var found: Int? {
+        guard let listing, listing.settled, !listing.isGuess, !listing.headwords.isEmpty else { return nil }
+        return listing.headwords.count
+    }
 
     public func source(_ id: UUID) -> SearchSource? {
         known.first { $0.id == id }
@@ -167,50 +193,161 @@ public final class SearchModel {
 
     // MARK: - Typing and searching
 
-    /// The reader typed: suggestions for what the field holds, asked once typing pauses, over the dictionaries the
-    /// scope asks (Q6, Q7: the core suggests public keys only).
+    /// The reader typed: once typing pauses, what the field holds is looked up and listed, and its first match shown
+    /// (P10), as a place that more typing replaces.
     public func textDidChange() {
-        suggestionTask?.cancel()
-        suggestionSerial += 1
-        let prefix = text
-        let dicts = inScope(scope).compactMap(\.handle)
-        guard !prefix.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !dicts.isEmpty else {
-            suggesting = false
-            suggestions = []
+        liveTask?.cancel()
+        let typed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty, !inScope(scope).compactMap(\.handle).isEmpty else { return }
+        let delay = options.suggestionDelay
+        liveTask = Task { [weak self] in
+            guard (try? await Task.sleep(for: delay)) != nil, let self else { return }
+            self.live(typed, confirm: false)
+        }
+    }
+
+    /// Looks up `query` (the field's text when nil) as typed, in the reader's scope: a new place in the trail. Return on
+    /// what typing already shows only confirms it.
+    public func submit(_ query: String? = nil) {
+        liveTask?.cancel()
+        let word = (query ?? text).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !word.isEmpty else { return }
+        if provisional, listing?.typed == word {
+            provisional = false
             return
         }
-        suggesting = true
-        let mine = suggestionSerial
-        let (backend, caller, limit, delay) = (backend, suggestCaller, options.suggestionLimit, options.suggestionDelay)
-        suggestionTask = Task { [weak self] in
-            guard (try? await Task.sleep(for: delay)) != nil else { return }
-            let pending = await backend.queue([.suggest(prefix: prefix, dicts: dicts, limit: limit)], as: caller,
-                                              superseding: true)
-            guard let outcome = await pending.first?.outcome() else { return }
-            guard let self, self.suggestionSerial == mine, case .success(let keys) = outcome.suggestions else { return }
-            self.suggestions = keys
+        text = word
+        live(word, confirm: true)
+    }
+
+    /// A row of the list chosen (a click, or ↓ and ↑ from the field): that headword shown, the list kept, as a place of
+    /// its own.
+    public func choose(headword: String) {
+        liveTask?.cancel()
+        provisional = false
+        chosenHeadword = headword
+        let scope = scope, typed = listing?.typed
+        navigate { model in
+            await model.leaveCurrent()
+            model.trail.push(Visit(query: headword, mode: .reader, scope: scope, typed: typed, isOrigin: false))
+            model.begin(headword, .reader, scope, landing: .top, select: nil)
         }
     }
 
-    /// Stops offering suggestions (Escape, or a search made).
-    public func dismissSuggestions() {
-        suggestionTask?.cancel()
-        suggestionSerial += 1
-        suggesting = false
-        suggestions = []
+    /// ⌘} and ⌘{ (P7): the next or previous of All and each enabled dictionary, wrapping.
+    public func stepScope(forward: Bool) {
+        let scopes = [SearchScope.all] + known.filter(\.enabled).map { SearchScope.one($0.id) }
+        let at = scopes.firstIndex(of: scope) ?? 0
+        setScope(scopes[(at + (forward ? 1 : scopes.count - 1)) % scopes.count])
     }
 
-    /// Looks up `query` (the field's text when nil) as typed, in the reader's scope: a new place in the trail.
-    public func submit(_ query: String? = nil) {
-        let word = (query ?? text).trimmingCharacters(in: .whitespacesAndNewlines)
-        dismissSuggestions()
-        guard !word.isEmpty else { return }
-        text = word
+    private func live(_ word: String, confirm: Bool) {
+        let replace = provisional
+        provisional = !confirm
+        chosenHeadword = nil
         let scope = scope
         navigate { model in
             await model.leaveCurrent()
-            model.trail.push(Visit(query: word, mode: .reader, scope: scope, isOrigin: true))
+            let visit = Visit(query: word, mode: .reader, scope: scope, typed: word, isOrigin: true)
+            if replace, model.trail.current != nil { model.trail.updateCurrent { $0 = visit } } else { model.trail.push(visit) }
             model.begin(word, .reader, scope, landing: .top, select: nil)
+            model.relist(word)
+        }
+    }
+
+    // MARK: - The list (P9, P13)
+
+    /// Lists `typed` afresh: the keys beginning with it are asked for; its own matches are the lookup's, when the lookup
+    /// is of it.
+    private func relist(_ typed: String) {
+        listSerial += 1
+        let mine = listSerial
+        listedKeys = nil
+        listing = Listing(typed: typed)
+        let dicts = inScope(scope).compactMap(\.handle)
+        let (backend, caller, limit) = (backend, suggestCaller, options.suggestionLimit)
+        Task { [weak self] in
+            var keys: [String] = []
+            if !dicts.isEmpty {
+                let pending = await backend.queue([.suggest(prefix: typed, dicts: dicts, limit: limit)], as: caller,
+                                                  superseding: true)
+                if let outcome = await pending.first?.outcome(), case .success(let found) = outcome.suggestions {
+                    keys = found
+                }
+            }
+            guard let self, self.listSerial == mine else { return }
+            self.suggestions = keys
+            self.listedKeys = keys
+            self.reconcile()
+        }
+    }
+
+    /// Settles the list once the keys and the typed word's own lookup have both answered; with nothing in it, asks for
+    /// spelling guesses. Called whenever either answers.
+    private func reconcile() {
+        guard var listing, !listing.settled, let keys = listedKeys else { return }
+        var own: [String] = []
+        if let lookup, lookup.mode == .reader, lookup.query == listing.typed {
+            guard !isSearching else { return }
+            own = sections.flatMap { section -> [String] in
+                if case .results(let results) = section.status { results.hits.map(\.headword) } else { [] }
+            }
+        }
+        let words = Listing.merged(own, keys)
+        if words.isEmpty, let guesser {
+            listedKeys = nil
+            guess(listing.typed, from: guesser)
+            return
+        }
+        listing.headwords = words
+        listing.settled = true
+        self.listing = listing
+        showFirstMatchIfNeeded()
+    }
+
+    /// The spelling guesses some dictionary in scope has a match for, in the guesser's order (P13).
+    private func guess(_ typed: String, from guesser: any SpellingGuesser) {
+        let words = Array(guesser.guesses(for: typed).filter { $0 != typed }.prefix(options.guessLimit))
+        let dicts = inScope(scope).compactMap(\.handle)
+        let mine = listSerial
+        let pairs = words.flatMap { word in dicts.map { (word, $0) } }
+        let operations = pairs.map { word, handle in
+            ServiceOperation.lookup(query: word, dicts: [handle],
+                                    options: LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil))
+        }
+        let (backend, caller) = (backend, guessCaller)
+        Task { [weak self] in
+            var found: Set<String> = []
+            if !operations.isEmpty {
+                let pending = await backend.queue(operations, as: caller, superseding: true)
+                for ((word, _), call) in zip(pairs, pending) {
+                    if case .success(let page) = await call.outcome().page, !page.hits.isEmpty { found.insert(word) }
+                }
+            }
+            guard let self, self.listSerial == mine, var listing = self.listing else { return }
+            listing.headwords = words.filter(found.contains)
+            listing.isGuess = !listing.headwords.isEmpty
+            listing.settled = true
+            self.listing = listing
+            self.showFirstMatchIfNeeded()
+        }
+    }
+
+    /// The typed word has no entry of its own but the list has rows: the first row is shown in the typed place (P10:
+    /// "take o" shows "take off"; P13: the first guess).
+    private func showFirstMatchIfNeeded() {
+        guard let listing, let first = listing.headwords.first, let lookup, lookup.mode == .reader,
+              lookup.query == listing.typed, !isSearching,
+              !sections.contains(where: { if case .results = $0.status { true } else { false } }) else { return }
+        chosenHeadword = first
+        let scope = lookup.scope
+        navigate { model in
+            model.trail.updateCurrent {
+                $0.query = first
+                $0.result = nil
+                $0.scroll = 0
+            }
+            model.begin(first, .reader, scope, landing: .top, select: nil)
         }
     }
 
@@ -227,6 +364,7 @@ public final class SearchModel {
         }
         ask(superseding: false)
         autoSelectIfDue()
+        if let typed = listing?.typed { relist(typed) }
     }
 
     /// The library changed: an order, a name, a dictionary enabled, ready, gone or reopened under another handle.
@@ -288,7 +426,9 @@ public final class SearchModel {
         navigate { model in
             await model.leaveCurrent()
             model.trail.push(Visit(query: query, mode: .link, scope: .one(dictionary), anchor: anchor, isOrigin: false))
-            model.dismissSuggestions()
+            model.liveTask?.cancel()
+            model.provisional = false
+            model.chosenHeadword = nil
             model.text = query
             model.begin(query, .link, .one(dictionary), landing: anchor.map(Landing.anchor) ?? .top, select: nil)
         }
@@ -378,9 +518,12 @@ public final class SearchModel {
     }
 
     private func restore(_ visit: Visit) {
-        dismissSuggestions()
-        text = visit.query
+        liveTask?.cancel()
+        provisional = false
+        text = visit.typed ?? visit.query
+        chosenHeadword = visit.typed == nil ? nil : visit.query
         if visit.mode == .reader { scope = visit.scope }
+        if let typed = visit.typed, listing?.typed != typed { relist(typed) }
         let landing: Landing = visit.scroll > 0 ? .offset(visit.scroll) : visit.anchor.map(Landing.anchor) ?? .top
         begin(visit.query, visit.mode, visit.scope, landing: landing, select: visit.result)
     }
@@ -438,6 +581,7 @@ public final class SearchModel {
         }
         onAnswered?(id, lookup)
         autoSelectIfDue()
+        reconcile()
     }
 
     private func paged(_ id: UUID, handle: DictId, serial: Int, offset: Int, _ outcome: Result<Page, ClientFailure>) {

@@ -30,6 +30,7 @@ import time
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
 from axcheck import checks, dictionaries_table  # noqa: E402
+import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
 from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
 
@@ -288,7 +289,21 @@ def relative(tree):
         walk(window, (window.get("frame") or [0, 0])[:2])
 
 
+def park_pointer(session):
+    """The pointer moved off XDict's windows before a capture: a pointer left over a control (the last route's click)
+    draws its rollover look, which reads as a second selected scope (P6, 2026-10-18)."""
+    frames = [w["frame"] for w in session.ax("windows")["windows"] if w.get("layer") == 0]
+    if not frames:
+        return
+    x, y, w, h = frames[0]
+    target = (x - 40, y + h / 2) if x > 60 else (x + w + 40, y + h / 2)
+    run(pointer, "move", int(target[0]), int(target[1]), check=False)
+    time.sleep(0.4)
+
+
 def capture(session, route, folder):
+    if not any(step and step[0] in ("menu", "menuopen", "extra") for step in getattr(session, "steps", [])):
+        park_pointer(session)
     shots = []
     windows = [w for w in session.ax("windows")["windows"]
                if w["alpha"] > 0 and w["frame"][2] > 40 and w["frame"][3] > 20]
@@ -305,8 +320,12 @@ def capture(session, route, folder):
     findings = checks(tree)
     if route == "settings.dictionaries":
         findings += [dict(f, parity="P39") for f in dictionaries_table(tree)]
+    menubar = session.ax("menubar")
+    # The Apple Dictionary parity checks (parity.py) read English titles: English variants only.
+    session.parity = parity.checks(route, tree, menubar) if session.lang == "en" else []
     with open(os.path.join(folder, f"{route}.ax.json"), "w") as f:
-        json.dump({"windows": session.ax("windows")["windows"], "tree": tree, "findings": findings}, f)
+        json.dump({"windows": session.ax("windows")["windows"], "tree": tree, "menubar": menubar, "findings": findings,
+                   "parity": session.parity}, f)
     return shots, findings
 
 
@@ -315,6 +334,7 @@ def walk(variant, name, library, route, steps, folder):
     record = {"variant": name, "route": route}
     try:
         session = Session(variant, library)
+        session.steps = steps
     except Failed as why:
         record["failure"] = f"launch: {why}"
         print(f"{name} {route}: {record['failure']}", flush=True)
@@ -324,6 +344,7 @@ def walk(variant, name, library, route, steps, folder):
             for step in steps:
                 session.step(step)
             record["shots"], record["findings"] = capture(session, route, folder)
+            record["parity"] = getattr(session, "parity", [])
             if not record["shots"]:
                 record["failure"] = "no window of XDict on screen"
         except (Failed, subprocess.TimeoutExpired, KeyError) as why:
@@ -337,6 +358,9 @@ def walk(variant, name, library, route, steps, folder):
     finally:
         session.quit()
     print(f"{name} {route}: {record.get('failure', 'ok')}", flush=True)
+    for check in record.get("parity", []):
+        print(f"{name} {route}: parity {check['id']} {'ok' if check['ok'] else 'NOT APPLE: ' + check['why']}",
+              flush=True)
     return record
 
 

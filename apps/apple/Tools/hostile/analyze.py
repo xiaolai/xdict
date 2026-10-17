@@ -475,13 +475,18 @@ def entries(res, part=None):
                                f"hold in a window at its narrowest, "
                                f"{f'{width:g} points' if isinstance(width, (int, float)) else 'its width not reported'}, "
                                f"needs no horizontal scrolling ({narrow})"))
-    wanted = {"oald": (1.5, "dark", "dark"), "ldoce": (0.8, "original", "light")}
+    # The text size is one for every dictionary since the Apple parity (P29, 2026-10-17): each reads what it set as it
+    # sets it, and after the relaunch both read the last size set (ldoce's); the theme stays per dictionary.
+    wanted_by_stage = {
+        "persistence-set.json": {"oald": (1.5, "dark", "dark"), "ldoce": (0.8, "original", "light")},
+        "persistence-check.json": {"oald": (0.8, "dark", "dark"), "ldoce": (0.8, "original", "light")},
+    }
     for stage in ("persistence-set.json", "persistence-check.json") if part != "corpus" else ():
         r = load(stage)
         if r is None:
             results.append(say(False, f"{stage}: the lab wrote no report"))
             continue
-        for name, (zoom, theme, scheme) in wanted.items():
+        for name, (zoom, theme, scheme) in wanted_by_stage[stage].items():
             got = r.get(name) if isinstance(r.get(name), dict) else {}
             results.append(say(abs(got.get("zoom", 0) - zoom) < 1e-6 and abs(got.get("pageZoom", 0) - zoom) < 1e-6
                                and got.get("theme") == theme and got.get("colorScheme") == scheme,

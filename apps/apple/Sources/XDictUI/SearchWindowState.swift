@@ -21,12 +21,8 @@ public final class SearchWindowState {
     public let pronunciation: Pronunciation
     /// What the dictionary service answered at launch: shown when it did not.
     public var service = LaunchStatus.asking
-    /// The suggestion ↑ and ↓ have reached, which Return looks up.
-    public var highlighted: String?
     /// Asks the search field for the keyboard whenever it changes (at launch, and by Search, ⌥⌘F).
     public private(set) var searchFocus = 1
-    /// Counts the reader's typing in the search field: what reveals a collapsed sidebar.
-    public private(set) var typed = 0
     /// Asks the results list for the keyboard whenever it changes (↓ from the search field).
     public private(set) var resultsFocus = 0
     /// The dictionary whose entry the pane shows: its links are looked up there.
@@ -48,7 +44,9 @@ public final class SearchWindowState {
         self.library = library
         self.backend = backend
         self.entry = entry
-        model = SearchModel(backend: backend, window: window) { [library] in library.searchSources }
+        model = SearchModel(backend: backend, window: window, guesser: SystemSpellingGuesser()) { [library] in
+            library.searchSources
+        }
         pronunciation = Pronunciation(backend: backend, output: speech, preferences: speechPreferences)
         model.scrollReader = { [weak entry] in await entry?.scrollOffset() }
         entry.onLookup = { [weak self] query, anchor in self?.follow(query, anchor: anchor) }
@@ -119,22 +117,21 @@ public final class SearchWindowState {
         onPresented?(shown, done)
     }
 
-    /// What covers the entry pane now (UI review X1), saying when some dictionaries could not look (Codex §5).
+    /// What covers the entry pane now (UI review X1): "No entries found." only once the list has settled empty, so it
+    /// never flashes before a completion or a guess is shown (P10, P13).
     public var placeholder: EntryPlaceholder {
+        let pending = model.listing.map { !$0.settled || !$0.headwords.isEmpty } ?? false
         let unsearched = model.sections.filter { if case .unavailable(let why) = $0.status {
             if case .indexing = why { false } else { true } } else { false } }.count
         return EntryPlaceholder.of(noDictionaries: library.entries.isEmpty && library.unreadable == nil,
                                    query: model.lookup?.query, selection: model.selection,
-                                   searching: model.isSearching, unsearched: unsearched)
+                                   searching: model.isSearching, unsearched: unsearched, pending: pending)
     }
 
     /// The dictionary the shown entry is read from: named beside its headword (Codex §5).
     public var shownSourceName: String? {
         model.shown.flatMap { model.source($0.result.dictionary)?.name }
     }
-
-    /// The words looked up last, for an empty sidebar (Codex §5).
-    public let recent = RecentLookups()
 
     /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
     /// entry either (UI review X1). Called when the placeholder changes.
@@ -164,48 +161,28 @@ public final class SearchWindowState {
     }
 
     /// **The reader typed** in the search field. Only typing comes here: a text the window sets (a visit adopted from
-    /// the panel, Back, Forward) reaches the field through `model.text` and never opens suggestions.
+    /// the panel, Back, Forward) reaches the field through `model.text` and starts no search.
     public func typedText(_ text: String) {
         model.text = text
-        highlighted = nil
-        typed += 1
         model.textDidChange()
     }
 
-    /// Return in the search field: the highlighted suggestion, or what was typed.
+    /// Return in the search field: what typing shows confirmed, or what was typed looked up (P10).
     public func submit() {
-        let chosen = model.showsSuggestions ? highlighted : nil
-        highlighted = nil
-        model.submit(chosen)
-        if let query = model.lookup?.query { recent.add(query) }
+        model.submit()
     }
 
-    /// A recent word chosen: looked up again, in the current scope.
-    public func lookUpRecent(_ word: String) {
-        model.text = word
-        model.submit(word)
-        recent.add(word)
-    }
-
-    /// ↑ or ↓ in the search field: through the suggestions while they show, else ↓ into the results.
+    /// ↓ in the search field: the next row of the list chosen and the list given the keyboard, so the arrows go on
+    /// through it (P11); ↑ does nothing there.
     public func move(_ step: Int) -> Bool {
-        guard model.showsSuggestions else {
-            guard step > 0, !model.sections.isEmpty else { return false }
-            focusResults()
-            return true
-        }
-        let list = model.suggestions
-        let at = highlighted.flatMap { list.firstIndex(of: $0) }
-        let next = at.map { $0 + step } ?? (step > 0 ? 0 : list.count - 1)
-        highlighted = list.indices.contains(next) ? list[next] : nil
+        guard step > 0, let rows = model.listing?.headwords, !rows.isEmpty else { return false }
+        let at = model.selectedHeadword.flatMap { rows.firstIndex(of: $0) }
+        let next = at.map { min($0 + 1, rows.count - 1) } ?? 0
+        if rows[next] != model.selectedHeadword { model.choose(headword: rows[next]) }
+        focusResults()
         return true
     }
 
-    /// Escape in the search field: puts the suggestions away, if they show.
-    public func cancel() -> Bool {
-        guard model.showsSuggestions else { return false }
-        highlighted = nil
-        model.dismissSuggestions()
-        return true
-    }
+    /// Escape in the search field: the field clears itself, as a search field does.
+    public func cancel() -> Bool { false }
 }
