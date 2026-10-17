@@ -12,6 +12,12 @@ body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !importan
 :where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}
 :where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
 :where(button,input,select,textarea){font:inherit}
+/* A relative size a dictionary's script writes at run time, which the core never sees (COBUILD's trend chart, */
+/* `font-size:smaller`, 13.3 px), is a step of the scale (G1). */
+[style*="font-size:smaller"],[style*="font-size: smaller"]{font-size:var(--xdict-fs-s) !important;
+line-height:var(--xdict-leading) !important}
+[style*="font-size:larger"],[style*="font-size: larger"]{font-size:var(--xdict-fs-l) !important;
+line-height:var(--xdict-leading) !important}
 :where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}
 :where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}
 @layer xdict-unify{
@@ -43,15 +49,18 @@ background:none !important}
 [data-xdict-sure=sensenum][data-xdict-sure],[data-xdict-sure=sensenum][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon])
 {font-family:var(--xdict-font) !important;font-weight:var(--xdict-weight-bold) !important;
 font-style:normal !important;color:var(--xdict-accent) !important;background:none !important}
-/* An example a markup table names: italic in the body face and the secondary text colour, so the accent stays */
-/* for labels and numbers (owner, 2026-10-16). Its descendants take the face and the slant but keep their own */
+/* An example a markup table names: italic in the body face and size and the secondary text colour, so the accent */
+/* stays for labels and numbers (owner, 2026-10-16; MED's were 14 px, G2). Its descendants take the face, size */
+/* and slant but keep their own */
 /* colour and weight: a headword the dictionary coloured inside it is the one accent (COBUILD-EC's */
-/* "correlate"). Han text is never slanted: no synthesized oblique, and CJK faces have no italic. */
+/* "correlate"). Han text is never slanted: no synthesized oblique, and CJK faces have no italic. What the table */
+/* keeps inside an example (a gloss, a grammar pattern: `keep`) and its translation (`trans`) take neither. */
 [data-xdict-sure=example][data-xdict-sure]{color:var(--xdict-text-2) !important}
 [data-xdict-sure=example][data-xdict-sure],[data-xdict-sure=example][data-xdict-sure] 
 :not([data-xdict-tag],[data-xdict-icon],[data-xdict-phon],[data-xdict-phon] *,[data-xdict-role=label],
-[data-xdict-role=label] *){font-family:var(--xdict-font) !important;font-style:italic !important;
-font-synthesis-style:none !important}
+[data-xdict-role=label] *,[data-xdict-sure=keep],[data-xdict-sure=keep] *,[data-xdict-sure=trans],
+[data-xdict-sure=trans] *){font-family:var(--xdict-font) !important;font-style:italic !important;
+font-synthesis-style:none !important;font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important}
 /* A section heading a markup table names: one look, bold, 1.125rem, the body face and the body text colour; the */
 /* accent is not for headings (owner, 2026-10-17). Its own text only: a link or a list inside it keeps its look. */
 [data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 

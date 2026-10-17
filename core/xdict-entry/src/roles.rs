@@ -618,8 +618,12 @@ pub(crate) struct Roles<'s> {
     /// Space written right after a block, past any punctuation: where it starts and ends. It goes if a block opens
     /// next, since space alone between two blocks is a line of its own (OED's `&nbsp;` between pronunciations).
     gap: Option<(usize, usize)>,
-    /// Space to drop: alone between two blocks, or between an inline element and the full stop after it.
+    /// Space to drop: between an inline element and the full stop after it, or a block's leading break.
     gaps: Vec<(usize, usize)>,
+    /// Space alone between two blocks, past any punctuation moved into the first: it becomes one plain space, which
+    /// collapses, so a text node stays between the blocks for a dictionary's script that walks `nextSibling`
+    /// (MWALED's `this.nextSibling.nextSibling` fold).
+    spaces: Vec<(usize, usize)>,
     /// A `<br>` written before anything else in its block (the block, where the break starts and ends): the block
     /// already starts a line, so once text follows in it the break goes, as its blank line would (COBUILD-EC's
     /// `<div><br>【语法信息】…`, WI-11 R8). Alone in its block it is a spacer the dictionary meant, and stays.
@@ -694,6 +698,7 @@ impl<'s> Roles<'s> {
             hug_after: None,
             moves: Vec::new(),
             gaps: Vec::new(),
+            spaces: Vec::new(),
             gap: None,
             hugs: Vec::new(),
             lead_break: None,
@@ -731,9 +736,9 @@ impl<'s> Roles<'s> {
         let lower = name.to_ascii_lowercase();
         if let Some(gap) = self.gap.take()
             && block_tag(&lower)
-            && self.gaps.len() < MAX_NODES
+            && self.spaces.len() < MAX_NODES
         {
-            self.gaps.push(gap);
+            self.spaces.push(gap);
         }
         let void = closed.is_none() && (VOID.contains(&lower.as_str()) || tag.ends_with("/>"));
         if void || image {
@@ -1008,7 +1013,13 @@ impl<'s> Roles<'s> {
                 n.text.1 = len;
             }
         }
-        let t = Tree::new(&self.nodes, &self.buf, self.key.as_deref(), self.profile.is_some_and(|p| p.pos_words));
+        let t = Tree::new(
+            &self.nodes,
+            &self.buf,
+            self.key.as_deref(),
+            self.profile.is_some_and(|p| p.pos_words),
+            self.profile.is_some_and(|p| p.example_blocks),
+        );
         let mut decided = Decided {
             edits: Vec::new(),
             audio_links: 0,
@@ -1033,6 +1044,9 @@ impl<'s> Roles<'s> {
         for &(from, to) in &self.gaps {
             decided.edits.push((from, to, String::new()));
         }
+        for &(from, to) in &self.spaces {
+            decided.edits.push((from, to, " ".into()));
+        }
         for (i, at, punct) in &self.moves {
             let Some(n) = self.nodes.get(*i as usize) else { continue };
             let Some((end, _)) = n.end else { continue };
@@ -1044,6 +1058,8 @@ impl<'s> Roles<'s> {
         }
         if self.key.is_some() {
             let mut led: Option<u64> = None;
+            // Where the role loop below writes a sure mark: a mark it does not write is written alone after it.
+            let mut wrote_sure = vec![false; self.nodes.len()];
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
                 if *role == Role::Headword {
@@ -1071,6 +1087,9 @@ impl<'s> Roles<'s> {
                 }
                 if let Some(sure) = sure {
                     attr.push_str(&format!(" data-xdict-sure=\"{sure}\""));
+                    if let Some(w) = wrote_sure.get_mut(i) {
+                        *w = true;
+                    }
                 }
                 // The entry's first headword is the lead, the one headword mark precise enough for strong styling
                 // (unification R, 2026-10-16). Not one in a link: a strip of links to the homographs (LDOCE's) is
@@ -1087,6 +1106,18 @@ impl<'s> Roles<'s> {
                 }
                 *decided.roles.entry(counted).or_default() += 1;
                 decided.edits.push((node.attr_at, node.attr_at, attr));
+            }
+            // Inside a sure example, what keeps the dictionary's look and a Chinese block (its translation) carry
+            // their mark whatever role the generic rule gave them, or none.
+            for (i, node) in self.nodes.iter().enumerate().skip(1) {
+                let mark = match t.sure(i) {
+                    Some(profiles::Sure::Keep) => "keep",
+                    Some(profiles::Sure::Trans) if node.profiled.is_none() => "trans",
+                    _ => continue,
+                };
+                if !wrote_sure.get(i).copied().unwrap_or(true) {
+                    decided.edits.push((node.attr_at, node.attr_at, format!(" data-xdict-sure=\"{mark}\"")));
+                }
             }
         }
         decided
@@ -1495,7 +1526,7 @@ fn sure_role(sure: profiles::Sure) -> Option<Role> {
         profiles::Sure::Sensenum => Some(Role::Sensenum),
         profiles::Sure::Example => Some(Role::Example),
         profiles::Sure::Heading => Some(Role::Heading),
-        profiles::Sure::Trans => None,
+        profiles::Sure::Trans | profiles::Sure::Keep => None,
     }
 }
 
@@ -1664,10 +1695,12 @@ struct Tree<'n> {
     feat: Vec<Feat>,
     /// The markup's part-of-speech selector holds other labels too: its elements need the part-of-speech words.
     pos_words: bool,
+    /// The markup's examples hold their text in blocks: an element of the selector with text of its own is not one.
+    example_blocks: bool,
 }
 
 impl<'n> Tree<'n> {
-    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>, pos_words: bool) -> Self {
+    fn new(nodes: &'n [Node], buf: &'n str, key: Option<&str>, pos_words: bool, example_blocks: bool) -> Self {
         let key_norm = key.map(norm_key).unwrap_or_default();
         let forms = key.map(key_forms).unwrap_or_default();
         let mut order = 0u32;
@@ -1717,22 +1750,49 @@ impl<'n> Tree<'n> {
                 order,
             });
         }
-        Self { nodes, buf, feat, pos_words }
+        Self { nodes, buf, feat, pos_words, example_blocks }
     }
 
     /// The role the markup's table makes sure for the element, once its text passes the role's check: a part of
     /// speech is 1–40 characters (and a part-of-speech word where the table asks); a sense number is a number.
     fn sure(&self, i: usize) -> Option<profiles::Sure> {
-        let sure = self.nodes.get(i)?.profiled?;
+        let node = self.nodes.get(i)?;
+        let Some(sure) = node.profiled else {
+            // A block inside a sure example whose text is Chinese with no Latin letter is its translation (COBUILD's
+            // unclassed `<p>` after the English one).
+            let f = self.feat.get(i)?;
+            let block = matches!(&*node.name, "p" | "div");
+            return (block && f.cjk > 0.0 && f.lat == 0.0 && self.in_example(i)).then_some(profiles::Sure::Trans);
+        };
+        if sure == profiles::Sure::Keep {
+            return self.in_example(i).then_some(sure);
+        }
         let f = self.feat.get(i)?;
         let t = f.short.as_deref().unwrap_or("");
         let ok = match sure {
             profiles::Sure::Pos => f.len > 0 && f.len <= 40 && (!self.pos_words || pos_text(t)),
             profiles::Sure::Sensenum => numbered(t),
-            profiles::Sure::Example | profiles::Sure::Trans => f.len > 0,
+            profiles::Sure::Example => f.len > 0 && !(self.example_blocks && node.direct),
+            profiles::Sure::Trans => f.len > 0,
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
+            profiles::Sure::Keep => false,
         };
         ok.then_some(sure)
+    }
+
+    /// Whether an element is inside an element the table makes a sure example.
+    fn in_example(&self, i: usize) -> bool {
+        let mut at = self.nodes.get(i).map(|n| n.parent as usize);
+        for _ in 0..MAX_DEPTH {
+            let Some(p) = at.filter(|p| *p != ROOT as usize) else { return false };
+            if self.nodes.get(p).and_then(|n| n.profiled) == Some(profiles::Sure::Example)
+                && self.feat.get(p).is_some_and(|f| f.len > 0)
+            {
+                return true;
+            }
+            at = self.nodes.get(p).map(|n| n.parent as usize);
+        }
+        false
     }
 
     /// An element's whole text, spaces collapsed, when it is no longer than the rules read.
