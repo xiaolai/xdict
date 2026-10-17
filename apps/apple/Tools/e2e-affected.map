@@ -66,6 +66,10 @@ apps/apple/Tools/hostile/*                          check:hostile.production hos
 apps/apple/Tools/lookup/verdicts.py                 check:hostile.app
 apps/apple/Tools/lookup/run-app-hostile.sh          check:hostile.app
 apps/apple/Tools/lookup/*                           check:lookup
+apps/apple/Resources/Acknowledgements.txt           launch
+apps/apple/Tools/measure/*                          check:measure.protocol
+apps/apple/Tools/notices.py                         none
+apps/apple/Tools/notices/*                          none
 apps/apple/Tools/anywhere/*                         check:selection services panel menubar shortcut
 apps/apple/Tools/library/health-expected.json       check:library.health
 apps/apple/Tools/library/*                          check:library.generated library.corpus
@@ -108,6 +112,7 @@ apps/apple/Sources/XDict/LibraryDrop.swift          check:library.generated
 apps/apple/Sources/XDict/ServiceReport.swift        check:service
 apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
 apps/apple/Sources/XDict/SoundReport.swift          check:sound
+apps/apple/Sources/XDict/MeasureReport.swift        check:measure.protocol
 apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services panel menubar shortcut
 apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
 

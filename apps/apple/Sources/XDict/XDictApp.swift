@@ -17,7 +17,7 @@ struct XDictApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
-        ?? AppSetup.reader
+        ?? MeasureReport.setup(CommandLine.arguments) ?? AppSetup.reader
     /// The app's one client of its dictionary service: one connection at a time, made on demand (`ServiceClient`).
     static var service: ServiceClient { setup.service }
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
@@ -35,6 +35,12 @@ struct XDictApp: App {
             CommandGroup(after: .appSettings) {
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
+            AcknowledgementsCommand()
+        }
+
+        // Every third-party notice (WI-10), from the app menu beside About.
+        Window("Acknowledgements", id: Self.acknowledgementsWindow) {
+            AcknowledgementsView(notices: AcknowledgementsView.bundled())
         }
 
         Window("Library", id: Self.libraryWindow) {
@@ -85,6 +91,7 @@ struct XDictApp: App {
     static let mainWindow = "main"
     static let libraryWindow = "library"
     static let setupWindow = "setup"
+    static let acknowledgementsWindow = "acknowledgements"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
     @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
 
@@ -238,5 +245,16 @@ enum SetupLaunch {
         guard XDictApp.setup.isReader, !defaults.bool(forKey: shownKey), XDictApp.library.entries.isEmpty else { return }
         defaults.set(true, forKey: shownKey)
         MenuBarActions.openSetup()
+    }
+}
+
+/// XDict ▸ Acknowledgements…, right after About XDict.
+struct AcknowledgementsCommand: Commands {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button { openWindow(id: XDictApp.acknowledgementsWindow) } label: { Text("Acknowledgements…") }
+        }
     }
 }

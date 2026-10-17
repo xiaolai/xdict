@@ -8,7 +8,7 @@
 #                            sub-stage's seconds from its `TIME<TAB>sub-stage<TAB>seconds` line
 #   e2e-status.sh show       what each stage last did, and whether it is evidence of the tree here now
 #   e2e-status.sh require-fresh [--bootstrap]
-#                            exit 1 unless every default sub-stage (`Tools/e2e.sh --list-stages`) — with --bootstrap,
+#                            exit 1 unless every default sub-stage (`Tools/e2e.sh --list-stages`) and RELEASE_EXTRAS — with --bootstrap,
 #                            the skeleton's `launch` alone — last passed on a development bundle of this very source tree,
 #                            all on one E2E Mac and one macOS build. What a release asks before it builds and again before
 #                            it uploads anything
@@ -22,6 +22,8 @@ cd "$(dirname "$0")/.."
 readonly STATUS=.build/e2e-status.tsv
 # The stage the skeleton's bootstrap release rests on (plan-macos-v1 WI-2).
 readonly BOOTSTRAP_STAGES="launch"
+# Extra sub-stages the ordinary release needs too: the WI-10 measurement (warm p95 within 1 s is part of done).
+readonly RELEASE_EXTRAS="measure.protocol"
 
 # A stage passes only if every assertion in it passed: the last result per stage once marked a stage green whose
 # earlier check had failed (XiaolaiDict). A run that emitted no RESULT line leaves the record untouched; its own exit
@@ -95,6 +97,7 @@ require_fresh() {
     else
         stages=$(Tools/e2e.sh --list-stages | paste -sd' ' -)
         [ -n "$stages" ] || { echo "e2e-status: Tools/e2e.sh listed no stages" >&2; return 1; }
+        stages="$stages $RELEASE_EXTRAS"
     fi
     tree=$(Tools/source-tree.sh)
     # shellcheck disable=SC2086 # the stage names are words, split on purpose
@@ -102,7 +105,7 @@ require_fresh() {
     if [ -n "$problems" ]; then
         echo "no fresh end-to-end pass of this source tree (${tree:0:12}) for the $mode release:" >&2
         sed 's/^/  /' <<<"$problems" >&2
-        echo "run make e2e FULL=1 E2E_SPLIT=0 on this tree (one E2E Mac, every sub-stage), then release" >&2
+        echo "run make e2e FULL=1 E2E_SPLIT=0 on this tree (one E2E Mac, every sub-stage) and make e2e STAGES=\"$RELEASE_EXTRAS\" E2E_HOST=<that Mac>, then release" >&2
         return 1
     fi
     echo "end-to-end evidence for the $mode release: $stages — each passed on a development bundle of this tree (${tree:0:12})"

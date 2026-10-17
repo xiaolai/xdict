@@ -7,8 +7,9 @@
 # 1. The source tree is read here first (`Tools/source-tree.sh`).
 # 2. The repository is copied to <host>:xdict-build/<this checkout's folder name>/, without build products, dictionary
 #    files or local.mk.
-# 3. There: `make lint test-swift` (the core, SwiftLint, swift test and its warnings gate), `swift build -c release`
-#    and the compiler-warnings gate on that release build, exactly as `build-bundle.sh` runs it here.
+# 3. There: `make lint test-swift` (the core, SwiftLint, swift test and its warnings gate), the third-party notices
+#    held to the crates the service links (`Tools/notices.py check`: needs cargo, so there and not here), `swift build
+#    -c release` and the compiler-warnings gate on that release build, exactly as `build-bundle.sh` runs it here.
 # 4. Back here, only: the app, the service and the entry lab into .build/remote-products/, and Generated/ (the core's
 #    versions and binding, which the bundle's checks and its input digest read).
 #    The products are deleted on the host before its release build, so an unchanged tree relinks them (seconds) and
@@ -50,6 +51,7 @@ out=$("$SSH" "$host" "set -euo pipefail; export PATH=\$HOME/bin:\$HOME/.cargo/bi
 cd $remote/apps/apple
 mkdir -p .build && touch .build/remote-build.marker
 make lint test-swift >&2
+python3 -I Tools/notices.py check >&2
 bin=\$(swift build -c release --show-bin-path)
 rm -f$(for p in $NAMES; do printf ' "$bin/%s"' "$p"; done)
 swift build -c release >&2
