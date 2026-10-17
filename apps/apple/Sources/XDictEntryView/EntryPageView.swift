@@ -6,9 +6,22 @@ import os
 /// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
 /// at the system's `large` size. A click anywhere on it, or VoiceOver's press, collapses or expands that dictionary.
 /// Its name, band and triangle follow the one text size, as Apple's do (P15, P29).
+/// **In the lookup popover, Apple's compact one** (P41; `popover.png`, `popover.dark.png`): the name leading, as the
+/// popover's title is, then a hairline to the trailing inset; no triangle, no collapse, a fixed size.
 @MainActor
 final class EntryPageDivider: NSView {
     static let height: CGFloat = 32
+
+    /// The popover's compact divider, in the popover's title-row metrics (`PanelLook`): the name 24 pt in, the system
+    /// font at 20 pt in the label colour, a hairline from 8 pt after it to 27 pt from the trailing edge, in a 40 pt
+    /// band (an 8 pt gap each side of the 24 pt row).
+    enum Popover {
+        static let leading: CGFloat = 24
+        static let trailing: CGFloat = 27
+        static let font: CGFloat = 20
+        static let height: CGFloat = 40
+        static let gap: CGFloat = 8
+    }
 
     /// The divider at a text size: the name's points, the band's height, the triangle's half-width.
     struct Metrics: Equatable {
@@ -28,6 +41,7 @@ final class EntryPageDivider: NSView {
     }
 
     let name: String
+    let style: EntryPageStyle
     let label: NSTextField
     private var metrics: Metrics
     private var heightConstraint: NSLayoutConstraint?
@@ -35,44 +49,66 @@ final class EntryPageDivider: NSView {
     var collapsed = false {
         didSet {
             needsDisplay = true
+            guard style == .window else { return }
             setAccessibilityValue(collapsed ? 0 : 1)
             setAccessibilityExpanded(!collapsed)
         }
     }
 
-    init(name: String, zoom: Double = 1) {
+    init(name: String, zoom: Double = 1, style: EntryPageStyle = .window) {
         self.name = name
+        self.style = style
         label = NSTextField(labelWithString: name)
         metrics = Self.metrics(zoom: zoom)
         super.init(frame: .zero)
-        label.font = .systemFont(ofSize: metrics.font)
-        label.textColor = .secondaryLabelColor
         label.lineBreakMode = .byTruncatingTail
-        label.alignment = .center
         label.translatesAutoresizingMaskIntoConstraints = false
         label.setAccessibilityElement(false)
         addSubview(label)
         translatesAutoresizingMaskIntoConstraints = false
-        let height = heightAnchor.constraint(equalToConstant: metrics.height)
-        heightConstraint = height
-        NSLayoutConstraint.activate([
-            height,
-            label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: (Self.ruleStart - Self.trailing) / 2),
-            label.centerYAnchor.constraint(equalTo: centerYAnchor),
-            label.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -(Self.ruleStart + Self.trailing + 48)),
-        ])
         setAccessibilityElement(true)
-        setAccessibilityRole(.disclosureTriangle)
         setAccessibilityLabel(name)
         setAccessibilityIdentifier("page.divider.\(name)")
-        setAccessibilityValue(1)
+        switch style {
+        case .window:
+            label.font = .systemFont(ofSize: metrics.font)
+            label.textColor = .secondaryLabelColor
+            label.alignment = .center
+            let height = heightAnchor.constraint(equalToConstant: metrics.height)
+            heightConstraint = height
+            NSLayoutConstraint.activate([
+                height,
+                label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: (Self.ruleStart - Self.trailing) / 2),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -(Self.ruleStart + Self.trailing + 48)),
+            ])
+            setAccessibilityRole(.disclosureTriangle)
+            setAccessibilityValue(1)
+        case .popover:
+            label.font = .systemFont(ofSize: Popover.font)
+            label.textColor = .labelColor
+            label.alignment = .natural
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            NSLayoutConstraint.activate([
+                heightAnchor.constraint(equalToConstant: Popover.height),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Popover.leading),
+                label.centerYAnchor.constraint(equalTo: centerYAnchor),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor,
+                                                constant: -(Popover.trailing + Popover.gap)),
+            ])
+            setAccessibilityRole(.staticText)
+        }
     }
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
 
-    /// The text size changed: the name, the band and the triangle follow it.
+    /// The band's height as laid out: what the page's height counts.
+    var bandHeight: CGFloat { style == .popover ? Popover.height : metrics.height }
+
+    /// The text size changed: the name, the band and the triangle follow it (the popover's stay, as its title does).
     func setZoom(_ zoom: Double) {
+        guard style == .window else { return }
         let next = Self.metrics(zoom: zoom)
         guard next != metrics else { return }
         metrics = next
@@ -92,6 +128,18 @@ final class EntryPageDivider: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         let mid = (bounds.height / 2).rounded(.down) + 0.5
+        if style == .popover {
+            // The title row's hairline: the separator colour, from just after the name to the trailing inset.
+            let start = label.frame.maxX + Popover.gap, end = bounds.maxX - Popover.trailing
+            guard end > start else { return }
+            NSColor.separatorColor.setStroke()
+            let rule = NSBezierPath()
+            rule.lineWidth = 1
+            rule.move(to: NSPoint(x: start, y: mid))
+            rule.line(to: NSPoint(x: end, y: mid))
+            rule.stroke()
+            return
+        }
         let colour = Self.ruleColour
         colour.setStroke()
         let text = label.frame.insetBy(dx: -Self.gap, dy: 0)
@@ -121,11 +169,16 @@ final class EntryPageDivider: NSView {
 
     override func mouseDown(with event: NSEvent) { toggle() }
     override func accessibilityPerformPress() -> Bool {
+        guard style == .window else { return false }
         toggle()
         return true
     }
 
-    func toggle() { onToggle?() }
+    /// The popover's divider collapses nothing.
+    func toggle() {
+        guard style == .window else { return }
+        onToggle?()
+    }
 }
 
 /// **One dictionary's part of the page**: its divider, and its frame — a pane of its own (`EntryPane`), made when it is
@@ -142,14 +195,16 @@ final class EntryPageSection {
     var hasDivider = true { didSet { apply() } }
     /// The frame's document has loaded at least once, and the frame has taken its height.
     var finished = false
+    /// Told when the frame's height changed: the page's height is news to whoever sizes to it (the popover).
+    var onHeightChange: (() -> Void)?
 
     var id: UUID { item.id }
     var name: String { item.name }
 
-    init(item: EntryPageItem, collapsed: Bool, zoom: Double = 1) {
+    init(item: EntryPageItem, collapsed: Bool, zoom: Double = 1, style: EntryPageStyle = .window) {
         self.item = item
         self.collapsed = collapsed
-        divider = EntryPageDivider(name: item.name, zoom: zoom)
+        divider = EntryPageDivider(name: item.name, zoom: zoom, style: style)
         holder.translatesAutoresizingMaskIntoConstraints = false
         height = holder.heightAnchor.constraint(equalToConstant: CGFloat(EntryPagePlan.estimatedHeight))
         height.priority = .required
@@ -164,6 +219,12 @@ final class EntryPageSection {
         let clamped = CGFloat(min(max(points, 1), EntryPage.maximumFrameHeight))
         guard abs(height.constant - clamped) >= 0.5 else { return }
         height.constant = clamped
+        onHeightChange?()
+    }
+
+    /// What this section adds to the page's height: its divider's band when shown, its frame when expanded.
+    var pageHeight: Double {
+        (hasDivider ? Double(divider.bandHeight) : 0) + (collapsed ? 0 : frameHeight)
     }
 
     func attach(_ pane: EntryPane) {
@@ -216,6 +277,9 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     private let make: (EntryPageSection) -> Result<EntryPane, EntryRefusal>
     private let preferences: EntryPreferences
     private var zoom: Double
+    let style: EntryPageStyle
+    /// Told whenever the page's height (`contentHeight`) may have changed: a frame's height, or the sections shown.
+    var onContentHeightChanged: (() -> Void)?
     /// Where to land once the frames above it have loaded: a page offset in points.
     private var pendingOffset: Double?
     /// Find across the frames: the query, each section's visible match count, and the current match.
@@ -228,9 +292,11 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     private(set) var asked = ContinuousClock.now
     private(set) var firstPaint: Duration?
 
-    init(preferences: EntryPreferences, zoom: Double, make: @escaping (EntryPageSection) -> Result<EntryPane, EntryRefusal>) {
+    init(preferences: EntryPreferences, zoom: Double, style: EntryPageStyle = .window,
+         make: @escaping (EntryPageSection) -> Result<EntryPane, EntryRefusal>) {
         self.preferences = preferences
         self.zoom = zoom
+        self.style = style
         self.make = make
         super.init()
         stack.orientation = .vertical
@@ -244,7 +310,9 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         scroll.hasVerticalScroller = true
         scroll.hasHorizontalScroller = false
         scroll.autohidesScrollers = true
-        scroll.drawsBackground = true
+        // In the popover the page is the glass: its frames are clear (`EntryPane.page`), and so is the page.
+        scroll.drawsBackground = style == .window
+        scroll.contentView.drawsBackground = style == .window
         scroll.backgroundColor = NSColor(name: nil) { appearance in
             appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 30 / 255, alpha: 1) : .white
         }
@@ -269,6 +337,16 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
 
     var panes: [EntryPane] { sections.compactMap(\.pane) }
 
+    /// **The page's height in points**: every shown divider's band and every expanded frame's height (a frame not yet
+    /// made counts at its estimate). What the popover sizes itself to, up to its cap, past which the page scrolls.
+    var contentHeight: Double { sections.reduce(0) { $0 + $1.pageHeight } }
+
+    /// A popover's page collapses nothing: its divider has no triangle (Apple's popover), and a dictionary collapsed in
+    /// the main window would otherwise be in the popover with no way to open it. The main window's choice is kept.
+    private func isCollapsed(_ item: EntryPageItem) -> Bool {
+        style == .window && preferences.collapsed(for: item.content.binding.dictionary)
+    }
+
     // MARK: - Showing
 
     /// Shows `items` in this order: a section whose dictionary, binding and record are unchanged keeps its frame as it
@@ -282,8 +360,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 kept.insert(ObjectIdentifier(section))
                 next.append(section)
             } else {
-                next.append(EntryPageSection(item: item, collapsed: preferences.collapsed(for: item.content.binding.dictionary),
-                                             zoom: zoom))
+                next.append(EntryPageSection(item: item, collapsed: isCollapsed(item), zoom: zoom, style: style))
             }
         }
         for section in sections where !kept.contains(ObjectIdentifier(section)) { section.close() }
@@ -294,11 +371,12 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         }
         sections = next
         for (index, section) in next.enumerated() {
-            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed)
+            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed, style: style)
             section.divider.onToggle = { [weak self, weak section] in
                 guard let self, let section else { return }
                 self.toggle(section)
             }
+            section.onHeightChange = { [weak self] in self?.onContentHeightChanged?() }
         }
         let views = next.flatMap { [$0.divider as NSView, $0.holder] }
         if stack.arrangedSubviews != views {
@@ -308,6 +386,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             }
         }
         if let offset { pendingOffset = offset } else if kept.isEmpty { scrollTo(0) }
+        onContentHeightChanged?()
         return materialize()
     }
 
@@ -323,8 +402,9 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         section.collapsed.toggle()
         preferences.setCollapsed(section.collapsed, for: section.item.content.binding.dictionary)
         if let index = sections.firstIndex(where: { $0 === section }) {
-            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed)
+            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: section.collapsed, style: style)
         }
+        onContentHeightChanged?()
         if let refusal = materialize() { onRefusal?(refusal) }
     }
 

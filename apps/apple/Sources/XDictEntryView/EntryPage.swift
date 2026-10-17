@@ -27,6 +27,17 @@ public struct EntryPageItem: Sendable {
     }
 }
 
+/// Where the page is shown: the main window (Apple's page: paper, collapsible dividers following the text size), or
+/// the lookup popover (P41; owner, 2026-10-18: "stack every dictionary as a section, like Apple's"): no paper of its
+/// own on the glass, every section named by Apple's compact popover divider, nothing collapsed.
+public enum EntryPageStyle: Sendable {
+    case window
+    case popover
+
+    /// The popover's page is the one whose frame takes the panel layer.
+    init(frame: EntryReadingFrame) { self = frame.contains(.panel) ? .popover : .window }
+}
+
 /// **The page's arithmetic, with no view** (P15): which sections have a divider, which are collapsed, and which frames
 /// to make now. A web view per dictionary costs a content process, so a headword found in many dictionaries makes only
 /// the frames on screen and one screen beyond; the rest are made as the reader scrolls towards them, or all at once for
@@ -40,8 +51,10 @@ enum EntryPagePlan {
 
     /// Apple's page: every section but the first has a divider (the first dictionary is read straight after the
     /// toolbar). A collapsed first section needs its divider back, or nothing could expand it.
-    static func hasDivider(at index: Int, collapsed: Bool) -> Bool {
-        index > 0 || collapsed
+    /// In the lookup popover every section has one: its title row is the headword, so the first dictionary is named
+    /// by its divider too, as Apple's popover names each of its stacked dictionaries (P41).
+    static func hasDivider(at index: Int, collapsed: Bool, style: EntryPageStyle = .window) -> Bool {
+        style == .popover || index > 0 || collapsed
     }
 
     /// The sections whose frames should exist for a viewport from `top` to `top + height` (points, the page's
