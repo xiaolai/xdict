@@ -158,14 +158,26 @@ class Triage(unittest.TestCase):
 
 
 class Repro(unittest.TestCase):
+    # Its own ledger, never the real one: closing or editing a real row must not change what these tests prove.
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.ledger = os.path.join(self.tmp.name, "ledger.tsv")
+        cols = ("id", "opened", "symptom", "repro", "mechanism", "rule", "fix_at", "guard", "status", "commit")
+        rows = [cols,
+                ("D1", "2026-10-17", "a gap", "ldoce:bloody,ldoce:cripple", "m", "R9", "-", "-", "open", "-"),
+                ("D2", "2026-10-17", "not yet found", "-", "m", "-", "-", "-", "open", "-")]
+        with open(self.ledger, "w") as f:
+            f.write("".join("\t".join(r) + "\n" for r in rows))
+
     def test_dry_run_names_hot_and_the_entries(self):
-        r = run("repro", "D7", "--dry-run", "--theme", "dark")
+        r = run("--ledger", self.ledger, "repro", "D1", "--dry-run", "--theme", "dark")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("hot.sh ldoce:bloody ldoce:cripple", r.stdout)
         self.assertIn("*-dark.jpg", r.stdout)
 
     def test_a_row_with_no_entry_refuses(self):
-        r = run("repro", "D38", "--dry-run")
+        r = run("--ledger", self.ledger, "repro", "D2", "--dry-run")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("no entry to render yet", r.stderr)
 
