@@ -1,4 +1,3 @@
-import Carbon.HIToolbox
 import SwiftUI
 import XDictAnywhere
 
@@ -12,19 +11,21 @@ public enum ShortcutDisplay {
         guard let name = keyName(shortcut.keyCode), name.count == 1, let key = name.lowercased().first,
               key.isLetter || key.isNumber || key.isPunctuation || key.isSymbol else { return nil }
         var modifiers: SwiftUI.EventModifiers = []
-        if shortcut.modifiers & UInt32(controlKey) != 0 { modifiers.insert(.control) }
-        if shortcut.modifiers & UInt32(optionKey) != 0 { modifiers.insert(.option) }
-        if shortcut.modifiers & UInt32(shiftKey) != 0 { modifiers.insert(.shift) }
-        if shortcut.modifiers & UInt32(cmdKey) != 0 { modifiers.insert(.command) }
+        if shortcut.control { modifiers.insert(.control) }
+        if shortcut.option { modifiers.insert(.option) }
+        if shortcut.shift { modifiers.insert(.shift) }
+        if shortcut.command { modifiers.insert(.command) }
         return (key, modifiers)
     }
 
     /// The combination spoken: modifier names in macOS's order, then the key as the menu labels it.
     public static func spoken(_ shortcut: Shortcut, keyName: (UInt32) -> String? = Shortcut.currentLayoutName) -> String {
-        let names: [(Int, String)] = [(controlKey, String(localized: "Control")), (optionKey, String(localized: "Option")),
-                                      (shiftKey, String(localized: "Shift")), (cmdKey, String(localized: "Command"))]
+        let names: [(Bool, String)] = [(shortcut.control, String(localized: "Control")),
+                                       (shortcut.option, String(localized: "Option")),
+                                       (shortcut.shift, String(localized: "Shift")),
+                                       (shortcut.command, String(localized: "Command"))]
         let label = shortcut.label(keyName: keyName)
         let key = label.drop { "⌃⌥⇧⌘".contains($0) }
-        return (names.filter { shortcut.modifiers & UInt32($0.0) != 0 }.map(\.1) + [String(key)]).joined(separator: "-")
+        return (names.filter(\.0).map(\.1) + [String(key)]).joined(separator: "-")
     }
 }
