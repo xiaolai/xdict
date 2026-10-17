@@ -184,6 +184,8 @@ padding-bottom:var(--xdict-space-2)}
 [data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
 :not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
 img{max-width:100%;height:auto}
+/* One indent a list level (R9, G14): 1.5em of the list, whatever margin or padding the dictionary gave it. */
+ul,ol{margin-inline-start:0 !important;padding-inline-start:1.5em !important}
 /* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
 /* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
 :where(a:any-link){color:var(--xdict-link)}
@@ -735,9 +737,13 @@ inset-block-start:calc(0.5lh - var(--xdict-icon) / 2) !important;margin:0 !impor
 /* 5. The speaker: one inline row, the accent tag first, both on the line's baseline, the glyph centred on */
 /* the tag; whatever width, height, float or display the dictionary gave its button. */
 [data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;
-width:auto !important;height:auto !important;min-width:0 !important;min-height:0 !important;
+width:auto !important;height:auto !important;
 float:none !important;position:static !important;vertical-align:baseline !important;
 flex-wrap:nowrap !important;line-height:inherit !important;
+/* Its hit area is XDict's (G11, 24 px), whatever padding the dictionary gave its button, and in small text too */
+/* (CED's `hwd_sound` at 12 px was 20 px wide). */
+padding:calc((var(--xdict-hit) - 1em) / 2) !important;min-width:var(--xdict-hit) !important;
+min-height:var(--xdict-hit) !important;justify-content:center !important;box-sizing:border-box !important;
 /* The control spacing before it: its hit area's negative margin, less 0.25em, so a speaker set against the */
 /* word before it (CED's after a transcription, COBUILD's after a headword) does not touch it. */
 margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}
@@ -769,6 +775,12 @@ min-height:0 !important;float:none !important;position:static !important}
 /* A label owns 0.35em after it before the next word or control (§8.4); two labels in a row share it. */
 [data-xdict-role=label]{margin-inline-end:0.35em !important}
 [data-xdict-role=label]+[data-xdict-role=label]{margin-inline-start:0 !important}
+/* Two labels each in a wrapper of its own share it too (OALD's OPAL links, `a{margin-right:4px}`): the wrapper */
+/* adds no inline space, and the second label none before it. */
+:is(a,span):has(> [data-xdict-role=label]:first-child):not([data-xdict-role]){margin-inline:0 !important;
+padding-inline:0 !important}
+:is(a,span):has(> [data-xdict-role=label]:first-child)+:is(a,span):has(> [data-xdict-role=label]:first-child)
+>[data-xdict-role=label]{margin-inline-start:0 !important}
 /* 7. Punctuation the source set against an element stays against it: its inline end spacing goes. */
 /* A speaker's tag is drawn first (order -1), never last; a label that replaced the hugging element's last */
 /* child is its last drawn text. */
@@ -849,7 +861,18 @@ var XDictPronRunCore = (function () {
     }
     return null;
   }
-  return { run: run };
+  // A transcription followed by the speakers that play it (PEU's `/ˈraɪdə(r)/<div data-xdict-speakers>…</div>`):
+  // the transcription and the last of the speakers, or their box, after it with nothing but space between.
+  function after(phon, is) {
+    var n = phon.nextSibling, steps = 0, last = null;
+    while (n && steps < 32) {
+      if (is.speaker(n) || is.speakers(n)) last = n;
+      else if (!is.blank(n)) break;
+      n = n.nextSibling; steps += 1;
+    }
+    return last ? { first: phon, last: last } : null;
+  }
+  return { run: run, after: after };
 })();
 
 """#,
@@ -859,25 +882,40 @@ var XDictPronRunCore = (function () {
   if (typeof document === 'undefined' || window.__xdictPronRun) return;
   var is = {
     speaker: function (n) { return n.nodeType === 1 && n.getAttribute('data-xdict-control') === 'speaker'; },
+    speakers: function (n) { return n.nodeType === 1 && n.hasAttribute('data-xdict-speakers'); },
     phon: function (n) { return n.nodeType === 1 && n.hasAttribute('data-xdict-phon'); },
     blank: function (n) { return n.nodeType === 3 && !/\S/.test(n.nodeValue); }
   };
   var MAX = 2000;
+  function inRun(n) { return n.parentNode && n.parentNode.hasAttribute && n.parentNode.hasAttribute('data-xdict-pron-run'); }
+  function wrap(r) {
+    var w = document.createElement('span');
+    w.setAttribute('data-xdict-pron-run', '');
+    r.first.parentNode.insertBefore(w, r.first);
+    var n = r.first, stop = r.last.nextSibling;
+    while (n && n !== stop) { var next = n.nextSibling; w.appendChild(n); n = next; }
+  }
   function glue() {
     var speakers = document.querySelectorAll('[data-xdict-control=speaker]'), done = 0;
     for (var i = 0; i < speakers.length && i < MAX; i++) {
       var s = speakers[i];
-      if (!s.parentNode || s.parentNode.hasAttribute && s.parentNode.hasAttribute('data-xdict-pron-run')) continue;
+      if (!s.parentNode || inRun(s)) continue;
       var prev = s.previousSibling;
       while (prev && is.blank(prev)) prev = prev.previousSibling;
       if (prev && is.speaker(prev)) continue;
       var r = XDictPronRunCore.run(s, is);
       if (!r) continue;
-      var wrap = document.createElement('span');
-      wrap.setAttribute('data-xdict-pron-run', '');
-      s.parentNode.insertBefore(wrap, s);
-      var n = s, stop = r.last.nextSibling;
-      while (n && n !== stop) { var next = n.nextSibling; wrap.appendChild(n); n = next; }
+      wrap(r);
+      done += 1;
+    }
+    // And a transcription with the speakers after it: a line never breaks between them (PEU, gallery 2026-10-17).
+    var phons = document.querySelectorAll('[data-xdict-phon]');
+    for (var j = 0; j < phons.length && j < MAX; j++) {
+      var p = phons[j];
+      if (!p.parentNode || inRun(p)) continue;
+      var a = XDictPronRunCore.after(p, is);
+      if (!a) continue;
+      wrap(a);
       done += 1;
     }
     return done;
@@ -937,6 +975,12 @@ body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !importan
 :where(sub,sup,rt){font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading)}
 :where(code,kbd,pre,samp,tt){font-size:var(--xdict-fs-s);line-height:var(--xdict-leading)}
 :where(button,input,select,textarea){font:inherit}
+/* A relative size a dictionary's script writes at run time, which the core never sees (COBUILD's trend chart, */
+/* `font-size:smaller`, 13.3 px), is a step of the scale (G1). */
+[style*="font-size:smaller"],[style*="font-size: smaller"]{font-size:var(--xdict-fs-s) !important;
+line-height:var(--xdict-leading) !important}
+[style*="font-size:larger"],[style*="font-size: larger"]{font-size:var(--xdict-fs-l) !important;
+line-height:var(--xdict-leading) !important}
 :where(p,ul,ol,dl,blockquote,figure,pre,menu,dir,fieldset,form){margin-block:var(--xdict-space-4)}
 :where(h1,h2,h3,h4,h5,h6,hr){margin-block:var(--xdict-space-3)}
 @layer xdict-unify{
