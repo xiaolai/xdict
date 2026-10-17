@@ -24,8 +24,8 @@ public enum EntryColourScheme: String, Sendable {
     case light, dark
 }
 
-/// **The reader's choices per dictionary, kept across launches** (R2, R4): zoom and theme, under the binding's
-/// `dictionary` (its lineage), in the app's own defaults. What is read back is held to what the view can show: a zoom
+/// **The reader's choices, kept across launches** (R2, R4): the text size, for every dictionary; the theme, under the
+/// binding's `dictionary` (its lineage), in the app's own defaults. What is read back is held to what the view can show: a zoom
 /// outside the range, or a theme this version does not know, reads as the default.
 public struct EntryPreferences: @unchecked Sendable {
     // `UserDefaults` is documented thread-safe; it is not marked `Sendable`.
@@ -38,7 +38,7 @@ public struct EntryPreferences: @unchecked Sendable {
         self.defaults = defaults
     }
 
-    static func zoomKey(_ dictionary: String) -> String { "entry.zoom.\(dictionary)" }
+    static let zoomKey = "entry.textSize"
     static func themeKey(_ dictionary: String) -> String { "entry.theme.\(dictionary)" }
     public static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
     /// The reading style's accent, for every dictionary (Settings ▸ Reading).
@@ -62,13 +62,15 @@ public struct EntryPreferences: @unchecked Sendable {
         defaults.set(original, forKey: Self.originalStyleKey(dictionary))
     }
 
-    public func zoom(for dictionary: String) -> Double {
-        let stored = defaults.double(forKey: Self.zoomKey(dictionary))
+    /// The text size, one for every dictionary, as Apple's Dictionary has it (parity P29, owner 2026-10-17; it was per
+    /// dictionary, ADR-0010 d.3).
+    public func zoom() -> Double {
+        let stored = defaults.double(forKey: Self.zoomKey)
         return Self.zoomRange.contains(stored) ? stored : 1.0
     }
 
-    public func setZoom(_ zoom: Double, for dictionary: String) {
-        defaults.set(min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound), forKey: Self.zoomKey(dictionary))
+    public func setZoom(_ zoom: Double) {
+        defaults.set(min(max(zoom, Self.zoomRange.lowerBound), Self.zoomRange.upperBound), forKey: Self.zoomKey)
     }
 
     public func theme(for dictionary: String) -> EntryTheme {
