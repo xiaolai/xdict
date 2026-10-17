@@ -16,7 +16,6 @@
 
 use html5ever::tendril::TendrilSink;
 use markup5ever_rcdom::{Handle, NodeData, RcDom};
-use std::time::{Duration, Instant};
 use xdict_entry::{Entry, Style, entry_normalized_within};
 
 const BASE: &str = "xdict://d/";
@@ -213,11 +212,10 @@ fn an_insertion_lands_outside_any_tag() {
 }
 
 /// A seeded walk over random interleavings of removable pieces, tag fragments, quotes and glyphs: deterministic,
-/// and bounded by count and by time.
+/// and bounded by count alone: the same cases on every machine (a time budget ran fewer on a slower one).
 #[test]
 fn random_interleavings_assemble_nothing() {
     const CASES: usize = 20_000;
-    const BUDGET: Duration = Duration::from_secs(60);
     // Halves of the dangerous words: never whole in an input, so whole in a parse only if assembled.
     const HALVES: [(&str, &str); 6] = [
         ("<scr", "ipt>alert(1)</script>"),
@@ -278,9 +276,7 @@ fn random_interleavings_assemble_nothing() {
         seed ^= seed << 17;
         usize::try_from(seed % n as u64).unwrap()
     };
-    let started = Instant::now();
-    let mut run = 0;
-    while run < CASES && started.elapsed() < BUDGET {
+    for _ in 0..CASES {
         let mut input = String::new();
         for _ in 0..1 + next(8) {
             match next(3) {
@@ -297,7 +293,5 @@ fn random_interleavings_assemble_nothing() {
             }
         }
         assert_clean(&input);
-        run += 1;
     }
-    assert!(run >= 1000, "only {run} cases in the budget");
 }
