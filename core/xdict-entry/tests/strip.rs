@@ -140,7 +140,9 @@ fn minion_private_use_is_written_as_unicode() {
     assert!(!out.chars().any(|c| ('\u{e000}'..='\u{f8ff}').contains(&c)), "Private Use left: {out}");
     assert!(out.contains("o\u{35e}o"), "{out}");
     assert!(out.contains("o\u{35d}o"), "{out}");
-    assert!(out.contains("<b>\u{2032}</b>"), "{out}");
+    // Not a `<b>`: a dictionary rule on its bold (AHD's `.runseg b::before`, a bullet) would draw on it too.
+    assert!(out.contains("<span style=\"font-weight:bold\">\u{2032}</span>"), "{out}");
+    assert!(!out.contains("<b>"), "{out}");
     let other = html("<span class=\"icon\">\u{e01f}</span>", &s);
     assert!(other.contains('\u{e01f}'), "{other}");
 }

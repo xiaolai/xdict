@@ -2530,12 +2530,13 @@ pub fn roles_marked(text: &str, key: &str, style: &crate::Style, base: &str) -> 
 /// not on a Mac (the gallery sweep of 2026-10-17 drew boxes; reading-style R3's edge). The two tied vowels with their
 /// combining tie (U+035E double macron, U+035D double breve), and the primary stress, a bold prime beside the light
 /// prime (U+2032) the markup writes for secondary stress. Read from the entries: `bassoon` (bə-so͞on′),
-/// `hurdswoman` (-wo͝om′-), `alone` (ə-lōn′).
+/// `hurdswoman` (-wo͝om′-), `alone` (ə-lōn′). The bold is a style, not a `<b>`: a dictionary rule on its bold (AHD's
+/// `.runseg b::before`, a bullet) would draw on it too.
 fn minion(c: char) -> Option<&'static str> {
     match c {
         '\u{e012}' => Some("o\u{35d}o"),
         '\u{e013}' => Some("o\u{35e}o"),
-        '\u{e01f}' => Some("<b>\u{2032}</b>"),
+        '\u{e01f}' => Some("<span style=\"font-weight:bold\">\u{2032}</span>"),
         _ => None,
     }
 }
