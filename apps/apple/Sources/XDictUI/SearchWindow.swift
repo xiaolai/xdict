@@ -52,11 +52,12 @@ public struct SearchWindow: View {
             .disabled(!state.model.canReturnToOrigin)
             .help(Text("Return to the word you typed"))
         }
+        // The speaker right before the title, the word it says (owner, 2026-10-17).
+        ToolbarItem(placement: .navigation) {
+            PronounceButton(state: state)
+        }
         ToolbarItem(placement: .principal) {
             ScopePicker(state: state)
-        }
-        ToolbarItem(placement: .primaryAction) {
-            PronounceButton(state: state)
         }
         ToolbarItem(placement: .primaryAction) {
             SearchField(text: state.model.text, prompt: String(localized: "Look Up"), focus: state.searchFocus,
