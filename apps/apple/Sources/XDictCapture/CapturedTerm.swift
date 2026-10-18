@@ -41,7 +41,11 @@ public enum ContextOutcome: Sendable, Equatable {
     case pending(PendingContextHandle)
     case unavailable(ContextUnavailable)
 }
-public enum CaptureValueError: Error, Sendable, Equatable { case term, range, rangeSplitsCharacter, geometry, confidence }
+public enum CaptureValueError: Error, Sendable, Equatable {
+    case term, range, rangeSplitsCharacter, geometry, confidence
+    /// A sentence longer than `CaptureLimits.contextCeilingUTF16`: a reader that did not cut before segmenting.
+    case contextTooLong
+}
 
 public struct CapturedTerm: Sendable, Equatable {
     public let term: String
@@ -80,6 +84,9 @@ public struct CapturedTerm: Sendable, Equatable {
             guard finite(point.cg) else { throw .geometry }
         }
         let checked: ContextOutcome
+        if case .available(let sentence, _, _, _) = context, sentence.utf16.count > CaptureLimits.contextCeilingUTF16 {
+            throw .contextTooLong
+        }
         if case .available(let sentence, let range, let cut, let gap) = context {
             let (text, moved) = try cleaned(sentence, keeping: range, term: term)
             checked = .available(sentence: text, term: moved, cut: cut, gap: gap)

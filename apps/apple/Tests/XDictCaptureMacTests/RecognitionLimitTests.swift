@@ -60,6 +60,30 @@ struct RecognitionLimitTests {
         #expect(lines.flatMap(\.runs).count <= 5)
     }
 
+    /// **The context limit holds inside one line too**: a single recognised line of 2,000,000 units ("tide " 400,000
+    /// times, no sentence end) yields a sentence of at most `contextUTF16` around the word, cut at both ends and said to
+    /// be — and a term the captured term accepts. Red while only whole lines are capped.
+    @Test func aLineLongerThanTheLimitIsCutAroundTheWord() throws {
+        let text = String(repeating: "tide ", count: 400_000)
+        let box = CGRect(x: 0, y: 0.4, width: 1, height: 0.05)
+        let word = CGRect(x: 0.5, y: 0.4, width: 0.000_002, height: 0.05)
+        let line = RecognisedLine(text: text, box: box, runs: [RecognisedRun(text: "tide", utf16Offset: 1_000_000, box: word)])
+        let read = try #require(ScreenTextRecogniser.reading(
+            [line], pick: RecognisedPick(line: 0, run: 0), at: CGPoint(x: word.minX, y: word.midY),
+            region: CGSize(width: 1000, height: 300), appName: nil, bundleID: nil, limits: .shipped))
+        #expect(read.word.word == "tide")
+        #expect(read.word.sentence.text.utf16.count <= CaptureLimits.shipped.contextUTF16,
+                "\(read.word.sentence.text.utf16.count) units in one sentence")
+        #expect(read.word.sentence.cut == [.start, .end] && read.mayBeCut, "a cut sentence said it was whole")
+        #expect(read.wantsMore.isEmpty, "a sentence the limit closed asked for a taller strip")
+        let term = try read.capturedTerm(pointer: nil)
+        guard case .available(let sentence, let range, _, _) = term.context else {
+            Issue.record("no context")
+            return
+        }
+        #expect((sentence as NSString).substring(with: range) == "tide")
+    }
+
     /// **The context limit reaches the reading**: a sentence longer than `contextUTF16` is never assembled whole.
     @Test func theContextLimitIsAppliedBeforeTheSentence() throws {
         let words = (0..<40).map { "word\($0)" }

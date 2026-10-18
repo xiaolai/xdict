@@ -70,7 +70,9 @@ struct TestInventoryTests {
         // session settling, cancelling and refusing an unknown handle (4).
         // 282 → 285 (plan-capture WI-4 verification): nothing of a settled sentence outlives its request, a context cancelled
         // by its holder leaves the book, and an older generation's settlement changes nothing.
-        "XDictCaptureTests": 285,
+        // 285 → 288: a sentence over the context ceiling refused, a cut that never splits a combining sequence, and a limit over
+        // the ceiling refused.
+        "XDictCaptureTests": 288,
         // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
         // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
@@ -93,7 +95,8 @@ struct TestInventoryTests {
         // one not presented cancelling its context). 226 → 230: an excluded app and an unattributable window refused before
         // any capture call, an allowed one captured, and a word refused after the read cancelling its context. 230 → 232:
         // a recognised word refused the presentation, or refused as a term, cancels its context and empties the book.
-        "XDictCaptureMacTests": 232,
+        // 232 → 233: one recognised line longer than the context limit is cut around the word.
+        "XDictCaptureMacTests": 233,
         // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
         // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
         // read through hover's reader at one point, and the process's lines and exits.
