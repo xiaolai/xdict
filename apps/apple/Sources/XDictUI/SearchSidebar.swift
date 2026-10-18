@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import XDictEntryView
 import XDictSearch
+import XDictTokens
 
 /// **The sidebar, as Apple's Dictionary has it** (parity P9, P11, P13, P43): there only after a search; one flat list of
 /// the matching headwords across the dictionaries in scope — an AppKit table VoiceOver reads as "search results", 28 pt
@@ -14,10 +15,10 @@ struct SearchSidebar: View {
         VStack(alignment: .leading, spacing: 0) {
             if state.model.listing?.isGuess == true {
                 Text("Did you mean?")
-                    .font(.system(size: 15).italic())
+                    .font(Tokens.TextRole.didYouMean.font)
                     .foregroundStyle(.secondary)
-                    .padding(.leading, 18)
-                    .padding(.vertical, 6)
+                    .padding(.leading, Tokens.Inset.sidebarHeaderLeading)
+                    .padding(.vertical, Tokens.Space.s)
                     .accessibilityIdentifier("did-you-mean")
             }
             HeadwordTable(state: state)
@@ -26,7 +27,7 @@ struct SearchSidebar: View {
                 Text(state.service.headline)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .padding(8)
+                    .padding(Tokens.Space.sm)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -133,7 +134,7 @@ struct HeadwordTable: NSViewRepresentable {
 
 /// The sidebar's table: its own class, so the window's instruments know the results list by it.
 final class HeadwordTableView: NSTableView {
-    static let rowHeight: CGFloat = 28
+    static let rowHeight: CGFloat = Tokens.Row.sidebar
     /// Where Tab goes from the list: the entry (`EntryViewController.keyViewTarget`), asked when the key is pressed, so
     /// the All page's frames made later, or a key-view loop the window recalculated, cannot send it to the search field.
     var entryKeyView: (() -> NSView?)?
@@ -168,6 +169,6 @@ final class HeadwordCell: NSTableCellView {
 
     func show(_ headword: String, selected: Bool) {
         label.stringValue = headword
-        label.font = .systemFont(ofSize: 13, weight: selected ? .semibold : .regular)
+        label.font = (selected ? Tokens.TextRole.sidebarRowSelected : Tokens.TextRole.sidebarRow).nsFont
     }
 }

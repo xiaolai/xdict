@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// The events of one controller, kept in order with their time.
 @MainActor
@@ -59,7 +60,7 @@ enum FaultRun {
             switches: { FaultySwitches(real: PreferencesSwitches($0), fault: fault) },
             events: { log.note($0) })
         let controller = EntryViewController(environment: environment)
-        let window = labWindow("fault \(fault)", frame: NSRect(x: 80, y: 200, width: 480, height: 320), view: controller.view)
+        let window = labWindow("fault \(fault)", frame: Tokens.InstrumentFrame.probe, view: controller.view)
         let shown = await controller.show(EntryReference(key: "ok-xdict"), from: content)
         try await Task.sleep(for: .milliseconds(1500))
         let sentence = controller.refusal.map { String(localized: EntrySentences.refusal($0)) } ?? ""
@@ -95,7 +96,7 @@ enum BindingRun {
             opener: RecordingOpener(), ruleListDirectory: FileManager.default.temporaryDirectory.appending(path: "xdict-lab-rules"),
             events: { log.note($0) })
         let controller = EntryViewController(environment: environment)
-        let window = labWindow("binding", frame: NSRect(x: 80, y: 200, width: 480, height: 320), view: controller.view)
+        let window = labWindow("binding", frame: Tokens.InstrumentFrame.probe, view: controller.view)
         defer { window.close() }
         var steps: [String: Any] = [:]
         let word = EntryReference(key: "word")

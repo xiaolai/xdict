@@ -35,6 +35,24 @@ struct TokensFreshnessTests {
     }
 }
 
+/// **The two visible changes the owner approved (2026-10-18) are the scale's tokens**, read off the sources: the
+/// Acknowledgments' notices 12 pt apart (were 10), the pronunciation banner 16 pt in on each side (was 14).
+struct ApprovedChangesTests {
+    static func source(_ file: String) throws -> String {
+        try String(contentsOf: TokensFreshnessTests.apple.appending(path: "Sources/XDictUI/\(file)"), encoding: .utf8)
+    }
+
+    @Test func theAcknowledgmentsSpacingIsTheScalesM() throws {
+        #expect(Tokens.Space.m == 12)
+        #expect(try Self.source("AcknowledgmentsView.swift").contains("VStack(alignment: .leading, spacing: Tokens.Space.m)"))
+    }
+
+    @Test func theBannersSideInsetIsTheScalesL() throws {
+        #expect(Tokens.Space.l == 16)
+        #expect(try Self.source("PronunciationBanner.swift").contains(".padding(.horizontal, Tokens.Space.l)"))
+    }
+}
+
 /// Both faces of a token: what SwiftUI and AppKit are handed is the same role.
 struct TokenValuesTests {
     @Test func aMeasuredRoleIsItsSizeWeightAndDesign() {

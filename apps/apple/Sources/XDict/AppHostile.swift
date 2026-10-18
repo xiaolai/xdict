@@ -7,6 +7,7 @@ import XDictEntryView
 import XDictLibrary
 import XDictSearch
 import XDictUI
+import XDictTokens
 
 /// `XDict --entry-hostile <library-dir> --fixture <hostile> --cases <cases.json> --out <report.json> [--concurrency N]`:
 /// a development instrument for the E2E `hostile` stage (run on the E2E Mac only). **The hostile-input suite through the
@@ -134,7 +135,10 @@ final class AppHostileRun {
     }
 
     private func launch(_ test: AppHostileReport.Case, slot: Int) {
-        let frame = NSRect(x: 40 + (slot % 2) * 500, y: 80 + (slot / 2) * 340, width: 480, height: 300)
+        let perRow = 2, tile = Tokens.InstrumentFrame.appHostileTile
+        let frame = NSRect(x: tile.minX + CGFloat(slot % perRow) * Tokens.InstrumentLength.appHostileStrideX,
+                           y: tile.minY + CGFloat(slot / perRow) * Tokens.InstrumentLength.appHostileStrideY,
+                           width: tile.width, height: tile.height)
         let window = InstrumentWindow(test.id, frame: frame, library: library, backend: client,
                                       suite: "ai.xdict.app.e2e.hostile", opener: opener)
         windows[test.id] = window

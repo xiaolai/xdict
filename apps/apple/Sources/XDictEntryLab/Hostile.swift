@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// One case of the hostile battery (`Tools/hostile/battery.py` writes them into `cases.json`): the entry of that key,
 /// how long to watch it, and whether it must run alone (a WebRTC host candidate's mDNS line names no page, only a time).
@@ -110,7 +111,8 @@ final class HostileRun {
         controllers[test.id] = controller
         records[test.id] = ["start": Date().timeIntervalSince1970, "events": [[String: Any]]()]
         readScripts[test.id] = test.readScript
-        let frame = NSRect(x: 40 + (slot % 4) * 330, y: 140, width: 320, height: 260)
+        let perRow = 4, tile = Tokens.InstrumentFrame.hostileTile
+        let frame = tile.offsetBy(dx: CGFloat(slot % perRow) * Tokens.InstrumentLength.hostileStride, dy: 0)
         windows[test.id] = [labWindow(test.id, frame: frame, view: controller.view)]
         Task { @MainActor in
             let rendered = try? await content.entry(EntryReference(key: test.id))
@@ -167,8 +169,8 @@ final class HostileRun {
     }
 
     private func popup(_ id: String, _ configuration: WKWebViewConfiguration, _ action: WKNavigationAction) -> WKWebView? {
-        let child = WKWebView(frame: NSRect(x: 0, y: 0, width: 300, height: 200), configuration: configuration)
-        windows[id, default: []].append(labWindow("\(id) popup", frame: NSRect(x: 60, y: 460, width: 300, height: 200),
+        let child = WKWebView(frame: Tokens.InstrumentFrame.popupView, configuration: configuration)
+        windows[id, default: []].append(labWindow("\(id) popup", frame: Tokens.InstrumentFrame.popup,
                                                   view: child))
         return child
     }

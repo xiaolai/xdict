@@ -238,6 +238,7 @@ test-tools:
 	@python3 -I Tools/tests/render_history_test.py
 	@python3 -I Tools/tests/tokens_test.py
 	@python3 -I Tools/tokens.py gen --check
+	@python3 -I Tools/tokens.py check
 	@python3 -I Tools/gallery/ledger.py check $(if $(XDICT_KNOWN_COMMITS),--known-commits $(XDICT_KNOWN_COMMITS))
 	@Tools/tests/notices-test.sh
 	@Tools/tests/icons-test.sh

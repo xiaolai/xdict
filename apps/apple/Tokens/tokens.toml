@@ -28,6 +28,9 @@ entryText = { kind = "string", swift = "EntryText", doc = "Values the entry view
 divider = { kind = "length", swift = "PageDivider", doc = "The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41)." }
 print = { kind = "length", swift = "Print", doc = "The printed entry page's section names." }
 placeholder = { kind = "length", swift = "Placeholder", doc = "The picture a blocked image becomes (SVG px): its host's name in a dashed box." }
+instrumentFrame = { kind = "rect", swift = "InstrumentFrame", doc = "Window frames of development instruments (the lab, the E2E instruments): never in front of a reader." }
+instrumentSize = { kind = "size", swift = "InstrumentSize", doc = "Pane sizes the instruments picture an entry at." }
+instrumentLength = { kind = "length", swift = "InstrumentLength", doc = "Strides, bounds and margins of the instruments' windows and captures." }
 css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
 palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
 accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
@@ -58,6 +61,9 @@ panelFooterLeading = { value = 26, source = "P41" }
 panelFooterGap = { value = 8, source = "P41" }
 panelBottom = { value = 8, source = "P41" }
 panelEntryFade = { value = 16, source = "P41" }
+panelRuleGap = { value = 8, source = "P41" }
+panelScreenMargin = { value = 8, why = "The lookup panel keeps clear of the screen's edges by this much when its room is measured." }
+clickedWordRise = { value = 8, why = "A Control-clicked word with no box: its point taken as the middle of a 16 pt line." }
 settingsSheetMargin = { value = 12, why = "The Details sheet's margin above and below inside the Settings window, so it never hangs past it." }
 settingsScreenMargin = { value = 40, why = "The Settings window's margin kept above and below it on the screen (ADR-0012 d.6)." }
 
@@ -68,11 +74,14 @@ scopeButton = { value = 22, source = "P6" }
 panelTitle = { value = 24, source = "P41" }
 panelFooter = { value = 26, source = "P41" }
 startName = { value = 32, source = "P14" }
+optionsBoxMin = { value = 60, why = "The box under the Settings table keeps at least two lines' room, so it does not jump as a selection changes (ADR-0012 d.6)." }
+clickedWord = { value = 16, why = "The line a Control-clicked word with no box is taken to stand on." }
 
 [control]
 scopeBar = { value = 36, source = "P6" }
 scopeMore = { value = 36, source = "P6" }
 toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window." }
+shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06)." }
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
 
 [window]
@@ -90,14 +99,31 @@ settingsTableMin = { value = 200, why = "The Dictionaries table at least this ta
 detailsSheetMin = { value = 220, why = "The Details sheet's usable minimum, which a small Settings pane still holds." }
 detailsSheetMax = { value = 640, why = "The Details sheet's maximum: its form scrolls inside rather than hang past the window (tour, 2026-10-18)." }
 popoverBody = { value = 390, source = "P41" }
+panelMinWidth = { value = 360, why = "The lookup panel's narrowest, bounding the popover's 390 pt body (P41) from below." }
+panelMaxWidth = { value = 640, why = "The lookup panel's widest, bounding the popover's body from above." }
+panelMinHeight = { value = 140, why = "The lookup panel's lowest: header and a line of entry (Codex UX decision 3, 2026-10-17)." }
+panelMaxHeight = { value = 560, why = "The lookup panel's tallest; a longer entry scrolls (Codex UX decision 3, 2026-10-17)." }
+panelInitialHeight = { value = 180, why = "The lookup panel's height while its entry loads (Codex UX decision 3, 2026-10-17)." }
+acknowledgmentsMinWidth = { value = 560, why = "The Acknowledgments window's narrowest: a licence's line reads whole." }
+acknowledgmentsIdealWidth = { value = 640, why = "The Acknowledgments window's opening width." }
+acknowledgmentsMinHeight = { value = 400, why = "The Acknowledgments window's lowest." }
+acknowledgmentsIdealHeight = { value = 560, why = "The Acknowledgments window's opening height." }
+bannerMax = { value = 520, why = "The pronunciation banner's widest: as wide as its words, never the window's (UI review M-15)." }
+noticesPopoverWidth = { value = 360, why = "The library notices' popover: a sentence a line." }
+noticesPopoverMaxHeight = { value = 320, why = "The library notices' popover's tallest; more scrolls." }
+fallbackScreenHeight = { value = 800, why = "The visible screen height assumed when AppKit names no main screen (none attached yet), so Settings still bounds its height." }
+initialColumn = { value = 1000, why = "The content column's width before the first layout measures it: wide, so the title shows until then (P8)." }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
+banner = { value = 16, why = "The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's." }
 
 [line]
 hairline = { value = 1, source = "P15" }
 
 [size]
+pointAnchor = { width = 1, height = 1, why = "A rect of no extent at a point: AppKit refuses an empty one as an anchor or a content rect." }
+menuBarIcon = { width = 22, height = 22, why = "The menu bar extra's image: the menu bar's thickness on macOS 27." }
 tableButton = { width = 24, height = 20, why = "The +/- buttons under the Settings table: the 20 pt row's height (P39), a little wider than tall." }
 
 [text]
@@ -113,7 +139,8 @@ startPrompt = { size = 18, design = "serif", source = "P14" }
 startName = { size = 20, design = "serif", source = "P14" }
 noEntries = { size = 24, source = "P12" }
 panelTitle = { size = 20, source = "P41" }
-panelFooter = { size = 13, source = "P41" }
+panelFooter = { size = 13, weight = "semibold", source = "P41" }
+tableCell = { size = 12, why = "Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12)." }
 
 [colour]
 label = { system = "labelColor" }
@@ -153,6 +180,33 @@ popoverGap = { value = 8, source = "P41" }
 [print]
 nameOffset = { value = 6, why = "A printed section's name sits this far into its header band, as Apple's prints." }
 nameHeight = { value = 16, why = "A printed section name's line: its 12 pt text and leading." }
+
+[instrumentFrame]
+labWindow = { x = 100, y = 120, width = 900, height = 700, why = "The lab's entry window: a main window's size, clear of the menu bar." }
+labSmallWindow = { x = 100, y = 120, width = 600, height = 500, why = "The lab's window for a dictionary checked at a smaller size." }
+reader = { x = 160, y = 160, width = 720, height = 640, why = "The reader stage's window, which real pointer events drive." }
+dropTarget = { x = 920, y = 360, width = 300, height = 300, why = "The reader stage's drop window, beside the reader window, not over it." }
+probe = { x = 80, y = 200, width = 480, height = 320, why = "The fault and binding probes' window." }
+popup = { x = 60, y = 460, width = 300, height = 200, why = "Where the hostile stage shows a page's refused popup, to see it stay empty." }
+popupView = { x = 0, y = 0, width = 300, height = 200, why = "The refused popup's web view, filling its window." }
+hostileTile = { x = 40, y = 140, width = 320, height = 260, why = "The first of the hostile stage's tiled windows, four a row." }
+appHostileTile = { x = 40, y = 80, width = 480, height = 300, why = "The first of the app's hostile windows, two a row." }
+libraryDrop = { x = 80, y = 80, width = 720, height = 480, why = "The drop instrument's window." }
+soundReport = { x = 120, y = 90, width = 900, height = 650, why = "The sound stage's window." }
+corpusOrigin = { x = 100, y = 80, width = 0, height = 0, why = "Where the corpus instrument's window opens; its size is the stage's." }
+galleryOrigin = { x = 80, y = 60, width = 0, height = 0, why = "Where the gallery's windows open; their size is the gallery's pane." }
+
+[instrumentSize]
+narrowPane = { width = 360, height = 700, why = "The narrow pane the lab and the corpus stage picture an entry in: the lookup panel's width." }
+galleryPane = { width = 820, height = 900, why = "The gallery's pane, about the main window's entry column." }
+
+[instrumentLength]
+galleryMinWidth = { value = 320, why = "The narrowest pane XDICT_LAB_WIDTH may ask the gallery for." }
+galleryMaxWidth = { value = 1600, why = "The widest pane XDICT_LAB_WIDTH may ask the gallery for." }
+hostileStride = { value = 330, why = "The hostile stage's tile and its gap, across." }
+appHostileStrideX = { value = 500, why = "The app's hostile windows' tile and gap, across." }
+appHostileStrideY = { value = 340, why = "The app's hostile windows' tile and gap, down." }
+captureMargin = { value = 6, why = "Around a transcription the gallery captures, so its edge glyphs are whole." }
 
 [placeholder]
 minWidth = { value = 80, why = "A blocked image's narrowest box, so a short host still reads as a box." }

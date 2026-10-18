@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import XDictAnywhere
 import XDictLibrary
+import XDictTokens
 
 /// **The setup window** (plan-macos-v1 WI-9): one row per `SetupBoard` step, each showing its live state and the one
 /// action that completes it. Accessibility is read again every half second while the window is open, because macOS
@@ -49,12 +50,12 @@ public struct SetupView: View {
 
     private func row(_ step: SetupBoard.Step) -> some View {
         let state = board.state(of: step)
-        return HStack(alignment: .top, spacing: 12) {
+        return HStack(alignment: .top, spacing: Tokens.Space.m) {
             Image(systemName: Self.symbol(state))
                 .foregroundStyle(state == .done ? Color.green : state == .problem ? Color.red : Color.orange)
                 .font(.title2)
                 .accessibilityLabel(Self.stateName(state))
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 Text(SetupBoard.title(step)).font(.headline)
                 Text(board.detail(step)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

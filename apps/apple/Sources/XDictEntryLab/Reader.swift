@@ -3,6 +3,7 @@ import Foundation
 import UniformTypeIdentifiers
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// **Reader-driven egress** (ADR-0009 refutation, item 8): the battery's `reader` entry in a production entry view,
 /// and a drop target beside it, waiting for a person's hands — here a helper posting real pointer events
@@ -43,9 +44,9 @@ final class ReaderRun {
         self.controller = controller
         focus.start()
         NSApp.activate()
-        window = labWindow("reader", frame: NSRect(x: 160, y: 160, width: 720, height: 640), view: controller.view)
+        window = labWindow("reader", frame: Tokens.InstrumentFrame.reader, view: controller.view)
         window?.makeKeyAndOrderFront(nil)
-        dropWindow = labWindow("drop here", frame: NSRect(x: 920, y: 360, width: 300, height: 300), view: drop)
+        dropWindow = labWindow("drop here", frame: Tokens.InstrumentFrame.dropTarget, view: drop)
         await controller.show(EntryReference(key: "reader"), from: content)
         _ = await log.waitForFinished(1, seconds: 10)
         try await Task.sleep(for: .milliseconds(500))

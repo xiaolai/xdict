@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import XDictEntryView
 import XDictLibrary
+import XDictTokens
 
 /// **Settings ▸ Dictionaries, as Apple's Dictionary draws it** (parity ledger P39, P40; owner, 2026-10-17: follow
 /// Apple), **and the only dictionary list in the app** (ADR-0012 d.2): Apple's line "Drag reference sources into the
@@ -13,12 +14,12 @@ import XDictLibrary
 /// (d.3), held by `SettingsRoute`.
 public struct SettingsDictionaries: View {
     /// Apple's Settings window: 600 pt wide; its table's rows 20 pt (settings.ax.json, 2026-10-17).
-    nonisolated public static let paneWidth: CGFloat = 600
-    nonisolated public static let rowHeight: CGFloat = 20
+    nonisolated public static let paneWidth: CGFloat = Tokens.Window.settingsWidth
+    nonisolated public static let rowHeight: CGFloat = Tokens.Row.settingsTable
     /// d.6: the table at least this tall, scrolling past it.
-    nonisolated public static let tableMinHeight: CGFloat = 200
+    nonisolated public static let tableMinHeight: CGFloat = Tokens.Window.settingsTableMin
     /// d.6: the margin kept above and below the window on the screen.
-    nonisolated static let screenMargin: CGFloat = 40
+    nonisolated static let screenMargin: CGFloat = Tokens.Inset.settingsScreenMargin
 
     nonisolated public static let instruction = LocalizedStringResource("Drag reference sources into the order you prefer:")
     nonisolated public static let tableName = LocalizedStringResource("Dictionaries")
@@ -69,9 +70,9 @@ public struct SettingsDictionaries: View {
     /// The Details… sheet: the pane's width, and no taller than the pane it covers less a margin above and below, so it
     /// never hangs past the Settings window (tour, light-en, 2026-10-18: window to ~605 pt, sheet to ~800); its form
     /// scrolls inside. Bounded above, and below by a usable minimum that a small pane still holds.
-    nonisolated public static let sheetMargin: CGFloat = 12
-    nonisolated public static let detailsSheetMinHeight: CGFloat = 220
-    nonisolated public static let detailsSheetMaxHeight: CGFloat = 640
+    nonisolated public static let sheetMargin: CGFloat = Tokens.Inset.settingsSheetMargin
+    nonisolated public static let detailsSheetMinHeight: CGFloat = Tokens.Window.detailsSheetMin
+    nonisolated public static let detailsSheetMaxHeight: CGFloat = Tokens.Window.detailsSheetMax
 
     nonisolated public static func detailsSheetSize(paneHeight: CGFloat) -> CGSize {
         let fits = paneHeight - 2 * sheetMargin
@@ -109,7 +110,7 @@ public struct SettingsDictionaries: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             SettingsLibraryStrip(library: library, route: route)
             Text(Self.instruction)
             table
@@ -119,10 +120,10 @@ public struct SettingsDictionaries: View {
                                  add: { item in add(item) }, remove: { removeSelected() })
             options
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
+        .padding(.horizontal, Tokens.Space.xl)
+        .padding(.vertical, Tokens.Space.l)
         .frame(width: Self.paneWidth)
-        .frame(maxHeight: Self.maxPaneHeight(visible: NSScreen.main?.visibleFrame.height ?? 800))
+        .frame(maxHeight: Self.maxPaneHeight(visible: NSScreen.main?.visibleFrame.height ?? Tokens.Window.fallbackScreenHeight))
         // The Details… sheet is sized from this, so it fits inside the window.
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
         .onAppear { resolveRoute() }
@@ -177,7 +178,7 @@ public struct SettingsDictionaries: View {
     /// sentence the strip says instead).
     @ViewBuilder private var emptyState: some View {
         if library.entries.isEmpty, library.unreadable == nil {
-            VStack(spacing: 8) {
+            VStack(spacing: Tokens.Space.sm) {
                 Text("No Dictionaries Yet").font(.headline)
                 Text("""
                     XDict reads the MDict dictionaries you already have: .mdx files, with their .mdd resources. \
@@ -186,7 +187,7 @@ public struct SettingsDictionaries: View {
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
             }
-            .padding(24)
+            .padding(Tokens.Space.xxl)
         }
     }
 
@@ -206,9 +207,9 @@ public struct SettingsDictionaries: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+        .padding(.horizontal, Tokens.Space.m)
+        .padding(.vertical, Tokens.Space.sm)
+        .frame(maxWidth: .infinity, minHeight: Tokens.Row.optionsBoxMin, alignment: .leading)
         .overlay { Rectangle().strokeBorder(.separator) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("settings.dictionaryOptions")
@@ -238,7 +239,7 @@ public struct SettingsDictionaries: View {
                     Button { route.dismiss() } label: { Text("Done") }
                         .keyboardShortcut(.defaultAction)
                 }
-                .padding(12)
+                .padding(Tokens.Space.m)
             }
             // The form scrolls inside; the sheet never extends past the window (`detailsSheetSize`).
             .frame(width: size.width, height: size.height)

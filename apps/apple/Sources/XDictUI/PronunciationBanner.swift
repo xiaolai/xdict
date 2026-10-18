@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import XDictSearch
 import XDictSpeech
+import XDictTokens
 
 /// **What a sound did, told where the reader is looking** (plan-macos-v1 WI-7; R9, L6): a small notice at the foot of
 /// the entry — the dictionary's recording playing, or why it could not and what the system voice did instead. It does
@@ -15,11 +16,11 @@ struct PronunciationBanner: View {
     var body: some View {
         if let shown = pronunciation.shown, shown.serial != dismissed, Self.shows(shown.notice, hasTip: shown.tip != nil) {
             let lines = SpeechSentences.lines(shown.notice)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.sm) {
                 Image(systemName: Self.symbol(shown.notice))
                     .foregroundStyle(Self.isProblem(shown.notice) ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
                     .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                     ForEach(lines.indices, id: \.self) { index in
                         Text(lines[index])
                             .font(index == 0 ? .callout : .caption)
@@ -47,13 +48,13 @@ struct PronunciationBanner: View {
                 .help(Text("Dismiss"))
                 .accessibilityLabel(Text("Dismiss"))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .padding(.horizontal, Tokens.Space.l)
+            .padding(.vertical, Tokens.Space.sm)
             // A floating control layer: glass, as wide as its words (UI review M-15).
             .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: 520)
-            .glassEffect(.regular, in: .rect(cornerRadius: 16))
-            .padding(12)
+            .frame(maxWidth: Tokens.Window.bannerMax)
+            .glassEffect(.regular, in: .rect(cornerRadius: Tokens.Radius.banner))
+            .padding(Tokens.Space.m)
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("pronunciation-notice")
             .transition(.opacity)

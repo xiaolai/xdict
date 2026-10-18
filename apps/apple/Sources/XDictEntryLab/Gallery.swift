@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// **The reading frame's gallery** (owner, 2026-10-15): three entries of every dictionary — the shortest, the longest
 /// and the one with the most images or tables among a spread of the sample — rendered light and dark, before (no frame)
@@ -12,7 +13,9 @@ enum GalleryRun {
     static let candidates = 12
     /// 820 px wide; `XDICT_LAB_WIDTH=<px>` (lab only, 320–1600) pictures another pane width.
     static let size = NSSize(width: ProcessInfo.processInfo.environment["XDICT_LAB_WIDTH"].flatMap(Double.init)
-        .flatMap { (320...1600).contains($0) ? $0 : nil } ?? 820, height: 900)
+        .map { CGFloat($0) }
+        .flatMap { (Tokens.InstrumentLength.galleryMinWidth...Tokens.InstrumentLength.galleryMaxWidth).contains($0) ? $0 : nil }
+        ?? Tokens.InstrumentSize.galleryPane.width, height: Tokens.InstrumentSize.galleryPane.height)
     /// The shell's world: the frame's `measure()` lives there.
     static let shellWorld = WKContentWorld.world(name: "xdict-entry")
 
@@ -83,7 +86,7 @@ enum GalleryRun {
                 environment.readingFrame = mode.frame.contains(.type) && panelDensity ? mode.frame.union(.panel) : mode.frame
                 environment.style = style
                 let controller = EntryViewController(environment: environment)
-                let window = labWindow("\(name) \(mode.name)", frame: NSRect(origin: NSPoint(x: 80, y: 60), size: size),
+                let window = labWindow("\(name) \(mode.name)", frame: NSRect(origin: Tokens.InstrumentFrame.galleryOrigin.origin, size: size),
                                        view: controller.view)
                 var themed = false
                 for (kind, entry) in chosen {
@@ -217,7 +220,7 @@ enum GalleryRun {
         var environment = CorpusRun.environment("gallery-choose", log: log)
         environment.readingFrame = []
         let controller = EntryViewController(environment: environment)
-        let window = labWindow("choose", frame: NSRect(origin: NSPoint(x: 80, y: 60), size: size), view: controller.view)
+        let window = labWindow("choose", frame: NSRect(origin: Tokens.InstrumentFrame.galleryOrigin.origin, size: size), view: controller.view)
         defer { controller.closeEntry(); window.close() }
         var surveyed: [(entry: SampledEntry, chars: Int, media: Int)] = []
         for entry in spread {
