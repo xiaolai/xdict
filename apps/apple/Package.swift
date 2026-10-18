@@ -69,6 +69,14 @@ let package = Package(
         // transitively by `ModuleBoundaryTests`. Provenance per file: `Sources/XDictCapture/PROVENANCE.md`.
         .target(name: "XDictCapture", exclude: ["PROVENANCE.md"]),
 
+        // **Capture on macOS** (ADR-0014 decisions 5 to 7; plan-capture WI-2), ported from XiaolaiDict's `MacCapture`
+        // and moved down from `XDictAnywhere`: the Accessibility session and the one lane every out-of-process read takes,
+        // the selection reader, the word reader's three dialects, and the never-prompting permission probe. AppKit and
+        // Accessibility, the pure target and the identities; never ScreenCaptureKit or Vision (WI-4), the tokens, search,
+        // the client, the contract or a view, held transitively by `ModuleBoundaryTests`. Provenance per file:
+        // `Sources/XDictCaptureMac/PROVENANCE.md`.
+        .target(name: "XDictCaptureMac", exclude: ["PROVENANCE.md"]),
+
         // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
         // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport
         // seam (NSXPC, or a test's fake), and the tokens it sends. No core: it asks the service.
@@ -158,6 +166,9 @@ let package = Package(
         .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech"]),
         // Capture without a window server: the ported XiaolaiDict tests by name, and ADR-0014's objection checks.
         .testTarget(name: "XDictCaptureTests", dependencies: ["XDictCapture"]),
+        // Capture on macOS against scripted Accessibility trees and a fake lane clock: never a window, never the real
+        // Accessibility API, never this Mac's grant.
+        .testTarget(name: "XDictCaptureMacTests", dependencies: ["XDictCaptureMac"]),
         // Lookup from anywhere without a keyboard, a window or another app: Carbon faked (a real global shortcut would
         // be taken from the reader while the suite ran), the Accessibility API faked, the panel's geometry as numbers.
         .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere"]),

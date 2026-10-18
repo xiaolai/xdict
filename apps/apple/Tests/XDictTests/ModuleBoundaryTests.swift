@@ -60,6 +60,11 @@ struct ModuleBoundaryTests {
         // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
         "XDictCapture": captureMayBind,
         "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
+        // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
+        // lane, the readers, the never-prompting probe. Neither ScreenCaptureKit nor Vision (WI-4), nothing that draws.
+        // What it binds today, inside `captureMacMayBind`, the ceiling `captureReachesNothingOfThisPackage` holds.
+        "XDictCaptureMac": ["ApplicationServices"],
+        "XDictCaptureMacTests": ["Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
@@ -307,11 +312,18 @@ struct ModuleBoundaryTests {
 
     // MARK: - Capture
 
-    /// **Capture's pure targets** (ADR-0014 decision 5): they reach no target of this package, directly or through
-    /// another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any view can
-    /// arrive by a dependency — and bind nothing beyond `captureMayBind`.
-    static let captureTargets: Set<String> = ["XDictCapture"]
+    /// **Capture's targets** (ADR-0014 decision 5): each reaches only the targets of this package named for it, directly
+    /// or through another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any
+    /// view can arrive by a dependency — and binds nothing beyond its own set. The pure target reaches nothing; the macOS
+    /// target reaches the pure one and the identities, and binds AppKit and Accessibility but not ScreenCaptureKit or
+    /// Vision (those arrive with the recogniser, plan-capture WI-4).
+    static let captureRules: [String: (reach: Set<String>, bind: Set<String>)] = [
+        "XDictCapture": (reach: [], bind: captureMayBind),
+        "XDictCaptureMac": (reach: ["XDictBase", "XDictCapture"], bind: captureMacMayBind),
+    ]
+    static var captureTargets: Set<String> { Set(captureRules.keys) }
     static let captureMayBind: Set<String> = ["CoreGraphics", "Foundation", "NaturalLanguage", "Synchronization", "os"]
+    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "os"]
 
     @Test func captureReachesNothingOfThisPackage() throws {
         let targets = try Manifest.dump().targets
@@ -352,18 +364,43 @@ struct ModuleBoundaryTests {
                                      files: ["XDictCapture": [("Clean.swift", ["Foundation", "NaturalLanguage"])]]) == [])
     }
 
+    /// **The macOS target's controls**: the pure target and the identities are allowed and named nowhere; a planted
+    /// ScreenCaptureKit, Vision or search import is named, and so is a dependency on the composition layer, with what it
+    /// drags in (the tokens and their UI frameworks).
+    @Test func captureMacReachingFurtherIsNamed() {
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        let base = target("XDictBase", []), pure = target("XDictCapture", [])
+        let clean = ["XDictCaptureMac": target("XDictCaptureMac", ["XDictBase", "XDictCapture"]), "XDictBase": base,
+                     "XDictCapture": pure]
+        let cleanFiles = ["XDictCaptureMac": [(file: "Lane.swift", modules: ["ApplicationServices", "XDictCapture", "XDictBase"])]]
+        #expect(Self.captureProblems(targets: clean, files: cleanFiles) == [])
+        let planted = ["XDictCaptureMac": [(file: "Planted.swift",
+                                            modules: ["ScreenCaptureKit", "Vision", "XDictSearch", "XDictCapture"])]]
+        #expect(Self.captureProblems(targets: clean, files: planted)
+                == ["XDictCaptureMac/Planted.swift imports ScreenCaptureKit", "XDictCaptureMac/Planted.swift imports Vision",
+                    "XDictCaptureMac/Planted.swift imports XDictSearch"])
+        var through = clean
+        through["XDictCaptureMac"] = target("XDictCaptureMac", ["XDictBase", "XDictCapture", "XDictAnywhere"])
+        through["XDictAnywhere"] = target("XDictAnywhere", ["XDictTokens"])
+        through["XDictTokens"] = target("XDictTokens", [])
+        #expect(Self.captureProblems(targets: through, files: cleanFiles)
+                == ["XDictCaptureMac reaches XDictAnywhere", "XDictCaptureMac reaches XDictTokens"])
+    }
+
     static func captureProblems(
         targets: [String: Manifest.Target], files: [String: [(file: String, modules: [String])]]
     ) -> [String] {
-        captureTargets.sorted().flatMap { name -> [String] in
+        captureRules.sorted(by: { $0.key < $1.key }).flatMap { name, rule -> [String] in
             var reached: Set<String> = [], pending = Array(targets[name]?.dependencies ?? [])
             while let next = pending.popLast() {
                 guard reached.insert(next).inserted else { continue }
                 pending += targets[next]?.dependencies ?? []
             }
-            let graph = reached.sorted().map { "\(name) reaches \($0)" }
+            let graph = reached.subtracting(rule.reach).sorted().map { "\(name) reaches \($0)" }
             let imports = (files[name] ?? []).flatMap { file, modules in
-                modules.filter { !captureMayBind.contains($0) }.map { "\(name)/\(file) imports \($0)" }
+                modules.filter { !rule.bind.contains($0) && !rule.reach.contains($0) }.map { "\(name)/\(file) imports \($0)" }
             }
             return graph + imports
         }
