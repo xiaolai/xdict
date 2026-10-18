@@ -1,4 +1,5 @@
 import Foundation
+import XDictAppleSource
 import XDictContract
 
 /// Where a file or a folder was, kept two ways (ADR-0009 decision 1): a security-scoped bookmark, which follows the file
@@ -97,6 +98,54 @@ public struct LineageJoin: Codable, Hashable, Sendable {
     }
 }
 
+/// **Where an Apple dictionary came from** (ADR-0011 decision 10): kept beside its entry by the library, never by the
+/// service, so a later launch can say whether Apple changed the bundle or XDict changed the converter (decision 7).
+public struct AppleSourceRecord: Codable, Hashable, Sendable {
+    /// `CFBundleIdentifier` of the installed bundle.
+    public let bundleIdentifier: String
+    /// `CFBundleVersion`, for the reader; the revision decides.
+    public let bundleVersion: String?
+    /// The manifest hash of the snapshot converted (`Manifest`).
+    public let sourceRevision: String
+    public let converterRevision: UInt32
+    /// The folder `AppleImports/<conversion>/` the files were published into.
+    public let conversion: UUID
+
+    public init(bundleIdentifier: String, bundleVersion: String?, sourceRevision: String, converterRevision: UInt32,
+                conversion: UUID) {
+        self.bundleIdentifier = bundleIdentifier
+        self.bundleVersion = bundleVersion
+        self.sourceRevision = sourceRevision
+        self.converterRevision = converterRevision
+        self.conversion = conversion
+    }
+
+    /// What a conversion published, for the bundle it was made of.
+    public init(_ converted: Converted, bundle: InstalledBundle) {
+        self.init(bundleIdentifier: bundle.identifier, bundleVersion: bundle.version,
+                  sourceRevision: converted.sourceRevision, converterRevision: converted.converterRevision,
+                  conversion: converted.conversion)
+    }
+
+    /// A record this version could have written: a bundle identifier, a revision in the manifest's shape, a converter
+    /// revision. Anything else is a damaged library, never a dictionary with no source.
+    var isWellFormed: Bool {
+        !bundleIdentifier.isEmpty && Manifest.isRevision(sourceRevision) && converterRevision > 0
+    }
+}
+
+/// **The edition and lineage an Apple dictionary last settled on**, by bundle identifier, kept after the dictionary is
+/// removed: a fresh import of the same bundle is a new lineage, and this is the join it suggests (ADR-0011 decision 8).
+public struct AppleLineage: Codable, Hashable, Sendable {
+    public let edition: Edition
+    public let lineage: LineageId
+
+    public init(edition: Edition, lineage: LineageId) {
+        self.edition = edition
+        self.lineage = lineage
+    }
+}
+
 /// One dictionary in the reader's library.
 public struct LibraryEntry: Codable, Hashable, Identifiable, Sendable {
     public let id: UUID
@@ -119,6 +168,8 @@ public struct LibraryEntry: Codable, Hashable, Identifiable, Sendable {
     public var offer: JoinOffer?
     /// The reader's join, until undone.
     public var join: LineageJoin?
+    /// An Apple dictionary's source (ADR-0011 decision 10); nil for the reader's own MDX files.
+    public var appleSource: AppleSourceRecord?
 
     /// What the reader's choices for this dictionary are kept under (zoom, theme, "Original style"): its lineage, which
     /// survives a new edition and a moved file (ADR-0002); its own id until it has one.
@@ -135,16 +186,53 @@ public struct LibraryEntry: Codable, Hashable, Identifiable, Sendable {
 }
 
 /// The library as written to disk.
+///
+/// - **Version 2** (ADR-0011 decision 10, 2026-10-18): an entry may carry `appleSource`, and the document carries
+///   `appleLineages`. A version 1 document is read as having neither; a version 2 document missing `appleLineages`, or
+///   holding a source record this version could not have written, is damaged, never read as "no Apple dictionaries".
 public struct LibraryDocument: Codable, Hashable, Sendable {
     /// Raised by any change a reader of an older version would misread.
-    public static let currentVersion = 1
+    public static let currentVersion = 2
 
     public let version: Int
     public var entries: [LibraryEntry]
+    public var appleLineages: [String: AppleLineage]
 
-    public init(entries: [LibraryEntry]) {
+    public init(entries: [LibraryEntry], appleLineages: [String: AppleLineage] = [:]) {
         version = Self.currentVersion
         self.entries = entries
+        self.appleLineages = appleLineages
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case version, entries, appleLineages
+    }
+
+    /// Reads any version up to this one, migrating as it goes; written back as this one at the next save.
+    public init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let read = try container.decode(Int.self, forKey: .version)
+        guard (1...Self.currentVersion).contains(read) else {
+            throw DecodingError.dataCorruptedError(forKey: .version, in: container, debugDescription: "version \(read)")
+        }
+        let decoded = try container.decode([LibraryEntry].self, forKey: .entries)
+        if read >= 2 {
+            appleLineages = try container.decode([String: AppleLineage].self, forKey: .appleLineages)
+            guard decoded.allSatisfy({ $0.appleSource?.isWellFormed ?? true }) else {
+                throw DecodingError.dataCorruptedError(forKey: .entries, in: container,
+                                                       debugDescription: "an Apple source record is damaged")
+            }
+            entries = decoded
+        } else {
+            // Version 1 had no Apple dictionaries: nothing in it is a source record.
+            appleLineages = [:]
+            entries = decoded.map { entry in
+                var migrated = entry
+                migrated.appleSource = nil
+                return migrated
+            }
+        }
+        version = Self.currentVersion
     }
 }
 

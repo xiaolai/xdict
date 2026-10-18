@@ -1,4 +1,5 @@
 import Foundation
+import XDictAppleSource
 import XDictBase
 import XDictContract
 import os
@@ -29,8 +30,7 @@ let idle = IdleExit.production { quietFor in
 }
 // The app-group container the app stages Apple dictionaries in (ADR-0011 decision 4), named by this process's own team.
 // Without one (unsigned, or no entitlement) the service still runs, and refuses every conversion as `noContainer`.
-let appleImports = (try? ClientCheck.ownTeam().get()).flatMap { AppGroup.container(team: $0) }
-    .map { AppleImportStore(root: AppGroup.appleImports(in: $0)) }
+let appleImports = SharedContainer.appleImports().map { AppleImportStore(root: $0) }
 if appleImports == nil { log.error("no app-group container: Apple dictionary conversions will be refused") }
 let context = ServiceContext(dictionaries: Dictionaries(storage: storage), idle: idle, appleImports: appleImports)
 let delegate = ServiceListener(context: context, check: check)

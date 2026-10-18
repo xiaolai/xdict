@@ -25,15 +25,18 @@ struct TestInventoryTests {
         "XDictBaseTests": 2,
         "XDictClientTests": 20,
         "XDictContractTests": 80,
-        "XDictLibraryTests": 52,
+        // 52 → 73 (plan WI-5, 2026-10-18): the Apple import's copy, conversion, source record, joins, sweep and restarts.
+        "XDictLibraryTests": 73,
         "XDictSearchTests": 49,
         "XDictSpeechTests": 31,
         // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
         "XDictAnywhereTests": 64,
-        "XDictUITests": 24,
+        // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
+        "XDictUITests": 29,
         "XDictEntryViewTests": 43,
-        "XDictServiceTests": 90,
+        // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
+        "XDictServiceTests": 92,
         "XDictTests": 37,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
@@ -41,6 +44,8 @@ struct TestInventoryTests {
         "XDictAppleImportTests": 72,
         // Added with the design tokens (2026-10-18): the generated file against its source, and both faces of a token.
         "XDictTokensTests": 6,
+        // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
+        "XDictAppleSourceTests": 16,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
