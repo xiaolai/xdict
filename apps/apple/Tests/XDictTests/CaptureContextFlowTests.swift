@@ -6,23 +6,25 @@ import XDictTestSupport
 /// only thing that may touch a captured term's context is the one ephemeral session that holds it — so the sentence never
 /// reaches search, the service, the trail or the observation hooks, which stringify into `events.jsonl`. Read off the
 /// code: every file outside `XDictCapture` and `XDictCaptureMac` that imports either is searched for a context access
-/// (`.context` on anything, or the context's types), and each one found must be the session's own call, `hold(` on the
-/// line with it. A positive control below plants each shape in a scratch file.
+/// (`.context` on anything, or the context's types) — **in code and inside string interpolations**, which run as code
+/// (`SourceScan.codeWithInterpolations`) — and each one found must be the session's own call, `hold(` on the line with
+/// it. Positive controls below plant each shape.
 struct CaptureContextFlowTests {
     static let captureModules: Set<String> = ["XDictCapture", "XDictCaptureMac"]
     static let captureSources = ["Sources/XDictCapture/", "Sources/XDictCaptureMac/"]
     /// **The one reader of a sentence outside capture, by name: the capture lab** (plan-capture WI-4). `--read-point`
     /// prints the term and its sentence for the E2E harness; it is a development instrument that never ships — no shipped
     /// target reaches it (`ModuleBoundaryTests.noShippedTargetHoldsAnInstrumentFlag`) and `Tools/build-bundle.sh` refuses
-    /// an app that carries it (`Tools/tests/development-lab-test.sh`). Exempt as a folder, and nothing else is.
+    /// an app that carries it (`Tools/tests/development-lab-test.sh`). Exempt as that folder of the package, and nothing
+    /// else is: the folders here are matched from the package root, never anywhere in a path.
     static let instrumentSources = ["Sources/XDictCaptureLab/"]
-    /// What a context access looks like in code (comments and strings removed first).
+    /// What a context access looks like in code (comments and a string's own text removed first).
     static var access: Regex<Substring> { /\.context\b|\bContextOutcome\b|\bSentenceContext\b|\bWordAtPoint\b/ }
 
     @Test func onlyTheSessionTouchesACapturedContextOutsideCapture() throws {
         let sources = Manifest.package.appending(path: "Sources")
         let files = try SourceScan.files(under: sources).map { (path: $0.file.path, text: $0.text) }
-        let consumers = Self.consumers(files)
+        let consumers = Self.consumers(files, root: Manifest.package.path)
         // The premise: the app's consumer is among them. A rule over files that import nothing of capture holds nothing.
         #expect(consumers.contains { $0.path.hasSuffix("/LookupAnywhere.swift") },
                 "the scan read no consumer of capture: \(consumers.map(\.path))")
@@ -32,79 +34,48 @@ struct CaptureContextFlowTests {
     }
 
     /// **The control for the exemption**: the same sentence read in any other target outside capture is named — the view
-    /// layer, the app, a folder whose name only starts like the lab's — and in the lab it is not.
+    /// layer, the app, a folder whose name only starts like the lab's, and a lab folder nested anywhere but at the package
+    /// root — and in the lab and the capture targets it is not.
     @Test func aSentenceReadOutsideTheLabIsStillNamed() {
         let read = "import XDictCapture\nfunc show(_ term: CapturedTerm) { print(term.context) }\n"
-        let files = ["XDictUI/Leak.swift", "XDict/Leak.swift", "XDictCaptureLabKit/Leak.swift", "XDictCaptureLab/Report.swift",
-                     "XDictCaptureMac/Reader.swift"].map { (path: "/repo/apps/apple/Sources/" + $0, text: read) }
-        let named = Self.problems(Self.consumers(files).map {
-            ($0.path.replacingOccurrences(of: "/repo/apps/apple/Sources/", with: ""), $0.text)
+        let root = "/repo/apps/apple"
+        let files = ["XDictUI/Leak.swift", "XDict/Leak.swift", "XDictCaptureLabKit/Leak.swift",
+                     "XDictUI/Sources/XDictCaptureLab/Leak.swift", "XDictCaptureLab/Report.swift", "XDictCaptureMac/Reader.swift"]
+            .map { (path: root + "/Sources/" + $0, text: read) }
+        let named = Self.problems(Self.consumers(files, root: root).map {
+            ($0.path.replacingOccurrences(of: root + "/Sources/", with: ""), $0.text)
         })
-        #expect(named == ["XDictUI/Leak.swift:2", "XDict/Leak.swift:2", "XDictCaptureLabKit/Leak.swift:2"])
+        #expect(named == ["XDictUI/Leak.swift:2", "XDict/Leak.swift:2", "XDictCaptureLabKit/Leak.swift:2",
+                          "XDictUI/Sources/XDictCaptureLab/Leak.swift:2"])
     }
 
-    /// The files outside capture and the lab that import capture: the ones the rule reads.
-    static func consumers(_ files: [(path: String, text: String)]) -> [(path: String, text: String)] {
-        files.filter { file in
-            !(captureSources + instrumentSources).contains { file.path.contains("/" + $0) }
-                && !Set(SourceScan.imports(in: file.text)).isDisjoint(with: captureModules)
-        }
-    }
-
-    // MARK: - Inside capture: what its log lines interpolate
-
-    /// **No log line inside capture interpolates the text it read** (decision 9: diagnostics are metadata only). Every
-    /// `Logger`, `os_log`, `NSLog` and `print` call in the capture targets is read, strings included, and none may
-    /// interpolate a sentence, a context, a word or a text. The premise: the scan found the targets' log calls.
-    @Test func noCaptureLogInterpolatesTheText() throws {
-        var calls: [(name: String, text: String)] = []
-        for folder in Self.captureSources {
-            calls += try SourceScan.files(under: Manifest.package.appending(path: folder))
-                .map { (folder + $0.file.lastPathComponent, $0.text) }
-        }
-        #expect(Self.logCalls(calls).count >= 10, "the scan found \(Self.logCalls(calls).count) log calls")
-        #expect(Self.logProblems(calls) == [])
-    }
-
-    /// The control: each spelling of a leak is named; a count, a refusal's description and a comment are not.
-    @Test func aLogLineInterpolatingTheTextIsNamed() {
+    /// **A context read inside a string interpolation is a read**: a log line in the app or the view layer that
+    /// interpolates it is named; a string that only says the word is not. Red while string contents are stripped whole.
+    @Test func aContextReadInsideAnInterpolationIsNamed() {
         let planted = """
-            log.debug("read \\(hit.word.sentence.text, privacy: .private)")
-            Self.log.notice("context \\(String(describing: recognition.context))")
-            print("word: \\(read.word)")
-            os_log("%@", "\\(term.text)")
-            log.notice("capture: \\(lines.count, privacy: .public) observations")
-            log.notice("refused (\\(String(describing: error), privacy: .public))")
-            // log.debug("\\(hit.word.sentence.text)") is a comment
+            import XDictCapture
+            import os
+            func show(_ term: CapturedTerm) {
+                Logger().debug("\\(String(describing: term.context))")
+                Logger().debug("the context is gone, and term.context is only text here")
+                let nested = "\\("inner \\(term.context)")"
+            }
             """
-        #expect(Self.logProblems([("Planted.swift", planted)])
-                == ["Planted.swift:1", "Planted.swift:2", "Planted.swift:3", "Planted.swift:4"])
+        let root = "/repo/apps/apple"
+        let files = ["XDict/Leak.swift", "XDictUI/Leak.swift"].map { (path: root + "/Sources/" + $0, text: planted) }
+        let named = Self.problems(Self.consumers(files, root: root).map {
+            ($0.path.replacingOccurrences(of: root + "/Sources/", with: ""), $0.text)
+        })
+        #expect(named == ["XDict/Leak.swift:4", "XDict/Leak.swift:6", "XDictUI/Leak.swift:4", "XDictUI/Leak.swift:6"])
     }
 
-    static var logCall: Regex<Substring> {
-        /\b(?:log|logger|Self\.log)\.(?:debug|info|notice|error|fault|warning|trace|critical)\(|\bprint\(|\bos_log\(|\bNSLog\(/
-    }
-    /// An interpolation naming what was read: `sentence`, `context`, `.text`, `.word`. Spelled with classes, not `\b`:
-    /// Swift's word boundary is Unicode's, under which `recognition.context` is one word.
-    static var readText: Regex<Substring> {
-        /\\\([^)]*(?:[^A-Za-z0-9_](?:sentence|context)|\.(?:text|word))(?![A-Za-z0-9_])/
-    }
-
-    static func logCalls(_ files: [(name: String, text: String)]) -> [String] {
-        files.flatMap { name, text in
-            text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().compactMap { index, line in
-                let code = line.drop { $0 == " " }
-                return !code.hasPrefix("//") && line.contains(logCall) ? "\(name):\(index + 1)" : nil
-            }
-        }
-    }
-
-    static func logProblems(_ files: [(name: String, text: String)]) -> [String] {
-        files.flatMap { name, text in
-            text.split(separator: "\n", omittingEmptySubsequences: false).enumerated().compactMap { index, line in
-                let code = line.drop { $0 == " " }
-                return !code.hasPrefix("//") && line.contains(logCall) && line.contains(readText) ? "\(name):\(index + 1)" : nil
-            }
+    /// The files outside capture and the lab that import capture: the ones the rule reads. The excluded folders are
+    /// matched from `root`, the package, so the same names nested deeper are read like any other.
+    static func consumers(_ files: [(path: String, text: String)], root: String) -> [(path: String, text: String)] {
+        let base = root.hasSuffix("/") ? root : root + "/"
+        return files.filter { file in
+            !(captureSources + instrumentSources).contains { file.path.hasPrefix(base + $0) }
+                && !Set(SourceScan.imports(in: file.text)).isDisjoint(with: captureModules)
         }
     }
 
@@ -127,12 +98,143 @@ struct CaptureContextFlowTests {
 
     static func problems(_ files: [(name: String, text: String)]) -> [String] {
         files.flatMap { name, text in
-            SourceScan.codeOnly(text).split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+            SourceScan.codeWithInterpolations(text).split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                 .compactMap { index, line -> String? in
                     guard line.contains(access), !line.lowercased().contains("session.hold(")
                     else { return nil }
                     return "\(name):\(index + 1)"
                 }
         }
+    }
+
+    // MARK: - Inside capture: what its log calls are handed
+
+    /// **No log call inside capture is handed the text it read** (decision 9: diagnostics are metadata only). Every
+    /// `Logger`, `os_log`, `NSLog` and `print` call in the capture targets is read whole — across lines, its interpolations
+    /// as code — and none may name a sentence, a context, a `.text` or a `.word`, nor a local of the same function assigned
+    /// from one (followed through further locals).
+    ///
+    /// **A static approximation, and its limit**: a "function" is the text from one `func` to the next, so a closure or
+    /// a computed property shares its enclosing function's locals; only `let`/`var` assignments on one line are followed;
+    /// a value passed through a parameter, a property, a collection or another function is not. It catches the direct and
+    /// the one-step-removed leak, which is what a log line written in passing looks like; it is not a taint analysis.
+    @Test func noCaptureLogIsHandedTheText() throws {
+        var files: [(name: String, text: String)] = []
+        for folder in Self.captureSources {
+            files += try SourceScan.files(under: Manifest.package.appending(path: folder))
+                .map { (folder + $0.file.lastPathComponent, $0.text) }
+        }
+        let found = Self.logFindings(files)
+        #expect(found.calls >= 10, "the scan found \(found.calls) log calls")
+        #expect(found.problems == [])
+    }
+
+    /// The control: each single-line spelling of a leak is named; a count, a refusal's description, a string that only
+    /// says the words, and a comment are not.
+    @Test func aLogLineInterpolatingTheTextIsNamed() {
+        let planted = """
+            log.debug("read \\(hit.word.sentence.text, privacy: .private)")
+            Self.log.notice("context \\(String(describing: recognition.context))")
+            print("word: \\(read.word)")
+            os_log("%@", "\\(term.text)")
+            log.notice("capture: \\(lines.count, privacy: .public) observations")
+            log.notice("refused (\\(String(describing: error), privacy: .public))")
+            log.notice("the sentence and its context were not read")
+            // log.debug("\\(hit.word.sentence.text)") is a comment
+            """
+        #expect(Self.logFindings([("Planted.swift", planted)]).problems
+                == ["Planted.swift:1", "Planted.swift:2", "Planted.swift:3", "Planted.swift:4"])
+    }
+
+    /// The control for the rest: a call across lines, and a context handed over through locals of the same function, are
+    /// named at the call's first line; the same name in another function is not. Red while only single lines that name
+    /// the text directly are read.
+    @Test func aLogCallAcrossLinesOrThroughALocalIsNamed() {
+        let planted = """
+            func a(_ hit: Hit) {
+                log.notice(
+                    "read \\(hit.word.sentence.text, privacy: .private)"
+                )
+            }
+            func b(_ term: CapturedTerm) {
+                let shown = term.context
+                let again = shown
+                log.debug("held \\(String(describing: again), privacy: .public)")
+            }
+            func c(again: Int) {
+                log.debug("count \\(again, privacy: .public)")
+            }
+            """
+        #expect(Self.logFindings([("Planted.swift", planted)]).problems == ["Planted.swift:2", "Planted.swift:9"])
+    }
+
+    static var logCall: Regex<Substring> {
+        /\b(?:log|logger|Self\.log)\.(?:debug|info|notice|error|fault|warning|trace|critical)\(|\bprint\(|\bos_log\(|\bNSLog\(/
+    }
+    /// What was read, named in code: `sentence`, `context`, `.text`, `.word`. Spelled with classes, not `\b`: Swift's word
+    /// boundary is Unicode's, under which `recognition.context` is one word.
+    static var readName: Regex<Substring> {
+        /(?:^|[^A-Za-z0-9_])(?:sentence|context)(?![A-Za-z0-9_])|\.(?:text|word)(?![A-Za-z0-9_])/
+    }
+    /// A one-line `let` or `var` assignment: the name, and what it is assigned.
+    static var assignment: Regex<(Substring, Substring, Substring)> {
+        /(?:^|[^A-Za-z0-9_])(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)[^=\n]*=([^\n]*)/
+    }
+
+    /// Every log call in `files`, counted, and those handed what was read, by file and the call's first line.
+    static func logFindings(_ files: [(name: String, text: String)]) -> (calls: Int, problems: [String]) {
+        var calls = 0
+        var problems: [String] = []
+        for (name, text) in files {
+            let code = SourceScan.codeWithInterpolations(text)
+            let starts = code.matches(of: /\bfunc\b/).map(\.range.lowerBound)
+            let bounds = [code.startIndex] + starts + [code.endIndex]
+            for (from, to) in zip(bounds, bounds.dropFirst()) {
+                let function = code[from..<to]
+                let tainted = taintedLocals(in: function)
+                for call in function.matches(of: logCall) {
+                    calls += 1
+                    let arguments = balanced(code, from: call.range.upperBound)
+                    let names = Set(arguments.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) })
+                    guard arguments.contains(readName) || !names.isDisjoint(with: tainted) else { continue }
+                    let line = code[code.startIndex..<call.range.lowerBound].filter { $0 == "\n" }.count + 1
+                    problems.append("\(name):\(line)")
+                }
+            }
+        }
+        return (calls, problems)
+    }
+
+    /// The locals of `function` assigned from what was read, or from such a local, to a fixed point.
+    static func taintedLocals(in function: Substring) -> Set<String> {
+        let assigned = function.matches(of: assignment).map { (name: String($0.output.1), value: $0.output.2) }
+        var tainted: Set<String> = []
+        var grew = true
+        while grew {
+            grew = false
+            for (name, value) in assigned where !tainted.contains(name) {
+                let names = Set(value.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) })
+                if value.contains(readName) || !names.isDisjoint(with: tainted) {
+                    tainted.insert(name)
+                    grew = true
+                }
+            }
+        }
+        return tainted
+    }
+
+    /// The text of a call's arguments: from just after its `(` to the `)` that closes it, across lines.
+    static func balanced(_ code: String, from start: String.Index) -> Substring {
+        var depth = 1
+        var index = start
+        while index < code.endIndex {
+            if code[index] == "(" { depth += 1 }
+            if code[index] == ")" {
+                depth -= 1
+                if depth == 0 { break }
+            }
+            index = code.index(after: index)
+        }
+        return code[start..<index]
     }
 }

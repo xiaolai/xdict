@@ -54,8 +54,9 @@ struct TestInventoryTests {
         // hover off, and its control; 44 → 46: the app starts hover only with its launch, and its control. 46 → 48
         // (plan-capture WI-4): no shipped target holds a development instrument's flag, and its control. 48 → 51: the
         // capture lab's sentence exemption held to its folder, and no log line inside capture interpolating the text read,
-        // with its control.
-        "XDictTests": 51,
+        // with its control. 51 → 53: a context read inside a string interpolation, and a log call across lines or through
+        // a local, each named by its control.
+        "XDictTests": 53,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
