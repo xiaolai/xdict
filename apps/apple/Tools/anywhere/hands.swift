@@ -192,6 +192,22 @@ func click(_ point: CGPoint, right: Bool = false) {
         usleep(50_000)
     }
 }
+/// A left-button drag from `start` to `end` in ten steps, as a reader selects with the mouse.
+func drag(from start: CGPoint, to end: CGPoint) {
+    func post(_ kind: CGEventType, _ point: CGPoint) {
+        CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point, mouseButton: .left)?
+            .post(tap: .cghidEventTap)
+    }
+    post(.mouseMoved, start)
+    usleep(60_000)
+    post(.leftMouseDown, start)
+    usleep(80_000)
+    for step in 1...10 {
+        post(.leftMouseDragged, CGPoint(x: start.x + (end.x - start.x) * CGFloat(step) / 10, y: start.y))
+        usleep(20_000)
+    }
+    post(.leftMouseUp, end)
+}
 
 /// The text-marker range on `page` that reads back as exactly `needle`, searched from `index` outwards (start within
 /// ±`spread`, length within ±2), or nil: never a range that merely starts near it.
@@ -205,37 +221,6 @@ func verifiedMarkers(_ page: AXUIElement, needle: String, at index: Int, length:
             else { continue }
             if parameterized(page, "AXStringForTextMarkerRange", range) as? String == needle { return range }
         }
-    }
-    return nil
-}
-
-/// The needle's markers from the text element that holds it, where the page's indices place it nowhere (Chrome, E2E
-/// 2026-10-18: no range near the index read back as the phrase). The element's own range (`AXTextMarkerRangeForUIElement`)
-/// gives its first marker; `AXNextTextMarkerForTextMarker` steps from it to the needle and across it, counted in
-/// characters and, failing that, in UTF-16 units. Taken only when the range reads back as exactly the needle.
-func elementMarkers(_ page: AXUIElement, needle: String) -> CFTypeRef? {
-    guard let holder = find(page, { node in
-        string(node, kAXRoleAttribute) == "AXStaticText" && (string(node, kAXValueAttribute)?.contains(needle) ?? false)
-    }), let value = string(holder, kAXValueAttribute), let at = value.range(of: needle),
-          let own = parameterized(holder, "AXTextMarkerRangeForUIElement", holder),
-          CFGetTypeID(own) == AXTextMarkerRangeGetTypeID()
-    else { return nil }
-    let start = AXTextMarkerRangeCopyStartMarker(unsafeDowncast(own, to: AXTextMarkerRange.self))
-    func step(_ marker: CFTypeRef, _ count: Int) -> CFTypeRef? {
-        var current = marker
-        for _ in 0..<count {
-            guard let next = parameterized(page, "AXNextTextMarkerForTextMarker", current) else { return nil }
-            current = next
-        }
-        return current
-    }
-    let counts = [(value.distance(from: value.startIndex, to: at.lowerBound), needle.count),
-                  (value.utf16.distance(from: value.startIndex, to: at.lowerBound), needle.utf16.count)]
-    for (offset, length) in counts {
-        guard let first = step(start, offset), let last = step(first, length),
-              let range = parameterized(page, "AXTextMarkerRangeForUnorderedTextMarkers", [first, last] as CFArray)
-        else { continue }
-        if parameterized(page, "AXStringForTextMarkerRange", range) as? String == needle { return range }
     }
     return nil
 }
@@ -344,8 +329,7 @@ case "select":
             // `AXStringForTextMarkerRange`'s string can land a few places off, on another line (E2E 2026-10-18: the
             // first line selected for the third). The nearest start and length that read back as the needle are taken.
             if found.location != NSNotFound,
-               let markers = verifiedMarkers(page, needle: needle, at: found.location, length: found.length)
-                   ?? elementMarkers(page, needle: needle) {
+               let markers = verifiedMarkers(page, needle: needle, at: found.location, length: found.length) {
                 located = (found, markers)
                 break
             }
@@ -366,30 +350,36 @@ case "select":
     }
     var (text, box) = selectedNow()
     var how = "markers"
+    // Every way tried, and what it left selected: a failure names each, not only the last.
+    var tried = ["markers: set \(status.rawValue), selected \(text.debugDescription)"]
     if text != needle {
-        // A host that takes no selection set by markers (Chrome, measured on the E2E Mac, 2026-10-15):
-        // the reader's way instead — Find, the text typed, then Escape, which leaves the match selected.
-        press("cmd+f")
-        usleep(400_000)
-        for character in needle {
-            let units = Array(String(character).utf16)
-            for down in [true, false] {
-                let event = CGEvent(keyboardEventSource: nil, virtualKey: 0, keyDown: down)
-                event?.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
-                event?.post(tap: .cghidEventTap)
-                usleep(15_000)
+        // Chrome answers a selection set by markers with success and selects nothing (probe on the E2E Mac,
+        // 2026-10-18: its index markers read back the phrase exactly, the set returned 0, and the page's selection
+        // stayed nil, at once and 2 s later, focused or not). Its markers' bounds are the page's, not the phrase's.
+        // The reader's way instead: a drag across the phrase, boxed by the text element that holds it
+        // (`AXBoundsForRange` on its own offsets, else its frame). The probe's drag selected the phrase exactly.
+        if let held = find(page, { node in
+            string(node, kAXRoleAttribute) == "AXStaticText" && (string(node, kAXValueAttribute)?.contains(needle) ?? false)
+        }), let value = string(held, kAXValueAttribute) as NSString? {
+            let local = value.range(of: needle)
+            var span = CFRange(location: local.location, length: local.length)
+            let target = AXValueCreate(.cfRange, &span).flatMap { rect(parameterized(held, "AXBoundsForRange", $0)) }
+                ?? frame(held)
+            if let target, target.width > 2 {
+                drag(from: CGPoint(x: target.minX + 1, y: target.midY), to: CGPoint(x: target.maxX - 1, y: target.midY))
+                usleep(500_000)
+                text = selectedNow().0
+                box = target
+                how = "drag"
+                tried.append("drag across \(describe(target)): selected \(text.debugDescription)")
+            } else {
+                tried.append("drag: the text element holding it has no box")
             }
-            usleep(30_000)
+        } else {
+            tried.append("drag: no text element holds it")
         }
-        usleep(500_000)
-        press("return")
-        usleep(300_000)
-        press("escape")
-        usleep(500_000)
-        (text, box) = selectedNow()
-        how = "find"
     }
-    emit(["dialect": how, "selected": json(text), "box": json(box.map(describe))])
+    emit(["dialect": how, "selected": json(text), "box": json(box.map(describe)), "tried": tried])
 
 case "context":
     let bundle = argument(1), title = argument(4)

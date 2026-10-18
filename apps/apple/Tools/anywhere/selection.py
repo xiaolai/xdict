@@ -9,4 +9,7 @@ def refused(needle, answer):
     selected = answer.get("selected")
     if selected == needle:
         return None
-    return f"selected {selected!r} ({answer.get('dialect')}), not {needle!r}"
+    said = f"selected {selected!r} ({answer.get('dialect')}), not {needle!r}"
+    # Each way `hands select` tried and what it left, so a failure says which path ran and why it fell through.
+    tried = answer.get("tried")
+    return f"{said}; tried: {'; '.join(tried)}" if tried else said
