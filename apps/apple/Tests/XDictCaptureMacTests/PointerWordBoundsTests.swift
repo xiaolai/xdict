@@ -22,6 +22,8 @@ final class Glyphs: AccessibilityReading {
     let emptyTokenBox: Bool
     /// Fails the request for the token's own box with this — the one geometry request made after the word is read.
     let failingTokenBox: CaptureError?
+    /// How many boxes were asked for.
+    private(set) var boundsAsked = 0
 
     init(_ text: String, speaksTextRange: Bool, emptyTokenBox: Bool = false, failingTokenBox: CaptureError? = nil) {
         self.text = text
@@ -53,6 +55,7 @@ final class Glyphs: AccessibilityReading {
             let units = Array(text.utf16)[range.location..<(range.location + range.length)]
             return String(decoding: units, as: UTF16.self) as CFString
         case kAXBoundsForRangeParameterizedAttribute:
+            boundsAsked += 1
             let range = Self.range(argument)
             if range.length > 1, let failingTokenBox { throw failingTokenBox }
             var box = emptyTokenBox && range.length > 1 ? CGRect.zero

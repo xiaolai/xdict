@@ -23,10 +23,15 @@ public struct SystemPointerWords: PointerWordSource {
     private let lane: AccessibilityLane
     private let access: AccessibilityAccess
     private let tolerance: HitTolerance
+    private let limits: CaptureLimits
 
     /// `tolerance` comes from the composition layer's tokens (decision 11), never a literal here.
-    public init(tolerance: HitTolerance, lane: AccessibilityLane = .system, access: AccessibilityAccess = .system) {
+    public init(
+        tolerance: HitTolerance, limits: CaptureLimits = .shipped, lane: AccessibilityLane = .system,
+        access: AccessibilityAccess = .system
+    ) {
         self.tolerance = tolerance
+        self.limits = limits
         self.lane = lane
         self.access = access
     }
@@ -61,8 +66,9 @@ public struct SystemPointerWords: PointerWordSource {
         at point: CGPoint, in target: PointerWordReader.Target, budget: Duration
     ) async -> PointerWordReader.Outcome {
         let tolerance = tolerance
+        let limits = limits
         return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.read(at: point, in: target, tolerance: tolerance, with: AccessibilitySession(budget: budget))
+            PointerWordReader.read(at: point, in: target, tolerance: tolerance, limits: limits, with: AccessibilitySession(budget: budget))
         }, refused: { refusal in
             switch refusal {
             case .cancelled, .superseded: .cancelled
