@@ -50,17 +50,20 @@ public struct SetupView: View {
 
     private func row(_ step: SetupBoard.Step) -> some View {
         let state = board.state(of: step)
-        return HStack(alignment: .top, spacing: Tokens.Space.m) {
-            Image(systemName: Self.symbol(state))
-                .foregroundStyle(state == .done ? Color.green : state == .problem ? Color.red : Color.orange)
-                .font(.title2)
-                .accessibilityLabel(Self.stateName(state))
-            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text(SetupBoard.title(step)).font(.headline)
-                Text(board.detail(step)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        // A status row in a pane (R1): the step and its state lead, its action trails at regular size.
+        return ActionRow {
+            HStack(alignment: .top, spacing: Tokens.Space.m) {
+                Image(systemName: Self.symbol(state))
+                    .foregroundStyle(state == .done ? Color.green : state == .problem ? Color.red : Color.orange)
+                    .font(.title2)
+                    .accessibilityLabel(Self.stateName(state))
+                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                    Text(SetupBoard.title(step)).font(.headline)
+                    Text(board.detail(step)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Spacer()
+        } actions: {
             action(step, state)
         }
         .accessibilityElement(children: .contain)

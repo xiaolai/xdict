@@ -171,15 +171,17 @@ struct PageNotices: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 ForEach(troubled) { section in
-                    HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                        Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
-                        if let sentence = SearchSentences.status(section.status) {
-                            ProblemStatus(sentence: sentence, compact: true)
+                    // A strip's row (R2): the name and its sentence lead, the way on small at the trailing edge.
+                    ActionRow(.strip) {
+                        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+                            Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
+                            if let sentence = SearchSentences.status(section.status) {
+                                ProblemStatus(sentence: sentence, compact: true)
+                            }
                         }
-                        Spacer(minLength: Tokens.Space.xs)
+                    } actions: {
                         if let next = section.next, SearchSentences.isButton(next) {
                             Button(SearchSentences.action(next)) { state.perform(next) }
-                                .controlSize(.small)
                         }
                     }
                     .accessibilityElement(children: .contain)

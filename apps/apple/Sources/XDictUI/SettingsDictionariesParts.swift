@@ -38,22 +38,17 @@ struct SettingsLibraryStrip: View {
         .font(.subheadline)
     }
 
-    /// One import under way: its name, how far, and Cancel while it can be cancelled.
+    /// One import under way (R2): its name and how far, over the bar where there is a count, and Cancel at the trailing
+    /// edge while it can be cancelled.
     private func progress(_ entry: LibraryEntry, _ phase: EntryPhase) -> some View {
-        HStack(spacing: Tokens.Space.sm) {
-            Text(verbatim: entry.displayName).lineLimit(1)
-            if case .importing(let done, let total) = phase, total > 0 {
-                ProgressView(value: Double(done), total: Double(total)) {
-                    Text(LibrarySentences.phase(phase))
-                }
-                .controlSize(.small)
-            } else {
+        ProgressRow(bar: Self.bar(phase)) {
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.sm) {
+                Text(verbatim: entry.displayName).lineLimit(1)
                 Text(LibrarySentences.phase(phase)).foregroundStyle(.secondary).lineLimit(1)
-                Spacer()
             }
+        } control: {
             if LibraryRowAction.for(phase) == .cancel {
                 Button { Task { await library.cancelImport(entry.id) } } label: { Text("Cancel") }
-                    .controlSize(.small)
             }
         }
         .font(.subheadline)
@@ -61,28 +56,35 @@ struct SettingsLibraryStrip: View {
         .accessibilityIdentifier("settings.progress")
     }
 
+    /// An import's bar: how far by its count; none before it has one.
+    static func bar(_ phase: EntryPhase) -> ProgressBar {
+        if case .importing(let done, let total) = phase { ProgressBar.of(done: done, total: total) } else { .none }
+    }
+
     /// **What the last addition could not do, as one line** (UI review X7): one notice says itself, several are
     /// counted, each listed with its reason behind Show Details….
     @ViewBuilder private var notices: some View {
         let notices = library.notices
         if !notices.isEmpty {
-            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
-                Group {
-                    if notices.count == 1, let only = notices.first {
-                        Text(LibrarySentences.notice(only))
-                    } else {
-                        Text(LibrarySentences.noticesHeadline(notices.count))
+            // R2: the strip's actions small at the trailing edge, Dismiss the primary one, rightmost.
+            ActionRow(.strip) {
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
+                    Group {
+                        if notices.count == 1, let only = notices.first {
+                            Text(LibrarySentences.notice(only))
+                        } else {
+                            Text(LibrarySentences.noticesHeadline(notices.count))
+                        }
                     }
+                    .font(.subheadline)
+                    .lineLimit(2)
                 }
-                .font(.subheadline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .lineLimit(2)
+            } secondary: {
                 Button("Show Details…") { showsNotices = true }
-                    .controlSize(.small)
                     .popover(isPresented: $showsNotices) { noticeDetails }
+            } primary: {
                 Button("Dismiss") { for notice in notices { library.dismiss(notice) } }
-                    .controlSize(.small)
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("library.notices")
@@ -182,12 +184,12 @@ struct SettingsDictionaryOptions: View {
                     SettingsDisplayOptionRow(option: option, dictionary: entry.preferencesKey)
                 }
             }
-            HStack(alignment: .firstTextBaseline) {
+            ActionRow {
                 Toggle(isOn: $originalStyle) { Text("Original style") }
                     .toggleStyle(.checkbox)
                     .help(Text("Show this dictionary's entries as its own stylesheets draw them, instead of in XDict's reading style. Links and protections are the same either way."))
                     .accessibilityIdentifier("original-style")
-                Spacer()
+            } actions: {
                 Button(action: details) { Text(SettingsDictionaries.details) }
                     .accessibilityIdentifier("settings.details")
             }
@@ -199,29 +201,22 @@ struct SettingsDictionaryOptions: View {
     @ViewBuilder private func conversionLine(_ line: AppleConversionLine) -> some View {
         switch line {
         case .working(let fraction, let cancellable):
-            // The sentence over the bar, the bar taking the width, Cancel at its own size at the trailing edge, where the
-            // box's other actions are: a labelled bar squeezed it to the side.
-            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+            // A progress row (R2): the sentence over the bar, the bar taking the width, Cancel small at its own size at the
+            // trailing edge, as an import's in the strip above (R4).
+            ProgressRow(bar: ProgressBar.of(fraction: fraction)) {
                 Text(AppleImportSentences.converting(name: entry.displayName)).foregroundStyle(.secondary)
-                HStack(spacing: Tokens.Space.sm) {
-                    if let fraction {
-                        ProgressView(value: fraction)
-                    } else {
-                        ProgressView().progressViewStyle(.linear)
-                    }
-                    if cancellable, let cancelConversion {
-                        Button(action: cancelConversion) { Text("Cancel") }
-                            .fixedSize()
-                            .accessibilityIdentifier("settings.convertCancel")
-                    }
+            } control: {
+                if cancellable, let cancelConversion {
+                    Button(action: cancelConversion) { Text("Cancel") }
+                        .accessibilityIdentifier("settings.convertCancel")
                 }
             }
             .accessibilityElement(children: .contain)
             .accessibilityIdentifier("settings.convertProgress")
         case .failed(let failure):
-            HStack(alignment: .firstTextBaseline) {
+            ActionRow {
                 Text(AppleImportSentences.failure(failure)).foregroundStyle(.secondary)
-                Spacer()
+            } actions: {
                 if let convertAgain {
                     Button(action: convertAgain) { Text("Try Again") }
                         .accessibilityIdentifier("settings.convertAgain")
@@ -237,24 +232,24 @@ struct SettingsDictionaryOptions: View {
         if let conversion {
             conversionLine(conversion)
         } else if entry.offer != nil {
-            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+            // A question and its two answers (R1): the primary one, Same Dictionary, rightmost.
+            ActionRow {
                 Text("The file of this dictionary changed. Is it still the same dictionary?")
-                HStack {
-                    Spacer()
-                    Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
-                    Button("A Different Dictionary") { library.declineJoin(entry.id) }
-                }
+            } secondary: {
+                Button("A Different Dictionary") { library.declineJoin(entry.id) }
+            } primary: {
+                Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
             }
         } else if entry.join != nil {
-            HStack {
+            ActionRow {
                 Text("Kept as the same dictionary as the file it replaced.")
-                Spacer()
+            } actions: {
                 Button("Undo") { Task { _ = await library.undoJoin(entry.id) } }
             }
         } else if let sentence = ProblemStatus.sentence(for: phase) {
-            HStack(alignment: .firstTextBaseline) {
+            ActionRow {
                 ProblemStatus(sentence: sentence)
-                Spacer()
+            } actions: {
                 switch LibraryRowAction.for(phase) {
                 case .locate: Button("Locate…") { locate() }
                 case .showInFinder: Button("Show in Finder") { LibraryRowAction.showInFinder(entry) }
@@ -263,9 +258,9 @@ struct SettingsDictionaryOptions: View {
                 }
             }
         } else if library.appleStatus[entry.id] == .updated {
-            HStack(alignment: .firstTextBaseline) {
+            ActionRow {
                 Text(AppleImportSentences.updated(name: entry.displayName))
-                Spacer()
+            } actions: {
                 if let convertAgain {
                     Button(action: convertAgain) { Text(AppleImportSentences.convertAgain) }
                         .help(Text(AppleImportSentences.convertAgainHelp))
@@ -275,11 +270,11 @@ struct SettingsDictionaryOptions: View {
         } else if library.appleStatus[entry.id] == .removed {
             Text(AppleImportSentences.removed).foregroundStyle(.secondary)
         } else if case .ready = phase, entry.languages.needsAsking {
-            HStack(alignment: .firstTextBaseline) {
+            ActionRow {
                 Text(entry.languages.basis == .unknown
                      ? LocalizedStringResource("XDict could not tell this dictionary's languages from its file name. Which are they?")
                      : LocalizedStringResource("XDict guessed these languages from the file name. Are they right?"))
-                Spacer()
+            } actions: {
                 if entry.languages.pair.search != nil, entry.languages.pair.explanation != nil {
                     Button("Confirm") { library.confirmLanguages(entry.id) }
                 } else {

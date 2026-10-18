@@ -275,15 +275,15 @@ public struct SettingsDictionaries: View {
         if case .details(let id) = route.presentation, let entry = library.entries.first(where: { $0.id == id }) {
             let size = Self.detailsSheetSize(paneHeight: paneHeight)
             VStack(spacing: 0) {
-                LibraryDetail(library: library, entry: entry,
-                              remove: { route.dismiss(); remove(id) }, locate: { route.locate() })
+                LibraryDetail(library: library, entry: entry, locate: { route.locate() })
                     .id(entry.preferencesKey)
                 Divider()
-                HStack {
-                    Spacer()
+                // R3: Remove from Library apart at the leading edge, never the default; Done the default action.
+                SheetFooter(destructive: {
+                    Button("Remove from Library", role: .destructive) { route.dismiss(); remove(id) }
+                }, primary: {
                     Button { route.dismiss() } label: { Text("Done") }
-                        .keyboardShortcut(.defaultAction)
-                }
+                })
                 .padding(Tokens.Space.m)
             }
             // The form scrolls inside; the sheet never extends past the window (`detailsSheetSize`).
