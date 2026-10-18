@@ -27,7 +27,10 @@ hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshn
   `.lineSpacing(`, `.opacity(`, `NSEdgeInsets(`/`EdgeInsets(`, `NSSize(`/`CGSize(`/`NSRect(`/`CGRect(`; font sizes
   (`.system(size:`, `systemFont(ofSize:` and its kin, `NSFont(name:size:`); every colour built from components
   (`Color(red:/white:/hue:`, `NSColor(red:/white:/calibrated…/srgb…/device…/displayP3…`), one finding per call; and
-  `let`/`var` of a `CGFloat` type given a literal.
+  `let`/`var` of a `CGFloat` type given a literal; and a tolerance compared bare with a distance (`hypot(`, `distance`,
+  `dx`/`dy`, `.minX`... `.width`, `.x`/`.y` on the other side of `<`, `<=`, `>`, `>=`), written as a literal or as a
+  constant whose type is inferred (`static let horizontal = 3`, reported at its declaration): capture's shape
+  (ADR-0014 decision 11). A ratio (the other side divides) is not a distance.
   CSS: lengths (px pt rem em lh vw vh ch ex) and colours (#hex, rgb(), hsl()) outside tokens.css and outside the
   fallback of a `var(`.
   ALLOWED, and nothing else:
@@ -702,6 +705,7 @@ KIND_GROUPS = {
     "constant": ["window", "control", "row", "inset", "space", "radius", "line", "size"],
     "radius": ["radius"], "line-spacing": ["space"], "font-size": ["text"], "opacity": [],
     "colour": ["colour"], "css-length": ["css", "density", "fill"], "css-colour": ["css", "palette"],
+    "distance": ["space", "inset", "size"],
 }
 
 
@@ -803,6 +807,45 @@ def allowed(kind, value, text, pos):
     return False
 
 
+# Capture-shaped distances (ADR-0014 decision 11): a tolerance compared with a distance, written as a bare literal or as
+# a constant whose type is inferred (`static let horizontal = 3`), which the `CGFloat` constant rule cannot see.
+COMPARISON = re.compile(r"\s(<=|>=|<|>)\s")
+DISTANCE_TERM = re.compile(r"\bhypot\(|\bdistance\b|\b(?:dx|dy)\b|\.(?:minX|maxX|minY|maxY|midX|midY|width|height|x|y)\b")
+OPERAND = r"(-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)"
+RIGHT_OPERAND = re.compile(r"\s*" + OPERAND + r"(?=\s*(?:$|[,{})?:&|;]|else\b))")
+LEFT_OPERAND = re.compile(r"(?:^|[\s(!,{])" + OPERAND + r"\s*$")
+INFERRED = r"\b(?:let|var)\s+{name}\s*=\s*(-?\d[\d_]*(?:\.\d+)?)\s*(?:$|//|\n)"
+
+
+def distance_comparisons(clean):
+    """(kind, position, value) for each tolerance compared bare with a distance: the literal itself, or the inferred
+    numeric constant's declaration. 0 means none and is allowed; a ratio (the other side divides) is not a distance."""
+    out = []
+    offset = 0
+    for line in clean.split("\n"):
+        for m in COMPARISON.finditer(line):
+            left, right = line[:m.start()], line[m.end():]
+            for operand_match, other, base in ((RIGHT_OPERAND.match(right), left, m.end()),
+                                               (LEFT_OPERAND.search(left), right, None)):
+                if operand_match is None or not DISTANCE_TERM.search(other) or " / " in other:
+                    continue
+                operand = operand_match.group(1)
+                if base is None:
+                    start = operand_match.start(1)
+                else:
+                    start = base + operand_match.start(1)
+                if re.fullmatch(r"-?\d[\d_]*(?:\.\d+)?", operand):
+                    if numeric_value(operand) != 0:
+                        out.append(("distance", offset + start, operand))
+                    continue
+                name = operand.split(".")[-1]
+                decl = re.search(INFERRED.format(name=re.escape(name)), clean)
+                if decl and numeric_value(decl.group(1)) != 0:
+                    out.append(("distance", decl.start(1), decl.group(1)))
+        offset += len(line) + 1
+    return out
+
+
 def scan_swift(rel, text):
     clean = blank_swift(text)
     lines = text.split("\n")
@@ -838,6 +881,8 @@ def scan_swift(rel, text):
             value = numeric_value(nm.group(1))
             if not allowed("constant", value, clean, nm.start()):
                 add("constant", nm.start(), nm.group(1))
+    for kind, pos, value in distance_comparisons(clean):
+        add(kind, pos, value)
     return [(rel, line, kind, value, lines[line - 1]) for kind, line, value in
             sorted(found.values(), key=lambda f: f[1])], EXEMPT_SWIFT
 

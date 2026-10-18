@@ -270,6 +270,35 @@ class Check(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertEqual(self.kinds(swift=code + "\n")[0], [expected])
 
+    def test_capture_shaped_distance_comparisons_are_seen(self):
+        cases = {
+            "static let horizontal = 3\nfunc near(dx: CGFloat) -> Bool { dx <= horizontal }": ("distance", "3"),
+            "func moved(a: CGPoint, b: CGPoint) -> Bool { hypot(b.x - a.x, b.y - a.y) > 2 }": ("distance", "2"),
+            "let slack = 4.0\nguard box.width < slack else { return }": ("distance", "4.0"),
+            "guard abs(a.minX - b.minX) <= 3 else { return }": ("distance", "3"),
+            "if 2 < distance(from: p, to: box) { }": ("distance", "2"),
+        }
+        for code, expected in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.kinds(swift=code + "\n")[0], [expected])
+
+    def test_distances_that_are_not_capture_tolerances_are_not_seen(self):
+        found, _ = self.kinds(swift="\n".join([
+            "guard dx <= tolerance.horizontal else { return }", "if count > 3 { }", "guard box.width > 0 else { return }",
+            "return overlap / shorter >= 0.5", "let limit = 3\nif items.count > limit { }",
+            "guard dx <= metrics.hit.horizontal * 2 else { return }", "let s: Set<Int> = []",
+        ]) + "\n")
+        self.assertEqual(found, [])
+
+    def test_a_planted_capture_tolerance_fails_check(self):
+        root = Root(self)
+        root.swift("func near(dx: CGFloat, t: HitTolerance) -> Bool { dx <= t.horizontal }\n")
+        self.assertEqual(root.run("check").returncode, 0)
+        root.swift("static let horizontal = 3\nfunc near(dx: CGFloat) -> Bool { dx <= horizontal }\n")
+        result = root.run("check")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Sources/XDictUI/View.swift:1: distance 3", result.stdout)
+
     def test_a_colour_from_components_is_one_finding(self):
         found, _ = self.kinds(swift="let c = NSColor(white: 0x5c / 255, alpha: 1)\nlet d = Color(red: 1, green: 0, blue: 0)\n")
         self.assertEqual([k for k, _ in found], ["colour", "colour"])
