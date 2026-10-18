@@ -286,6 +286,25 @@ struct HoverRecognitionTests {
         #expect(context.end == .cancelled)
     }
 
+    /// **A word refused after it was read cancels its context** (decision 8): here its script is not one the reader looks
+    /// up, and the sentence still being read for it is let go — the taller strip told and the capture released. Red if the refusal path forgets the cancel.
+    @Test func aRecognisedWordRefusedAfterTheReadCancelsItsContext() async throws {
+        let gate = GrowthGate()
+        var policy = HoverPolicy.shipped
+        policy.allowedScripts = [.han]
+        let reader = RecognitionFixtures.reader(growing(gate), policy: policy)
+        var releases = 0
+        reader.onCaptureReleased = { releases += 1 }
+        guard case .quiet(.scriptNotAllowed) = await RecognitionFixtures.read(reader) else {
+            Issue.record("a word in a script the reader does not look up was not refused")
+            return
+        }
+        await HoverFixtures.settle { gate.sawCancellation }
+        #expect(gate.sawCancellation, "the taller strip went on being read for a refused word")
+        await HoverFixtures.settle { releases == 1 }
+        #expect(releases == 1, "the capture was held for a refused word")
+    }
+
     /// **A reading with nothing left to read has no context**, and lets the capture go.
     @Test func aWholeReadingHasNoContext() async throws {
         let reader = RecognitionFixtures.reader(RecognitionFixtures.screen())

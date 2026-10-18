@@ -105,13 +105,20 @@ public final class ScreenTextRecogniser: Sendable {
     private let metrics: CaptureMetrics
     private let limits: CaptureLimits
     private let access: ScreenRecordingAccess
-    private let cache = ShareableContentCache()
+    private let capturer: any ScreenCapturing
 
     /// `metrics` from the composition layer's tokens (decision 11).
-    public init(metrics: CaptureMetrics, limits: CaptureLimits = .shipped, access: ScreenRecordingAccess = .system) {
+    public convenience init(metrics: CaptureMetrics, limits: CaptureLimits = .shipped, access: ScreenRecordingAccess = .system) {
+        self.init(metrics: metrics, limits: limits, access: access,
+                  capturer: SystemScreenCapturer(frameDrift: metrics.frameDrift))
+    }
+
+    /// `capturer` is the screen: the real one above, a stand-in in the tests that count captures.
+    init(metrics: CaptureMetrics, limits: CaptureLimits, access: ScreenRecordingAccess, capturer: any ScreenCapturing) {
         self.metrics = metrics
         self.limits = limits
         self.access = access
+        self.capturer = capturer
     }
 
     /// Reads `window` — **the one the caller chose** — in a strip around `point`. Consent first, then the window's owner
@@ -133,7 +140,9 @@ public final class ScreenTextRecogniser: Sendable {
         return first
     }
 
-    private func taller(than strip: Target, toward sides: StripSides, elapsed: Duration, lastRead: Duration) -> Target? {
+    private func taller(
+        than strip: CaptureTarget, toward sides: StripSides, elapsed: Duration, lastRead: Duration
+    ) -> CaptureTarget? {
         guard !sides.isEmpty,
               let taller = ContextStrip.grown(
                 strip.region.minY...strip.region.maxY, toward: sides, within: strip.frame.minY...strip.frame.maxY,
@@ -146,7 +155,7 @@ public final class ScreenTextRecogniser: Sendable {
     /// **Grown only where the sentence ran into the strip's edge**, while a further read can finish inside the budget
     /// counted from the first read's start. Answers the last reading made, or nil where none was made beyond `first`.
     private func grow(
-        _ first: Recognition, strip from: Target, at point: CGPoint, of window: ListedWindow,
+        _ first: Recognition, strip from: CaptureTarget, at point: CGPoint, of window: ListedWindow,
         started: ContinuousClock.Instant, lastRead firstRead: Duration
     ) async -> Recognition? {
         var strip = from
@@ -172,9 +181,9 @@ public final class ScreenTextRecogniser: Sendable {
     }
 
     /// One capture of `target` and its reading.
-    private func read(_ target: Target, at point: CGPoint, of window: ListedWindow) async throws -> Recognition {
+    private func read(_ target: CaptureTarget, at point: CGPoint, of window: ListedWindow) async throws -> Recognition {
         try Task.checkCancellation()
-        let image = try await capture(target, of: window)
+        let image = try await capturer.capture(target, of: window)
         try Task.checkCancellation()
         let lines = try Self.recognise(image, limits: limits, slack: metrics.tiling) { tile in
             try Self.recogniseWhole(tile)
@@ -185,36 +194,21 @@ public final class ScreenTextRecogniser: Sendable {
     private static let log = Logger(subsystem: XDictIdentity.app, category: "recognition")
 
     /// Consent, then the window's capture target, then its owner against `policy` — all before a pixel.
-    private func authorisedTarget(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> Target {
+    private func authorisedTarget(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> CaptureTarget {
         switch await access.captureState() {
         case .granted: break
         case .notSetUp, .declined: throw RecognitionError.screenRecordingNeeded
         case .couldNotTell: throw RecognitionError.screenRecordingUnreadable
         }
         try Task.checkCancellation()
-        let target = try await target(at: point, window: window)
+        let target = try await capturer.target(at: point, window: window, stripHeight: metrics.strip.initialHeight)
         guard let bundleID = target.bundleID else { throw RecognitionError.unattributable }
         if CaptureAuthorization.refusal(bundleID: bundleID, policy: policy) != nil { throw RecognitionError.excludedApp }
         return target
     }
 
-    /// The strip around the pointer, captured — and refused if the window moved while it was taken.
-    private func capture(_ target: Target, of window: ListedWindow) async throws -> CGImage {
-        let config = SCStreamConfiguration()
-        config.sourceRect = target.sourceRect
-        config.width = Int((target.region.width * CGFloat(target.filter.pointPixelScale)).rounded())
-        config.height = Int((target.region.height * CGFloat(target.filter.pointPixelScale)).rounded())
-        config.showsCursor = false
-        config.captureResolution = .best
-        let image = try await SCScreenshotManager.captureImage(contentFilter: target.filter, configuration: config)
-        guard let after = Self.liveBounds(of: window.windowID), sameGeometry(after, target.frame) else {
-            throw RecognitionError.windowNotCapturable
-        }
-        return image
-    }
-
     /// The recognised word under `point`, or `.nothingUnderPointer`.
-    private func hit(in lines: [RecognisedLine], at point: CGPoint, target: Target) throws -> Recognition {
+    private func hit(in lines: [RecognisedLine], at point: CGPoint, target: CaptureTarget) throws -> Recognition {
         let cursor = CaptureGeometry.normalized(point, in: target.region)
         // The shared tolerance, in the capture's normalised units.
         let slack = CGSize(width: metrics.hit.horizontal / target.region.width,
@@ -384,34 +378,59 @@ public final class ScreenTextRecogniser: Sendable {
         }
     }
 
-    // MARK: - The window
+}
 
-    private struct Target {
-        let filter: SCContentFilter
-        /// In global screen points.
-        let region: CGRect
-        /// The same region in the window's own coordinates.
-        let sourceRect: CGRect
-        let appName: String?
-        let bundleID: String?
-        /// The window's frame when the capture was set up, in global screen points.
-        let frame: CGRect
+// MARK: - The window
 
-        /// The same window and width, over `rows` — a vertical range in global screen points.
-        func vertically(_ rows: ClosedRange<CGFloat>) -> Target {
-            let region = CGRect(x: region.minX, y: rows.lowerBound, width: region.width,
-                                height: rows.upperBound - rows.lowerBound)
-            return Target(filter: filter, region: region,
-                          sourceRect: CGRect(origin: CGPoint(x: region.minX - frame.minX, y: region.minY - frame.minY),
-                                             size: region.size),
-                          appName: appName, bundleID: bundleID, frame: frame)
-        }
+/// What capturing one window needs again, opaque to the recogniser: ScreenCaptureKit's content filter on the real screen,
+/// a stand-in in the tests.
+protocol CaptureFilter {
+    var pointPixelScale: Float { get }
+}
+
+extension SCContentFilter: CaptureFilter {}
+
+/// One window's strip, set up for a capture: its owner and frame are known **before any pixel is taken**.
+struct CaptureTarget: @unchecked Sendable {
+    // `@unchecked`: the filter is made once per target and only read afterwards; ScreenCaptureKit does not mark it.
+    let filter: any CaptureFilter
+    /// In global screen points.
+    let region: CGRect
+    /// The same region in the window's own coordinates.
+    let sourceRect: CGRect
+    let appName: String?
+    let bundleID: String?
+    /// The window's frame when the capture was set up, in global screen points.
+    let frame: CGRect
+
+    /// The same window and width, over `rows` — a vertical range in global screen points.
+    func vertically(_ rows: ClosedRange<CGFloat>) -> CaptureTarget {
+        let region = CGRect(x: region.minX, y: rows.lowerBound, width: region.width,
+                            height: rows.upperBound - rows.lowerBound)
+        return CaptureTarget(filter: filter, region: region,
+                             sourceRect: CGRect(origin: CGPoint(x: region.minX - frame.minX, y: region.minY - frame.minY),
+                                                size: region.size),
+                             appName: appName, bundleID: bundleID, frame: frame)
     }
+}
 
-    /// The capture for `listed`, found by its compositor number in ScreenCaptureKit's list, **against the window as it is
-    /// now**: a cached frame that disagrees with the live one is refreshed, and a point the window no longer covers reads
-    /// nothing. `sourceRect` is window-local from (0, 0), though the filter reports the frame globally.
-    private func target(at point: CGPoint, window listed: ListedWindow) async throws -> Target {
+/// **The screen side of the recogniser** — who owns a window and where it is, then its pixels — and the seam its tests
+/// replace, so the owner checks are observed to come before any capture call.
+protocol ScreenCapturing: Sendable {
+    /// `window`'s strip, `stripHeight` tall around `point`, with its owner and frame. No pixel is captured.
+    func target(at point: CGPoint, window: ListedWindow, stripHeight: CGFloat) async throws -> CaptureTarget
+    /// The target's pixels — refused if the window moved while they were taken.
+    func capture(_ target: CaptureTarget, of window: ListedWindow) async throws -> CGImage
+}
+
+/// **The real screen**: ScreenCaptureKit's window list, cached, and its screenshot, checked against the compositor's live
+/// frame before and after.
+struct SystemScreenCapturer: ScreenCapturing {
+    /// How far two readings of a window's frame may disagree (`CaptureMetrics.frameDrift`, from the tokens).
+    let frameDrift: CGFloat
+    private let cache = ShareableContentCache()
+
+    func target(at point: CGPoint, window listed: ListedWindow, stripHeight: CGFloat) async throws -> CaptureTarget {
         guard let live = Self.liveBounds(of: listed.windowID) else { throw RecognitionError.windowNotCapturable }
         guard live.contains(point) else { throw RecognitionError.nothingUnderPointer }
         var found = try await shareableContent().windows.first { $0.windowID == listed.windowID }
@@ -421,13 +440,28 @@ public final class ScreenTextRecogniser: Sendable {
         }
         guard let window = found, sameGeometry(window.frame, live) else { throw RecognitionError.windowNotCapturable }
         let frame = window.frame
-        let region = CaptureGeometry.rect(
-            around: point, size: CGSize(width: frame.width, height: metrics.strip.initialHeight), within: frame)
-        return Target(
+        let region = CaptureGeometry.rect(around: point, size: CGSize(width: frame.width, height: stripHeight), within: frame)
+        return CaptureTarget(
             filter: SCContentFilter(desktopIndependentWindow: window), region: region,
             sourceRect: CGRect(origin: CGPoint(x: region.minX - frame.minX, y: region.minY - frame.minY), size: region.size),
             appName: window.owningApplication?.applicationName, bundleID: window.owningApplication?.bundleIdentifier,
             frame: frame)
+    }
+
+    func capture(_ target: CaptureTarget, of window: ListedWindow) async throws -> CGImage {
+        // Only this capturer makes targets with a real filter; any other is refused, never captured.
+        guard let filter = target.filter as? SCContentFilter else { throw RecognitionError.windowNotCapturable }
+        let config = SCStreamConfiguration()
+        config.sourceRect = target.sourceRect
+        config.width = Int((target.region.width * CGFloat(filter.pointPixelScale)).rounded())
+        config.height = Int((target.region.height * CGFloat(filter.pointPixelScale)).rounded())
+        config.showsCursor = false
+        config.captureResolution = .best
+        let image = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+        guard let after = Self.liveBounds(of: window.windowID), sameGeometry(after, target.frame) else {
+            throw RecognitionError.windowNotCapturable
+        }
+        return image
     }
 
     /// The window's bounds as the compositor has them now, or nil where it is no longer on screen.
@@ -440,11 +474,10 @@ public final class ScreenTextRecogniser: Sendable {
         return CGRect(dictionaryRepresentation: bounds as CFDictionary)
     }
 
-    /// Two readings of one frame, the same within `metrics.frameDrift` on every edge.
+    /// Two readings of one frame, the same within `frameDrift` on every edge.
     func sameGeometry(_ a: CGRect, _ b: CGRect) -> Bool {
-        let drift = metrics.frameDrift
-        return abs(a.minX - b.minX) <= drift && abs(a.minY - b.minY) <= drift
-            && abs(a.width - b.width) <= drift && abs(a.height - b.height) <= drift
+        abs(a.minX - b.minX) <= frameDrift && abs(a.minY - b.minY) <= frameDrift
+            && abs(a.width - b.width) <= frameDrift && abs(a.height - b.height) <= frameDrift
     }
 
     /// The on-screen window list, cached for `contentLifetime`: fetching it is the path's dominant cost (60–85 ms for
