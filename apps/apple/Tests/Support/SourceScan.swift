@@ -51,6 +51,83 @@ public enum SourceScan {
         }
     }
 
+    /// **`code` as the compiler runs it**: comments gone and a string's own text gone, **but every interpolation kept**,
+    /// since `"\(term.context)"` evaluates `term.context` exactly as code outside a string does. Interpolations nest
+    /// (a string inside one is read the same way); a raw string's interpolation is `\#(`. Newlines inside strings and
+    /// comments are kept, so a line number here is the source's.
+    public static func codeWithInterpolations(_ code: String) -> String {
+        let characters = Array(code)
+        func starts(_ token: String, at index: Int) -> Bool {
+            let token = Array(token)
+            return index + token.count <= characters.count
+                && Array(characters[index..<(index + token.count)]) == token
+        }
+        func newlines(_ range: Range<Int>) -> String {
+            String(repeating: "\n", count: characters[range].filter { $0 == "\n" }.count)
+        }
+        // Code until the end — or, inside an interpolation, until the `)` that closes it, which is consumed.
+        func program(_ index: inout Int, interpolated: Bool) -> String {
+            var out = "", depth = 0
+            while index < characters.count {
+                if starts("//", at: index) {
+                    while index < characters.count, characters[index] != "\n" { index += 1 }
+                    continue
+                }
+                if starts("/*", at: index) {
+                    let begun = index
+                    var nesting = 0
+                    repeat {
+                        if starts("/*", at: index) { nesting += 1; index += 2 }
+                        else if starts("*/", at: index) { nesting -= 1; index += 2 }
+                        else { index += 1 }
+                    } while nesting > 0 && index < characters.count
+                    out += " " + newlines(begun..<min(index, characters.count))
+                    continue
+                }
+                if interpolated {
+                    if characters[index] == "(" { depth += 1 }
+                    if characters[index] == ")" {
+                        if depth == 0 { index += 1; return out }
+                        depth -= 1
+                    }
+                }
+                var hashes = 0
+                while index + hashes < characters.count, characters[index + hashes] == "#" { hashes += 1 }
+                if index + hashes < characters.count, characters[index + hashes] == "\"" {
+                    out += string(&index, hashes: hashes)
+                    continue
+                }
+                let run = max(hashes, 1)
+                out += String(characters[index..<min(index + run, characters.count)])
+                index += run
+            }
+            return out
+        }
+        // A string literal: its text dropped, its interpolations read as code.
+        func string(_ index: inout Int, hashes: Int) -> String {
+            let quote = starts("\"\"\"", at: index + hashes) ? "\"\"\"" : "\""
+            let close = quote + String(repeating: "#", count: hashes)
+            let escape = "\\" + String(repeating: "#", count: hashes)
+            index += hashes + quote.count
+            var out = "\""
+            while index < characters.count, !starts(close, at: index) {
+                if starts(escape + "(", at: index) {
+                    index += escape.count + 1
+                    out += "\\(" + program(&index, interpolated: true) + ")"
+                } else if starts(escape, at: index) {
+                    index += escape.count + 1
+                } else {
+                    if characters[index] == "\n" { out += "\n" }
+                    index += 1
+                }
+            }
+            index += close.count
+            return out + "\""
+        }
+        var index = 0
+        return program(&index, interpolated: false)
+    }
+
     /// `code` with every comment replaced by a space and every string literal's contents removed, so neither can
     /// look like an import or hide one. Block comments nest, as Swift's do; a raw string ends only at a quote followed
     /// by as many `#` as opened it, and has no backslash escapes.
