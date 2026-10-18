@@ -50,47 +50,46 @@ public struct SetupView: View {
 
     private func row(_ step: SetupBoard.Step) -> some View {
         let state = board.state(of: step)
-        return HStack(alignment: .top, spacing: Tokens.Space.m) {
-            Image(systemName: Self.symbol(state))
-                .foregroundStyle(state == .done ? Color.green : state == .problem ? Color.red : Color.orange)
-                .font(.title2)
-                .accessibilityLabel(Self.stateName(state))
-            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                Text(SetupBoard.title(step)).font(.headline)
-                Text(board.detail(step)).foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+        // A status row in a pane (R1): the step and its state lead, its action trails at regular size.
+        return ActionRow {
+            HStack(alignment: .top, spacing: Tokens.Space.m) {
+                Image(systemName: Self.symbol(state))
+                    .foregroundStyle(state == .done ? Color.green : state == .problem ? Color.red : Color.orange)
+                    .font(.title2)
+                    .accessibilityLabel(Self.stateName(state))
+                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                    Text(SetupBoard.title(step)).font(.headline)
+                    Text(board.detail(step)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
-            Spacer()
-            action(step, state)
+        } actions: {
+            switch step {
+            case .dictionaries:
+                // Add Dictionaries… opens the open panel itself (UI review U-02), in Settings ▸ Dictionaries (ADR-0012
+                // d.4).
+                Button {
+                    if state != .done { SettingsRoute.shared.requestImport() } else { showDictionaries() }
+                } label: {
+                    Text(state == .done ? "Open Dictionary Settings" : "Add Dictionaries…")
+                }
+                .accessibilityIdentifier("setup.dictionaries.action")
+            case .accessibility:
+                if state != .done {
+                    Button {
+                        _ = AccessibilityGate.system(true)
+                        if let url = URL(string: Self.accessibilityPane) { NSWorkspace.shared.open(url) }
+                    } label: {
+                        Text("Open System Settings")
+                    }
+                    .accessibilityIdentifier("setup.accessibility.action")
+                }
+            case .shortcut:
+                ShortcutRecorder(registrar: registrar)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.\(step.rawValue).\(Self.stateKey(state))")
-    }
-
-    @ViewBuilder
-    private func action(_ step: SetupBoard.Step, _ state: SetupBoard.State) -> some View {
-        switch step {
-        case .dictionaries:
-            // Add Dictionaries… opens the open panel itself (UI review U-02), in Settings ▸ Dictionaries (ADR-0012 d.4).
-            Button {
-                if state != .done { SettingsRoute.shared.requestImport() } else { showDictionaries() }
-            } label: {
-                Text(state == .done ? "Open Dictionary Settings" : "Add Dictionaries…")
-            }
-                .accessibilityIdentifier("setup.dictionaries.action")
-        case .accessibility:
-            if state != .done {
-                Button {
-                    _ = AccessibilityGate.system(true)
-                    if let url = URL(string: Self.accessibilityPane) { NSWorkspace.shared.open(url) }
-                } label: {
-                    Text("Open System Settings")
-                }
-                .accessibilityIdentifier("setup.accessibility.action")
-            }
-        case .shortcut:
-            ShortcutRecorder(registrar: registrar)
-        }
     }
 
     static let accessibilityPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"

@@ -118,7 +118,7 @@ public struct LookupPanelView: View {
     @ViewBuilder private var placeholder: some View {
         switch notice {
         case .reading:
-            ProgressView().controlSize(.small).coversPane()
+            ProgressView().controlSize(.small).coversPane()  // placement: spinner
         case .refused(let refusal):
             ContentUnavailableView {
                 Label("Nothing to Look Up", systemImage: "text.cursor")
@@ -126,8 +126,10 @@ public struct LookupPanelView: View {
                 Text(AnywhereSentences.refusal(refusal))
             } actions: {
                 if refusal == .notTrusted {
-                    Button("Open Accessibility Settings") { NSWorkspace.shared.open(Self.accessibilityPane) }
-                        .accessibilityIdentifier("panel.openAccessibility")
+                    EmptyStateActions {
+                        Button("Open Accessibility Settings") { NSWorkspace.shared.open(Self.accessibilityPane) }
+                            .accessibilityIdentifier("panel.openAccessibility")
+                    }
                 }
             }
             .coversPane()
@@ -140,11 +142,13 @@ public struct LookupPanelView: View {
                 } description: {
                     Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
                 } actions: {
-                    Button("Open Dictionary Settings") { showDictionaries() }
+                    EmptyStateActions {
+                        Button("Open Dictionary Settings") { showDictionaries() }
+                    }
                 }
                 .coversPane()
             case .searching:
-                ProgressView().controlSize(.small).coversPane()
+                ProgressView().controlSize(.small).coversPane()  // placement: spinner
             case .noResults(let query):
                 ContentUnavailableView.search(text: query).coversPane()
             case .noResultsIncomplete(let query, let unsearched):
@@ -169,7 +173,7 @@ private struct FooterRow: View {
                 .padding(.leading, PanelLook.leading)
                 .padding(.trailing, PanelLook.trailing)
                 .padding(.top, PanelLook.footerGap)
-            Button(action: action) {
+            Button(action: action) {  // placement: P41
                 HStack {
                     title.font(Tokens.TextRole.panelFooter.font)
                     Spacer(minLength: Tokens.Space.sm)
