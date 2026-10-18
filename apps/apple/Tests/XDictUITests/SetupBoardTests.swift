@@ -77,4 +77,17 @@ struct SetupBoardTests {
         #expect(!SetupLanguageCheck.chineseOnly(texts: ["词典"], preferredLanguage: "en-US"))
         #expect(SetupLanguageCheck.english(in: ["词典", "Add Dictionaries", "mdx"]) == ["Add Dictionaries"])
     }
+
+    /// **Apple's Simplified Chinese keeps "App" and the modifier keys' names in Latin letters** ("任何 App", "Control 键"),
+    /// so a translated string holding them is not English left behind (E2E re-run, 2026-10-18: the window's two such
+    /// strings were reported as English once the check read the window). A whole word only: "Apple" and an untranslated
+    /// sentence still count.
+    @Test func applesLatinNamesInChineseAreNotEnglish() {
+        #expect(!SetupLanguageCheck.isEnglish("已授权。快捷键可以读取任何 App 中选中的文字。"))
+        #expect(!SetupLanguageCheck.isEnglish("查询快捷键，Control-Option-D"))
+        #expect(!SetupLanguageCheck.isEnglish("Command-Shift-L"))
+        #expect(SetupLanguageCheck.isEnglish("Granted. The shortcut can read the selection in any app."))
+        #expect(SetupLanguageCheck.isEnglish("Apple 词典"))
+        #expect(SetupLanguageCheck.isEnglish("Applications"))
+    }
 }

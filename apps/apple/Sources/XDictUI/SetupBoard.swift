@@ -102,12 +102,15 @@ public enum SetupWindowReading {
 /// its Accessibility tree read; and the verdict, which fails on no text at all, since an empty tree (a window not yet
 /// drawn, or read before it was) has no English in it and would otherwise pass without reading anything.
 public enum SetupLanguageCheck {
-    /// A run of three Latin letters that is not one of the names XDict keeps in every language.
+    /// A run of three Latin letters that is not one of the names kept in every language: XDict's own (XDict, MDict, mdx,
+    /// mdd) and those Apple's Simplified Chinese keeps in Latin letters ("任何 App", "Control 键"). Whole words only, so
+    /// "Apple" or "Applications" still count.
     public static func isEnglish(_ text: String) -> Bool {
-        var stripped = text
-        for name in ["XDict", "MDict", "mdx", "mdd"] { stripped = stripped.replacingOccurrences(of: name, with: "") }
-        return stripped.contains(/[A-Za-z]{3,}/)
+        text.split { !($0.isASCII && $0.isLetter) }.contains { $0.count >= 3 && !keptNames.contains(String($0)) }
     }
+
+    private static let keptNames: Set<String> = ["XDict", "MDict", "mdx", "mdd", "App", "Control", "Option", "Command",
+                                                 "Shift"]
 
     public static func english(in texts: [String]) -> [String] { texts.filter(isEnglish) }
 
