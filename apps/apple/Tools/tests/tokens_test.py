@@ -299,6 +299,42 @@ class Check(unittest.TestCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("Sources/XDictUI/View.swift:1: distance 3", result.stdout)
 
+    def test_the_other_capture_spellings_are_seen(self):
+        cases = {
+            "static let gap: Double = 3\nguard dx <= gap else { return }": [("distance", "3")],
+            "guard dx <= CGFloat(3) else { return }": [("distance", "3")],
+            "func near(_ p: CGPoint, tolerance: CGFloat = 3) -> Bool { true }": [("default", "3")],
+            "guard dx<=3 else { return }": [("distance", "3")],
+            "let r = box.insetBy(dx: -3, dy: -2)": [("geometry", "-3"), ("geometry", "-2")],
+        }
+        for code, expected in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.kinds(swift=code + "\n")[0], expected)
+
+    def capture_kinds(self, swift):
+        root = Root(self)
+        (root.path / "Sources/XDictCapture").mkdir()
+        (root.path / "Sources/XDictCapture/Rule.swift").write_text(swift)
+        return [(f[2], f[3]) for f in root.findings()[0]]
+
+    def test_a_capture_float_constant_is_injected_or_named_a_fraction(self):
+        cases = {
+            "static let pitch: Double = 1.5": [("capture-unitless-name", "1.5")],
+            "let jitter = 0.25": [("capture-unitless-name", "0.25")],
+            "func clips(edge: CGFloat = 0.004) -> Bool { true }": [("capture-unitless-name", "0.004")],
+            "static let pitchRatio: Double = 1.5": [],
+            "static let cutFraction = 0.25": [],
+            "func f(minimumOverlap: CGFloat = 0.2) -> Bool { true }": [],
+            "init(confidence: Double = 1) {}": [],
+            "static let count = 3": [],
+        }
+        for code, expected in cases.items():
+            with self.subTest(code=code):
+                self.assertEqual(self.capture_kinds(code + "\n"), expected)
+
+    def test_the_fraction_rule_holds_only_inside_capture(self):
+        self.assertEqual(self.kinds(swift="let jitter = 0.25\n")[0], [])
+
     def test_a_colour_from_components_is_one_finding(self):
         found, _ = self.kinds(swift="let c = NSColor(white: 0x5c / 255, alpha: 1)\nlet d = Color(red: 1, green: 0, blue: 0)\n")
         self.assertEqual([k for k, _ in found], ["colour", "colour"])

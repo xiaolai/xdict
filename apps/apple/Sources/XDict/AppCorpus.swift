@@ -124,7 +124,8 @@ final class AppCorpusRun {
         return library.searchSources.first { $0.id == entry.id && $0.handle != nil }
     }
 
-    func window(_ title: String, width: Double = 900, height: Double = 700, suite: String = "ai.xdict.app.e2e.entries")
+    func window(_ title: String, width: CGFloat = Tokens.InstrumentSize.corpusWindow.width,
+                height: CGFloat = Tokens.InstrumentSize.corpusWindow.height, suite: String = "ai.xdict.app.e2e.entries")
         -> InstrumentWindow {
         InstrumentWindow(title, frame: NSRect(origin: Tokens.InstrumentFrame.corpusOrigin.origin, size: CGSize(width: width, height: height)), library: library,
                          backend: client, suite: suite, opener: RecordingOpener())

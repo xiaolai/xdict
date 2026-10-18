@@ -682,6 +682,7 @@ SWIFT_CALLS = [
     (r"\.cornerRadius\(|\bcornerRadius:\s*", "radius"),
     (r"\.lineSpacing\(", "line-spacing"),
     (r"\.opacity\(", "opacity"),
+    (r"\.insetBy\(", "geometry"),
     (r"\.system\(\s*size:|[sS]ystemFont\(ofSize:|\bNSFont\(name:", "font-size"),
 ]
 # One finding per call, whatever its numbers: a colour built from components.
@@ -809,12 +810,22 @@ def allowed(kind, value, text, pos):
 
 # Capture-shaped distances (ADR-0014 decision 11): a tolerance compared with a distance, written as a bare literal or as
 # a constant whose type is inferred (`static let horizontal = 3`), which the `CGFloat` constant rule cannot see.
-COMPARISON = re.compile(r"\s(<=|>=|<|>)\s")
+# Spaced on both sides, or `<=`/`>=` unspaced (`dx<=3`); an unspaced `<` or `>` is a generic, not a comparison.
+COMPARISON = re.compile(r"\s(?:<=|>=|<|>)\s|(?<=[\w)\]])(?:<=|>=)(?=[-\w(])")
 DISTANCE_TERM = re.compile(r"\bhypot\(|\bdistance\b|\b(?:dx|dy)\b|\.(?:minX|maxX|minY|maxY|midX|midY|width|height|x|y)\b")
-OPERAND = r"(-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)"
+OPERAND = r"((?:CGFloat|Double|Float)\(-?\d[\d_]*(?:\.\d+)?\)|-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)"
 RIGHT_OPERAND = re.compile(r"\s*" + OPERAND + r"(?=\s*(?:$|[,{})?:&|;]|else\b))")
 LEFT_OPERAND = re.compile(r"(?:^|[\s(!,{])" + OPERAND + r"\s*$")
-INFERRED = r"\b(?:let|var)\s+{name}\s*=\s*(-?\d[\d_]*(?:\.\d+)?)\s*(?:$|//|\n)"
+INFERRED = r"\b(?:let|var)\s+{name}\s*(?::\s*(?:CGFloat|Double|Float)\s*)?=\s*(-?\d[\d_]*(?:\.\d+)?)\s*(?:$|//|\n)"
+FLOAT_TYPE = r"(?:CGFloat|Double|Float)"
+# A floating default parameter: `tolerance: CGFloat = 3`.
+DEFAULT_PARAM = re.compile(r"[(,]\s*(?:\w+\s+)?(\w+)\s*:\s*" + FLOAT_TYPE + r"\s*=\s*(-?\d[\d_]*(?:\.\d+)?)(?![\w.])")
+# A floating constant: typed `CGFloat`/`Double`/`Float`, or inferred from a literal with a decimal point.
+FLOAT_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*" + FLOAT_TYPE + r"\s*=\s*(-?\d[\d_]*(?:\.\d+)?)|=\s*(-?\d[\d_]*\.\d+))\s*(?:$|//|\n)", re.M)
+# Inside the capture target a floating constant is handed in (CaptureMetrics, CaptureLimits) or named as the
+# dimensionless fraction it is; the checker cannot tell a Double ratio from a Double length by its type (ADR-0014 d.11).
+CAPTURE_DIR = "Sources/XDictCapture/"
+FRACTION_NAME = re.compile(r"(?:Ratio|Fraction|Overlap)$")
 
 
 def distance_comparisons(clean):
@@ -830,6 +841,9 @@ def distance_comparisons(clean):
                 if operand_match is None or not DISTANCE_TERM.search(other) or " / " in other:
                     continue
                 operand = operand_match.group(1)
+                wrapped = re.fullmatch(r"(?:CGFloat|Double|Float)\((.*)\)", operand)
+                if wrapped:
+                    operand = wrapped.group(1)
                 if base is None:
                     start = operand_match.start(1)
                 else:
@@ -843,6 +857,20 @@ def distance_comparisons(clean):
                 if decl and numeric_value(decl.group(1)) != 0:
                     out.append(("distance", decl.start(1), decl.group(1)))
         offset += len(line) + 1
+    return out
+
+
+def unnamed_fractions(clean):
+    """(kind, position, value) for each floating constant or default parameter in the capture target whose name does
+    not say it is a dimensionless fraction. 0 and 1 (none, whole) are allowed."""
+    out = []
+    for m in FLOAT_CONSTANT.finditer(clean):
+        start, raw = (m.start(2), m.group(2)) if m.group(2) is not None else (m.start(3), m.group(3))
+        if numeric_value(raw) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
+            out.append(("capture-unitless-name", start, raw))
+    for m in DEFAULT_PARAM.finditer(clean):
+        if numeric_value(m.group(2)) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
+            out.append(("capture-unitless-name", m.start(2), m.group(2)))
     return out
 
 
@@ -881,6 +909,13 @@ def scan_swift(rel, text):
             value = numeric_value(nm.group(1))
             if not allowed("constant", value, clean, nm.start()):
                 add("constant", nm.start(), nm.group(1))
+    if rel.startswith(CAPTURE_DIR):
+        for kind, pos, value in unnamed_fractions(clean):
+            add(kind, pos, value)
+    else:
+        for m in DEFAULT_PARAM.finditer(clean):
+            if numeric_value(m.group(2)) not in (0, 1):
+                add("default", m.start(2), m.group(2))
     for kind, pos, value in distance_comparisons(clean):
         add(kind, pos, value)
     return [(rel, line, kind, value, lines[line - 1]) for kind, line, value in
