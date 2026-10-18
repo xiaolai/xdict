@@ -91,11 +91,11 @@ def row_texts(table):
 
 # ---- the rules, each returning None when Apple's, else why not ----
 
-def title_dictionary(tree):
+def title_xdict(tree):
     window = main_window(tree)
-    titles = [str(label(n)) for n in find(tree, "AXStaticText", "Dictionary")]
-    if not str(window.get("title", "")).startswith("Dictionary") and not titles:
-        return f"the window's title is {window.get('title')!r}, not 'Dictionary'"
+    titles = [str(label(n)) for n in find(tree, "AXStaticText", "XDict")]
+    if not str(window.get("title", "")).startswith("XDict") and not titles:
+        return f"the window's title is {window.get('title')!r}, not 'XDict' (P2, XDict's own)"
     return None
 
 
@@ -398,7 +398,7 @@ def print_panel(tree):
 
 
 TREE_RULES = {
-    "main.start": [("P2", title_dictionary), ("P2", title_no_count), ("P3", toolbar_order), ("P4", toolbar_help),
+    "main.start": [("P2", title_xdict), ("P2", title_no_count), ("P3", toolbar_order), ("P4", toolbar_help),
                    ("P5", search_placeholder), ("P6", scope_bar), ("P9", no_sidebar), ("P14", start_page),
                    ("P42", toolbar_order)],
     "search.result": [("P2", title_found), ("P9", sidebar_table), ("P9", sidebar_flat), ("P9", notices_in_page),
@@ -412,7 +412,7 @@ TREE_RULES = {
     "main.narrow": [("P8", narrow)],
     "scope.one": [("P7", scope_selected(1))],
     "entry.find": [("P30", find_bar)],
-    "page.all": [("P15", page_dividers("Beta", "Records")), ("P16", title_dictionary)],
+    "page.all": [("P15", page_dividers("Beta", "Records")), ("P16", title_xdict)],
     "page.collapse": [("P15", page_collapsed("Beta"))],
     "page.one": [("P15", page_dividers())],
     "page.find": [("P30", find_bar), ("P15", page_dividers("Beta", "Records"))],

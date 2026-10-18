@@ -123,7 +123,7 @@ def apple_window(title, *extra):
             button("Back", 100, "Show the previous result"), button("Forward", 136, "Show the next result"),
             button("Smaller Text", 440, "Decrease font size"), button("Bigger Text", 476, "Increase font size"),
             node("AXTextField", (520, 7, 327, 38), subrole="AXSearchField", placeholder="Search"),
-            node("AXStaticText", (180, 0, 200, 52), value="Dictionary")]),
+            node("AXStaticText", (180, 0, 200, 52), value="XDict")]),
         node("AXRadioGroup", (183, 52, 676, 36), [node("AXRadioButton", (190 + 60 * i, 59, 60, 22), title=t,
                                                        value="1" if i == 0 else "0")
                                                   for i, t in enumerate(["All", "Alpha", "Beta"])]),
@@ -171,34 +171,34 @@ page = [node("AXDisclosureTriangle", (183, 300, 676, 32), identifier="page.divid
         node("AXDisclosureTriangle", (183, 500, 676, 32), identifier="page.divider.Records", description="Records",
               value="1")]
 cases = {
-    "main.start": (apple_window("Dictionary", *start_text), old_window("Look Up")),
-    "search.result": (apple_window("Dictionary", rowed("apple", "Apple", "apple pie"),
+    "main.start": (apple_window("XDict", *start_text), old_window("Look Up")),
+    "search.result": (apple_window("XDict", rowed("apple", "Apple", "apple pie"),
                                    node("AXGroup", (200, 90, 400, 20), identifier="status"),
                                    node("AXStaticText", value="2 found")),
                       old_window("apple", node("AXOutline", (0, 52, 220, 600), [node("AXStaticText", value="Alpha")]),
                                  node("AXStaticText", value="Not Searched"))),
-    "search.live": (apple_window("Dictionary", rowed("take off", "take on"), node("AXStaticText", value="2 found")),
+    "search.live": (apple_window("XDict", rowed("take off", "take on"), node("AXStaticText", value="2 found")),
                     old_window("Look Up", node("AXStaticText", value="Suggestions"))),
-    "search.didyoumean": (apple_window("Dictionary", node("AXStaticText", value="Did you mean?"),
+    "search.didyoumean": (apple_window("XDict", node("AXStaticText", value="Did you mean?"),
                                        rowed("banana")), old_window("Look Up")),
-    "search.none": (apple_window("Dictionary", rowed(), node("AXStaticText", (200, 98, 220, 30),
+    "search.none": (apple_window("XDict", rowed(), node("AXStaticText", (200, 98, 220, 30),
                                                              value="No entries found.")),
                     old_window("zzqxjv", node("AXStaticText", (500, 300, 200, 30), value="No Results for “zzqxjv”"))),
     "window.min": ({"windows": [node("AXWindow", (0, 0, 400, 300), subrole="AXStandardWindow")]},
                    {"windows": [node("AXWindow", (0, 0, 640, 420), subrole="AXStandardWindow")]}),
-    "main.narrow": (apple_window("Dictionary"), old_window("apple")),
-    "scope.one": (apple_window("Dictionary"), old_window("apple")),
-    "entry.find": (apple_window("Dictionary", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
+    "main.narrow": (apple_window("XDict"), old_window("apple")),
+    "scope.one": (apple_window("XDict"), old_window("apple")),
+    "entry.find": (apple_window("XDict", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
                    old_window("apple")),
     # Apple's page: dividers named by the dictionaries after the first; XDict's old window had one entry, no divider.
-    "page.all": (apple_window("Dictionary", *page), old_window("orange")),
-    "page.collapse": (apple_window("Dictionary", dict(page[0], value="0"), page[1]), old_window("orange")),
-    "page.one": (apple_window("Dictionary"), apple_window("Dictionary", *page)),
-    "page.find": (apple_window("Dictionary", *page, node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
+    "page.all": (apple_window("XDict", *page), old_window("orange")),
+    "page.collapse": (apple_window("XDict", dict(page[0], value="0"), page[1]), old_window("orange")),
+    "page.one": (apple_window("XDict"), apple_window("XDict", *page)),
+    "page.find": (apple_window("XDict", *page, node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
                   old_window("orange")),
     # Apple's print panel (print.ax.json): a sheet with Print and Cancel; before P44 XDict printed one frame, no panel
     # read here.
-    "page.print": (apple_window("Dictionary", node("AXSheet", (80, 337, 1560, 1000), [
+    "page.print": (apple_window("XDict", node("AXSheet", (80, 337, 1560, 1000), [
         node("AXButton", (1296, 1248, 140, 48), title="Cancel"),
         node("AXButton", (1460, 1248, 140, 48), title="Print")])), old_window("orange")),
 }

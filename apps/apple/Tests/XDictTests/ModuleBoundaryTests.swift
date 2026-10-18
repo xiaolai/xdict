@@ -46,7 +46,8 @@ struct ModuleBoundaryTests {
         "XDictUI": ["AppKit", "Foundation", "Observation", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
-        "XDictSearchTests": ["Foundation", "Synchronization", "Testing"],
+        // `Observation`: the tests watch the model's `found` for a needless change (the title's count, P2).
+        "XDictSearchTests": ["Foundation", "Observation", "Synchronization", "Testing"],
         // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
         "XDictSpeech": ["AVFAudio", "Foundation", "os"],
         "XDictSpeechTests": ["AVFAudio", "Foundation", "Testing"],
