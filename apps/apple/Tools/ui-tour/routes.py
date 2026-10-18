@@ -177,18 +177,18 @@ ROUTES = [
     ("library.dropImported", "empty", "Drag a good .mdx onto an empty library", "The new dictionary imported and "
      "listed", [LIBRARY, ("wait", 1), ("drop", "file/single.mdx"), ("wait", 4)]),
     # Settings
-    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, Show Setup…",
-     [SETTINGS, ("wait", 1), ("click", "General")]),
+    # Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General.
+    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, the lookup shortcut, Show "
+     "Setup…", [SETTINGS, ("wait", 1), ("click", "General")]),
     ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table, options box below (P39, P40)",
      [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]),
-    ("settings.reading", "full", "⌘, ▸ Reading", "Accent colour with its sentence",
-     [SETTINGS, ("wait", 1), ("click", "Reading")]),
-    ("settings.speech", "full", "⌘, ▸ Speech", "English accent, Voice, Open Read & Speak Settings, Use the "
-     "dictionary's recordings", [SETTINGS, ("wait", 1), ("click", "Speech")]),
-    ("settings.lookup", "full", "⌘, ▸ Lookup", "Look up the selection: the shortcut recorder, its sentence",
-     [SETTINGS, ("wait", 1), ("click", "Lookup")]),
-    ("settings.recording", "full", "⌘, ▸ Lookup, click the recorder", "'Type the new shortcut'",
-     [SETTINGS, ("wait", 1), ("click", "Lookup"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
+    ("settings.readingSpeech", "full", "⌘, ▸ Reading & Speech", "Accent colour with its sentence; English accent, "
+     "Voice, Open Read & Speak Settings, Use the dictionary's recordings",
+     [SETTINGS, ("wait", 1), ("click", "Reading & Speech")]),
+    ("settings.lookup", "full", "⌘, ▸ General", "Look up the selection: the shortcut recorder, its sentence",
+     [SETTINGS, ("wait", 1), ("click", "General")]),
+    ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
+     [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
     # Not driven
     ("library.loading", "full", "An import in progress", "Progress and Cancel on the row", None),
     ("lookup.held", "full", "A dictionary slow to answer", "Its section waiting, the others shown", None),
