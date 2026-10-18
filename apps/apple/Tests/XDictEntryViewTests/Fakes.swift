@@ -9,6 +9,8 @@ final class FakeContent: EntryContent, @unchecked Sendable {
     var resources: [String: EntryResource] = [:]
     var links: [String: EntryLink] = [:]
     var failing = false
+    /// What the dictionary declares (ADR-0013): nothing unless a test says.
+    var display: EntryDisplayOptions = .none
     var held: Set<String> = []
     private let lock = NSLock()
     private var waiting: [CheckedContinuation<Void, Never>] = []
@@ -48,6 +50,11 @@ final class FakeContent: EntryContent, @unchecked Sendable {
     func link(_ url: String, origin: EntryLinkOrigin) async throws -> EntryLink {
         guard !failing, let link = links[url] else { throw Failure() }
         return link
+    }
+
+    func displayOptions() async throws -> EntryDisplayOptions {
+        guard !failing else { throw Failure() }
+        return display
     }
 }
 

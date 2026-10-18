@@ -15,6 +15,10 @@ protocol EntryPaneHost: AnyObject {
     /// A new window, asked for only when the confinement allows one (the lab's control for that layer, never the app).
     func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView?
     func documentFinished(_ pane: EntryPane)
+    /// The value the page's root is given for each option the pane's edition declares (ADR-0013 d.4).
+    func displayValues(_ options: EntryDisplayOptions, for pane: EntryPane) -> [EntryDisplayValue]
+    /// The shown document holds new display values: what was found in it may have changed.
+    func displayApplied(_ pane: EntryPane)
 }
 
 /// Find's answer: the matches the reader can step through, those in folded sections, and which one is current (1-based,
@@ -54,6 +58,12 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private let style: EntryStyle
     private var restartedAfterCrash = false
     private(set) var closed = false
+    /// What the bound edition declares (ADR-0013), asked once for the pane's life, before its first document.
+    private var displayAsk: Task<EntryDisplayOptions, Never>?
+    private var displayKnown = false
+    private(set) var display: EntryDisplayOptions = .none
+    /// The values the page's root is given, the default included: in the scripts every load starts with.
+    private(set) var displayValues: [EntryDisplayValue] = []
 
     /// **Everything that must hold before a web view exists**, checked in order; nothing is made unless all of it does.
     static func gate(_ confinement: EntryConfinement, switches: any WebKitFeatureSwitches,
@@ -157,6 +167,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
             host?.record(.documentFailed(reference, String(describing: error)))
             return false
         }
+        await askDisplayOptions()
         guard mine == generation, !closed else { return false }
         guard !document.policy.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             host?.record(.refusedToRender(.noPolicy))
@@ -170,6 +181,46 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         self.reference = reference
         self.landing = landing
         load(url)
+        return true
+    }
+
+    /// Asks the bound edition's display options, once; every later call waits for that one answer. A failure is
+    /// recorded and the entry shown as the dictionary wrote it (no CSS, no attribute), never refused for it.
+    private func askDisplayOptions() async {
+        guard !displayKnown else { return }
+        let ask = displayAsk ?? Task { @MainActor [content, weak host] in
+            do {
+                return try await content.displayOptions()
+            } catch {
+                host?.record(.displayOptionsFailed(String(describing: error)))
+                return EntryDisplayOptions.none
+            }
+        }
+        displayAsk = ask
+        let options = await ask.value
+        guard !displayKnown, !closed else { return }
+        displayKnown = true
+        display = options
+        displayValues = host?.displayValues(options, for: self) ?? []
+    }
+
+    /// **The reader changed a display option** (ADR-0013 d.3): every later load starts with `values`, and the shown
+    /// document is given them in place, from the shell's world, without being asked for or loaded again. False when
+    /// nothing changed.
+    @discardableResult
+    func setDisplayValues(_ values: [EntryDisplayValue]) -> Bool {
+        guard values != displayValues, !closed else { return false }
+        displayValues = values
+        installScripts()
+        host?.record(.displayApplied(values.map { "\($0.attribute)=\($0.value)" }))
+        guard current != nil else { return true }
+        let arguments: [String: Any] = ["v": values.map { [$0.attribute, $0.value] }]
+        Task { @MainActor in
+            _ = try? await view.callAsyncJavaScript(EntryScripts.setDisplay, arguments: arguments, in: nil,
+                                                    contentWorld: Self.world)
+            guard !closed else { return }
+            host?.displayApplied(self)
+        }
         return true
     }
 
@@ -252,7 +303,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private func installScripts() {
         let controller = view.configuration.userContentController
         controller.removeAllUserScripts()
-        for source in EntryScripts.installed(scheme, frame: frame, style: style) {
+        for source in EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues) {
             controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true, in: Self.world))
         }

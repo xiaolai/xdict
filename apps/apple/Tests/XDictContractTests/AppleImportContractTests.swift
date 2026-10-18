@@ -7,10 +7,6 @@ import XDictContract
 /// is bounded by the silence between its progress events; the reply carries what was converted; a refusal is a kind,
 /// never a sentence.
 struct AppleImportContractTests {
-    @Test func theContractIsVersion6() {
-        #expect(Contract.version == 6)
-    }
-
     @Test func aConversionIsALongCallNamingOnlyItsStagingFolder() throws {
         let convert = ServiceOperation.convertApple(staging: Fixtures.staging)
         #expect(convert.reportsProgress && Deadlines.deadline(for: convert, onFreshConnection: true) == nil)

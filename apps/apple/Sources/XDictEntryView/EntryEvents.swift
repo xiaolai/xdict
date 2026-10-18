@@ -30,6 +30,10 @@ public enum EntryEvent: Sendable, Equatable {
     /// A ⌘-clicked word handed to the window for a new tab (P47), or a message from the shell's script refused.
     case wordOpenedInNewTab(word: String)
     case messageRefused
+    /// The edition's display options could not be read (ADR-0013): its entries show as the dictionary wrote them.
+    case displayOptionsFailed(String)
+    /// The reader's display choices given to the page, each `attribute=value`.
+    case displayApplied([String])
 }
 
 enum EntryLog {
@@ -49,6 +53,8 @@ enum EntryLog {
             logger.info("\(String(describing: event), privacy: .private(mask: .hash))")
         case .contentProcessTerminated:
             logger.error("the entry's web content process ended")
+        case .displayOptionsFailed(let why):
+            logger.error("the display options were not read: \(why, privacy: .public)")
         default:
             logger.debug("\(String(describing: event), privacy: .private(mask: .hash))")
         }

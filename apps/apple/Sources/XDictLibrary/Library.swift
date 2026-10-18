@@ -45,6 +45,15 @@ public enum StyleState: Hashable, Sendable {
     case unavailable
 }
 
+/// What one dictionary's edition declares as display options (ADR-0013), this session: asked when Settings shows it.
+public enum DisplayOptionsState: Hashable, Sendable {
+    case reading
+    /// The answer, and the edition it is of: another edition (Convert Again, a joined file) is asked again.
+    case read(DisplayOptions, edition: Edition)
+    /// The service could not answer; asked again when the dictionary is next shown.
+    case unavailable
+}
+
 /// Something the reader should be told once, not kept with any dictionary.
 public enum LibraryNotice: Hashable, Sendable {
     case finder(FinderProblem)
@@ -97,6 +106,8 @@ public final class Library {
     public private(set) var health: [UUID: HealthState] = [:]
     /// Each open dictionary's reading-style report (ADR-0010), asked by its details pane and kept this session.
     public private(set) var readingStyles: [UUID: StyleState] = [:]
+    /// Each open dictionary's display options (ADR-0013), asked by Settings and kept this session, per edition.
+    public private(set) var displayOptions: [UUID: DisplayOptionsState] = [:]
     /// Why the stored library could not be read: until it can, nothing is added and nothing is saved.
     public private(set) var unreadable: LibraryStoreError?
     /// Each Apple dictionary's edition and lineage, kept past its removal (`AppleLineage`, ADR-0011 decision 8).
@@ -535,6 +546,7 @@ public final class Library {
         phases[id] = nil
         health[id] = nil
         readingStyles[id] = nil
+        displayOptions[id] = nil
         appleStatus[id] = nil
     }
 
@@ -628,6 +640,29 @@ public final class Library {
         case .failure(let failure):
             log.error("the reading style of \(id, privacy: .public) was not reported: \(String(describing: failure), privacy: .public)")
             readingStyles[id] = .unavailable
+        }
+    }
+
+    // MARK: - Display options (ADR-0013)
+
+    /// Asks the service which display options the open dictionary `id`'s edition declares, unless this session already
+    /// knows them for that edition or is asking. A dictionary not open has nothing to declare.
+    public func loadDisplayOptions(_ id: UUID) async {
+        guard let at = index(id), let edition = entries[at].edition else { return }
+        switch displayOptions[id] {
+        case .reading: return
+        case .read(_, let known) where known == edition: return
+        case .read, .unavailable, nil: break
+        }
+        guard let dict = handle(id) else { return }
+        displayOptions[id] = .reading
+        let outcome = await backend.displayOptions(dict)
+        guard index(id) != nil, displayOptions[id] == .reading else { return }
+        switch outcome {
+        case .success(let options): displayOptions[id] = .read(options, edition: edition)
+        case .failure(let failure):
+            log.error("the display options of \(id, privacy: .public) were not read: \(String(describing: failure), privacy: .public)")
+            displayOptions[id] = .unavailable
         }
     }
 

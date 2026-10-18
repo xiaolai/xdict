@@ -236,6 +236,8 @@ struct ConfinementTests {
             func openInNewTab(_ click: EntryWordClick, from pane: EntryPane) {}
             func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView? { nil }
             func documentFinished(_ pane: EntryPane) {}
+            func displayValues(_ options: EntryDisplayOptions, for pane: EntryPane) -> [EntryDisplayValue] { [] }
+            func displayApplied(_ pane: EntryPane) {}
         }
         let noRules = EntryConfinement(policyHeader: true, ruleList: false, navigationPolicy: true, refusesNewWindows: true,
                                        featuresOff: EntrySwitches.required)
