@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import XDictBase
+import XDictContract
 
 /// **Who may talk to this service** (ADR-0009, refutation objection 6, as the owner amended it on 2026-10-14: the
 /// boundary is input and output). An embedded XPC service is reachable by name only from its own app; on top of that,

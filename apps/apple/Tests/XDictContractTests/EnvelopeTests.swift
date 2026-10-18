@@ -15,6 +15,8 @@ struct EnvelopeTests {
         expectEveryCase(Fixtures.coreFailures, Fixtures.coreFailureCases, Fixtures.index)
         expectEveryCase(Fixtures.refusals, Fixtures.refusalCases, Fixtures.index)
         expectEveryCase(Fixtures.wireErrors, Fixtures.wireErrorCases, Fixtures.index)
+        expectEveryCase(Fixtures.appleRefusals, Fixtures.appleRefusalCases, Fixtures.index)
+        expectEveryCase(Fixtures.appleBounds, Fixtures.appleBoundCases, Fixtures.index)
     }
 
     /// Each operation as the service receives it: encoded by the client, admitted with the handles it needs, equal.
