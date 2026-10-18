@@ -35,7 +35,6 @@ struct ButtonPlacementTests {
     static let exclusions: [String: String] = [
         "P3": "the toolbar: Back/Forward and Smaller/Bigger Text, Apple's segmented pairs (SearchWindow.toolbar)",
         "P48": "the toolbar's speaker and Edit ▸ Pronounce, XDict's own addition to Apple's toolbar and Edit menu",
-        "P6": "the scope bar's radio buttons and overflow pop-up (ScopeBar; being replaced in parallel, remove then)",
         "P30": "the find bar's chevron pair and Done (EntryFindBar)",
         "P31": "the app menu: Set Up XDict…, Acknowledgments",
         "P32": "the File menu: New Tab, Add Dictionaries…, Print…",

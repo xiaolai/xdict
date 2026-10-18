@@ -17,7 +17,7 @@ import XDictTokens
 //   (`EmptyStateActions`).
 // - R6 Apple's own measured layouts keep their places, each site marked `// placement: <id>` on its line:
 //   the toolbar (P3) and its speaker (P48); the menus: app (P31), File (P32), Edit ▸ Find (P33), View (P34), Go (P35),
-//   Search (P36), Help (P38), and the menu-bar item's menu; the scope bar (P6); the find bar (P30); Settings ▸
+//   Search (P36), Help (P38), and the menu-bar item's menu; the find bar (P30); Settings ▸
 //   Dictionaries' table checkboxes and +/− (P39); the lookup popover's speaker and footer rows (P41). The system's own:
 //   an NSAlert (it already follows R3), a spinner, an icon-only glyph, the shortcut recorder and a Form's
 //   LabeledContent. `ButtonPlacementTests.exclusions` is the list of ids, each with why; an unknown or unused id fails.
