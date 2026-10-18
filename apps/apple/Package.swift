@@ -27,7 +27,7 @@ let package = Package(
 
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
-        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictEntryView",
+        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictEntryView",
                                                 "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTokens"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
@@ -105,7 +105,7 @@ let package = Package(
         .target(name: "XDictAppleSource", dependencies: ["XDictContract"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
                                                         "XDictTokens", "XDictUI"]),
 
@@ -150,7 +150,7 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
+        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
                                                         "XDictSpeech", "XDictTestSupport", "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.

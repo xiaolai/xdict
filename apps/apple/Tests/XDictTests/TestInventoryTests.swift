@@ -38,13 +38,15 @@ struct TestInventoryTests {
         // control's scripts, its default and tolerances, the derived scripts, the popover's acknowledgements, the anchor).
         "XDictAnywhereTests": 65,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
-        "XDictUITests": 29,
+        // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
+        "XDictUITests": 33,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
         // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
         // macOS capture target's controls.
-        "XDictTests": 40,
+        // 40 → 42 (WI-3): the captured context's data-flow rule and its control.
+        "XDictTests": 42,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
