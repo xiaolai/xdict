@@ -150,6 +150,19 @@ actor FakeBackend: LibraryBackend {
         return styleAnswer
     }
 
+    // MARK: - Display options (ADR-0013)
+
+    /// Every dictionary whose display options were asked, in order; what it answers.
+    private(set) var displayAsked: [DictId] = []
+    var displayAnswer: Result<DisplayOptions, ClientFailure> = .success(DisplayOptions(version: 1, options: [], css: ""))
+
+    func setDisplayAnswer(_ answer: Result<DisplayOptions, ClientFailure>) { displayAnswer = answer }
+
+    func displayOptions(_ dict: DictId) async -> Result<DisplayOptions, ClientFailure> {
+        displayAsked.append(dict)
+        return displayAnswer
+    }
+
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure> {
         lineageCalls.append(operation)
         switch operation {

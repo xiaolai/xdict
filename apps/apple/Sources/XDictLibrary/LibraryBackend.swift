@@ -53,6 +53,8 @@ public protocol LibraryBackend: Sendable {
     func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> HealthJob
     /// What the reading style does to an open dictionary (ADR-0010), as the service computed it.
     func readingStyle(_ dict: DictId) async -> Result<ReadingStyle, ClientFailure>
+    /// The display options an open dictionary's edition declares (ADR-0013), as the core read them in the service.
+    func displayOptions(_ dict: DictId) async -> Result<DisplayOptions, ClientFailure>
 }
 
 extension ServiceClient: LibraryBackend {
@@ -87,6 +89,15 @@ extension ServiceClient: LibraryBackend {
                 return .failure(.wire(.undecodable(detail: "not a reading style")))
             }
             return .success(style)
+        }
+    }
+
+    public func displayOptions(_ dict: DictId) async -> Result<DisplayOptions, ClientFailure> {
+        await call(.displayOptions(dict: dict)).flatMap { delivered in
+            guard case .displayOptions(let options) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not display options")))
+            }
+            return .success(options)
         }
     }
 
