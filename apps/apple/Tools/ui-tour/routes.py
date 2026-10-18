@@ -224,4 +224,8 @@ NOT_DRIVEN_WHY = {
     "services.otherApp": "needs a selection in another app (TextEdit, Notes); the tour drives XDict alone",
     "anywhere.noAccess": "Accessibility grants are never changed by script, and XDict holds it on this Mac",
     "sound.recording": "the lookup fixtures hold no recording; the E2E sound stage plays them at volume 0",
+    "settings.dictionaries.appleUpdated": "needs an imported Apple dictionary whose installed bundle then changes; the "
+                                          "E2E library.apple stage converts a synthetic one and changes it",
+    "settings.dictionaries.appleRemoved": "needs an imported Apple dictionary whose installed bundle then goes; the "
+                                          "E2E library.apple stage removes its synthetic one",
 }
