@@ -87,6 +87,58 @@ struct CaptureContextSessionTests {
         #expect(session.context(request: 4, generation: 8) == .unavailable(.notCaptured))
     }
 
+    // MARK: - The sentence's lifetime: never past its request
+
+    /// **A settled sentence lives in the session alone, and goes with its request** (decisions 8 and 9): once the held
+    /// context settles, the book keeps no copy of it, and after `end(request:)` — or `clear()` — nothing of the sentence
+    /// is left anywhere in the session, read through its seams (the held context and the book), not its description. Red
+    /// while the book keeps a settled context until eight newer push it out.
+    @Test(arguments: [true, false])
+    func nothingOfASettledSentenceOutlivesItsRequest(endingByRequest: Bool) async {
+        let session = CaptureContextSession()
+        let work = PendingContextTests.Work()
+        let context = pending(session, work)
+        session.hold(.pending(context.handle), request: 3, generation: 7)
+        work.answer(PendingContextTests.grown)
+        await PendingContextTests.settle { session.context(request: 3, generation: 7) == PendingContextTests.grown }
+        #expect(session.context(request: 3, generation: 7) == PendingContextTests.grown)
+        #expect(session.pending.count == 0, "the book kept a copy of a sentence the session already holds")
+        #expect(session.pending.context(context.handle) == nil)
+        if endingByRequest { session.end(request: 3) } else { session.clear() }
+        #expect(session.isEmpty && session.pending.count == 0, "something of the sentence outlived its request")
+    }
+
+    /// **A context let go by whoever held it leaves the book**: cancelled through its own handle — as the watcher does for
+    /// a word it will not present — it is no longer found, so its first reading is not kept for later. Red while only the
+    /// book's own `cancel` forgets.
+    @Test func aContextCancelledByItsHolderLeavesTheBook() {
+        let book = PendingContexts()
+        let context = book.start(fallback: PendingContextTests.first, bound: .seconds(5), work: { nil })
+        let held = book.start(fallback: PendingContextTests.first, bound: .seconds(5), work: {
+            await PendingContextTests.Work().run()
+        })
+        held.cancel()
+        #expect(book.context(held.handle) == nil, "a cancelled context stayed in the book")
+        context.cancel()
+        #expect(book.count == 0, "the book holds \(book.count) contexts nobody wants")
+    }
+
+    /// **A settlement for an older generation of the same request changes nothing held now** (the generation check in
+    /// `settle`): the request presented again with another pending context, and the first one's end arrives. Red without
+    /// the check, which would replace the newer pending context with the older one's ending.
+    @Test func aSettlementForAnOlderGenerationChangesNothing() {
+        let session = CaptureContextSession()
+        let older = pending(session, PendingContextTests.Work())
+        session.hold(.pending(older.handle), request: 3, generation: 7)
+        let newer = pending(session, PendingContextTests.Work())
+        // The older one is cancelled inside this call, and its ending reaches the session before it returns.
+        session.hold(.pending(newer.handle), request: 3, generation: 8)
+        #expect(older.end == .cancelled)
+        #expect(session.context(request: 3, generation: 8) == .pending(newer.handle),
+                "an older generation's ending replaced the context held now")
+        newer.cancel()
+    }
+
     /// **Fail-closed**: a handle the book does not hold (cancelled, or never started) is held as no context, never as a
     /// context waiting forever.
     @Test func anUnknownHandleIsHeldAsNoContext() {

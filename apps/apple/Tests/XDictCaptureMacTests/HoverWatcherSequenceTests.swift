@@ -416,6 +416,51 @@ struct HoverWatcherSequenceTests {
         #expect(rig.sink.all.isEmpty)
     }
 
+    /// A context still being read, held until the test is done with it.
+    private func reading(_ contexts: PendingContexts) -> PendingContext {
+        contexts.start(fallback: .unavailable(.notCaptured), bound: RecognitionFixtures.patient, work: {
+            await GrowthGate().held()
+            return nil
+        })
+    }
+
+    /// **A recognised word whose presentation is refused cancels its context**: a newer request took the presentation
+    /// after this hover's was numbered, so the hover's word is refused — and the sentence read for it is let go and leaves
+    /// the book. Red if the refused-presentation path forgets the discard.
+    @Test func aRecognisedWordRefusedThePresentationCancelsItsContext() async {
+        let rig = Rig()
+        await rig.rest()
+        _ = rig.requests.beginPresenting(.selection)
+        let contexts = PendingContexts()
+        let context = reading(contexts)
+        rig.reader.answer(.recognised(RecognitionFixtures.recognition("He paid the fine."), request: rig.reader.asks[0].request,
+                                      key: "key-fine", context: context))
+        await HoverFixtures.settle { context.end != nil }
+        #expect(context.end == .cancelled, "a word refused the presentation kept its sentence being read")
+        #expect(contexts.count == 0, "the book kept a refused word's context")
+        #expect(rig.sink.all.isEmpty)
+    }
+
+    /// **A recognised word the validating constructor refuses cancels its context**: a control character in the word is
+    /// never a term, and the sentence read for it is let go and leaves the book. Red if the refused-term path forgets the
+    /// discard.
+    @Test func aRecognisedWordRefusedAsATermCancelsItsContext() async throws {
+        let rig = Rig()
+        await rig.rest()
+        let contexts = PendingContexts()
+        let context = reading(contexts)
+        let sentence = "He paid the fi\u{1}ne."
+        let words = try #require(SentenceContext(text: sentence, mayBeCut: false,
+                                                 selection: (sentence as NSString).range(of: "fi\u{1}ne"), cut: []))
+        let refused = Recognition(word: WordAtPoint(word: "fi\u{1}ne", sentence: words), confidence: 0.9, mayBeCut: false,
+                                  appName: "Ghostty", bundleID: "com.mitchellh.ghostty", gap: nil)
+        rig.reader.answer(.recognised(refused, request: rig.reader.asks[0].request, key: "key-refused", context: context))
+        await HoverFixtures.settle { context.end != nil }
+        #expect(context.end == .cancelled, "a refused term kept its sentence being read")
+        #expect(contexts.count == 0, "the book kept a refused term's context")
+        #expect(rig.sink.all.isEmpty)
+    }
+
     /// **A read that found nothing ends its request** (new in XDict: every request ends exactly once, ADR-0014 d.4).
     @Test func aReadThatFoundNothingEndsItsRequest() async {
         let rig = Rig()

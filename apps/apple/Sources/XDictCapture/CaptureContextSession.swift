@@ -46,18 +46,21 @@ public final class CaptureContextSession: Sendable {
         waiting?.onEnd { [weak self] end in self?.settle(request: request, generation: generation, end) }
     }
 
-    /// The reading behind a held pending context ended: what it settled to replaces it, if it is still the one held.
+    /// The reading behind a held pending context ended: what it settled to replaces it, if it is still the one held —
+    /// **and the book forgets it**, so the sentence lives here alone and goes with its request (`end`, `clear`).
     private func settle(request: Int, generation: Int, _ end: PendingContextEnd) {
         let outcome: ContextOutcome
         switch end {
         case .settled(let settled), .overdue(let settled): outcome = settled
         case .cancelled: outcome = .unavailable(.notCaptured)
         }
-        held.withLock { held in
+        let taken = held.withLock { held -> PendingContextHandle? in
             guard let current = held, current.request == request, current.generation == generation,
-                  case .pending = current.context else { return }
+                  case .pending(let handle) = current.context else { return nil }
             held = Held(request: request, generation: generation, context: outcome)
+            return handle
         }
+        if let taken { pending.forget(taken) }
     }
 
     private static func handle(of context: ContextOutcome) -> PendingContextHandle? {
