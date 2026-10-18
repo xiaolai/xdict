@@ -29,11 +29,11 @@ set -euo pipefail
 apple=$FAKE_HOST/xdict-build/$FAKE_NAME/apps/apple
 bin=$apple/.build/release
 rm -rf "$bin"; mkdir -p "$bin" "$apple/Generated"
-[ "$FAKE_MODE" = stale ] && { for p in XDict XDictService XDictEntryLab; do echo x >"$bin/$p"; done; chmod +x "$bin"/*; touch -t 202001010000 "$bin"/*; }
+[ "$FAKE_MODE" = stale ] && { for p in XDict XDictService XDictEntryLab XDictCaptureLab; do echo x >"$bin/$p"; done; chmod +x "$bin"/*; touch -t 202001010000 "$bin"/*; }
 touch -t 202001010001 "$apple/.build/remote-build.marker"  # fixed, not a sleep: past a stale product
 [ "$FAKE_MODE" = edit ] && echo changed >"$FAKE_TREE"
 if [ "$FAKE_MODE" != stale ]; then
-    for p in XDict XDictService XDictEntryLab; do
+    for p in XDict XDictService XDictEntryLab XDictCaptureLab; do
         [ "$FAKE_MODE" = missing ] && [ $p = XDictService ] && continue
         echo x >"$bin/$p"; chmod +x "$bin/$p"
     done
