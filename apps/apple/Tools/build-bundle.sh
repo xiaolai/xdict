@@ -112,7 +112,7 @@ bundle_inputs_digest() {
         # The source tree too: the bundle names it (Provenance.txt), so a bundle of another tree is not this one's.
         printf '%s\0' "$CONFIG" "$BUNDLE_ID" "$XDICT_SIGN_ID" "${XDICT_BUILD_NUMBER:-}" "$(Tools/source-tree.sh)"
         find Sources Strings Resources Generated Package.swift Makefile Tools/build-bundle.sh \
-            Tools/compiler-warnings.py Tools/compile-icon.sh -type f -print0 | digest_files
+            Tools/compiler-warnings.py Tools/compile-icon.sh Tools/expand-entitlements.sh -type f -print0 | digest_files
     } | shasum -a 256 | cut -d' ' -f1
 }
 
@@ -253,6 +253,15 @@ verify_no_development_lab() {
         || { echo "the app binary holds $LAB_STYLE_FLAG: only the lab may read a style from a directory"; return 1; }
 }
 
+# An entitlements file with the app group's team prefix expanded from the signing identity (ADR-0011 decision 4): the
+# tracked files say `$(TeamIdentifierPrefix)`, so no team identifier is in the repository. Prints the expanded copy's path.
+expanded_entitlements() {  # $1: a tracked entitlements file
+    local out=.build/entitlements/$(basename "$1")
+    mkdir -p .build/entitlements
+    Tools/expand-entitlements.sh "$XDICT_SIGN_ID" "$1" "$out" >&2 || return 1
+    printf '%s\n' "$out"
+}
+
 # Each binary's signed entitlements, compared whole with its file as JSON (plutil sorts keys and compacts): one more
 # key, a `false`, or `get-task-allow` (which the notary refuses) is a different string.
 entitlements_json() {  # $1: a signed code object
@@ -285,6 +294,7 @@ verify_signatures() {
             grep -q '^Timestamp=' <<<"$described" || { echo "a release is signed without a secure timestamp: $part"; return 1; }
         fi
         entitlements=$(entitlements_json "$part")
+        file=$(expanded_entitlements "$file") || { echo "$file could not be expanded for $XDICT_SIGN_ID"; return 1; }
         wanted=$(plutil -convert json -o - "$file")
         [ "$entitlements" = "$wanted" ] || { echo "$part is signed with entitlements $entitlements, not $file's $wanted"; return 1; }
     done
@@ -341,8 +351,9 @@ verify_bundle() {
 # ---------------------------------------------------------------------------------------------------------------------
 # Assembly, in the stage.
 
-sign_part() {  # $1: entitlements file; $2: the code object
-    local entitlements=$1 part=$2 stamp=--timestamp=none attempt
+sign_part() {  # $1: a tracked entitlements file, expanded here; $2: the code object
+    local entitlements part=$2 stamp=--timestamp=none attempt
+    entitlements=$(expanded_entitlements "$1") || fail "$1 could not be expanded for $XDICT_SIGN_ID"
     ! is_release || stamp=--timestamp
     for (( attempt = 1; attempt <= SIGN_TRIES; attempt++ )); do
         if (( attempt == SIGN_TRIES )) || ! is_release; then
