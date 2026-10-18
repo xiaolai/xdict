@@ -62,6 +62,39 @@ public struct EntryPreferences: @unchecked Sendable {
         defaults.set(original, forKey: Self.originalStyleKey(dictionary))
     }
 
+    /// Where the reader's choice of a display option is kept for a dictionary (ADR-0013 d.4): per option, per lineage.
+    public static func displayChoiceKey(_ option: String, _ dictionary: String) -> String {
+        "entry.option.\(option).\(dictionary)"
+    }
+
+    /// The reader's choice of a display option for this dictionary, as stored: an intent, kept whatever any edition
+    /// declares. Nil until chosen.
+    public func storedDisplayChoice(_ option: String, for dictionary: String) -> String? {
+        defaults.string(forKey: Self.displayChoiceKey(option, dictionary))
+    }
+
+    public func setDisplayChoice(_ value: String, option: String, for dictionary: String) {
+        defaults.set(value, forKey: Self.displayChoiceKey(option, dictionary))
+    }
+
+    /// **The effective choice** (ADR-0013 d.4): the stored intent where the edition declares that value, else the
+    /// edition's default. A value it does not declare stays stored and inactive; it never hides the only variant, which
+    /// the core's CSS hides only beside another.
+    public func displayChoice(_ option: EntryDisplayOption, for dictionary: String) -> String {
+        Self.effective(storedDisplayChoice(option.id, for: dictionary), of: option)
+    }
+
+    /// A stored intent resolved against what an edition declares: itself where declared, else the edition's default.
+    public static func effective(_ stored: String?, of option: EntryDisplayOption) -> String {
+        guard let stored, option.values.contains(stored) else { return option.defaultValue }
+        return stored
+    }
+
+    /// The value of every option the edition declares, the default included: what the page's root is given.
+    public func displayValues(_ options: EntryDisplayOptions, for dictionary: String) -> [EntryDisplayValue] {
+        options.options.map { EntryDisplayValue(attribute: $0.attribute, value: displayChoice($0, for: dictionary)) }
+    }
+
     /// The text size, one for every dictionary, as Apple's Dictionary has it (parity P29, owner 2026-10-17; it was per
     /// dictionary, ADR-0010 d.3).
     public func zoom() -> Double {
