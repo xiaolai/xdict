@@ -68,7 +68,9 @@ struct TestInventoryTests {
         // 261 → 269 (WI-3): one numbering across the four triggers (5) and the ephemeral context session (3).
         // 269 → 282 (WI-4): the pending context, its one ending and its cancel (6), the book of them (3), and the
         // session settling, cancelling and refusing an unknown handle (4).
-        "XDictCaptureTests": 282,
+        // 282 → 285 (plan-capture WI-4 verification): nothing of a settled sentence outlives its request, a context cancelled
+        // by its holder leaves the book, and an older generation's settlement changes nothing.
+        "XDictCaptureTests": 285,
         // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
         // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
@@ -89,8 +91,9 @@ struct TestInventoryTests {
         // moved by name; seven added (Accessibility first, a site refused through Accessibility, an excluded app's
         // recognition, an overdue context, a notice told and its request ended, a recognised word presented pending, and
         // one not presented cancelling its context). 226 → 230: an excluded app and an unattributable window refused before
-        // any capture call, an allowed one captured, and a word refused after the read cancelling its context.
-        "XDictCaptureMacTests": 230,
+        // any capture call, an allowed one captured, and a word refused after the read cancelling its context. 230 → 232:
+        // a recognised word refused the presentation, or refused as a term, cancels its context and empties the book.
+        "XDictCaptureMacTests": 232,
         // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
         // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
         // read through hover's reader at one point, and the process's lines and exits.

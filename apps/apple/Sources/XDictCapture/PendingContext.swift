@@ -34,6 +34,8 @@ public final class PendingContext: Sendable {
     private let state = Mutex(State())
     /// The work, started at once. Set once, in `init`, before anything can read it.
     private let work = Mutex<Task<Void, Never>?>(nil)
+    /// What the book that numbered it does when it is cancelled: forget it. Set once, by `PendingContexts.start`.
+    private let release = Mutex<(@Sendable () -> Void)?>(nil)
 
     /// Starts `work` now. It answers the grown context, or nil where the first reading stands. `sleep` is the bound's
     /// clock, a seam for the tests.
@@ -75,10 +77,17 @@ public final class PendingContext: Sendable {
         if let ended { handler(ended) }
     }
 
-    /// Nobody will show this context: it ends cancelled now, and the work is told.
+    /// Nobody will show this context: it ends cancelled now, the work is told, **and the book forgets it** — whoever
+    /// cancels it, and whether or not it had already ended, so a context let go keeps no sentence for later.
     public func cancel() {
         finish(.cancelled)
         work.withLock { $0 }?.cancel()
+        release.withLock { $0 }?()
+    }
+
+    /// The book's hook, set once.
+    fileprivate func released(by forget: @escaping @Sendable () -> Void) {
+        release.withLock { $0 = forget }
     }
 
     /// Returns when the work itself has returned — which may be long after the context ended.
@@ -125,7 +134,8 @@ extension PendingContextEnd: CustomStringConvertible, CustomDebugStringConvertib
 }
 
 /// **The contexts still being read, by handle**: where whoever holds a term's `.pending(handle)` finds the reading, and
-/// the one place a handle is numbered. A context leaves when it is cancelled. **Bounded**: past `capacity` the oldest is
+/// the one place a handle is numbered. A context leaves when it is cancelled, by the book or by whoever holds it, and
+/// when the session that held it has taken what it settled to (`forget`). **Bounded**: past `capacity` the oldest is
 /// cancelled and forgotten, so a context nobody claimed cannot outlive its request by more than a few newer ones.
 public final class PendingContexts: Sendable {
     /// How many contexts may be held at once. A count, not a design value: one is presented at a time, and a few more may
@@ -153,6 +163,7 @@ public final class PendingContexts: Sendable {
             return PendingContextHandle(id: state.issued)
         }
         let context = PendingContext(handle: handle, fallback: fallback, bound: bound, sleep: sleep, work: work)
+        context.released { [weak self] in self?.forget(handle) }
         let evicted = state.withLock { state -> [PendingContext] in
             state.live[handle.id] = context
             state.order.append(handle.id)
@@ -179,6 +190,14 @@ public final class PendingContexts: Sendable {
             return state.live.removeValue(forKey: handle.id)
         }
         gone?.cancel()
+    }
+
+    /// Forgets the context under `handle` without cancelling it: its holder has what it ended with.
+    public func forget(_ handle: PendingContextHandle) {
+        state.withLock { state in
+            state.order.removeAll { $0 == handle.id }
+            state.live[handle.id] = nil
+        }
     }
 
     public var count: Int { state.withLock { $0.live.count } }
