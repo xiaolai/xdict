@@ -70,6 +70,13 @@ enum EntryPagePlan {
         return out
     }
 
+    /// The frame Tab reaches from the results (the key-view order): the first expanded, made frame whose bottom is below
+    /// `top`, the page's scroll position; else the first expanded, made frame; nil when none is made.
+    static func firstKeyFrame(tops: [Double], heights: [Double], collapsed: [Bool], made: [Bool], top: Double) -> Int? {
+        let usable = tops.indices.filter { !collapsed[$0] && made[$0] }
+        return usable.first { tops[$0] + heights[$0] > top } ?? usable.first
+    }
+
     /// Where a find match lands in the page: the global position `(section, match)` after stepping from `current`, over
     /// sections with `counts` matches each, wrapping; nil when nothing matches anywhere.
     static func step(from current: (section: Int, match: Int)?, counts: [Int], forward: Bool) -> (section: Int, match: Int)? {

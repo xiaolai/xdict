@@ -25,6 +25,9 @@ public struct ProblemStatus: View {
         .font(compact ? .subheadline : .body)
         .help(Text(sentence))
         .accessibilityElement(children: .combine)
+        // Said outright: a selectable Text under `.combine` gave the combined element no label at all (E2E lookup
+        // checkpoints of 2026-10-18 found the sentence missing while the row's action button, a sibling, was there).
+        .accessibilityLabel(Text(sentence))
         .accessibilityIdentifier("problem-status")
     }
 
