@@ -57,6 +57,8 @@ export type HealthFinding = {
   examples: { key: string; text: string }[];
 };
 export type Health = { version: number; entries: number; findings: HealthFinding[]; classes: { name: string; count: number }[] };
+export type DisplayOption = { id: string; attribute: string; values: string[]; defaultValue: string };
+export type DisplayOptions = { version: number; options: DisplayOption[]; css: string };
 export type Resource =
   | { type: 'found'; path: string; mime: string; bytes: Uint8Array }
   | { type: 'missing'; path: string };
@@ -116,6 +118,7 @@ interface GlueCore {
   entry(dict: string, entry: string, view: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
+  displayOptions(dict: string): string;
   joinLineage(edition: string, lineage: string): string;
   splitLineage(edition: string, newLineage: string): string;
   lineageOf(edition: string): string;
@@ -295,6 +298,11 @@ export class XDictCore {
   health(dict: string, progress?: (done: number, total: number) => boolean): Health {
     const watcher = progress ? { progress } : undefined;
     return this.call(() => this.inner.health(dict, watcher));
+  }
+
+  /** The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013). */
+  displayOptions(dict: string): DisplayOptions {
+    return this.call(() => this.inner.displayOptions(dict));
   }
 
   /** Joins an edition to a lineage the registry holds, as the reader asked; answers the lineage it now has. */
