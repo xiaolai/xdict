@@ -34,6 +34,10 @@ struct ModuleBoundaryTests {
     static let systemModules: [String: Set<String>] = [
         // No UI and no domain: the identities, the core's versions and the launch window's sentences, plain Swift.
         "XDictBase": [],
+        // The design tokens: lengths as CGFloat, text roles and colours for both AppKit and SwiftUI call sites.
+        "XDictTokens": ["AppKit", "SwiftUI"],
+        // `CryptoKit`: the source's digest, compared with the one the generated file carries.
+        "XDictTokensTests": ["AppKit", "CryptoKit", "Foundation", "Testing"],
         // The IPC contract: Foundation alone (`theContractStandsAlone` says why, and refuses more).
         "XDictContract": contractMayBind,
         // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers; `AppKit` is the main window's

@@ -1,0 +1,201 @@
+# XDict's design tokens for the macOS shell: the one source of every length, size, text role and colour the shell
+# draws with (ADR-0003: tokens are per shell, never shared across platforms).
+#
+#   python3 -I Tools/tokens.py gen     writes Sources/XDictTokens/Tokens.swift and Sources/XDictEntryView/Style/tokens.css
+#   python3 -I Tools/tokens.py find 12 which token has this value, or the nearest ones
+#   python3 -I Tools/tokens.py add <group.name> <value> --source P.. | --why "..." | --system ...
+#
+# Every token carries its provenance, and the generator refuses one without: `source` (a parity id of
+# Tools/parity/apple-dictionary.tsv: Apple measured it, so it is fixed), `system` (the platform's own value: a text
+# style or a semantic colour, which follows the reader's settings), or `why` (XDict's own choice, said in a sentence).
+# Edit by hand or with `add`, then `gen`; the generated files are never edited.
+#
+# [groups] declares each group: its kind (what a token of it holds), the Swift enum it becomes (none for the reading
+# style's CSS groups) and one line on what it is for.
+
+[groups]
+space = { kind = "length", swift = "Space", doc = "The spacing scale: stack spacing and padding between things that belong together." }
+inset = { kind = "length", swift = "Inset", doc = "Where content starts inside a pane, window or panel: fixed insets, most Apple-measured." }
+row = { kind = "length", swift = "Row", doc = "Row and line heights of lists, tables and the panel." }
+control = { kind = "length", swift = "Control", doc = "The sizes of controls and bars." }
+window = { kind = "length", swift = "Window", doc = "Widths and heights of windows, panes, columns and sheets." }
+radius = { kind = "length", swift = "Radius", doc = "Corner radii." }
+line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
+size = { kind = "size", swift = "Size", doc = "Fixed two-dimensional sizes." }
+text = { kind = "font", swift = "TextRole", doc = "Text roles: a system text style where one fits, else a size Apple measured." }
+colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's semantic colours first; a literal only where Apple's page was measured." }
+css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
+palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
+accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
+
+[space]
+xxs = { value = 2, why = "The scale's smallest step: a label over its caption, two lines that read as one." }
+xs = { value = 4, why = "Half the base step: items of one group, a caption under its control." }
+s = { value = 6, why = "Between a glyph or badge and the text it leads, on the first baseline." }
+sm = { value = 8, why = "The base step of the macOS layout grid: controls side by side, a form's rows." }
+m = { value = 12, why = "Between groups of one pane; a sheet's margin." }
+l = { value = 16, why = "Between sections; a pane's vertical padding." }
+xl = { value = 20, why = "A pane's horizontal padding: the macOS window margin." }
+xxl = { value = 24, why = "Around a stand-alone message or a sheet's content." }
+
+[inset]
+entryLeading = { value = 19, source = "P12" }
+entryTop = { value = 10, source = "P12" }
+startTop = { value = 36, source = "P14" }
+startSide = { value = 16, why = "The start page's side margin, so a long dictionary name wraps short of the pane's edge." }
+sidebarHeaderLeading = { value = 18, why = "The \"Did you mean?\" header starts where the sidebar rows' text starts." }
+scopeLeading = { value = 7, source = "P6" }
+panelLeading = { value = 24, source = "P41" }
+panelTrailing = { value = 27, source = "P41" }
+panelTop = { value = 16, source = "P41" }
+panelFooterLeading = { value = 26, source = "P41" }
+panelFooterGap = { value = 8, source = "P41" }
+panelBottom = { value = 8, source = "P41" }
+panelEntryFade = { value = 16, source = "P41" }
+settingsSheetMargin = { value = 12, why = "The Details sheet's margin above and below inside the Settings window, so it never hangs past it." }
+settingsScreenMargin = { value = 40, why = "The Settings window's margin kept above and below it on the screen (ADR-0012 d.6)." }
+
+[row]
+sidebar = { value = 28, source = "P9" }
+settingsTable = { value = 20, source = "P39" }
+scopeButton = { value = 22, source = "P6" }
+panelTitle = { value = 24, source = "P41" }
+panelFooter = { value = 26, source = "P41" }
+startName = { value = 32, source = "P14" }
+
+[control]
+scopeBar = { value = 36, source = "P6" }
+scopeMore = { value = 36, source = "P6" }
+toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window." }
+popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
+
+[window]
+mainMinimumWidth = { value = 400, source = "P1" }
+mainMinimumHeight = { value = 300, source = "P1" }
+searchFieldMin = { value = 110, why = "The search field's narrowest, where the toolbar's overflow takes everything else first (P8)." }
+searchFieldIdeal = { value = 327, source = "P5" }
+searchFieldMax = { value = 420, why = "The search field stops growing here in a wide window, so the title keeps its room." }
+sidebarMin = { value = 150, why = "The narrowest sidebar that still shows a long headword's start." }
+sidebarIdeal = { value = 183, source = "P9" }
+sidebarMax = { value = 320, why = "The widest sidebar, so the entry column keeps most of the window." }
+titleYields = { value = 560, why = "Below this content width the window title gives way to the search field, as Apple's does (P8)." }
+settingsWidth = { value = 600, source = "P39" }
+settingsTableMin = { value = 200, why = "The Dictionaries table at least this tall, scrolling past it (ADR-0012 d.6)." }
+detailsSheetMin = { value = 220, why = "The Details sheet's usable minimum, which a small Settings pane still holds." }
+detailsSheetMax = { value = 640, why = "The Details sheet's maximum: its form scrolls inside rather than hang past the window (tour, 2026-10-18)." }
+popoverBody = { value = 390, source = "P41" }
+
+[radius]
+sidebarSelection = { value = 8, source = "P43" }
+
+[line]
+hairline = { value = 1, source = "P15" }
+
+[size]
+tableButton = { width = 24, height = 20, why = "The +/- buttons under the Settings table: the 20 pt row's height (P39), a little wider than tall." }
+
+[text]
+body = { system = "body" }
+callout = { system = "callout" }
+caption = { system = "caption" }
+headline = { system = "headline" }
+title3 = { system = "title3" }
+sidebarRow = { size = 13, weight = "regular", source = "P43" }
+sidebarRowSelected = { size = 13, weight = "semibold", source = "P43" }
+didYouMean = { size = 15, italic = true, why = "The italic \"Did you mean?\" header (P13), a step above the 13 pt rows." }
+startPrompt = { size = 18, design = "serif", source = "P14" }
+startName = { size = 20, design = "serif", source = "P14" }
+noEntries = { size = 24, source = "P12" }
+panelTitle = { size = 20, source = "P41" }
+panelFooter = { size = 13, source = "P41" }
+
+[colour]
+label = { system = "labelColor" }
+secondaryLabel = { system = "secondaryLabelColor" }
+tertiaryLabel = { system = "tertiaryLabelColor" }
+separator = { system = "separatorColor" }
+accent = { system = "controlAccentColor" }
+textBackground = { system = "textBackgroundColor" }
+link = { system = "linkColor" }
+entryRule = { light = "#929292", dark = "#5c5c5c", source = "P15" }
+entryPage = { light = "#ffffff", dark = "#1e1e1e", source = "P27" }
+
+# The reading style (EntryReadingFrame.tokens, held equal by EntryTokensCSSTests until phase 2 makes this the source).
+[css]
+base = { value = "16px", source = "P18" }
+font-cjk = { value = '"Songti SC", "STSong"', source = "P18" }
+font = { value = 'ui-serif, "New York", var(--xdict-font-cjk), serif', source = "P18" }
+font-ui = { value = '-apple-system, system-ui, "Helvetica Neue", "PingFang SC", sans-serif', source = "P21" }
+font-phon = { value = '"XDict Phonetic Serif", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)', why = "XDict's bundled phonetic face first (EntryFonts), then what the Mac may have." }
+font-text = { value = "var(--xdict-font)", why = "The text face, kept where --xdict-font means the phonetic face (inside a transcription)." }
+font-mono = { value = 'ui-monospace, "SF Mono", Menlo, monospace', why = "The system's monospaced face, for code a dictionary marks." }
+fs-xs = { value = "0.75rem", why = "The type scale's smallest step (reading-style.md section 1.1)." }
+fs-s = { value = "0.875rem", why = "The type scale: small." }
+fs-m = { value = "1rem", why = "The type scale: the body." }
+fs-l = { value = "1.125rem", why = "The type scale: large." }
+fs-xl = { value = "1.25rem", why = "The type scale: extra large." }
+fs-xxl = { value = "1.5rem", why = "The type scale's largest step." }
+fs-min = { value = "var(--xdict-fs-xs)", why = "The floor a dictionary's own sizes are clamped to." }
+fs-max = { value = "var(--xdict-fs-xxl)", why = "The ceiling a dictionary's own sizes are clamped to." }
+fs-hw = { value = "1.4375rem", source = "P19" }
+weight-headword = { value = "500", source = "P19" }
+leading = { value = "1.4", source = "P18" }
+leading-tight = { value = "1.3", source = "P20" }
+weight-bold = { value = "600", source = "P22" }
+space-1 = { value = "0.25rem", why = "The reading style's spacing scale, step 1 (4 px at the base)." }
+space-2 = { value = "0.5rem", why = "The reading style's spacing scale, step 2." }
+space-3 = { value = "0.75rem", why = "The reading style's spacing scale, step 3." }
+space-4 = { value = "1rem", why = "The reading style's spacing scale, step 4." }
+space-5 = { value = "1.5rem", why = "The reading style's spacing scale, step 5." }
+gap = { value = "var(--xdict-space-2)", why = "The gap between inline items." }
+indent = { value = "1.5em", why = "One nesting level (R9): Apple's body inset of 1.5em (P17)." }
+indent-max = { value = "calc(3 * var(--xdict-indent))", why = "The deepest a dictionary's nesting indents, three levels." }
+measure = { value = "none", source = "P17" }
+pad-block = { value = "1.25rem", why = "The page's block padding (reading-style.md R1)." }
+pad-inline = { value = "1rem", source = "P17" }
+cell-pad = { value = "0.25em 0.75em", why = "A data table's cell padding (R16)." }
+radius = { value = "6px", why = "The reading style's one corner radius (find marks, plates)." }
+hit = { value = "24px", why = "The smallest hit target of a control in the entry (section 5.2): the HIG's 24 pt minimum on macOS." }
+icon = { value = "1em", why = "A control's glyph: 1em of the text it sits in (section 5.5)." }
+phon-colour = { value = "var(--xdict-text-2)", source = "P20" }
+mark = { value = "#ffe36e", why = "A find match: a soft yellow every text colour of the palette holds its contrast on." }
+mark-current = { value = "#ff9632", why = "The current find match: orange, told apart from the other matches' yellow." }
+
+[palette]
+bg = { light = "#ffffff", dark = "#1e1e1e", source = "P27" }
+panel = { light = "#f3f3f5", dark = "#2a2a2c", why = "A raised surface inside the page, one step off the background in each theme." }
+text = { light = "#000000", dark = "#ffffff", source = "P26" }
+text-2 = { light = "#6d6d6d", dark = "#9a9a9a", why = "Apple's secondary label (P26, P27) darkened in light to the lightest grey holding 4.5:1 on every surface (palette.py, 2026-10-17)." }
+rule = { light = "#e6e6e6", dark = "#343434", why = "A rule inside an entry: Apple's quaternary label (P26, P27) composited opaque on each page." }
+plate = { light = "transparent", dark = "#ececef", why = "A dictionary's picture drawn on a light plate in dark, none in light." }
+link = { light = "#0068da", dark = "#419cff", source = "P26" }
+accent = { light = "#055959", dark = "#81ecec", why = "The one accent every chromatic text colour becomes (owner, 2026-10-16): teal's deep tier by default." }
+red-deep = { light = "#901114", dark = "#fec9c2", why = "Hue family red, deep tier: 7:1 on every surface and tint (palette.py)." }
+red = { light = "#af342f", dark = "#fb988d", why = "Hue family red, plain tier: 4.5:1 on every surface (palette.py)." }
+red-tint = { light = "#ffebe8", dark = "#3e2724", why = "Hue family red, tint: a background the deep and plain tiers hold their contrast on." }
+orange-deep = { light = "#773a00", dark = "#ffcba9", why = "Hue family orange, deep tier (palette.py)." }
+orange = { light = "#9b4e01", dark = "#f2a26a", why = "Hue family orange, plain tier (palette.py)." }
+orange-tint = { light = "#ffece0", dark = "#3c291d", why = "Hue family orange, tint (palette.py)." }
+yellow-deep = { light = "#5c4c00", dark = "#ecd78a", why = "Hue family yellow, deep tier (palette.py)." }
+yellow = { light = "#796502", dark = "#cfb656", why = "Hue family yellow, plain tier (palette.py)." }
+yellow-tint = { light = "#f6f0da", dark = "#332e19", why = "Hue family yellow, tint (palette.py)." }
+green-deep = { light = "#035e23", dark = "#aaeab2", why = "Hue family green, deep tier (palette.py)." }
+green = { light = "#047b30", dark = "#80cd8b", why = "Hue family green, plain tier (palette.py)." }
+green-tint = { light = "#e3f6e5", dark = "#223324", why = "Hue family green, tint (palette.py)." }
+teal-deep = { light = "#055959", dark = "#81ecec", why = "Hue family teal, deep tier (palette.py)." }
+teal = { light = "#057575", dark = "#3bcfcf", why = "Hue family teal, plain tier (palette.py)." }
+teal-tint = { light = "#daf7f6", dark = "#163333", why = "Hue family teal, tint (palette.py)." }
+blue-deep = { light = "#02489f", dark = "#c0d9fe", why = "Hue family blue, deep tier (palette.py)." }
+blue = { light = "#2063bf", dark = "#8ab9ff", why = "Hue family blue, plain tier (palette.py)." }
+blue-tint = { light = "#e8f1fe", dark = "#232e3f", why = "Hue family blue, tint (palette.py)." }
+purple-deep = { light = "#622c91", dark = "#e2ccfe", why = "Hue family purple, deep tier (palette.py)." }
+purple = { light = "#7c48ae", dark = "#c9a3f5", why = "Hue family purple, plain tier (palette.py)." }
+purple-tint = { light = "#f4ecff", dark = "#32293c", why = "Hue family purple, tint (palette.py)." }
+pink-deep = { light = "#881356", dark = "#fec5dc", why = "Hue family pink, deep tier (palette.py)." }
+pink = { light = "#a63470", dark = "#f297bf", why = "Hue family pink, plain tier (palette.py)." }
+pink-tint = { light = "#feeaf2", dark = "#3c2730", why = "Hue family pink, tint (palette.py)." }
+
+[accent]
+teal = { light = "#055959", dark = "#81ecec", why = "The default accent: at least 7:1 on every surface and tint, in both themes." }
+red = { light = "#901114", dark = "#fec9c2", why = "The red accent: at least 7:1 on every surface and tint, in both themes." }
+indigo = { light = "#3f3a8c", dark = "#c4c1ff", why = "The indigo accent: at least 7:1 on every surface and tint, in both themes." }
