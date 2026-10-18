@@ -50,6 +50,17 @@ struct DictionaryTableDropTests {
         #expect(DictionaryTable.dropRow(for: .reorder(["x"]), proposed: 2) == (2, .above))
     }
 
+    // MARK: - Where a drag aims (the drop instrument, ADR-0012 d.7)
+
+    /// The table's centre, in global points with the origin top left (as `pointer` takes them), from its frame on a
+    /// screen whose origin is bottom left: never the window's centre, which a strip or a problem box can push off the
+    /// table (tour, dark-en dropV3Mdd, 2026-10-18).
+    @Test func aDragAimsAtTheTablesCentreFlipped() {
+        let table = CGRect(x: 100, y: 300, width: 560, height: 200)  // bottom-left origin
+        let point = DictionaryTable.dropPoint(tableOnScreen: table, mainScreenHeight: 1_000)
+        #expect(point == CGPoint(x: 380, y: 1_000 - 400))
+    }
+
     // MARK: - Keys
 
     @Test func deleteRemoves() {

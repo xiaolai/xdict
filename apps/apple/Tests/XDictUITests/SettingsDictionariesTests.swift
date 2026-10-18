@@ -84,6 +84,18 @@ struct SettingsDictionariesTests {
         #expect(SettingsDictionaries.maxPaneHeight(visible: 300) >= SettingsDictionaries.tableMinHeight)
     }
 
+    /// The Details… sheet never hangs past the Settings window (tour, light-en, 2026-10-18: window to ~605 pt, sheet to
+    /// ~800): the pane's width, and no taller than the pane it covers less a margin; its form scrolls inside.
+    @Test func theDetailsSheetFitsInsideThePane() {
+        let size = SettingsDictionaries.detailsSheetSize(paneHeight: 540)
+        #expect(size.width == SettingsDictionaries.paneWidth)
+        #expect(size.height == 540 - 2 * SettingsDictionaries.sheetMargin)
+        #expect(SettingsDictionaries.detailsSheetSize(paneHeight: 2_000).height <= SettingsDictionaries.detailsSheetMaxHeight)
+        // A pane not yet measured, or tiny, still gives a usable sheet, never one taller than the pane.
+        #expect(SettingsDictionaries.detailsSheetSize(paneHeight: 0).height == SettingsDictionaries.detailsSheetMinHeight)
+        #expect(SettingsDictionaries.detailsSheetSize(paneHeight: 250).height <= 250)
+    }
+
     /// The strip names only what is under way; a ready or a troubled dictionary is not in it (the call of 2026-10-18:
     /// no "Ready" text).
     @Test func theStripHoldsWhatIsUnderWay() {

@@ -66,6 +66,27 @@ public struct SettingsDictionaries: View {
         max(visible - 2 * screenMargin, tableMinHeight)
     }
 
+    /// The Details… sheet: the pane's width, and no taller than the pane it covers less a margin above and below, so it
+    /// never hangs past the Settings window (tour, light-en, 2026-10-18: window to ~605 pt, sheet to ~800); its form
+    /// scrolls inside. Bounded above, and below by a usable minimum that a small pane still holds.
+    nonisolated public static let sheetMargin: CGFloat = 12
+    nonisolated public static let detailsSheetMinHeight: CGFloat = 220
+    nonisolated public static let detailsSheetMaxHeight: CGFloat = 640
+
+    nonisolated public static func detailsSheetSize(paneHeight: CGFloat) -> CGSize {
+        let fits = paneHeight - 2 * sheetMargin
+        let height = paneHeight <= 0 ? detailsSheetMinHeight
+            : min(detailsSheetMaxHeight, max(min(detailsSheetMinHeight, paneHeight), fits))
+        return CGSize(width: paneWidth, height: height)
+    }
+
+    /// Where the drop instrument drags to: the centre of the dictionary table under `root`, in global top-left points;
+    /// nil when no table is there (`LibraryDrop`, ADR-0012 d.7).
+    public static func dropPoint(in root: NSView) -> CGPoint? {
+        guard let frame = DictionaryTable.screenFrame(in: root) else { return nil }
+        return DictionaryTable.dropPoint(tableOnScreen: frame, mainScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+    }
+
     /// The dictionaries under way, in the library's order: what the strip shows (no "Ready": the call of 2026-10-18).
     nonisolated public static func underWay(order: [UUID], phases: [UUID: EntryPhase]) -> [UUID] {
         order.filter { id in
@@ -79,6 +100,7 @@ public struct SettingsDictionaries: View {
     @Bindable private var library: Library
     @Bindable private var route: SettingsRoute
     @State private var selection: UUID?
+    @State private var paneHeight: CGFloat = 0
     @Environment(\.undoManager) private var undoManager
 
     public init(library: Library, route: SettingsRoute = .shared) {
@@ -101,6 +123,8 @@ public struct SettingsDictionaries: View {
         .padding(.vertical, 16)
         .frame(width: Self.paneWidth)
         .frame(maxHeight: Self.maxPaneHeight(visible: NSScreen.main?.visibleFrame.height ?? 800))
+        // The Details… sheet is sized from this, so it fits inside the window.
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
         .onAppear { resolveRoute() }
         .onChange(of: route.pendingSelection) { resolveRoute() }
         .onChange(of: library.entries.map(\.id)) { resolveRoute() }
@@ -203,6 +227,7 @@ public struct SettingsDictionaries: View {
 
     @ViewBuilder private var detailsSheet: some View {
         if case .details(let id) = route.presentation, let entry = library.entries.first(where: { $0.id == id }) {
+            let size = Self.detailsSheetSize(paneHeight: paneHeight)
             VStack(spacing: 0) {
                 LibraryDetail(library: library, entry: entry,
                               remove: { route.dismiss(); remove(id) }, locate: { route.locate() })
@@ -215,7 +240,8 @@ public struct SettingsDictionaries: View {
                 }
                 .padding(12)
             }
-            .frame(width: 520, height: 560)
+            // The form scrolls inside; the sheet never extends past the window (`detailsSheetSize`).
+            .frame(width: size.width, height: size.height)
         }
     }
 
