@@ -50,8 +50,9 @@ struct TestInventoryTests {
         "XDictTokensTests": 6,
         // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
         "XDictAppleSourceTests": 16,
-        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
-        "XDictCaptureTests": 261,
+        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name;
+        // 261 → 269 (WI-3): one numbering across the four triggers (5) and the ephemeral context session (3).
+        "XDictCaptureTests": 269,
         // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
         // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
