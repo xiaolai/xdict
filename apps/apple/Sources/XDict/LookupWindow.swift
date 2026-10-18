@@ -556,10 +556,13 @@ final class LookupWindowRun: LookupStage {
                 }
             }
         }
+        // The scope bar's choice: the radio group by its name, and the option of the chosen scope's title with value 1
+        // (`#id=value:text`), so a name merely shown, not chosen, does not pass.
+        present.append("#scope:\(String(localized: "Dictionaries"))")
         if case .one(let id) = model.scope, let source = model.source(id) {
-            present.append("#scope:\(source.name)")
+            present.append("#scope.option=1:\(source.name)")
         } else {
-            present.append("#scope:\(String(localized: "All"))")
+            present.append("#scope.option=1:\(String(localized: "All"))")
         }
         return ["present": present, "absent": [], "ordered": []]
     }

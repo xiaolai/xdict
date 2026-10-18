@@ -24,6 +24,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lookup_checks  # noqa: E402
 import typing_check  # noqa: E402
 
 kit, work, app, out = sys.argv[1:5]
@@ -163,41 +164,6 @@ def ax_nodes():
     return tree.get("nodes", []), tree
 
 
-def judge(name, expect, nodes):
-    """Holds the window, as read, to what the app said it must show."""
-    texts = [(n.get("id", ""), n.get("texts", [])) for n in nodes]
-
-    def where(item):
-        if item.startswith("#") and ":" in item:
-            ident, text = item[1:].split(":", 1)
-            return next((i for i, (nid, ts) in enumerate(texts) if nid == ident and text in ts), None)
-        return next((i for i, (_, ts) in enumerate(texts) if item in ts), None)
-
-    missing = [p for p in expect.get("present", []) if where(p) is None]
-    found = [a for a in expect.get("absent", []) if where(a) is not None]
-    order = [where(o) for o in expect.get("ordered", [])]
-    in_order = all(i is not None for i in order) and order == sorted(order)
-    ok = bool(nodes) and not missing and not found and in_order
-    detail = (f"{len(nodes)} elements; missing {missing}; present though absent {found}; order "
-              f"{list(zip(expect.get('ordered', []), order))}")
-    return {"name": f"ax.{name}", "pass": ok, "detail": detail}
-
-
-def results_read(nodes, names, own_labels):
-    """VoiceOver's reading of the results (R10, R11): at least two, each an element of a known role (one whose role is
-    unknown VoiceOver may pass over), each naming one of the window's dictionaries, the first two as the app labels
-    them."""
-    results = [n for n in nodes if n.get("id") == "result"]
-    labels = [" ".join(n.get("texts", [])) for n in results]
-    named = [label for label in labels if any(d in label for d in names)]
-    roles = sorted({n.get("role", "") for n in results})
-    own = own_labels[:2]
-    read = all(any(label in n.get("texts", []) for n in results) for label in own)
-    known = bool(roles) and "AXUnknown" not in roles and "" not in roles
-    ok = len(results) >= 2 and len(named) == len(labels) and len(own) == 2 and read and known
-    return ok, (f"{len(results)} results read, as {roles}: {labels[:6]}; the app's own labels {own_labels[:4]}")
-
-
 def link_focus(web, text):
     """VoiceOver's reading of the entry once Tab has reached a link (R10): the link `text` is in the entry's tree and
     alone has the keyboard, and the app's focused element, read after the entry (as VoiceOver reads it), is that link."""
@@ -250,32 +216,48 @@ check("keyboard.firstQueryNoPointer",
       f"looked up {state.get('query')!r}: {sections(state)}; shown {shown(state)}; the keyboard stays in "
       f"{state.get('responder')}")
 
-# VoiceOver reads each result with its dictionary (R10, R11).
+# VoiceOver reads the results and their dictionaries (R10, R11): since the parity window (P9-P11) the results are one
+# merged list of headwords, `results`, read as the app's first rows in order; each dictionary is named on the All page
+# (P15), by the divider of every dictionary that found the word but the first.
 nodes, _ = ax_nodes()
 names = state.get("dictionaries", [])
-read_ok, read_detail = results_read(nodes, names, state.get("resultLabels", []))
+read_ok, read_detail = lookup_checks.results_read(nodes, state.get("suggestions", [])[:3], sections(state))
 check("voiceover.resultsNameTheirDictionary", read_ok, read_detail)
 
-# Down into the results, and through them.
+
+def key(state):
+    return (state.get("shown") or {}).get("key")
+
+
+# Down into the results, and through them: the merged list's rows for `apple` are apple, apple polisher, applet; the
+# first ↓ from the field moves the selection from the shown row to the next.
 state = press("down")
-into = state.get("responder")
+into, first_down = state.get("responder"), key(state)
 state = press("down")
-moved = shown(state)
+moved = key(state)
 state = press("up")
-check("keyboard.results", into == "results" and moved == "Beta/apple" and shown(state) == "Alpha/apple",
-      f"↓ from the field: the keyboard in {into}; ↓ again shows {moved}; ↑ shows {shown(state)}")
+back_up = key(state)
+state = press("up")
+state = until(lambda s: shown(s) == "Alpha/apple" and s.get("entryFinished"))
+check("keyboard.results", into == "results" and (first_down, moved, back_up) == ("apple polisher", "applet",
+                                                                                 "apple polisher")
+      and shown(state) == "Alpha/apple",
+      f"↓ from the field: the keyboard in {into}, shows {first_down}; ↓ again shows {moved}; ↑ shows {back_up}; ↑ "
+      f"again shows {shown(state)}")
 
 # Where the entry sits, as the screen has it (Alpha's `apple` says `body{margin:0}`, as many MDict stylesheets do): its
-# area starts at the toolbar's bottom, with no band for a hidden find bar, and its first text stands at least 8 pt
-# inside the pane's left edge, whatever the dictionary's CSS (the shell's reading inset).
+# area starts right under the scope bar (P6, 36 pt under the toolbar), or under the page's notices while they are shown,
+# with no band for a hidden find bar; its first text stands at least 8 pt inside the pane's left edge, whatever the
+# dictionary's CSS (the shell's reading inset). Read once the entry has finished, and once more after a moment before
+# a missing web area counts: the All page makes its frames after the page is laid out.
 geometry = tool("geometry", pid) or {}
+if not geometry.get("web") or not geometry.get("text"):
+    time.sleep(1.0)
+    geometry = tool("geometry", pid) or {}
 facts["entryGeometry"] = json.dumps(geometry)
-bar, web, text = geometry.get("toolbar"), geometry.get("web"), geometry.get("text")
-if bar and web:
-    band = web["y"] - (bar["y"] + bar["height"])
-    check("ax.entryBelowToolbar", abs(band) <= 1, f"the entry starts {band:g} pt below the toolbar's bottom")
-else:
-    check("ax.entryBelowToolbar", False, f"no toolbar or no entry to measure: {geometry}")
+placed, placed_detail = lookup_checks.entry_placement(geometry)
+check("ax.entryBelowToolbar", placed is True, placed_detail)
+web, text = geometry.get("web"), geometry.get("text")
 if web and text:
     inset = text["x"] - web["x"]
     check("ax.entryInset", inset >= 8, f"{geometry.get('textValue')!r} starts {inset:g} pt inside the entry's left edge")
@@ -343,23 +325,30 @@ state = until(lambda s: all(st != "searching" for _, st in sections(s)), 5)
 second = names[1] if len(names) > 1 else "?"
 scoped = (state.get("scope"), [n for n, _ in sections(state)])
 nodes, _ = ax_nodes()
-scope_texts = [n.get("texts") for n in nodes if n.get("id") == "scope"]
+scope_ok, scope_detail = lookup_checks.scope_chosen(nodes, second)
 check("keyboard.scope", scoped == (second, [second]), f"⌘2: scope {scoped[0]!r}, sections {scoped[1]}")
-check("voiceover.scopeVisible", any(second in ts for ts in scope_texts),
-      f"the toolbar's scope, as read: {scope_texts}")
+check("voiceover.scopeVisible", scope_ok, scope_detail)
 state = press("cmd+0", settle=0.3)
 check("keyboard.scopeAll", state.get("scope") == "all", f"⌘0: scope {state.get('scope')!r}")
 
-# A suggestion, chosen with the keyboard (Q6).
+# A suggestion, chosen with the keyboard (Q6): typing shows the first row's entry at once; Return keeps it; ↓ and
+# Return choose the next row.
 state = press("cmd+opt+f")
 press("cmd+a", settle=0.2)
 state = type_text("take o", settle=1.0)
 offered = state.get("suggestions", [])
+state = until(lambda s: shown(s) == "Alpha/take off")
+typed = shown(state)
+press("return", settle=0.2)
+state = until(lambda s: s.get("query") == "take off" and s.get("shown"))
+kept = (state.get("query"), shown(state))
 press("down", settle=0.3)
 state = press("return", settle=0.2)
-state = until(lambda s: s.get("query") == "take off" and s.get("shown"))
-check("keyboard.suggestion", "take off" in offered and state.get("query") == "take off"
-      and shown(state) == "Alpha/take off", f"typing 'take o' offered {offered}; ↓ and Return looked up "
+state = until(lambda s: s.get("query") == "take on" and s.get("shown"))
+check("keyboard.suggestion", offered[:2] == ["take off", "take on"] and typed == "Alpha/take off"
+      and kept == ("take off", "Alpha/take off") and state.get("query") == "take on"
+      and shown(state) == "Alpha/take on",
+      f"typing 'take o' offered {offered} and showed {typed}; Return kept {kept}; ↓ and Return looked up "
       f"{state.get('query')!r}, shown {shown(state)}")
 facts["keys"] = json.dumps(state.get("keys", [])[-40:])
 
@@ -380,7 +369,7 @@ while time.time() < end:
         done_names.add(name)
         nodes, tree = ax_nodes()
         # The verdict goes back to the app, whose findings carry it: the stage reads it there, once.
-        verdict = judge(point["name"], point.get("expect", {}), nodes)
+        verdict = lookup_checks.judge(point["name"], point.get("expect", {}), nodes)
         print(f"{'PASS' if verdict['pass'] else 'FAIL'}  {verdict['name']}: {verdict['detail'][:300]}", flush=True)
         with open(os.path.join(commands, f"ax-{point['name']}.json"), "w") as f:
             json.dump(tree, f)

@@ -228,6 +228,7 @@ test-tools:
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
 	@python3 -I Tools/tests/lookup_typing_test.py
+	@python3 -I Tools/tests/lookup_checks_test.py
 	@python3 -I Tools/tests/measure_test.py
 	@python3 -I Tools/tests/ui_tour_test.py
 	@python3 -I Tools/tests/ledger_test.py
