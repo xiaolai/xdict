@@ -114,7 +114,7 @@ if [ -n "$only" ]; then
 fi
 SUBSTAGES=$(tr '\n' ' ' <<<"$SUBSTAGES")
 # shellcheck disable=SC2086 # sub-stage names, split on purpose
-check_drivers $SUBSTAGES || fail "see above: a sub-stage asked for has no driver yet; nothing was built, locked or shipped"
+check_drivers $SUBSTAGES || fail "see above: a sub-stage asked for has no driver yet; nothing was locked or shipped"
 # shellcheck disable=SC2086 # sub-stage names, split on purpose
 NEEDS=" $(bash "$PLAN" needs $SUBSTAGES | tr '\n' ' ') "
 needs() { case $NEEDS in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
