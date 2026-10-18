@@ -163,24 +163,43 @@ public enum PointerWordReader {
         }
     }
 
-    /// The site `target` shows: the host of its web area's address, from the same walk to the page the marker dialect
-    /// makes. No web area is not web content; a web area whose address cannot be read, or a read that failed, is
-    /// `unreadable` — never guessed to be harmless.
-    public static func host(of target: Target, with ax: some AccessibilityReading) -> HostReading {
+    /// The site `target` shows, **judged on every web area that encloses it** (XDict ADR-0014; security review of
+    /// plan-capture WI-2). An `about:blank` or `srcdoc` frame inside an excluded page — an embedded editor — has no host
+    /// of its own, and taking the nearest web area's address alone let an excluded site's text through as "not web
+    /// content". So the walk goes outward through every enclosing web area: any whose host `isExcluded` refuses (that host
+    /// is answered); else the innermost readable host; a `file:` page with no host above it is a page with no site;
+    /// anything else hostless is `unreadable`, never harmless. `.notWebContent` only where no web area exists at all.
+    public static func host(
+        of target: Target, isExcluded: (String) -> Bool, with ax: some AccessibilityReading
+    ) -> HostReading {
         do throws(CaptureError) {
             // Woken first: an unwoken Chromium tree has no web area yet, and "no page" read from it would let an
             // excluded site through.
             try awaken(target, ax)
-            let area: AXUIElement
-            switch try ax.walkToPage(from: target.element) {
-            case .page(let found): area = found
-            case .application: return .notWebContent
-            case .stoppedShort: return .unreadable
+            var walk = try ax.walkToPage(from: target.element)
+            var hosts: [String] = []
+            var sawFile = false
+            var areas = 0
+            while case .page(let area) = walk, areas < webAreaAncestorLimit {
+                areas += 1
+                let raw = try ax.attribute(area, kAXURLAttribute, ofApplication: false)
+                let url = (raw as? URL) ?? (raw as? String).flatMap { URL(string: $0) }
+                if let host = url?.host(percentEncoded: false), !host.isEmpty {
+                    if isExcluded(host) { return .known(host) }
+                    hosts.append(host)
+                } else if url?.isFileURL == true {
+                    sawFile = true
+                }
+                walk = try ax.enclosingWebArea(of: area)
             }
-            let raw = try ax.attribute(area, kAXURLAttribute, ofApplication: false)
-            guard let url = (raw as? URL) ?? (raw as? String).flatMap({ URL(string: $0) }) else { return .unreadable }
-            if let host = url.host(percentEncoded: false), !host.isEmpty { return .known(host) }
-            return url.isFileURL || url.scheme == "about" ? .notWebContent : .unreadable
+            if areas == 0 {
+                if case .application = walk { return .notWebContent }
+                return .unreadable
+            }
+            // A walk outward that stopped short may have missed an excluded page above: not known to be harmless.
+            if case .stoppedShort = walk { return .unreadable }
+            if let innermost = hosts.first { return .known(innermost) }
+            return sawFile ? .notWebContent : .unreadable
         } catch {
             return .unreadable
         }
