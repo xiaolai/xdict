@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **The shell's own scripts, in a content world of their own** (`EntryPane.world`): the page cannot see their globals,
 /// replace their functions or call their message handler. They make no request and change no URL: find (R3), the
@@ -8,7 +9,7 @@ enum EntryScripts {
     /// The reading inset every entry gets, whatever its CSS: many MDict stylesheets say `body{margin:0}`, as GoldenDict
     /// pads its articles itself. On the root and `!important`, so neither a body margin nor a plain `html{padding:0}`
     /// removes it; the dictionary's full-width rows end at it like a page margin, and the scroller stays at the edge.
-    static let readingInset = "html{padding:8px 14px !important;box-sizing:border-box}"
+    static let readingInset = "html{padding:\(Tokens.EntryText.readingInset) !important;box-sizing:border-box}"
     /// Find's matching, with no DOM: whitespace in the query matches any run of whitespace, letters match whatever
     /// their case (Unicode simple folding), everything else as written.
     static var findCore: String { EntryStyle.bundled.script("find-core.js") }

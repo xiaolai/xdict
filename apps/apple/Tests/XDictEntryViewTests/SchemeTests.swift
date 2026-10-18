@@ -200,6 +200,17 @@ struct SchemeTests {
         #expect(!svg.contains("<script>") && svg.contains("&lt;script&gt;&amp;&quot;"))
     }
 
+    /// The placeholder drawn from the tokens is the picture it was when its numbers were written in (2026-10-18), at
+    /// the narrowest box and at a cut-off one.
+    @Test func thePlaceholderIsTheTokensPicture() {
+        func svg(_ label: String) -> String { String(decoding: EntryResourceServer.placeholder(label: label), as: UTF8.self) }
+        #expect(svg("ab") == #"<svg xmlns="http://www.w3.org/2000/svg" width="80" height="28" role="img" aria-label="ab">"#
+            + #"<rect x="0.5" y="0.5" width="79" height="27" rx="4" fill="#f2f2f2" stroke="#8a8a8a" stroke-dasharray="3 2"/>"#
+            + #"<text x="12" y="18" font-family="-apple-system, sans-serif" font-size="12" fill="#3a3a3a">ab</text></svg>"#)
+        #expect(svg(String(repeating: "x", count: 20)).hasPrefix(#"<svg xmlns="http://www.w3.org/2000/svg" width="164""#))
+        #expect(svg(String(repeating: "x", count: 100)).contains(#"width="480""#))
+    }
+
     /// **Each answer keeps its package** (ADR-0009 refutation, item 13): two views bound to A and B ask the same path; A's
     /// answer is held while B's is given; released, A's is A's.
     @Test func eachViewIsAnsweredFromItsOwnDictionary() async {

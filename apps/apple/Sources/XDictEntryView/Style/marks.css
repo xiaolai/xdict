@@ -5,30 +5,30 @@
 background-image:none !important;-webkit-mask:none !important;mask:none !important}
 /* 2. The lookup arrow, on whichever side the dictionary drew its own. */
 [data-xdict-before=lookup]::before,[data-xdict-after=lookup]::after{{{glyph-arrow}}}
-[data-xdict-before=lookup]::before{margin:0 0.2em 0 0 !important;margin-inline:0 0.2em !important}
-[data-xdict-after=lookup]::after{margin:0 0 0 0.2em !important;margin-inline:0.2em 0 !important}
-/* 3. The one marker: a 0.35em dot in the secondary text colour, at the head of the block. */
+[data-xdict-before=lookup]::before{margin:0 var(--xdict-arrow-gap) 0 0 !important;margin-inline:0 var(--xdict-arrow-gap) !important}
+[data-xdict-after=lookup]::after{margin:0 0 0 var(--xdict-arrow-gap) !important;margin-inline:var(--xdict-arrow-gap) 0 !important}
+/* 3. The one marker: a `--xdict-marker-size` dot in the secondary text colour, at the head of the block. */
 [data-xdict-before=marker]::before,[data-xdict-after=marker]::after{content:"" !important;
-display:inline-block !important;width:0.35em !important;height:0.35em !important;
+display:inline-block !important;width:var(--xdict-marker-size) !important;height:var(--xdict-marker-size) !important;
 padding:0 !important;aspect-ratio:1 !important;box-sizing:content-box !important;
 min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;
 line-height:0 !important;
 background-color:var(--xdict-text-2) !important;border-radius:50% !important;
-vertical-align:0.2em !important;position:static !important;float:none !important;
+vertical-align:var(--xdict-marker-raise) !important;position:static !important;float:none !important;
 font-size:inherit !important;border:0 !important;box-shadow:none !important;transform:none !important}
-[data-xdict-before=marker]::before{margin:0 0.35em 0 0 !important;margin-inline:0 0.35em !important}
-[data-xdict-after=marker]::after{margin:0 0 0 0.35em !important;margin-inline:0.35em 0 !important}
+[data-xdict-before=marker]::before{margin:0 var(--xdict-marker-gap) 0 0 !important;margin-inline:0 var(--xdict-marker-gap) !important}
+[data-xdict-after=marker]::after{margin:0 0 0 var(--xdict-marker-gap) !important;margin-inline:var(--xdict-marker-gap) 0 !important}
 /* The leading dot hangs in a gutter of its own, centred on the first line box, whatever display the item's */
 /* content has: a block child would otherwise push the text to the line below the dot (COBUILD's examples). */
-[data-xdict-before=marker]{position:relative !important;padding-inline-start:0.7em !important;
+[data-xdict-before=marker]{position:relative !important;padding-inline-start:var(--xdict-marker-gutter) !important;
 text-indent:0 !important;list-style:none !important}
 /* The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text. */
 [data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}
 [data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
+inset-block-start:calc(var(--xdict-marker-drop, 0px) + var(--xdict-half-line) - var(--xdict-marker-size) / 2) !important;margin:0 !important;line-height:inherit !important}
 /* 4. The disclosure chevron, drawn from `aria-expanded`, which the disclosure script keeps to the fold. */
-[data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 0.25em 0 0 !important;
-margin-inline:0 0.25em !important;transition:transform 0.15s !important}
+[data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 var(--xdict-chevron-gap) 0 0 !important;
+margin-inline:0 var(--xdict-chevron-gap) !important;transition:transform 0.15s !important}
 @media (prefers-reduced-motion:reduce){[data-xdict-control=disclosure]::before{transition:none !important}}
 [data-xdict-before=lookup]:dir(rtl)::before,[data-xdict-after=lookup]:dir(rtl)::after,
 [data-xdict-control=disclosure]:dir(rtl)::before{transform:scaleX(-1) !important}
@@ -38,9 +38,9 @@ margin-inline:0 0.25em !important;transition:transform 0.15s !important}
 padding-block:0 !important}
 /* The chevron hangs in its own gutter on the head's first line box, as the marker does. */
 [data-xdict-control=disclosure]{position:relative !important;
-padding-inline-start:calc(var(--xdict-icon) + 0.25em) !important}
+padding-inline-start:calc(var(--xdict-icon) + var(--xdict-chevron-gap)) !important}
 [data-xdict-control=disclosure]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(0.5lh - var(--xdict-icon) / 2) !important;margin:0 !important}
+inset-block-start:calc(var(--xdict-half-line) - var(--xdict-icon) / 2) !important;margin:0 !important}
 /* 5. The speaker: one inline row, the accent tag first, both on the line's baseline, the glyph centred on */
 /* the tag; whatever width, height, float or display the dictionary gave its button. */
 [data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;
@@ -49,25 +49,25 @@ float:none !important;position:static !important;vertical-align:baseline !import
 flex-wrap:nowrap !important;line-height:inherit !important;
 /* Its hit area is XDict's (G11, 24 px), whatever padding the dictionary gave its button, and in small text too */
 /* (CED's `hwd_sound` at 12 px was 20 px wide). */
-padding:calc((var(--xdict-hit) - 1em) / 2) !important;min-width:var(--xdict-hit) !important;
+padding:calc((var(--xdict-hit) - var(--xdict-icon)) / 2) !important;min-width:var(--xdict-hit) !important;
 min-height:var(--xdict-hit) !important;justify-content:center !important;box-sizing:border-box !important;
-/* The control spacing before it: its hit area's negative margin, less 0.25em, so a speaker set against the */
+/* The control spacing before it: its hit area's negative margin, less `--xdict-speaker-before`, so a speaker set against the */
 /* word before it (CED's after a transcription, COBUILD's after a headword) does not touch it. */
-margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}
-[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}
+margin-inline-start:calc(var(--xdict-speaker-before) - (var(--xdict-hit) - var(--xdict-icon)) / 2) !important}
+[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 var(--xdict-tag-gap) !important}
 /* A box holding only speakers (the core's `data-xdict-speakers`) sits on its transcription's line. */
 [data-xdict-speakers]{display:inline !important;float:none !important;position:static !important;
 margin-block:0 !important}
 /* A box of speakers leading its block floats at the line's start, so the transcription's block after it */
 /* (CEPD's `sense-body`) begins its first line beside it. */
-[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:0.35em !important}
+[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:var(--xdict-speaker-gap) !important}
 /* A speaker and the transcription it plays are one run (`pronRunDOM`): no break inside it but within the */
 /* transcription itself. */
 [data-xdict-pron-run]{white-space:nowrap !important}
 [data-xdict-pron-run] [data-xdict-phon]{white-space:normal !important}
 /* A tag wrapped deeper in its speaker (OED's) owns its gap too (§8.4); 0.56em of its 0.625em is 0.35em of the text. */
-[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:0.56em !important}
-[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 0.35em !important}
+[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:var(--xdict-tag-gap) !important}
+[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 var(--xdict-speaker-gap) !important}
 /* 6. Labels are sized by their text, not by the badge's box the dictionary sized for its drawing. */
 [data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist],
 [data-xdict-role=label][data-xdict-label=frequency],[data-xdict-role=label][data-xdict-label=new]
@@ -79,8 +79,8 @@ min-height:0 !important;float:none !important;position:static !important}
 /* A fold head's wrapper adds no vertical space of its own around it. */
 :has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])
 {margin-block:0 !important;padding-block:0 !important}
-/* A label owns 0.35em after it before the next word or control (§8.4); two labels in a row share it. */
-[data-xdict-role=label]{margin-inline-end:0.35em !important}
+/* A label owns `--xdict-label-gap` after it before the next word or control (§8.4); two labels in a row share it. */
+[data-xdict-role=label]{margin-inline-end:var(--xdict-label-gap) !important}
 [data-xdict-role=label]+[data-xdict-role=label]{margin-inline-start:0 !important}
 /* Two labels each in a wrapper of its own share it too (OALD's OPAL links, `a{margin-right:4px}`): the wrapper */
 /* adds no inline space, and the second label none before it. */
@@ -104,8 +104,8 @@ padding-inline-end:0 !important}
 [data-xdict-labelled]{display:none !important}}
 /* 8. Labels: one style, plain text in the secondary colour, no box (R11). */
 [data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);
-font-weight:var(--xdict-weight-bold);letter-spacing:0.02em;
-white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}
+font-weight:var(--xdict-weight-bold);letter-spacing:var(--xdict-label-tracking);
+white-space:nowrap;vertical-align:baseline;margin-inline-start:var(--xdict-label-before)}
 /* A label replacing a drawing is XDict's in both styles; one read from the dictionary's words takes this */
 /* colour and loses its box in the reading style only (`readingLabelsCSS`): in original style it keeps the */
 /* dictionary's, chosen for the box it sits on (LDOCE's GRAMMAR heading on cyan read 2.34:1 in grey). */
@@ -114,10 +114,10 @@ white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}
 background:none !important;border:0 !important;padding:0 !important}
 [data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist]
 {font-variant-numeric:lining-nums}
-[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:0.08em}
+[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:var(--xdict-frequency-tracking)}
 [data-xdict-role=label][data-xdict-label=new]{font-variant-caps:all-small-caps;font-size:var(--xdict-fs-s)}
 /* Sense numbers: no circle or box. Their weight is the dictionary's: the mark is not precise enough for */
 /* strong styling (0.74 on the holdout; unification R, 2026-10-16). */
 [data-xdict-role=sensenum]{
 font-variant-numeric:lining-nums tabular-nums;background:none !important;border:0 !important;
-border-radius:0 !important;margin-inline-end:0.25em}
+border-radius:0 !important;margin-inline-end:var(--xdict-sensenum-gap)}

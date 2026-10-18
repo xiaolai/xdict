@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 @testable import XDictEntryView
+import XDictTokens
 
 /// **What the entry view injects is the text of `Sources/XDictEntryView/Style/`** (plan-verification §4.6): the files a
 /// person edits, compiled into the binary by `Tools/reading-style-gen.py`, reach the page unchanged but for the
@@ -47,8 +48,9 @@ struct EntryStyleFilesTests {
         #expect(Array(installed[4...]) == (try ["placeholder-clicks.js", "speaker-clicks.js", "disclosure-core.js",
                                                 "disclosure.js", "pron-run-core.js", "pron-run.js"].map(script)))
         for name in ["column.css", "type.css", "reading-labels.css"] {
-            let joined = try #require(disk[name]).split(separator: "\n").map { $0.drop { $0 == " " } }
-                .filter { !($0.hasPrefix("/*") && $0.hasSuffix("*/")) }.joined()
+            // The tokens' `{{fill-<name>}}`s are written in (a media query's breakpoint): nothing else is.
+            let joined = EntryStyle.fill(try #require(disk[name]).split(separator: "\n").map { $0.drop { $0 == " " } }
+                .filter { !($0.hasPrefix("/*") && $0.hasSuffix("*/")) }.joined(), Tokens.ReadingStyle.fills, in: name)
             #expect(installed[3].contains(String(data: try JSONEncoder().encode(joined), encoding: .utf8)?
                 .dropFirst().dropLast() ?? "-"), "\(name) is not in the frame's script")
         }

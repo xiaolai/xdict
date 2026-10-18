@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "e57903bf5f0a3204483880143582ffe7dc795dd6599d32de4294e5783832e5bc"
+    public static let sourceDigest = "75bbaca7b59e8c8735525869021f79144a8f4e2bc20ce566a2932fa1b4af55eb"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -236,6 +236,43 @@ public enum Tokens {
             ("phon-colour", "var(--xdict-text-2)"),
             ("mark", "#ffe36e"),
             ("mark-current", "#ff9632"),
+            ("paper", "#ecebe6"),
+            ("paper-text", "#1d1d1f"),
+            ("paper-pad-inline", "clamp(0.75rem, 4vw, 2rem)"),
+            ("hairline", "1px"),
+            ("focus-ring", "2px"),
+            ("control-gap", "0.15em"),
+            ("glyph-baseline", "-0.15em"),
+            ("tag-tracking", "0.02em"),
+            ("tag-gap", "0.56em"),
+            ("label-tracking", "0.02em"),
+            ("frequency-tracking", "0.08em"),
+            ("heading-tracking", "0.03em"),
+            ("rule-gap", "0.3em"),
+            ("arrow-gap", "0.2em"),
+            ("marker-raise", "0.2em"),
+            ("marker-size", "0.35em"),
+            ("marker-gap", "0.35em"),
+            ("marker-gutter", "0.7em"),
+            ("half-line", "0.5lh"),
+            ("label-gap", "0.35em"),
+            ("label-before", "0.25em"),
+            ("speaker-gap", "0.35em"),
+            ("speaker-before", "0.25em"),
+            ("chevron-gap", "0.25em"),
+            ("sensenum-gap", "0.25em"),
+            ("hang-default", "1em"),
+            ("layout-cell-gap", "0.25em"),
+            ("image-max", "20em"),
+            ("float-max-width", "12em"),
+            ("float-max-height", "16em"),
+            ("badge-height", "1em"),
+            ("badge-max-height", "1.25em"),
+            ("badge-baseline", "-0.125em"),
+            ("badge-gap", "0.25em"),
+            ("icon-image-height", "1.25em"),
+            ("icon-image-baseline", "-0.2em"),
+            ("icon-image-gap", "0.125em"),
         ]
         /// The palette: name, light, dark.
         public static let palette: [(String, String, String)] = [

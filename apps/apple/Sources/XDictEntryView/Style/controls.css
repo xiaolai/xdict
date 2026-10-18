@@ -4,17 +4,17 @@
 [data-xdict-control]{background-image:none !important;cursor:pointer}
 /* A fold head is often a block (a heading, a box's title): it keeps its own layout and colour. */
 [data-xdict-control]:not([data-xdict-control=disclosure]){color:var(--xdict-link);text-decoration:none;
-display:inline-flex;align-items:baseline;gap:0.15em;
-padding:calc((var(--xdict-hit) - 1em) / 2);margin:calc((var(--xdict-hit) - 1em) / -2);
+display:inline-flex;align-items:baseline;gap:var(--xdict-control-gap);
+padding:calc((var(--xdict-hit) - var(--xdict-icon)) / 2);margin:calc((var(--xdict-hit) - var(--xdict-icon)) / -2);
 border-radius:var(--xdict-radius)}
-[data-xdict-control]:focus-visible{outline:2px solid var(--xdict-link);outline-offset:0}
+[data-xdict-control]:focus-visible{outline:var(--xdict-focus-ring) solid var(--xdict-link);outline-offset:0}
 [data-xdict-icon=speaker]{display:inline-block;width:var(--xdict-icon);height:var(--xdict-icon);
-vertical-align:-0.15em;background-color:currentColor;-webkit-mask:{{speaker-mask}} center/contain no-repeat;
+vertical-align:var(--xdict-glyph-baseline);background-color:currentColor;-webkit-mask:{{speaker-mask}} center/contain no-repeat;
 mask-image:{{speaker-mask}};mask-size:contain;mask-repeat:no-repeat;mask-position:center}
 [data-xdict-unavailable]{opacity:0.4;cursor:default}
 /* In XDict's face even inside a transcription (OALECD's sound links wrap them). */
 [data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);font-variant-caps:all-small-caps;color:var(--xdict-text-2);
 /* 0.35em of the text after the tag (0.56em of its own 0.625em): the next speaker or word does not touch it. */
-letter-spacing:0.02em;margin-inline-end:0.56em}
+letter-spacing:var(--xdict-tag-tracking);margin-inline-end:var(--xdict-tag-gap)}
 [data-xdict-accent=uk]>[data-xdict-tag]::before{content:{{uk-tag}}}
 [data-xdict-accent=us]>[data-xdict-tag]::before{content:{{us-tag}}}
