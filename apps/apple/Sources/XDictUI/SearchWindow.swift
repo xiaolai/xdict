@@ -7,9 +7,10 @@ import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
 /// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the Smaller/Bigger Text pair and the
-/// search field at its trailing edge; the scope bar runs under it; the sidebar of matching headwords appears only after
-/// a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep their contract. The menus
-/// (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
+/// search field at its trailing edge, whose magnifier holds the scope menu (P6, XDict's own); the sidebar of matching
+/// headwords appears only after a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep
+/// their contract. The menus (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word,
+/// Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
@@ -94,7 +95,11 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
+            SearchField(text: state.model.text,
+                        prompt: String(localized: SearchScopeMenu.prompt(known: state.model.known,
+                                                                         scope: state.model.scope)),
+                        scopes: SearchScopeMenu.items(known: state.model.known, scope: state.model.scope),
+                        onScope: { state.model.setScope($0) }, focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
                 // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
@@ -106,21 +111,19 @@ public struct SearchWindow: View {
     }
 }
 
-/// The entry pane: the scope bar over the entry view, the page's notices, and a placeholder while there is nothing to
-/// read.
+/// The entry pane: the page's notices over the entry view, and a placeholder while there is nothing to read. The entry
+/// starts right under the toolbar: the scope is the search field's menu (P6), not a row of its own.
 struct EntryDetail: View {
     let state: SearchWindowState
 
     var body: some View {
         VStack(spacing: 0) {
-            ScopeBar(state: state)
-                .frame(height: ScopeBarLayout.height)
-                .background { FindKeys(state: state) }
             PageNotices(state: state)
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
                 .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }
         }
+        .background { FindKeys(state: state) }
     }
 
     @ViewBuilder private var placeholder: some View {

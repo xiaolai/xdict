@@ -8,8 +8,9 @@ import XDictTestSupport
 @testable import XDictUI
 
 /// **The main window as Apple's Dictionary has it** (parity ledger groups A, B, E; owner's decisions of 2026-10-17):
-/// each a decision a view makes, without a window. What only a window shows — the toolbar's order, the scope bar's
-/// radio group, the sidebar's table, the menu bar's keys — the UI tour's parity checks hold (`Tools/ui-tour/parity.py`).
+/// each a decision a view makes, without a window. What only a window shows — the toolbar's order, the scope menu's
+/// button in the search field, the sidebar's table, the menu bar's keys — the UI tour's parity checks hold
+/// (`Tools/ui-tour/parity.py`).
 @MainActor
 struct ParityWindowTests {
     static func text(_ resource: LocalizedStringResource?) -> String {
@@ -84,21 +85,6 @@ struct ParityWindowTests {
         #expect(widths == widths.sorted(), "the field never narrows as the window widens")
     }
 
-    /// **P6, P8**: every scope when they fit; else as many as fit beside the » button, "All" always.
-    @Test func theScopeBarShowsWhatFitsAndOverflowsTheRest() {
-        let widths: [CGFloat] = [36, 86, 56, 117]
-        #expect(ScopeBarLayout.shown(widths: widths, available: 400) == 4)
-        #expect(ScopeBarLayout.shown(widths: widths, available: 7 + 36 + 86 + 56 + 36) == 3)
-        #expect(ScopeBarLayout.shown(widths: widths, available: 7 + 36 + 86 + 36 + 10) == 2)
-        #expect(ScopeBarLayout.shown(widths: widths, available: 20) == 1, "All always shows")
-        #expect(ScopeBarLayout.height == 36 && ScopeBarLayout.buttonHeight == 22)
-        let sources = [SearchSource(id: UUID(), name: "Alpha", edition: nil, preferencesKey: "a", enabled: true,
-                                    state: .indexing(fraction: nil)),
-                       SearchSource(id: UUID(), name: "Off", edition: nil, preferencesKey: "o", enabled: false,
-                                    state: .indexing(fraction: nil))]
-        #expect(ScopeBarLayout.scopes(sources) == [.all, .one(sources[0].id)])
-    }
-
     /// **P7**: ⌘0 every dictionary, ⌘1–⌘9 the first nine, ⌘} and ⌘{ to step; Actual Size moved to ⌥⌘0.
     @Test func theSearchMenuHasApplesKeys() {
         #expect(ScopeShortcut.all == "0")
@@ -139,24 +125,5 @@ struct ParityWindowTests {
         #expect(table.nextValidKeyView === entry)
         entry.isHidden = true
         #expect(table.nextValidKeyView === field, "a hidden entry cannot take the keyboard")
-    }
-
-    /// **P6, P42**: the scope bar reads as one radio group named "Dictionaries", each scope a `scope.option` named by its
-    /// title, the chosen one's value 1 and every other's 0 — what VoiceOver and the lookup driver read the choice by.
-    @Test func theScopeBarNamesItsGroupAndItsChoice() throws {
-        let bar = ScopeBarView(frame: NSRect(x: 0, y: 0, width: 600, height: ScopeBarLayout.height))
-        let beta = UUID()
-        bar.update(items: [ScopeBarView.Item(scope: .all, title: "All", enabled: true),
-                           ScopeBarView.Item(scope: .one(UUID()), title: "Alpha", enabled: true),
-                           ScopeBarView.Item(scope: .one(beta), title: "Beta", enabled: true)],
-                   selected: .one(beta))
-        func descendants(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(descendants) }
-        let group = try #require(descendants(bar).compactMap { $0 as? ScopeRadioGroup }.first)
-        #expect(group.accessibilityIdentifier() == "scope")
-        #expect(group.accessibilityLabel() == String(localized: "Dictionaries"))
-        let options = descendants(bar).compactMap { $0 as? ScopeButton }
-        #expect(options.map { $0.accessibilityIdentifier() } == ["scope.option", "scope.option", "scope.option"])
-        #expect(options.map { $0.accessibilityLabel() } == ["All", "Alpha", "Beta"])
-        #expect(options.map { ($0.accessibilityValue() as? NSNumber)?.intValue } == [0, 0, 1])
     }
 }
