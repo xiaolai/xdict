@@ -209,6 +209,37 @@ func verifiedMarkers(_ page: AXUIElement, needle: String, at index: Int, length:
     return nil
 }
 
+/// The needle's markers from the text element that holds it, where the page's indices place it nowhere (Chrome, E2E
+/// 2026-10-18: no range near the index read back as the phrase). The element's own range (`AXTextMarkerRangeForUIElement`)
+/// gives its first marker; `AXNextTextMarkerForTextMarker` steps from it to the needle and across it, counted in
+/// characters and, failing that, in UTF-16 units. Taken only when the range reads back as exactly the needle.
+func elementMarkers(_ page: AXUIElement, needle: String) -> CFTypeRef? {
+    guard let holder = find(page, { node in
+        string(node, kAXRoleAttribute) == "AXStaticText" && (string(node, kAXValueAttribute)?.contains(needle) ?? false)
+    }), let value = string(holder, kAXValueAttribute), let at = value.range(of: needle),
+          let own = parameterized(holder, "AXTextMarkerRangeForUIElement", holder),
+          CFGetTypeID(own) == AXTextMarkerRangeGetTypeID()
+    else { return nil }
+    let start = AXTextMarkerRangeCopyStartMarker(unsafeDowncast(own, to: AXTextMarkerRange.self))
+    func step(_ marker: CFTypeRef, _ count: Int) -> CFTypeRef? {
+        var current = marker
+        for _ in 0..<count {
+            guard let next = parameterized(page, "AXNextTextMarkerForTextMarker", current) else { return nil }
+            current = next
+        }
+        return current
+    }
+    let counts = [(value.distance(from: value.startIndex, to: at.lowerBound), needle.count),
+                  (value.utf16.distance(from: value.startIndex, to: at.lowerBound), needle.utf16.count)]
+    for (offset, length) in counts {
+        guard let first = step(start, offset), let last = step(first, length),
+              let range = parameterized(page, "AXTextMarkerRangeForUnorderedTextMarkers", [first, last] as CFArray)
+        else { continue }
+        if parameterized(page, "AXStringForTextMarkerRange", range) as? String == needle { return range }
+    }
+    return nil
+}
+
 switch command {
 case "activate":
     emit(["front": activate(argument(1)), "now": frontInfo()])
@@ -313,7 +344,8 @@ case "select":
             // `AXStringForTextMarkerRange`'s string can land a few places off, on another line (E2E 2026-10-18: the
             // first line selected for the third). The nearest start and length that read back as the needle are taken.
             if found.location != NSNotFound,
-               let markers = verifiedMarkers(page, needle: needle, at: found.location, length: found.length) {
+               let markers = verifiedMarkers(page, needle: needle, at: found.location, length: found.length)
+                   ?? elementMarkers(page, needle: needle) {
                 located = (found, markers)
                 break
             }
