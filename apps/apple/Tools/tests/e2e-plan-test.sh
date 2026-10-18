@@ -45,6 +45,15 @@ same "no name means every default sub-stage" "$(bash $plan substages)" "$(bash $
 same "all adds the extra ones" "$(bash $plan substages --all)" "$(bash $plan expand all)"
 refuses "an unknown stage is refused" bash $plan expand hostil
 refuses "an unknown sub-stage is refused" bash $plan expand hostile.prod
+# A stage whose sub-stages are all extra is refused as such, naming them, not as a stage that does not exist.
+for stage in hover measure; do
+    if out=$(bash $plan expand $stage 2>&1); then bad "a stage with only extra sub-stages expanded: $out"
+    else case $out in *"no stage called"*) bad "$stage: refused as unknown: $out" ;;
+        *"no default sub-stage"*"$stage."*) ok "$stage: refused as a stage with only extra sub-stages, naming them" ;;
+        *) bad "$stage: refused without naming its sub-stages: $out" ;; esac; fi
+done
+out=$(bash $plan expand hostil 2>&1 || true)
+case $out in *"no stage called 'hostil'"*) ok "an unknown stage is still called unknown" ;; *) bad "an unknown stage: $out" ;; esac
 same "E2E_ONLY's checks select their owners" "$(lines service.recovery lookup.paging)" \
     "$(bash $plan only ax.paging,kill.typedError)"
 refuses "an unknown check is refused" bash $plan only paging.everything
