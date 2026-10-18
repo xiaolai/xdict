@@ -200,7 +200,7 @@ struct SiteExclusionTests {
     @Test func theCheckAndTheReadAreOneLaneJob() async {
         let entries = Mutex(0)
         let lane = AccessibilityLane { _ in entries.withLock { $0 += 1 } }
-        let source = SystemPointerWords(tolerance: Measured.hit, lane: lane, access: AccessibilityAccess(probe: { .granted }),
+        let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: AccessibilityAccess(probe: { .granted }),
                                         client: { _ in
                                             let tree = SiteTree()
                                             _ = tree.area(1, "https://news.example/", in: tree.application)

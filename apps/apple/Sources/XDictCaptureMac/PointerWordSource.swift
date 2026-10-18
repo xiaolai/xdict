@@ -1,8 +1,8 @@
 import ApplicationServices
 import XDictCapture
 
-/// Everything a hover asks of the screen through Accessibility — **the seam the hover reader's tests replace**
-/// (ported from XiaolaiDict's `ScreenWordSource`, its recogniser left for plan-capture WI-4).
+/// Everything a hover asks of the screen — through Accessibility, and through the recogniser where Accessibility finds no
+/// word — **the seam the hover reader's tests replace** (ported from XiaolaiDict's `ScreenWordSource`).
 public protocol PointerWordSource: Sendable {
     /// The compositor's on-screen windows, front to back, every level.
     func listedWindows() -> [ListedWindow]
@@ -16,6 +16,9 @@ public protocol PointerWordSource: Sendable {
     ) async -> PointerWordReader.GatedOutcome
     /// What the one lane is doing now — for the "capture stuck" notice (ADR-0014 decision 6), which the consumer words.
     func laneState() -> LaneState
+    /// **The pixels of `window` around `point`, read** (plan-capture WI-4): consent first and the window's owner against
+    /// `policy` before any pixel, never prompting (decision 7). Throws a `RecognitionError`, or the caller's cancellation.
+    func recognise(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> Recognition
 }
 
 /// **The real screen, through the one lane as hover work** (XDict ADR-0014 decision 6): coalesced with the hovers
@@ -26,19 +29,22 @@ public struct SystemPointerWords: PointerWordSource {
     private let access: AccessibilityAccess
     private let tolerance: HitTolerance
     private let limits: CaptureLimits
+    private let recogniser: ScreenTextRecogniser
     private let client: @Sendable (Duration) -> any AccessibilityReading
 
-    /// `tolerance` comes from the composition layer's tokens (decision 11), never a literal here.
+    /// `metrics` come from the composition layer's tokens (decision 11), never a literal here; `screen` is the one owner
+    /// of the Screen Recording grant the recogniser reads.
     public init(
-        tolerance: HitTolerance, limits: CaptureLimits = .shipped, lane: AccessibilityLane = .system,
-        access: AccessibilityAccess = .system,
+        metrics: CaptureMetrics, limits: CaptureLimits = .shipped, lane: AccessibilityLane = .system,
+        access: AccessibilityAccess = .system, screen: ScreenRecordingAccess = .system,
         client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) }
     ) {
         self.client = client
-        self.tolerance = tolerance
+        self.tolerance = metrics.hit
         self.limits = limits
         self.lane = lane
         self.access = access
+        recogniser = ScreenTextRecogniser(metrics: metrics, limits: limits, access: screen)
     }
 
     /// Owner and frame are public; only a window's title needs Screen Recording, and nothing here asks for it.
@@ -79,6 +85,12 @@ public struct SystemPointerWords: PointerWordSource {
     }
 
     public func laneState() -> LaneState { lane.current() }
+
+    /// **Not through the lane**: the recogniser reads pixels, not another process's Accessibility, so a wedged capture
+    /// never holds a read the shortcut waits on — and a wedged lane never holds a capture (decision 8).
+    public func recognise(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> Recognition {
+        try await recogniser.read(at: point, window: window, policy: policy)
+    }
 
     /// The lane's refusal as the read's failure: a stuck lane is an app not answering; a hover that waited too long is
     /// one past its deadline.

@@ -38,7 +38,7 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement; one numbering with presentation claims since WI-3) | `CaptureSinkTests` (9), `RequestNumberingTests` (5, WI-3) | XDict ADR-0014 d.4; 0045 |
 | `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
 | `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
-| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration) | through the ported tests (`MeasuredMetrics.swift`) | XDict ADR-0014 d.5, d.11 |
+| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration; `frameDrift` since WI-4) | through the ported tests (`MeasuredMetrics.swift`); the app's held to the tokens by `ScreenRecordingRowTests.theRecognitionMetricsAreTheTokens` | XDict ADR-0014 d.5, d.11 |
 | `CaptureContextSession.swift` (the one ephemeral session the presented request's context lives in; added in plan-capture WI-3; since WI-4 it holds the book of pending contexts, settles a held one to what its reading answers, and cancels it when its presentation is replaced, ends or closes) | `CaptureContextSessionTests` (3; 7 since WI-4), seen failing against a missing type, then against a session that only dropped the handle | XDict ADR-0014 d.8, d.9 |
 | `CaptureDescriptions.swift` (metadata-only descriptions and empty mirrors of `SentenceContext`, `ContextOutcome`, `CapturedTerm`; added in plan-capture WI-2) | `PointerWordReaderTests.noDescriptionOfAResultCarriesItsSentence` (in `XDictCaptureMacTests`), seen failing against leaking descriptions | XDict ADR-0014 d.9 |
 
@@ -81,7 +81,9 @@ capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagM
   with `SelectionCaptureTests` (the selection disagrees, the app has exited, the pointer moved into the submenu).
 - ~~WI-4: the pending context handle's cancel~~ — done in plan-capture WI-4: `PendingContext.cancel`, with
   `cancellingEndsItOnceAndStopsTheWork` and the session's `replacingEndingOrClosingCancelsThePendingContext`.
-- WI-4: the recogniser using `CaptureLimits.observations` and the tile limits.
+- ~~WI-4: the recogniser using `CaptureLimits.observations` and the tile limits~~ — done in plan-capture WI-4:
+  `ScreenTextRecogniser.recognise`, with `RecognitionLimitTests` (`theTilesAreTheLimitsHandedIn`,
+  `noMoreObservationsThanTheLimitAreTaken`, `aSpentLimitReadsNoFurtherTile`) in `XDictCaptureMacTests`.
 - ~~WI-3: `RequestSequence` and `CaptureRequests` joined into one numbering~~ — done in plan-capture WI-3:
   `CaptureRequests` holds the `RequestSequence` (`begin`, `beginPresenting`, `present`, `close`), with
   `RequestNumberingTests` across shortcut, Service, menu and hover.

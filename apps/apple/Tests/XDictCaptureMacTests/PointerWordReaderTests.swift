@@ -175,7 +175,7 @@ struct PointerWordReaderTests {
     @Test func aHoverTargetGoesThroughTheLaneUnderTheHoverTimeout() async {
         let timeouts = Mutex<[Float]>([])
         let lane = AccessibilityLane { timeout in timeouts.withLock { $0.append(timeout) } }
-        let source = SystemPointerWords(tolerance: Measured.hit, lane: lane, access: AccessibilityAccess(probe: { .declined }))
+        let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: AccessibilityAccess(probe: { .declined }))
         let outcome = await source.target(at: point, windows: { [] })
         guard case .none(.accessibilityOff) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(timeouts.withLock { $0 } == [PointerWordReader.messagingTimeout])
