@@ -131,6 +131,16 @@ x.links.forEach((c: any, i: number) => check(`links[${i}]`, c.link, outcome(() =
 x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, outcome(() => core.resource(dict, c.path, { ...view(), originalStyle: c.originalStyle === true }))));
 check("health", x.health, outcome(() => core.health(dict, undefined)));
 
+// ADR-0013: the display options tiny declares (none), then each case's dictionary imported and opened.
+check('displayOptions.tiny', x.displayOptions.tiny, outcome(() => core.displayOptions(dict)));
+x.displayOptions.cases.forEach((c: any, i: number) => {
+  const casePkg = { mdx: file(c.mdx), mdd: [], sidecars: c.sidecars.map((s: string) => file(s)) };
+  core.import(casePkg);
+  const caseOpened = core.open(casePkg);
+  if (caseOpened.type !== 'ready') throw new Error(`displayOptions.cases[${i}] not open`);
+  check(`displayOptions.cases[${i}]`, c.result, outcome(() => core.displayOptions(caseOpened.dict)));
+});
+
 const b = x.byteSource;
 const bytes = readFileSync(join(fixtures, 'tiny.mdx'));
 const copy: Location = { type: 'source', name: b.name, source: new Bytes(bytes, big(b.identity)) };

@@ -164,6 +164,17 @@ fn the_tiny_dictionary_conforms() {
     }
     check("health", &x["health"], outcome(core.health(dict.clone(), &NoProgress)));
 
+    // ADR-0013: the display options tiny declares (none), then each case's dictionary imported and opened.
+    let d = &x["displayOptions"];
+    check("displayOptions.tiny", &d["tiny"], outcome(core.display_options(dict.clone())));
+    for (i, case) in d["cases"].as_array().unwrap().iter().enumerate() {
+        let sidecars = case["sidecars"].as_array().unwrap().iter().map(|s| at(s.as_str().unwrap())).collect();
+        let package = Package { mdx: at(case["mdx"].as_str().unwrap()), mdd: vec![], sidecars };
+        core.import(package.clone(), &NoProgress).unwrap();
+        let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("not open") };
+        check(&format!("displayOptions.cases[{i}]"), &case["result"], outcome(core.display_options(dict)));
+    }
+
     let b = &x["byteSource"];
     let mdx = std::fs::read(dir.join("tiny.mdx")).unwrap();
     let identity: FileIdentity = serde_json::from_value(b["identity"].clone()).unwrap();
