@@ -170,6 +170,38 @@ struct CaptureSinkTests {
         #expect(!requests.acknowledge(ancient, generation: 1, .shown))
     }
 
+    /// Ends `count` other requests, each begun, delivered and acknowledged.
+    private func endOthers(_ count: Int, in requests: CaptureRequests, consumer: Consumer) throws {
+        for _ in 0..<count {
+            let other = requests.begin(.pointerGesture)
+            _ = requests.deliver(try term(), for: other, to: consumer)
+            let generation = try #require(consumer.delivered.withLock { $0.last?.generation })
+            requests.acknowledge(other, generation: generation, .shown)
+        }
+    }
+
+    /// **A request begun and not yet delivered outlives any number of others' endings**: the ring holds ended
+    /// requests only, so it is still delivered and acknowledged exactly once.
+    @Test func aLongWaitingRequestIsStillDeliveredAndAcknowledgedOnce() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let waiting = requests.begin(.selection)
+        try endOthers(70, in: requests, consumer: consumer)
+        #expect(requests.deliver(try term(), for: waiting, to: consumer) == .accepted)
+        let generation = try #require(consumer.delivered.withLock { $0.last?.generation })
+        #expect(requests.acknowledge(waiting, generation: generation, .shown))
+        #expect(!requests.acknowledge(waiting, generation: generation, .shown))
+        #expect(requests.terminal(of: waiting)?.outcome == .shown)
+    }
+
+    @Test func aLongWaitingRequestIsStillCancelledOnce() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let waiting = requests.begin(.selection)
+        try endOthers(70, in: requests, consumer: consumer)
+        #expect(requests.cancel(waiting))
+        #expect(!requests.cancel(waiting))
+        #expect(requests.terminal(of: waiting)?.outcome == .cancelled)
+    }
+
     @Test func anUnknownRequestIsNeverAcknowledged() {
         let requests = CaptureRequests()
         let stranger = CaptureRequest(number: 99, trigger: .menu)
