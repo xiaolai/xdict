@@ -39,15 +39,16 @@ ROUTES = [
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
     # The main window
     ("main.start", "full", "Launch XDict", "As Apple's Dictionary (P2–P6, P14): the title 'XDict' (XDict's own); Back / "
-     "Forward, Smaller / Bigger Text and the search field ('Search') in the toolbar; the scope bar (All, Alpha, Beta, "
-     "...) under it; no sidebar; 'Type a word to look up in…' and the dictionaries' names, centred", []),
+     "Forward, Smaller / Bigger Text and the search field ('Search', its magnifier the scope menu) in the toolbar; "
+     "the entry right under the toolbar, no scope bar; no sidebar; 'Type a word to look up in…' and the dictionaries' "
+     "names, centred", []),
     ("window.min", "full", "Ask for a 100 × 100 pt main window (P1)", "It takes Apple's minimum, 400 × 300 pt",
      [("size", 100, 100)]),
-    ("main.w640", "full", "Look up 'apple' at 640 pt (P8)", "Search field, the pairs and the title in the toolbar; "
-     "the scope bar whole or with its »", [("size", 640, 500), ("key", "cmd+opt+f"), ("type", "apple"),
+    ("main.w640", "full", "Look up 'apple' at 640 pt (P8)", "Search field (with its scope menu), the pairs and the "
+     "title in the toolbar", [("size", 640, 500), ("key", "cmd+opt+f"), ("type", "apple"),
                                            ("key", "return"), ("wait", 1.5)]),
-    ("main.narrow", "full", "Look up 'apple' at the 400 pt minimum (P8)", "The search field and the scope bar (All "
-     "and what fits, the rest under ») still there; Back / Forward and the text size in the toolbar's overflow",
+    ("main.narrow", "full", "Look up 'apple' at the 400 pt minimum (P8)", "The search field and its scope menu still "
+     "there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
      "'Open Dictionary Settings' button", []),
@@ -77,11 +78,16 @@ ROUTES = [
     ("trail.origin", "full", "... then Return to Original Word (⌥⌘[)", "The typed word's entry",
      look_up("apple") + [("key", "tab"), ("key", "tab"), ("key", "return"), ("wait", 1.2), ("key", "cmd+opt+["),
                          ("wait", 1)]),
-    ("scope.one", "full", "Look up 'apple', then ⌘2 (P7)", "The scope bar's Beta chosen; the list and entry Beta's",
-     look_up("apple") + [("key", "cmd+2"), ("wait", 1.2)]),
-    ("scope.click", "full", "Look up 'apple', click Beta in the scope bar (P6)", "Beta chosen on its grey capsule",
-     look_up("apple") + [("click", "Beta"), ("wait", 1.2)]),
-    ("entry.find", "full", "Look up 'apple', ⌘F, type 'a' (P30)", "The find bar under the scope bar with a match "
+    ("scope.one", "full", "Look up 'apple', then ⌘2 (P7)", "Beta chosen: the field reads 'Search in Beta', its "
+     "magnifier in the accent colour; the list and entry Beta's", look_up("apple") + [("key", "cmd+2"), ("wait", 1.2)]),
+    ("scope.menu", "full", "Look up 'apple', click the search field's magnifier (P6)", "The 'Search In' menu: All "
+     "Dictionaries checked (⌘0), then Alpha (⌘1), Beta (⌘2) and the rest in the reader's order, one that cannot "
+     "answer greyed", look_up("apple") + [("click", "scope.menu"), ("wait", 0.8)]),
+    ("scope.click", "full", "Look up 'apple', choose Beta in the magnifier's menu (P6)", "Beta chosen: the field "
+     "reads 'Search in Beta', its magnifier in the accent colour; the list and entry Beta's",
+     look_up("apple") + [("click", "scope.menu"), ("wait", 0.8), ("key", "down"), ("key", "down"), ("key", "down"),
+                         ("key", "return"), ("wait", 1.2)]),
+    ("entry.find", "full", "Look up 'apple', ⌘F, type 'a' (P30)", "The find bar under the toolbar with a match "
      "count; the page dimmed, the matches white, the current one yellow",
      look_up("apple") + [("key", "cmd+f"), ("wait", 0.6), ("key", "a"), ("wait", 0.8)]),
     ("entry.zoomIn", "full", "Look up 'apple', ⌘= twice (P29)", "The entry larger, nothing clipped",

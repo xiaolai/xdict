@@ -246,7 +246,8 @@ check("keyboard.results", into == "results" and (first_down, moved, back_up) == 
       f"again shows {shown(state)}")
 
 # Where the entry sits, as the screen has it (Alpha's `apple` says `body{margin:0}`, as many MDict stylesheets do): its
-# area starts right under the scope bar (P6, 36 pt under the toolbar), or under the page's notices while they are shown,
+# area starts right under the toolbar (P6: the scope is the search field's menu), or under the page's notices while
+# they are shown,
 # with no band for a hidden find bar; its first text stands at least 8 pt inside the pane's left edge, whatever the
 # dictionary's CSS (the shell's reading inset). Read once the entry has finished, and once more after a moment before
 # a missing web area counts: the All page makes its frames after the page is laid out.

@@ -53,7 +53,6 @@ entryTop = { value = 10, source = "P12" }
 startTop = { value = 36, source = "P14" }
 startSide = { value = 16, why = "The start page's side margin, so a long dictionary name wraps short of the pane's edge." }
 sidebarHeaderLeading = { value = 18, why = "The \"Did you mean?\" header starts where the sidebar rows' text starts." }
-scopeLeading = { value = 7, source = "P6" }
 panelLeading = { value = 24, source = "P41" }
 panelTrailing = { value = 27, source = "P41" }
 panelTop = { value = 16, source = "P41" }
@@ -70,7 +69,6 @@ settingsScreenMargin = { value = 40, why = "The Settings window's margin kept ab
 [row]
 sidebar = { value = 28, source = "P9" }
 settingsTable = { value = 20, source = "P39" }
-scopeButton = { value = 22, source = "P6" }
 panelTitle = { value = 24, source = "P41" }
 panelFooter = { value = 26, source = "P41" }
 startName = { value = 32, source = "P14" }
@@ -78,8 +76,6 @@ optionsBoxMin = { value = 60, why = "The box under the Settings table keeps at l
 clickedWord = { value = 22.4, why = "The line a Control-clicked word with no box is taken to stand on: one reading line, 16 pt base x 1.4 leading (css.base, css.leading)." }
 
 [control]
-scopeBar = { value = 36, source = "P6" }
-scopeMore = { value = 36, source = "P6" }
 toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window." }
 shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06)." }
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
