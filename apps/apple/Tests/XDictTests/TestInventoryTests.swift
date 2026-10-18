@@ -37,7 +37,8 @@ struct TestInventoryTests {
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
-        "XDictTests": 37,
+        // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls.
+        "XDictTests": 39,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -46,6 +47,8 @@ struct TestInventoryTests {
         "XDictTokensTests": 6,
         // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
         "XDictAppleSourceTests": 16,
+        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
+        "XDictCaptureTests": 220,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
