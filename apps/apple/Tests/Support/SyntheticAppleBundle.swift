@@ -145,6 +145,32 @@ public enum SyntheticAppleBundle {
         return bundle
     }
 
+    /// A bundle whose `Body.data` holds one zlib section per list in `sections`, its keys addressing each entry by its
+    /// section, so a test can stop a conversion between sections.
+    @discardableResult
+    public static func make(in root: URL, sections: [[Entry]], _ o: Overrides = Overrides()) throws -> URL {
+        var payload: [UInt8] = []
+        var records: [[UInt8]] = []
+        var offset = 0x20
+        for entries in sections {
+            let xmls = entries.map { entry($0.id, $0.title, $0.body) }
+            var pos = 0
+            for (e, xml) in zip(entries, xmls) {
+                records.append(record(([e.title] + e.keys).enumerated().map {
+                    lexeme(pos, $0.element, first: $0.offset == 0, section: offset)
+                }))
+                pos += 4 + xml.count
+            }
+            let bytes = try section(xmls, sizeDelta: 0, jumpDelta: 0, compress: true)
+            payload += bytes
+            offset += bytes.count
+        }
+        var o = o
+        o.body = window(payload)
+        o.keytext = try keytext(records)
+        return try make(in: root, entries: sections.flatMap { $0 }, o)
+    }
+
     public static func tempDir() throws -> URL {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("xdict-apple-import-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)

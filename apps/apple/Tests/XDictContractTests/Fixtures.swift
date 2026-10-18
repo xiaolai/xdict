@@ -59,9 +59,14 @@ enum Fixtures {
         .lineageOf(edition: edition),
         .health(dict: dict),
         .readingStyle(dict: dict),
+        .convertApple(staging: staging),
+        .cancelConversion,
     ]
 
-    static let operationCases = 15
+    /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
+    static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
+
+    static let operationCases = 17
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -79,6 +84,8 @@ enum Fixtures {
         case .lineageOf: 12
         case .health: 13
         case .readingStyle: 14
+        case .convertApple: 15
+        case .cancelConversion: 16
         }
     }
 
@@ -127,7 +134,13 @@ enum Fixtures {
         .lineage(nil),
         .health(health),
         .readingStyle(readingStyle),
+        .converted(converted),
     ]
+
+    static let converted = Converted(
+        conversion: UUID(uuidString: "0D6E8C4B-1A2F-4E3D-9B7C-5F6A8E2D1C0B") ?? UUID(),
+        sourceRevision: "m1:" + String(repeating: "ab", count: 32), converterRevision: 1,
+        files: ["dictionary.mdx", "dictionary.mdd"], entries: 101_283, redirects: 243_907, resources: 61)
 
     static let health = Health(version: 1, entries: 706_524, findings: [
         HealthFinding(kind: .missingFile, count: 609_710, name: "oed.css",
@@ -145,7 +158,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 13
+    static let answerCases = 14
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -161,6 +174,7 @@ enum Fixtures {
         case .lineage: 10
         case .health: 11
         case .readingStyle: 12
+        case .converted: 13
         }
     }
 
@@ -247,12 +261,59 @@ enum Fixtures {
         }
     }
 
+    static let appleBounds: [AppleImportBound] = [
+        .fileCount(limit: 512), .snapshotBytes(limit: 512 << 20), .sourceFile(name: "Body.data", limit: 512 << 20),
+        .inflatedBlock(claimed: 1 << 30), .decompression(limit: 2 << 30), .output(limit: 2 << 30), .keyLength(units: 70_000),
+    ]
+
+    static let appleBoundCases = 7
+    static func index(_ bound: AppleImportBound) -> Int {
+        switch bound {
+        case .fileCount: 0
+        case .snapshotBytes: 1
+        case .sourceFile: 2
+        case .inflatedBlock: 3
+        case .decompression: 4
+        case .output: 5
+        case .keyLength: 6
+        }
+    }
+
+    static let appleRefusals: [AppleImportRefusal] = appleBounds.map(AppleImportRefusal.boundExceeded) + [
+        .noContainer, .stagingNotFound, .stagingNotAFolder, .symbolicLink(path: "Contents/Resources/x"),
+        .notARegularFile(path: "Contents/fifo"), .notVersion3(found: 4), .notVersion3(found: nil), .noKeyTextIndex,
+        .malformedInfoPlist(detail: "unparsable"), .unsupported(detail: "bodyCompression(1)"),
+        .corrupt(detail: "body(offset: 64)"), .unsafeName(name: "../x"), .unreadable(file: "Body.data", code: 5),
+        .unwritable(file: "dictionary.mdx", code: 28), .noEntries,
+    ]
+
+    static let appleRefusalCases = 15
+    static func index(_ refusal: AppleImportRefusal) -> Int {
+        switch refusal {
+        case .noContainer: 0
+        case .stagingNotFound: 1
+        case .stagingNotAFolder: 2
+        case .symbolicLink: 3
+        case .notARegularFile: 4
+        case .notVersion3: 5
+        case .noKeyTextIndex: 6
+        case .malformedInfoPlist: 7
+        case .unsupported: 8
+        case .boundExceeded: 9
+        case .corrupt: 10
+        case .unsafeName: 11
+        case .unreadable: 12
+        case .unwritable: 13
+        case .noEntries: 14
+        }
+    }
+
     static let wireErrors: [WireError] = coreFailures.map(WireError.core) + refusals.map(WireError.refused) + [
         .interrupted, .invalidated, .timedOut(deadline: .milliseconds(5_250)), .undecodable(detail: "not JSON"),
         .contractMismatch(service: 1, client: 2),
-    ]
+    ] + appleRefusals.map(WireError.appleImport)
 
-    static let wireErrorCases = 7
+    static let wireErrorCases = 8
     static func index(_ error: WireError) -> Int {
         switch error {
         case .core: 0
@@ -262,6 +323,7 @@ enum Fixtures {
         case .undecodable: 4
         case .contractMismatch: 5
         case .refused: 6
+        case .appleImport: 7
         }
     }
 

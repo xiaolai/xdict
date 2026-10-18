@@ -41,7 +41,9 @@ public enum Contract {
     /// an open dictionary (ADR-0010, owner's decision of 2026-10-17), shown in the Library's details pane.
     /// 5 (2026-10-17): `ReadingStyle.skipped` became typed (`SkippedSheet`, a path and a `SkipReason`), so the shell
     /// words why a sheet was not read in the reader's language instead of showing the core's English.
-    public static let version: UInt32 = 5
+    /// 6 (2026-10-18): the operations `convertApple` and `cancelConversion`, the answer `converted` and the error
+    /// `appleImport`: an Apple dictionary snapshot converted in the service (ADR-0011, plan WI-4).
+    public static let version: UInt32 = 6
 }
 
 // MARK: - The request
@@ -195,13 +197,22 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// What the reading style does to an open dictionary (ADR-0010): its base size, the fonts it keeps, the sheets read
     /// and skipped, and what normalizing them changed. Computed in the service, which reads the sheets; a short call.
     case readingStyle(dict: DictId)
+    /// Convert the Apple dictionary snapshot the app staged at `AppleImports/staging/<staging>/` of the app-group
+    /// container, and publish it into a folder of its own (ADR-0011 decisions 4 and 9). No handle travels, no path: the
+    /// service resolves the UUID in the container it shares with the app. One conversion runs at a time across the
+    /// service, others waiting their turn; like an import it has no deadline and reports progress; a client that
+    /// disconnects cancels its conversions. Refused as `WireError.appleImport`; cancelled as `CoreFailure.cancelled`.
+    /// Either way the staging folder and any output are removed.
+    case convertApple(staging: UUID)
+    /// Stop this connection's conversion, running or waiting, at its next step; it then answers `cancelled`.
+    case cancelConversion
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: nil
         }
     }
 
@@ -210,7 +221,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: nil
         }
     }
 
@@ -219,7 +230,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
-             .splitLineage, .lineageOf, .health, .readingStyle: false
+             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: false
         }
     }
 
@@ -230,7 +241,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry, .resource: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
-             .readingStyle: nil
+             .readingStyle, .convertApple, .cancelConversion: nil
         }
     }
 
@@ -243,7 +254,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .readingStyle(let dict):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
-        case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf: []
+        case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion: []
         }
     }
 
@@ -251,7 +262,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .versions: .versions
         case .importPackage: .imported
-        case .cancel: .cancellation
+        case .cancel, .cancelConversion: .cancellation
         case .openPackage: .opened
         case .close: .closed
         case .lookup: .page
@@ -262,16 +273,17 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .joinLineage, .splitLineage, .lineageOf: .lineage
         case .health: .health
         case .readingStyle: .readingStyle
+        case .convertApple: .converted
         }
     }
 
-    /// An import or a health check: the long calls, bounded by silence between their progress events rather than by a
+    /// An import, a health check or a conversion: the long calls, bounded by silence between their progress events rather than by a
     /// deadline (`Deadlines.importSilence`), and stopped by `cancel`.
     public var reportsProgress: Bool {
         switch self {
-        case .importPackage, .health: true
+        case .importPackage, .health, .convertApple: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf, .readingStyle: false
+             .splitLineage, .lineageOf, .readingStyle, .cancelConversion: false
         }
     }
 }
@@ -389,13 +401,15 @@ public enum Answer: Codable, Hashable, Sendable {
     case health(Health)
     /// What the reading style does to the dictionary.
     case readingStyle(ReadingStyle)
+    /// What a conversion published (contract 6).
+    case converted(Converted)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle: false
+             .lineage, .health, .readingStyle, .converted: false
         }
     }
 
@@ -423,22 +437,25 @@ public enum Answer: Codable, Hashable, Sendable {
         case .lineage: .lineage
         case .health: .health
         case .readingStyle: .readingStyle
+        case .converted: .converted
         }
     }
 }
 
-/// What `cancel` found.
+/// What `cancel` or `cancelConversion` found.
 public enum Cancellation: String, Codable, Hashable, Sendable {
-    /// The import or health check was running; it stops at its next progress report and answers `cancelled`.
+    /// The import, health check or conversion was running or waiting; it stops at its next progress report and answers
+    /// `cancelled`.
     case stopping
-    /// No import or health check of that id is running: it never ran here, or it has already answered.
+    /// No import or health check of that id is running, or no conversion of this connection: it never ran here, or it
+    /// has already answered.
     case notRunning
 }
 
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
-    case readingStyle
+    case readingStyle, converted
 }
 
 // MARK: - Events
