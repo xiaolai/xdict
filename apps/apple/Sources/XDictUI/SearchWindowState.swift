@@ -28,8 +28,8 @@ public final class SearchWindowState {
     /// The dictionary whose entry the pane shows: its links are looked up there.
     public private(set) var presented: UUID?
 
-    /// The library window, at one dictionary or none.
-    @ObservationIgnored public var openLibrary: (@MainActor (UUID?) -> Void)?
+    /// Settings ▸ Dictionaries, at one dictionary or none (ADR-0012 d.4: `SettingsRoute.show`).
+    @ObservationIgnored public var showDictionaries: (@MainActor (UUID?) -> Void)?
     /// Each entry handed to the entry view, and whether it was: for the instruments.
     @ObservationIgnored public var onPresented: (@MainActor (SearchModel.Shown, Bool) -> Void)?
 
@@ -195,8 +195,8 @@ public final class SearchWindowState {
         switch next {
         case .wait, .checkSpelling:
             break
-        case .openLibrary(let id):
-            openLibrary?(id)
+        case .showInSettings(let id):
+            showDictionaries?(id)
         case .retryImport(let id):
             library.retry(id)
         case .retryLookup(let id):

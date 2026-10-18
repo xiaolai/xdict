@@ -45,7 +45,7 @@ struct SpeechSentencesTests {
         let outcomes: [SpeechOutcome] = [Self.spoken, .noLanguage, .noVoice(language: "ko"), .nothingToSay]
         let lines = outcomes.map { Self.text(.speech($0)).joined() }
         #expect(Set(lines).count == outcomes.count, "\(lines)")
-        #expect(lines[1].contains("Library"), "the reader is not told where to set the language: \(lines[1])")
+        #expect(lines[1].contains("Settings"), "the reader is not told where to set the language: \(lines[1])")
     }
 
     /// A path the dictionary wrote can be hundreds of characters (OED's, measured); the notice shows its file name, and

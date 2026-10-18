@@ -22,15 +22,15 @@ public struct LookupPanelView: View {
     let notice: PanelNotice
     let shortcut: String?
     let expand: () -> Void
-    let openLibrary: () -> Void
+    let showDictionaries: () -> Void
 
     public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?, expand: @escaping () -> Void,
-                openLibrary: @escaping () -> Void = {}) {
+                showDictionaries: @escaping () -> Void = {}) {
         self.state = state
         self.notice = notice
         self.shortcut = shortcut
         self.expand = expand
-        self.openLibrary = openLibrary
+        self.showDictionaries = showDictionaries
     }
 
     public var body: some View {
@@ -95,14 +95,14 @@ public struct LookupPanelView: View {
     }
 
     /// The popover's footer rows (P41): "Open in Dictionary" with a book, "Configure Dictionaries" with a gear; here
-    /// "Open in XDict" and the Library.
+    /// "Open in XDict" and Settings ▸ Dictionaries.
     private var footer: some View {
         VStack(spacing: 0) {
             FooterRow(title: Text("Open in XDict"), symbol: "character.book.closed", action: expand)
                 .disabled(state.model.lookup == nil)
                 .help(expandHelp)
                 .accessibilityIdentifier("panel.expand")
-            FooterRow(title: Text("Configure Dictionaries"), symbol: "gearshape", action: openLibrary)
+            FooterRow(title: Text("Configure Dictionaries"), symbol: "gearshape", action: showDictionaries)
                 .accessibilityIdentifier("panel.configure")
         }
         .padding(.bottom, PanelLook.bottomInset)
@@ -141,7 +141,7 @@ public struct LookupPanelView: View {
                 } description: {
                     Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
                 } actions: {
-                    Button("Open Library") { openLibrary() }
+                    Button("Open Dictionary Settings") { showDictionaries() }
                 }
                 .coversPane()
             case .searching:
@@ -149,7 +149,7 @@ public struct LookupPanelView: View {
             case .noResults(let query):
                 ContentUnavailableView.search(text: query).coversPane()
             case .noResultsIncomplete(let query, let unsearched):
-                NoResultsIncomplete(query: query, unsearched: unsearched, openLibrary: openLibrary).coversPane()
+                NoResultsIncomplete(query: query, unsearched: unsearched, showDictionaries: showDictionaries).coversPane()
             case .start, .none:
                 EmptyView()
             }

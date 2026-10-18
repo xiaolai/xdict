@@ -240,7 +240,8 @@ class Session:
             raise Failed(f"unknown step {step}")
 
     def drop(self, file):
-        """A file dragged in from another window (Tools/library/dragsource) onto the app's Library window."""
+        """A file dragged in from another window (Tools/library/dragsource) onto the window in front (Settings ▸
+        Dictionaries, ADR-0012)."""
         target = [w for w in self.ax("windows")["windows"] if w["layer"] == 0]
         if not target:
             raise Failed("no window to drop onto")

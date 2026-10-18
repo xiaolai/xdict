@@ -73,7 +73,7 @@ struct StartPage: View {
 struct NoResultsIncomplete: View {
     let query: String
     let unsearched: Int
-    let openLibrary: () -> Void
+    let showDictionaries: () -> Void
 
     var body: some View {
         ContentUnavailableView {
@@ -81,7 +81,7 @@ struct NoResultsIncomplete: View {
         } description: {
             Text(SearchSentences.noResultsIncomplete(query: query, unsearched: unsearched))
         } actions: {
-            Button("Show in Library", action: openLibrary)
+            Button("Show in Settings", action: showDictionaries)
         }
         .accessibilityIdentifier("no-results-incomplete")
     }

@@ -45,7 +45,7 @@ public enum SearchSentences {
     public static func action(_ next: NextAction) -> LocalizedStringResource {
         switch next {
         case .wait: LocalizedStringResource("It is looked up as soon as it is ready.")
-        case .openLibrary: LocalizedStringResource("Show in Library")
+        case .showInSettings: LocalizedStringResource("Show in Settings")
         case .retryImport: LocalizedStringResource("Import Again")
         case .retryLookup: LocalizedStringResource("Try Again")
         case .reopen: LocalizedStringResource("Open Again")
@@ -58,7 +58,7 @@ public enum SearchSentences {
     public static func isButton(_ next: NextAction) -> Bool {
         switch next {
         case .wait, .checkSpelling: false
-        case .openLibrary, .retryImport, .retryLookup, .reopen, .searchEverywhere: true
+        case .showInSettings, .retryImport, .retryLookup, .reopen, .searchEverywhere: true
         }
     }
 

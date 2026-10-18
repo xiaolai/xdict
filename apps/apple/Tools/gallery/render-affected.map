@@ -97,8 +97,8 @@ apps/apple/Sources/XDictEntryView/Style/find*.js            route:entry.find rou
 apps/apple/Sources/XDictEntryView/Style/readability-core.js route:entry.find route:page.find
 apps/apple/Sources/XDictEntryView/Style/speaker-clicks.js   route:speech.pronounce route:sound.recording
 apps/apple/Sources/XDictEntryView/Style/placeholder-clicks.js route:trail.followed
-apps/apple/Sources/XDictEntryView/Style/minimal.css         route:library.originalStyle
-apps/apple/Sources/XDictEntryView/Style/original-phon.css   route:library.originalStyle
+apps/apple/Sources/XDictEntryView/Style/minimal.css         route:settings.dictionaries.originalStyle
+apps/apple/Sources/XDictEntryView/Style/original-phon.css   route:settings.dictionaries.originalStyle
 apps/apple/Sources/XDictEntryView/Style/*                   rep views:core
 apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift   rep views:core
 apps/apple/Sources/XDictEntryView/EntryMarks.swift          rep views:core
@@ -122,12 +122,14 @@ apps/apple/Sources/XDictUI/Search*.swift                    routes:search
 apps/apple/Sources/XDictUI/ScopeBar.swift                   route:scope.*
 apps/apple/Sources/XDictUI/Toolbar*.swift                   routes:search
 apps/apple/Sources/XDictUI/MenuBarMenu.swift                route:menubar.extra
-apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes:panel route:library.window route:settings.general
-apps/apple/Sources/XDictUI/Library*.swift                   route:library.*
+apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes:panel route:settings.dictionaries route:settings.general
+apps/apple/Sources/XDictUI/Library*.swift                   route:settings.dictionaries*
+apps/apple/Sources/XDictUI/DictionaryTable.swift            route:settings.dictionaries*
+apps/apple/Sources/XDictUI/ProblemStatus.swift              route:settings.dictionaries* routes:search routes:panel
 apps/apple/Sources/XDictUI/Settings*.swift                  route:settings.*
 apps/apple/Sources/XDictUI/*Settings.swift                  route:settings.*
 apps/apple/Sources/XDictUI/Setup*.swift                     route:setup.* route:reader.firstLaunch
-apps/apple/Sources/XDict/XDictApp.swift                     routes:menus
+apps/apple/Sources/XDict/XDictApp.swift                     routes:menus route:settings.*
 apps/apple/Sources/XDict/LookupWindow.swift                 routes:search
 apps/apple/Sources/XDict/EntryWindows.swift                 routes:search routes:page
 

@@ -35,13 +35,13 @@ struct SearchSentencesTests {
 
     @Test func everyNextActionIsWordedAndItsOwn() {
         let id = UUID()
-        let actions: [NextAction] = [.wait, .openLibrary(id), .retryImport(id), .retryLookup(id), .reopen,
+        let actions: [NextAction] = [.wait, .showInSettings(id), .retryImport(id), .retryLookup(id), .reopen,
                                      .searchEverywhere("abbe"), .checkSpelling]
         let words = actions.map { Self.text(SearchSentences.action($0)) }
         #expect(words.allSatisfy { !$0.isEmpty }, "\(words)")
         #expect(Set(words).count == actions.count, "\(words)")
         #expect(words[5].contains("abbe"))
-        #expect(SearchSentences.isButton(.openLibrary(id)) && SearchSentences.isButton(.retryLookup(id))
+        #expect(SearchSentences.isButton(.showInSettings(id)) && SearchSentences.isButton(.retryLookup(id))
                 && SearchSentences.isButton(.searchEverywhere("a")))
         #expect(!SearchSentences.isButton(.wait) && !SearchSentences.isButton(.checkSpelling))
     }

@@ -116,11 +116,10 @@ struct EntryDetail: View {
                 Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
                 Button("Add Dictionaries…") {
-                    LibraryRequests.shared.requestImport()
-                    state.openLibrary?(nil)
+                    SettingsRoute.shared.requestImport()
                 }
                 .buttonStyle(.borderedProminent)
-                Button("Open Library") { state.openLibrary?(nil) }
+                Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
             }
             .coversPane()
         case .start:
