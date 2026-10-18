@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 import XDictAppleSource
+import XDictContract
 import XDictEntryView
 import XDictLibrary
 import XDictTokens
@@ -86,6 +87,37 @@ public struct SettingsDictionaries: View {
     public static func dropPoint(in root: NSView) -> CGPoint? {
         guard let frame = DictionaryTable.screenFrame(in: root) else { return nil }
         return DictionaryTable.dropPoint(tableOnScreen: frame, mainScreenHeight: NSScreen.screens.first?.frame.height ?? 0)
+    }
+
+    // MARK: - ADR-0013 d.6: display options
+
+    /// **The options the selected dictionary offers**: those its current edition declares, as the service answered, in
+    /// the catalogue's shape and with a name the shell can say. None while the answer is unknown, failed or of another
+    /// edition, so no row shows unless the edition declares an option.
+    nonisolated public static func displayOptionRows(_ state: DisplayOptionsState?, edition: Edition?) -> [DisplayOption] {
+        guard case .read(let declared, let of) = state, let edition, of == edition else { return [] }
+        return declared.options.filter { option in
+            EntryDisplayOption(option) != nil && optionTitle(option.id) != nil
+                && option.values.allSatisfy { optionValue(option.id, $0) != nil }
+        }
+    }
+
+    /// An option's name, by its catalogue id; nil for one this version cannot name.
+    nonisolated public static func optionTitle(_ id: String) -> LocalizedStringResource? {
+        switch id {
+        case "pronunciation": LocalizedStringResource("Pronunciation")
+        default: nil
+        }
+    }
+
+    /// A value's name, by its option's catalogue id; nil for one this version cannot name.
+    nonisolated public static func optionValue(_ id: String, _ value: String) -> LocalizedStringResource? {
+        switch (id, value) {
+        case ("pronunciation", "respell"): LocalizedStringResource("Respelling")
+        case ("pronunciation", "ipa"): LocalizedStringResource("IPA")
+        case ("pronunciation", "both"): LocalizedStringResource("Both")
+        default: nil
+        }
     }
 
     /// The dictionaries under way, in the library's order: what the strip shows (no "Ready": the call of 2026-10-18).
@@ -332,5 +364,12 @@ public struct SettingsDictionaries: View {
         -> (offsets: IndexSet, destination: Int)? {
         let offsets = IndexSet(dragged.compactMap(UUID.init(uuidString:)).compactMap { ids.firstIndex(of: $0) })
         return offsets.isEmpty ? nil : (offsets, index)
+    }
+}
+
+extension EntryDisplayOption {
+    /// The contract's option in the entry view's terms: nil unless it has the catalogue's shape.
+    init?(_ option: DisplayOption) {
+        self.init(id: option.id, attribute: option.attribute, values: option.values, defaultValue: option.defaultValue)
     }
 }
