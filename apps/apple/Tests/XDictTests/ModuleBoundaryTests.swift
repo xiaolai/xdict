@@ -22,6 +22,17 @@ struct ModuleBoundaryTests {
     /// entry view are held to the rule above like every other target.
     static let developmentHostsReachingTheCore: Set<String> = ["XDictEntryLab"]
 
+    /// **The development instruments that never ship, and the flag each answers to** (plan-capture WI-4; ADR-0014
+    /// decision 8, after XiaolaiDict ADR-0016): `XDictCaptureLab`'s `--read-point` reads the word under any screen point
+    /// with whatever grants its process holds, so it is a deputy, and the shipped executables hold none of it — not behind
+    /// a flag, not compiled in and switched off, but in a target neither reaches. A leaf like the entry lab
+    /// (`leafProblems`); its flag in no source of a target that ships (`noShippedTargetHoldsAnInstrumentFlag`); and
+    /// `Tools/build-bundle.sh` refuses an XDict.app that carries the lab or an app binary that holds the flag.
+    static let developmentInstruments: [String: String] = ["XDictCaptureLab": "--read-point"]
+
+    /// What a reader gets: these executables and every target they reach.
+    static let shippedExecutables: Set<String> = ["XDict", "XDictService"]
+
     /// **Who may reach the Apple dictionary converter** (ADR-0011 decision 3): the converter, the dictionary service that
     /// runs it, and their tests. An Apple bundle is untrusted binary input, parsed in the service and never in the app
     /// (ADR-0001), so nothing else that ships may link it, the development lab included.
@@ -77,6 +88,9 @@ struct ModuleBoundaryTests {
         "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
+        // The capture lab (plan-capture WI-4): hover's reader at one point, its report as JSON. Nothing that draws.
+        "XDictCaptureLab": ["CoreGraphics", "Foundation"],
+        "XDictCaptureLabTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // Its signature and an Apple snapshot's hash come from `XDictAppleSource` (`SigningTeam`, `Manifest`).
         "XDictService": ["Foundation", "Synchronization", "os"],
         // `Security` reads the process's own signing team, which names the app-group container (`SigningTeam`);
@@ -152,6 +166,14 @@ struct ModuleBoundaryTests {
         let app = Manifest.Target(name: "XDict", type: "executable", dependencies: ["XDictEntryLab"], path: "",
                                   swiftSettings: [])
         #expect(Self.leafProblems(["XDictEntryLab": lab, "XDict": app]) == ["XDict depends on XDictEntryLab"])
+        let captureLab = Manifest.Target(name: "XDictCaptureLab", type: "executable", dependencies: ["XDictCaptureMac"],
+                                         path: "", swiftSettings: [])
+        let anywhere = Manifest.Target(name: "XDictAnywhere", type: "regular", dependencies: ["XDictCaptureLab"], path: "",
+                                       swiftSettings: [])
+        let labTests = Manifest.Target(name: "XDictCaptureLabTests", type: "test", dependencies: ["XDictCaptureLab"],
+                                       path: "", swiftSettings: [])
+        #expect(Self.leafProblems(["XDictCaptureLab": captureLab, "XDictAnywhere": anywhere, "XDictCaptureLabTests": labTests])
+                == ["XDictAnywhere depends on XDictCaptureLab"])
         #expect(Self.graphProblems(reaching: ["XDictService", "XDictEntryLab", "XDictEntryView"])
                 == ["XDictEntryView reaches the core"])
         let scratch = try TemporaryDirectory(named: "xdict-planted-entry-core-import")
@@ -215,6 +237,67 @@ struct ModuleBoundaryTests {
         files.sorted(by: { $0.key < $1.key }).flatMap { target, files in
             mayReachTheAppleImport.contains(target) ? [] : files.flatMap { file, modules in
                 modules.filter { $0 == appleImportModule }.map { "\(target)/\(file) imports \($0)" }
+            }
+        }
+    }
+
+    // MARK: - The development instruments
+
+    /// **An instrument is an executable nothing depends on, and nothing that ships holds its flag.** The scan reads every
+    /// file of every target the shipped executables reach, comments included: a flag named anywhere there is one a
+    /// later edit can wire. The premises: the scan reached the capture targets, and the lab itself holds its flag.
+    @Test func noShippedTargetHoldsAnInstrumentFlag() throws {
+        let targets = try Manifest.dump().targets
+        #expect(Self.leafProblems(targets) == [])
+        let shipped = Self.shipped(targets)
+        #expect(shipped.isSuperset(of: ["XDict", "XDictService", "XDictCaptureMac", "XDictAnywhere"]), "\(shipped.sorted())")
+        var files: [String: [(file: String, text: String)]] = [:]
+        for name in shipped.union(Self.developmentInstruments.keys) {
+            let target = try #require(targets[name], "\(name) is not declared")
+            guard target.type != "binary" else { continue }
+            files[name] = try SourceScan.files(under: Manifest.package.appending(path: target.path))
+                .map { ($0.file.lastPathComponent, $0.text) }
+        }
+        #expect(Self.instrumentFlagProblems(files, shipped: shipped) == [])
+        for (lab, flag) in Self.developmentInstruments {
+            #expect(targets[lab]?.type == "executable", "\(lab) is not an executable target")
+            #expect(!shipped.contains(lab), "\(lab) ships")
+            #expect(files[lab]?.contains { $0.text.contains(flag) } == true, "\(lab) holds no \(flag): the scan sees nothing")
+        }
+    }
+
+    /// **The controls**: the flag planted in a shipped target, in code or in a comment, is named; in the lab it is not;
+    /// and a target reached only through another ships.
+    @Test func anInstrumentFlagInAShippedTargetIsNamed() {
+        let code = "let flag = \"--read-point\"\n", comment = "// answers --read-point\n", clean = "let x = 1\n"
+        #expect(Self.instrumentFlagProblems(["XDictCaptureMac": [("Planted.swift", code), ("Clean.swift", clean)],
+                                             "XDict": [("Note.swift", comment)],
+                                             "XDictCaptureLab": [("Lab.swift", code)]],
+                                            shipped: ["XDict", "XDictCaptureMac"])
+                == ["XDict/Note.swift holds --read-point", "XDictCaptureMac/Planted.swift holds --read-point"])
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        #expect(Self.shipped(["XDict": target("XDict", ["XDictUI"]), "XDictUI": target("XDictUI", ["XDictTokens"]),
+                              "XDictTokens": target("XDictTokens", []), "XDictCaptureLab": target("XDictCaptureLab", ["XDictUI"])])
+                == ["XDict", "XDictUI", "XDictTokens"])
+    }
+
+    /// The shipped executables and every target they reach, by declared dependencies.
+    static func shipped(_ targets: [String: Manifest.Target]) -> Set<String> {
+        var reached: Set<String> = []
+        var next = Array(shippedExecutables.filter { targets[$0] != nil })
+        while let name = next.popLast() {
+            guard reached.insert(name).inserted, let target = targets[name] else { continue }
+            next.append(contentsOf: target.dependencies.filter { targets[$0] != nil })
+        }
+        return reached
+    }
+
+    static func instrumentFlagProblems(_ files: [String: [(file: String, text: String)]], shipped: Set<String>) -> [String] {
+        files.filter { shipped.contains($0.key) }.sorted(by: { $0.key < $1.key }).flatMap { target, files in
+            files.flatMap { file in
+                developmentInstruments.values.sorted().filter { file.text.contains($0) }.map { "\(target)/\(file.file) holds \($0)" }
             }
         }
     }
@@ -492,9 +575,11 @@ struct ModuleBoundaryTests {
     }
 
     /// Every target that depends on a development host, directly or through another.
+    /// Who depends on a development host or instrument. Its own tests may: a test target never ships.
     static func leafProblems(_ targets: [String: Manifest.Target]) -> [String] {
-        developmentHostsReachingTheCore.sorted().flatMap { host in
-            Manifest.reaching(host, in: targets).sorted().map { "\($0) depends on \(host)" }
+        developmentHostsReachingTheCore.union(developmentInstruments.keys).sorted().flatMap { host in
+            Manifest.reaching(host, in: targets).filter { targets[$0]?.type != "test" }.sorted()
+                .map { "\($0) depends on \(host)" }
         }
     }
 

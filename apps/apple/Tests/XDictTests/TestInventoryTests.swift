@@ -51,8 +51,9 @@ struct TestInventoryTests {
         // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
         // macOS capture target's controls.
         // 40 → 42 (WI-3): the captured context's data-flow rule and its control; 42 → 44: every driven instrument turns
-        // hover off, and its control; 44 → 46: the app starts hover only with its launch, and its control.
-        "XDictTests": 46,
+        // hover off, and its control; 44 → 46: the app starts hover only with its launch, and its control. 46 → 48
+        // (plan-capture WI-4): no shipped target holds a development instrument's flag, and its control.
+        "XDictTests": 48,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -87,6 +88,10 @@ struct TestInventoryTests {
         // recognition, an overdue context, a notice told and its request ended, a recognised word presented pending, and
         // one not presented cancelling its context).
         "XDictCaptureMacTests": 226,
+        // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
+        // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
+        // read through hover's reader at one point, and the process's lines and exits.
+        "XDictCaptureLabTests": 13,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
