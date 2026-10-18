@@ -101,7 +101,14 @@ let package = Package(
 
         // The dictionary service: sandboxed, with no file and no network entitlement, and the only process that runs
         // the core (ADR-0001 decision 5), answering the frozen contract.
-        .executableTarget(name: "XDictService", dependencies: ["XDictBase", "XDictContract", "XDictCore"]),
+        .executableTarget(name: "XDictService", dependencies: ["XDictAppleImport", "XDictBase", "XDictContract", "XDictCore"]),
+
+        // **Apple's dictionaries, converted to MDX once** (ADR-0011): a snapshot of an installed `*.dictionary` bundle in
+        // the service's own container, written out as an `.mdx` + `.mdd` pair the core then reads like any other. Swift,
+        // not the core, because only macOS has these bundles (ADR-0011 decision 3); linked by the dictionary service
+        // alone, since a bundle is untrusted binary input (ADR-0001), and `ModuleBoundaryTests` holds that. Foundation
+        // and the system's libz, nothing else.
+        .target(name: "XDictAppleImport"),
 
         // What the test targets share, and nothing ships: a source walk that cannot skip silently, a directory that
         // removes itself, and the manifest as SwiftPM reads it.
@@ -133,8 +140,12 @@ let package = Package(
         // The one test target besides the service that reaches the core: the service's own listener, over a real NSXPC
         // connection in this process, asked through the real client and the instruments' scenarios; and the core's
         // types mapped into the contract's.
-        .testTarget(name: "XDictServiceTests", dependencies: ["XDictClient", "XDictContract", "XDictCore",
-                                                              "XDictInstruments", "XDictService"]),
+        .testTarget(name: "XDictServiceTests", dependencies: ["XDictAppleImport", "XDictClient", "XDictContract", "XDictCore",
+                                                              "XDictInstruments", "XDictService", "XDictTestSupport"]),
+        // The converter over synthetic bundles the tests write themselves (no Apple content, ADR-0011): the bundle's
+        // structure, the entry transform, the writer, its bounds, refusals and determinism, read back by a reader that
+        // lives here and never ships (ADR-0011 decision 3).
+        .testTarget(name: "XDictAppleImportTests", dependencies: ["XDictAppleImport", "XDictTestSupport"]),
         // The harness's own rules, read off the tree: module boundaries, test floors, the string catalog, the floor.
         .testTarget(name: "XDictTests", dependencies: ["XDictTestSupport"]),
     ],
