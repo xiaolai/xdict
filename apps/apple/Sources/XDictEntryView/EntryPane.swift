@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import XDictTokens
 
 /// What a pane asks of the view that owns it.
 @MainActor
@@ -235,7 +236,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     static func page(_ scheme: EntryColourScheme, frame: EntryReadingFrame) -> Page {
         if frame.contains(.panel) { return Page(draws: false, under: .clear) }
-        return Page(draws: true, under: scheme == .dark ? NSColor(white: 30 / 255, alpha: 1) : .white)
+        return Page(draws: true, under: Tokens.Colour.entryPage.fixed(dark: scheme == .dark))
     }
 
     private func applyScheme() {

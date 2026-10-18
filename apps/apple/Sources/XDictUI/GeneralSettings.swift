@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictAnywhere
+import XDictTokens
 
 /// **General, in Settings** (⌘,; plan-macos-v1 WI-9, ADR-0012 d.1): launch at login, with what the system says of it, the
 /// language of XDict's own words, the lookup shortcut (`ShortcutSettings`, once the Lookup pane) and Show Setup…. The
@@ -32,7 +33,7 @@ public struct GeneralSettings: View {
             .accessibilityIdentifier("launch-at-login")
             if let failure = login.failure {
                 // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                     Text("The system did not change whether XDict opens when you log in.")
                     Text(verbatim: failure).font(.caption)
                 }

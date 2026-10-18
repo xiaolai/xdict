@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **XDict's marks** (icon sweep 2026-10-15 §8; ADR-0010): the core marks what a dictionary drew, the frame draws XDict's
 /// own in its place. Glyphs are CSS masks of inline `data:` SVG filled with `currentColor` (no route, no script); labels
@@ -6,18 +7,18 @@ import Foundation
 extension EntryReadingFrame {
     /// A chevron to the trailing side, turned down when its fold is open (§8.1 `disclosure`).
     static let chevronSVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
-        + "<path d='M6 3.5l4.5 4.5L6 12.5' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round' "
+        + "<path d='M6 3.5l4.5 4.5L6 12.5' fill='none' stroke='black' stroke-width='\(Tokens.EntryText.glyphStroke)' stroke-linecap='round' "
         + "stroke-linejoin='round'/></svg>"
 
     /// An arrow to the trailing side (§8.1 `lookup`).
     static let arrowSVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
-        + "<path d='M2.5 8h10.5M9.5 4.5L13 8l-3.5 3.5' fill='none' stroke='black' stroke-width='1.5' "
+        + "<path d='M2.5 8h10.5M9.5 4.5L13 8l-3.5 3.5' fill='none' stroke='black' stroke-width='\(Tokens.EntryText.glyphStroke)' "
         + "stroke-linecap='round' stroke-linejoin='round'/></svg>"
 
     /// A glyph box: 1em of the text it sits in, painted by `svg` as a mask in the text's colour.
     private static func glyph(_ svg: String) -> String {
         "content:\"\" !important;display:inline-block !important;width:var(--xdict-icon) !important;"
-            + "height:var(--xdict-icon) !important;vertical-align:-0.15em !important;position:static !important;"
+            + "height:var(--xdict-icon) !important;vertical-align:var(--xdict-glyph-baseline) !important;position:static !important;"
             + "float:none !important;font-size:inherit !important;border:0 !important;box-shadow:none !important;"
             + "background-color:currentColor !important;-webkit-mask:\(mask(svg)) center/contain no-repeat !important;"
             + "mask:\(mask(svg)) center/contain no-repeat !important"

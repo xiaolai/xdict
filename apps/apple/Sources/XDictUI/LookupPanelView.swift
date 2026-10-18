@@ -4,6 +4,7 @@ import XDictAnywhere
 import XDictContract
 import XDictLibrary
 import XDictSearch
+import XDictTokens
 
 /// What the panel shows besides an entry: the selection being read, or why nothing could be looked up.
 public enum PanelNotice: Equatable, Sendable {
@@ -69,14 +70,14 @@ public struct LookupPanelView: View {
     /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17). No switcher: every
     /// dictionary is stacked below under its own name, as Apple's popover stacks them (owner, 2026-10-18).
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Tokens.Inset.panelRuleGap) {
             PronounceButton(state: state)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
                 .frame(width: PanelLook.titleRow, height: PanelLook.titleRow)
                 .contentShape(Rectangle())
             Text(verbatim: state.shownWord ?? state.model.lookup?.query ?? "")
-                .font(.system(size: PanelLook.titleSize))
+                .font(Tokens.TextRole.panelTitle.font)
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -84,7 +85,7 @@ public struct LookupPanelView: View {
                 .accessibilityIdentifier("panel.query")
             Rectangle()
                 .fill(.separator)
-                .frame(minWidth: 8, maxWidth: .infinity, maxHeight: 1)
+                .frame(minWidth: Tokens.Inset.panelRuleGap, maxWidth: .infinity, maxHeight: Tokens.Line.hairline)
                 .accessibilityHidden(true)
         }
         .frame(height: PanelLook.titleRow)
@@ -172,8 +173,8 @@ private struct FooterRow: View {
                 .padding(.top, PanelLook.footerGap)
             Button(action: action) {
                 HStack {
-                    title.font(.system(size: PanelLook.footerFontSize, weight: .semibold))
-                    Spacer(minLength: 8)
+                    title.font(Tokens.TextRole.panelFooter.font)
+                    Spacer(minLength: Tokens.Space.sm)
                     Image(systemName: symbol).imageScale(.large).accessibilityHidden(true)
                 }
                 .foregroundStyle(.secondary)

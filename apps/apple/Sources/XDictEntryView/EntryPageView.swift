@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import os
+import XDictTokens
 
 /// **Apple's divider between two dictionaries** (parity P15, measured on Dictionary.app): a disclosure triangle at the
 /// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
@@ -10,17 +11,16 @@ import os
 /// popover's title is, then a hairline to the trailing inset; no triangle, no collapse, a fixed size.
 @MainActor
 final class EntryPageDivider: NSView {
-    static let height: CGFloat = 32
+    static let height: CGFloat = Tokens.PageDivider.height
 
     /// The popover's compact divider, in the popover's title-row metrics (`PanelLook`): the name 24 pt in, the system
     /// font at 20 pt in the label colour, a hairline from 8 pt after it to 27 pt from the trailing edge, in a 40 pt
     /// band (an 8 pt gap each side of the 24 pt row).
     enum Popover {
-        static let leading: CGFloat = 24
-        static let trailing: CGFloat = 27
-        static let font: CGFloat = 20
-        static let height: CGFloat = 40
-        static let gap: CGFloat = 8
+        static let leading: CGFloat = Tokens.Inset.panelLeading
+        static let trailing: CGFloat = Tokens.Inset.panelTrailing
+        static let height: CGFloat = Tokens.PageDivider.popoverBand
+        static let gap: CGFloat = Tokens.PageDivider.popoverGap
     }
 
     /// The divider at a text size: the name's points, the band's height, the triangle's half-width.
@@ -32,13 +32,10 @@ final class EntryPageDivider: NSView {
 
     static func metrics(zoom: Double) -> Metrics {
         let scale = CGFloat(zoom)
-        return Metrics(font: 18 * scale, height: height * scale, triangle: 5.5 * scale)
+        return Metrics(font: Tokens.PageDivider.font * scale, height: height * scale, triangle: Tokens.PageDivider.triangle * scale)
     }
     /// The rule: #929292 measured on Apple's page in light; its dark twin keeps the same contrast with #1e1e1e.
-    static let ruleColour = NSColor(name: nil) { appearance in
-        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 0x5c / 255, alpha: 1)
-            : NSColor(white: 0x92 / 255, alpha: 1)
-    }
+    static var ruleColour: NSColor { Tokens.Colour.entryRule.nsColor }
 
     let name: String
     let style: EntryPageStyle
@@ -85,7 +82,7 @@ final class EntryPageDivider: NSView {
             setAccessibilityRole(.disclosureTriangle)
             setAccessibilityValue(1)
         case .popover:
-            label.font = .systemFont(ofSize: Popover.font)
+            label.font = Tokens.TextRole.panelTitle.nsFont
             label.textColor = .labelColor
             label.alignment = .natural
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
@@ -119,10 +116,10 @@ final class EntryPageDivider: NSView {
 
     /// Apple's geometry, in points from the pane's leading edge: the triangle centred at 29, the rule from 45 to 16
     /// short of the trailing edge, a 12 pt gap each side of the name.
-    static let triangleCentre: CGFloat = 29
-    static let ruleStart: CGFloat = 45
-    static let trailing: CGFloat = 16
-    static let gap: CGFloat = 12
+    static let triangleCentre: CGFloat = Tokens.PageDivider.triangleCentre
+    static let ruleStart: CGFloat = Tokens.PageDivider.ruleStart
+    static let trailing: CGFloat = Tokens.PageDivider.trailing
+    static let gap: CGFloat = Tokens.PageDivider.gap
 
     override var isFlipped: Bool { true }
 
@@ -313,9 +310,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         // In the popover the page is the glass: its frames are clear (`EntryPane.page`), and so is the page.
         scroll.drawsBackground = style == .window
         scroll.contentView.drawsBackground = style == .window
-        scroll.backgroundColor = NSColor(name: nil) { appearance in
-            appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(white: 30 / 255, alpha: 1) : .white
-        }
+        scroll.backgroundColor = Tokens.Colour.entryPage.nsColor
         scroll.translatesAutoresizingMaskIntoConstraints = false
         let clip = scroll.contentView
         NSLayoutConstraint.activate([

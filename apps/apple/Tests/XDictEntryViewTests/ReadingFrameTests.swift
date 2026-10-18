@@ -206,8 +206,11 @@ struct ReadingFrameTests {
         let css = EntryReadingFrame.minimalCSS
         #expect(css.contains("contain:layout"))
         #expect(css.contains("padding:"))
-        #expect(css.contains(":root[data-xdict-theme=dark]{background:\(EntryReadingFrame.paper)"))
-        #expect(css.contains(":root[data-xdict-theme=light]{background:#ffffff"))
+        #expect(css.contains(":root[data-xdict-theme=dark]{background:var(--xdict-paper)"))
+        #expect(css.contains(":root[data-xdict-theme=light]{background:var(--xdict-bg)"))
+        // The paper and the page are the tokens', which the minimal frame's token sheet declares.
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-paper:#ecebe6;"))
+        #expect(EntryReadingFrame.paletteCSS.contains(":root[data-xdict-theme=light]{--xdict-bg:#ffffff;"))
         #expect(!css.contains("max-width"), "the column is the reading style's")
         let dark = EntryScripts.appearance(.dark, frame: .minimal)
         #expect(dark.contains("xdict-frame-minimal"))
@@ -250,11 +253,12 @@ struct ReadingFrameTests {
         #expect(css.contains("[data-xdict-control-mode=replace]>:not([data-xdict-icon]):not([data-xdict-tag]){display:none !important}"))
         #expect(css.contains("[data-xdict-control]::before,[data-xdict-control]::after{content:none !important}"))
         #expect(css.contains("[data-xdict-accent=uk]>[data-xdict-tag]::before{content:"))
-        #expect(css.contains("calc((var(--xdict-hit) - 1em) / 2)"))
+        #expect(css.contains("calc((var(--xdict-hit) - var(--xdict-icon)) / 2)"))
         #expect(css.contains("[data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);"))
         // A tag ends its control with 0.35em of the text before the next control or word (0.56em of the tag's own
         // 0.625em): MED's `UK` touched the next speaker (icon sweep 2026-10-15, §8.4).
-        #expect(css.contains("margin-inline-end:0.56em"))
+        #expect(css.contains("margin-inline-end:var(--xdict-tag-gap)"))
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-tag-gap:0.56em;"))
         #expect(!css.contains("url(http"))
         #expect(EntryScripts.appearance(.light, frame: .all).contains("[data-xdict-icon=speaker]"))
         #expect(!EntryScripts.appearance(.light, frame: []).contains("[data-xdict-icon=speaker]"))
@@ -526,10 +530,11 @@ struct ReadingFrameTests {
                         + "{margin-inline-end:0 !important;padding-inline-end:0 !important}"))
         // The coordinator's review of 2026-10-16 (second round): labels and tags own their spacing (§8.4), and the
         // marker and the chevron hang in a gutter on their block's first line box.
-        #expect(inLayer("[data-xdict-role=label]{margin-inline-end:0.35em !important}"))
-        #expect(inLayer("margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}"),
+        #expect(inLayer("[data-xdict-role=label]{margin-inline-end:var(--xdict-label-gap) !important}"))
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-label-gap:0.35em;"))
+        #expect(inLayer("margin-inline-start:calc(var(--xdict-speaker-before) - (var(--xdict-hit) - var(--xdict-icon)) / 2) !important}"),
                 "a speaker keeps the control spacing from the word before it")
-        #expect(inLayer("[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}"))
+        #expect(inLayer("[data-xdict-tag]{order:-1 !important;margin-inline:0 var(--xdict-tag-gap) !important}"))
         #expect(inLayer("[data-xdict-before=marker]::before{position:absolute !important;"))
         #expect(inLayer("[data-xdict-control=disclosure]::before{position:absolute !important;"))
         #expect(inLayer("[data-xdict-control=disclosure]{margin-block:0 !important;"
@@ -634,7 +639,8 @@ struct ReadingFrameTests {
         let css = EntryReadingFrame.typeCSS
         #expect(css.contains("font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;"
             + "font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;"
-            + "text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}"))
+            + "text-transform:lowercase !important;letter-spacing:var(--xdict-heading-tracking) !important;color:var(--xdict-text-2) !important}"))
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-heading-tracking:0.03em;"))
     }
 
     /// P22: a sense number the core names hangs in Apple's 1em negative indent where it starts its block, the block's
@@ -652,7 +658,7 @@ struct ReadingFrameTests {
         #expect(!hangs("{sure: true, first: true, alone: true}"), "a number alone on its line")
         #expect(!hangs("{sure: true, first: true, own: true}"), "the dictionary hangs it already")
         let column = EntryReadingFrame.columnCSS
-        #expect(column.contains("[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;"
+        #expect(column.contains("[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + var(--xdict-hang-default)) !important;"
             + "text-indent:0 !important}"))
         #expect(column.contains("[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}"))
         let reading = EntryScripts.appearance(.light, frame: .all)
@@ -671,8 +677,9 @@ struct ReadingFrameTests {
         #expect(rule("{block: false, alone: false}") == "")
         #expect(rule("{block: false, alone: true, body: true}") == "")
         let css = EntryReadingFrame.typeCSS
-        #expect(css.contains("[data-xdict-ruled]{box-shadow:inset 0 -1px 0 var(--xdict-rule) !important;"
-            + "padding-bottom:0.3em !important}"))
+        #expect(css.contains("[data-xdict-ruled]{box-shadow:inset 0 calc(-1 * var(--xdict-hairline)) 0 var(--xdict-rule) !important;"
+            + "padding-bottom:var(--xdict-rule-gap) !important}"))
+        #expect(EntryReadingFrame.tokensCSS.contains("--xdict-hairline:1px;") && EntryReadingFrame.tokensCSS.contains("--xdict-rule-gap:0.3em;"))
         #expect(css.contains("[data-xdict-sure=subhead][data-xdict-sure],[data-xdict-sure=subhead][data-xdict-sure] "
             + ":not([data-xdict-tag],[data-xdict-icon]){font-weight:var(--xdict-weight-bold) !important}"))
         #expect(EntryScripts.appearance(.light, frame: .all).contains("function rules() {"))
@@ -705,7 +712,7 @@ struct ReadingFrameTests {
         #expect(drop("{padded: true, first: false, contentTop: 112, markerTop: 100}") == 0)
         #expect(drop("{padded: true, first: true, contentTop: 98, markerTop: 100}") == 0)
         let style = EntryScripts.appearance(.light, frame: .all)
-        #expect(style.contains("calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em)"))
+        #expect(style.contains("calc(var(--xdict-marker-drop, 0px) + var(--xdict-half-line) - var(--xdict-marker-size) "))
         #expect(style.contains("function markerDrops() {"))
     }
 

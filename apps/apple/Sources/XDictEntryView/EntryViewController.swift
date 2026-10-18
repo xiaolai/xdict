@@ -1,6 +1,7 @@
 import AppKit
 import WebKit
 import os
+import XDictTokens
 
 /// What the entry view is given: where preferences live, how a consented remote link is opened, the confinement (the
 /// app passes `.production` and nothing else), where its rule list is compiled, and who listens to its events.
@@ -614,7 +615,7 @@ final class EntryFindBar: NSView {
         done.action = #selector(finish)
         let row = NSStackView(views: [field, count, steps, done])
         row.orientation = .horizontal
-        row.edgeInsets = NSEdgeInsets(top: 6, left: 8, bottom: 6, right: 8)
+        row.edgeInsets = NSEdgeInsets(top: Tokens.Space.s, left: Tokens.Space.sm, bottom: Tokens.Space.s, right: Tokens.Space.sm)
         row.translatesAutoresizingMaskIntoConstraints = false
         // The bar's edge against the entry under it.
         let edge = NSBox()

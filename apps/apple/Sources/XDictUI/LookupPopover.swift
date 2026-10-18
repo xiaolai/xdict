@@ -1,4 +1,5 @@
 import AppKit
+import XDictTokens
 
 /// **The lookup popover** (P41; owner, 2026-10-17: "make it a real popover"): an `NSPopover` — the system's glass body
 /// and arrow — shown from an invisible anchor window placed at the word's screen rectangle (the selection's
@@ -40,7 +41,7 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 
     /// With full-size content the popover's size includes its arrow and its shadow's margins, 26 pt each way (measured:
     /// a 390 pt content showed a 364 pt body); the body keeps the measured 390 pt, its window 416 as Apple's.
-    static let chrome = CGSize(width: 26, height: 26)
+    static let chrome = CGSize(width: Tokens.Control.popoverChrome, height: Tokens.Control.popoverChrome)
     static func outer(_ body: CGSize) -> CGSize { CGSize(width: body.width + chrome.width, height: body.height + chrome.height) }
     /// The body's size: what the reader sees, without the arrow and the shadow's margins.
     public var bodySize: CGSize {
@@ -49,7 +50,7 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 
     /// The anchor: the word, or a point at the pointer when no word could be read.
     public static func anchorRect(word: CGRect?, pointer: CGPoint) -> CGRect {
-        word ?? CGRect(x: pointer.x, y: pointer.y, width: 1, height: 1)
+        word ?? CGRect(origin: pointer, size: Tokens.Size.pointAnchor)
     }
 
     /// Below the word (AppKit's `minY`, y up), above where the room below is short of the popover and above is larger.
@@ -116,7 +117,7 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 /// every click through to the reader's app beneath it.
 public final class PopoverAnchor: NSPanel {
     public init() {
-        super.init(contentRect: CGRect(x: 0, y: 0, width: 1, height: 1), styleMask: [.borderless, .nonactivatingPanel],
+        super.init(contentRect: CGRect(origin: .zero, size: Tokens.Size.pointAnchor), styleMask: [.borderless, .nonactivatingPanel],
                    backing: .buffered, defer: false)
         isOpaque = false
         backgroundColor = .clear

@@ -172,7 +172,7 @@ var XDictColourCore = (function () {
 [data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
 /* Apple's hanging sense number (parity P22): the block's text 1em in from the dictionary's own inset, the number 1em */
 /* out of it (frame.js `hang`, which writes both measures in em). */
-[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;text-indent:0 !important}
+[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + var(--xdict-hang-default)) !important;text-indent:0 !important}
 [data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}
 /* Apple's etymology (parity P25): its text close under its label, Apple's 0.2em as the spacing scale's 0.25em (the */
 /* space after a heading; a margin off the scale fails the gallery's invariants), whether the label heads the section's box or is */
@@ -204,7 +204,7 @@ text-align:start}
 /* No fills anywhere (owner, 2026-10-15): the header row is told by weight and the space under it. */
 [data-xdict-table=data] th,[data-xdict-table=data] thead td{font-weight:var(--xdict-weight-bold);
 padding-bottom:var(--xdict-space-2)}
-[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
+[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 var(--xdict-layout-cell-gap) 0 0}
 :not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
 img{max-width:100%;height:auto}
 /* R16's classes (WI-11, 2026-10-17): frame.js reads each shown image's class (`data-xdict-img`, from its natural */
@@ -213,8 +213,8 @@ img{max-width:100%;height:auto}
 /* An illustration, alone or beside text: a block at the text's edge, at most 20em square, half a line around it */
 /* (the space above is frame.js's, `data-xdict-space=image`, so it collapses to exactly that). */
 img:is([data-xdict-img=illustration],[data-xdict-img=inline]){display:block !important;float:none !important;
-position:static !important;clear:none !important;width:auto !important;height:auto !important;max-width:min(100%, 20em) !important;
-max-height:20em !important;margin-inline:0 !important;margin-block-end:var(--xdict-space-image) !important;
+position:static !important;clear:none !important;width:auto !important;height:auto !important;max-width:min(100%, var(--xdict-image-max)) !important;
+max-height:var(--xdict-image-max) !important;margin-inline:0 !important;margin-block-end:var(--xdict-space-image) !important;
 box-sizing:border-box !important}
 [data-xdict-img-holder=illustration],[data-xdict-img-holder=inline]{display:block !important;padding-block:0 !important;
 border-block:0 !important;clear:none !important}
@@ -222,11 +222,11 @@ border-block:0 !important;clear:none !important}
 img[data-xdict-captioned]{margin-block-end:var(--xdict-space-1) !important}
 /* A figure in a table cell: the cell's padding is its space. */
 img[data-xdict-img=table]{width:auto !important;height:auto !important;max-width:100% !important;
-max-height:20em !important;margin:0 !important;box-sizing:border-box !important}
+max-height:var(--xdict-image-max) !important;margin:0 !important;box-sizing:border-box !important}
 /* A floated picture: on its side, at most 40% of the column and 16em tall, 1em from the text it faces; the block */
 /* holding it clears it before the next (`data-xdict-clears`). */
-img[data-xdict-img=float]{width:auto !important;height:auto !important;max-width:min(40%, 12em) !important;
-max-height:16em !important;margin-bottom:var(--xdict-space-2) !important;
+img[data-xdict-img=float]{width:auto !important;height:auto !important;max-width:min(40%, var(--xdict-float-max-width)) !important;
+max-height:var(--xdict-float-max-height) !important;margin-bottom:var(--xdict-space-2) !important;
 position:static !important;box-sizing:border-box !important}
 img[data-xdict-img=float][data-xdict-side=end]{float:inline-end !important;
 margin-inline:var(--xdict-space-4) 0 !important}
@@ -234,19 +234,19 @@ img[data-xdict-img=float][data-xdict-side=start]{float:inline-start !important;
 margin-inline:0 var(--xdict-space-4) !important}
 [data-xdict-clears]{display:flow-root !important}
 /* 4px above it only beside text: in a narrow pane its space above is frame.js's (`--xdict-space-at`, type.css). */
-@media (min-width:481px){img[data-xdict-img=float]{margin-top:var(--xdict-space-1) !important}}
+@media (min-width:{{fill-bp-wide}}){img[data-xdict-img=float]{margin-top:var(--xdict-space-1) !important}}
 /* In a narrow pane (a column under about 30em) a float leaves no room for its text: it becomes an illustration. */
-@media (max-width:480px){[data-xdict-img-holder=float]{display:block !important;padding-block:0 !important;clear:none !important}[data-xdict-float-box]{float:none !important;margin-inline:0 !important}img[data-xdict-img=float][data-xdict-side]{float:none !important;clear:none !important;display:block !important;
-max-width:min(100%, 20em) !important;max-height:20em !important;margin-inline:0 !important;
+@media (max-width:{{fill-bp-narrow}}){[data-xdict-img-holder=float]{display:block !important;padding-block:0 !important;clear:none !important}[data-xdict-float-box]{float:none !important;margin-inline:0 !important}img[data-xdict-img=float][data-xdict-side]{float:none !important;clear:none !important;display:block !important;
+max-width:min(100%, var(--xdict-image-max)) !important;max-height:var(--xdict-image-max) !important;margin-inline:0 !important;
 margin-block-end:var(--xdict-space-image) !important}}
 /* A badge or ornament (a small image floated in a heading): inline after the text, the text's height. */
 img:is([data-xdict-img=badge],[data-xdict-img=icon]){font-size:inherit !important}
 img[data-xdict-img=badge]{float:none !important;position:static !important;display:inline !important;
-width:auto !important;height:1em !important;max-height:1.25em !important;vertical-align:-0.125em !important;
-margin-block:0 !important;margin-inline:0.25em 0 !important}
+width:auto !important;height:var(--xdict-badge-height) !important;max-height:var(--xdict-badge-max-height) !important;vertical-align:var(--xdict-badge-baseline) !important;
+margin-block:0 !important;margin-inline:var(--xdict-badge-gap) 0 !important}
 /* A small image in text (an icon that is not a speaker): R16's small rule. */
 img[data-xdict-img=icon]{float:none !important;display:inline !important;width:auto !important;
-height:1.25em !important;vertical-align:-0.2em !important;margin-block:0 !important;margin-inline:0.125em !important}
+height:var(--xdict-icon-image-height) !important;vertical-align:var(--xdict-icon-image-baseline) !important;margin-block:0 !important;margin-inline:var(--xdict-icon-image-gap) !important}
 /* An image used as text (a phrase with tone marks): its own size, never the small rule's, on the line's middle. */
 img[data-xdict-img=text]{display:inline-block !important;float:none !important;width:auto !important;
 height:auto !important;max-width:100% !important;vertical-align:middle !important;margin-block:0 !important}
@@ -262,11 +262,11 @@ border-radius:var(--xdict-radius) !important}
 /* A caption the dictionary wrote under its picture: secondary text, small, against the picture. */
 [data-xdict-caption]{font-size:var(--xdict-fs-s) !important;line-height:var(--xdict-leading) !important;
 color:var(--xdict-text-2) !important;text-align:start !important;margin-block:var(--xdict-space-1) 0 !important;
-max-width:20em !important}
+max-width:var(--xdict-image-max) !important}
 /* A list level (R9, G14; owner, 2026-10-17): flush when its items show no number or bullet, one indent (1.5em) */
 /* when they do, whatever margin or padding the dictionary gave it. `data-xdict-list` is frame.js's reading. */
 ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
-[data-xdict-list=marked]{padding-inline-start:1.5em !important}
+[data-xdict-list=marked]{padding-inline-start:var(--xdict-indent) !important}
 /* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
 /* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
 :where(a:any-link){color:var(--xdict-link)}
@@ -290,20 +290,44 @@ img[data-xdict-img],[data-xdict-space],[data-xdict-img-holder]{transition:none !
 [data-xdict-control]{background-image:none !important;cursor:pointer}
 /* A fold head is often a block (a heading, a box's title): it keeps its own layout and colour. */
 [data-xdict-control]:not([data-xdict-control=disclosure]){color:var(--xdict-link);text-decoration:none;
-display:inline-flex;align-items:baseline;gap:0.15em;
-padding:calc((var(--xdict-hit) - 1em) / 2);margin:calc((var(--xdict-hit) - 1em) / -2);
+display:inline-flex;align-items:baseline;gap:var(--xdict-control-gap);
+padding:calc((var(--xdict-hit) - var(--xdict-icon)) / 2);margin:calc((var(--xdict-hit) - var(--xdict-icon)) / -2);
 border-radius:var(--xdict-radius)}
-[data-xdict-control]:focus-visible{outline:2px solid var(--xdict-link);outline-offset:0}
+[data-xdict-control]:focus-visible{outline:var(--xdict-focus-ring) solid var(--xdict-link);outline-offset:0}
 [data-xdict-icon=speaker]{display:inline-block;width:var(--xdict-icon);height:var(--xdict-icon);
-vertical-align:-0.15em;background-color:currentColor;-webkit-mask:{{speaker-mask}} center/contain no-repeat;
+vertical-align:var(--xdict-glyph-baseline);background-color:currentColor;-webkit-mask:{{speaker-mask}} center/contain no-repeat;
 mask-image:{{speaker-mask}};mask-size:contain;mask-repeat:no-repeat;mask-position:center}
 [data-xdict-unavailable]{opacity:0.4;cursor:default}
 /* In XDict's face even inside a transcription (OALECD's sound links wrap them). */
 [data-xdict-tag]{font-family:var(--xdict-font-text);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);font-variant-caps:all-small-caps;color:var(--xdict-text-2);
 /* 0.35em of the text after the tag (0.56em of its own 0.625em): the next speaker or word does not touch it. */
-letter-spacing:0.02em;margin-inline-end:0.56em}
+letter-spacing:var(--xdict-tag-tracking);margin-inline-end:var(--xdict-tag-gap)}
 [data-xdict-accent=uk]>[data-xdict-tag]::before{content:{{uk-tag}}}
 [data-xdict-accent=us]>[data-xdict-tag]::before{content:{{us-tag}}}
+
+"""#,
+        "density.css": #"""
+/* Generated by Tools/tokens.py from Tokens/tokens.toml (sha256 d866a68778d047ccb2d5c52420ca1fd400ac5a6f673813a84f897f682815fa50). Do not edit. */
+:root{
+--xdict-space-translation:0em;
+--xdict-space-example:0.5em;
+--xdict-space-sense:0.75em;
+--xdict-space-subhead:0.75em;
+--xdict-space-heading:1em;
+--xdict-space-phrase:1em;
+--xdict-space-pos:1.5em;
+--xdict-space-after-heading:0.25em;
+--xdict-space-image:0.75em;
+}
+:root[data-xdict-density=panel]{
+--xdict-space-translation:0em;
+--xdict-space-example:0.25em;
+--xdict-space-sense:0.5em;
+--xdict-space-subhead:0.5em;
+--xdict-space-heading:0.75em;
+--xdict-space-phrase:0.75em;
+--xdict-space-pos:1em;
+}
 
 """#,
         "disclosure-core.js": #"""
@@ -1312,30 +1336,30 @@ var XDictFrameCore = (function () {
 background-image:none !important;-webkit-mask:none !important;mask:none !important}
 /* 2. The lookup arrow, on whichever side the dictionary drew its own. */
 [data-xdict-before=lookup]::before,[data-xdict-after=lookup]::after{{{glyph-arrow}}}
-[data-xdict-before=lookup]::before{margin:0 0.2em 0 0 !important;margin-inline:0 0.2em !important}
-[data-xdict-after=lookup]::after{margin:0 0 0 0.2em !important;margin-inline:0.2em 0 !important}
-/* 3. The one marker: a 0.35em dot in the secondary text colour, at the head of the block. */
+[data-xdict-before=lookup]::before{margin:0 var(--xdict-arrow-gap) 0 0 !important;margin-inline:0 var(--xdict-arrow-gap) !important}
+[data-xdict-after=lookup]::after{margin:0 0 0 var(--xdict-arrow-gap) !important;margin-inline:var(--xdict-arrow-gap) 0 !important}
+/* 3. The one marker: a `--xdict-marker-size` dot in the secondary text colour, at the head of the block. */
 [data-xdict-before=marker]::before,[data-xdict-after=marker]::after{content:"" !important;
-display:inline-block !important;width:0.35em !important;height:0.35em !important;
+display:inline-block !important;width:var(--xdict-marker-size) !important;height:var(--xdict-marker-size) !important;
 padding:0 !important;aspect-ratio:1 !important;box-sizing:content-box !important;
 min-width:0 !important;min-height:0 !important;max-width:none !important;max-height:none !important;
 line-height:0 !important;
 background-color:var(--xdict-text-2) !important;border-radius:50% !important;
-vertical-align:0.2em !important;position:static !important;float:none !important;
+vertical-align:var(--xdict-marker-raise) !important;position:static !important;float:none !important;
 font-size:inherit !important;border:0 !important;box-shadow:none !important;transform:none !important}
-[data-xdict-before=marker]::before{margin:0 0.35em 0 0 !important;margin-inline:0 0.35em !important}
-[data-xdict-after=marker]::after{margin:0 0 0 0.35em !important;margin-inline:0.35em 0 !important}
+[data-xdict-before=marker]::before{margin:0 var(--xdict-marker-gap) 0 0 !important;margin-inline:0 var(--xdict-marker-gap) !important}
+[data-xdict-after=marker]::after{margin:0 0 0 var(--xdict-marker-gap) !important;margin-inline:var(--xdict-marker-gap) 0 !important}
 /* The leading dot hangs in a gutter of its own, centred on the first line box, whatever display the item's */
 /* content has: a block child would otherwise push the text to the line below the dot (COBUILD's examples). */
-[data-xdict-before=marker]{position:relative !important;padding-inline-start:0.7em !important;
+[data-xdict-before=marker]{position:relative !important;padding-inline-start:var(--xdict-marker-gutter) !important;
 text-indent:0 !important;list-style:none !important}
 /* The gutter is the dot's: an item's first child pulled into it (OALD's `.cf`, -4px) starts at the text. */
 [data-xdict-before=marker]>:first-child{margin-inline-start:0 !important}
 [data-xdict-before=marker]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(var(--xdict-marker-drop, 0px) + 0.5lh - 0.175em) !important;margin:0 !important;line-height:inherit !important}
+inset-block-start:calc(var(--xdict-marker-drop, 0px) + var(--xdict-half-line) - var(--xdict-marker-size) / 2) !important;margin:0 !important;line-height:inherit !important}
 /* 4. The disclosure chevron, drawn from `aria-expanded`, which the disclosure script keeps to the fold. */
-[data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 0.25em 0 0 !important;
-margin-inline:0 0.25em !important;transition:transform 0.15s !important}
+[data-xdict-control=disclosure]::before{{{glyph-chevron}};margin:0 var(--xdict-chevron-gap) 0 0 !important;
+margin-inline:0 var(--xdict-chevron-gap) !important;transition:transform 0.15s !important}
 @media (prefers-reduced-motion:reduce){[data-xdict-control=disclosure]::before{transition:none !important}}
 [data-xdict-before=lookup]:dir(rtl)::before,[data-xdict-after=lookup]:dir(rtl)::after,
 [data-xdict-control=disclosure]:dir(rtl)::before{transform:scaleX(-1) !important}
@@ -1345,9 +1369,9 @@ margin-inline:0 0.25em !important;transition:transform 0.15s !important}
 padding-block:0 !important}
 /* The chevron hangs in its own gutter on the head's first line box, as the marker does. */
 [data-xdict-control=disclosure]{position:relative !important;
-padding-inline-start:calc(var(--xdict-icon) + 0.25em) !important}
+padding-inline-start:calc(var(--xdict-icon) + var(--xdict-chevron-gap)) !important}
 [data-xdict-control=disclosure]::before{position:absolute !important;inset-inline-start:0 !important;
-inset-block-start:calc(0.5lh - var(--xdict-icon) / 2) !important;margin:0 !important}
+inset-block-start:calc(var(--xdict-half-line) - var(--xdict-icon) / 2) !important;margin:0 !important}
 /* 5. The speaker: one inline row, the accent tag first, both on the line's baseline, the glyph centred on */
 /* the tag; whatever width, height, float or display the dictionary gave its button. */
 [data-xdict-control=speaker]{display:inline-flex !important;align-items:center !important;
@@ -1356,25 +1380,25 @@ float:none !important;position:static !important;vertical-align:baseline !import
 flex-wrap:nowrap !important;line-height:inherit !important;
 /* Its hit area is XDict's (G11, 24 px), whatever padding the dictionary gave its button, and in small text too */
 /* (CED's `hwd_sound` at 12 px was 20 px wide). */
-padding:calc((var(--xdict-hit) - 1em) / 2) !important;min-width:var(--xdict-hit) !important;
+padding:calc((var(--xdict-hit) - var(--xdict-icon)) / 2) !important;min-width:var(--xdict-hit) !important;
 min-height:var(--xdict-hit) !important;justify-content:center !important;box-sizing:border-box !important;
-/* The control spacing before it: its hit area's negative margin, less 0.25em, so a speaker set against the */
+/* The control spacing before it: its hit area's negative margin, less `--xdict-speaker-before`, so a speaker set against the */
 /* word before it (CED's after a transcription, COBUILD's after a headword) does not touch it. */
-margin-inline-start:calc(0.25em - (var(--xdict-hit) - 1em) / 2) !important}
-[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 0.56em !important}
+margin-inline-start:calc(var(--xdict-speaker-before) - (var(--xdict-hit) - var(--xdict-icon)) / 2) !important}
+[data-xdict-control=speaker]>[data-xdict-tag]{order:-1 !important;margin-inline:0 var(--xdict-tag-gap) !important}
 /* A box holding only speakers (the core's `data-xdict-speakers`) sits on its transcription's line. */
 [data-xdict-speakers]{display:inline !important;float:none !important;position:static !important;
 margin-block:0 !important}
 /* A box of speakers leading its block floats at the line's start, so the transcription's block after it */
 /* (CEPD's `sense-body`) begins its first line beside it. */
-[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:0.35em !important}
+[data-xdict-speakers=lead]{float:inline-start !important;margin-inline-end:var(--xdict-speaker-gap) !important}
 /* A speaker and the transcription it plays are one run (`pronRunDOM`): no break inside it but within the */
 /* transcription itself. */
 [data-xdict-pron-run]{white-space:nowrap !important}
 [data-xdict-pron-run] [data-xdict-phon]{white-space:normal !important}
 /* A tag wrapped deeper in its speaker (OED's) owns its gap too (§8.4); 0.56em of its 0.625em is 0.35em of the text. */
-[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:0.56em !important}
-[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 0.35em !important}
+[data-xdict-control=speaker] [data-xdict-tag]{margin-inline-end:var(--xdict-tag-gap) !important}
+[data-xdict-control=speaker]>[data-xdict-icon]{margin-inline:0 var(--xdict-speaker-gap) !important}
 /* 6. Labels are sized by their text, not by the badge's box the dictionary sized for its drawing. */
 [data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist],
 [data-xdict-role=label][data-xdict-label=frequency],[data-xdict-role=label][data-xdict-label=new]
@@ -1386,8 +1410,8 @@ min-height:0 !important;float:none !important;position:static !important}
 /* A fold head's wrapper adds no vertical space of its own around it. */
 :has(> [data-xdict-control=disclosure]),:has(> :only-child > [data-xdict-control=disclosure])
 {margin-block:0 !important;padding-block:0 !important}
-/* A label owns 0.35em after it before the next word or control (§8.4); two labels in a row share it. */
-[data-xdict-role=label]{margin-inline-end:0.35em !important}
+/* A label owns `--xdict-label-gap` after it before the next word or control (§8.4); two labels in a row share it. */
+[data-xdict-role=label]{margin-inline-end:var(--xdict-label-gap) !important}
 [data-xdict-role=label]+[data-xdict-role=label]{margin-inline-start:0 !important}
 /* Two labels each in a wrapper of its own share it too (OALD's OPAL links, `a{margin-right:4px}`): the wrapper */
 /* adds no inline space, and the second label none before it. */
@@ -1411,8 +1435,8 @@ padding-inline-end:0 !important}
 [data-xdict-labelled]{display:none !important}}
 /* 8. Labels: one style, plain text in the secondary colour, no box (R11). */
 [data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);
-font-weight:var(--xdict-weight-bold);letter-spacing:0.02em;
-white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}
+font-weight:var(--xdict-weight-bold);letter-spacing:var(--xdict-label-tracking);
+white-space:nowrap;vertical-align:baseline;margin-inline-start:var(--xdict-label-before)}
 /* A label replacing a drawing is XDict's in both styles; one read from the dictionary's words takes this */
 /* colour and loses its box in the reading style only (`readingLabelsCSS`): in original style it keeps the */
 /* dictionary's, chosen for the box it sits on (LDOCE's GRAMMAR heading on cyan read 2.34:1 in grey). */
@@ -1421,23 +1445,23 @@ white-space:nowrap;vertical-align:baseline;margin-inline-start:0.25em}
 background:none !important;border:0 !important;padding:0 !important}
 [data-xdict-role=label][data-xdict-label=level],[data-xdict-role=label][data-xdict-label=wordlist]
 {font-variant-numeric:lining-nums}
-[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:0.08em}
+[data-xdict-role=label][data-xdict-label=frequency]{letter-spacing:var(--xdict-frequency-tracking)}
 [data-xdict-role=label][data-xdict-label=new]{font-variant-caps:all-small-caps;font-size:var(--xdict-fs-s)}
 /* Sense numbers: no circle or box. Their weight is the dictionary's: the mark is not precise enough for */
 /* strong styling (0.74 on the holdout; unification R, 2026-10-16). */
 [data-xdict-role=sensenum]{
 font-variant-numeric:lining-nums tabular-nums;background:none !important;border:0 !important;
-border-radius:0 !important;margin-inline-end:0.25em}
+border-radius:0 !important;margin-inline-end:var(--xdict-sensenum-gap)}
 
 """#,
         "minimal.css": #"""
-/* "Original style"'s whole frame: the page's insets (the reading style's own padding values, written out: original */
-/* style loads no tokens but the palette), `contain: layout` (R13), and the paper: white in light, `paper` in dark, */
-/* with dark text where the dictionary sets none. XDict's marks take the palette's light values on the paper. */
-html{padding:1.25rem clamp(0.75rem, 4vw, 2rem) !important;color-scheme:light only;
-color:#1d1d1f;box-sizing:border-box}
-:root[data-xdict-theme=light]{background:#ffffff !important}
-:root[data-xdict-theme=dark]{background:{{paper}} !important}
+/* "Original style"'s whole frame: the page's insets (the reading style's padding tokens), `contain: layout` (R13), */
+/* and the paper: the page colour in light, `--xdict-paper` in dark, with `--xdict-paper-text` where the dictionary */
+/* sets none. XDict's marks take the palette's light values on the paper. */
+html{padding:var(--xdict-pad-block) var(--xdict-paper-pad-inline) !important;color-scheme:light only;
+color:var(--xdict-paper-text);box-sizing:border-box}
+:root[data-xdict-theme=light]{background:var(--xdict-bg) !important}
+:root[data-xdict-theme=dark]{background:var(--xdict-paper) !important}
 :root[data-xdict-theme=dark]{{{light-palette}}}
 body{contain:layout !important;overflow-wrap:break-word}
 
@@ -1446,6 +1470,96 @@ body{contain:layout !important;overflow-wrap:break-word}
 [data-xdict-phon],
 [data-xdict-phon] :not([data-xdict-control],[data-xdict-control] *,[data-xdict-role=label])
 {--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon) !important}
+
+"""#,
+        "palette.css": #"""
+/* Generated by Tools/tokens.py from Tokens/tokens.toml (sha256 d866a68778d047ccb2d5c52420ca1fd400ac5a6f673813a84f897f682815fa50). Do not edit. */
+:root[data-xdict-theme=light]{
+--xdict-bg:#ffffff;
+--xdict-panel:#f3f3f5;
+--xdict-text:#000000;
+--xdict-text-2:#6d6d6d;
+--xdict-rule:#e6e6e6;
+--xdict-plate:transparent;
+--xdict-link:#0068da;
+--xdict-accent:#055959;
+--xdict-red-deep:#901114;
+--xdict-red:#af342f;
+--xdict-red-tint:#ffebe8;
+--xdict-orange-deep:#773a00;
+--xdict-orange:#9b4e01;
+--xdict-orange-tint:#ffece0;
+--xdict-yellow-deep:#5c4c00;
+--xdict-yellow:#796502;
+--xdict-yellow-tint:#f6f0da;
+--xdict-green-deep:#035e23;
+--xdict-green:#047b30;
+--xdict-green-tint:#e3f6e5;
+--xdict-teal-deep:#055959;
+--xdict-teal:#057575;
+--xdict-teal-tint:#daf7f6;
+--xdict-blue-deep:#02489f;
+--xdict-blue:#2063bf;
+--xdict-blue-tint:#e8f1fe;
+--xdict-purple-deep:#622c91;
+--xdict-purple:#7c48ae;
+--xdict-purple-tint:#f4ecff;
+--xdict-pink-deep:#881356;
+--xdict-pink:#a63470;
+--xdict-pink-tint:#feeaf2;
+}
+:root[data-xdict-theme=dark]{
+--xdict-bg:#1e1e1e;
+--xdict-panel:#2a2a2c;
+--xdict-text:#ffffff;
+--xdict-text-2:#9a9a9a;
+--xdict-rule:#343434;
+--xdict-plate:#ececef;
+--xdict-link:#419cff;
+--xdict-accent:#81ecec;
+--xdict-red-deep:#fec9c2;
+--xdict-red:#fb988d;
+--xdict-red-tint:#3e2724;
+--xdict-orange-deep:#ffcba9;
+--xdict-orange:#f2a26a;
+--xdict-orange-tint:#3c291d;
+--xdict-yellow-deep:#ecd78a;
+--xdict-yellow:#cfb656;
+--xdict-yellow-tint:#332e19;
+--xdict-green-deep:#aaeab2;
+--xdict-green:#80cd8b;
+--xdict-green-tint:#223324;
+--xdict-teal-deep:#81ecec;
+--xdict-teal:#3bcfcf;
+--xdict-teal-tint:#163333;
+--xdict-blue-deep:#c0d9fe;
+--xdict-blue:#8ab9ff;
+--xdict-blue-tint:#232e3f;
+--xdict-purple-deep:#e2ccfe;
+--xdict-purple:#c9a3f5;
+--xdict-purple-tint:#32293c;
+--xdict-pink-deep:#fec5dc;
+--xdict-pink:#f297bf;
+--xdict-pink-tint:#3c2730;
+}
+:root[data-xdict-theme=light][data-xdict-hue=teal]{
+--xdict-accent:#055959
+}
+:root[data-xdict-theme=dark][data-xdict-hue=teal]{
+--xdict-accent:#81ecec
+}
+:root[data-xdict-theme=light][data-xdict-hue=red]{
+--xdict-accent:#901114
+}
+:root[data-xdict-theme=dark][data-xdict-hue=red]{
+--xdict-accent:#fec9c2
+}
+:root[data-xdict-theme=light][data-xdict-hue=indigo]{
+--xdict-accent:#3f3a8c
+}
+:root[data-xdict-theme=dark][data-xdict-hue=indigo]{
+--xdict-accent:#c4c1ff
+}
 
 """#,
         "placeholder-clicks.js": #"""
@@ -1574,6 +1688,87 @@ background:none !important;border:0 !important;padding:0 !important}
 })();
 
 """#,
+        "tokens.css": #"""
+/* Generated by Tools/tokens.py from Tokens/tokens.toml (sha256 d866a68778d047ccb2d5c52420ca1fd400ac5a6f673813a84f897f682815fa50). Do not edit. */
+:root{
+--xdict-base:16px;
+--xdict-font-cjk:"Songti SC", "STSong";
+--xdict-font:ui-serif, "New York", var(--xdict-font-cjk), serif;
+--xdict-font-ui:-apple-system, system-ui, "Helvetica Neue", "PingFang SC", sans-serif;
+--xdict-font-phon:"XDict Phonetic Serif", "Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font);
+--xdict-font-text:var(--xdict-font);
+--xdict-font-mono:ui-monospace, "SF Mono", Menlo, monospace;
+--xdict-fs-xs:0.75rem;
+--xdict-fs-s:0.875rem;
+--xdict-fs-m:1rem;
+--xdict-fs-l:1.125rem;
+--xdict-fs-xl:1.25rem;
+--xdict-fs-xxl:1.5rem;
+--xdict-fs-min:var(--xdict-fs-xs);
+--xdict-fs-max:var(--xdict-fs-xxl);
+--xdict-fs-hw:1.4375rem;
+--xdict-weight-headword:500;
+--xdict-leading:1.4;
+--xdict-leading-tight:1.3;
+--xdict-weight-bold:600;
+--xdict-space-1:0.25rem;
+--xdict-space-2:0.5rem;
+--xdict-space-3:0.75rem;
+--xdict-space-4:1rem;
+--xdict-space-5:1.5rem;
+--xdict-gap:var(--xdict-space-2);
+--xdict-indent:1.5em;
+--xdict-indent-max:calc(3 * var(--xdict-indent));
+--xdict-measure:none;
+--xdict-pad-block:1.25rem;
+--xdict-pad-inline:1rem;
+--xdict-cell-pad:0.25em 0.75em;
+--xdict-radius:6px;
+--xdict-hit:24px;
+--xdict-icon:1em;
+--xdict-phon-colour:var(--xdict-text-2);
+--xdict-mark:#ffe36e;
+--xdict-mark-current:#ff9632;
+--xdict-paper:#ecebe6;
+--xdict-paper-text:#1d1d1f;
+--xdict-paper-pad-inline:clamp(0.75rem, 4vw, 2rem);
+--xdict-hairline:1px;
+--xdict-focus-ring:2px;
+--xdict-control-gap:0.15em;
+--xdict-glyph-baseline:-0.15em;
+--xdict-tag-tracking:0.02em;
+--xdict-tag-gap:0.56em;
+--xdict-label-tracking:0.02em;
+--xdict-frequency-tracking:0.08em;
+--xdict-heading-tracking:0.03em;
+--xdict-rule-gap:0.3em;
+--xdict-arrow-gap:0.2em;
+--xdict-marker-raise:0.2em;
+--xdict-marker-size:0.35em;
+--xdict-marker-gap:0.35em;
+--xdict-marker-gutter:0.7em;
+--xdict-half-line:0.5lh;
+--xdict-label-gap:0.35em;
+--xdict-label-before:0.25em;
+--xdict-speaker-gap:0.35em;
+--xdict-speaker-before:0.25em;
+--xdict-chevron-gap:0.25em;
+--xdict-sensenum-gap:0.25em;
+--xdict-hang-default:1em;
+--xdict-layout-cell-gap:0.25em;
+--xdict-image-max:20em;
+--xdict-float-max-width:12em;
+--xdict-float-max-height:16em;
+--xdict-badge-height:1em;
+--xdict-badge-max-height:1.25em;
+--xdict-badge-baseline:-0.125em;
+--xdict-badge-gap:0.25em;
+--xdict-icon-image-height:1.25em;
+--xdict-icon-image-baseline:-0.2em;
+--xdict-icon-image-gap:0.125em;
+}
+
+"""#,
         "type.css": #"""
 body{font:400 var(--xdict-fs-m)/var(--xdict-leading) var(--xdict-font) !important}
 [data-xdict-phon]{--xdict-font:var(--xdict-font-phon);font-family:var(--xdict-font-phon)}
@@ -1648,10 +1843,10 @@ font-synthesis-style:none !important;font-size:var(--xdict-fs-m) !important;line
 /* inside it keeps its look. */
 [data-xdict-sure=heading][data-xdict-sure],[data-xdict-sure=heading][data-xdict-sure] 
 :not([data-xdict-tag],[data-xdict-icon],a,a *,ul,ul *,ol,ol *){font-family:var(--xdict-font) !important;
-font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;text-transform:lowercase !important;letter-spacing:0.03em !important;color:var(--xdict-text-2) !important}
+font-size:var(--xdict-fs-m) !important;line-height:var(--xdict-leading) !important;font-weight:normal !important;font-style:normal !important;font-variant-caps:small-caps !important;text-transform:lowercase !important;letter-spacing:var(--xdict-heading-tracking) !important;color:var(--xdict-text-2) !important}
 /* Apple's thin rule under a section label (parity P24, 2026-10-18), on the label's own line (frame.js `rules`): the */
 /* rule colour, 0.3em under the text, drawn as a shadow, not a border, so no box is drawn (G5). */
-[data-xdict-ruled]{box-shadow:inset 0 -1px 0 var(--xdict-rule) !important;padding-bottom:0.3em !important}
+[data-xdict-ruled]{box-shadow:inset 0 calc(-1 * var(--xdict-hairline)) 0 var(--xdict-rule) !important;padding-bottom:var(--xdict-rule-gap) !important}
 /* A phrase or a derived word a markup table names, weight 600 as Apple's `span.l` and `span.drv` (parity P24). */
 [data-xdict-sure=subhead][data-xdict-sure],[data-xdict-sure=subhead][data-xdict-sure] :not([data-xdict-tag],[data-xdict-icon]){font-weight:var(--xdict-weight-bold) !important}
 /* Apple's etymology label in the secondary label colour (parity P25): a heading of an etymology the core names. */
@@ -1688,12 +1883,8 @@ a:any-link:not([data-xdict-control]):hover{text-decoration:underline !important}
 /* B in the main window, A in the lookup panel (`data-xdict-density=panel`, set by the shell, never by width). In em, */
 /* so they follow the text. Space grows with structural distance: translation < example < sense = subhead < heading */
 /* = phrase block < part-of-speech block; a heading binds to its first line (0.25em). */
-:root{--xdict-space-translation:0em;--xdict-space-example:0.5em;--xdict-space-sense:0.75em;
---xdict-space-subhead:0.75em;--xdict-space-heading:1em;--xdict-space-phrase:1em;--xdict-space-pos:1.5em;
---xdict-space-after-heading:0.25em;--xdict-space-image:0.75em}
-:root[data-xdict-density=panel]{--xdict-space-translation:0em;--xdict-space-example:0.25em;
---xdict-space-sense:0.5em;--xdict-space-subhead:0.5em;--xdict-space-heading:0.75em;--xdict-space-phrase:0.75em;
---xdict-space-pos:1em}
+/* The values themselves are tokens (`Tokens/tokens.toml` [density]), generated into density.css, which follows */
+/* this sheet. */
 /* frame.js marks each role block that starts a line (`data-xdict-space`; one that continues a line takes nothing) */
 /* and writes on it the margin that makes the collapsed gap its token (`roleSpace`). */
 [data-xdict-space=sense]{--xdict-space-want:var(--xdict-space-sense)}

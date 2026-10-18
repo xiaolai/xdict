@@ -8,6 +8,7 @@ import XDictLibrary
 import XDictSearch
 import XDictSpeech
 import XDictUI
+import XDictTokens
 
 /// `XDict --sound-report <fixtures> --library-dir <dir> --work <dir> --out <file> [--corpus <dir> --sample <json>]`: a
 /// development instrument for the E2E `sound` stage (plan-macos-v1 WI-7, done-when; run on the E2E Mac only: it opens a
@@ -100,7 +101,7 @@ final class SoundRun {
         let (library, settled) = await instrumentLibrary(libraryDirectory, client: client, adding: adding,
                                                          within: .seconds(3_600))
         let title = "sound"
-        let window = InstrumentWindow(title, frame: NSRect(x: 120, y: 90, width: 900, height: 650), library: library,
+        let window = InstrumentWindow(title, frame: Tokens.InstrumentFrame.soundReport, library: library,
                                       backend: client, suite: "ai.xdict.app.e2e.sound", opener: RecordingOpener(),
                                       speech: SystemOutput(volume: 0), speechPreferences: preferences)
         defer { window.close() }

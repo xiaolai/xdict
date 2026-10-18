@@ -63,12 +63,12 @@ struct BundleFactsTests {
     }
 
     /// **The icon's mark is the default reading accent** (owner, 2026-10-17): teal, light and dark, as
-    /// `EntryReadingFrame.Accent.teal` declares it. Both are read from source, so changing either alone fails here
+    /// the tokens' `[accent] teal` declares it (`Tokens/tokens.toml`). Both are read from source, so changing either alone fails here
     /// rather than drifting. Every platform's set is generated from `icon.json` (`Tools/icons`), so they follow.
     @Test func theIconsMarkIsTheReadingAccent() throws {
-        let frame = try String(contentsOf: Manifest.package.appending(path: "Sources/XDictEntryView/EntryReadingFrame.swift"),
-                               encoding: .utf8)
-        let declared = try #require(frame.firstMatch(of: /case \.teal: \("(#[0-9a-fA-F]{6})", "(#[0-9a-fA-F]{6})"\)/))
+        let tokens = try String(contentsOf: Manifest.package.appending(path: "Tokens/tokens.toml"), encoding: .utf8)
+        let accents = try #require(tokens.components(separatedBy: "\n[accent]\n").last)
+        let declared = try #require(("\n" + accents).firstMatch(of: /\nteal = \{ light = "(#[0-9a-fA-F]{6})", dark = "(#[0-9a-fA-F]{6})"/))
         let (light, dark) = (String(declared.1).uppercased(), String(declared.2).uppercased())
 
         let data = try Data(contentsOf: Manifest.package.appending(path: "Resources/XDict.icon/icon.json"))

@@ -3,6 +3,7 @@ import SwiftUI
 import XDictContract
 import XDictEntryView
 import XDictLibrary
+import XDictTokens
 
 /// **One dictionary's details**: the question a changed file asks (and the undo of its answer), the reader's name for
 /// it, its languages (asked when the file name did not state them, L3), its About from the header (R11: title,
@@ -81,7 +82,7 @@ struct LibraryDetail: View {
                     if !style.fonts.isEmpty {
                         DisclosureGroup {
                             ForEach(Array(style.fonts.enumerated()), id: \.offset) { _, font in
-                                VStack(alignment: .leading, spacing: 2) {
+                                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                                     Text(verbatim: font.family).font(.callout.bold())
                                     Text(LibrarySentences.fontReason(font.reason)).font(.caption)
                                     Text(verbatim: font.selector).font(.caption.monospaced()).foregroundStyle(.secondary)
@@ -98,7 +99,7 @@ struct LibraryDetail: View {
                         }
                         ForEach(Array(style.skipped.enumerated()), id: \.offset) { _, skipped in
                             // The reader's sentence, then the core's own English beneath it, as a diagnostic only.
-                            VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                                 Text(LibrarySentences.skipped(skipped)).font(.caption)
                                 if let detail = LibrarySentences.skippedDetail(skipped) {
                                     Text(verbatim: detail).font(.caption2.monospaced()).foregroundStyle(.tertiary)
@@ -127,7 +128,7 @@ struct LibraryDetail: View {
         if let sentence = ProblemStatus.sentence(for: phase) {
             // Which dictionary first, its file beneath, then why and what to do (Codex §5).
             Section {
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                     Text(verbatim: entry.displayName).font(.headline)
                     if let file = entry.mdx?.fileName {
                         Text(verbatim: file).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
@@ -160,7 +161,7 @@ struct LibraryDetail: View {
                         } else {
                             DisclosureGroup {
                                 ForEach(Array(finding.examples.enumerated()), id: \.offset) { _, example in
-                                    VStack(alignment: .leading, spacing: 2) {
+                                    VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                                         Text(verbatim: example.key).font(.callout.bold())
                                         Text(verbatim: example.text).font(.caption.monospaced()).foregroundStyle(.secondary)
                                     }
@@ -205,7 +206,7 @@ struct LibraryDetail: View {
     private var languages: some View {
         Section("Languages") {
             if entry.languages.needsAsking {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Tokens.Space.s) {
                     Text(entry.languages.basis == .unknown
                          ? LocalizedStringResource("XDict could not tell this dictionary's languages from its file name. Which are they?")
                          : LocalizedStringResource("XDict guessed these languages from the file name. Are they right?"))
@@ -291,7 +292,7 @@ struct LibraryDetail: View {
             // Short, the whole value in its help and on the pasteboard (UI review L-11).
             if let edition = entry.edition {
                 LabeledContent {
-                    HStack(spacing: 6) {
+                    HStack(spacing: Tokens.Space.s) {
                         Text(verbatim: Self.short(edition)).font(.subheadline.monospaced()).foregroundStyle(.secondary)
                             .help(Text(verbatim: edition.rawValue))
                         Button {
