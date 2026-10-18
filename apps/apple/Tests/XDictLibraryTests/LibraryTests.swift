@@ -101,6 +101,32 @@ struct LibraryTests {
         #expect(library.readingStyles[id] == nil)
     }
 
+    /// ADR-0013 d.6: Settings asks the service which display options an open dictionary's edition declares, once per
+    /// edition this session; a failed ask is told and asked again next time; a removed dictionary's answer goes.
+    @Test func aDictionarysDisplayOptionsAreAskedOncePerEdition() async throws {
+        try dir.files("a.mdx")
+        let declared = DisplayOptions(version: 1, options: [
+            DisplayOption(id: "pronunciation", attribute: "data-xdict-opt-pronunciation", values: ["respell", "ipa", "both"],
+                          defaultValue: "ipa"),
+        ], css: ".a { display: none }")
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        let edition = try #require(library.entries.first?.edition)
+        await backend.setDisplayAnswer(.failure(.wire(.core(.cancelled(detail: "x")))))
+        await library.loadDisplayOptions(id)
+        #expect(library.displayOptions[id] == .unavailable)
+        await backend.setDisplayAnswer(.success(declared))
+        await library.loadDisplayOptions(id)
+        await library.loadDisplayOptions(id)
+        #expect(library.displayOptions[id] == .read(declared, edition: edition))
+        #expect(await backend.displayAsked == [dict, dict], "a kept answer is not asked for again")
+        await library.remove(id)
+        #expect(library.displayOptions[id] == nil)
+    }
+
     @Test func cancelThenRetryCompletes() async throws {
         try dir.files("a.mdx")
         let library = library()

@@ -114,6 +114,9 @@ final class Dictionaries: Sendable {
             // ADR-0010: the service reads the sheets and computes the report; the app only shows it.
             case .readingStyle(let dict):
                 return (.answer(.readingStyle(XDictContract.ReadingStyle(try core.readingStyle(dict: dict.rawValue)))), nil)
+            // ADR-0013: the core reads the edition's markup and sheets; the app only receives what applies.
+            case .displayOptions(let dict):
+                return (.answer(.displayOptions(XDictContract.DisplayOptions(try core.displayOptions(dict: dict.rawValue)))), nil)
             // `cancel` is the connection's, never the core's (`ConnectionSession`); so are conversions, which never reach
             // the core (`AppleImports`).
             case .cancel, .convertApple, .cancelConversion:
