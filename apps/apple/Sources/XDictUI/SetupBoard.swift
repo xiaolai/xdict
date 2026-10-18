@@ -70,3 +70,22 @@ public struct SetupBoard: Equatable, Sendable {
         }
     }
 }
+
+/// **Whether the setup window speaks only Chinese** (E2E `setup.chineseOnly`): the English it still shows, from the texts
+/// its Accessibility tree read; and the verdict, which fails on no text at all, since an empty tree (a window not yet
+/// drawn, or read before it was) has no English in it and would otherwise pass without reading anything.
+public enum SetupLanguageCheck {
+    /// A run of three Latin letters that is not one of the names XDict keeps in every language.
+    public static func isEnglish(_ text: String) -> Bool {
+        var stripped = text
+        for name in ["XDict", "MDict", "mdx", "mdd"] { stripped = stripped.replacingOccurrences(of: name, with: "") }
+        return stripped.contains(/[A-Za-z]{3,}/)
+    }
+
+    public static func english(in texts: [String]) -> [String] { texts.filter(isEnglish) }
+
+    /// Some text was read, none of it English, and the first preferred language is Chinese.
+    public static func chineseOnly(texts: [String], preferredLanguage: String?) -> Bool {
+        !texts.isEmpty && english(in: texts).isEmpty && preferredLanguage?.hasPrefix("zh") == true
+    }
+}
