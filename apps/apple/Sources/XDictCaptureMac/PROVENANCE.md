@@ -7,7 +7,13 @@ names, now in `Tests/XDictCaptureMacTests/`) and the ADR behind it. "ADR-00nn" w
 are written "XDict ADR-00nn".
 
 **Provenance check (2026-10-18, by reading).** Every XiaolaiDict origin file below and its tests were read in full while
-porting. `git log` over those source and test paths names one author, the owner: 11 commits; no file carries a licence
+porting. `git log 044dac6` names one author, the owner, over every path: 11 commits over the twelve paths read for
+this target (`Sources/MacCapture/{AccessibilityAccess,AccessibilitySession,ScreenWordReader,ScreenWordSource,SelectionText,Permission}.swift`,
+`Sources/Capture/ProcessResolver.swift`, `Tests/XiaolaiDictTests/AccessibilityBudgetTests.swift`,
+`Tests/MacCaptureTests/{ScreenWordBoundsTests,AccessibilityAccessTests,SelectionTests}.swift`,
+`Tests/CaptureTests/ProcessResolverTests.swift`), and 16 once `Sources/MacCapture/SelectionReader.swift` — the origin
+of XDict's own reader, ported in plan-macos-v1 WI-8 — is counted with them (recounted 2026-10-18 after the verifier
+counted 15 over a set it did not name); no file carries a licence
 header, a copyright line or text from another project, and none of them is, or was translated from, third-party code.
 XiaolaiDict has no licence file, so this is a recorded check, not a given (XDict ADR-0014 Context). The files moved from
 `XDictAnywhere` are XDict's own, with their history in this repository.
@@ -24,6 +30,10 @@ XiaolaiDict has no licence file, so this is a recorded check, not a given (XDict
 | `FrontApp.swift` (`FrontApp`, `WindowOwner`, `ProcessResolver`) | XDict `Sources/XDictAnywhere/SelectionReader.swift` (`FrontApp`, moved down); XiaolaiDict `Sources/Capture/ProcessResolver.swift`, now what `FrontApp.resolving` resolves through | `ProcessResolverTests` (5) by name from XiaolaiDict | XDict ADR-0014 d.10 |
 | `PointerWordReader.swift` (`PointerWordReader`: `Hit`, `Miss`, `Outcome`, `Target`, `TargetMiss`, `TargetOutcome`, the three dialects, the wake-up and the escalation keyed by process launch, `host(of:)`) | XiaolaiDict `Sources/MacCapture/ScreenWordReader.swift`. Changed: misses typed instead of strings; the hit test a request of the session (inside the budget); the tolerance handed in (`HitTolerance`, decision 11); `capturedTerm(pointer:)` hands over a `CapturedTerm` with the sentence as an available context; descriptions metadata only (decision 9) | `PointerWordBoundsTests` (XiaolaiDict `ScreenWordBoundsTests`, 6 by name: `theTextRangeDialectAsksForTheTokensOwnBox`, `theBoundsScanKeepsTheBoxItAlreadyAskedFor`, `aTokenBoxThatFailsKeepsTheWordWithNoBox`, `aTokenBoxCancelledCancelsTheRead`, `anIndexAtTheLargestLengthReadsNothingAndNeverTraps`, `anEmptyBoxLocatesNothing`); `PointerWordBudgetTests` (XiaolaiDict `AccessibilityBudgetTests`, 6 by name: `theRequestAfterTheBudgetIsNeverMade`, `nothingIsAskedAfterAnAppStopsAnswering`, `anAbsentValueTriesTheNextDialect`, `anUnansweredWakeUpEndsTheReadAndIsTriedAgain`, `aWakeUpRefusedForAnyReasonEndsTheRead`, `cancellationStopsBetweenRequests`); `ChromiumEscalationTests` (2 by name: `aFullMissAsksTheAppToBuildItsTreeOncePerLaunch`, `aReadThatFailedAsksNothingMore`); new `PointerWordReaderTests` (9: a scripted WebKit tree for the marker dialect, the target's order with an own-process floating window, a stalled hit test, no grant, the lane, the hand-over, metadata-only descriptions) | 0042, 0046; XDict ADR-0014 d.2, d.6, d.7, d.9 |
 | `PointerWordSource.swift` (`PointerWordSource`, `SystemPointerWords`) | XiaolaiDict `Sources/MacCapture/ScreenWordSource.swift`, without `recognise` (plan-capture WI-4); every read through the lane as hover work | `PointerWordReaderTests.aHoverTargetGoesThroughTheLaneUnderTheHoverTimeout` | 0046; XDict ADR-0014 d.6 |
+
+Added in the second round of WI-2 (new, no origin): `SiteExclusionTests` (6; the site judged on every enclosing web
+area, a security review's finding), two limit tests in `PointerWordReaderTests` (decision 3), and `LaneBarrierTests`
+(5; the queue's order, the barrier after cancel and supersede, the deadline before the hit test, the click carried in).
 
 ## Not moved
 
