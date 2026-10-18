@@ -1,6 +1,7 @@
 import Foundation
 import Security
 import XDictBase
+import XDictContract
 
 /// **Who may talk to this service** (ADR-0009, refutation objection 6, as the owner amended it on 2026-10-14: the
 /// boundary is input and output). An embedded XPC service is reachable by name only from its own app; on top of that,
@@ -33,7 +34,7 @@ enum ClientCheck: Sendable, Equatable {
     /// The requirement text, for a team identifier that is exactly what Apple issues (ten upper-case letters and
     /// digits) — anything else is refused rather than spliced into the requirement language.
     static func requirement(team: String, app: String) -> ClientCheck {
-        guard team.count == 10, team.allSatisfy({ ($0.isASCII && $0.isUppercase) || ($0.isASCII && $0.isNumber) }) else {
+        guard AppGroup.isTeamIdentifier(team) else {
             return .refuseAll(why: "the signature's team identifier is not one Apple issues: \(team.debugDescription)")
         }
         return .requirement("anchor apple generic and identifier \"\(app)\" and certificate leaf[subject.OU] = \"\(team)\"")

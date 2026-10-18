@@ -31,13 +31,18 @@ struct BundleFactsTests {
         #expect(version != nil && version == service["CFBundleShortVersionString"] as? String)
     }
 
-    /// **The service is sandboxed and may open nothing**: no file entitlement, no network. A file reaches it as a
-    /// descriptor the app opened (plan-macos-v1, choice 1). The app is not sandboxed and asks for nothing.
+    /// **The service is sandboxed and may open nothing of the reader's**: no file entitlement, no network. A dictionary
+    /// reaches it as a descriptor the app opened (plan-macos-v1, choice 1). The app is not sandboxed. Both share one
+    /// app group, where Apple dictionary snapshots are staged and converted (ADR-0011 decision 4, amended 2026-10-18);
+    /// its team prefix is written as Xcode's `$(TeamIdentifierPrefix)` and substituted at signing from the signing
+    /// identity (`Tools/expand-entitlements.sh`), so no team identifier is in a tracked file.
     @Test func eachBinaryHasExactlyItsEntitlements() throws {
+        let group = ["$(TeamIdentifierPrefix)ai.xdict.app"]
         let service = try PlatformFloorTests.plist("Resources/DictionaryService.entitlements")
-        #expect(service.count == 1 && service["com.apple.security.app-sandbox"] as? Bool == true, "\(service)")
+        #expect(service.count == 2 && service["com.apple.security.app-sandbox"] as? Bool == true, "\(service)")
+        #expect(service["com.apple.security.application-groups"] as? [String] == group, "\(service)")
         let app = try PlatformFloorTests.plist("Resources/XDict.entitlements")
-        #expect(app.isEmpty, "\(app)")
+        #expect(app.count == 1 && app["com.apple.security.application-groups"] as? [String] == group, "\(app)")
     }
 
     /// The app declares the languages the catalog carries, and only those: English and Simplified Chinese

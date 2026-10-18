@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
-<!-- The app: not sandboxed, and no entitlement at all — the hardened runtime with nothing relaxed. Written out rather
-     than omitted, so each binary is signed with a file of its own and an addition here is a line in a diff.
+<!-- The app: not sandboxed — the hardened runtime with nothing relaxed — and one entitlement: the app group it shares
+     with its dictionary service, where an Apple dictionary snapshot is staged for conversion (ADR-0011 decision 4).
+     The team prefix is Xcode's placeholder, expanded at signing from the signing identity
+     (Tools/expand-entitlements.sh), so no team identifier is in the repository.
      BundleFactsTests and Tools/build-bundle.sh hold the signed app to exactly this. -->
-<dict/>
+<dict>
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)ai.xdict.app</string>
+	</array>
+</dict>
 </plist>
