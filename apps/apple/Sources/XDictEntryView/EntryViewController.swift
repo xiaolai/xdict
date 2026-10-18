@@ -58,6 +58,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public var onLookup: ((_ query: String, _ anchor: String?) -> Void)?
     public var onSound: ((_ path: String) -> Void)?
     public var onSpeak: ((_ text: String) -> Void)?
+    /// A word the reader ⌘-clicked in the entry, to look up in a new tab (parity P47).
+    public var onOpenInNewTab: ((_ word: String) -> Void)?
 
     private var environment: EntryEnvironment
     private var pane: EntryPane?
@@ -516,6 +518,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         case .speak(let text): onSpeak?(text)
         case .scroll, .askReader, .nothing: break
         }
+    }
+
+    func openInNewTab(_ click: EntryWordClick, from pane: EntryPane) {
+        guard owns(pane) else { return }
+        record(.wordOpenedInNewTab(word: click.word))
+        onOpenInNewTab?(click.word)
     }
 
     func askReader(_ url: URL, from pane: EntryPane) {

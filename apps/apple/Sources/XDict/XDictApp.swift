@@ -184,6 +184,17 @@ struct MainWindow: View {
             guard state == nil else { return }
             let made = XDictApp.windowState()
             made.showDictionaries = { SettingsRoute.shared.show($0) }
+            // A ⌘-clicked word opens in a new tab of this window, looked up as typed and Return (P47).
+            made.openInNewTab = { [openWindow] word in
+                NewTabLookups.shared.hand(word)
+                NewTab.open { openWindow(id: XDictApp.mainWindow) }
+            }
+            if let word = NewTabLookups.shared.take() {
+                Task {
+                    await LibraryLaunch.once()
+                    made.model.submit(word)
+                }
+            }
             state = made
             XDictApp.windowMade?(made)
             MainWindows.made(made)
