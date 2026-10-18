@@ -174,7 +174,8 @@ private func dataWindow(_ c: Cursor) throws -> (start: Int, limit: Int) {
 }
 
 func readBody(bundle: URL, props: Properties, bounds: Bounds = .production,
-              budget: DecompressionBudget = DecompressionBudget(limit: Bounds.production.decompressedBytes)) throws -> [AppleArticle] {
+              budget: DecompressionBudget = DecompressionBudget(limit: Bounds.production.decompressedBytes),
+              steps: Steps? = nil) throws -> [AppleArticle] {
     let raw = try readBounded((try resourcesRoot(bundle: bundle)).appendingPathComponent("Body.data"),
                               limit: bounds.sourceFileBytes, name: "Body.data")
     let c = Cursor(bytes: raw) { .body(offset: $0) }
@@ -184,6 +185,8 @@ func readBody(bundle: URL, props: Properties, bounds: Bounds = .production,
     let windowEnd = headerSize + limit
     try raw.withUnsafeBufferPointer { buf in
         while section < limit {
+            // Before each section is inflated: where a cancellation stops a conversion (ADR-0011 decision 5).
+            try steps?.reading(done: section - start, total: limit - start)
             let pos = headerSize + section
             guard pos + 8 <= raw.count else { throw AppleImportError.corrupt(.body(offset: pos)) }
             let jump = try c.i32(pos)

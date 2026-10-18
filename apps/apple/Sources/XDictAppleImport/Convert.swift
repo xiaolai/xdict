@@ -127,10 +127,15 @@ private func validateName(_ name: String) throws {
 /// staging folder inside `outDir` and moved into place only once both files are whole; a refusal leaves nothing.
 ///
 /// The same snapshot writes the same bytes whatever `name` is, on any date, in any time zone (ADR-0011 decision 6).
+///
+/// `checkpoint` is asked before every body section is inflated and every output block is built (`ConversionStep`); a
+/// `false` stops the conversion as `cancelled`, leaving nothing in `outDir` (ADR-0011 decision 5).
+@discardableResult
 public func convert(snapshot: URL, into outDir: URL, name: String, bounds: Bounds = .production,
-                    report rep: Report = Report()) throws(AppleImportError) {
+                    report rep: Report = Report(), checkpoint: Checkpoint? = nil) throws(AppleImportError)
+    -> ConversionSummary {
     do {
-        try convertSnapshot(snapshot, into: outDir, name: name, bounds: bounds, report: rep)
+        return try convertSnapshot(snapshot, into: outDir, name: name, bounds: bounds, report: rep, steps: Steps(checkpoint))
     } catch let error as AppleImportError {
         throw error
     } catch {
@@ -139,7 +144,8 @@ public func convert(snapshot: URL, into outDir: URL, name: String, bounds: Bound
     }
 }
 
-private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, bounds: Bounds, report rep: Report) throws {
+private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, bounds: Bounds, report rep: Report,
+                             steps: Steps) throws -> ConversionSummary {
     try validateName(name)
     let names = ["\(name).mdx", "\(name).mdd"]
     for file in names {
@@ -151,7 +157,7 @@ private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, boun
     rep.say("bundle: \(props.displayName)")
 
     let budget = DecompressionBudget(limit: bounds.decompressedBytes)
-    let raw = try readBody(bundle: bundle, props: props, bounds: bounds, budget: budget)
+    let raw = try readBody(bundle: bundle, props: props, bounds: bounds, budget: budget, steps: steps)
     let keytext = try readKeyText(bundle: bundle, props: props, bounds: bounds, budget: budget)
     rep.say("body entries: \(raw.count); articles with keys: \(keytext.count)")
 
@@ -204,18 +210,19 @@ private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, boun
 
     // Title and description come from the bundle alone, never from `name` (ADR-0011 decision 6).
     let description = props.copyright.isEmpty ? props.displayName : props.copyright
-    let meter = OutputMeter(limit: bounds.outputBytes)
-    try writeMDict(items: all, isMDD: false, title: props.displayName, description: description,
-                   to: stage.appendingPathComponent(names[0]), fileLimit: bounds.sourceFileBytes, meter: meter)
-
-    // resources -> MDD
+    // resources -> MDD, collected first so the writing steps know their total
     let skipTop: Set<String> = ["Body.data", "KeyText.data", "KeyText.index", "EntryID.data", "EntryID.index", "fbm.css",
                                 props.cssName ?? ""]
     var files = try collectResources(res: res, skipTop: skipTop, stats: stats)
     guard !files.contains(where: { $0.key == "\\\(stylesheetName)" }) else { throw AppleImportError.corrupt(.resourceKey("\\\(stylesheetName)")) }
     files.append(MDictItem(key: "\\\(stylesheetName)", data: Array(css.utf8)))
+    steps.writingTotal = all.count + files.count
+
+    let meter = OutputMeter(limit: bounds.outputBytes)
+    try writeMDict(items: all, isMDD: false, title: props.displayName, description: description,
+                   to: stage.appendingPathComponent(names[0]), fileLimit: bounds.sourceFileBytes, meter: meter, steps: steps)
     try writeMDict(items: files, isMDD: true, title: props.displayName, description: description,
-                   to: stage.appendingPathComponent(names[1]), fileLimit: bounds.sourceFileBytes, meter: meter)
+                   to: stage.appendingPathComponent(names[1]), fileLimit: bounds.sourceFileBytes, meter: meter, steps: steps)
     rep.say("mdd resources: \(files.count)")
 
     for (k, v) in stats.counts.sorted(by: { $0.key < $1.key }) { rep.say("note: \(k): \(v)") }
@@ -224,6 +231,7 @@ private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, boun
     rep.say("links: \(articles.reduce(0) { $0 + $1.links.count }) total, \(unresolved) not resolved by id")
 
     try publish(stage: stage, outDir: outDir, names: names)
+    return ConversionSummary(entries: items.count, redirects: redirects.count, resources: files.count, files: names)
 }
 
 /// Moves the finished files into place, each by a rename that refuses to replace anything (`RENAME_EXCL`); if one

@@ -25,6 +25,8 @@ public enum AppleImportError: Error, Equatable, Sendable {
     case unwritable(file: String, code: Int)
     /// The bundle has no entries.
     case noEntries
+    /// The checkpoint answered `false` (ADR-0011 decision 5): the conversion stopped there and left nothing.
+    case cancelled
 }
 
 public enum InfoPlistFault: Equatable, Sendable {
