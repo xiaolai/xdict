@@ -305,6 +305,9 @@ class Check(unittest.TestCase):
             "guard dx <= CGFloat(3) else { return }": [("distance", "3")],
             "func near(_ p: CGPoint, tolerance: CGFloat = 3) -> Bool { true }": [("default", "3")],
             "guard dx<=3 else { return }": [("distance", "3")],
+            "guard dx <= 3 as CGFloat else { return }": [("distance", "3")],
+            "guard 3 as CGFloat >= dx else { return }": [("distance", "3")],
+            "guard dx <= CGFloat(exactly: 3)! else { return }": [("distance", "3")],
             "let r = box.insetBy(dx: -3, dy: -2)": [("geometry", "-3"), ("geometry", "-2")],
         }
         for code, expected in cases.items():
@@ -332,10 +335,36 @@ class Check(unittest.TestCase):
             "static let slop = 2\nfunc f(x: CGFloat) -> CGFloat { x + CGFloat(Self.slop) }": [("capture-unitless-name", "2")],
             "let edgeRatio = CGFloat(2)": [],
             "static let memory = 64\nlet kept = memory + 1": [],
+            "static let slop = 2\nlet s = CGFloat(exactly: Self.slop) ?? 0": [("capture-unitless-name", "2")],
+            "let t = CGFloat(exactly: 3)!": [("capture-unitless-name", "3")],
+            "let t = CGFloat(exactly: 3) ?? 0": [("capture-unitless-name", "3")],
+            "static let edgeRatio = 2\nlet s = CGFloat(exactly: edgeRatio)!": [],
         }
         for code, expected in cases.items():
             with self.subTest(code=code):
                 self.assertEqual(self.capture_kinds(code + "\n"), expected)
+
+    def test_the_capture_rule_holds_in_the_macos_capture_target_too(self):
+        root = Root(self)
+        (root.path / "Sources/XDictCaptureMac").mkdir()
+        (root.path / "Sources/XDictCaptureMac/Lane.swift").write_text("let jitter = 0.25\nlet edgeRatio = 0.5\n")
+        self.assertEqual([(f[2], f[3]) for f in root.findings()[0]], [("capture-unitless-name", "0.25")])
+
+    def test_a_whole_constant_wrapped_in_another_file_of_the_target_is_seen(self):
+        root = Root(self)
+        (root.path / "Sources/XDictCapture").mkdir()
+        (root.path / "Sources/XDictCapture/Rule.swift").write_text("enum Rule {\n    static let slop = 2\n}\n")
+        (root.path / "Sources/XDictCapture/Use.swift").write_text(
+            "func f(x: CGFloat) -> CGFloat { x + CGFloat(Rule.slop) }\n")
+        found = [(f[0], f[2], f[3]) for f in root.findings()[0]]
+        self.assertEqual(found, [("Sources/XDictCapture/Rule.swift", "capture-unitless-name", "2")])
+
+    def test_a_whole_constant_wrapped_in_another_target_is_not_this_targets(self):
+        root = Root(self)
+        (root.path / "Sources/XDictCapture").mkdir()
+        (root.path / "Sources/XDictCapture/Rule.swift").write_text("enum Rule {\n    static let slop = 2\n}\n")
+        (root.path / "Sources/XDictUI/Use.swift").write_text("let w = CGFloat(Rule.slop)\n")
+        self.assertEqual([f for f in root.findings()[0] if f[2] == "capture-unitless-name"], [])
 
     def test_the_fraction_rule_holds_only_inside_capture(self):
         self.assertEqual(self.kinds(swift="let jitter = 0.25\n")[0], [])

@@ -148,6 +148,8 @@ apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
 apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
+# The selection reader and its lane moved down from XDictAnywhere (plan-capture WI-2).
+apps/apple/Sources/XDictCaptureMac/*                selection services panel menubar shortcut
 apps/apple/Sources/XDictUI/Setup*                   setup
 apps/apple/Sources/XDictUI/LaunchAtLogin.swift      setup
 apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup

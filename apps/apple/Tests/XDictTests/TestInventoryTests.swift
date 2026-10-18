@@ -31,14 +31,17 @@ struct TestInventoryTests {
         "XDictSpeechTests": 31,
         // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
-        "XDictAnywhereTests": 64,
+        // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
+        // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
+        "XDictAnywhereTests": 37,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         "XDictUITests": 29,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
-        // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls.
-        "XDictTests": 39,
+        // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
+        // macOS capture target's controls.
+        "XDictTests": 40,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -49,6 +52,12 @@ struct TestInventoryTests {
         "XDictAppleSourceTests": 16,
         // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
         "XDictCaptureTests": 261,
+        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
+        // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
+        // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
+        // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
+        // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
+        "XDictCaptureMacTests": 113,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
