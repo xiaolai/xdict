@@ -164,6 +164,7 @@ e2e:
 	@[ -n "$(E2E_HOST)" ] || { echo "E2E_HOST_MACOS is not set: put the E2E Mac's SSH name in $(REPO)/local.mk" >&2; exit 1; }
 	@stages=$$(Tools/e2e-run.sh select) || exit 1; stages=$$(echo $$stages); \
 	if [ -z "$$stages" ]; then echo "e2e: every sub-stage is unchanged since its last pass; nothing to run (FULL=1 runs them all)"; exit 0; fi; \
+	Tools/e2e.sh --drivers $$stages || exit 1; \
 	tree=$$(Tools/source-tree.sh) && \
 	if [ -d .build/XDict.app ] && [ "$$(cat .build/XDict.app.source-tree 2>/dev/null)" = "$$tree" ]; then \
 	  echo "e2e: .build/XDict.app is built of this tree already; not building it again"; \
