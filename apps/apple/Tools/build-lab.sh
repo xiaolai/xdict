@@ -79,7 +79,7 @@ cp Tools/lookup/drive.py Tools/lookup/lookup_checks.py Tools/lookup/typing_check
 # Lookup from anywhere's hands in other apps and its driver (plan-macos-v1 WI-8).
 mkdir -p "$KIT/anywhere"
 swiftc -O -warnings-as-errors -o "$KIT/anywhere/hands" Tools/anywhere/hands.swift || fail "the hands helper did not build"
-cp Tools/anywhere/drive.py Tools/anywhere/front.py Tools/anywhere/hostcondition.py "$KIT/anywhere/"
+cp Tools/anywhere/drive.py Tools/anywhere/front.py Tools/anywhere/hostcondition.py Tools/anywhere/selection.py "$KIT/anywhere/"
 # The WI-10 measurement's driver and its arithmetic.
 mkdir -p "$KIT/measure"
 cp Tools/measure/drive.py Tools/measure/stats.py "$KIT/measure/"

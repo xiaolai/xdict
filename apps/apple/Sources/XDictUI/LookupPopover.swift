@@ -76,9 +76,11 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
             popover.contentViewController = controller
         }
         // The content's own fitting size is none (it fills the frost by constraints): the popover is sized here, its
-        // full-size content holding the arrow and the shadow's margins too.
+        // full-size content holding the arrow and the shadow's margins too. Only through `contentSize`: setting the
+        // frost's frame by hand as well left it out of step with the popover's size once the popover was reused, and
+        // each later showing grew the window by the difference (586, 812, 978, then the whole screen, in the E2E of
+        // 2026-10-18), its body at the bottom and the window over the word (`LookupPopoverTests`).
         let outer = Self.outer(size)
-        frost.frame = CGRect(origin: .zero, size: outer)
         popover.contentViewController?.preferredContentSize = outer
         popover.contentSize = outer
         let rect = Self.anchorRect(word: word, pointer: pointer)

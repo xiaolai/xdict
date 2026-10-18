@@ -13,6 +13,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "anywhere"))
 import front  # noqa: E402
 import hostcondition  # noqa: E402
+import selection  # noqa: E402
 
 
 def no_page(bundle, title):
@@ -75,6 +76,23 @@ class FrontHeld(unittest.TestCase):
     def test_any_other_error_is_the_checks_to_judge(self):
         self.assertEqual(self.guarded(lambda: {"error": "hands: the page has no 'abbé'"}),
                          {"error": "hands: the page has no 'abbé'"})
+
+
+class SelectionIsTheNeedle(unittest.TestCase):
+    """`selection.refused`: a host that selected something other than what was asked (Chrome's triple-click fallback
+    took the fixture's first line for the phrase, E2E 2026-10-18) is refused with its own reason, never handed on as
+    if it were the phrase."""
+
+    def test_the_exact_needle_passes(self):
+        self.assertIsNone(selection.refused("crème brûlée 煎饼", {"selected": "crème brûlée 煎饼", "dialect": "markers"}))
+
+    def test_another_line_is_refused_naming_what_was_selected_and_how(self):
+        said = selection.refused("crème brûlée 煎饼", {"selected": "The abbé took off at noon. abbé\n\n",
+                                                        "dialect": "tripleClick"})
+        self.assertEqual(said, "selected 'The abbé took off at noon. abbé\\n\\n' (tripleClick), not 'crème brûlée 煎饼'")
+
+    def test_nothing_selected_is_refused(self):
+        self.assertEqual(selection.refused("abbé", {"dialect": "find"}), "selected None (find), not 'abbé'")
 
 
 if __name__ == "__main__":
