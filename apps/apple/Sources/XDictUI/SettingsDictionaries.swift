@@ -290,13 +290,11 @@ public struct SettingsDictionaries: View {
 
     /// The details sheet's footer (R3): Remove from Library apart at the leading edge, never the default; Done the
     /// default action; Escape closes the sheet, which has nothing to cancel (what it changes applies at once).
-    static func detailsFooter(remove: @escaping () -> Void, close: @escaping () -> Void)
-        -> SheetFooter<Button<Text>, EmptyView, Button<Text>> {
-        SheetFooter(destructive: {
-            Button("Remove from Library", role: .destructive, action: remove)
-        }, primary: {
-            Button(action: close) { Text("Done") }
-        }, closeOnEscape: close)
+    static func detailsFooter(remove: @escaping () -> Void, close: @escaping () -> Void) -> SheetFooter {
+        SheetFooter([
+            FooterAction(.destructive, title: Text("Remove from Library"), perform: remove),
+            FooterAction(.primary, title: Text("Done"), perform: close),
+        ], closeOnEscape: close)
     }
 
     private func add(_ item: AddItem) {
