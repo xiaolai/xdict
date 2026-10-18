@@ -73,7 +73,8 @@ enum EntryScripts {
         [style.script("find-core.js"), style.script("find.js"), style.script("readability-core.js"),
          appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
          style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),
-         style.script("pron-run-core.js"), style.script("pron-run.js")]
+         style.script("pron-run-core.js"), style.script("pron-run.js"), style.script("word-clicks-core.js"),
+         style.script("word-clicks.js")]
     }
 
     /// **A click on XDict's speaker is XDict's** (the core marks it `data-xdict-control="speaker"`): on the window, in
@@ -86,4 +87,13 @@ enum EntryScripts {
     /// A reader's click on a blocked image's placeholder asks the same question as a remote link. Trusted clicks only:
     /// a script's `click()` or `dispatchEvent` is not the reader. An image inside a link is left to the link.
     static var placeholderClicks: String { EntryStyle.bundled.script("placeholder-clicks.js") }
+
+    /// The word under a caret, by the segmenter's word granularity and trimmed of punctuation, and whether a click may
+    /// open it in a new tab: with no DOM, so `swift test` runs it in JavaScriptCore (parity P47).
+    static var wordClicksCore: String { EntryStyle.bundled.script("word-clicks-core.js") }
+
+    /// **A ⌘-click on a word opens its lookup in a new tab** (P47): the reader's single ⌘-click only (trusted, nothing
+    /// selected, no drag, not taken by the page), never inside a link or a control, posts `{kind: "word", word}` once.
+    /// A plain click does nothing new (owner, 2026-10-18).
+    static var wordClicksDOM: String { EntryStyle.bundled.script("word-clicks.js") }
 }

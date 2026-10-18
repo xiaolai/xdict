@@ -1899,5 +1899,84 @@ a:any-link:not([data-xdict-control]):hover{text-decoration:underline !important}
 /* The margin itself is column.css's, in the first cascade layer (`xdict-space`). */
 
 """#,
+        "word-clicks-core.js": #"""
+var XDictWordCore = (function () {
+  'use strict';
+  // The longest word a click looks up, in code points; the native side holds the same bound (`EntryWordClick`).
+  var MAX = 64;
+  var EDGE = /^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu;
+  function word(s) {
+    if (!s || !s.isWordLike) return null;
+    var w = s.segment.replace(EDGE, '');
+    if (!w || Array.from(w).length > MAX) return null;
+    return { word: w, start: s.index, end: s.index + s.segment.length };
+  }
+  // The word of `text` at the caret `offset`, by the segmenter's word granularity (so a CJK run gives its word, an
+  // accented word stays whole), trimmed of punctuation and symbols; null on a space or punctuation. A caret just after
+  // a word (the right half of its last letter) is that word: the DOM side checks the point is on its letters.
+  function at(text, offset, segmenter) {
+    if (typeof text !== 'string' || typeof offset !== 'number' || offset < 0 || offset > text.length) return null;
+    var segments = segmenter.segment(text);
+    return word(segments.containing(offset)) || (offset > 0 ? word(segments.containing(offset - 1)) : null);
+  }
+  // Whether a click opens its word in a new tab: the reader's (trusted) single primary Command-click, no other modifier,
+  // nothing selected, and not already taken by the page (`defaultPrevented`). A plain click is never a lookup (owner,
+  // 2026-10-18: readers misclick).
+  function allowed(e, selected) {
+    return !!e && e.isTrusted === true && e.button === 0 && e.detail === 1 && e.metaKey === true && !e.altKey
+      && !e.ctrlKey && !e.shiftKey && !e.defaultPrevented && !selected;
+  }
+  return { at: at, allowed: allowed, MAX: MAX };
+})();
+
+"""#,
+        "word-clicks.js": #"""
+(function () {
+  'use strict';
+  if (typeof document === 'undefined' || window.__xdictWordClicks) return;
+  window.__xdictWordClicks = true;
+  if (typeof Intl === 'undefined' || !Intl.Segmenter || !document.caretRangeFromPoint) return;
+  var segmenter = new Intl.Segmenter(undefined, { granularity: 'word' });
+  // What a click inside is the control's or the link's, never a word's.
+  var CONTROLS = 'a[href],button,input,select,textarea,label,summary,audio,video,img,svg,[contenteditable],'
+    + '[role=button],[role=link],[onclick],[data-xdict-control]';
+  var SLOP = 4;
+  var down = null;
+  window.addEventListener('mousedown', function (e) {
+    down = e.isTrusted ? { x: e.clientX, y: e.clientY } : null;
+  }, true);
+  function selected() {
+    var s = window.getSelection();
+    return !!s && !s.isCollapsed && String(s).trim() !== '';
+  }
+  function wordAt(x, y) {
+    var caret = document.caretRangeFromPoint(x, y);
+    if (!caret || caret.startContainer.nodeType !== 3) return null;
+    var node = caret.startContainer, hit = XDictWordCore.at(node.nodeValue || '', caret.startOffset, segmenter);
+    if (!hit) return null;
+    var range = document.createRange();
+    range.setStart(node, hit.start);
+    range.setEnd(node, hit.end);
+    var rects = range.getClientRects();
+    for (var i = 0; i < rects.length; i++) {
+      var r = rects[i];
+      if (x >= r.left && x <= r.right && y >= r.top && y <= r.bottom) return hit.word;
+    }
+    return null;
+  }
+  // A Command-click on a word opens it in a new tab, once per click. Bubbling, on the window: the page's own
+  // handlers have run, and one that took the click has said so.
+  window.addEventListener('click', function (e) {
+    if (!XDictWordCore.allowed(e, selected())) return;
+    if (!down || Math.abs(down.x - e.clientX) > SLOP || Math.abs(down.y - e.clientY) > SLOP) return;
+    var t = e.target;
+    if (!t || !t.closest || t.closest(CONTROLS)) return;
+    var word = wordAt(e.clientX, e.clientY);
+    if (!word) return;
+    try { webkit.messageHandlers.xdictEntry.postMessage({ kind: 'word', word: word }); } catch (x) {}
+  });
+})();
+
+"""#,
     ]
 }

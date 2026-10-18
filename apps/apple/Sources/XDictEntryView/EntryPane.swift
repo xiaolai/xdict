@@ -10,6 +10,8 @@ protocol EntryPaneHost: AnyObject {
     func perform(_ action: EntryLinkAction, from pane: EntryPane)
     /// A remote URL the reader (or a script) activated: ask the reader.
     func askReader(_ url: URL, from pane: EntryPane)
+    /// A word the reader ⌘-clicked, to open in a new tab (parity P47).
+    func openInNewTab(_ click: EntryWordClick, from pane: EntryPane)
     /// A new window, asked for only when the confinement allows one (the lab's control for that layer, never the app).
     func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView?
     func documentFinished(_ pane: EntryPane)
@@ -433,14 +435,35 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     // MARK: - WKScriptMessageHandler (the shell's world only)
 
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.world == Self.world, let body = message.body as? [String: Any],
-              body["kind"] as? String == "blocked-image", let text = body["url"] as? String,
-              case .blocked(let remote) = EntryRoutes.route(URL(string: text), method: "GET") else { return }
-        guard let url = RemoteOpenGate.openable(remote) else {
-            host?.record(.linkRouted(url: text, action: "nothing"))
-            return
+    /// What a message to the handler is: only the shell's world is heard, and only in the two shapes its scripts post.
+    enum Message: Equatable {
+        case blockedImage(String)
+        case word(EntryWordClick)
+        case refused
+    }
+
+    nonisolated static func message(_ body: Any, fromShellsWorld: Bool) -> Message {
+        guard fromShellsWorld, let object = body as? [String: Any] else { return .refused }
+        switch object["kind"] as? String {
+        case "blocked-image": return (object["url"] as? String).map(Message.blockedImage) ?? .refused
+        case "word": return EntryWordClick(message: body).map(Message.word) ?? .refused
+        default: return .refused
         }
-        host?.askReader(url, from: self)
+    }
+
+    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        switch Self.message(message.body, fromShellsWorld: message.world == Self.world) {
+        case .refused:
+            host?.record(.messageRefused)
+        case .word(let click):
+            host?.openInNewTab(click, from: self)
+        case .blockedImage(let text):
+            guard case .blocked(let remote) = EntryRoutes.route(URL(string: text), method: "GET") else { return }
+            guard let url = RemoteOpenGate.openable(remote) else {
+                host?.record(.linkRouted(url: text, action: "nothing"))
+                return
+            }
+            host?.askReader(url, from: self)
+        }
     }
 }
