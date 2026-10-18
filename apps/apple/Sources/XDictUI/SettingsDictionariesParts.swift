@@ -115,8 +115,8 @@ struct SettingsAddRemoveBar: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {  // placement: P39
-            Menu {
+        HStack(spacing: 0) {
+            Menu {  // placement: P39
                 ForEach(SettingsDictionaries.addMenu, id: \.self) { item in
                     if item.opensWithCommandO {
                         Button { add(item) } label: { Text(item.title) }.keyboardShortcut("o")
@@ -134,7 +134,7 @@ struct SettingsAddRemoveBar: View {
             .help(Text("Add Dictionaries…"))
             .accessibilityLabel(Text("Add Dictionaries…"))
             .accessibilityIdentifier("settings.add")
-            Button(action: remove) {
+            Button(action: remove) {  // placement: P39
                 Image(systemName: "minus").frame(width: Tokens.Size.tableButton.width, height: Tokens.Size.tableButton.height).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)

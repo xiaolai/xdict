@@ -13,9 +13,17 @@ import XDictTestSupport
 /// - **C, no size, key or style by hand**: `.controlSize(`, AppKit's `controlSize = .`, Return or Escape bound by hand,
 ///   a bordered or tinted style.
 ///
-/// **An exclusion is a marker on the very line**: `// placement: <id>`, the id one of `exclusions` below. On a line
-/// that opens a block, it covers the block for check A; checks B and C want it on the line itself, so a second
-/// `.borderedProminent` in a marked file still fails.
+/// **An exclusion is a marker on the very line**: `// placement: <id>`, the id one of `exclusions` below. It covers that
+/// line. It covers a whole block for check A only where its line opens a menu or toolbar builder — `CommandGroup`,
+/// `CommandMenu`, `Menu`, `ToolbarItem(Group)`, `MenuBarExtra`, `.toolbar`, a `some Commands` or `some ToolbarContent`
+/// body: SwiftUI makes every button there a menu item or a toolbar item, whatever its line says. A marker on any other
+/// line that opens a block (an `HStack`, a view's `body`) covers only its line, so each button in the block needs its
+/// own. Checks B and C always want the marker on the line itself, so a second `.borderedProminent` in a marked file
+/// still fails.
+///
+/// **Its limit**: it reads text, not types. A button built in a helper (a property, a function, a view of its own) is
+/// judged where the helper writes it, not where it is used; a helper called from a pane slot must place its buttons
+/// through the blocks itself or carry markers.
 struct ButtonPlacementTests {
     static let sharedBlocks = "Sources/XDictUI/ActionLayout.swift"
     /// The shell's interface modules: the rest of `Sources/` holds no button.
@@ -62,8 +70,14 @@ struct ButtonPlacementTests {
         let parent: Int?
         let slot: Slot
         let marker: String?
+        /// Whether its line opens a menu or toolbar builder, where a marker covers the whole block.
+        let opensBuilder: Bool
         let open: Int
         var close: Int
+    }
+
+    static var builder: Regex<AnyRegexOutput> {
+        Regex(#/\b(CommandGroup|CommandMenu|Menu|ToolbarItem|ToolbarItemGroup|MenuBarExtra)\b|some\s+(Commands|ToolbarContent)\s*$|\.toolbar\s*$|@ToolbarContentBuilder/#)
     }
 
     /// A file's braces, with which characters are code (not a comment or a string) and the innermost brace each sits
@@ -182,7 +196,9 @@ struct ButtonPlacementTests {
                             } else {
                                 slot = .other
                             }
-                            frames.append(Frame(parent: top, slot: slot, marker: markers[line], open: index, close: index))
+                            let opensBuilder = prefix.firstMatch(of: ButtonPlacementTests.builder.wordBoundaryKind(.simple)) != nil
+                            frames.append(Frame(parent: top, slot: slot, marker: markers[line], opensBuilder: opensBuilder,
+                                                open: index, close: index))
                             top = frames.count - 1
                         } else if character == "}" {
                             guard let closing = top else { return }
@@ -236,7 +252,7 @@ struct ButtonPlacementTests {
             if markers[lineOf[index]] != nil { return true }
             var frame = innermost[index]
             while let current = frame {
-                if frames[current].marker != nil { return true }
+                if frames[current].marker != nil, frames[current].opensBuilder { return true }
                 switch frames[current].slot {
                 case .actions: return true
                 case .sentence: return false
@@ -251,18 +267,26 @@ struct ButtonPlacementTests {
 
     /// Check A's sites: every control that performs an action.
     static var actionControl: Regex<AnyRegexOutput> {
-        Regex(#/\b(Button|NSButton|NSPopUpButton|NSSegmentedControl|Menu|CommandMenu|ControlGroup|Link)\s*[({]|\.addButton\(/#)
+        Regex(#/\b(Button|NSButton|NSPopUpButton|NSSegmentedControl|Menu|CommandMenu|ControlGroup|SettingsLink|ShareLink|HelpLink|Link)\s*[({]|\b[A-Za-z]*Link\s*\(|\.addButton\(/#)
     }
-    /// Check B's: a control of any kind.
-    static var anyControl: Regex<AnyRegexOutput> { Regex(#/\b(Button|Toggle|Menu|NSButton|Link|Picker)\s*[({]/#) }
+    /// Check B's: a control of any kind. (Any `…Link(` is a link; `…Link {` only for SwiftUI's own, since a return type
+    /// such as `EntryLink {` opens a function body.)
+    static var anyControl: Regex<AnyRegexOutput> {
+        Regex(#/\b(Button|Toggle|Menu|NSButton|Picker|SettingsLink|ShareLink|HelpLink|Link)\s*[({]|\b[A-Za-z]*Link\s*\(/#)
+    }
     /// Check C's spellings, and the rule each breaks.
     static var byHand: [(pattern: Regex<AnyRegexOutput>, rule: String)] {
         [
             (Regex(#/\.controlSize\(/#), "a size by hand (R2, R4: the surface decides it)"),
-            (Regex(#/\bcontrolSize\s*=\s*\./#), "an AppKit size by hand (R2, R4)"),
-            (Regex(#/\.keyboardShortcut\(\s*\.(defaultAction|cancelAction|return|escape)\b/#),
+            (Regex(#/\\\.controlSize\b/#), "a size through the environment by hand (R2, R4)"),
+            (Regex(#/\bcontrolSize\s*=/#), "an AppKit size by hand (R2, R4)"),
+            (Regex(#/\.keyboardShortcut\(\s*(KeyboardShortcut|KeyEquivalent)?\.(defaultAction|cancelAction|return|escape)\b/#),
              "Return or Escape bound by hand (R3: SheetFooter binds them)"),
-            (Regex(#/\.buttonStyle\(\s*\.bordered/#), "a bordered or prominent style by hand (R3)"),
+            (Regex(#/\.keyboardShortcut\(\s*"\\(r|n|u\{)/#), "Return or Escape bound by hand, as a character (R3)"),
+            (Regex(#/\bkeyEquivalent\s*=|\bkeyEquivalent\s*:\s*"\\(r|n|u\{)/#), "an AppKit key equivalent by hand (R3)"),
+            (Regex(#/\.buttonStyle\((?!\s*\.(plain|borderless|automatic)\s*\))/#),
+             "a button style by hand (R3: only plain, borderless or automatic outside the blocks)"),
+            (Regex(#/\.toggleStyle\(\s*\.button\b/#), "a toggle drawn as a button by hand"),
             (Regex(#/\.tint\(/#), "a tinted button by hand (R3)"),
         ]
     }
@@ -406,6 +430,52 @@ struct ButtonPlacementTests {
             ProgressView().controlSize(.small)
             // Button("Commented") { }.controlSize(.small)
             """) == [1, 2, 3, 4, 5, 5, 7])
+    }
+
+    /// Check C, the other spellings of the same things (verifier, 2026-10-18), and the links SwiftUI draws as buttons.
+    @Test func checkCSeesTheOtherSpellings() {
+        #expect(Self.lines("""
+            ActionRow { Text("x") } actions: { Button("A") { a() }.keyboardShortcut(KeyEquivalent.return) }
+            ActionRow { Text("x") } actions: { Button("B") { b() }.keyboardShortcut("\\r", modifiers: []) }
+            ActionRow { Text("x") } actions: { Button("C") { c() }.buttonStyle(BorderedProminentButtonStyle()) }
+            ActionRow { Text("x") } actions: { Button("D") { d() }.buttonStyle(.glassProminent) }
+            ActionRow { Text("x") } actions: { Button("E") { e() }.buttonStyle(.plain) }
+            VStack { }.environment(\\.controlSize, .small)
+            ActionRow { Text("x") } actions: { Toggle(isOn: $on) { Text("t") }.toggleStyle(.button) }
+            button.keyEquivalent = "\\r"
+            button.controlSize = NSControl.ControlSize.small
+            SettingsLink { Text("Settings") }
+            ShareLink(item: url)
+            HelpLink { help() }
+            """) == [1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12])
+    }
+
+    /// A marker on a line that opens a menu or toolbar builder covers the block; on any other block-opening line, only
+    /// its own line.
+    @Test func aMarkerCoversABlockOnlyWhereItOpensAMenuOrToolbar() {
+        #expect(Self.lines("""
+            var body: some View {  // placement: menu-bar-extra
+                Button("Open") { open() }
+            }
+            CommandMenu("Go") {  // placement: P35
+                Button("Back") { back() }
+            }
+            HStack(spacing: 0) {  // placement: P39
+                Button(action: remove) { Image(systemName: "minus") }
+            }
+            @ToolbarContentBuilder private var toolbar: some ToolbarContent {  // placement: P3
+                ToolbarItem { Button("Back") { back() } }
+            }
+            """) == [2, 8])
+    }
+
+    /// `SheetFooter`'s body binds each placement's key, the builder's, in one place: deleting it fails here, as no test
+    /// can render the body.
+    @Test func theFooterBodyBindsEachPlacementsKey() throws {
+        let text = try #require(try Self.sources().first { $0.path == Self.sharedBlocks }?.text)
+        let bindings = text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { $0.contains(".keyboardShortcut(") && !$0.hasPrefix("//") }
+        #expect(bindings == [".keyboardShortcut(placement.key)"])
     }
 
     @Test func aMarkerMustNameAnExclusion() {
