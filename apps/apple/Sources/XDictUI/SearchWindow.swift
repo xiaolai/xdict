@@ -44,6 +44,7 @@ public struct SearchWindow: View {
         .navigationTitle(Text(ToolbarLayout.windowTitle))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)
+        .background(TabTitle(title: ToolbarLayout.tabTitle(word: state.shownWord)))
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
         .onChange(of: state.model.shown) { _, shown in
             guard let shown else { return }

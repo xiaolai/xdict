@@ -37,6 +37,13 @@ public enum ToolbarLayout {
     /// The window's title, always: "XDict", where Apple's says "Dictionary" (P2, the owner's deviation of 2026-10-18).
     public static var windowTitle: LocalizedStringResource { LocalizedStringResource("XDict") }
 
+    /// A tab's label: the word it shows, else the window's title. The window's own title stays "XDict" (above); a
+    /// tab with the same text as every other tab tells the reader nothing (owner, 2026-10-18).
+    public static func tabTitle(word: String?) -> String {
+        let trimmed = word?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? String(localized: windowTitle) : trimmed
+    }
+
     /// Under the title after a search: how many headwords the list found; nothing for none, or for spelling guesses.
     public static func subtitle(found: Int?) -> LocalizedStringResource? {
         found.map { LocalizedStringResource("\($0) found") }

@@ -46,6 +46,14 @@ struct ParityWindowTests {
 
     /// **P2, XDict's own**: the title is "XDict" always (owner, 2026-10-18; Apple's says "Dictionary"); "N found" under
     /// it counts the list, in the reader's grammar, and is absent for no result and for spelling guesses.
+    /// A tab names its word, not the app: every tab said "XDict" (owner, 2026-10-18). With no word shown it falls back
+    /// to the window's title.
+    @Test func aTabIsNamedByItsWordAndFallsBackToTheTitle() {
+        #expect(ToolbarLayout.tabTitle(word: "happy") == "happy")
+        #expect(ToolbarLayout.tabTitle(word: "  ") == "XDict")
+        #expect(ToolbarLayout.tabTitle(word: nil) == "XDict")
+    }
+
     @Test func theTitleIsXDictWithTheCountUnderIt() {
         #expect(Self.text(ToolbarLayout.windowTitle) == "XDict")
         #expect(Self.chinese(ToolbarLayout.windowTitle) == "XDict")
