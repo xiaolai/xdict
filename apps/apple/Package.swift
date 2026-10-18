@@ -59,7 +59,9 @@ let package = Package(
         // behind a seam, the one Escape claim, and what registering it answered — the selection read through the
         // Accessibility API (both dialects, the term less its punctuation, and where it is on screen), the text the
         // Service is handed, and where the panel goes beside the word. Kinds, never sentences: the view layer words them.
-        .target(name: "XDictAnywhere", dependencies: ["XDictBase", "XDictCaptureMac", "XDictTokens"]),
+        // Since plan-capture WI-3 also the composition layer for capture (ADR-0014 decision 5): hover's control, its
+        // stored policy and scripts, the tokens' tolerances, and the popover's acknowledgements.
+        .target(name: "XDictAnywhere", dependencies: ["XDictBase", "XDictCapture", "XDictCaptureMac", "XDictTokens"]),
 
         // **Capture, as values and arithmetic** (ADR-0014 decision 5; plan-capture WI-1), ported from XiaolaiDict's
         // `CaptureModel` and `Capture`: the captured term and its validating constructor, the sink's request numbers and
@@ -171,7 +173,7 @@ let package = Package(
         .testTarget(name: "XDictCaptureMacTests", dependencies: ["XDictCapture", "XDictCaptureMac"]),
         // Lookup from anywhere without a keyboard, a window or another app: Carbon faked (a real global shortcut would
         // be taken from the reader while the suite ran), the Accessibility API faked, the panel's geometry as numbers.
-        .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere", "XDictCaptureMac"]),
+        .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictTokens"]),
         // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.

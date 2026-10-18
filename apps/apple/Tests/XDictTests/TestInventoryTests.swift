@@ -33,7 +33,10 @@ struct TestInventoryTests {
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
         // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
         // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
-        "XDictAnywhereTests": 37,
+        // 37 → 65 (plan-capture WI-3): the composition layer for capture — HoverPolicyStoreTests (9) and
+        // HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name from XiaolaiDict, thirteen added (the
+        // control's scripts, its default and tolerances, the derived scripts, the popover's acknowledgements, the anchor).
+        "XDictAnywhereTests": 65,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         "XDictUITests": 29,
         "XDictEntryViewTests": 43,
