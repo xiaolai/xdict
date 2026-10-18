@@ -20,19 +20,19 @@ struct DictionaryTable: NSViewRepresentable {
     }
 
     /// A drag whose source is this table reorders (its rows, by id) and never imports; any other imports its file URLs.
-    static func classify(fromTable: Bool, rows: [String], urls: [URL]) -> Drop {
+    nonisolated static func classify(fromTable: Bool, rows: [String], urls: [URL]) -> Drop {
         if fromTable { return rows.isEmpty ? .refuse : .reorder(rows) }
         let files = urls.filter(\.isFileURL)
         return files.isEmpty ? .refuse : .importFiles(files)
     }
 
     /// Where the drop is drawn: a reorder in the gap above the proposed row; an import on the whole table.
-    static func dropRow(for drop: Drop, proposed: Int) -> (row: Int, operation: NSTableView.DropOperation) {
+    nonisolated static func dropRow(for drop: Drop, proposed: Int) -> (row: Int, operation: NSTableView.DropOperation) {
         if case .reorder = drop { return (proposed, .above) }
         return (-1, .on)
     }
 
-    static func keyAction(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> KeyAction? {
+    nonisolated static func keyAction(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> KeyAction? {
         let flags = flags.intersection([.command, .option, .control, .shift])
         switch (keyCode, flags) {
         case (51, []), (117, []): return .remove
