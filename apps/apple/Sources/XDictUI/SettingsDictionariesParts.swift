@@ -152,13 +152,17 @@ struct SettingsDictionaryOptions: View {
     let entry: LibraryEntry
     let details: () -> Void
     let locate: () -> Void
+    /// Convert Again for an Apple dictionary Apple updated (ADR-0011 decision 8); nil where it cannot be offered.
+    let convertAgain: (() -> Void)?
     @AppStorage private var originalStyle: Bool
 
-    init(library: Library, entry: LibraryEntry, details: @escaping () -> Void, locate: @escaping () -> Void) {
+    init(library: Library, entry: LibraryEntry, details: @escaping () -> Void, locate: @escaping () -> Void,
+         convertAgain: (() -> Void)? = nil) {
         self.library = library
         self.entry = entry
         self.details = details
         self.locate = locate
+        self.convertAgain = convertAgain
         _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
     }
 
@@ -177,8 +181,8 @@ struct SettingsDictionaryOptions: View {
         }
     }
 
-    /// One problem at a time, the most pressing first: the changed file's question, then why it cannot be used, then the
-    /// languages to confirm.
+    /// One problem at a time, the most pressing first: the changed file's question, then why it cannot be used, then an
+    /// Apple dictionary Apple updated or removed (ADR-0011 decisions 7–9), then the languages to confirm.
     @ViewBuilder private var problem: some View {
         let phase = library.phases[entry.id]
         if entry.offer != nil {
@@ -206,6 +210,18 @@ struct SettingsDictionaryOptions: View {
                 case .cancel, .none: EmptyView()
                 }
             }
+        } else if library.appleStatus[entry.id] == .updated {
+            HStack(alignment: .firstTextBaseline) {
+                Text(AppleImportSentences.updated(name: entry.displayName))
+                Spacer()
+                if let convertAgain {
+                    Button(action: convertAgain) { Text(AppleImportSentences.convertAgain) }
+                        .help(Text(AppleImportSentences.convertAgainHelp))
+                        .accessibilityIdentifier("settings.convertAgain")
+                }
+            }
+        } else if library.appleStatus[entry.id] == .removed {
+            Text(AppleImportSentences.removed).foregroundStyle(.secondary)
         } else if case .ready = phase, entry.languages.needsAsking {
             HStack(alignment: .firstTextBaseline) {
                 Text(entry.languages.basis == .unknown

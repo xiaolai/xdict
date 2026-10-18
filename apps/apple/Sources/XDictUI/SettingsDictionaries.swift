@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
+import XDictAppleSource
 import XDictEntryView
 import XDictLibrary
 import XDictTokens
@@ -37,7 +38,7 @@ public struct SettingsDictionaries: View {
     /// The `+` menu's items (d.2), in order.
     public enum AddItem: CaseIterable, Sendable {
         case mdxFiles
-        /// ADR-0011; not offered until the Apple import lands (plan WI-5).
+        /// ADR-0011: the Apple dictionaries installed on this Mac, converted once (plan WI-5).
         case appleDictionaries
 
         public var title: LocalizedStringResource {
@@ -52,8 +53,7 @@ public struct SettingsDictionaries: View {
 
         var isOffered: Bool {
             switch self {
-            case .mdxFiles: true
-            case .appleDictionaries: false
+            case .mdxFiles, .appleDictionaries: true
             }
         }
     }
@@ -100,13 +100,15 @@ public struct SettingsDictionaries: View {
 
     @Bindable private var library: Library
     @Bindable private var route: SettingsRoute
+    private let appleImport: AppleImportHost?
     @State private var selection: UUID?
     @State private var paneHeight: CGFloat = 0
     @Environment(\.undoManager) private var undoManager
 
-    public init(library: Library, route: SettingsRoute = .shared) {
+    public init(library: Library, route: SettingsRoute = .shared, appleImport: AppleImportHost? = nil) {
         self.library = library
         self.route = route
+        self.appleImport = appleImport
     }
 
     public var body: some View {
@@ -127,6 +129,8 @@ public struct SettingsDictionaries: View {
         // The Details… sheet is sized from this, so it fits inside the window.
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { paneHeight = $0 }
         .onAppear { resolveRoute() }
+        // ADR-0011 decision 7: each Apple dictionary compared with its installed bundle when Settings opens.
+        .task { await checkAppleDictionaries() }
         .onChange(of: route.pendingSelection) { resolveRoute() }
         .onChange(of: library.entries.map(\.id)) { resolveRoute() }
         .fileImporter(isPresented: presented(.importer), allowedContentTypes: Self.chooseable,
@@ -136,6 +140,12 @@ public struct SettingsDictionaries: View {
         // The open panel's button says what happens (UI review L-19).
         .fileDialogConfirmationLabel(Text("Add"))
         .sheet(isPresented: detailsShown) { detailsSheet }
+        .sheet(isPresented: presented(.appleImport), onDismiss: { appleImport?.importer.clearFinished() }) {
+            if let appleImport {
+                AppleImportSheet(library: library, host: appleImport, size: Self.detailsSheetSize(paneHeight: paneHeight),
+                                 done: { route.dismiss(.appleImport) })
+            }
+        }
     }
 
     // MARK: - The table
@@ -200,7 +210,8 @@ public struct SettingsDictionaries: View {
             if let id = selection, let entry = library.entries.first(where: { $0.id == id }) {
                 SettingsDictionaryOptions(library: library, entry: entry,
                                           details: { route.request(.details(entry.id)) },
-                                          locate: { route.request(.importer) })
+                                          locate: { route.request(.importer) },
+                                          convertAgain: appleImport.map { host in { convertAgain(entry.id, host) } })
                     .id(entry.preferencesKey)
             } else {
                 Text(Self.noSelection).foregroundStyle(.secondary)
@@ -249,7 +260,27 @@ public struct SettingsDictionaries: View {
     private func add(_ item: AddItem) {
         switch item {
         case .mdxFiles: route.request(.importer)
-        case .appleDictionaries: route.request(.appleImport)
+        case .appleDictionaries: if appleImport != nil { route.request(.appleImport) }
+        }
+    }
+
+    // MARK: - Apple dictionaries (ADR-0011)
+
+    private func checkAppleDictionaries() async {
+        guard let appleImport, !library.importedAppleBundles.isEmpty else { return }
+        await appleImport.importer.checkForUpdates(installed: await appleImport.find())
+    }
+
+    /// Convert Again from the bundle as installed now; gone meanwhile, the row says so at the next check.
+    private func convertAgain(_ id: UUID, _ host: AppleImportHost) {
+        guard let identifier = library.entries.first(where: { $0.id == id })?.appleSource?.bundleIdentifier else { return }
+        Task {
+            let installed = await host.find()
+            if let bundle = installed.first(where: { $0.identifier == identifier }), bundle.refusal == nil {
+                host.importer.convertAgain(id, from: bundle)
+            } else {
+                await host.importer.checkForUpdates(installed: installed)
+            }
         }
     }
 

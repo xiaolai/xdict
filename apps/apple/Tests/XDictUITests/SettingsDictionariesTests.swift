@@ -60,15 +60,17 @@ struct SettingsDictionariesTests {
 
     // MARK: - ADR-0012: what the Library window did
 
-    /// `+` is a menu (d.2): Add MDX Files… (⌘O), and Add Apple Dictionaries…, in the code but not offered until WI-5.
-    @Test func thePlusMenuOffersMDXFilesOnly() {
+    /// `+` is a menu (d.2): Add MDX Files… (⌘O), and Add Apple Dictionaries…, offered since the Apple import landed
+    /// (ADR-0011 decision 1, plan WI-5; parity P39).
+    @Test func thePlusMenuOffersMDXFilesAndAppleDictionaries() {
         #expect(SettingsDictionaries.AddItem.allCases == [.mdxFiles, .appleDictionaries])
-        #expect(SettingsDictionaries.addMenu == [.mdxFiles])
+        #expect(SettingsDictionaries.addMenu == [.mdxFiles, .appleDictionaries])
         #expect(SettingsDictionaries.AddItem.mdxFiles.opensWithCommandO)
         #expect(!SettingsDictionaries.AddItem.appleDictionaries.opensWithCommandO)
         #expect(Self.text(SettingsDictionaries.AddItem.mdxFiles.title) == "Add MDX Files…")
         #expect(Self.text(SettingsDictionaries.AddItem.appleDictionaries.title) == "Add Apple Dictionaries…")
         #expect(Self.text(SettingsDictionaries.AddItem.mdxFiles.title, "zh-Hans") == "添加 MDX 文件…")
+        #expect(Self.text(SettingsDictionaries.AddItem.appleDictionaries.title, "zh-Hans") == "添加 Apple 词典…")
     }
 
     /// The importer offers what the Library's did: folders, .mdx and .mdd.

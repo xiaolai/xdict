@@ -170,8 +170,13 @@ ROUTES = [
                             ("click", "settings.details"), ("wait", 1.5)]),
     ("settings.dictionaries.addPanel", "full", "⌘, ▸ Dictionaries, ⌘O (+ ▸ Add MDX Files…)", "The open panel for "
      ".mdx/.mdd and folders", DICTIONARIES + [("key", "cmd+o"), ("wait", 2)]),
-    ("settings.dictionaries.addMenu", "full", "⌘, ▸ Dictionaries, click +", "The + menu: Add MDX Files… ⌘O",
-     DICTIONARIES + [("click", "settings.add"), ("wait", 0.8)]),
+    ("settings.dictionaries.addMenu", "full", "⌘, ▸ Dictionaries, click +", "The + menu: Add MDX Files… ⌘O, then "
+     "Add Apple Dictionaries… (P39; ADR-0011 decision 1)", DICTIONARIES + [("click", "settings.add"), ("wait", 0.8)]),
+    # ADR-0011 (plan WI-5): the Apple dictionaries installed on the Mac the tour runs on; nothing is converted.
+    ("settings.dictionaries.appleImport", "full", "⌘, ▸ Dictionaries, + ▸ Add Apple Dictionaries…", "The sheet: a "
+     "checkbox per Apple dictionary installed on this Mac with its languages and size, 'Apple Dictionary' greyed with "
+     "its sentence, how to download more (Dictionary.app ▸ Settings), Cancel and Import (dimmed until one is ticked)",
+     DICTIONARIES + [("click", "settings.add"), ("wait", 0.8), ("click", "Add Apple Dictionaries…"), ("wait", 3)]),
     ("settings.dictionaries.dropV3", "full", "Drag a format 3.0 .mdx onto the table", "Imported and Ready: XDict "
      "reads format 3.0 dictionaries (ADR-0005)", DICTIONARIES + [("drop", "refused/v3/v3.mdx"), ("wait", 3)]),
     ("settings.dictionaries.dropV3Mdd", "full", "Drag a folder holding a format 3.0 .mdx and its .mdd onto the table",
@@ -194,6 +199,11 @@ ROUTES = [
     ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
      [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
     # Not driven
+    ("settings.dictionaries.appleUpdated", "full", "An imported Apple dictionary whose bundle Apple updated", "Beneath "
+     "the table, 'Apple updated <name>.' with Convert Again; after it, 'Kept as the same dictionary…' with Undo "
+     "(ADR-0011 decisions 7 and 8)", None),
+    ("settings.dictionaries.appleRemoved", "full", "An imported Apple dictionary whose bundle Apple removed",
+     "Beneath the table, 'Apple removed this dictionary’s files; this copy still reads.' (ADR-0011 decision 9)", None),
     ("settings.dictionaries.loading", "full", "An import in progress", "Progress and Cancel in the strip above the "
      "table", None),
     ("lookup.held", "full", "A dictionary slow to answer", "Its section waiting, the others shown", None),
@@ -214,4 +224,8 @@ NOT_DRIVEN_WHY = {
     "services.otherApp": "needs a selection in another app (TextEdit, Notes); the tour drives XDict alone",
     "anywhere.noAccess": "Accessibility grants are never changed by script, and XDict holds it on this Mac",
     "sound.recording": "the lookup fixtures hold no recording; the E2E sound stage plays them at volume 0",
+    "settings.dictionaries.appleUpdated": "needs an imported Apple dictionary whose installed bundle then changes; the "
+                                          "E2E library.apple stage converts a synthetic one and changes it",
+    "settings.dictionaries.appleRemoved": "needs an imported Apple dictionary whose installed bundle then goes; the "
+                                          "E2E library.apple stage removes its synthetic one",
 }

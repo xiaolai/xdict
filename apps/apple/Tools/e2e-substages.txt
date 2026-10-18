@@ -83,6 +83,15 @@
 @ entries.persistence default kit,corpus
     entries.app.persistence
 
+# The Apple import (ADR-0011, plan WI-5): the real app over its own library and a synthetic AssetsV2 tree written by the
+# run (`--apple-assets`; no Apple content), converted by the signed service in the shared app-group container. Extra
+# until the stage's driver lands (defined 2026-10-18, never run): a run that names it fails loudly on the missing
+# `substage_library_apple`, and no release requires it meanwhile.
+@ library.apple extra kit
+    appleImport.listed appleImport.refusedShown appleImport.converted appleImport.reads appleImport.alreadyImported
+    appleImport.cancelLeavesNothing appleImport.updateOffered appleImport.convertAgainJoins appleImport.removedStillReads
+    appleImport.sweptAtLaunch
+
 @ library.corpus default editions,corpus
     corpus.registered corpus.editions corpus.choicesMade relaunch.everyDictionary relaunch.order
     relaunch.foundWhereMoved relaunch.answering corpus.changed.newEdition corpus.changed.notJoinedUnasked

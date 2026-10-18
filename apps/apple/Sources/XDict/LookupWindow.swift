@@ -26,10 +26,15 @@ enum LookupWindowReport {
     /// The app's setup under this instrument: read by `XDictApp.setup` before anything else of the app is made.
     static func setup(_ arguments: [String]) -> AppSetup? {
         guard let work = Instrument.value(after: flag, in: arguments) else { return nil }
-        return AppSetup(libraryDirectory: URL(fileURLWithPath: work).appending(path: "store"),
-                        service: ServiceClient(connect: hold.connect(XPCServiceConnection.embedded)),
-                        entryEvents: { event in LookupWindowRun.shared?.note(event) },
-                        speechVolume: 0, speechSuite: InstrumentWindow.speechSuite)
+        var setup = AppSetup(libraryDirectory: URL(fileURLWithPath: work).appending(path: "store"),
+                             service: ServiceClient(connect: hold.connect(XPCServiceConnection.embedded)),
+                             entryEvents: { event in LookupWindowRun.shared?.note(event) },
+                             speechVolume: 0, speechSuite: InstrumentWindow.speechSuite)
+        // A synthetic AssetsV2 tree for the Apple import's E2E sub-stage (`library.appleImport`), never the reader's run.
+        if let assets = Instrument.value(after: "--apple-assets", in: arguments) {
+            setup.appleAssets = URL(fileURLWithPath: assets, isDirectory: true)
+        }
+        return setup
     }
 
     /// Readies the run before the app starts: it begins when the first main window is made.

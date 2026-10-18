@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictAppleSource
 @testable import XDictService
 import XDictTestSupport
 
@@ -9,46 +10,46 @@ import XDictTestSupport
 /// signature) offers no update.
 struct AppleImportManifestTests {
     static func entry(_ name: String, _ bytes: String) -> ManifestEntry {
-        ManifestEntry(name: name, size: UInt64(bytes.utf8.count), sha256: Manifest.sha256(Array(bytes.utf8)))
+        ManifestEntry(name: name, size: UInt64(bytes.utf8.count), sha256: XDictAppleSource.Manifest.sha256(Array(bytes.utf8)))
     }
 
     @Test func theOrderFilesAreListedInChangesNothing() throws {
         let a = [Self.entry("Contents/Info.plist", "p"), Self.entry("Contents/Resources/Body.data", "b")]
-        #expect(try Manifest.revision(a) == Manifest.revision(a.reversed()))
+        #expect(try XDictAppleSource.Manifest.revision(a) == XDictAppleSource.Manifest.revision(a.reversed()))
     }
 
     @Test func aRenamedFileChangesTheRevision() throws {
         let a = [Self.entry("Contents/Resources/a.css", "x")]
         let b = [Self.entry("Contents/Resources/b.css", "x")]
-        #expect(try Manifest.revision(a) != Manifest.revision(b))
+        #expect(try XDictAppleSource.Manifest.revision(a) != XDictAppleSource.Manifest.revision(b))
     }
 
     /// Two entries of one name cannot both be what the converter reads: refused, never one silently chosen.
     @Test func duplicateNamesAreRefused() {
         let twice = [Self.entry("Contents/Resources/a.css", "x"), Self.entry("Contents/Resources/a.css", "y")]
-        #expect(throws: ManifestFault.duplicateName("Contents/Resources/a.css")) { try Manifest.revision(twice) }
+        #expect(throws: ManifestFault.duplicateName("Contents/Resources/a.css")) { try XDictAppleSource.Manifest.revision(twice) }
     }
 
     /// Canonically equivalent names are different names: compared by their UTF-8 bytes, as the converter keys them.
     @Test func namesAreComparedByTheirBytes() throws {
         let composed = [Self.entry("Contents/Resources/\u{E9}.css", "x")]
         let decomposed = [Self.entry("Contents/Resources/e\u{301}.css", "x")]
-        #expect(try Manifest.revision(composed) != Manifest.revision(decomposed))
+        #expect(try XDictAppleSource.Manifest.revision(composed) != XDictAppleSource.Manifest.revision(decomposed))
     }
 
     /// The same bytes split differently across files are a different snapshot: each name, length and size is hashed.
     @Test func theSameBytesSplitDifferentlyAreAnotherRevision() throws {
         let one = [Self.entry("Contents/Resources/a", "ab"), Self.entry("Contents/Resources/b", "c")]
         let other = [Self.entry("Contents/Resources/a", "a"), Self.entry("Contents/Resources/b", "bc")]
-        #expect(try Manifest.revision(one) != Manifest.revision(other))
+        #expect(try XDictAppleSource.Manifest.revision(one) != XDictAppleSource.Manifest.revision(other))
         let joined = [Self.entry("Contents/Resources/ab", "")]
         let split = [Self.entry("Contents/Resources/a", ""), Self.entry("Contents/Resources/b", "")]
-        #expect(try Manifest.revision(joined) != Manifest.revision(split))
+        #expect(try XDictAppleSource.Manifest.revision(joined) != XDictAppleSource.Manifest.revision(split))
     }
 
     @Test func theRevisionIsVersioned() throws {
-        let revision = try Manifest.revision([Self.entry("Contents/Info.plist", "p")])
-        #expect(revision.hasPrefix("m\(Manifest.version):") && revision.dropFirst(3).allSatisfy(\.isHexDigit))
+        let revision = try XDictAppleSource.Manifest.revision([Self.entry("Contents/Info.plist", "p")])
+        #expect(revision.hasPrefix("m\(XDictAppleSource.Manifest.version):") && revision.dropFirst(3).allSatisfy(\.isHexDigit))
     }
 
     // MARK: - Over a staged snapshot

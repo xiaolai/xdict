@@ -191,3 +191,13 @@ measure.memory
 # LookupScenarioTests; refusal.noHandle refusal.pipe refusal.writable refusal.otherFile refusal.control
 # refusal.missingToken supersede.lateReply supersede.queuedNeverSent stall.timedOut stall.newConnection
 # stall.answeredWhileTheStalledRun -> ServiceContractTests.
+appleImport.listed
+appleImport.refusedShown
+appleImport.converted
+appleImport.reads
+appleImport.alreadyImported
+appleImport.cancelLeavesNothing
+appleImport.updateOffered
+appleImport.convertAgainJoins
+appleImport.removedStillReads
+appleImport.sweptAtLaunch
