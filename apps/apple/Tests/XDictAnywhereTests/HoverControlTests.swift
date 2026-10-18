@@ -138,6 +138,16 @@ struct HoverControlTests {
         #expect(try !control(suite).isEnabled)
     }
 
+    /// **Hover off starts nothing**: launching with the reader's hover turned off installs no watcher. Red if
+    /// `startIfEnabled` ignores the setting.
+    @Test func hoverOffStartsNoWatcher() throws {
+        let hover = try control()
+        hover.isEnabled = false
+        hover.startIfEnabled()
+        #expect(!hover.isWatching, "a hover the reader turned off was started")
+        #expect(!hover.watcher.isWatching)
+    }
+
     /// **The capture targets get the tokens' distances**, valid by construction (ADR-0014 d.11).
     @Test func theTolerancesAreTheTokens() {
         #expect(CaptureTolerances.hit.horizontal > 0 && CaptureTolerances.hit.vertical > 0)

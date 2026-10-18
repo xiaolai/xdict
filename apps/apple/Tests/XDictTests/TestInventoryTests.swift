@@ -33,10 +33,11 @@ struct TestInventoryTests {
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
         // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
         // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
-        // 37 → 65 (plan-capture WI-3): the composition layer for capture — HoverPolicyStoreTests (9) and
-        // HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name from XiaolaiDict, thirteen added (the
-        // control's scripts, its default and tolerances, the derived scripts, the popover's acknowledgements, the anchor).
-        "XDictAnywhereTests": 65,
+        // 37 → 66 (plan-capture WI-3): 38 were present (the floor above counted one short); the composition layer for
+        // capture — HoverPolicyStoreTests (8) and HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name
+        // from XiaolaiDict, fourteen added (the control's scripts, its default and tolerances, hover off starting nothing,
+        // the derived scripts, the popover's acknowledgements, the anchor): 38 + 14 + 14 = 66.
+        "XDictAnywhereTests": 66,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         "XDictUITests": 33,
@@ -45,8 +46,9 @@ struct TestInventoryTests {
         "XDictServiceTests": 92,
         // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
         // macOS capture target's controls.
-        // 40 → 42 (WI-3): the captured context's data-flow rule and its control.
-        "XDictTests": 42,
+        // 40 → 42 (WI-3): the captured context's data-flow rule and its control; 42 → 44: every driven instrument turns
+        // hover off, and its control.
+        "XDictTests": 44,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -65,8 +67,9 @@ struct TestInventoryTests {
         // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
         // 113 → 153 (WI-3): the hover watcher and reader, XiaolaiDict's HoverWatcherSequenceTests (18, with
         // stoppingEndsTheHover), HoverWatcherTests (13), HoverReaderSourceTests (2) and HoverSiteTests (1) moved by name,
-        // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing).
-        "XDictCaptureMacTests": 153,
+        // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing);
+        // 153 → 156: a hover supersedes a shortcut still reading, the compositor's own window, the key up at the gate.
+        "XDictCaptureMacTests": 156,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

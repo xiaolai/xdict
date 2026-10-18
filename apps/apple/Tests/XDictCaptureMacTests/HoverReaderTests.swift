@@ -74,6 +74,38 @@ struct HoverReaderSourceTests {
         #expect(screen.reads == 0)
     }
 
+    /// **XDict's own window, listed by the compositor at the point, is refused on the main actor before the lane is asked**
+    /// (WI-3 verification; XiaolaiDict ADR-0042): here the lane would answer another app's target and a word, and still
+    /// nothing is read. Red without the compositor check in `read`.
+    @Test func ourListedWindowIsRefusedBeforeTheLaneIsAsked() async {
+        let screen = ScriptedPointerWords()
+        screen.windows = [ListedWindow(pid: getpid(), bounds: CGRect(x: 0, y: 0, width: 100, height: 100))]
+        screen.targetOutcome = .found(HoverFixtures.target())
+        screen.readOutcome = .hit(HoverFixtures.hit("tide"))
+        guard case .quiet(.samePlace) = await read(reader(screen)) else {
+            Issue.record("XDict's own listed window was not refused first")
+            return
+        }
+        #expect(screen.reads == 0)
+    }
+
+    /// **The gate is handed the keys actually held** (WI-3 verification, G1): under the hold gesture with nothing held,
+    /// the read is refused at the gate and nothing is asked of the screen. Red if the reader tells the gate the key is
+    /// always down.
+    @Test func aHoverWithTheKeyUpIsRefusedAtTheGate() async {
+        let screen = ScriptedPointerWords()
+        screen.targetOutcome = .found(HoverFixtures.target())
+        screen.readOutcome = .hit(HoverFixtures.hit("tide"))
+        let outcome = await reader(screen).read(
+            at: CGPoint(x: 10, y: 10), modifiersHeld: [], tappedTwice: false, pointerStillFor: .seconds(1),
+            begin: { CaptureRequest(number: 7, trigger: .pointerGesture) })
+        guard case .quiet(.modifierNotHeld) = outcome else {
+            Issue.record("a hover with the key up answered \(outcome)")
+            return
+        }
+        #expect(screen.reads == 0)
+    }
+
     /// **The pointer over XDict's own window reads nothing** — no target is resolved for it and no text read.
     @Test func ourOwnWindowIsRefusedWithoutReading() async {
         let screen = ScriptedPointerWords()
