@@ -41,7 +41,7 @@ public enum ContextOutcome: Sendable, Equatable {
     case pending(PendingContextHandle)
     case unavailable(ContextUnavailable)
 }
-public enum CaptureValueError: Error, Sendable, Equatable { case term, range, geometry, confidence }
+public enum CaptureValueError: Error, Sendable, Equatable { case term, range, rangeSplitsCharacter, geometry, confidence }
 
 public struct CapturedTerm: Sendable, Equatable {
     public let term: String
@@ -102,13 +102,15 @@ public struct CapturedTerm: Sendable, Equatable {
     private static func cleaned(
         _ sentence: String, keeping range: NSRange, term: String
     ) throws(CaptureValueError) -> (String, NSRange) {
-        let units = sentence.utf16.count
-        guard range.location != NSNotFound, range.location >= 0, range.length >= 0, range.location <= units,
-              range.length <= units - range.location,
-              let span = Range(range, in: sentence),
-              span.lowerBound.samePosition(in: sentence.unicodeScalars) != nil,
-              span.upperBound.samePosition(in: sentence.unicodeScalars) != nil,
-              sentence[span] == term
+        let units = Array(sentence.utf16)
+        guard range.location != NSNotFound, range.location >= 0, range.length >= 0, range.location <= units.count,
+              range.length <= units.count - range.location
+        else { throw .range }
+        // A boundary inside a surrogate pair: the unit at either edge is a pair's second half.
+        let end = range.location + range.length
+        if range.location < units.count, UTF16.isTrailSurrogate(units[range.location]) { throw .rangeSplitsCharacter }
+        if end < units.count, UTF16.isTrailSurrogate(units[end]) { throw .rangeSplitsCharacter }
+        guard range.length == term.utf16.count, let span = Range(range, in: sentence), sentence[span] == term
         else { throw .range }
         var out = String.UnicodeScalarView()
         var location = range.location
