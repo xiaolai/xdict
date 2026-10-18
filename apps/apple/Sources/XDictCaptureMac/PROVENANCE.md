@@ -92,6 +92,35 @@ XDict does not have (the notice is a Settings line, plan-capture WI-4); `ScreenR
 Settings list, which is the view layer's (`HoverSentences`). `ScreenMetricsAppKit` is the history drawer's adapter, which
 XDict does not have.
 
+## Closed after the migration manifest (2026-10-19, capture-migration manifest §7)
+
+Moved by name from XiaolaiDict at `044dac6`, each seen failing against a mutation of the function it covers, then green:
+
+| XDict file | Origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `PointerWordReader.swift` (`wholeWordRange(of:in:)`) | XiaolaiDict `ScreenWordReader.wholeWordRange` (moved with the pointer reader, WI-2, without its tests) | `HoverAuditTests`: `awholeWordMatchDoesNotHitInsideAnotherWord`, `awordThatIsNotThereAsAWholeWordIsNotFound`, `thefirstWholeWordOccurrenceIsTaken` (red against a substring search and against the last occurrence taken) | XDict ADR-0014 d.3 |
+| `ScreenTextRecogniser.swift` (`SystemScreenCapturer.sameGeometry`) | XiaolaiDict `ScreenTextRecogniser.sameGeometry`. Changed: an instance method reading `frameDrift` (`CaptureMetrics`, from the tokens) | `HoverAuditTests.amovedWindowIsNotTreatedAsTheSameGeometry`, the drift handed in (1 pt, `Measured.metrics`; red against x and width ignored, and against no drift) | XDict ADR-0014 d.11 |
+| `HoverReader.swift` (`key(bundleID:sentence:word:at:)`, the key-up clearing of `lastLookedUp`) | XiaolaiDict `HoverReader` | `ScriptFilterWiringTests` (this target): `theSuppressionKeyTellsTwoAppsApart`, `releasingTheModifierClearsTheSuppressedWord` (red against a key without the app, and against a key-up that kept the word) | XDict ADR-0014 d.10 |
+| the selection path's unfiltered script, hover's injected defaults | XiaolaiDict `XiaolaiDictApp` | `XDictTests/ScriptFilterWiringTests`: `theSelectionShortcutIsNotFilteredByScript` (now `LookupAnywhere.swift` and `SelectionReader.swift`), `theAppReadsOnlyTheDefaultsSuiteItWasGiven` (now `XDictAnywhere`'s stores; red against a planted `policy.allows(` and a planted `UserDefaults.standard`) | XDict ADR-0015 |
+
+Not moved, and why (the code each covers is not in XDict):
+
+- XiaolaiDict's `SelectionReaderTests`, 7 of 24: `theRangeDialectCarriesTheExactRangeAndItsWindowsDocument`,
+  `aDialectWithContextIsUsedWholeNotMixed`, `anIncoherentSentenceIsDroppedAndSaidToBeMissing`,
+  `aFailedProvenanceReadKeepsTheSelection`, `provenanceNeverComesFromAnotherWindow`, `aSelectionSurvivesAFailedContextRead`
+  test the selection's sentence context and its provenance (window, document), which XDict's selection does not read
+  (`ContextOutcome.unavailable(.notCaptured)`; left behind in plan-macos-v1 WI-8, the owner's ruling on context for the
+  shortcut, menu and Service is open, manifest §6). `readsRunOneAtATime` is the lane's now: `AccessibilityLaneTests.readsNeverOverlap`.
+- XiaolaiDict's `Tests/MacCaptureTests/SelectionTests.swift`, 14 of 24: `SelectionWindowTests` (7) and `MarkerSentenceTests`
+  (3) test `SelectionWindow` and `MarkerSentence`, the window and the sentence read around a selection — not ported, for
+  the same reason (the pointer path's read window is `PointerWordReader`'s own code, under `PointerWordReaderTests`);
+  `CaptureTests`' `aCompleteSentenceIsReportedAsComplete`, `aDegradedContextSaysSo` and `theRangeFollowsTheTrimmedTerm`
+  test the selection's context quality, likewise absent; `aPassageIsRefused`'s behaviour is held by
+  `SelectionReaderTests.nothingNoWordAndTooLongAreToldApart` (the too-long refusal, typed).
+- XiaolaiDict's `ScriptFilterWiringTests.everyRecordedLookupCarriesTheScriptItWasWrittenIn` and
+  `theDrawerFiltersByTheScriptsTheReaderStudies` test the study ledger's rows and the history drawer, which XDict does not
+  have (it records no reading history; manifest §6).
+
 ## Not moved
 
 `ScreenMetricsAppKit` (no history drawer in XDict).
