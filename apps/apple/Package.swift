@@ -27,7 +27,7 @@ let package = Package(
 
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
-        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictContract", "XDictEntryView",
+        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictEntryView",
                                                 "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTokens"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
@@ -59,7 +59,7 @@ let package = Package(
         // behind a seam, the one Escape claim, and what registering it answered — the selection read through the
         // Accessibility API (both dialects, the term less its punctuation, and where it is on screen), the text the
         // Service is handed, and where the panel goes beside the word. Kinds, never sentences: the view layer words them.
-        .target(name: "XDictAnywhere", dependencies: ["XDictBase", "XDictTokens"]),
+        .target(name: "XDictAnywhere", dependencies: ["XDictBase", "XDictCaptureMac", "XDictTokens"]),
 
         // **Capture, as values and arithmetic** (ADR-0014 decision 5; plan-capture WI-1), ported from XiaolaiDict's
         // `CaptureModel` and `Capture`: the captured term and its validating constructor, the sink's request numbers and
@@ -68,6 +68,14 @@ let package = Package(
         // (tolerances are handed in, `CaptureMetrics`), and no lookup, search, client, contract or UI target, held
         // transitively by `ModuleBoundaryTests`. Provenance per file: `Sources/XDictCapture/PROVENANCE.md`.
         .target(name: "XDictCapture", exclude: ["PROVENANCE.md"]),
+
+        // **Capture on macOS** (ADR-0014 decisions 5 to 7; plan-capture WI-2), ported from XiaolaiDict's `MacCapture`
+        // and moved down from `XDictAnywhere`: the Accessibility session and the one lane every out-of-process read takes,
+        // the selection reader, the word reader's three dialects, and the never-prompting permission probe. AppKit and
+        // Accessibility, the pure target and the identities; never ScreenCaptureKit or Vision (WI-4), the tokens, search,
+        // the client, the contract or a view, held transitively by `ModuleBoundaryTests`. Provenance per file:
+        // `Sources/XDictCaptureMac/PROVENANCE.md`.
+        .target(name: "XDictCaptureMac", dependencies: ["XDictBase", "XDictCapture"], exclude: ["PROVENANCE.md"]),
 
         // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
         // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport
@@ -95,7 +103,7 @@ let package = Package(
         .target(name: "XDictAppleSource", dependencies: ["XDictContract"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
                                                         "XDictTokens", "XDictUI"]),
 
@@ -140,7 +148,7 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
+        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
                                                         "XDictSpeech", "XDictTestSupport", "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.
@@ -158,9 +166,12 @@ let package = Package(
         .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech"]),
         // Capture without a window server: the ported XiaolaiDict tests by name, and ADR-0014's objection checks.
         .testTarget(name: "XDictCaptureTests", dependencies: ["XDictCapture"]),
+        // Capture on macOS against scripted Accessibility trees and a fake lane clock: never a window, never the real
+        // Accessibility API, never this Mac's grant.
+        .testTarget(name: "XDictCaptureMacTests", dependencies: ["XDictCapture", "XDictCaptureMac"]),
         // Lookup from anywhere without a keyboard, a window or another app: Carbon faked (a real global shortcut would
         // be taken from the reader while the suite ran), the Accessibility API faked, the panel's geometry as numbers.
-        .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere"]),
+        .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere", "XDictCaptureMac"]),
         // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.

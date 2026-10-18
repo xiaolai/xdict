@@ -3,6 +3,7 @@ import ApplicationServices
 import Observation
 import SwiftUI
 import XDictAnywhere
+import XDictCaptureMac
 import XDictBase
 import XDictContract
 import XDictEntryView

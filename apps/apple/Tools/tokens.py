@@ -30,9 +30,10 @@ hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshn
   `let`/`var` of a `CGFloat` type given a literal; and a tolerance compared bare with a distance (`hypot(`, `distance`,
   `dx`/`dy`, `.minX`... `.width`, `.x`/`.y` on the other side of `<`, `<=`, `>`, `>=`), written as a literal or as a
   constant whose type is inferred (`static let horizontal = 3`, reported at its declaration): capture's shape
-  (ADR-0014 decision 11). A ratio (the other side divides) is not a distance. Inside Sources/XDictCapture, a floating
-  constant or default, a literal bound through CGFloat(...) or `as CGFloat`, and a whole number the file later wraps as
-  CGFloat must be 0 or 1, handed in, or named with a Ratio, Fraction or Overlap suffix.
+  (ADR-0014 decision 11). A ratio (the other side divides) is not a distance. Inside both capture targets
+  (Sources/XDictCapture, Sources/XDictCaptureMac), a floating constant or default, a literal bound through CGFloat(...)
+  or `as CGFloat`, and a whole number any file of the same target wraps as CGFloat must be 0 or 1, handed in, or named
+  with a Ratio, Fraction or Overlap suffix.
   CSS: lengths (px pt rem em lh vw vh ch ex) and colours (#hex, rgb(), hsl()) outside tokens.css and outside the
   fallback of a `var(`.
   ALLOWED, and nothing else:
@@ -815,7 +816,10 @@ def allowed(kind, value, text, pos):
 # Spaced on both sides, or `<=`/`>=` unspaced (`dx<=3`); an unspaced `<` or `>` is a generic, not a comparison.
 COMPARISON = re.compile(r"\s(?:<=|>=|<|>)\s|(?<=[\w)\]])(?:<=|>=)(?=[-\w(])")
 DISTANCE_TERM = re.compile(r"\bhypot\(|\bdistance\b|\b(?:dx|dy)\b|\.(?:minX|maxX|minY|maxY|midX|midY|width|height|x|y)\b")
-OPERAND = r"((?:CGFloat|Double|Float)\(-?\d[\d_]*(?:\.\d+)?\)|-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)"
+# A literal also counts written through a floating wrapper inline: `CGFloat(3)`, `CGFloat(exactly: 3)!`, `3 as CGFloat`.
+OPERAND = (r"((?:CGFloat|Double|Float)\((?:exactly:\s*)?-?\d[\d_]*(?:\.\d+)?\)!?"
+           r"|-?\d[\d_]*(?:\.\d+)?\s+as\s+(?:CGFloat|Double|Float)\b"
+           r"|-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)")
 RIGHT_OPERAND = re.compile(r"\s*" + OPERAND + r"(?=\s*(?:$|[,{})?:&|;]|else\b))")
 LEFT_OPERAND = re.compile(r"(?:^|[\s(!,{])" + OPERAND + r"\s*$")
 INFERRED = r"\b(?:let|var)\s+{name}\s*(?::\s*(?:CGFloat|Double|Float)\s*)?=\s*(-?\d[\d_]*(?:\.\d+)?)\s*(?:$|//|\n)"
@@ -826,13 +830,16 @@ DEFAULT_PARAM = re.compile(r"[(,]\s*(?:\w+\s+)?(\w+)\s*:\s*" + FLOAT_TYPE + r"\s
 FLOAT_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*" + FLOAT_TYPE + r"\s*=\s*(-?\d[\d_]*(?:\.\d+)?)|=\s*(-?\d[\d_]*\.\d+))\s*(?:$|//|\n)", re.M)
 # Inside the capture target a floating constant is handed in (CaptureMetrics, CaptureLimits) or named as the
 # dimensionless fraction it is; the checker cannot tell a Double ratio from a Double length by its type (ADR-0014 d.11).
-CAPTURE_DIR = "Sources/XDictCapture/"
+# Both capture targets (plan-capture WI-2): the pure one and the macOS one, each its own module.
+CAPTURE_DIRS = ("Sources/XDictCapture/", "Sources/XDictCaptureMac/")
 FRACTION_NAME = re.compile(r"(?:Ratio|Fraction|Overlap)$")
-# A literal bound to a name through a floating wrapper: `let t = CGFloat(3)`, `let t = 3 as CGFloat`.
+# A literal bound to a name through a floating wrapper: `let t = CGFloat(3)`, `let t = 3 as CGFloat`, and the failable
+# `let t = CGFloat(exactly: 3)!` or `CGFloat(exactly: 3) ?? 0`.
 WRAPPED_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*(?:" + FLOAT_TYPE
-                              + r"\(\s*(-?\d[\d_]*(?:\.\d+)?)\s*\)|(-?\d[\d_]*(?:\.\d+)?)\s+as\s+" + FLOAT_TYPE
+                              + r"\(\s*(?:exactly:\s*)?(-?\d[\d_]*(?:\.\d+)?)\s*\)(?:!|\s*\?\?\s*[^\n/]*?)?"
+                              + r"|(-?\d[\d_]*(?:\.\d+)?)\s+as\s+" + FLOAT_TYPE
                               + r")\s*(?:$|//|\n)", re.M)
-# A whole number bound to a name, which the file later wraps as a floating value (`CGFloat(slop)`).
+# A whole number bound to a name, which the file later wraps as a floating value (`CGFloat(slop)`, `CGFloat(exactly: slop)`).
 WHOLE_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*=\s*(-?\d[\d_]*)\s*(?:$|//|\n)", re.M)
 
 
@@ -849,7 +856,8 @@ def distance_comparisons(clean):
                 if operand_match is None or not DISTANCE_TERM.search(other) or " / " in other:
                     continue
                 operand = operand_match.group(1)
-                wrapped = re.fullmatch(r"(?:CGFloat|Double|Float)\((.*)\)", operand)
+                wrapped = (re.fullmatch(r"(?:CGFloat|Double|Float)\((?:exactly:\s*)?(.*)\)!?", operand)
+                           or re.fullmatch(r"(.*?)\s+as\s+(?:CGFloat|Double|Float)", operand))
                 if wrapped:
                     operand = wrapped.group(1)
                 if base is None:
@@ -868,7 +876,7 @@ def distance_comparisons(clean):
     return out
 
 
-def unnamed_fractions(clean):
+def unnamed_fractions(clean, module=None):
     """(kind, position, value) for each floating constant or default parameter in the capture target whose name does
     not say it is a dimensionless fraction. 0 and 1 (none, whole) are allowed."""
     out = []
@@ -883,16 +891,22 @@ def unnamed_fractions(clean):
         start, raw = (m.start(2), m.group(2)) if m.group(2) is not None else (m.start(3), m.group(3))
         if numeric_value(raw) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
             out.append(("capture-unitless-name", start, raw))
+    # `module`: every file of the same capture target, blanked — a whole number declared in one file and wrapped as a
+    # floating value in another of the same module is the same constant.
     for m in WHOLE_CONSTANT.finditer(clean):
         name = re.escape(m.group(1))
-        wrapped = re.search(r"\b" + FLOAT_TYPE + r"\(\s*(?:Self\.|self\.|\w+\.)?" + name + r"\s*\)|\b"
-                            + name + r"\s+as\s+" + FLOAT_TYPE, clean)
+        wrapped = re.search(r"\b" + FLOAT_TYPE + r"\(\s*(?:exactly:\s*)?(?:Self\.|self\.|\w+\.)?" + name + r"\s*\)|\b"
+                            + name + r"\s+as\s+" + FLOAT_TYPE, module if module is not None else clean)
         if wrapped and numeric_value(m.group(2)) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
             out.append(("capture-unitless-name", m.start(2), m.group(2)))
     return out
 
 
-def scan_swift(rel, text):
+def capture_dir(rel):
+    return next((d for d in CAPTURE_DIRS if rel.startswith(d)), None)
+
+
+def scan_swift(rel, text, modules=None):
     clean = blank_swift(text)
     lines = text.split("\n")
     found = {}
@@ -927,8 +941,8 @@ def scan_swift(rel, text):
             value = numeric_value(nm.group(1))
             if not allowed("constant", value, clean, nm.start()):
                 add("constant", nm.start(), nm.group(1))
-    if rel.startswith(CAPTURE_DIR):
-        for kind, pos, value in unnamed_fractions(clean):
+    if capture_dir(rel):
+        for kind, pos, value in unnamed_fractions(clean, (modules or {}).get(capture_dir(rel))):
             add(kind, pos, value)
     else:
         for m in DEFAULT_PARAM.finditer(clean):
@@ -985,6 +999,18 @@ def scan(root):
     """(findings, exemptions): each finding (file, line, kind, value, source line)."""
     findings, exemptions = [], []
     sources = os.path.join(root, "Sources")
+    # Each capture target's files blanked and joined, for the rule that follows a constant into another file.
+    modules = {}
+    for d in CAPTURE_DIRS:
+        full = os.path.join(root, d)
+        if os.path.isdir(full):
+            parts = []
+            for dirpath, _, filenames in sorted(os.walk(full)):
+                for fn in sorted(filenames):
+                    if fn.endswith(".swift"):
+                        with open(os.path.join(dirpath, fn), encoding="utf-8") as f:
+                            parts.append(blank_swift(f.read()))
+            modules[d] = "\n".join(parts)
     for dirpath, dirnames, filenames in os.walk(sources):
         dirnames.sort()
         for fn in sorted(filenames):
@@ -1000,7 +1026,7 @@ def scan(root):
                 continue
             with open(path, encoding="utf-8") as f:
                 text = f.read()
-            hits, exempt_rx = scanner(rel, text)
+            hits, exempt_rx = scanner(rel, text, modules) if scanner is scan_swift else scanner(rel, text)
             seen_lines = set()
             for hit in hits:
                 m = exempt_rx.search(hit[4])

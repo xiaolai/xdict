@@ -38,6 +38,7 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
 | `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
 | `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration) | through the ported tests (`MeasuredMetrics.swift`) | XDict ADR-0014 d.5, d.11 |
+| `CaptureDescriptions.swift` (metadata-only descriptions and empty mirrors of `SentenceContext`, `ContextOutcome`, `CapturedTerm`; added in plan-capture WI-2) | `PointerWordReaderTests.noDescriptionOfAResultCarriesItsSentence` (in `XDictCaptureMacTests`), seen failing against leaking descriptions | XDict ADR-0014 d.9 |
 
 ## What changed on the way (re-checked against XDict, ADR-0014)
 
@@ -74,8 +75,8 @@ capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagM
 
 ## Open, by work item (TODO)
 
-- WI-2: the Service-text-wins rule — acquisition `.serviceText` with disagreeing Accessibility text yields no context
-  and no geometry — belongs to the reader, with its test there.
+- ~~WI-2: the Service-text-wins rule~~ — done in plan-capture WI-2: `SelectionReader.serviceTerm` in `XDictCaptureMac`,
+  with `SelectionCaptureTests` (the selection disagrees, the app has exited, the pointer moved into the submenu).
 - WI-4: the pending context handle's cancel, and the recogniser using `CaptureLimits.observations` and the tile limits.
 - WI-3: `RequestSequence` (presentation claims) and `CaptureRequests` (acknowledgements) joined into one numbering for
   every trigger, in one order.
