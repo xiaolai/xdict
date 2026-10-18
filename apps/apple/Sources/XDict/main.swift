@@ -3,6 +3,7 @@
 //
 // A development instrument is chosen by its flag before any window exists, and exits when it has answered.
 import SwiftUI
+import XDictAnywhere
 import XDictUI
 
 let arguments = Array(CommandLine.arguments.dropFirst())
@@ -52,5 +53,5 @@ if arguments.contains(MeasureReport.flag) {
     MeasureReport.prepare(arguments)
 }
 // A driven run starts no hover (plan-capture WI-3): a key the instrument holds must not open a lookup it did not ask for.
-LookupAnywhere.instrumented = [LookupWindowReport.flag, AnywhereReport.flag, MeasureReport.flag].contains(where: arguments.contains)
+LookupAnywhere.launch = .of(arguments: arguments, instrumentFlags: [LookupWindowReport.flag, AnywhereReport.flag, MeasureReport.flag])
 XDictApp.main()

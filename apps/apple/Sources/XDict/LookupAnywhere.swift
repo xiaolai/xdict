@@ -42,9 +42,9 @@ final class LookupAnywhere {
     }
 
     static let shared = LookupAnywhere()
-    /// A development instrument drives this launch (`main.swift`): hover is not started, so a held key in a driven run
-    /// never opens a lookup nobody asked for.
-    static var instrumented = false
+    /// Which launch this is (`main.swift`): in one a development instrument drives, hover is not started, so a held key
+    /// in a driven run never opens a lookup nobody asked for.
+    static var launch: HoverLaunch = .reader
 
     /// Hover's settings, pause and watcher, and **the app's one book of capture requests**, every trigger's.
     @ObservationIgnored private(set) lazy var hover = HoverControl(
@@ -132,7 +132,7 @@ final class LookupAnywhere {
         }
         state = made
         hover.watcher.sink = self
-        if !Self.instrumented { hover.startIfEnabled() }
+        hover.startAtLaunch(Self.launch)
     }
 
     // MARK: - Asking
