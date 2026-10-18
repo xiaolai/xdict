@@ -31,6 +31,15 @@ release build compiles each module **whole**, in one job: it writes one file, `<
 the list names, and none per source — so `--whole-module` requires and reads that file instead. The kind of build is
 said, never guessed. A list that names no source is refused too. A `.dia` whose source the module no longer compiles —
 a file moved or removed — is stale, counted and skipped.
+
+**A warning belongs to the source it is about, not to the file that holds it.** Swift compiles sources in batches,
+and a batch can write a warning located in one of its sources into another source's `.dia`: measured 2026-10-18, the
+`#expect` expansions of `DictionaryTableDropTests.swift` landed in `AnywhereSentencesTests.dia`. Fix the first source
+and its own `.dia` is rewritten clean, while the holder, not recompiled, keeps the warning until it happens to be. So
+a warning is attributed by its location — a `.swift` file by its name, a macro expansion buffer by the file its
+mangled name encodes — and, when that source's own `.dia` in the module is newer than the holder, it is stale:
+counted and skipped. A holder at least as new, an attributed source with no `.dia` of its own, or a buffer name this
+cannot decode keeps the warning: a real warning is never dropped.
 """
 from __future__ import annotations
 
@@ -115,6 +124,86 @@ def warnings_in(library: ctypes.CDLL, path: pathlib.Path) -> list[str]:
     return found
 
 
+LOCATION = re.compile(r"^(?P<file>.+?):\d+:\d+: ")
+MACRO_BUFFER = "@__swiftmacro_"
+
+
+def swift_punycode(encoded: str) -> str | None:
+    """Swift's Punycode (`lib/Basic/Punycode.cpp`): RFC 3492 with `_` as the delimiter and digits `a`-`z`, `A`-`J`;
+    an ASCII character an identifier cannot hold (a file name's dot) is encoded as U+D800 plus its value."""
+    basic, _, extended = encoded.rpartition("_")
+    output = [ord(c) for c in basic]
+    n, bias, i, index = 128, 72, 0, 0
+    while index < len(extended):
+        old, weight, k = i, 1, 36
+        while True:
+            if index >= len(extended):
+                return None
+            c = extended[index]
+            index += 1
+            digit = ord(c) - ord("a") if "a" <= c <= "z" else ord(c) - ord("A") + 26 if "A" <= c <= "J" else None
+            if digit is None:
+                return None
+            i += digit * weight
+            t = 1 if k <= bias else 26 if k >= bias + 26 else k - bias
+            if digit < t:
+                break
+            weight *= 36 - t
+            k += 36
+        delta = (i - old) // (700 if old == 0 else 2)
+        delta += delta // (len(output) + 1)
+        k = 0
+        while delta > (36 - 1) * 26 // 2:
+            delta //= 36 - 1
+            k += 36
+        bias = k + (36 * delta) // (delta + 38)
+        n += i // (len(output) + 1)
+        i %= len(output) + 1
+        output.insert(i, n)
+        i += 1
+    decoded = [point - 0xD800 if 0xD800 <= point < 0xD880 else point for point in output]
+    return "".join(map(chr, decoded)) if all(0 <= point < 0x110000 for point in decoded) else None
+
+
+def macro_source(buffer: str) -> tuple[str, str] | None:
+    """The module and the source file a macro expansion buffer's name encodes, or None when the name does not decode.
+
+    The name is `@__swiftmacro_` and the expansion's mangled context: the module, then the file, each an identifier —
+    `<length><name>`, or `00<length><Swift Punycode>` when the name holds a character an identifier cannot, as a file
+    name's dot."""
+    name = pathlib.PurePath(buffer).name
+    if not name.startswith(MACRO_BUFFER):
+        return None
+    rest = name[len(MACRO_BUFFER):]
+    length = re.match(r"[1-9]\d*", rest)
+    if not length or len(rest) < length.end() + int(length.group()):
+        return None
+    module = rest[length.end():length.end() + int(length.group())]
+    rest = rest[length.end() + int(length.group()):]
+    file = re.match(r"(00)?([1-9]\d*)", rest)
+    if not file or len(rest) < file.end() + int(file.group(2)):
+        return None
+    identifier = rest[file.end():file.end() + int(file.group(2))]
+    source = swift_punycode(identifier) if file.group(1) else identifier
+    return (module, source) if source and source.endswith(".swift") and "/" not in source else None
+
+
+def attributed_stem(warning: str, module: str, sources: set[str]) -> str | None:
+    """The stem of the module's source a warning is about, by its location: a file the module's list names, or a
+    macro expansion buffer whose name decodes to this module and one of its sources. None otherwise."""
+    located = LOCATION.match(warning)
+    if not located:
+        return None
+    file = located.group("file")
+    if pathlib.PurePath(file).name.startswith(MACRO_BUFFER):
+        decoded = macro_source(file)
+        if decoded is None or decoded[0] != module:
+            return None
+        stem = pathlib.PurePath(decoded[1]).stem
+        return stem if stem in {pathlib.PurePath(source).stem for source in sources} else None
+    return pathlib.PurePath(file).stem if file in sources else None
+
+
 def package_targets(tests: bool) -> list[str]:
     dumped = subprocess.run(["swift", "package", "dump-package", "--package-path", str(REPO)],
                             capture_output=True, text=True)
@@ -142,6 +231,8 @@ class Reading:
     modules: int = 0
     read: int = 0
     stale: int = 0
+    # Warnings a batch wrote into another source's `.dia`, older than that source's own.
+    stale_warnings: int = 0
     unbuilt: list[str] = dataclasses.field(default_factory=list)
     empty: list[str] = dataclasses.field(default_factory=list)
     missing: list[str] = dataclasses.field(default_factory=list)
@@ -177,7 +268,8 @@ def read_module(library: ctypes.CDLL, directory: pathlib.Path, whole_module: boo
     the ones it did."""
     reading.modules += 1
     listed = next(directory.glob("*.SwiftFileList"))
-    stems = {pathlib.Path(line.strip()).stem for line in listed.read_text().splitlines() if line.strip()}
+    sources = {line.strip() for line in listed.read_text().splitlines() if line.strip()}
+    stems = {pathlib.Path(source).stem for source in sources}
     if not stems:
         reading.empty.append(listed.name)
     expected = expected_files(listed, stems, whole_module)
@@ -193,7 +285,21 @@ def read_module(library: ctypes.CDLL, directory: pathlib.Path, whole_module: boo
             continue
         reading.read += 1
         for warning in warnings_in(library, dia):
+            if stale_elsewhere(directory, dia, warning, listed.stem.split("-", 1)[0], sources):
+                reading.stale_warnings += 1
+                continue
             reading.warnings.setdefault(warning.replace(f"{REPO}/", ""), None)
+
+
+def stale_elsewhere(directory: pathlib.Path, holder: pathlib.Path, warning: str, module: str,
+                    sources: set[str]) -> bool:
+    """A warning about another source of the module, held by a `.dia` older than that source's own: written by a
+    batch before that source was last compiled."""
+    stem = attributed_stem(warning, module, sources)
+    if stem is None or stem == holder.stem:
+        return False
+    own = directory / f"{stem}.dia"
+    return own.is_file() and own.stat().st_mtime_ns > holder.stat().st_mtime_ns
 
 
 def read_build(library: ctypes.CDLL, build: pathlib.Path, targets: list[str], whole_module: bool) -> Reading:
@@ -229,6 +335,9 @@ def report(reading: Reading) -> int:
             print(f"  {warning}", file=sys.stderr)
         return 1
     note = f"; {reading.stale} left by a source the module no longer compiles, not read" if reading.stale else ""
+    if reading.stale_warnings:
+        note += (f"; {reading.stale_warnings} warning{'s' if reading.stale_warnings != 1 else ''} about another "
+                 "source, held by a diagnostics file older than that source's own, not counted")
     print(f"compiler-warnings: no warning in {reading.read} file{'s' if reading.read != 1 else ''} of "
           f"{reading.modules} module{'s' if reading.modules != 1 else ''}{note}")
     return 0
