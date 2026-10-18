@@ -82,7 +82,9 @@ struct NoResultsIncomplete: View {
         } description: {
             Text(SearchSentences.noResultsIncomplete(query: query, unsearched: unsearched))
         } actions: {
-            Button("Show in Settings", action: showDictionaries)
+            EmptyStateActions {
+                Button("Show in Settings", action: showDictionaries)
+            }
         }
         .accessibilityIdentifier("no-results-incomplete")
     }

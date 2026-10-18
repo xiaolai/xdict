@@ -148,7 +148,7 @@ struct DictionaryTable: NSViewRepresentable {
             let item = parent.rows[row]
             switch column.identifier.rawValue {
             case "check":
-                let box = NSButton(checkboxWithTitle: "", target: self, action: #selector(toggled(_:)))
+                let box = NSButton(checkboxWithTitle: "", target: self, action: #selector(toggled(_:)))  // placement: P39
                 box.state = item.enabled ? .on : .off
                 box.isEnabled = item.usable
                 box.tag = row

@@ -28,16 +28,16 @@ public struct MenuBarMenu: View {
         }
         // The shortcut drawn as the menu draws key equivalents, not written into the title (UI review A-07).
         if registrar.isRegistered, let key = ShortcutDisplay.keyEquivalent(registrar.current) {
-            Button("Look Up Selection") { lookUp() }
+            Button("Look Up Selection") { lookUp() }  // placement: menu-bar-extra
                 .keyboardShortcut(KeyEquivalent(key.key), modifiers: key.modifiers)
         } else {
-            Button("Look Up Selection") { lookUp() }
+            Button("Look Up Selection") { lookUp() }  // placement: menu-bar-extra
         }
-        Button("Open XDict") { openMain() }
-        Button("Dictionaries…") { showDictionaries() }
+        Button("Open XDict") { openMain() }  // placement: menu-bar-extra
+        Button("Dictionaries…") { showDictionaries() }  // placement: menu-bar-extra
         Divider()
-        Button("Settings…") { openSettings() }
+        Button("Settings…") { openSettings() }  // placement: menu-bar-extra
         Divider()
-        Button("Quit XDict") { NSApplication.shared.terminate(nil) }
+        Button("Quit XDict") { NSApplication.shared.terminate(nil) }  // placement: menu-bar-extra
     }
 }

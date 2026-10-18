@@ -80,7 +80,7 @@ public struct GeneralSettings: View {
             }
             Section {
                 LabeledContent {
-                    Button { openSetup() } label: { Text("Show Setup…") }
+                    Button { openSetup() } label: { Text("Show Setup…") }  // placement: form-row
                         .accessibilityIdentifier("show-setup")
                 } label: {
                     Text("Setup")

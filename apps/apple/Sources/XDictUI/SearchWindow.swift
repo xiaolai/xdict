@@ -62,7 +62,7 @@ public struct SearchWindow: View {
 
     /// Back/Forward | title | space | Smaller/Bigger Text | search (P3). At the 400 pt minimum the two pairs go to the
     /// overflow before the search field does (P8).
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
             ControlGroup {
                 Button { state.model.back() } label: { Label("Back", systemImage: "chevron.backward") }
@@ -88,7 +88,7 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
                 .disabled(!state.canPronounce)
                 .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
                 .accessibilityIdentifier("toolbar.pronounce")
@@ -142,11 +142,11 @@ struct EntryDetail: View {
             } description: {
                 Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
-                Button("Add Dictionaries…") {
-                    SettingsRoute.shared.requestImport()
+                EmptyStateActions {
+                    Button("Add Dictionaries…") { SettingsRoute.shared.requestImport() }
+                } secondary: {
+                    Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
                 }
-                .buttonStyle(.borderedProminent)
-                Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
             }
             .coversPane()
         case .start:
@@ -182,15 +182,17 @@ struct PageNotices: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 ForEach(troubled) { section in
-                    HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                        Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
-                        if let sentence = SearchSentences.status(section.status) {
-                            ProblemStatus(sentence: sentence, compact: true)
+                    // A strip's row (R2): the name and its sentence lead, the way on small at the trailing edge.
+                    ActionRow(.strip) {
+                        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+                            Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
+                            if let sentence = SearchSentences.status(section.status) {
+                                ProblemStatus(sentence: sentence, compact: true)
+                            }
                         }
-                        Spacer(minLength: Tokens.Space.xs)
+                    } actions: {
                         if let next = section.next, SearchSentences.isButton(next) {
                             Button(SearchSentences.action(next)) { state.perform(next) }
-                                .controlSize(.small)
                         }
                     }
                     .accessibilityElement(children: .contain)
@@ -223,7 +225,7 @@ struct PronounceButton: View {
     let state: SearchWindowState
 
     var body: some View {
-        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P41
             .disabled(!state.canPronounce)
             .help(help)
             .accessibilityIdentifier("pronounce")
