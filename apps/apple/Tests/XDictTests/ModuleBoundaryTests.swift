@@ -56,6 +56,10 @@ struct ModuleBoundaryTests {
         "XDictAnywhere": ["AppKit", "ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation",
                           "os"],
         "XDictAnywhereTests": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
+        // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
+        // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
+        "XDictCapture": captureMayBind,
+        "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
@@ -299,6 +303,70 @@ struct ModuleBoundaryTests {
             "XDictContract/Planted.swift imports XDictBase",
         ])
         #expect(Self.contractProblems(dependencies: [], files: [("Clean.swift", ["Foundation"])]) == [])
+    }
+
+    // MARK: - Capture
+
+    /// **Capture's pure targets** (ADR-0014 decision 5): they reach no target of this package, directly or through
+    /// another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any view can
+    /// arrive by a dependency — and bind nothing beyond `captureMayBind`.
+    static let captureTargets: Set<String> = ["XDictCapture"]
+    static let captureMayBind: Set<String> = ["CoreGraphics", "Foundation", "NaturalLanguage", "Synchronization", "os"]
+
+    @Test func captureReachesNothingOfThisPackage() throws {
+        let targets = try Manifest.dump().targets
+        let files = try Self.importsByTarget()
+        #expect(Self.captureProblems(targets: targets, files: files) == [])
+        // The premise: the target exists and its walk read files. A rule about a target nobody declared holds nothing.
+        for name in Self.captureTargets {
+            #expect(targets[name] != nil, "\(name) is not declared")
+            #expect(files[name]?.isEmpty == false, "the walk read nothing of \(name)")
+        }
+    }
+
+    /// **The controls**: a planted import no edge declares, a planted framework, a direct dependency on a UI target and
+    /// one that arrives only through another target are each named; the clean target is not.
+    @Test func captureReachingFurtherIsNamed() throws {
+        let scratch = try TemporaryDirectory(named: "xdict-planted-capture-import")
+        try "import Foundation\nimport XDictSearch\nimport AppKit\n"
+            .write(to: scratch.appending("Planted.swift"), atomically: true, encoding: .utf8)
+        let planted = try SourceScan.files(under: scratch.url).map { ($0.file.lastPathComponent, SourceScan.imports(in: $0.text)) }
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        let ui = target("XDictUI", ["XDictTokens"]), tokens = target("XDictTokens", [])
+        let middle = target("XDictHelper", ["XDictUI"])
+        // A planted undeclared import, with no edge at all.
+        #expect(Self.captureProblems(targets: ["XDictCapture": target("XDictCapture", []), "XDictSearch": target("XDictSearch", [])],
+                                     files: ["XDictCapture": planted])
+                == ["XDictCapture/Planted.swift imports XDictSearch", "XDictCapture/Planted.swift imports AppKit"])
+        // A dependency on a UI target, direct and transitive.
+        let direct = ["XDictCapture": target("XDictCapture", ["XDictUI"]), "XDictUI": ui, "XDictTokens": tokens]
+        #expect(Self.captureProblems(targets: direct, files: ["XDictCapture": [("Clean.swift", ["Foundation"])]])
+                == ["XDictCapture reaches XDictTokens", "XDictCapture reaches XDictUI"])
+        let through = ["XDictCapture": target("XDictCapture", ["XDictHelper"]), "XDictHelper": middle, "XDictUI": ui,
+                       "XDictTokens": tokens]
+        #expect(Self.captureProblems(targets: through, files: ["XDictCapture": [("Clean.swift", ["Foundation"])]])
+                == ["XDictCapture reaches XDictHelper", "XDictCapture reaches XDictTokens", "XDictCapture reaches XDictUI"])
+        #expect(Self.captureProblems(targets: ["XDictCapture": target("XDictCapture", [])],
+                                     files: ["XDictCapture": [("Clean.swift", ["Foundation", "NaturalLanguage"])]]) == [])
+    }
+
+    static func captureProblems(
+        targets: [String: Manifest.Target], files: [String: [(file: String, modules: [String])]]
+    ) -> [String] {
+        captureTargets.sorted().flatMap { name -> [String] in
+            var reached: Set<String> = [], pending = Array(targets[name]?.dependencies ?? [])
+            while let next = pending.popLast() {
+                guard reached.insert(next).inserted else { continue }
+                pending += targets[next]?.dependencies ?? []
+            }
+            let graph = reached.sorted().map { "\(name) reaches \($0)" }
+            let imports = (files[name] ?? []).flatMap { file, modules in
+                modules.filter { !captureMayBind.contains($0) }.map { "\(name)/\(file) imports \($0)" }
+            }
+            return graph + imports
+        }
     }
 
     // MARK: - Every target's edges and frameworks
