@@ -28,6 +28,16 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `CaptureScript.swift` | `ProbeScript.dominant(in:)` and `letterScript(of:)` of `Sources/DictionaryModel/DictionaryLanguage.swift` | `CaptureScriptTests` (from `DictionaryLanguageTests`: `punctuationDigitsAndSpacesDoNotVote`, `anyKanaMakesItJapaneseHoweverManyHanThereAre`, `latinReachesPastAscii`, `punctuationInsideAScriptsBlockDoesNotVote`, `theScriptsAreRecognisedWhereverUnicodePutsThem`, `composedAndDecomposedTextAgree`, `aBlockNamedForOneScriptCanHoldAnother`, `presentationFormsFoldToTheLettersTheyAre`, `kanaBeyondTheOriginalBlocksIsStillKana`, `amongLettersTheMajorityScriptWins`) | 0015 |
 | `CaptureExclusions.swift` | the password-manager list of `Sources/Capture/PlacePolicy.swift` (the list only) | `HoverPolicyTests` (`itShipsExcludingPasswordManagers`) | 0015 |
 
+## New in XDict (no XiaolaiDict origin; written test-first, each test seen failing against a stub)
+
+| XDict file | Tests | ADR |
+|---|---|---|
+| `CapturedTerm.swift` (trigger, acquisition, source app, pointer, word box, context outcome, validating constructor) | `CapturedTermTests` (14) | XDict ADR-0014 d.2, d.3 |
+| `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement) | `CaptureSinkTests` (9) | XDict ADR-0014 d.4; 0045 |
+| `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
+| `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
+| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration) | through the ported tests (`MeasuredMetrics.swift`) | XDict ADR-0014 d.5, d.11 |
+
 ## What changed on the way (re-checked against XDict, ADR-0014)
 
 - **No literal tolerance or capture dimension.** `HitTolerance` (3 pt, 2 pt), `HoverSession.restTolerance` (2 pt),
