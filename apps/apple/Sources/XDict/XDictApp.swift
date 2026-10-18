@@ -11,8 +11,8 @@ import XDictUI
 import os
 
 /// The app: the main window (plan-macos-v1 WI-6) — search, results and the entry — opened at launch with its search
-/// field holding the keyboard, more with ⌘N; the library window (WI-5), from the main window or with ⌘⇧L; Settings (⌘,)
-/// with the reader's accent (WI-7). At launch the app asks its dictionary service for the core's versions (the E2E
+/// field holding the keyboard, more with ⌘N; Settings (⌘,), whose Dictionaries pane is the only dictionary list
+/// (ADR-0012). At launch the app asks its dictionary service for the core's versions (the E2E
 /// `launch` stage's handshake) and reads the library.
 struct XDictApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
@@ -51,41 +51,21 @@ struct XDictApp: App {
         .defaultSize(width: 640, height: 560)
         .commandsRemoved()
 
-        // Sized for its details (UI review L-01): at 452 pt the detail showed a third of itself.
-        Window("Library", id: Self.libraryWindow) {
-            LibraryView(library: Self.library)
-                .frame(minWidth: 640, minHeight: 400)
-                .task { await LibraryLaunch.once() }
-        }
-        .defaultSize(width: 980, height: 680)
-        .keyboardShortcut("l", modifiers: [.command, .shift])
-
         // The setup board (WI-9): opened by itself once, on a fresh account, and from the app menu or Settings after.
         Window("Set Up XDict", id: Self.setupWindow) {
             SetupView(library: Self.library, registrar: LookupAnywhere.shared.registrar,
                       trusted: { AccessibilityGate.system(false) },
-                      openLibrary: { MenuBarActions.openLibrary() })
+                      showDictionaries: { MenuBarActions.showDictionaries() })
                 .task { await LibraryLaunch.once() }
         }
         .windowResizability(.contentSize)
         .commandsRemoved()
 
         Settings {
-            // Dictionaries first: Apple's Settings opens on its dictionary list (parity P39). The other panes are XDict's
-            // own (Lookup Anywhere, speech, the reading accent, login), at Apple's width.
-            TabView {
-                Tab("Dictionaries", systemImage: "books.vertical") {
-                    SettingsDictionaries(library: Self.library, openLibrary: { MenuBarActions.openLibrary() })
-                        .task { await LibraryLaunch.once() }
-                }
-                Tab("General", systemImage: "gearshape") {
-                    GeneralSettings(login: Self.loginItem, defaults: .standard, domain: XDictIdentity.app,
-                                    openSetup: { MenuBarActions.openSetup() })
-                }
-                Tab("Reading", systemImage: "book") { ReadingSettings() }
-                Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
-                Tab("Lookup", systemImage: "keyboard") { ShortcutSettings(registrar: LookupAnywhere.shared.registrar) }
-            }
+            // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
+            // dictionary list (parity P39). The other two are XDict's own, at Apple's width. The pane in front is
+            // `SettingsRoute`'s, so every way in can choose it (d.4).
+            SettingsContent(route: .shared)
         }
 
         // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
@@ -94,14 +74,28 @@ struct XDictApp: App {
             MenuBarMenu(registrar: LookupAnywhere.shared.registrar,
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
-                        openLibrary: { MenuBarActions.openLibrary() })
+                        showDictionaries: { MenuBarActions.showDictionaries() })
         } label: {
             MenuBarLabel()
         }
     }
 
+    /// One Settings pane's content (ADR-0012 d.1): the lookup shortcut sits in General, the speech rows in Reading &
+    /// Speech.
+    @MainActor @ViewBuilder static func settings(_ pane: SettingsTab) -> some View {
+        switch pane {
+        case .dictionaries:
+            SettingsDictionaries(library: library, route: .shared)
+                .task { await LibraryLaunch.once() }
+        case .readingAndSpeech:
+            ReadingSettings()
+        case .general:
+            GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
+                            registrar: LookupAnywhere.shared.registrar, openSetup: { MenuBarActions.openSetup() })
+        }
+    }
+
     static let mainWindow = "main"
-    static let libraryWindow = "library"
     static let setupWindow = "setup"
     static let acknowledgmentsWindow = "acknowledgments"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
@@ -176,7 +170,7 @@ struct MainWindow: View {
         .onAppear {
             guard state == nil else { return }
             let made = XDictApp.windowState()
-            made.openLibrary = { _ in openWindow(id: XDictApp.libraryWindow) }
+            made.showDictionaries = { SettingsRoute.shared.show($0) }
             state = made
             XDictApp.windowMade?(made)
             MainWindows.made(made)
@@ -220,6 +214,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 /// The menu-bar item's icon, and the scene actions it hands over.
 struct MenuBarLabel: View {
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Self.icon
@@ -227,6 +222,12 @@ struct MenuBarLabel: View {
             .task {
                 LookupAnywhere.shared.openMainWindow = { openWindow(id: XDictApp.mainWindow) }
                 MenuBarActions.open = { openWindow(id: $0) }
+                // Every way into Settings ▸ Dictionaries opens Settings through here, so it works with no other window
+                // open (ADR-0012 d.4).
+                SettingsRoute.shared.open = {
+                    NSApp.activate()
+                    openSettings()
+                }
                 await LibraryLaunch.once()
                 SetupLaunch.openOnAFreshAccount()
             }
@@ -270,9 +271,26 @@ enum MenuBarActions {
         open?(XDictApp.setupWindow)
     }
 
-    static func openLibrary() {
-        NSApp.activate()
-        open?(XDictApp.libraryWindow)
+    /// Settings ▸ Dictionaries, at `dictionary` when given (ADR-0012 d.4, d.5).
+    static func showDictionaries(_ dictionary: UUID? = nil) {
+        SettingsRoute.shared.show(dictionary)
+    }
+}
+
+/// **Settings' panes, the one in front chosen by `SettingsRoute`** (ADR-0012 d.1, d.4).
+struct SettingsContent: View {
+    @Bindable var route: SettingsRoute
+
+    var body: some View {
+        TabView(selection: $route.pane) {
+            ForEach(SettingsTab.allCases, id: \.self) { pane in
+                Tab(value: pane) {
+                    XDictApp.settings(pane)
+                } label: {
+                    Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
+                }
+            }
+        }
     }
 }
 
@@ -311,10 +329,9 @@ struct FileAndHelpCommands: Commands {
         CommandGroup(after: .newItem) {
             Button("New Tab") { NewTab.open { openWindow(id: XDictApp.mainWindow) } }
                 .keyboardShortcut("t")
-            Button("Add Dictionaries…") {
-                LibraryRequests.shared.requestImport()
-                MenuBarActions.openLibrary()
-            }
+            // Settings ▸ Dictionaries with the open panel up; the pane's `+` ▸ Add MDX Files… shows the same ⌘O (ADR-0012
+            // d.3).
+            Button("Add Dictionaries…") { SettingsRoute.shared.requestImport() }
             .keyboardShortcut("o")
         }
         CommandGroup(replacing: .help) {

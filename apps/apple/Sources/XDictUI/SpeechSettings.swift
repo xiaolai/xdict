@@ -3,8 +3,8 @@ import SwiftUI
 import XDictSpeech
 
 /// **Speech, in Settings** (⌘,; plan-macos-v1 WI-7, `platform-architecture.md` §4a): the reader's accent for English,
-/// the voice it will use, and what is worth knowing about that voice, with the way to a better one. WI-9 builds the rest
-/// of Settings around it.
+/// the voice it will use, and what is worth knowing about that voice, with the way to a better one. Rows, not a form:
+/// they sit beneath the accent colour in the Reading & Speech pane (`ReadingSettings`; ADR-0012 d.1).
 public struct SpeechSettings: View {
     @AppStorage(SpeechPreferences.accentKey) private var accent: Accent = SpeechPreferences.defaultAccent
     @AppStorage(SpeechPreferences.useRecordingsKey) private var useRecordings = false
@@ -14,7 +14,7 @@ public struct SpeechSettings: View {
     public var body: some View {
         let tags = SpeechLanguage.voiceTags(declared: "en", accent: accent) ?? [accent.rawValue]
         let voice = Voices.best(for: tags, among: Voices.installed)
-        Form {
+        Group {
             Picker(selection: $accent) {
                 ForEach(Accent.allCases, id: \.self) { accent in
                     Text(SpeechSentences.accent(accent)).tag(accent)
@@ -42,10 +42,9 @@ public struct SpeechSettings: View {
             }
             .accessibilityLabel(Text("Use the dictionary's recordings"))
             .accessibilityIdentifier("use-recordings")
-            Text("Each dictionary is spoken in the language set for it in the Library.")
+            Text("Each dictionary is spoken in the language set for it in Settings ▸ Dictionaries.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .settingsPane()
     }
 }

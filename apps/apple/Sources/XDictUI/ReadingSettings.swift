@@ -1,8 +1,9 @@
 import SwiftUI
 import XDictEntryView
 
-/// **Reading, in Settings** (⌘,): the reading style's accent, the one colour a dictionary's coloured text is drawn in
-/// (owner, 2026-10-16). Kept with the other reading preferences; an open entry takes a new choice at once.
+/// **Reading & Speech, in Settings** (⌘,; ADR-0012 d.1): the reading style's accent, the one colour a dictionary's
+/// coloured text is drawn in (owner, 2026-10-16), an open entry taking a new choice at once; then the speech rows
+/// (`SpeechSettings`), in one form.
 public struct ReadingSettings: View {
     @AppStorage(EntryPreferences.accentKey) private var accent: EntryReadingFrame.Accent = .teal
 
@@ -26,6 +27,7 @@ public struct ReadingSettings: View {
             }
             .pickerStyle(.radioGroup)
             .accessibilityIdentifier("accent-colour")
+            Section { SpeechSettings() }
         }
         // As tall as its rows: a grouped form scrolls and would take the window's height, leaving it mostly empty.
         .settingsPane()

@@ -3,8 +3,8 @@ import SwiftUI
 import XDictAnywhere
 
 /// **Lookup from anywhere, in Settings** (plan-macos-v1 WI-8): the lookup shortcut — shown, rebindable by a recorder,
-/// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). WI-9 builds the
-/// rest of Settings around it.
+/// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). Rows, not a
+/// form: they sit in the General pane (`GeneralSettings`; ADR-0012 d.1).
 public struct ShortcutSettings: View {
     let registrar: ShortcutRegistrar
 
@@ -13,7 +13,7 @@ public struct ShortcutSettings: View {
     }
 
     public var body: some View {
-        Form {
+        Group {
             LabeledContent {
                 ShortcutRecorder(registrar: registrar)
             } label: {
@@ -32,7 +32,6 @@ public struct ShortcutSettings: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }
-        .settingsPane()
     }
 }
 

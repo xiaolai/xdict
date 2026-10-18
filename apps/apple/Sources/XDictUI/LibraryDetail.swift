@@ -136,7 +136,7 @@ struct LibraryDetail: View {
                 ProblemStatus(sentence: sentence)
                 switch LibraryRowAction.for(phase) {
                 case .locate: Button("Locate…") { locate() }
-                case .showInFinder: Button("Show in Finder") { LibraryRow.showInFinder(entry) }
+                case .showInFinder: Button("Show in Finder") { LibraryRowAction.showInFinder(entry) }
                 case .tryAgain: Button("Try Again") { library.retry(entry.id) }
                 case .cancel, .none: EmptyView()
                 }

@@ -153,8 +153,8 @@ extension LookupScenario {
         let wanted: [(String, (SectionStatus?) -> Bool, NextAction?)] = [
             ("records", { $0 == .noMatch(query: "apple", mode: .reader) }, .checkSpelling),
             ("slow", { if case .unavailable(.indexing)? = $0 { true } else { false } }, .wait),
-            ("gone", { $0 == .unavailable(.missingFile("gone.mdx")) }, ids["gone"].map(NextAction.openLibrary)),
-            ("damaged", { $0 == .unavailable(.malformed) }, ids["damaged"].map(NextAction.openLibrary)),
+            ("gone", { $0 == .unavailable(.missingFile("gone.mdx")) }, ids["gone"].map(NextAction.showInSettings)),
+            ("damaged", { $0 == .unavailable(.malformed) }, ids["damaged"].map(NextAction.showInSettings)),
         ]
         var wrong: [String] = [], seen: [String] = []
         for (name, ok, next) in wanted {

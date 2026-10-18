@@ -224,9 +224,9 @@ struct SearchModelTests {
             .unavailable(.outsideItsFolder("link.mdd")),
         ])
         #expect(model.sections.map(\.next) == [
-            .checkSpelling, .wait, .openLibrary(Fixture.id(3)), .openLibrary(Fixture.id(4)), .openLibrary(Fixture.id(5)),
-            .retryImport(Fixture.id(6)), .retryLookup(Fixture.id(7)), .openLibrary(Fixture.id(8)),
-            .openLibrary(Fixture.id(9)),
+            .checkSpelling, .wait, .showInSettings(Fixture.id(3)), .showInSettings(Fixture.id(4)), .showInSettings(Fixture.id(5)),
+            .retryImport(Fixture.id(6)), .retryLookup(Fixture.id(7)), .showInSettings(Fixture.id(8)),
+            .showInSettings(Fixture.id(9)),
         ])
         #expect(Set(statuses).count == statuses.count, "two states read alike")
     }
