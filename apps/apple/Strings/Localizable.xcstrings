@@ -3693,6 +3693,22 @@
         }
       }
     },
+    "Part of this dictionary could not be read. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Part of this dictionary could not be read. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典有一部分无法读取。请再试一次。"
+          }
+        }
+      }
+    },
     "Part of this dictionary is damaged, so this lookup could not be read." : {
       "localizations" : {
         "en" : {
@@ -4672,6 +4688,22 @@
         }
       }
     },
+    "The copy of this dictionary was gone before XDict could convert it. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The copy of this dictionary was gone before XDict could convert it. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 还没来得及转换，这部词典的副本就不见了。请再试一次。"
+          }
+        }
+      }
+    },
     "The dictionary service answered." : {
       "localizations" : {
         "en" : {
@@ -5014,6 +5046,40 @@
         }
       }
     },
+    "This dictionary has more than %lld files, more than XDict converts." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This dictionary has more than %lld file, more than XDict converts."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "This dictionary has more than %lld files, more than XDict converts."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "这部词典的文件超过 %lld 个，超出了 XDict 能转换的数量。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "This dictionary has no entry named “%@”." : {
       "localizations" : {
         "en" : {
@@ -5026,6 +5092,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典没有名为“%@”的词条。"
+          }
+        }
+      }
+    },
+    "This dictionary has no search words, so XDict cannot convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary has no search words, so XDict cannot convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典没有可供查找的词条，XDict 无法转换它。"
+          }
+        }
+      }
+    },
+    "This dictionary holds a link or a special file where a plain file belongs, so XDict does not convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary holds a link or a special file where a plain file belongs, so XDict does not convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典里本该是普通文件的地方是链接或特殊文件，XDict 不转换它。"
           }
         }
       }
@@ -5046,6 +5144,22 @@
         }
       }
     },
+    "This dictionary is damaged or empty, so XDict does not convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is damaged or empty, so XDict does not convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典已损坏或是空的，XDict 不转换它。"
+          }
+        }
+      }
+    },
     "This dictionary is encrypted in a way XDict does not read." : {
       "localizations" : {
         "en" : {
@@ -5062,6 +5176,38 @@
         }
       }
     },
+    "This dictionary is in an older format than the one macOS installs, so XDict does not convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is in an older format than the one macOS installs, so XDict does not convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典的格式比 macOS 安装的旧，XDict 不转换它。"
+          }
+        }
+      }
+    },
+    "This dictionary is larger than XDict converts (%@)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary is larger than XDict converts (%@)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典超出了 XDict 能转换的大小（%@）。"
+          }
+        }
+      }
+    },
     "This dictionary is locked to its buyer with a registration code. XDict does not open locked dictionaries." : {
       "localizations" : {
         "en" : {
@@ -5074,6 +5220,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典用注册码锁定给了购买者。XDict 不打开加锁的词典。"
+          }
+        }
+      }
+    },
+    "This dictionary names a file outside itself, so XDict does not convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary names a file outside itself, so XDict does not convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典指向了它自身以外的文件，XDict 不转换它。"
+          }
+        }
+      }
+    },
+    "This dictionary uses something XDict does not convert yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary uses something XDict does not convert yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典用到了 XDict 暂时还不能转换的内容。"
+          }
+        }
+      }
+    },
+    "This dictionary would grow larger than XDict converts." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary would grow larger than XDict converts."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典展开后会超出 XDict 能转换的大小。"
           }
         }
       }
@@ -5106,6 +5300,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典的文字采用 %@ 编码，XDict 无法读取。"
+          }
+        }
+      }
+    },
+    "This dictionary’s description file is damaged, so XDict does not convert it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This dictionary’s description file is damaged, so XDict does not convert it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这部词典的描述文件已损坏，XDict 不转换它。"
           }
         }
       }
@@ -5658,6 +5868,22 @@
         }
       }
     },
+    "XDict could not save the converted dictionary. Check that your disk has room, then try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict could not save the converted dictionary. Check that your disk has room, then try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 无法保存转换好的词典。请确认磁盘还有空间，然后再试一次。"
+          }
+        }
+      }
+    },
     "XDict could not tell this dictionary's languages from its file name. Which are they?" : {
       "localizations" : {
         "en" : {
@@ -5814,6 +6040,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 界面的语言；词典内容从不翻译。下次打开 XDict 时生效。"
+          }
+        }
+      }
+    },
+    "XDict’s dictionary service cannot reach its shared folder, so it cannot convert Apple dictionaries. Reinstall XDict." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict’s dictionary service cannot reach its shared folder, so it cannot convert Apple dictionaries. Reinstall XDict."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 的词典服务无法访问它的共享文件夹，因此无法转换 Apple 词典。请重新安装 XDict。"
           }
         }
       }

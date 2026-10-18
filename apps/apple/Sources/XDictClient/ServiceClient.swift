@@ -234,6 +234,36 @@ public actor ServiceClient {
         return .success(.notRunning)
     }
 
+    /// Converts the Apple dictionary snapshot staged at `AppleImports/staging/<staging>/` of the shared app-group
+    /// container (ADR-0011 decision 4); `progress` hears the service's reports. Like an import it has no deadline and
+    /// ends after `importSilence` without a report. Stop it with `cancelConversion`.
+    public func submitConvertApple(staging: UUID, progress: (@Sendable (UInt64, UInt64) -> Void)? = nil) -> CallTicket {
+        let call = makeCall(.convertApple(staging: staging), caller: nil, package: nil, progress: progress)
+        enqueue(call)
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
+    /// Stops the conversion `ticket` names: one not yet sent never is; one sent, running or waiting its turn in the
+    /// service, stops at its next step and answers `cancelled`.
+    public func cancelConversion(_ ticket: CallTicket) async -> Result<Cancellation, ClientFailure> {
+        if let index = queue.firstIndex(where: { $0.number == ticket.number }) {
+            let call = queue.remove(at: index)
+            call.promise.fulfil(.failure(.wire(.core(.cancelled(detail: "cancelled before it was sent")))))
+            return .success(.stopping)
+        }
+        for link in links.values where link.inFlight.contains(where: { $0.value.call.number == ticket.number }) {
+            let cancel = makeCall(.cancelConversion, caller: nil, package: nil, progress: nil)
+            send(cancel, on: link)
+            return await cancel.promise.value().flatMap { delivered in
+                guard case .cancellation(let found) = delivered.answer else {
+                    return .failure(.wire(.undecodable(detail: "not a cancellation")))
+                }
+                return .success(found)
+            }
+        }
+        return .success(.notRunning)
+    }
+
     /// Closes a dictionary opened through `open`. After a restart there is nothing left to close in the service.
     public func close(_ dict: DictId) async -> ClientOutcome {
         guard let registered = registry.removeValue(forKey: dict) else { return await call(.close(dict: dict)) }

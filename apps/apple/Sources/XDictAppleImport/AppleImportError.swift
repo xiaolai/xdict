@@ -25,6 +25,8 @@ public enum AppleImportError: Error, Equatable, Sendable {
     case unwritable(file: String, code: Int)
     /// The bundle has no entries.
     case noEntries
+    /// The checkpoint answered `false` (ADR-0011 decision 5): the conversion stopped there and left nothing.
+    case cancelled
 }
 
 public enum InfoPlistFault: Equatable, Sendable {
@@ -92,8 +94,9 @@ public struct Bounds: Sendable, Equatable {
     /// `Info.plist`, parsed by Foundation in one piece. 4 MiB: the installed ones are a few KiB.
     public var infoPlistBytes: Int
     /// Every zlib block of `Body.data` and `KeyText.data` together, inflated. 2 GiB: about sixteen times Hungarian's
-    /// whole snapshot, and what is inflated is held while the records are built, so this is also a memory bound. Not
-    /// measured on the service yet; plan WI-4 measures Hungarian and sets the memory budget it fails over.
+    /// whole snapshot, and what is inflated is held while the records are built, so this is also a memory bound:
+    /// 256 MiB inflated peaked at about 1 GiB through the service's path (`Tools/measure-apple-import-memory.sh`, which
+    /// holds that to a budget). Hungarian in the signed service is the owner's measurement (ADR-0011 decision 5).
     public var decompressedBytes: Int
     /// The MDX and the MDD together. 2 GiB: an MDX is smaller than what it was inflated from, and the MDD is the
     /// snapshot's resources, already within 512 MiB.

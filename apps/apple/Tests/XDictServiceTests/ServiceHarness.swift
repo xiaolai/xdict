@@ -27,11 +27,15 @@ final class ServiceHarness: Sendable {
         }
     }
 
-    init(check: ClientCheck = .anyoneForTests, idle: IdleExit? = nil) throws {
+    /// `appleImports`: the folder conversions use in place of the app-group container's (`AppleStaging`); none, as for
+    /// a service without the entitlement, by default.
+    init(check: ClientCheck = .anyoneForTests, idle: IdleExit? = nil, appleImports: AppleImportStore? = nil,
+         conversionHeartbeat: Duration = .seconds(15)) throws {
         storage = FileManager.default.temporaryDirectory.appending(path: "xdict-service-\(UUID().uuidString)")
         let idle = idle ?? IdleExit(quiet: .seconds(86_400), now: { ContinuousClock.now }, arm: { _ in }, exit: { _ in })
         context = ServiceContext(dictionaries: Dictionaries(storage: Dictionaries.Storage(
-            indexes: storage.appending(path: "indexes"), registry: storage.appending(path: "registry"))), idle: idle)
+            indexes: storage.appending(path: "indexes"), registry: storage.appending(path: "registry"))), idle: idle,
+            appleImports: appleImports, conversionHeartbeat: conversionHeartbeat)
         listener = Box(service: ServiceListener(context: context, check: check))
     }
 

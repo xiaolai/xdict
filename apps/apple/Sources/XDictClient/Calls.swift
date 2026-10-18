@@ -112,7 +112,8 @@ extension ServiceOperation {
         case .close(let dict), .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _),
              .health(let dict), .readingStyle(let dict): [dict]
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts
-        case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf: []
+        case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
+             .cancelConversion: []
         }
     }
 
@@ -127,7 +128,8 @@ extension ServiceOperation {
         case .readingStyle(let dict): .readingStyle(dict: rename(dict))
         case .lookup(let query, let dicts, let options): .lookup(query: query, dicts: dicts.map(rename), options: options)
         case .suggest(let prefix, let dicts, let limit): .suggest(prefix: prefix, dicts: dicts.map(rename), limit: limit)
-        case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf: self
+        case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
+             .cancelConversion: self
         }
     }
 }
