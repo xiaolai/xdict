@@ -475,6 +475,69 @@
       }
     ]
   },
+  "displayOptions": {
+    "comment": "ADR-0013: the display options each open dictionary declares, with its default and the CSS a shell applies. tiny carries no markup contract; prn.mdx carries both pronunciation variants side by side and a sheet styling fbm_NOAD (Apple's NOAD: IPA by default); prn-plain.mdx the same contract, IPA first, and no sheet (the contract's default, both); prn-one.mdx only the IPA variant, so nothing applies even under NOAD's sheet.",
+    "tiny": {
+      "version": 1,
+      "options": [],
+      "css": ""
+    },
+    "cases": [
+      {
+        "mdx": "prn.mdx",
+        "sidecars": [
+          "prn-noad.css"
+        ],
+        "result": {
+          "version": 1,
+          "options": [
+            {
+              "id": "pronunciation",
+              "attribute": "data-xdict-opt-pronunciation",
+              "values": [
+                "respell",
+                "ipa",
+                "both"
+              ],
+              "defaultValue": "ipa"
+            }
+          ],
+          "css": ":root[data-xdict-opt-pronunciation=\"respell\"] .t_respell[data-d-prn=\"US\"] ~ .t_IPA[data-d-prn=\"IPA\"] { display: none !important; }\n:root[data-xdict-opt-pronunciation=\"respell\"] .t_IPA[data-d-prn=\"IPA\"]:has(~ .t_respell[data-d-prn=\"US\"]) { display: none !important; }\n:root:not([data-xdict-opt-pronunciation=\"respell\"]):not([data-xdict-opt-pronunciation=\"both\"]) .t_IPA[data-d-prn=\"IPA\"] ~ .t_respell[data-d-prn=\"US\"] { display: none !important; }\n:root:not([data-xdict-opt-pronunciation=\"respell\"]):not([data-xdict-opt-pronunciation=\"both\"]) .t_respell[data-d-prn=\"US\"]:has(~ .t_IPA[data-d-prn=\"IPA\"]) { display: none !important; }\n:root[data-xdict-opt-pronunciation=\"both\"] .t_IPA[data-d-prn=\"IPA\"] ~ .t_respell[data-d-prn=\"US\"]::before { content: \" | \"; content: \" | \" / \"\"; }\n:root[data-xdict-opt-pronunciation=\"both\"] .t_respell[data-d-prn=\"US\"] ~ .t_IPA[data-d-prn=\"IPA\"]::before { content: \" | \"; content: \" | \" / \"\"; }\n"
+        }
+      },
+      {
+        "mdx": "prn-plain.mdx",
+        "sidecars": [],
+        "result": {
+          "version": 1,
+          "options": [
+            {
+              "id": "pronunciation",
+              "attribute": "data-xdict-opt-pronunciation",
+              "values": [
+                "respell",
+                "ipa",
+                "both"
+              ],
+              "defaultValue": "both"
+            }
+          ],
+          "css": ":root[data-xdict-opt-pronunciation=\"respell\"] .t_respell[data-d-prn=\"US\"] ~ .t_IPA[data-d-prn=\"IPA\"] { display: none !important; }\n:root[data-xdict-opt-pronunciation=\"respell\"] .t_IPA[data-d-prn=\"IPA\"]:has(~ .t_respell[data-d-prn=\"US\"]) { display: none !important; }\n:root[data-xdict-opt-pronunciation=\"ipa\"] .t_IPA[data-d-prn=\"IPA\"] ~ .t_respell[data-d-prn=\"US\"] { display: none !important; }\n:root[data-xdict-opt-pronunciation=\"ipa\"] .t_respell[data-d-prn=\"US\"]:has(~ .t_IPA[data-d-prn=\"IPA\"]) { display: none !important; }\n:root:not([data-xdict-opt-pronunciation=\"respell\"]):not([data-xdict-opt-pronunciation=\"ipa\"]) .t_IPA[data-d-prn=\"IPA\"] ~ .t_respell[data-d-prn=\"US\"]::before { content: \" | \"; content: \" | \" / \"\"; }\n:root:not([data-xdict-opt-pronunciation=\"respell\"]):not([data-xdict-opt-pronunciation=\"ipa\"]) .t_respell[data-d-prn=\"US\"] ~ .t_IPA[data-d-prn=\"IPA\"]::before { content: \" | \"; content: \" | \" / \"\"; }\n"
+        }
+      },
+      {
+        "mdx": "prn-one.mdx",
+        "sidecars": [
+          "prn-noad.css"
+        ],
+        "result": {
+          "version": 1,
+          "options": [],
+          "css": ""
+        }
+      }
+    ]
+  },
   "byteSource": {
     "comment": "The same MDX bytes through a ByteSource the suite implements, named copy/tiny.mdx, reporting the identity below, with a sidecar of its own (also a ByteSource): one edition at two locations, both open at once, each handle serving its own package's sidecar (Codex objection 1). Then a source that returns one byte too few.",
     "name": "copy/tiny.mdx",

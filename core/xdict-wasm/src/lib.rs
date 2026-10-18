@@ -515,6 +515,13 @@ impl Core {
         watched_reply(|| self.0.health(dict.into(), &progress))
     }
 
+    /// The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013). Reads a
+    /// sample of the edition's records, so through its sources.
+    #[wasm_bindgen(js_name = displayOptions)]
+    pub fn display_options(&self, dict: &str) -> Reply {
+        watched_reply(|| self.0.display_options(dict.into()))
+    }
+
     #[wasm_bindgen(js_name = joinLineage)]
     pub fn join_lineage(&self, edition: &str, lineage: &str) -> Reply {
         reply(self.0.join_lineage(edition.into(), lineage.into()))
