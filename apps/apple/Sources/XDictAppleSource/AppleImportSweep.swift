@@ -4,7 +4,7 @@ import Foundation
 /// converter writes, so an imported copy made by an older converter is offered Convert Again. The converter owns the
 /// number (`AppleImport.converterRevision`, linked by the service alone); `AppleSourceSharingTests` holds this one to it.
 public enum AppleConverter {
-    public static let revision: UInt32 = 1
+    public static let revision: UInt32 = 2
 }
 
 /// **The launch sweep** (ADR-0011 decision 9): publication is staging → output folder → library import → library

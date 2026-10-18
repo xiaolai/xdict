@@ -24,12 +24,16 @@ private let booleanAttrs: Set<String> = [
     "checked", "compact", "declare", "defer", "disabled", "ismap", "multiple", "nohref", "noresize", "noshade",
     "nowrap", "readonly", "selected",
 ]
-/// Attributes with a function in plain HTML; the rest is editorial metadata unless the CSS selects it.
+/// Attributes with a function in plain HTML; the rest is editorial metadata unless the CSS selects it or it is a kept
+/// marker (`keptMarkers`).
 let htmlAttrs: Set<String> = [
     "id", "class", "href", "src", "alt", "title", "lang", "style", "width", "height",
     "colspan", "rowspan", "align", "valign", "border", "frame", "rules", "size",
     "cellpadding", "cellspacing", "summary", "scope", "headers", "start", "type",
 ]
+/// Apple's semantic markers, by local name in its namespace: kept as `data-d-*` whatever the stylesheet selects, so a
+/// display option can act on them; keeping one hides nothing (ADR-0013 decision 1). `prn`: a pronunciation's variant.
+let keptMarkers: Set<String> = ["prn"]
 let linkPlaceholder = "apple2mdx-link:"
 /// libxml2's default element nesting limit (without XML_PARSE_HUGE).
 private let maxDepth = 256
@@ -277,12 +281,14 @@ struct EntryTransformer {
         // plain attributes keep their place; namespaced ones are renamed and moved to the end
         var final: [(String, String)] = []
         var renamed: [(String, String)] = []
+        var markers: Set<String> = []
         for a in resolved {
             let l = String(decoding: a.local, as: UTF8.self)
             if !a.prefixed {
                 final.append((l, a.value))
             } else if a.ns == dNS {
                 renamed.append(("data-d-" + l, a.value))
+                if keptMarkers.contains(l) { markers.insert("data-d-" + l) }
             } else if a.ns == xhtmlNS || a.ns == xmlNS {
                 renamed.append((l, a.value))
             } else {
@@ -307,7 +313,7 @@ struct EntryTransformer {
         final = kept
         if let keep = cssAttrs {
             let before = final.count
-            final.removeAll { !htmlAttrs.contains($0.0) && !keep.contains($0.0) }
+            final.removeAll { !htmlAttrs.contains($0.0) && !keep.contains($0.0) && !markers.contains($0.0) }
             stats.bump("metadata attributes dropped", before - final.count)
         }
         var name = element
