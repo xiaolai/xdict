@@ -21,7 +21,7 @@ public struct MenuBarMenu: View {
         self.showDictionaries = showDictionaries
     }
 
-    public var body: some View {
+    public var body: some View {  // placement: menu-bar-extra
         if let problem = registrar.problem {
             Text(AnywhereSentences.problem(problem))
             Divider()

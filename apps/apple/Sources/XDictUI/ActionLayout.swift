@@ -13,8 +13,14 @@ import XDictTokens
 //   is prominent; a destructive action is never the default and stands apart at the leading edge (`SheetFooter`).
 // - R4 One surface, one size: the surface decides it, never the site (`ActionSurface`).
 // - R5 A single action in an otherwise-text row goes trailing (`ActionRow`).
-// - R6 Apple's own measured layouts keep their places: the toolbar (P3), menus, the Settings table's +/− (P39) and the
-//   popover's footer rows (P41).
+// - An empty state's ways on sit centred under its sentence, the first prominent when a second is under it
+//   (`EmptyStateActions`).
+// - R6 Apple's own measured layouts keep their places, each site marked `// placement: <id>` on its line:
+//   the toolbar (P3) and its speaker (P48); the menus: app (P31), File (P32), Edit ▸ Find (P33), View (P34), Go (P35),
+//   Search (P36), Help (P38), and the menu-bar item's menu; the scope bar (P6); the find bar (P30); Settings ▸
+//   Dictionaries' table checkboxes and +/− (P39); the lookup popover's speaker and footer rows (P41). The system's own:
+//   an NSAlert (it already follows R3), a spinner, an icon-only glyph, the shortcut recorder and a Form's
+//   LabeledContent. `ButtonPlacementTests.exclusions` is the list of ids, each with why; an unknown or unused id fails.
 
 /// Where a group of actions sits, which decides their size (R4).
 enum ActionSurface: Equatable {
@@ -24,30 +30,52 @@ enum ActionSurface: Equatable {
     case strip
     /// A sheet's or a dialog's footer (R3).
     case footer
+    /// An empty state: its ways on, centred under its sentence.
+    case emptyState
 
     var controlSize: ControlSize {
         switch self {
-        case .pane, .footer: .regular
+        case .pane, .footer, .emptyState: .regular
         case .strip: .small
         }
     }
 }
 
-/// The places of a sheet's footer, in reading order (R3).
-enum FooterSlot: CaseIterable, Equatable {
-    case destructive, cancel, primary
+/// What a sheet's footer lays out, in reading order (R3). `SheetFooter`'s body draws exactly `arrangement`.
+enum FooterItem: Hashable {
+    /// The destructive action, at the leading edge.
+    case destructive
+    /// The space that sets it apart from the rest, at the trailing edge.
+    case gap
+    case cancel
+    /// No Cancel to take Escape (a sheet whose changes apply at once): Escape closes the sheet, as Done does.
+    case closeOnEscape
+    /// The default action, rightmost.
+    case primary
 
-    /// Escape for Cancel, Return for the default action; nothing for a destructive one, which is never the default.
+    /// Escape for Cancel or for closing, Return for the default action; nothing for a destructive one, which is never
+    /// the default.
     var keyEquivalent: KeyboardShortcut? {
         switch self {
-        case .destructive: nil
-        case .cancel: .cancelAction
+        case .destructive, .gap: nil
+        case .cancel, .closeOnEscape: .cancelAction
         case .primary: .defaultAction
         }
     }
 
-    /// The destructive action sits at the leading edge, apart from the others at the trailing one.
-    var standsApart: Bool { self == .destructive }
+    static func arrangement(closesOnEscape: Bool) -> [FooterItem] {
+        [.destructive, .gap, closesOnEscape ? .closeOnEscape : .cancel, .primary]
+    }
+}
+
+/// An empty state's ways on, top to bottom: the first, then the one under it.
+enum EmptyStateItem: Hashable {
+    case primary, secondary
+
+    static func arrangement(hasSecondary: Bool) -> [EmptyStateItem] { hasSecondary ? [.primary, .secondary] : [.primary] }
+
+    /// The first way on is prominent only when it is one of two: a single one is the page's only button anyway.
+    func isProminent(hasSecondary: Bool) -> Bool { self == .primary && hasSecondary }
 }
 
 /// What a progress row's bar shows (R2).
@@ -166,25 +194,49 @@ struct ProgressBarView: View {
 }
 
 /// A sheet's footer (R3): a destructive action apart at the leading edge, then Cancel and the default action at the
-/// trailing one, Escape and Return theirs. A slot left empty takes no room.
+/// trailing one, Escape and Return theirs, in `FooterItem.arrangement`'s order. A slot left empty takes no room. With
+/// nothing to cancel, Escape closes the sheet.
 struct SheetFooter<Destructive: View, Cancel: View, Primary: View>: View {
     @ViewBuilder let destructive: Destructive
     @ViewBuilder let cancel: Cancel
     @ViewBuilder let primary: Primary
+    let closeOnEscape: (() -> Void)?
 
     init(@ViewBuilder destructive: () -> Destructive, @ViewBuilder cancel: () -> Cancel,
          @ViewBuilder primary: () -> Primary) {
-        self.destructive = destructive()
-        self.cancel = cancel()
-        self.primary = primary()
+        self.init(destructive: destructive(), cancel: cancel(), primary: primary(), closeOnEscape: nil)
     }
+
+    fileprivate init(destructive: Destructive, cancel: Cancel, primary: Primary, closeOnEscape: (() -> Void)?) {
+        self.destructive = destructive
+        self.cancel = cancel
+        self.primary = primary
+        self.closeOnEscape = closeOnEscape
+    }
+
+    /// What this footer lays out, in order: its body draws exactly this.
+    var arrangement: [FooterItem] { FooterItem.arrangement(closesOnEscape: closeOnEscape != nil) }
 
     var body: some View {
         HStack(spacing: Tokens.Space.sm) {
-            destructive.keyboardShortcut(FooterSlot.destructive.keyEquivalent)
-            Spacer()
-            cancel.keyboardShortcut(FooterSlot.cancel.keyEquivalent)
-            primary.keyboardShortcut(FooterSlot.primary.keyEquivalent)
+            ForEach(arrangement, id: \.self) { item in
+                switch item {
+                case .destructive: destructive.keyboardShortcut(item.keyEquivalent)
+                case .gap: Spacer()
+                case .cancel: cancel.keyboardShortcut(item.keyEquivalent)
+                case .closeOnEscape:
+                    if let closeOnEscape {
+                        // Escape's own key, with no room, picture or VoiceOver element of its own: Done says the same.
+                        Button(action: closeOnEscape) { EmptyView() }
+                            .buttonStyle(.plain)
+                            .frame(width: 0, height: 0)
+                            .opacity(0)
+                            .accessibilityHidden(true)
+                            .keyboardShortcut(item.keyEquivalent)
+                    }
+                case .primary: primary.keyboardShortcut(item.keyEquivalent)
+                }
+            }
         }
         .controlSize(ActionSurface.footer.controlSize)
     }
@@ -193,13 +245,54 @@ struct SheetFooter<Destructive: View, Cancel: View, Primary: View>: View {
 extension SheetFooter where Destructive == EmptyView {
     /// Cancel and the default action.
     init(@ViewBuilder cancel: () -> Cancel, @ViewBuilder primary: () -> Primary) {
-        self.init(destructive: { EmptyView() }, cancel: cancel, primary: primary)
+        self.init(destructive: EmptyView(), cancel: cancel(), primary: primary(), closeOnEscape: nil)
     }
 }
 
 extension SheetFooter where Cancel == EmptyView {
-    /// A destructive action and the default action, with nothing to cancel.
-    init(@ViewBuilder destructive: () -> Destructive, @ViewBuilder primary: () -> Primary) {
-        self.init(destructive: destructive, cancel: { EmptyView() }, primary: primary)
+    /// A destructive action and the default action, with nothing to cancel: Escape closes the sheet.
+    init(@ViewBuilder destructive: () -> Destructive, @ViewBuilder primary: () -> Primary,
+         closeOnEscape: @escaping () -> Void) {
+        self.init(destructive: destructive(), cancel: EmptyView(), primary: primary(), closeOnEscape: closeOnEscape)
+    }
+}
+
+/// An empty state's ways on (`ActionSurface.emptyState`), centred under its sentence: in a `ContentUnavailableView`'s
+/// actions or a page of its own. The first is prominent when a second sits under it (`EmptyStateItem`).
+struct EmptyStateActions<Primary: View, Secondary: View>: View {
+    @ViewBuilder let primary: Primary
+    @ViewBuilder let secondary: Secondary
+    let hasSecondary: Bool
+
+    init(@ViewBuilder primary: () -> Primary, @ViewBuilder secondary: () -> Secondary) {
+        self.primary = primary()
+        self.secondary = secondary()
+        hasSecondary = true
+    }
+
+    var body: some View {
+        VStack(spacing: Tokens.Space.sm) {
+            ForEach(EmptyStateItem.arrangement(hasSecondary: hasSecondary), id: \.self) { item in
+                switch item {
+                case .primary:
+                    if item.isProminent(hasSecondary: hasSecondary) {
+                        primary.buttonStyle(.borderedProminent)
+                    } else {
+                        primary
+                    }
+                case .secondary: secondary
+                }
+            }
+        }
+        .controlSize(ActionSurface.emptyState.controlSize)
+    }
+}
+
+extension EmptyStateActions where Secondary == EmptyView {
+    /// One way on.
+    init(@ViewBuilder primary: () -> Primary) {
+        self.primary = primary()
+        secondary = EmptyView()
+        hasSecondary = false
     }
 }

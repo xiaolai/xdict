@@ -65,7 +65,7 @@ struct AppleImportSheet: View {
     @ViewBuilder private var list: some View {
         if !found {
             HStack(spacing: Tokens.Space.sm) {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small)  // placement: spinner
                 Text(AppleImportSentences.finding).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -299,7 +299,7 @@ struct LibraryDetail: View {
                     HStack(spacing: Tokens.Space.s) {
                         Text(verbatim: Self.short(edition)).font(.subheadline.monospaced()).foregroundStyle(.secondary)
                             .help(Text(verbatim: edition.rawValue))
-                        Button {
+                        Button {  // placement: glyph
                             NSPasteboard.general.clearContents()
                             NSPasteboard.general.setString(edition.rawValue, forType: .string)
                         } label: {

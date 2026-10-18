@@ -36,7 +36,7 @@ final class ScopeBarView: NSView {
     private var selected: SearchScope = .all
     private let group = ScopeRadioGroup()
     private var buttons: [ScopeButton] = []
-    private let more = NSPopUpButton(frame: .zero, pullsDown: true)
+    private let more = NSPopUpButton(frame: .zero, pullsDown: true)  // placement: P6
     private let rule = NSBox()
 
     override init(frame: NSRect) {
@@ -70,7 +70,7 @@ final class ScopeBarView: NSView {
             self.items = items
             buttons.forEach { $0.removeFromSuperview() }
             buttons = items.enumerated().map { index, item in
-                let button = ScopeButton(title: item.title, target: self, action: #selector(chose(_:)))
+                let button = ScopeButton(title: item.title, target: self, action: #selector(chose(_:)))  // placement: P6
                 button.tag = index
                 button.isEnabled = item.enabled
                 group.addSubview(button)
@@ -137,7 +137,7 @@ final class ScopeRadioGroup: NSView {
 
 /// One scope: an accessory-bar toggle, text only, read as a radio button named by its title (`scope.option`), its value
 /// 1 when it is the chosen scope and 0 otherwise, as an AppKit radio button reads.
-final class ScopeButton: NSButton {
+final class ScopeButton: NSButton {  // placement: P6
     convenience init(title: String, target: AnyObject, action: Selector) {
         self.init(frame: .zero)
         self.title = title
@@ -147,7 +147,7 @@ final class ScopeButton: NSButton {
         bezelStyle = .accessoryBar
         showsBorderOnlyWhileMouseInside = true
         font = .systemFont(ofSize: NSFont.systemFontSize)
-        controlSize = .regular
+        controlSize = .regular  // placement: P6
         setAccessibilityIdentifier("scope.option")
         setAccessibilityLabel(title)
     }

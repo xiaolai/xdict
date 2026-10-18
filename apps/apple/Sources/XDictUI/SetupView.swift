@@ -64,36 +64,32 @@ public struct SetupView: View {
                 }
             }
         } actions: {
-            action(step, state)
+            switch step {
+            case .dictionaries:
+                // Add Dictionaries… opens the open panel itself (UI review U-02), in Settings ▸ Dictionaries (ADR-0012
+                // d.4).
+                Button {
+                    if state != .done { SettingsRoute.shared.requestImport() } else { showDictionaries() }
+                } label: {
+                    Text(state == .done ? "Open Dictionary Settings" : "Add Dictionaries…")
+                }
+                .accessibilityIdentifier("setup.dictionaries.action")
+            case .accessibility:
+                if state != .done {
+                    Button {
+                        _ = AccessibilityGate.system(true)
+                        if let url = URL(string: Self.accessibilityPane) { NSWorkspace.shared.open(url) }
+                    } label: {
+                        Text("Open System Settings")
+                    }
+                    .accessibilityIdentifier("setup.accessibility.action")
+                }
+            case .shortcut:
+                ShortcutRecorder(registrar: registrar)
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("setup.\(step.rawValue).\(Self.stateKey(state))")
-    }
-
-    @ViewBuilder
-    private func action(_ step: SetupBoard.Step, _ state: SetupBoard.State) -> some View {
-        switch step {
-        case .dictionaries:
-            // Add Dictionaries… opens the open panel itself (UI review U-02), in Settings ▸ Dictionaries (ADR-0012 d.4).
-            Button {
-                if state != .done { SettingsRoute.shared.requestImport() } else { showDictionaries() }
-            } label: {
-                Text(state == .done ? "Open Dictionary Settings" : "Add Dictionaries…")
-            }
-                .accessibilityIdentifier("setup.dictionaries.action")
-        case .accessibility:
-            if state != .done {
-                Button {
-                    _ = AccessibilityGate.system(true)
-                    if let url = URL(string: Self.accessibilityPane) { NSWorkspace.shared.open(url) }
-                } label: {
-                    Text("Open System Settings")
-                }
-                .accessibilityIdentifier("setup.accessibility.action")
-            }
-        case .shortcut:
-            ShortcutRecorder(registrar: registrar)
-        }
     }
 
     static let accessibilityPane = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
