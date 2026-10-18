@@ -17,6 +17,9 @@ for tool in ssh rsync; do
 done
 printf 'BUILD_HOSTS = stub-a stub-b\nBUILD_HOSTS_XCODE = stub-x\nBUILD_HOST = stub-x\n' >"$scratch/local.mk"
 export XDICT_GATE_CACHE=$scratch/cache XDICT_LAND_CORPUS=$scratch/corpus XDICT_LAND_LOCAL_MK=$scratch/local.mk
+# The hosts the Makefile exports from a real local.mk (run under `make test`, they are set): Tools/e2e-facts.sh asks
+# XDICT_BUILD_HOST for its toolchain, which reached a real host from "all cached asks no host" (2026-10-18).
+unset XDICT_BUILD_HOST XDICT_BUILD_CORPUS XDICT_E2E_HOST XDICT_E2E_HOST_2 XDICT_E2E_CORPUS
 # The gallery's keys and the render record, scratch ones (Tools/gallery/render_affected.py pending ends land's output).
 python3 -I -c 'import json, sys
 dicts = [l.split()[1:] for l in open("Tools/gallery/render-affected.map") if l.startswith("dicts ")][0]
