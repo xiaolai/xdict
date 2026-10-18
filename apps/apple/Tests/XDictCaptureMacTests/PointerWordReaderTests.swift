@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 import XDictCapture
-import XDictCaptureMac
+@testable import XDictCaptureMac
 
 /// **The pointer's word in each dialect, who owns the pixel, and what a hit says about itself** (plan-capture WI-2;
 /// XDict ADR-0014 decisions 2, 6, 7 and 9). Scripted trees only: the text range and the bounds scan through `Glyphs`,

@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 import XDictCapture
-import XDictCaptureMac
+@testable import XDictCaptureMac
 
 /// **Hover's Accessibility read is bounded, and stops at the first failure** (moved by name from XiaolaiDict's
 /// `AccessibilityBudgetTests`). It had a quarter-second timeout per request and nothing over the whole read, and

@@ -3,7 +3,7 @@ import Foundation
 import Synchronization
 import Testing
 import XDictCapture
-import XDictCaptureMac
+@testable import XDictCaptureMac
 
 /// **An excluded site is refused through every frame it holds** (security review of plan-capture WI-2): an
 /// `about:blank` or `srcdoc` frame inside an excluded page has no host of its own, and must not read as harmless.
@@ -144,7 +144,18 @@ struct SiteExclusionTests {
         #expect(host(tree, from: parent) == .known("bank.example"))
     }
 
-    /// A cycle of parents never reaches the application: unknown.
+    /// **`data:` and `javascript:` frames have no host and are not `about:`**: they do not defer to the page around
+    /// them, even an allowed one.
+    @Test func dataAndJavascriptFramesAreUnreadable() {
+        for address in ["data:text/html,<p>hi</p>", "javascript:void(0)"] {
+            let tree = SiteTree()
+            let page = tree.area(1, "https://news.example/", in: tree.application)
+            #expect(host(tree, from: tree.area(2, address, in: page)) == .unreadable, "\(address)")
+        }
+    }
+
+    /// A cycle of parents never reaches the application: unknown. (It cannot go red alone: without the repeat check the
+    /// walk still ends at its limit, which is also unknown; the repeat check only ends it sooner.)
     @Test func aCycleOfParentsIsUnreadable() {
         let tree = SiteTree()
         let outer = tree.area(1, "https://news.example/", in: tree.application)

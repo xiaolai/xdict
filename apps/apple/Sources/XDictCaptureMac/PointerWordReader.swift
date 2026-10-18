@@ -144,7 +144,7 @@ public enum PointerWordReader {
     /// the text range reads `readRadiusUTF16` each side of the pointer's character; the markers' sentence is cut to
     /// `contextUTF16` around the word; the bounds scan refuses a value longer than the read window
     /// (`2 × readRadiusUTF16`) before tokenising it.
-    public static func read(
+    static func read(
         at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
         with ax: some AccessibilityReading
     ) -> Outcome {
@@ -182,7 +182,7 @@ public enum PointerWordReader {
     /// with no host on the chain; a chain of `about:` frames alone stays `unreadable`. A read that failed, a parent that
     /// cannot be read, a frame with no readable address, any other hostless address, a cycle and the limit running out
     /// all leave it `unreadable`.
-    public static func host(
+    static func host(
         of target: Target, isExcluded: (String) -> Bool, with ax: some AccessibilityReading
     ) -> HostReading {
         do throws(CaptureError) {
