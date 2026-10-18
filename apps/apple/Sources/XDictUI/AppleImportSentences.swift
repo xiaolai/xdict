@@ -67,6 +67,11 @@ public enum AppleImportSentences {
     public static let importButton = LocalizedStringResource("Import")
 
     /// Where one import is, in the row's own words; nil while nothing was asked.
+    /// The line over a conversion's bar in the dictionary's own box.
+    public static func converting(name: String) -> LocalizedStringResource {
+        LocalizedStringResource("Converting \(name) again…")
+    }
+
     public static func step(_ step: AppleImportStep?) -> LocalizedStringResource? {
         switch step {
         case nil: nil

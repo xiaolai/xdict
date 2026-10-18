@@ -155,15 +155,21 @@ struct SettingsDictionaryOptions: View {
     let locate: () -> Void
     /// Convert Again for an Apple dictionary Apple updated (ADR-0011 decision 8); nil where it cannot be offered.
     let convertAgain: (() -> Void)?
+    /// What this dictionary's conversion is doing now, and Cancel for it; nil when none runs.
+    let conversion: AppleConversionLine?
+    let cancelConversion: (() -> Void)?
     @AppStorage private var originalStyle: Bool
 
     init(library: Library, entry: LibraryEntry, details: @escaping () -> Void, locate: @escaping () -> Void,
-         convertAgain: (() -> Void)? = nil) {
+         convertAgain: (() -> Void)? = nil, conversion: AppleConversionLine? = nil,
+         cancelConversion: (() -> Void)? = nil) {
         self.library = library
         self.entry = entry
         self.details = details
         self.locate = locate
         self.convertAgain = convertAgain
+        self.conversion = conversion
+        self.cancelConversion = cancelConversion
         _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
     }
 
@@ -189,11 +195,44 @@ struct SettingsDictionaryOptions: View {
         .task(id: entry.edition) { await library.loadDisplayOptions(entry.id) }
     }
 
+    /// Convert Again under way (or failed), where its button was: a bar with the service's count, and Cancel.
+    @ViewBuilder private func conversionLine(_ line: AppleConversionLine) -> some View {
+        switch line {
+        case .working(let fraction, let cancellable):
+            HStack(spacing: Tokens.Space.sm) {
+                if let fraction {
+                    ProgressView(value: fraction) { Text(AppleImportSentences.converting(name: entry.displayName)) }
+                } else {
+                    ProgressView { Text(AppleImportSentences.converting(name: entry.displayName)) }
+                        .progressViewStyle(.linear)
+                }
+                if cancellable, let cancelConversion {
+                    Button(action: cancelConversion) { Text("Cancel") }
+                        .controlSize(.small)
+                        .accessibilityIdentifier("settings.convertCancel")
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("settings.convertProgress")
+        case .failed(let failure):
+            HStack(alignment: .firstTextBaseline) {
+                Text(AppleImportSentences.failure(failure)).foregroundStyle(.secondary)
+                Spacer()
+                if let convertAgain {
+                    Button(action: convertAgain) { Text("Try Again") }
+                        .accessibilityIdentifier("settings.convertAgain")
+                }
+            }
+        }
+    }
+
     /// One problem at a time, the most pressing first: the changed file's question, then why it cannot be used, then an
     /// Apple dictionary Apple updated or removed (ADR-0011 decisions 7–9), then the languages to confirm.
     @ViewBuilder private var problem: some View {
         let phase = library.phases[entry.id]
-        if entry.offer != nil {
+        if let conversion {
+            conversionLine(conversion)
+        } else if entry.offer != nil {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 Text("The file of this dictionary changed. Is it still the same dictionary?")
                 HStack {

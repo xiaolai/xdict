@@ -243,7 +243,9 @@ public struct SettingsDictionaries: View {
                 SettingsDictionaryOptions(library: library, entry: entry,
                                           details: { route.request(.details(entry.id)) },
                                           locate: { route.request(.importer) },
-                                          convertAgain: appleImport.map { host in { convertAgain(entry.id, host) } })
+                                          convertAgain: appleImport.map { host in { convertAgain(entry.id, host) } },
+                                          conversion: conversionLine(for: entry),
+                                          cancelConversion: cancelConversion(for: entry))
                     .id(entry.preferencesKey)
             } else {
                 Text(Self.noSelection).foregroundStyle(.secondary)
@@ -301,6 +303,17 @@ public struct SettingsDictionaries: View {
     private func checkAppleDictionaries() async {
         guard let appleImport, !library.importedAppleBundles.isEmpty else { return }
         await appleImport.importer.checkForUpdates(installed: await appleImport.find())
+    }
+
+    /// What the importer is doing for this dictionary's bundle, for the box (the sheet is closed, so nothing else says).
+    private func conversionLine(for entry: LibraryEntry) -> AppleConversionLine? {
+        guard let identifier = entry.appleSource?.bundleIdentifier else { return nil }
+        return AppleConversionLine.of(appleImport?.importer.steps[identifier])
+    }
+
+    private func cancelConversion(for entry: LibraryEntry) -> (() -> Void)? {
+        guard let host = appleImport, let identifier = entry.appleSource?.bundleIdentifier else { return nil }
+        return { Task { await host.importer.cancel(identifier) } }
     }
 
     /// Convert Again from the bundle as installed now; gone meanwhile, the row says so at the next check.
