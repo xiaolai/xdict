@@ -175,10 +175,15 @@ public final class SearchModel {
         chosenHeadword ?? shown.flatMap { hit($0.result)?.headword }
     }
 
-    /// How many headwords the list found ("N found" under the window's title): none for guesses or an empty list.
-    public var found: Int? {
-        guard let listing, listing.settled, !listing.isGuess, !listing.headwords.isEmpty else { return nil }
-        return listing.headwords.count
+    /// How many headwords the last settled list found ("N found" under the window's title): none for guesses or an
+    /// empty list. Set only when a list settles, and only when it differs (owner, 2026-10-18: the titlebar's text
+    /// flashed): a list still being asked for keeps the count before it, so typing never drops the subtitle line and
+    /// brings it back, and an unchanged count never lays the title out again.
+    public private(set) var found: Int?
+
+    private func settleFound(_ listing: Listing) {
+        let count = listing.isGuess || listing.headwords.isEmpty ? nil : listing.headwords.count
+        if found != count { found = count }
     }
 
     public func source(_ id: UUID) -> SearchSource? {
@@ -302,6 +307,7 @@ public final class SearchModel {
         listing.headwords = words
         listing.settled = true
         self.listing = listing
+        settleFound(listing)
         showFirstMatchIfNeeded()
     }
 
@@ -329,6 +335,7 @@ public final class SearchModel {
             listing.isGuess = !listing.headwords.isEmpty
             listing.settled = true
             self.listing = listing
+            self.settleFound(listing)
             self.showFirstMatchIfNeeded()
         }
     }

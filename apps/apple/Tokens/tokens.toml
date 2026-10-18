@@ -113,6 +113,7 @@ noticesPopoverWidth = { value = 360, why = "The library notices' popover: a sent
 noticesPopoverMaxHeight = { value = 320, why = "The library notices' popover's tallest; more scrolls." }
 fallbackScreenHeight = { value = 800, why = "The visible screen height assumed when AppKit names no main screen (none attached yet), so Settings still bounds its height." }
 initialColumn = { value = 1000, why = "The content column's width before the first layout measures it: wide, so the title shows until then (P8)." }
+searchFieldAtWindow = { value = 859, source = "P5" }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
