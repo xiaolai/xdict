@@ -24,7 +24,7 @@
     launch.startedByLaunchServices launch.knownAsBundle launch.stillRunning launch.serviceFromBundle
     launch.handshakeVersions launch.entryViewReady launch.handshakeParent launch.quitsOnTerm
 
-@ setup default -
+@ setup default kit
     setup.rowsLive setup.grantCompletesRow setup.loginItemRegisters setup.choicesPersist setup.chineseOnly
 
 @ service.conformance default fixtures

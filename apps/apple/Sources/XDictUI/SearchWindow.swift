@@ -144,6 +144,15 @@ struct PageNotices: View {
     var body: some View {
         let troubled = state.model.sections.filter(Self.isTroubled)
         if !troubled.isEmpty {
+            notices(troubled)
+                // One group with its rule: where the entry below it starts is measured from its bottom.
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("page.notices")
+        }
+    }
+
+    private func notices(_ troubled: [ResultSection]) -> some View {
+        VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(troubled) { section in
                     HStack(alignment: .firstTextBaseline, spacing: 6) {

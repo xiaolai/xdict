@@ -44,6 +44,14 @@ public final class EntryWebView: WKWebView {
     /// A frame of the All page (parity P15) is as tall as its document, so the page scrolls, not the frame: the wheel
     /// goes to the page's scroll view.
     var passesScrollToPage = false
+    /// Where Shift-Tab out of the entry goes (the window's results list), asked when the key is pressed, so a frame made
+    /// later or a key-view loop the window recalculated cannot send it elsewhere.
+    weak var keyViewPredecessor: NSView?
+
+    override public var previousValidKeyView: NSView? {
+        if let predecessor = keyViewPredecessor, predecessor.canBecomeKeyView { return predecessor }
+        return super.previousValidKeyView
+    }
 
     override public func scrollWheel(with event: NSEvent) {
         if passesScrollToPage, let page = enclosingScrollView {

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import Testing
@@ -89,5 +90,43 @@ struct ParityWindowTests {
         #expect(Self.text(LocalizedStringResource("Type a word to look up in…")) == "Type a word to look up in…")
         #expect(Self.text(LocalizedStringResource("Did you mean?")) == "Did you mean?")
         #expect(Self.text(LocalizedStringResource("Search")) == "Search")
+    }
+
+    /// **Tab from the results reaches the entry** (lookup E2E, 2026-10-18: it went back to the search field): the list's
+    /// next key view is whatever the entry names when Tab is pressed, whatever the window's key-view loop says.
+    @Test func tabFromTheResultsReachesTheEntry() throws {
+        final class Entry: NSView { override var acceptsFirstResponder: Bool { true } }
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled],
+                              backing: .buffered, defer: true)
+        let field = NSTextField(frame: NSRect(x: 0, y: 270, width: 200, height: 22))
+        let table = HeadwordTableView(frame: NSRect(x: 0, y: 0, width: 100, height: 260))
+        let entry = Entry(frame: NSRect(x: 110, y: 0, width: 290, height: 260))
+        let content = try #require(window.contentView)
+        [field, table, entry].forEach(content.addSubview)
+        table.nextKeyView = field
+        #expect(table.nextValidKeyView === field, "without an entry, the window's loop")
+        table.entryKeyView = { entry }
+        #expect(table.nextValidKeyView === entry)
+        entry.isHidden = true
+        #expect(table.nextValidKeyView === field, "a hidden entry cannot take the keyboard")
+    }
+
+    /// **P6, P42**: the scope bar reads as one radio group named "Dictionaries", each scope a `scope.option` named by its
+    /// title, the chosen one's value 1 and every other's 0 — what VoiceOver and the lookup driver read the choice by.
+    @Test func theScopeBarNamesItsGroupAndItsChoice() throws {
+        let bar = ScopeBarView(frame: NSRect(x: 0, y: 0, width: 600, height: ScopeBarLayout.height))
+        let beta = UUID()
+        bar.update(items: [ScopeBarView.Item(scope: .all, title: "All", enabled: true),
+                           ScopeBarView.Item(scope: .one(UUID()), title: "Alpha", enabled: true),
+                           ScopeBarView.Item(scope: .one(beta), title: "Beta", enabled: true)],
+                   selected: .one(beta))
+        func descendants(_ view: NSView) -> [NSView] { view.subviews + view.subviews.flatMap(descendants) }
+        let group = try #require(descendants(bar).compactMap { $0 as? ScopeRadioGroup }.first)
+        #expect(group.accessibilityIdentifier() == "scope")
+        #expect(group.accessibilityLabel() == String(localized: "Dictionaries"))
+        let options = descendants(bar).compactMap { $0 as? ScopeButton }
+        #expect(options.map { $0.accessibilityIdentifier() } == ["scope.option", "scope.option", "scope.option"])
+        #expect(options.map { $0.accessibilityLabel() } == ["All", "Alpha", "Beta"])
+        #expect(options.map { ($0.accessibilityValue() as? NSNumber)?.intValue } == [0, 0, 1])
     }
 }

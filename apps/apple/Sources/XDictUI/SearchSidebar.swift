@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XDictEntryView
 import XDictSearch
 
 /// **The sidebar, as Apple's Dictionary has it** (parity P9, P11, P13, P43): there only after a search; one flat list of
@@ -52,6 +53,8 @@ struct HeadwordTable: NSViewRepresentable {
         table.columnAutoresizingStyle = .uniformColumnAutoresizingStyle
         table.setAccessibilityLabel(String(localized: "search results"))
         table.setAccessibilityIdentifier("results")
+        table.entryKeyView = { [weak entry = state.entry] in entry?.keyViewTarget }
+        state.entry.keyViewPredecessor = table
         table.dataSource = context.coordinator
         table.delegate = context.coordinator
         let scroll = NSScrollView()
@@ -131,6 +134,14 @@ struct HeadwordTable: NSViewRepresentable {
 /// The sidebar's table: its own class, so the window's instruments know the results list by it.
 final class HeadwordTableView: NSTableView {
     static let rowHeight: CGFloat = 28
+    /// Where Tab goes from the list: the entry (`EntryViewController.keyViewTarget`), asked when the key is pressed, so
+    /// the All page's frames made later, or a key-view loop the window recalculated, cannot send it to the search field.
+    var entryKeyView: (() -> NSView?)?
+
+    override var nextValidKeyView: NSView? {
+        if let entry = entryKeyView?(), entry.canBecomeKeyView { return entry }
+        return super.nextValidKeyView
+    }
 }
 
 /// One headword: 13 pt system text, semibold when selected.
