@@ -60,14 +60,15 @@ public protocol CaptureSink: AnyObject, Sendable {
 /// - `cancel` (Escape, a newer shortcut) ends a request not yet ended; `consumerGone` ends every delivered request still
 ///   open.
 ///
-/// **Bounded.** Only open delivered requests and the last `endedMemory` ended numbers are kept. A request whose number
-/// is at or below one that fell out of that ring, and that is not open, counts as ended: it was outlived by
-/// `endedMemory` endings and is stale.
+/// **Bounded by what is still owed.** Every request begun and not yet ended is kept (delivered or not), and of the
+/// ended ones only the last `endedMemory` numbers, for duplicate and late answers. A number at or below one that fell
+/// out of that ring, and not open, has ended.
 public final class CaptureRequests: Sendable {
     private struct State {
         var issued = 0
         var generations = 0
-        /// Open delivered requests and the generation of each one's latest delivery.
+        /// Every request begun and not ended, with the generation of its latest delivery; 0 is not yet delivered
+        /// (generations start at 1).
         var open: [Int: Int] = [:]
         /// Recently ended requests, oldest first in `endedOrder`.
         var ended: [Int: CaptureAcknowledgement] = [:]
@@ -106,6 +107,7 @@ public final class CaptureRequests: Sendable {
     public func begin(_ trigger: CaptureTrigger) -> CaptureRequest {
         state.withLock { state in
             state.issued += 1
+            state.open[state.issued] = 0
             return CaptureRequest(number: state.issued, trigger: trigger)
         }
     }
@@ -133,7 +135,7 @@ public final class CaptureRequests: Sendable {
     @discardableResult
     public func acknowledge(_ request: CaptureRequest, generation: Int, _ outcome: CaptureOutcome) -> Bool {
         state.withLock { state in
-            guard state.known(request), state.open[request.number] == generation else { return false }
+            guard state.known(request), generation > 0, state.open[request.number] == generation else { return false }
             return state.end(request.number, generation: generation, outcome) != nil
         }
     }
@@ -151,7 +153,8 @@ public final class CaptureRequests: Sendable {
     /// open, and their delivery to nobody is refused.
     public func consumerGone() -> [CaptureAcknowledgement] {
         state.withLock { state in
-            state.open.sorted { $0.key < $1.key }.compactMap { state.end($0.key, generation: $0.value, .cancelled) }
+            state.open.filter { $0.value > 0 }.sorted { $0.key < $1.key }
+                .compactMap { state.end($0.key, generation: $0.value, .cancelled) }
         }
     }
 
