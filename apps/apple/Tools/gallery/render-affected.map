@@ -120,7 +120,8 @@ apps/apple/Sources/XDict/LookupAnywhere.swift               routes:panel
 apps/apple/Sources/XDictUI/AllPage.swift                    routes:page
 apps/apple/Sources/XDictUI/Search*.swift                    routes:search
 apps/apple/Sources/XDictUI/Toolbar*.swift                   routes:search
-apps/apple/Sources/XDictUI/MenuBarMenu.swift                route:menubar.extra
+apps/apple/Sources/XDictUI/MenuBarMenu.swift                route:menubar.*
+apps/apple/Sources/XDictUI/HoverSentences.swift             route:settings.general.hover route:settings.general.screenRecording* route:menubar.hover*
 apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes:panel route:settings.dictionaries route:settings.general
 apps/apple/Sources/XDictUI/Library*.swift                   route:settings.dictionaries*
 apps/apple/Sources/XDictUI/DictionaryTable.swift            route:settings.dictionaries*
