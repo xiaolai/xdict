@@ -91,7 +91,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "bd33ae1c5dc7f8883a1468c6df3d1c7d48755795",
+  "apps/apple/Package.swift": "9d5234c9c76f181f1007b82332e0302f5700d1bb",
   "core/Cargo.toml": "8e96898c7e4a1b21f920104e9b25a0b82a2bca64",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
@@ -128,6 +128,7 @@
   "XDictAnywhere": {
    "deps": [
     "XDictBase",
+    "XDictCapture",
     "XDictCaptureMac",
     "XDictTokens"
    ],
@@ -137,7 +138,9 @@
   "XDictAnywhereTests": {
    "deps": [
     "XDictAnywhere",
-    "XDictCaptureMac"
+    "XDictCapture",
+    "XDictCaptureMac",
+    "XDictTokens"
    ],
    "dir": "apps/apple/Tests/XDictAnywhereTests/",
    "type": "test"
