@@ -199,17 +199,21 @@ struct SettingsDictionaryOptions: View {
     @ViewBuilder private func conversionLine(_ line: AppleConversionLine) -> some View {
         switch line {
         case .working(let fraction, let cancellable):
-            HStack(spacing: Tokens.Space.sm) {
-                if let fraction {
-                    ProgressView(value: fraction) { Text(AppleImportSentences.converting(name: entry.displayName)) }
-                } else {
-                    ProgressView { Text(AppleImportSentences.converting(name: entry.displayName)) }
-                        .progressViewStyle(.linear)
-                }
-                if cancellable, let cancelConversion {
-                    Button(action: cancelConversion) { Text("Cancel") }
-                        .controlSize(.small)
-                        .accessibilityIdentifier("settings.convertCancel")
+            // The sentence over the bar, the bar taking the width, Cancel at its own size at the trailing edge, where the
+            // box's other actions are: a labelled bar squeezed it to the side.
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                Text(AppleImportSentences.converting(name: entry.displayName)).foregroundStyle(.secondary)
+                HStack(spacing: Tokens.Space.sm) {
+                    if let fraction {
+                        ProgressView(value: fraction)
+                    } else {
+                        ProgressView().progressViewStyle(.linear)
+                    }
+                    if cancellable, let cancelConversion {
+                        Button(action: cancelConversion) { Text("Cancel") }
+                            .fixedSize()
+                            .accessibilityIdentifier("settings.convertCancel")
+                    }
                 }
             }
             .accessibilityElement(children: .contain)
@@ -236,6 +240,7 @@ struct SettingsDictionaryOptions: View {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 Text("The file of this dictionary changed. Is it still the same dictionary?")
                 HStack {
+                    Spacer()
                     Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
                     Button("A Different Dictionary") { library.declineJoin(entry.id) }
                 }
