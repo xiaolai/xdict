@@ -118,7 +118,7 @@ apps/apple/Sources/XDict/HandshakeReport.swift      check:launch
 apps/apple/Sources/XDict/SoundReport.swift          check:sound
 apps/apple/Sources/XDict/MeasureReport.swift        check:measure.protocol
 apps/apple/Sources/XDict/AnywhereReport.swift       check:selection services panel menubar shortcut
-apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut
+apps/apple/Sources/XDict/LookupAnywhere.swift       selection services panel menubar shortcut hover.permission hover.popover
 
 # --- The product ----------------------------------------------------------------------------------------------------
 apps/apple/Sources/XDictEntryView/EntryReadingFrame.swift hostile.production reader entries.quick entries.persistence lookup.core lookup.a11y sound
@@ -147,12 +147,18 @@ apps/apple/Sources/XDictUI/AppleImport*             library.apple
 apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
-apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut
+# The capture lab links XDictAnywhere and XDictCaptureMac (and XDictCapture, which the graph gives every app sub-stage
+# and hover's lab ones by the hand list's `launches`), so hover's lab sub-stages come with the app's (plan-capture WI-5).
+apps/apple/Sources/XDictAnywhere/*                  selection services panel menubar shortcut hover.accessibility hover.ocr hover.exclusions hover.permission hover.popover
 # The selection reader and its lane moved down from XDictAnywhere (plan-capture WI-2).
-apps/apple/Sources/XDictCaptureMac/*                selection services panel menubar shortcut
+apps/apple/Sources/XDictCaptureMac/*                selection services panel menubar shortcut hover.accessibility hover.ocr hover.exclusions hover.permission hover.popover
 apps/apple/Sources/XDictUI/Setup*                   setup
 apps/apple/Sources/XDictUI/LaunchAtLogin.swift      setup
 apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup
+# Hover's Settings rows, its sentences (the notice, the pause lines), the pause group and the popover hover opens.
+apps/apple/Sources/XDictUI/Hover*                   lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.permission hover.popover
+apps/apple/Sources/XDictUI/MenuBarMenu.swift        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.popover
+apps/apple/Sources/XDictUI/LookupPopover.swift      lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.popover
 apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup
 # The catalog's text reaches only the checks that compare a reader-facing sentence or run the app in Chinese; the
 # instruments read every other string through `String(localized:)`, so a reworded line cannot fail them. Audited by
