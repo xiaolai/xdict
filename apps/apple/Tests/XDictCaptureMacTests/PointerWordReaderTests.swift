@@ -14,6 +14,8 @@ struct PointerWordReaderTests {
     /// WebKit's page: "The cat sat." with "cat" at x 140…170, y 200…220, answered through markers only.
     final class WebPage: AccessibilityReading {
         static let sentence = "The cat sat."
+        let sentence: String
+        init(sentence: String = WebPage.sentence) { self.sentence = sentence }
         private func marker(_ byte: UInt8) -> AXTextMarker { AXTextMarkerCreate(nil, [byte], 1) }
         private var word: AXTextMarkerRange { AXTextMarkerRangeCreate(nil, marker(2), marker(3)) }
         private var whole: AXTextMarkerRange { AXTextMarkerRangeCreate(nil, marker(4), marker(5)) }
@@ -40,7 +42,7 @@ struct PointerWordReaderTests {
             case "AXStringForTextMarkerRange":
                 switch Self.firstByte(argument) {
                 case 2: return "cat" as CFString
-                case 4: return Self.sentence as CFString
+                case 4: return sentence as CFString
                 default: return nil
                 }
             default: return nil
@@ -67,6 +69,35 @@ struct PointerWordReaderTests {
     @Test func aPointerOffEveryWordReadsNothing() {
         let outcome = PointerWordReader.read(at: CGPoint(x: 155, y: 260), in: target, tolerance: Measured.hit, with: WebPage())
         #expect(outcome == .miss(.noText(app: "Safari", role: "AXWebArea")))
+    }
+
+    /// **A page's "sentence" is cut to the context limit before it is segmented** (decision 3): WebKit can answer a
+    /// whole document for a sentence. 160,013 UTF-16 units come back; what is segmented, and handed over, is at most
+    /// `contextUTF16` around the word, its cut ends marked.
+    @Test func aDocumentLongSentenceIsCutBeforeItIsSegmented() {
+        let filler = String(repeating: "lorem ", count: 13_333)
+        let long = filler + "The cat sat." + filler + "xxxxx"
+        #expect(long.utf16.count == 160_013)
+        let outcome = PointerWordReader.read(at: CGPoint(x: 155, y: 210), in: target, tolerance: Measured.hit,
+                                             limits: .shipped, with: WebPage(sentence: long))
+        guard case .hit(let hit) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(hit.word.word == "cat")
+        #expect(hit.word.sentence.text.utf16.count <= CaptureLimits.shipped.contextUTF16)
+        #expect(hit.word.sentence.mayBeCut)
+    }
+
+    /// **The bounds scan refuses a value longer than its read window before tokenising it**: fifty long words pass the
+    /// word cap, so only the length bound keeps the whole value from being segmented and scanned.
+    @Test func theBoundsScanDoesNotSegmentAValueLongerThanItsWindow() throws {
+        let limits = try #require(CaptureLimits(readRadiusUTF16: 100, contextUTF16: 80, observations: 1, tilePixels: 2,
+                                                tileOverlapPixels: 1))
+        let value = (0..<50).map { _ in String(repeating: "a", count: 9) }.joined(separator: " ")
+        #expect(value.utf16.count > 2 * limits.readRadiusUTF16)
+        let glyphs = Glyphs(value, speaksTextRange: false)
+        let outcome = PointerWordReader.read(at: CGPoint(x: 105, y: 210), in: target, tolerance: Measured.hit,
+                                             limits: limits, with: glyphs)
+        guard case .miss = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(glyphs.boundsAsked == 0, "the whole value was segmented and scanned")
     }
 
     // MARK: - Who owns the pixel

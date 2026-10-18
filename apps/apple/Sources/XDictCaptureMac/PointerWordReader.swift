@@ -106,8 +106,6 @@ public enum PointerWordReader {
     public static let budget: Duration = .milliseconds(500)
     /// One request per word, hence the cap: past it, the recogniser is the cheaper answer. An acquisition bound, in words.
     public static let maximumScannedWords = 120
-    /// The text read around the pointer's character in the text-range dialect, UTF-16 units each side (XiaolaiDict's).
-    public static let textRangeRadiusUTF16 = 300
 
     /// **Who owns the pixel, asked in this order**: the grant (never prompting, decision 7), then **the compositor's
     /// window list, before Accessibility is asked anything** — where the window under the pointer is one of XDict's own,
@@ -139,8 +137,14 @@ public enum PointerWordReader {
     /// a top-left origin, Accessibility's space. **A failure ends the read**: `.notResponding` means the app did not
     /// answer one request, and asking it the next hundred questions only multiplies that; the budget running out, or the
     /// reader moving on, ends it the same way. Only an absent value moves on to the next dialect.
+    ///
+    /// **`limits` bounds what each dialect reads before anything is segmented** (decision 3), one rule for all three:
+    /// the text range reads `readRadiusUTF16` each side of the pointer's character; the markers' sentence is cut to
+    /// `contextUTF16` around the word; the bounds scan refuses a value longer than the read window
+    /// (`2 × readRadiusUTF16`) before tokenising it.
     public static func read(
-        at point: CGPoint, in target: Target, tolerance: HitTolerance, with ax: some AccessibilityReading
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
+        with ax: some AccessibilityReading
     ) -> Outcome {
         let element = target.element
         func hit(_ found: Located, _ acquisition: CaptureAcquisition) -> Outcome {
@@ -149,9 +153,9 @@ public enum PointerWordReader {
         }
         do throws(CaptureError) {
             try awaken(target, ax)
-            if let found = try textRange(element, at: point, tolerance, ax) { return hit(found, .textRange) }
-            if let found = try textMarkers(element, at: point, tolerance, ax) { return hit(found, .textMarkers) }
-            if let found = try boundsScan(element, at: point, tolerance, ax) { return hit(found, .boundsScan) }
+            if let found = try textRange(element, at: point, tolerance, limits, ax) { return hit(found, .textRange) }
+            if let found = try textMarkers(element, at: point, tolerance, limits, ax) { return hit(found, .textMarkers) }
+            if let found = try boundsScan(element, at: point, tolerance, limits, ax) { return hit(found, .boundsScan) }
             // **Nothing answered: ask the app, once, to build its tree for an assistive client.** Chrome exposes no page
             // until it is told one is reading it; this hover still misses — the tree arrives about two seconds later —
             // and the next one reads text. Asked only here, so an app that answers is never told.
@@ -211,7 +215,8 @@ public enum PointerWordReader {
     typealias Located = (word: WordAtPoint, bounds: ReadBounds?)
 
     private static func textRange(
-        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ ax: some AccessibilityReading
+        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ limits: CaptureLimits,
+        _ ax: some AccessibilityReading
     ) throws(CaptureError) -> Located? {
         guard let index = try ax.range(element, kAXRangeForPositionParameterizedAttribute, value(point))?.location,
               let count = try ax.integer(element, kAXNumberOfCharactersAttribute),
@@ -219,8 +224,8 @@ public enum PointerWordReader {
         else { return nil }
         // `index` and `count` are another process's: `index + radius` trapped for an index within the radius of
         // `Int.max` (XiaolaiDict, audit of 2026-10-10). `count - index` is positive here, so neither line can overflow.
-        let start = max(0, index - textRangeRadiusUTF16)
-        let end = index + min(textRangeRadiusUTF16, count - index)
+        let start = max(0, index - limits.readRadiusUTF16)
+        let end = index + min(limits.readRadiusUTF16, count - index)
         guard let text = try ax.string(
             element, kAXStringForRangeParameterizedAttribute, value(CFRange(location: start, length: end - start)))
         else { return nil }
@@ -268,12 +273,13 @@ public enum PointerWordReader {
 
     /// The marker dialect: the word the pointer is over, then its sentence.
     private static func textMarkers(
-        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ ax: some AccessibilityReading
+        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ limits: CaptureLimits,
+        _ ax: some AccessibilityReading
     ) throws(CaptureError) -> Located? {
         let host = try ax.webArea(containing: element) ?? element
         guard let marker = try ax.parameterized(host, "AXTextMarkerForPosition", value(point)),
               let best = try markedWord(at: point, marker: marker, in: host, tolerance, ax),
-              let word = try context(of: best, at: point, marker: marker, in: host, ax)
+              let word = try context(of: best, at: point, marker: marker, in: host, limits, ax)
         else { return nil }
         // WebKit's word, which holds the token — larger than the token where WebKit calls 看书 one word, so `containing`.
         return (word, ReadBounds.checked(best.box, quality: .containing, near: point, tolerance: tolerance))
@@ -305,13 +311,16 @@ public enum PointerWordReader {
     /// `best` in its sentence, segmented at the pointer — or the word alone, marked cut at both ends, where the sentence
     /// cannot be read or the word cannot be placed in it.
     private static func context(
-        of best: MarkedWord, at point: CGPoint, marker: CFTypeRef, in host: AXUIElement, _ ax: some AccessibilityReading
+        of best: MarkedWord, at point: CGPoint, marker: CFTypeRef, in host: AXUIElement, _ limits: CaptureLimits,
+        _ ax: some AccessibilityReading
     ) throws(CaptureError) -> WordAtPoint? {
         guard let range = try ax.parameterized(host, "AXSentenceTextMarkerRangeForTextMarker", marker),
-              let sentence = try ax.string(host, "AXStringForTextMarkerRange", range)
+              let whole = try ax.string(host, "AXStringForTextMarkerRange", range),
+              let cut = bounded(whole, around: best.word, limits)
         else { return TextSegmenter.word(in: best.word, utf16Offset: 0, clipped: [.start, .end]) }
         // Whole words only: a plain substring search found "he" inside "there". A substring match is accepted only for
         // CJK, where the app's word breaks and the tokeniser's are expected to disagree.
+        let (sentence, clipped) = (cut.text, cut.clipped)
         var wholeWord = wholeWordRange(of: best.word, in: sentence)
         if wholeWord == nil, LineJoiner.isCJKText(best.word) {
             let found = (sentence as NSString).range(of: best.word, options: [.literal])
@@ -321,7 +330,24 @@ public enum PointerWordReader {
         // Re-segment at the pointer's position within WebKit's word, not at its first character.
         let within = CaptureGeometry.characterIndex(
             at: point.x, across: best.box.minX...best.box.maxX, count: best.word.utf16.count)
-        return TextSegmenter.word(in: sentence, utf16Offset: wholeWord.location + within)
+        return TextSegmenter.word(in: sentence, utf16Offset: wholeWord.location + within, clipped: clipped)
+    }
+
+    /// **The sentence cut to `contextUTF16` around the word before it is segmented** (decision 3): a page can answer a
+    /// "sentence" of a whole document. The word is found by a literal search, which reads the text once and tokenises
+    /// nothing; the cut ends are marked. Nil where the word is not in it, so the caller falls back to the word alone.
+    static func bounded(
+        _ sentence: String, around word: String, _ limits: CaptureLimits
+    ) -> (text: String, clipped: TextSegmenter.Clipping)? {
+        let units = sentence.utf16.count
+        guard units > limits.contextUTF16 else { return (sentence, []) }
+        let found = (sentence as NSString).range(of: word, options: [.literal])
+        guard found.location != NSNotFound, let cut = limits.window(of: sentence, around: found) else { return nil }
+        var clipped: TextSegmenter.Clipping = []
+        let start = found.location - cut.range.location
+        if start > 0 { clipped.insert(.start) }
+        if start + cut.text.utf16.count < units { clipped.insert(.end) }
+        return (cut.text, clipped)
     }
 
     /// Where `word` appears in `sentence` as a whole word, by the same tokeniser — so "he" does not match inside
@@ -338,9 +364,13 @@ public enum PointerWordReader {
     // MARK: - bounds scan
 
     private static func boundsScan(
-        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ ax: some AccessibilityReading
+        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ limits: CaptureLimits,
+        _ ax: some AccessibilityReading
     ) throws(CaptureError) -> Located? {
-        guard let text = try ax.string(element, kAXValueAttribute), !text.isEmpty else { return nil }
+        // A value longer than the read window is refused before it is tokenised: its words could not pass the cap.
+        guard let text = try ax.string(element, kAXValueAttribute), !text.isEmpty,
+              text.utf16.count <= 2 * limits.readRadiusUTF16
+        else { return nil }
         let words = TextSegmenter.wordRanges(in: text)
         guard words.count <= maximumScannedWords else { return nil }
         var best: (offset: Int, distance: CGFloat, box: CGRect, word: String)?
