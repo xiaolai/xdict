@@ -87,7 +87,7 @@ s = sel(["core/xdict-entry/src/normalize.rs"])
 check("(b) the core's shared entry processing: 24", len(s.pictures) == 24 and views_of(s) == {"core-light"})
 minimal = sel([STYLE + "minimal.css"])
 check("Original style's sheet: its route, no picture of the four views",
-      not minimal.pictures and set(minimal.routes) == {"library.originalStyle"})
+      not minimal.pictures and set(minimal.routes) == {"settings.dictionaries.originalStyle"})
 
 pane = sel(["apps/apple/Sources/XDictEntryView/EntryPane.swift"])
 check("(c) EntryPane.swift: the panel and page routes, no entry",
@@ -100,8 +100,10 @@ search = sel(["apps/apple/Sources/XDictUI/SearchWindow.swift"])
 check("(c) the search window: its routes", "search.result" in search.routes and "main.start" in search.routes
       and not search.pictures and not any(r.startswith("library.") for r in search.routes), sorted(search.routes))
 menus = sel(["apps/apple/Sources/XDict/XDictApp.swift"])
-check("(c) the menus: their routes", menus.routes and not menus.pictures
-      and all(r.startswith(("menu", "about", "ackn")) for r in menus.routes), sorted(menus.routes))
+# XDictApp.swift also composes Settings' panes (ADR-0012 d.1, d.4), so its routes are the menus' and Settings'.
+check("(c) the menus and Settings: their routes", menus.routes and not menus.pictures
+      and all(r.startswith(("menu", "about", "ackn", "settings.")) for r in menus.routes)
+      and any(r.startswith("settings.") for r in menus.routes), sorted(menus.routes))
 
 # (a) A role-table hunk: the line of LDOCE's `signature` selects LDOCE and LDOCE-EC alone.
 lines = profiles_text.split("\n")

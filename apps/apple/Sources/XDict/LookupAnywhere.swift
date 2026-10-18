@@ -80,7 +80,13 @@ final class LookupAnywhere {
         NSApp.servicesProvider = ServicesProvider.shared
         NSUpdateDynamicServices()
         registrar.registerSaved()
-        state = XDictApp.windowState(panel: true)
+        let made = XDictApp.windowState(panel: true)
+        // A section's "Show in Settings" closes the panel and opens Settings at that dictionary (ADR-0012 d.4).
+        made.showDictionaries = { [weak self] id in
+            self?.close(why: "showDictionaries")
+            MenuBarActions.showDictionaries(id)
+        }
+        state = made
     }
 
     // MARK: - Asking
@@ -375,9 +381,9 @@ private struct PanelRoot: View {
         LookupPanelView(state: state, notice: anywhere.notice,
                         shortcut: anywhere.registrar.isRegistered ? anywhere.registrar.current.label() : nil,
                         expand: { anywhere.expand() },
-                        openLibrary: {
-                            anywhere.close(why: "openLibrary")
-                            MenuBarActions.openLibrary()
+                        showDictionaries: {
+                            anywhere.close(why: "showDictionaries")
+                            MenuBarActions.showDictionaries()
                         })
     }
 }

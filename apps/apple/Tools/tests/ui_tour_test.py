@@ -225,4 +225,21 @@ assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "
 assert parity.menus_share({"menubar": apple_menus["menubar"][1:]}), "P45 without Services"
 print(f"ui_tour_test: parity ok ({sum(len(v) for v in parity.TREE_RULES.values())} tree rules, "
       f"{sum(len(v) for v in parity.MENU_RULES.values())} menu rules)")
+# A drop aims at the dictionary table's own frame, never the window's centre (dark-en dropV3Mdd, 2026-10-18), and a
+# table missing from the tree fails naming what it looked for.
+import aim  # noqa: E402
+table = node("AXTable", (100, 300, 560, 200), identifier="settings.dictionaries", description="Dictionaries")
+tree = {"windows": [node("AXWindow", (80, 80, 600, 700), [node("AXGroup", (90, 120, 580, 40)), table])]}
+assert aim.drop_target(tree) == (380, 400), aim.drop_target(tree)
+# A long table runs past what shows: its scroll area's frame is the one aimed at.
+long_table = node("AXTable", (100, 300, 560, 2000), identifier="settings.dictionaries")
+scrolled = {"windows": [node("AXWindow", (80, 80, 600, 700),
+                             [node("AXScrollArea", (100, 300, 560, 200), [long_table])])]}
+assert aim.drop_target(scrolled) == (380, 400), aim.drop_target(scrolled)
+try:
+    aim.drop_target({"windows": [node("AXWindow", (80, 80, 600, 700))]})
+    raise AssertionError("a tree without the table gave an aim")
+except aim.NoTarget as missing:
+    assert "settings.dictionaries" in str(missing), missing
+print("ui_tour_test: drop aim ok")
 print(f"ui_tour_test: ok ({len(ROUTES)} routes, {len(undriven)} not driven)")

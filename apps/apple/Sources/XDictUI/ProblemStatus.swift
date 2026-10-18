@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XDictLibrary
 
@@ -29,7 +30,7 @@ public struct ProblemStatus: View {
 
     /// The sentence for a dictionary's phase when it cannot be used; nil when it can (or is on its way).
     nonisolated public static func sentence(for phase: EntryPhase?) -> LocalizedStringResource? {
-        guard let phase, LibraryRow.isTrouble(phase) else { return nil }
+        guard let phase, LibraryRowAction.isTrouble(phase) else { return nil }
         return LibrarySentences.phase(phase)
     }
 }
@@ -56,5 +57,19 @@ public enum LibraryRowAction: Equatable, Sendable {
         case .showInFinder: "Show in Finder"
         case .tryAgain: "Try Again"
         }
+    }
+
+    /// A phase in which the dictionary cannot answer, so its checkbox is not offered (UI review L-08).
+    nonisolated public static func isTrouble(_ phase: EntryPhase) -> Bool {
+        switch phase {
+        case .refused, .failed, .missing, .outsideItsFolder: true
+        case .waiting, .importing, .cancelling, .opening, .ready, .cancelled: false
+        }
+    }
+
+    /// Show in Finder: the dictionary's .mdx, selected.
+    @MainActor static func showInFinder(_ entry: LibraryEntry) {
+        guard let path = entry.mdx?.location.path else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 }

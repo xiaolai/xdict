@@ -1389,6 +1389,22 @@
         }
       }
     },
+    "Add Apple Dictionaries…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Apple Dictionaries…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 Apple 词典…"
+          }
+        }
+      }
+    },
     "Add Dictionaries…" : {
       "localizations" : {
         "en" : {
@@ -1401,6 +1417,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加词典…"
+          }
+        }
+      }
+    },
+    "Add MDX Files…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add MDX Files…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 MDX 文件…"
           }
         }
       }
@@ -1829,38 +1861,6 @@
         }
       }
     },
-    "Confirm languages" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Confirm languages"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "确认语言"
-          }
-        }
-      }
-    },
-    "Confirm the changed file" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Confirm the changed file"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "确认已更改的文件"
-          }
-        }
-      }
-    },
     "Control" : {
       "localizations" : {
         "en" : {
@@ -1941,6 +1941,22 @@
         }
       }
     },
+    "Details…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详细信息…"
+          }
+        }
+      }
+    },
     "Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -1969,6 +1985,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可供查询的词典：%lld 部。"
+          }
+        }
+      }
+    },
+    "Dictionaries…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionaries…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典…"
           }
         }
       }
@@ -2069,18 +2101,18 @@
         }
       }
     },
-    "Each dictionary is spoken in the language set for it in the Library." : {
+    "Each dictionary is spoken in the language set for it in Settings ▸ Dictionaries." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Each dictionary is spoken in the language set for it in the Library."
+            "value" : "Each dictionary is spoken in the language set for it in Settings ▸ Dictionaries."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "每部词典按资料库中为它设定的语言朗读。"
+            "value" : "每部词典按“设置 ▸ 词典”中为它设定的语言朗读。"
           }
         }
       }
@@ -2839,22 +2871,6 @@
         }
       }
     },
-    "Library" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Library"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "词库"
-          }
-        }
-      }
-    },
     "Locate…" : {
       "localizations" : {
         "en" : {
@@ -2915,22 +2931,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询所选内容"
-          }
-        }
-      }
-    },
-    "Lookup" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lookup"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查询"
           }
         }
       }
@@ -3027,38 +3027,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "忽略重音或标记后匹配"
-          }
-        }
-      }
-    },
-    "Move Down" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move Down"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "下移"
-          }
-        }
-      }
-    },
-    "Move Up" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Move Up"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "上移"
           }
         }
       }
@@ -3187,22 +3155,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还没有词典"
-          }
-        }
-      }
-    },
-    "No Dictionary Selected" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No Dictionary Selected"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未选择词典"
           }
         }
       }
@@ -3565,18 +3517,18 @@
         }
       }
     },
-    "Open Library" : {
+    "Open Dictionary Settings" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Open Library"
+            "value" : "Open Dictionary Settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "打开词库"
+            "value" : "打开词典设置"
           }
         }
       }
@@ -3962,6 +3914,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "阅读"
+          }
+        }
+      }
+    },
+    "Reading & Speech" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading & Speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读与语音"
           }
         }
       }
@@ -4464,34 +4432,18 @@
         }
       }
     },
-    "Show in Library" : {
+    "Show in Settings" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Show in Library"
+            "value" : "Show in Settings"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在词库中显示"
-          }
-        }
-      }
-    },
-    "Show in Library…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show in Library…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在词库中显示…"
+            "value" : "在设置中显示"
           }
         }
       }
@@ -4576,22 +4528,6 @@
         }
       }
     },
-    "Speech" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speech"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语音"
-          }
-        }
-      }
-    },
     "Spoken by the system voice %@ (%@) instead." : {
       "localizations" : {
         "en" : {
@@ -4668,6 +4604,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文字大小 %1$@ 像素：抽样词条中有 %2$@ 使用此大小。"
+          }
+        }
+      }
+    },
+    "That dictionary is no longer in your library." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That dictionary is no longer in your library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "那部词典已不在你的词库中。"
           }
         }
       }
@@ -5126,18 +5078,18 @@
         }
       }
     },
-    "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in the Library." : {
+    "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in Settings ▸ Dictionaries." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in the Library."
+            "value" : "This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in Settings ▸ Dictionaries."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这部词典尚未设定语言，XDict 无法为它选择语音。请在词库中设定。"
+            "value" : "这部词典尚未设定语言，XDict 无法为它选择语音。请在“设置 ▸ 词典”中设定。"
           }
         }
       }

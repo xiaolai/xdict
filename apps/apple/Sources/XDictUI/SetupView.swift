@@ -10,15 +10,15 @@ public struct SetupView: View {
     @Bindable private var library: Library
     private let registrar: ShortcutRegistrar
     private let trusted: @MainActor () -> Bool
-    private let openLibrary: () -> Void
+    private let showDictionaries: () -> Void
     @State private var isTrusted = false
 
     public init(library: Library, registrar: ShortcutRegistrar, trusted: @escaping @MainActor () -> Bool,
-                openLibrary: @escaping () -> Void) {
+                showDictionaries: @escaping () -> Void) {
         self.library = library
         self.registrar = registrar
         self.trusted = trusted
-        self.openLibrary = openLibrary
+        self.showDictionaries = showDictionaries
     }
 
     var board: SetupBoard {
@@ -70,12 +70,11 @@ public struct SetupView: View {
     private func action(_ step: SetupBoard.Step, _ state: SetupBoard.State) -> some View {
         switch step {
         case .dictionaries:
-            // Add Dictionaries… opens the open panel itself (UI review U-02), in the Library.
+            // Add Dictionaries… opens the open panel itself (UI review U-02), in Settings ▸ Dictionaries (ADR-0012 d.4).
             Button {
-                if state != .done { LibraryRequests.shared.requestImport() }
-                openLibrary()
+                if state != .done { SettingsRoute.shared.requestImport() } else { showDictionaries() }
             } label: {
-                Text(state == .done ? "Open Library" : "Add Dictionaries…")
+                Text(state == .done ? "Open Dictionary Settings" : "Add Dictionaries…")
             }
                 .accessibilityIdentifier("setup.dictionaries.action")
         case .accessibility:
