@@ -54,8 +54,10 @@ struct TestInventoryTests {
         "XDictCaptureTests": 261,
         // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
         // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
-        // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission).
-        "XDictCaptureMacTests": 68,
+        // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
+        // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
+        // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
+        "XDictCaptureMacTests": 91,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
