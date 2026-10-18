@@ -44,14 +44,12 @@ struct AppleImportSheet: View {
             Text(AppleImportSentences.howToDownload).font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             // R3: Cancel (Done once imports have started) left of Import, the default action.
-            SheetFooter(cancel: {
-                Button { done() } label: { Text(importer.steps.isEmpty ? "Cancel" : "Done") }
-                    .accessibilityIdentifier("appleImport.close")
-            }, primary: {
-                Button { startImport() } label: { Text(AppleImportSentences.importButton) }
-                    .disabled(choice.toImport(steps: importer.steps).isEmpty)
-                    .accessibilityIdentifier("appleImport.import")
-            })
+            SheetFooter([
+                FooterAction(.cancel, title: Text(importer.steps.isEmpty ? "Cancel" : "Done"),
+                             identifier: "appleImport.close", perform: done),
+                FooterAction(.primary, title: Text(AppleImportSentences.importButton), identifier: "appleImport.import",
+                             isDisabled: choice.toImport(steps: importer.steps).isEmpty, perform: startImport),
+            ])
         }
         .padding(Tokens.Space.l)
         .frame(width: size.width, height: size.height)

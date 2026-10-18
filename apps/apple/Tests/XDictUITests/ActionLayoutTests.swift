@@ -47,10 +47,57 @@ struct ActionLayoutTests {
     /// default (verifier, 2026-10-18: on main, Escape did nothing there).
     @MainActor @Test func theDetailsSheetClosesOnEscape() {
         let footer = SettingsDictionaries.detailsFooter(remove: {}, close: {})
-        #expect(footer.arrangement == [.destructive, .gap, .closeOnEscape, .primary])
-        let keys = footer.arrangement.map(\.keyEquivalent)
-        #expect(keys.contains(.cancelAction))
-        #expect(keys.last == .defaultAction)
+        #expect(Self.triples(footer.placements) == [
+            Triple(.destructive, nil, .destructive), Triple(.gap, nil, .gap),
+            Triple(.closeOnEscape, .cancelAction, .hidden), Triple(.primary, .defaultAction, .standard),
+        ])
+        #expect(footer.placements.map(\.action?.title) == [Text("Remove from Library"), nil, Text(verbatim: ""), Text("Done")])
+    }
+
+    // MARK: - What SheetFooter's body places in each slot
+
+    /// One placement as the body draws it: which slot, the key it binds, how it looks.
+    struct Triple: Equatable {
+        let item: FooterItem
+        let key: KeyboardShortcut?
+        let style: FooterStyle
+        init(_ item: FooterItem, _ key: KeyboardShortcut?, _ style: FooterStyle) {
+            self.item = item
+            self.key = key
+            self.style = style
+        }
+    }
+
+    static func triples(_ placements: [FooterPlacement]) -> [Triple] {
+        placements.map { Triple($0.item, $0.key, $0.style) }
+    }
+
+    static var remove: FooterAction { FooterAction(.destructive, title: Text("Remove from Library")) {} }
+    static var cancel: FooterAction { FooterAction(.cancel, title: Text("Cancel")) {} }
+    static var done: FooterAction { FooterAction(.primary, title: Text("Done")) {} }
+
+    /// R3, as the body draws it (`SheetFooter.body` draws `placements` and nothing else): each action in its own slot,
+    /// whatever order it was given in, with its key and its look. Swapping Cancel and the default action fails here.
+    @MainActor @Test func eachActionLandsInItsOwnSlotWithItsKey() {
+        let placements = FooterPlacement.placements([Self.done, Self.cancel, Self.remove], closeOnEscape: nil)
+        #expect(Self.triples(placements) == [
+            Triple(.destructive, nil, .destructive), Triple(.gap, nil, .gap),
+            Triple(.cancel, .cancelAction, .standard), Triple(.primary, .defaultAction, .standard),
+        ])
+        #expect(placements.map(\.action?.title) == [Text("Remove from Library"), nil, Text("Cancel"), Text("Done")])
+        #expect(placements.allSatisfy { $0.action?.role == $0.item.role })
+    }
+
+    /// A slot with no action takes no room; Escape's hidden button binds Escape, and only it.
+    @MainActor @Test func anEmptySlotTakesNoRoomAndTheHiddenButtonBindsEscape() {
+        #expect(Self.triples(FooterPlacement.placements([Self.done], closeOnEscape: nil)) == [
+            Triple(.gap, nil, .gap), Triple(.primary, .defaultAction, .standard),
+        ])
+        let closing = FooterPlacement.placements([Self.done], closeOnEscape: {})
+        #expect(Self.triples(closing) == [
+            Triple(.gap, nil, .gap), Triple(.closeOnEscape, .cancelAction, .hidden),
+            Triple(.primary, .defaultAction, .standard),
+        ])
     }
 
     /// An empty state's ways on: the first one, prominent only when a second sits under it.

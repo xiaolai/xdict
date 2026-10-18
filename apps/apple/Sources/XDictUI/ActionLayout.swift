@@ -21,6 +21,10 @@ import XDictTokens
 //   Dictionaries' table checkboxes and +/− (P39); the lookup popover's speaker and footer rows (P41). The system's own:
 //   an NSAlert (it already follows R3), a spinner, an icon-only glyph, the shortcut recorder and a Form's
 //   LabeledContent. `ButtonPlacementTests.exclusions` is the list of ids, each with why; an unknown or unused id fails.
+//   A marker covers its own line; it covers a whole block only on a line that opens a menu or toolbar builder
+//   (CommandGroup, CommandMenu, Menu, ToolbarItem, a Commands or ToolbarContent body), where SwiftUI makes every
+//   button a menu or toolbar item. The guard reads text, not types: a button written in a helper is judged where the
+//   helper writes it, not where it is used.
 
 /// Where a group of actions sits, which decides their size (R4).
 enum ActionSurface: Equatable {
@@ -41,7 +45,7 @@ enum ActionSurface: Equatable {
     }
 }
 
-/// What a sheet's footer lays out, in reading order (R3). `SheetFooter`'s body draws exactly `arrangement`.
+/// What a sheet's footer lays out, in reading order (R3): `FooterPlacement.placements` fills these slots.
 enum FooterItem: Hashable {
     /// The destructive action, at the leading edge.
     case destructive
@@ -193,69 +197,156 @@ struct ProgressBarView: View {
     }
 }
 
+
+/// One action of a sheet's footer: which slot it is for (R3), its title, and what it does.
+struct FooterAction {
+    enum Role: Equatable { case destructive, cancel, primary }
+
+    let role: Role
+    let title: Text
+    let identifier: String?
+    let isDisabled: Bool
+    let perform: () -> Void
+
+    init(_ role: Role, title: Text, identifier: String? = nil, isDisabled: Bool = false,
+         perform: @escaping () -> Void) {
+        self.role = role
+        self.title = title
+        self.identifier = identifier
+        self.isDisabled = isDisabled
+        self.perform = perform
+    }
+}
+
+/// How a footer placement is drawn.
+enum FooterStyle: Equatable {
+    /// The space between the leading and the trailing actions.
+    case gap
+    /// A button with the destructive role.
+    case destructive
+    /// A push button; Return's makes it the prominent default.
+    case standard
+    /// Escape's own button: no room, picture, focus or VoiceOver element.
+    case hidden
+}
+
+extension FooterItem {
+    /// Which action fills this slot; none for the gap.
+    var role: FooterAction.Role? {
+        switch self {
+        case .destructive: .destructive
+        case .cancel, .closeOnEscape: .cancel
+        case .primary: .primary
+        case .gap: nil
+        }
+    }
+
+    var style: FooterStyle {
+        switch self {
+        case .gap: .gap
+        case .destructive: .destructive
+        case .cancel, .primary: .standard
+        case .closeOnEscape: .hidden
+        }
+    }
+}
+
+/// What a sheet's footer places in each slot, in order: the slot, the action in it, its key and its look.
+/// `SheetFooter`'s body draws exactly these and nothing else, so what is tested here is what is on screen.
+struct FooterPlacement: Identifiable {
+    let item: FooterItem
+    let action: FooterAction?
+    let key: KeyboardShortcut?
+    let style: FooterStyle
+    var id: FooterItem { item }
+
+    /// The actions in `FooterItem.arrangement`'s slots, whatever order they come in; a slot with no action is left out,
+    /// and with nothing to cancel, Escape's hidden button closes the sheet.
+    static func placements(_ actions: [FooterAction], closeOnEscape: (() -> Void)?) -> [FooterPlacement] {
+        FooterItem.arrangement(closesOnEscape: closeOnEscape != nil).compactMap { item in
+            let action: FooterAction?
+            switch item {
+            case .gap: action = nil
+            case .closeOnEscape: action = closeOnEscape.map { FooterAction(.cancel, title: Text(verbatim: ""), perform: $0) }
+            default: action = actions.first { $0.role == item.role }
+            }
+            if item != .gap, action == nil { return nil }
+            return FooterPlacement(item: item, action: action, key: item.keyEquivalent, style: item.style)
+        }
+    }
+}
+
 /// A sheet's footer (R3): a destructive action apart at the leading edge, then Cancel and the default action at the
-/// trailing one, Escape and Return theirs, in `FooterItem.arrangement`'s order. A slot left empty takes no room. With
-/// nothing to cancel, Escape closes the sheet.
-struct SheetFooter<Destructive: View, Cancel: View, Primary: View>: View {
-    @ViewBuilder let destructive: Destructive
-    @ViewBuilder let cancel: Cancel
-    @ViewBuilder let primary: Primary
-    let closeOnEscape: (() -> Void)?
+/// trailing one, Escape and Return theirs. The body draws `placements` one by one through the same view, so no slot
+/// is placed by hand.
+struct SheetFooter: View {
+    let placements: [FooterPlacement]
 
-    init(@ViewBuilder destructive: () -> Destructive, @ViewBuilder cancel: () -> Cancel,
-         @ViewBuilder primary: () -> Primary) {
-        self.init(destructive: destructive(), cancel: cancel(), primary: primary(), closeOnEscape: nil)
+    /// Cancel and the default action, and a destructive one if any.
+    init(_ actions: [FooterAction]) {
+        placements = FooterPlacement.placements(actions, closeOnEscape: nil)
     }
 
-    fileprivate init(destructive: Destructive, cancel: Cancel, primary: Primary, closeOnEscape: (() -> Void)?) {
-        self.destructive = destructive
-        self.cancel = cancel
-        self.primary = primary
-        self.closeOnEscape = closeOnEscape
+    /// With nothing to cancel: Escape closes the sheet.
+    init(_ actions: [FooterAction], closeOnEscape: @escaping () -> Void) {
+        placements = FooterPlacement.placements(actions, closeOnEscape: closeOnEscape)
     }
-
-    /// What this footer lays out, in order: its body draws exactly this.
-    var arrangement: [FooterItem] { FooterItem.arrangement(closesOnEscape: closeOnEscape != nil) }
 
     var body: some View {
         HStack(spacing: Tokens.Space.sm) {
-            ForEach(arrangement, id: \.self) { item in
-                switch item {
-                case .destructive: destructive.keyboardShortcut(item.keyEquivalent)
-                case .gap: Spacer()
-                case .cancel: cancel.keyboardShortcut(item.keyEquivalent)
-                case .closeOnEscape:
-                    if let closeOnEscape {
-                        // Escape's own key, with no room, picture or VoiceOver element of its own: Done says the same.
-                        Button(action: closeOnEscape) { EmptyView() }
-                            .buttonStyle(.plain)
-                            .frame(width: 0, height: 0)
-                            .opacity(0)
-                            .accessibilityHidden(true)
-                            .keyboardShortcut(item.keyEquivalent)
-                    }
-                case .primary: primary.keyboardShortcut(item.keyEquivalent)
-                }
+            ForEach(placements) { placement in
+                FooterPlacementView(placement: placement)
             }
         }
         .controlSize(ActionSurface.footer.controlSize)
     }
 }
 
-extension SheetFooter where Destructive == EmptyView {
-    /// Cancel and the default action.
-    init(@ViewBuilder cancel: () -> Cancel, @ViewBuilder primary: () -> Primary) {
-        self.init(destructive: EmptyView(), cancel: cancel(), primary: primary(), closeOnEscape: nil)
+/// One placement, drawn as its style says, binding its key.
+private struct FooterPlacementView: View {
+    let placement: FooterPlacement
+
+    var body: some View {
+        if let action = placement.action {
+            Button(role: placement.style == .destructive ? .destructive : nil, action: action.perform) { action.title }
+                .disabled(action.isDisabled)
+                .keyboardShortcut(placement.key)
+                .modifier(Identified(identifier: action.identifier))
+                .modifier(Hidden(isHidden: placement.style == .hidden))
+        } else {
+            Spacer()
+        }
     }
 }
 
-extension SheetFooter where Cancel == EmptyView {
-    /// A destructive action and the default action, with nothing to cancel: Escape closes the sheet.
-    init(@ViewBuilder destructive: () -> Destructive, @ViewBuilder primary: () -> Primary,
-         closeOnEscape: @escaping () -> Void) {
-        self.init(destructive: destructive(), cancel: EmptyView(), primary: primary(), closeOnEscape: closeOnEscape)
+/// An accessibility identifier where the action has one.
+private struct Identified: ViewModifier {
+    let identifier: String?
+
+    func body(content: Content) -> some View {
+        if let identifier { content.accessibilityIdentifier(identifier) } else { content }
     }
 }
+
+/// Escape's hidden button: no room, no picture, not reachable by Tab (Full Keyboard Access) and no VoiceOver element;
+/// its key equivalent alone remains. Done says the same thing on screen.
+private struct Hidden: ViewModifier {
+    let isHidden: Bool
+
+    func body(content: Content) -> some View {
+        if isHidden {
+            content
+                .buttonStyle(.plain)
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .focusable(false)
+                .accessibilityHidden(true)
+        } else {
+            content
+        }
+    }
+}
+
 
 /// An empty state's ways on (`ActionSurface.emptyState`), centred under its sentence: in a `ContentUnavailableView`'s
 /// actions or a page of its own. The first is prominent when a second sits under it (`EmptyStateItem`).
