@@ -32,6 +32,9 @@ public final class SearchWindowState {
     @ObservationIgnored public var showDictionaries: (@MainActor (UUID?) -> Void)?
     /// Each entry handed to the entry view, and whether it was: for the instruments.
     @ObservationIgnored public var onPresented: (@MainActor (SearchModel.Shown, Bool) -> Void)?
+    /// A word ⌘-clicked in the entry, looked up in a new tab of this window (parity P47). Unset in the lookup popover,
+    /// where a ⌘-click does nothing new.
+    @ObservationIgnored public var openInNewTab: (@MainActor (String) -> Void)?
 
     @ObservationIgnored private let backend: any SearchBackend
 
@@ -52,6 +55,7 @@ public final class SearchWindowState {
         entry.onLookup = { [weak self] query, anchor in self?.follow(query, anchor: anchor) }
         entry.onSound = { [weak self] path in self?.playRecording(path) }
         entry.onSpeak = { [weak self] text in self?.speak(text) }
+        entry.onOpenInNewTab = { [weak self] word in self?.openInNewTab?(word) }
     }
 
     public func focusSearch() { searchFocus += 1 }

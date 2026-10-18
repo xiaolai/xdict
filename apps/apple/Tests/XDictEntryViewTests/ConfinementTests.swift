@@ -233,6 +233,7 @@ struct ConfinementTests {
             func record(_ event: EntryEvent) { events.append(event) }
             func perform(_ action: EntryLinkAction, from pane: EntryPane) {}
             func askReader(_ url: URL, from pane: EntryPane) {}
+            func openInNewTab(_ click: EntryWordClick, from pane: EntryPane) {}
             func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView? { nil }
             func documentFinished(_ pane: EntryPane) {}
         }

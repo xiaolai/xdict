@@ -27,6 +27,9 @@ public enum EntryEvent: Sendable, Equatable {
     case downloadRefused(url: String)
     case menuFiltered(kept: [String], removed: [String])
     case contentProcessTerminated
+    /// A ⌘-clicked word handed to the window for a new tab (P47), or a message from the shell's script refused.
+    case wordOpenedInNewTab(word: String)
+    case messageRefused
 }
 
 enum EntryLog {
