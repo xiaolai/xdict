@@ -35,6 +35,12 @@ Added in the second round of WI-2 (new, no origin): `SiteExclusionTests` (6; the
 area, a security review's finding), two limit tests in `PointerWordReaderTests` (decision 3), and `LaneBarrierTests`
 (5; the queue's order, the barrier after cancel and supersede, the deadline before the hit test, the click carried in).
 
+**For WI-3 (the hover reader): read a hover's text only through `PointerWordSource.readUnlessRefused`.** It is one lane
+job that checks the site (fail-closed: `unreadable` unless the walk to the application is complete and every web area on
+it decided) and then reads, so a page cannot navigate between a check and a read. The source offers no separate host or
+read call on purpose. Third round of WI-2: eight more tests in `SiteExclusionTests` (a parent that cannot be read, a
+frame with no address, the walk's limit, a cycle, the combined job twice, and random trees against a model of the rule).
+
 ## Not moved
 
 `HoverWatcher`, `HoverReader`, `PendingContext` (plan-capture WI-3), `ScreenTextRecogniser`, `ScreenRecordingAccess`,

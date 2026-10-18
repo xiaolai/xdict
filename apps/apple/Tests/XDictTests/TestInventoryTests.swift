@@ -57,7 +57,7 @@ struct TestInventoryTests {
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
         // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
         // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
-        "XDictCaptureMacTests": 104,
+        "XDictCaptureMacTests": 112,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

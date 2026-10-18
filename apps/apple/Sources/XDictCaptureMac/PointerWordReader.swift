@@ -169,12 +169,19 @@ public enum PointerWordReader {
         }
     }
 
-    /// The site `target` shows, **judged on every web area that encloses it** (XDict ADR-0014; security review of
-    /// plan-capture WI-2). An `about:blank` or `srcdoc` frame inside an excluded page — an embedded editor — has no host
-    /// of its own, and taking the nearest web area's address alone let an excluded site's text through as "not web
-    /// content". So the walk goes outward through every enclosing web area: any whose host `isExcluded` refuses (that host
-    /// is answered); else the innermost readable host; a `file:` page with no host above it is a page with no site;
-    /// anything else hostless is `unreadable`, never harmless. `.notWebContent` only where no web area exists at all.
+    /// The site `target` shows, **fail-closed by construction** (security review of plan-capture WI-2, twice). The
+    /// answer starts as `unreadable` and becomes anything else only on an affirmative, complete result:
+    ///
+    /// - every element from the pointed one up to the application was read, each parent read and none repeated, within
+    ///   `siteWalkLimit` elements — the walk **reached the application normally**;
+    /// - and every web area on that chain yielded a decision: a host (an excluded one refuses at once, answered as that
+    ///   host), a `file:` page, or an `about:` frame (`about:blank`, `srcdoc`), which has no site of its own and defers
+    ///   to the pages around it.
+    ///
+    /// Then: no web area at all is `notWebContent`; otherwise the innermost host, or `notWebContent` for a `file:` page
+    /// with no host on the chain; a chain of `about:` frames alone stays `unreadable`. A read that failed, a parent that
+    /// cannot be read, a frame with no readable address, any other hostless address, a cycle and the limit running out
+    /// all leave it `unreadable`.
     public static func host(
         of target: Target, isExcluded: (String) -> Bool, with ax: some AccessibilityReading
     ) -> HostReading {
@@ -182,33 +189,77 @@ public enum PointerWordReader {
             // Woken first: an unwoken Chromium tree has no web area yet, and "no page" read from it would let an
             // excluded site through.
             try awaken(target, ax)
-            var walk = try ax.walkToPage(from: target.element)
+            var current = target.element
+            var seen: Set<AXUIElement> = []
             var hosts: [String] = []
-            var sawFile = false
             var areas = 0
-            while case .page(let area) = walk, areas < webAreaAncestorLimit {
-                areas += 1
-                let raw = try ax.attribute(area, kAXURLAttribute, ofApplication: false)
-                let url = (raw as? URL) ?? (raw as? String).flatMap { URL(string: $0) }
-                if let host = url?.host(percentEncoded: false), !host.isEmpty {
-                    if isExcluded(host) { return .known(host) }
-                    hosts.append(host)
-                } else if url?.isFileURL == true {
-                    sawFile = true
+            var sawFile = false
+            for _ in 0..<siteWalkLimit {
+                guard seen.insert(current).inserted else { return .unreadable }
+                let role = try ax.string(current, kAXRoleAttribute)
+                if role == kAXApplicationRole {
+                    if areas == 0 { return .notWebContent }
+                    if let innermost = hosts.first { return .known(innermost) }
+                    return sawFile ? .notWebContent : .unreadable
                 }
-                walk = try ax.enclosingWebArea(of: area)
+                if role == "AXWebArea" {
+                    areas += 1
+                    switch try siteOf(current, ax) {
+                    case .host(let host):
+                        if isExcluded(host) { return .known(host) }
+                        hosts.append(host)
+                    case .file: sawFile = true
+                    case .noSiteOfItsOwn: break
+                    case .unknown: return .unreadable
+                    }
+                }
+                guard let parent = try ax.element(current, kAXParentAttribute) else { return .unreadable }
+                current = parent
             }
-            if areas == 0 {
-                if case .application = walk { return .notWebContent }
-                return .unreadable
-            }
-            // A walk outward that stopped short may have missed an excluded page above: not known to be harmless.
-            if case .stoppedShort = walk { return .unreadable }
-            if let innermost = hosts.first { return .known(innermost) }
-            return sawFile ? .notWebContent : .unreadable
+            return .unreadable
         } catch {
             return .unreadable
         }
+    }
+
+    /// Elements walked from the pointed one to the application: toolbars and groups above a browser's page, and the
+    /// frames inside it. Past this, the answer is `unreadable`, never "complete".
+    public static let siteWalkLimit = 64
+
+    /// What one web area's address says about its site.
+    private enum FrameSite {
+        case host(String)
+        case file
+        /// `about:` — no site of its own; the pages around it decide.
+        case noSiteOfItsOwn
+        /// No readable address, or a hostless one that is not `about:` or `file:`.
+        case unknown
+    }
+
+    private static func siteOf(_ area: AXUIElement, _ ax: some AccessibilityReading) throws(CaptureError) -> FrameSite {
+        let raw = try ax.attribute(area, kAXURLAttribute, ofApplication: false)
+        guard let url = (raw as? URL) ?? (raw as? String).flatMap({ URL(string: $0) }) else { return .unknown }
+        if let host = url.host(percentEncoded: false), !host.isEmpty { return .host(host) }
+        if url.isFileURL { return .file }
+        return url.scheme?.lowercased() == "about" ? .noSiteOfItsOwn : .unknown
+    }
+
+    /// **One lane job for a hover: the site check, then the text read, together** — so the page cannot navigate between
+    /// a check and a read made as two jobs. `refuses` is the consumer's policy (`HoverPolicy.refuses`): asked of every
+    /// enclosing host and of the overall answer, and the text is read only when it does not refuse.
+    public static func readUnlessRefused(
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
+        refuses: (HostReading) -> Bool, with ax: some AccessibilityReading
+    ) -> GatedOutcome {
+        let site = host(of: target, isExcluded: { refuses(.known($0)) }, with: ax)
+        if refuses(site) { return .refused(site) }
+        return .read(read(at: point, in: target, tolerance: tolerance, limits: limits, with: ax))
+    }
+
+    /// The combined job's answer: the site refused (and nothing read), or what the read found.
+    public enum GatedOutcome: Sendable, Equatable {
+        case refused(HostReading)
+        case read(Outcome)
     }
 
     // MARK: - text range
