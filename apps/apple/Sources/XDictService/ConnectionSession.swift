@@ -13,6 +13,16 @@ final class ServiceContext: Sendable {
     let idle: IdleExit
     let bulk = WorkGate(ceiling: WorkGate.ceiling(for: .bulk))
     let lookups = WorkGate(ceiling: WorkGate.ceiling(for: .lookup))
+    /// **One Apple dictionary conversion at a time, across the service** (ADR-0011 decision 5): each holds up to the
+    /// snapshot's 512 MiB and what it inflates, so a second waits its turn, in order, rather than doubling that. It
+    /// runs on `background`, apart from the reader's gates, so a lookup is never behind it.
+    let conversions = WorkGate(ceiling: 1)
+    /// The app-group container's `AppleImports/`, or nil when the service has none (unsigned, or no entitlement):
+    /// every conversion is then refused as `noContainer`.
+    let appleImports: AppleImportStore?
+    /// How often a conversion waiting its turn reports that it is still there: well inside the client's 60 s of
+    /// silence (`Deadlines.importSilence`), which would otherwise end it while a long one runs ahead of it.
+    let conversionHeartbeat: Duration
     let queue = DispatchQueue(label: "ai.xdict.app.DictionaryService.core", qos: .userInitiated, attributes: .concurrent)
     /// Where health checks and reading-style reports run (WI-12, ADR-0010): below the reader's calls, which they must
     /// never hold up.
@@ -20,9 +30,12 @@ final class ServiceContext: Sendable {
     let log = Logger(subsystem: XDictIdentity.dictionaryService, category: "service")
     private let connections = Atomic<UInt64>(0)
 
-    init(dictionaries: Dictionaries, idle: IdleExit) {
+    init(dictionaries: Dictionaries, idle: IdleExit, appleImports: AppleImportStore? = nil,
+         conversionHeartbeat: Duration = .seconds(15)) {
         self.dictionaries = dictionaries
         self.idle = idle
+        self.appleImports = appleImports
+        self.conversionHeartbeat = conversionHeartbeat
     }
 
     func gate(for creditClass: CreditClass) -> WorkGate {
@@ -56,7 +69,9 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
     private let context: ServiceContext
     private weak var connection: NSXPCConnection?
     private let credits = Mutex(Credits())
-    private let imports = Mutex<[UInt64: ImportProgress]>([:])
+    /// The long calls in flight: imports, health checks and conversions, by request id, so `cancel` finds them, and
+    /// whether each is a conversion, so `cancelConversion` does.
+    private let imports = Mutex<[UInt64: (progress: ImportProgress, isConversion: Bool)]>([:])
 
     init(number: UInt64, context: ServiceContext, connection: NSXPCConnection) {
         self.number = number
@@ -76,7 +91,8 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
     func end() {
         context.bulk.connectionEnded(number)
         context.lookups.connectionEnded(number)
-        for progress in imports.withLock({ Array($0.values) }) { progress.cancel() }
+        context.conversions.connectionEnded(number)
+        for running in imports.withLock({ Array($0.values) }) { running.progress.cancel() }
     }
 
     private func receive(_ envelope: Data, files: [FileHandle], reply: @escaping @Sendable (Data, Data?) -> Void) {
@@ -94,9 +110,18 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         let operation = request.operation
         if case .cancel(let target) = operation {
             let running = imports.withLock { $0[target] }
-            running?.cancel()
+            running?.progress.cancel()
             return answer(Response(id: request.id, outcome: .answer(.cancellation(running == nil ? .notRunning : .stopping))),
                           payload: nil, credit: nil, reply: reply)
+        }
+        if case .cancelConversion = operation {
+            let running = imports.withLock { $0.values.filter(\.isConversion) }
+            for conversion in running { conversion.progress.cancel() }
+            return answer(Response(id: request.id, outcome: .answer(.cancellation(running.isEmpty ? .notRunning : .stopping))),
+                          payload: nil, credit: nil, reply: reply)
+        }
+        if case .convertApple(let staging) = operation {
+            return convertApple(staging: staging, request: request, reply: reply)
         }
         let credit: Credit
         switch credits.withLock({ $0.take(for: operation) }) {
@@ -128,15 +153,59 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         })
     }
 
-    /// An import's or a health check's progress, reported to the client as events and answering `false` once `cancel`
-    /// names it. Registered before the work is queued, so a `cancel` that follows it on this connection always finds it.
+    /// **An Apple dictionary conversion** (ADR-0011 decisions 4 and 5): through the service-wide gate of one, on the
+    /// background queue. A conversion whose client goes before its turn never runs, and its staging folder is removed;
+    /// one running stops at its next step (`end`).
+    private func convertApple(staging: UUID, request: Request, reply: @escaping @Sendable (Data, Data?) -> Void) {
+        guard let store = context.appleImports else {
+            return answer(Response(id: request.id, outcome: .failure(.appleImport(.noContainer))), payload: nil, credit: nil,
+                          reply: reply)
+        }
+        guard let progress = importProgress(for: request) else {
+            // `convertApple` reports progress (`ServiceOperation.reportsProgress`); were that ever changed, say so.
+            return answer(Response(id: request.id, outcome: .failure(.core(.internalFault(detail: "a conversion without progress")))),
+                          payload: nil, credit: nil, reply: reply)
+        }
+        let job: @Sendable () -> Void = { [self] in
+            let outcome = AppleImports.convert(staging: staging, in: store, progress: progress)
+            context.conversions.leave()
+            imports.withLock { _ = $0.removeValue(forKey: request.id) }
+            let logged = (try? outcome.get()).map { "published \($0.conversion), \($0.entries) entries" } ?? "\(outcome)"
+            context.log.notice("conversion of \(staging, privacy: .public): \(logged, privacy: .public)")
+            switch outcome {
+            case .success(let converted):
+                answer(Response(id: request.id, outcome: .answer(.converted(converted))), payload: nil, credit: nil, reply: reply)
+            case .failure(let error):
+                answer(Response(id: request.id, outcome: .failure(error)), payload: nil, credit: nil, reply: reply)
+            }
+        }
+        // While it waits its turn it still reports, at no progress, so the client's silence deadline does not end it.
+        let heartbeat = Heartbeat(every: context.conversionHeartbeat, queue: context.background) {
+            _ = progress.progress(done: 0, total: ProgressScale.total)
+        }
+        context.conversions.enter(connection: number, run: { [context] in
+            heartbeat.stop()
+            context.background.async(execute: job)
+        }, dropped: { [self] in
+            heartbeat.stop()
+            imports.withLock { _ = $0.removeValue(forKey: request.id) }
+            AppleImports.discard(staging: staging, in: store)
+            answer(Response(id: request.id, outcome: .failure(.core(.cancelled(detail: "its connection ended before it ran")))),
+                   payload: nil, credit: nil, reply: reply)
+        })
+    }
+
+    /// An import's, a health check's or a conversion's progress, reported to the client as events and answering
+    /// `false` once `cancel` (or `cancelConversion`, or the client's going) names it. Registered before the work is
+    /// queued, so a `cancel` that follows it on this connection always finds it.
     private func importProgress(for request: Request) -> ImportProgress? {
         guard request.operation.reportsProgress else { return nil }
         let id = request.id
         let progress = ImportProgress { [weak self] done, total in
             self?.send(ServiceEvent(request: id, kind: .progress(done: done, total: total)))
         }
-        imports.withLock { $0[id] = progress }
+        let isConversion = if case .convertApple = request.operation { true } else { false }
+        imports.withLock { $0[id] = (progress, isConversion) }
         return progress
     }
 
@@ -161,6 +230,34 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         // A client that has gone, or exports nothing, misses an event; nothing here waits for one.
         let proxy = connection.remoteObjectProxyWithErrorHandler { _ in }
         (proxy as? any ServiceEventsXPC)?.event(data)
+    }
+}
+
+/// A repeating timer, stopped once. `@unchecked Sendable`: `DispatchSourceTimer` is thread-safe by its documentation but
+/// not declared `Sendable`; whether it has stopped is an `Atomic`.
+final class Heartbeat: @unchecked Sendable {
+    private let timer: any DispatchSourceTimer
+    private let stopped = Atomic<Bool>(false)
+
+    init(every interval: Duration, queue: DispatchQueue, beat: @escaping @Sendable () -> Void) {
+        let (seconds, attoseconds) = interval.components
+        let nanoseconds = max(1, Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000))
+        timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + .nanoseconds(nanoseconds), repeating: .nanoseconds(nanoseconds))
+        timer.setEventHandler { [weak self] in
+            guard let self, !self.stopped.load(ordering: .relaxed) else { return }
+            beat()
+        }
+        timer.resume()
+    }
+
+    func stop() {
+        guard !stopped.exchange(true, ordering: .relaxed) else { return }
+        timer.cancel()
+    }
+
+    deinit {
+        stop()
     }
 }
 

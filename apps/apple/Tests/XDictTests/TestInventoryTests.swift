@@ -24,7 +24,7 @@ struct TestInventoryTests {
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
         "XDictBaseTests": 2,
         "XDictClientTests": 20,
-        "XDictContractTests": 67,
+        "XDictContractTests": 80,
         "XDictLibraryTests": 52,
         "XDictSearchTests": 49,
         "XDictSpeechTests": 31,
@@ -33,11 +33,12 @@ struct TestInventoryTests {
         "XDictAnywhereTests": 64,
         "XDictUITests": 24,
         "XDictEntryViewTests": 43,
-        "XDictServiceTests": 46,
+        "XDictServiceTests": 90,
         "XDictTests": 37,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
-        // core, the harness's by its boundary (2026-10-18).
-        "XDictAppleImportTests": 67,
+        // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
+        // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
+        "XDictAppleImportTests": 72,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
