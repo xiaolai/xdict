@@ -111,7 +111,7 @@ public enum Unavailable: Hashable, Sendable {
     func next(for dictionary: UUID) -> NextAction {
         switch self {
         case .indexing: .wait
-        case .missingFile, .outsideItsFolder, .malformed, .unsupported: .openLibrary(dictionary)
+        case .missingFile, .outsideItsFolder, .malformed, .unsupported: .showInSettings(dictionary)
         case .notImported: .retryImport(dictionary)
         }
     }
@@ -140,7 +140,7 @@ public enum LookupFailure: Hashable, Sendable {
 
     func next(for dictionary: UUID) -> NextAction? {
         switch self {
-        case .malformed: .openLibrary(dictionary)
+        case .malformed: .showInSettings(dictionary)
         case .changed: .reopen
         case .tooLarge: nil
         case .serviceFailed: .retryLookup(dictionary)
@@ -153,7 +153,7 @@ public enum NextAction: Hashable, Sendable {
     /// Nothing: it is asked again by itself when it can answer.
     case wait
     /// The library, at this dictionary: relink, replace or remove it.
-    case openLibrary(UUID)
+    case showInSettings(UUID)
     /// Import this dictionary again.
     case retryImport(UUID)
     /// Ask this dictionary again.

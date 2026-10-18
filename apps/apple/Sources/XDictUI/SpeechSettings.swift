@@ -42,7 +42,7 @@ public struct SpeechSettings: View {
             }
             .accessibilityLabel(Text("Use the dictionary's recordings"))
             .accessibilityIdentifier("use-recordings")
-            Text("Each dictionary is spoken in the language set for it in the Library.")
+            Text("Each dictionary is spoken in the language set for it in Settings ▸ Dictionaries.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
         }

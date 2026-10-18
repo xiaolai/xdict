@@ -44,7 +44,7 @@ public enum SpeechSentences {
             LocalizedStringResource("Spoken by the system voice \(voice) (\(languageName(language))).")
         case .noLanguage:
             LocalizedStringResource("""
-                This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in the Library.
+                This dictionary's language is not set, so XDict cannot choose a voice for it. Set it in Settings ▸ Dictionaries.
                 """)
         case .noVoice(let language):
             LocalizedStringResource("""

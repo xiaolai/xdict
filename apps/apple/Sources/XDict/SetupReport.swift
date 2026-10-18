@@ -106,7 +106,7 @@ enum SetupReport {
     @MainActor
     static func show(library: Library, trusted: @escaping @MainActor () -> Bool) -> NSWindow {
         let view = SetupView(library: library, registrar: LookupAnywhere.shared.registrar, trusted: trusted,
-                             openLibrary: {})
+                             showDictionaries: {})
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()

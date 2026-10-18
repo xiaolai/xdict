@@ -8,7 +8,8 @@ import XDictUI
 
 /// `XDict --library-drop <library-dir> --ready <file> --expect <file name>`: a development instrument for the E2E
 /// `library` stage's drag-and-drop check (run on the E2E Mac only; never on the build Mac, whose screen is the
-/// owner's). Shows the production `LibraryView` over a library of its own, in a window at a fixed place, and writes
+/// owner's). Shows the production Settings ▸ Dictionaries pane (`SettingsDictionaries`, ADR-0012 d.7: the Library
+/// window is gone) over a library of its own, with a route of its own, in a window at a fixed place, and writes
 /// `<file>` with the window's centre in global display points (origin top left, as `pointer` takes them) once it is on
 /// screen. A real drag from elsewhere (`Tools/library/dragsource` and `pointer drag`) then drops a file on it; the
 /// instrument prints `Findings` — whether a dictionary of that file name was registered and answers — and exits.
@@ -31,7 +32,7 @@ enum LibraryDropReport {
         let window = NSWindow(contentRect: NSRect(x: frame.minX, y: screen.maxY - frame.maxY, width: frame.width,
                                                   height: frame.height),
                               styleMask: [.titled, .resizable], backing: .buffered, defer: false)
-        window.contentView = NSHostingView(rootView: LibraryView(library: library))
+        window.contentView = NSHostingView(rootView: SettingsDictionaries(library: library, route: SettingsRoute()))
         window.isReleasedWhenClosed = false
         window.makeKeyAndOrderFront(nil)
         app.activate()

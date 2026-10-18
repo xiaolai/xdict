@@ -13,7 +13,7 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("click", match...)            a real click at its centre
     ("extra",)                     the menu-bar extra opened
     ("size", width, height)        the main window set to that size, in points (Apple's 400 × 300 pt minimum)
-    ("drop", fixture)              a file of fixtures/library dragged from a source window onto the Library window
+    ("drop", fixture)              a file of fixtures/library dragged from a source window onto the window in front (Settings ▸ Dictionaries)
     ("wait", seconds)
     ("after", step...)            a step run after the capture (the print panel cancelled before the app quits)
 
@@ -24,9 +24,10 @@ window's routes are also held to Apple's Dictionary by `parity.py` (the parity l
 """
 
 SEARCH = ("key", "cmd+opt+f")
-LIBRARY = ("key", "cmd+shift+l")
 NARROW = ("size", 400, 300)
 SETTINGS = ("key", "cmd+,")
+# Settings ▸ Dictionaries, the only dictionary list (ADR-0012 d.2).
+DICTIONARIES = [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]
 
 
 def look_up(word):
@@ -49,7 +50,7 @@ ROUTES = [
      "and what fits, the rest under ») still there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
-     "'Open Library' button", []),
+     "'Open Dictionary Settings' button", []),
     ("search.result", "full", "Type 'apple', Return", "As Apple's (P2, P9, P43): 'N found' under the title; the "
      "sidebar one flat list of headwords (28 pt rows, 13 pt, the selected one semibold); the damaged and gone "
      "dictionaries said in the page, above the entry", look_up("apple")),
@@ -118,11 +119,12 @@ ROUTES = [
     ("menu.go", "full", "Click Go", "Back ⌘[, Forward ⌘], Return to Original Word ⌥⌘[", [("menuopen", 5)]),
     ("menu.search", "full", "Click Search (P7, P36)", "All Dictionaries ⌘0, each dictionary ⌘1…, Select Next "
      "Dictionary ⌘}, Select Previous Dictionary ⌘{", [("menuopen", 6)]),
-    ("menu.window", "full", "Click Window (P37)", "Library ⇧⌘L, the tab items and the window list", [("menuopen", 7)]),
+    ("menu.window", "full", "Click Window (P37)", "The tab items and the window list (no Library: ADR-0012 d.5)",
+     [("menuopen", 7)]),
     ("menu.help", "full", "Click Help (P38)", "The help search field and XDict Help", [("menuopen", 8)]),
     ("menu.services", "full", "Select the search field's word, XDict ▸ Services", "The Services submenu, XDict's "
      "own lookup among them", look_up("apple") + [SEARCH, ("menu", 1, "Services|服务")]),
-    ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Library…, "
+    ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Dictionaries…, "
      "Settings…, Quit XDict", [("extra",)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
@@ -143,45 +145,47 @@ ROUTES = [
                                     ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
      [("type", "apple"), ("key", "cmd+a"), ("key", "ctrl+opt+d"), ("wait", 2)]),
-    # The library
-    ("library.window", "full", "⇧⌘L", "The library: every dictionary in order, each with 'Use in lookups', "
-     "problem badges on damaged / gone / locked; 'Select a dictionary to see its details.'", [LIBRARY, ("wait", 1)]),
-    ("library.empty", "empty", "⇧⌘L over an empty library", "'No Dictionaries Yet' with 'Add Dictionaries…'",
-     [LIBRARY, ("wait", 1)]),
-    ("library.detail", "full", "⇧⌘L, click 'alpha'", "Name, Files, Reading style (fonts, sheets), Health, "
-     "Languages, Reading (Original style), About (title, format, entries, edition), Remove from Library",
-     [LIBRARY, ("wait", 1), ("click", "alpha", "Alpha"), ("wait", 1.5)]),
-    ("library.originalStyle", "full", "... switch Original style on", "The switch on",
-     [LIBRARY, ("wait", 1.5), ("click", "alpha", "Alpha"), ("wait", 1.5), ("click", "original-style"),
-      ("wait", 0.8)]),
-    ("library.damaged", "full", "⇧⌘L, click 'damaged'", "A sentence naming why it cannot be read (bad checksum)",
-     [LIBRARY, ("wait", 1), ("click", "damaged", "Damaged"), ("wait", 1.2)]),
-    ("library.gone", "full", "⇧⌘L, click 'gone'", "The file is missing, said in a sentence, with what to do",
-     [LIBRARY, ("wait", 1), ("click", "gone", "Gone"), ("wait", 1.2)]),
-    ("library.locked", "full", "⇧⌘L over the fixtures, which hold a registration-code file", "No 'locked' row: "
-     "such a file is refused at import (ADR-0005 decision 4, 5b19fbd), with a notice naming why",
-     [LIBRARY, ("wait", 1.5)]),
-    ("library.records", "full", "⇧⌘L, click 'records'", "A large dictionary's details and health",
-     [LIBRARY, ("wait", 1), ("click", "records", "Records"), ("wait", 1.5)]),
-    ("library.addPanel", "full", "⇧⌘L, Add Dictionaries… (⌘O)", "The open panel for .mdx/.mdd and folders",
-     [LIBRARY, ("wait", 1), ("key", "cmd+o"), ("wait", 2)]),
-    ("library.dropV3", "full", "Drag a format 3.0 .mdx onto the library", "Imported and Ready: XDict reads format "
-     "3.0 dictionaries (ADR-0005)", [LIBRARY, ("wait", 1), ("drop", "refused/v3/v3.mdx"), ("wait", 3)]),
-    ("library.dropV3Mdd", "full", "Drag a folder holding a format 3.0 .mdx and its .mdd onto the library",
-     "The dictionary imported, and its .mdd refused on it with the sentence naming format 3.0 resources",
-     [LIBRARY, ("wait", 1), ("drop", "refused/v3"), ("wait", 3), ("click", "v3", "V3", "Format Three Resources"),
-      ("wait", 1.2)]),
-    ("library.dropEncrypted", "full", "Drag a registration-code file onto the library", "Refused, or asking for the "
-     "reader's own code, with a sentence", [LIBRARY, ("wait", 1), ("drop", "refused/regcode/regcode.mdx"),
-                                            ("wait", 3)]),
-    ("library.dropImported", "empty", "Drag a good .mdx onto an empty library", "The new dictionary imported and "
-     "listed", [LIBRARY, ("wait", 1), ("drop", "file/single.mdx"), ("wait", 4)]),
-    # Settings
-    # Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General.
+    # Settings. Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General. The Dictionaries pane is the only
+    # dictionary list (d.2); its routes are the Library window's, moved by what they drive (d.7,
+    # dev-docs/settings-library-inventory.md).
+    ("settings.dictionaries.empty", "empty", "⌘, ▸ Dictionaries over an empty library", "'No Dictionaries Yet' with "
+     "'Add MDX Files…' over the empty table", DICTIONARIES),
+    ("settings.dictionaries.details", "full", "⌘, ▸ Dictionaries, click 'alpha', Details…", "The sheet: Name, Files, "
+     "Reading style (fonts, sheets), Health, Languages, Reading (Original style), About (title, format, entries, "
+     "edition), Remove from Library, Done", DICTIONARIES + [("click", "alpha", "Alpha"), ("wait", 0.8),
+                                            ("click", "settings.details"), ("wait", 1.5)]),
+    ("settings.dictionaries.originalStyle", "full", "⌘, ▸ Dictionaries, click 'alpha', switch Original style on",
+     "The switch on, in the options box", DICTIONARIES + [("click", "alpha", "Alpha"), ("wait", 0.8),
+                                           ("click", "original-style"), ("wait", 0.8)]),
+    ("settings.dictionaries.damaged", "full", "⌘, ▸ Dictionaries, click 'damaged'", "Beneath the table, a sentence "
+     "naming why it cannot be read (bad checksum), with Show in Finder",
+     DICTIONARIES + [("click", "damaged", "Damaged"), ("wait", 1.2)]),
+    ("settings.dictionaries.gone", "full", "⌘, ▸ Dictionaries, click 'gone'", "Beneath the table, the file is "
+     "missing, said in a sentence, with Locate…", DICTIONARIES + [("click", "gone", "Gone"), ("wait", 1.2)]),
+    ("settings.dictionaries.locked", "full", "⌘, ▸ Dictionaries over the fixtures, which hold a registration-code "
+     "file", "No 'locked' row: such a file is refused at import (ADR-0005 decision 4, 5b19fbd), with a notice in "
+     "the strip naming why", DICTIONARIES + [("wait", 0.5)]),
+    ("settings.dictionaries.records", "full", "⌘, ▸ Dictionaries, click 'records', Details…", "A large dictionary's "
+     "details and health", DICTIONARIES + [("click", "records", "Records"), ("wait", 0.8),
+                            ("click", "settings.details"), ("wait", 1.5)]),
+    ("settings.dictionaries.addPanel", "full", "⌘, ▸ Dictionaries, ⌘O (+ ▸ Add MDX Files…)", "The open panel for "
+     ".mdx/.mdd and folders", DICTIONARIES + [("key", "cmd+o"), ("wait", 2)]),
+    ("settings.dictionaries.addMenu", "full", "⌘, ▸ Dictionaries, click +", "The + menu: Add MDX Files… ⌘O",
+     DICTIONARIES + [("click", "settings.add"), ("wait", 0.8)]),
+    ("settings.dictionaries.dropV3", "full", "Drag a format 3.0 .mdx onto the table", "Imported and Ready: XDict "
+     "reads format 3.0 dictionaries (ADR-0005)", DICTIONARIES + [("drop", "refused/v3/v3.mdx"), ("wait", 3)]),
+    ("settings.dictionaries.dropV3Mdd", "full", "Drag a folder holding a format 3.0 .mdx and its .mdd onto the table",
+     "The dictionary imported and selected, its .mdd refused with the sentence naming format 3.0 resources "
+     "(Details…)", DICTIONARIES + [("drop", "refused/v3"), ("wait", 3), ("click", "settings.details"),
+                    ("wait", 1.2)]),
+    ("settings.dictionaries.dropEncrypted", "full", "Drag a registration-code file onto the table", "Refused, with a "
+     "notice in the strip", DICTIONARIES + [("drop", "refused/regcode/regcode.mdx"), ("wait", 3)]),
+    ("settings.dictionaries.dropImported", "empty", "Drag a good .mdx onto the empty table", "The new dictionary "
+     "imported, listed and selected", DICTIONARIES + [("drop", "file/single.mdx"), ("wait", 4)]),
     ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, the lookup shortcut, Show "
      "Setup…", [SETTINGS, ("wait", 1), ("click", "General")]),
-    ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table, options box below (P39, P40)",
-     [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]),
+    ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table with every dictionary in order, + and − "
+     "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice", DICTIONARIES),
     ("settings.readingSpeech", "full", "⌘, ▸ Reading & Speech", "Accent colour with its sentence; English accent, "
      "Voice, Open Read & Speak Settings, Use the dictionary's recordings",
      [SETTINGS, ("wait", 1), ("click", "Reading & Speech")]),
@@ -190,10 +194,11 @@ ROUTES = [
     ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
      [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
     # Not driven
-    ("library.loading", "full", "An import in progress", "Progress and Cancel on the row", None),
+    ("settings.dictionaries.loading", "full", "An import in progress", "Progress and Cancel in the strip above the "
+     "table", None),
     ("lookup.held", "full", "A dictionary slow to answer", "Its section waiting, the others shown", None),
-    ("library.changed", "full", "A dictionary's file replaced", "'Is it still the same dictionary?' with Same / "
-     "A Different Dictionary, then Undo", None),
+    ("settings.dictionaries.changed", "full", "A dictionary's file replaced", "Beneath the table, 'Is it still the "
+     "same dictionary?' with Same / A Different Dictionary, then Undo", None),
     ("services.otherApp", "full", "Services ▸ Look Up in XDict from another app", "The panel over that app", None),
     ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Nothing to Look Up' and 'Open "
      "Accessibility Settings'", None),
@@ -201,10 +206,11 @@ ROUTES = [
 ]
 
 NOT_DRIVEN_WHY = {
-    "library.loading": "an import lasts milliseconds over the fixtures; only the E2E lookup scenario's TransportHold "
-                       "holds one open, and it runs only with that scenario",
+    "settings.dictionaries.loading": "an import lasts milliseconds over the fixtures; only the E2E lookup scenario's "
+                                     "TransportHold holds one open, and it runs only with that scenario",
     "lookup.held": "the TransportHold is the E2E scenario's to set; the tour does not run the scenario",
-    "library.changed": "needs a dictionary's file replaced under a running app; the E2E library stage does that",
+    "settings.dictionaries.changed": "needs a dictionary's file replaced under a running app; the E2E library stage "
+                                     "does that",
     "services.otherApp": "needs a selection in another app (TextEdit, Notes); the tour drives XDict alone",
     "anywhere.noAccess": "Accessibility grants are never changed by script, and XDict holds it on this Mac",
     "sound.recording": "the lookup fixtures hold no recording; the E2E sound stage plays them at volume 0",

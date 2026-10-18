@@ -54,7 +54,48 @@ struct SettingsDictionariesTests {
     @Test func theOptionsSlotSaysWhatItHolds() {
         #expect(Self.text(SettingsDictionaries.noSelection) == "Select a dictionary to see its options.")
         #expect(Self.text(SettingsDictionaries.noSelection, "zh-Hans") == "选择一部词典以查看它的选项。")
-        #expect(Self.text(SettingsDictionaries.showInLibrary) == "Show in Library…")
-        #expect(Self.text(SettingsDictionaries.showInLibrary, "zh-Hans") == "在词库中显示…")
+        #expect(Self.text(SettingsDictionaries.details) == "Details…")
+        #expect(Self.text(SettingsDictionaries.details, "zh-Hans") == "详细信息…")
+    }
+
+    // MARK: - ADR-0012: what the Library window did
+
+    /// `+` is a menu (d.2): Add MDX Files… (⌘O), and Add Apple Dictionaries…, in the code but not offered until WI-5.
+    @Test func thePlusMenuOffersMDXFilesOnly() {
+        #expect(SettingsDictionaries.AddItem.allCases == [.mdxFiles, .appleDictionaries])
+        #expect(SettingsDictionaries.addMenu == [.mdxFiles])
+        #expect(SettingsDictionaries.AddItem.mdxFiles.opensWithCommandO)
+        #expect(!SettingsDictionaries.AddItem.appleDictionaries.opensWithCommandO)
+        #expect(Self.text(SettingsDictionaries.AddItem.mdxFiles.title) == "Add MDX Files…")
+        #expect(Self.text(SettingsDictionaries.AddItem.appleDictionaries.title) == "Add Apple Dictionaries…")
+        #expect(Self.text(SettingsDictionaries.AddItem.mdxFiles.title, "zh-Hans") == "添加 MDX 文件…")
+    }
+
+    /// The importer offers what the Library's did: folders, .mdx and .mdd.
+    @Test func theImporterTakesFoldersMdxAndMdd() {
+        #expect(SettingsDictionaries.choosesFolders)
+        #expect(SettingsDictionaries.chooseableExtensions == ["mdx", "mdd"])
+    }
+
+    /// d.6: the table at least 200 pt tall; the pane at most the screen's visible height less its margins.
+    @Test func thePaneFollowsTheSizeRules() {
+        #expect(SettingsDictionaries.tableMinHeight == 200)
+        #expect(SettingsDictionaries.maxPaneHeight(visible: 800) == 720)
+        #expect(SettingsDictionaries.maxPaneHeight(visible: 300) >= SettingsDictionaries.tableMinHeight)
+    }
+
+    /// The strip names only what is under way; a ready or a troubled dictionary is not in it (the call of 2026-10-18:
+    /// no "Ready" text).
+    @Test func theStripHoldsWhatIsUnderWay() {
+        let ids = (0..<6).map { _ in UUID() }
+        let phases: [UUID: EntryPhase] = [ids[0]: .ready, ids[1]: .importing(done: 1, total: 4), ids[2]: .waiting,
+                                          ids[3]: .missing(fileName: "x.mdx"), ids[4]: .opening, ids[5]: .cancelling]
+        #expect(SettingsDictionaries.underWay(order: ids, phases: phases) == [ids[1], ids[2], ids[4], ids[5]])
+    }
+
+    /// The removed-dictionary sentence, in both languages.
+    @Test func aRemovedDictionaryIsSaid() {
+        #expect(Self.text(SettingsDictionaries.removedNotice) == "That dictionary is no longer in your library.")
+        #expect(Self.text(SettingsDictionaries.removedNotice, "zh-Hans") == "那部词典已不在你的词库中。")
     }
 }
