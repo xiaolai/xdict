@@ -1,0 +1,596 @@
+{
+  "about" : "A paragraph whose second sentence runs past the strip's bottom edge: cut, and asking for more below.",
+  "expect" : {
+    "excludes" : [
+      "keeper"
+    ],
+    "mayBeCut" : true,
+    "startsWith" : "The lamp",
+    "wantsMore" : 2,
+    "word" : "gulls"
+  },
+  "lines" : [
+    {
+      "box" : [
+        0.043056,
+        0.695833,
+        0.440278,
+        0.054167
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.043056,
+            0.695833,
+            0.031389,
+            0.054167
+          ],
+          "text" : "The",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.076667,
+            0.696667,
+            0.057778,
+            0.053333
+          ],
+          "text" : "keeper",
+          "utf16Offset" : 4
+        },
+        {
+          "box" : [
+            0.136667,
+            0.696667,
+            0.017778,
+            0.053333
+          ],
+          "text" : "of",
+          "utf16Offset" : 11
+        },
+        {
+          "box" : [
+            0.156667,
+            0.696667,
+            0.026667,
+            0.053333
+          ],
+          "text" : "the",
+          "utf16Offset" : 14
+        },
+        {
+          "box" : [
+            0.185556,
+            0.696667,
+            0.068889,
+            0.053333
+          ],
+          "text" : "northern",
+          "utf16Offset" : 18
+        },
+        {
+          "box" : [
+            0.256667,
+            0.696667,
+            0.037778,
+            0.053333
+          ],
+          "text" : "light",
+          "utf16Offset" : 27
+        },
+        {
+          "box" : [
+            0.296667,
+            0.696667,
+            0.064444,
+            0.053333
+          ],
+          "text" : "counted",
+          "utf16Offset" : 33
+        },
+        {
+          "box" : [
+            0.363333,
+            0.696667,
+            0.046667,
+            0.053333
+          ],
+          "text" : "every",
+          "utf16Offset" : 41
+        },
+        {
+          "box" : [
+            0.412222,
+            0.696667,
+            0.033333,
+            0.053333
+          ],
+          "text" : "ship",
+          "utf16Offset" : 47
+        },
+        {
+          "box" : [
+            0.447778,
+            0.695833,
+            0.035556,
+            0.054167
+          ],
+          "text" : "that",
+          "utf16Offset" : 52
+        }
+      ],
+      "text" : "The keeper of the northern light counted every ship that"
+    },
+    {
+      "box" : [
+        0.044344,
+        0.752743,
+        0.443209,
+        0.05989
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.044344,
+            0.760159,
+            0.056358,
+            0.052474
+          ],
+          "text" : "passed",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.102676,
+            0.7596,
+            0.027189,
+            0.050518
+          ],
+          "text" : "the",
+          "utf16Offset" : 7
+        },
+        {
+          "box" : [
+            0.131842,
+            0.758681,
+            0.045939,
+            0.050878
+          ],
+          "text" : "rocks",
+          "utf16Offset" : 11
+        },
+        {
+          "box" : [
+            0.179758,
+            0.757883,
+            0.039689,
+            0.050758
+          ],
+          "text" : "after",
+          "utf16Offset" : 17
+        },
+        {
+          "box" : [
+            0.221424,
+            0.757044,
+            0.041772,
+            0.050798
+          ],
+          "text" : "dusk",
+          "utf16Offset" : 23
+        },
+        {
+          "box" : [
+            0.265173,
+            0.756405,
+            0.031356,
+            0.050598
+          ],
+          "text" : "and",
+          "utf16Offset" : 28
+        },
+        {
+          "box" : [
+            0.298506,
+            0.755487,
+            0.045939,
+            0.050878
+          ],
+          "text" : "wrote",
+          "utf16Offset" : 32
+        },
+        {
+          "box" : [
+            0.346421,
+            0.754648,
+            0.041772,
+            0.050798
+          ],
+          "text" : "each",
+          "utf16Offset" : 38
+        },
+        {
+          "box" : [
+            0.39017,
+            0.753729,
+            0.045939,
+            0.050878
+          ],
+          "text" : "name",
+          "utf16Offset" : 43
+        },
+        {
+          "box" : [
+            0.438086,
+            0.753051,
+            0.033439,
+            0.050638
+          ],
+          "text" : "into",
+          "utf16Offset" : 48
+        },
+        {
+          "box" : [
+            0.473502,
+            0.752743,
+            0.014051,
+            0.051396
+          ],
+          "text" : "a",
+          "utf16Offset" : 53
+        }
+      ],
+      "text" : "passed the rocks after dusk and wrote each name into a"
+    },
+    {
+      "box" : [
+        0.041667,
+        0.825,
+        0.427778,
+        0.05
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.041667,
+            0.825,
+            0.052083,
+            0.05
+          ],
+          "text" : "ledger",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.095833,
+            0.825,
+            0.054167,
+            0.05
+          ],
+          "text" : "whose",
+          "utf16Offset" : 7
+        },
+        {
+          "box" : [
+            0.152083,
+            0.825,
+            0.052083,
+            0.05
+          ],
+          "text" : "pages",
+          "utf16Offset" : 13
+        },
+        {
+          "box" : [
+            0.20625,
+            0.825,
+            0.033333,
+            0.05
+          ],
+          "text" : "had",
+          "utf16Offset" : 19
+        },
+        {
+          "box" : [
+            0.241667,
+            0.825,
+            0.041667,
+            0.05
+          ],
+          "text" : "gone",
+          "utf16Offset" : 23
+        },
+        {
+          "box" : [
+            0.285417,
+            0.825,
+            0.03125,
+            0.05
+          ],
+          "text" : "soft",
+          "utf16Offset" : 28
+        },
+        {
+          "box" : [
+            0.31875,
+            0.825,
+            0.035417,
+            0.05
+          ],
+          "text" : "with",
+          "utf16Offset" : 33
+        },
+        {
+          "box" : [
+            0.35625,
+            0.825,
+            0.035417,
+            0.05
+          ],
+          "text" : "salt.",
+          "utf16Offset" : 38
+        },
+        {
+          "box" : [
+            0.39375,
+            0.825,
+            0.03125,
+            0.05
+          ],
+          "text" : "The",
+          "utf16Offset" : 44
+        },
+        {
+          "box" : [
+            0.427083,
+            0.825,
+            0.042361,
+            0.05
+          ],
+          "text" : "lamp",
+          "utf16Offset" : 48
+        }
+      ],
+      "text" : "ledger whose pages had gone soft with salt. The lamp"
+    },
+    {
+      "box" : [
+        0.043056,
+        0.8875,
+        0.380556,
+        0.05
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.043056,
+            0.8875,
+            0.056667,
+            0.05
+          ],
+          "text" : "burned",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.101736,
+            0.888333,
+            0.03625,
+            0.048333
+          ],
+          "text" : "until",
+          "utf16Offset" : 7
+        },
+        {
+          "box" : [
+            0.14,
+            0.888333,
+            0.066458,
+            0.048333
+          ],
+          "text" : "morning",
+          "utf16Offset" : 13
+        },
+        {
+          "box" : [
+            0.208472,
+            0.888333,
+            0.044306,
+            0.048333
+          ],
+          "text" : "while",
+          "utf16Offset" : 21
+        },
+        {
+          "box" : [
+            0.254792,
+            0.888333,
+            0.026181,
+            0.048333
+          ],
+          "text" : "the",
+          "utf16Offset" : 27
+        },
+        {
+          "box" : [
+            0.282986,
+            0.888333,
+            0.032222,
+            0.048333
+          ],
+          "text" : "tide",
+          "utf16Offset" : 31
+        },
+        {
+          "box" : [
+            0.317222,
+            0.888333,
+            0.038264,
+            0.048333
+          ],
+          "text" : "rose",
+          "utf16Offset" : 36
+        },
+        {
+          "box" : [
+            0.3575,
+            0.888333,
+            0.03625,
+            0.048333
+          ],
+          "text" : "over",
+          "utf16Offset" : 41
+        },
+        {
+          "box" : [
+            0.395764,
+            0.8875,
+            0.027847,
+            0.05
+          ],
+          "text" : "the",
+          "utf16Offset" : 46
+        }
+      ],
+      "text" : "burned until morning while the tide rose over the"
+    },
+    {
+      "box" : [
+        0.043056,
+        0.95,
+        0.425,
+        0.045833
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.043056,
+            0.95,
+            0.064028,
+            0.045833
+          ],
+          "text" : "harbour",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.108958,
+            0.95,
+            0.03375,
+            0.045
+          ],
+          "text" : "wall",
+          "utf16Offset" : 8
+        },
+        {
+          "box" : [
+            0.144583,
+            0.95,
+            0.031875,
+            0.045
+          ],
+          "text" : "and",
+          "utf16Offset" : 13
+        },
+        {
+          "box" : [
+            0.178333,
+            0.95,
+            0.028125,
+            0.045
+          ],
+          "text" : "the",
+          "utf16Offset" : 17
+        },
+        {
+          "box" : [
+            0.208333,
+            0.95,
+            0.039375,
+            0.045
+          ],
+          "text" : "gulls",
+          "utf16Offset" : 21
+        },
+        {
+          "box" : [
+            0.249583,
+            0.95,
+            0.054375,
+            0.045
+          ],
+          "text" : "waited",
+          "utf16Offset" : 27
+        },
+        {
+          "box" : [
+            0.305833,
+            0.95,
+            0.0225,
+            0.045
+          ],
+          "text" : "on",
+          "utf16Offset" : 34
+        },
+        {
+          "box" : [
+            0.330208,
+            0.95,
+            0.046875,
+            0.045
+          ],
+          "text" : "every",
+          "utf16Offset" : 37
+        },
+        {
+          "box" : [
+            0.378958,
+            0.95,
+            0.03375,
+            0.045
+          ],
+          "text" : "roof",
+          "utf16Offset" : 43
+        },
+        {
+          "box" : [
+            0.414583,
+            0.95,
+            0.0225,
+            0.045
+          ],
+          "text" : "for",
+          "utf16Offset" : 48
+        },
+        {
+          "box" : [
+            0.438958,
+            0.95,
+            0.029097,
+            0.045833
+          ],
+          "text" : "the",
+          "utf16Offset" : 52
+        }
+      ],
+      "text" : "harbour wall and the gulls waited on every roof for the"
+    }
+  ],
+  "name" : "cut-below",
+  "pointer" : "gulls",
+  "recordedBy" : "RecognitionRecorder (ScreenTextRecogniser.recognise + recogniseWhole), synthetic text",
+  "region" : [
+    900,
+    300
+  ]
+}

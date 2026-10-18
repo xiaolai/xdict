@@ -78,6 +78,7 @@ final class ScriptedHoverReader: HoverReading {
     }
 
     var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
+    var onCaptureReleased: (@MainActor () -> Void)?
     private(set) var asks: [Ask] = []
     private(set) var remembered: [String] = []
     private(set) var forgotten: [String] = []
@@ -131,6 +132,12 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     var lane: LaneState = .idle
     private(set) var reads = 0
     private(set) var textReads = 0
+    /// What the recogniser answers (plan-capture WI-4), and whether it hangs until `finishCapture`.
+    var recognition: Result<Recognition, RecognitionError> = .failure(.nothingUnderPointer)
+    var hangs = false
+    private(set) var recognitions = 0
+    private(set) var recognisedWindows: [ListedWindow] = []
+    private let hung = Mutex<[CheckedContinuation<Void, Never>]>([])
 
     func listedWindows() -> [ListedWindow] { windows }
 
@@ -149,6 +156,18 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     }
 
     func laneState() -> LaneState { lane }
+
+    func recognise(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> Recognition {
+        recognitions += 1
+        recognisedWindows.append(window)
+        if hangs { await withCheckedContinuation { continuation in hung.withLock { $0.append(continuation) } } }
+        return try recognition.get()
+    }
+
+    /// Lets every hung capture return.
+    func finishCapture() {
+        for continuation in hung.withLock({ taken in defer { taken = [] }; return taken }) { continuation.resume() }
+    }
 }
 
 enum HoverFixtures {

@@ -1,0 +1,94 @@
+{
+  "about" : "A Chinese sentence and a Latin one on one line; the pointer on the Latin word. Vision, detecting the line's language, read the Chinese half as Latin letters, as recorded.",
+  "expect" : {
+    "excludes" : [
+      "潮水"
+    ],
+    "mayBeCut" : false,
+    "sentence" : "The tide was high tonight.",
+    "wantsMore" : 0,
+    "word" : "tide"
+  },
+  "lines" : [
+    {
+      "box" : [
+        0.045712,
+        0.459782,
+        0.448857,
+        0.087245
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.045712,
+            0.459782,
+            0.166616,
+            0.082082
+          ],
+          "text" : "TA1EE.",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.215433,
+            0.462887,
+            0.045853,
+            0.079168
+          ],
+          "text" : "The",
+          "utf16Offset" : 7
+        },
+        {
+          "box" : [
+            0.26439,
+            0.463782,
+            0.042589,
+            0.079108
+          ],
+          "text" : "tide",
+          "utf16Offset" : 11
+        },
+        {
+          "box" : [
+            0.310084,
+            0.464618,
+            0.042589,
+            0.079108
+          ],
+          "text" : "was",
+          "utf16Offset" : 16
+        },
+        {
+          "box" : [
+            0.355777,
+            0.465454,
+            0.049117,
+            0.079227
+          ],
+          "text" : "high",
+          "utf16Offset" : 20
+        },
+        {
+          "box" : [
+            0.407997,
+            0.466409,
+            0.086572,
+            0.080617
+          ],
+          "text" : "tonight.",
+          "utf16Offset" : 25
+        }
+      ],
+      "text" : "TA1EE. The tide was high tonight."
+    }
+  ],
+  "name" : "chinese-and-latin",
+  "pointer" : "tide",
+  "recordedBy" : "RecognitionRecorder (ScreenTextRecogniser.recognise + recogniseWhole), synthetic text",
+  "region" : [
+    900,
+    300
+  ]
+}

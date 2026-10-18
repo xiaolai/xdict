@@ -1,8 +1,8 @@
 #!/bin/bash
 # The E2E kit for the entry view's stages (plan-macos-v1 WI-4): the development lab as a signed app, the fixtures the
 # core's own MDX writer makes from `conformance/fixtures`, the observers and the analysis, and the pointer helper; the
-# drag source (WI-5); the keyboard helper, the lookup stage's driver and the app's hostile run (WI-6).
-# Built here, run on the E2E Mac only (`Tools/e2e.sh`); **nothing here launches anything**.
+# drag source (WI-5); the keyboard helper, the lookup stage's driver and the app's hostile run (WI-6); the capture lab,
+# `--read-point` (plan-capture WI-4). Built here, run on the E2E Mac only (`Tools/e2e.sh`); **nothing here launches anything**.
 #
 #   build-lab.sh             writes .build/e2e-kit/ whole, or fails
 #   build-lab.sh --app-only  only the signed lab, into .build/lab-kit/ (Tools/gallery/lab.sh: compiles nothing here)
@@ -59,6 +59,37 @@ codesign --force --options runtime --timestamp=none --sign "$identity" "$APP" >/
 codesign --verify --strict "$APP" || fail "$APP does not verify"
 [ "$APP_ONLY" = 1 ] && { echo "build-lab: $APP signed by $identity"; exit 0; }
 
+# **The capture lab** (plan-capture WI-4): `--read-point X Y` through hover's own reader, a deputy for whoever runs it, so
+# never in XDict.app (`Tools/build-bundle.sh` refuses it there and checks this binary holds what it searches for). Its own
+# identifier and the same Developer ID: its Accessibility and Screen Recording grants are its own, given by hand on the E2E
+# Mac, and none of XDict.app's are borrowed. Background only: it shows nothing and prints one line.
+readonly CAPTURE_LAB=XDictCaptureLab
+readonly CAPTURE_APP=$KIT/$CAPTURE_LAB.app
+if [ -z "${XDICT_REMOTE_PRODUCTS:-}" ]; then
+    swift build -c release --product "$CAPTURE_LAB" >/dev/null || fail "swift build of $CAPTURE_LAB failed"
+fi
+[ -x "$products/$CAPTURE_LAB" ] || fail "swift build produced no $CAPTURE_LAB"
+mkdir -p "$CAPTURE_APP/Contents/MacOS"
+cp "$products/$CAPTURE_LAB" "$CAPTURE_APP/Contents/MacOS/$CAPTURE_LAB"
+cat >"$CAPTURE_APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleIdentifier</key><string>ai.xdict.lab.capture</string>
+    <key>CFBundleName</key><string>XDictCaptureLab</string>
+    <key>CFBundleExecutable</key><string>XDictCaptureLab</string>
+    <key>CFBundlePackageType</key><string>APPL</string>
+    <key>CFBundleShortVersionString</key><string>0</string>
+    <key>CFBundleVersion</key><string>0</string>
+    <key>LSMinimumSystemVersion</key><string>27.0</string>
+    <key>LSBackgroundOnly</key><true/>
+</dict>
+</plist>
+PLIST
+codesign --force --options runtime --timestamp=none --sign "$identity" "$CAPTURE_APP" >/dev/null
+codesign --verify --strict "$CAPTURE_APP" || fail "$CAPTURE_APP does not verify"
+
 # The fixtures, by the core's writer: every folder of conformance/fixtures, the battery and the twins among them.
 kit_abs=$(cd "$KIT" && pwd)
 (cd ../../core && cargo run -q -p xdict-conformance --bin conformance-fixtures -- "$kit_abs/fixtures") \
@@ -83,4 +114,4 @@ cp Tools/anywhere/drive.py Tools/anywhere/front.py Tools/anywhere/hostcondition.
 # The WI-10 measurement's driver and its arithmetic.
 mkdir -p "$KIT/measure"
 cp Tools/measure/drive.py Tools/measure/stats.py "$KIT/measure/"
-echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"
+echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app and $CAPTURE_LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"

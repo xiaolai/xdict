@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "4c3df6536641b1bde791e1e48ff98d907d5814cf0e7752f8519397f2f3bc887f"
+    public static let sourceDigest = "9c1ae4bd92260192a6bd419a22eb8027e601b0c0e7735752b127f394765be240"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -380,6 +380,18 @@ public enum Tokens {
         public static let hitDown: CGFloat = 2
         /// How far a resting pointer may drift and still be resting: a hand held on a word twitches by a point or two, and counting that as movement restarted the dwell every time (XiaolaiDict ADR-0045).
         public static let restDrift: CGFloat = 2
+        /// The height of the first strip the recogniser reads around the pointer's row: XiaolaiDict measured 140 reading three of five rows of a paragraph and 300 the whole of it (ADR-0016 there, 2026-10-11).
+        public static let stripStart: CGFloat = 300
+        /// How far a strip grows on a side where its sentence ran into the edge, per read: XiaolaiDict's measured step, a taller strip costing little more than the one before (ADR-0016 there).
+        public static let stripStep: CGFloat = 150
+        /// The tallest strip the recogniser reads, so growing stays inside the capture deadline (XiaolaiDict ADR-0016, 2026-10-11).
+        public static let stripMost: CGFloat = 600
+        /// In band pixels: how close to a tile's inner edge a recognised box may end and still be called cut by it, so a word on a tile boundary is read from the tile that saw it whole (XiaolaiDict ADR-0016 tiling addendum).
+        public static let tileEdgeSlack: CGFloat = 4
+        /// In band pixels: how much ink a dropped run may have seen that no kept run covers before the merged reading is called missing text (XiaolaiDict ADR-0016 tiling addendum).
+        public static let tileHoleSlack: CGFloat = 16
+        /// How far two readings of one window's frame, the compositor's and ScreenCaptureKit's, may disagree and still be the same frame: the two round independently (XiaolaiDict ScreenTextRecogniser).
+        public static let frameDrift: CGFloat = 1
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).

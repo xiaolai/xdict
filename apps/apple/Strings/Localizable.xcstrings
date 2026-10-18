@@ -1501,6 +1501,38 @@
         }
       }
     },
+    "Allowed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allowed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已允许"
+          }
+        }
+      }
+    },
+    "Allow…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "允许…"
+          }
+        }
+      }
+    },
     "Already imported" : {
       "localizations" : {
         "en" : {
@@ -1891,6 +1923,22 @@
         }
       }
     },
+    "Check Again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "再次检查"
+          }
+        }
+      }
+    },
     "Check the spelling, or try a shorter form of the word." : {
       "localizations" : {
         "en" : {
@@ -2209,6 +2257,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在拷贝…"
+          }
+        }
+      }
+    },
+    "Could not tell whether Screen Recording is allowed. Check again in a moment." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Could not tell whether Screen Recording is allowed. Check again in a moment."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法确定是否已允许录屏。请稍后再次检查。"
           }
         }
       }
@@ -3031,6 +3095,22 @@
         }
       }
     },
+    "Hover needs Screen Recording to read words in apps that do not share their text. Allow it in the Screen Recording row." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover needs Screen Recording to read words in apps that do not share their text. Allow it in the Screen Recording row."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停查词需要“录屏”权限，才能读取不共享文本的应用中的词语。请在“录屏”一行中允许。"
+          }
+        }
+      }
+    },
     "Hover reads nothing in these apps. Looking up a selection works in any app." : {
       "localizations" : {
         "en" : {
@@ -3043,6 +3123,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "悬停在这些应用中什么也不读取。查选中的内容在任何应用中都可用。"
+          }
+        }
+      }
+    },
+    "Hover reads words from the screen where an app does not share its text." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover reads words from the screen where an app does not share its text."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "应用不共享文本时，悬停查词会从屏幕读取词语。"
           }
         }
       }
@@ -3427,6 +3523,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拉丁字母"
+          }
+        }
+      }
+    },
+    "Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让悬停查词读取不共享文本的应用中的词语，例如终端和图片。macOS 只会询问一次。"
           }
         }
       }
@@ -3987,6 +4099,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "未设置"
+          }
+        }
+      }
+    },
+    "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未允许。请在“系统设置 ▸ 隐私与安全性 ▸ 录屏与系统录音”中打开 XDict，然后再次检查。"
           }
         }
       }
@@ -4938,6 +5066,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用系统语音按字面朗读“%@”"
+          }
+        }
+      }
+    },
+    "Screen Recording" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Recording"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "录屏"
           }
         }
       }
@@ -6694,22 +6838,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "任何文字的词"
-          }
-        }
-      }
-    },
-    "Words in apps that do not share their text need Screen Recording, which you can allow in Set Up XDict." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Words in apps that do not share their text need Screen Recording, which you can allow in Set Up XDict."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不共享文本的应用中的词语需要“录屏”权限，可以在“设置 XDict”中允许。"
           }
         }
       }
