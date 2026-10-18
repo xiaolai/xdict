@@ -21,6 +21,10 @@ public enum AppleImportAcceptance {
     }
 
     public static let stylesheet = "body { color: black }"
+    /// Two variants of one pronunciation, each marked by Apple's `d:prn` (synthetic text). The stylesheet selects no
+    /// attribute, so the markers survive only because the converter keeps them (ADR-0013 decision 1).
+    static let pronunciations =
+        "<span class=\"ph t_respell\" d:prn=\"US\">thurd</span><span class=\"ph t_IPA\" d:prn=\"US\">/thurd/</span>"
     public static let image: [UInt8] = [0x89, 0x50, 0x4e, 0x47]
 
     /// Writes the acceptance bundle under `root`, changed as `variant` says.
@@ -29,7 +33,7 @@ public enum AppleImportAcceptance {
         let entries: [SyntheticAppleBundle.Entry] = [
             ("e1", "alpha", "<p>first <a href=\"x-dictionary:r:e2\">beta</a></p>", variant == .redirectTarget ? [] : ["alphas"]),
             ("e2", "beta", second, []),
-            ("e3", "gamma", "<p>third</p>", variant == .redirectTarget ? ["gammas", "alphas"] : ["gammas"]),
+            ("e3", "gamma", "<p>third " + pronunciations + "</p>", variant == .redirectTarget ? ["gammas", "alphas"] : ["gammas"]),
         ]
         var o = SyntheticAppleBundle.Overrides()
         o.css = stylesheet
@@ -47,7 +51,8 @@ public enum AppleImportAcceptance {
         ("alpha", link + "<div id=\"e1\" class=\"entry\"><p>first <a href=\"entry://beta\">beta</a></p></div>"),
         ("alphas", "@@@LINK=alpha"),
         ("beta", link + "<div id=\"e2\" class=\"entry\"><p>second</p></div>"),
-        ("gamma", link + "<div id=\"e3\" class=\"entry\"><p>third</p></div>"),
+        ("gamma", link + "<div id=\"e3\" class=\"entry\"><p>third <span class=\"ph t_respell\" data-d-prn=\"US\">thurd</span>"
+            + "<span class=\"ph t_IPA\" data-d-prn=\"US\">/thurd/</span></p></div>"),
         ("gammas", "@@@LINK=gamma"),
     ]
 
