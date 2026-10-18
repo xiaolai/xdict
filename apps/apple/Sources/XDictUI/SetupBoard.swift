@@ -106,11 +106,12 @@ public enum SetupLanguageCheck {
     /// mdd) and those Apple's Simplified Chinese keeps in Latin letters ("任何 App", "Control 键"). Whole words only, so
     /// "Apple" or "Applications" still count.
     public static func isEnglish(_ text: String) -> Bool {
-        text.split { !($0.isASCII && $0.isLetter) }.contains { $0.count >= 3 && !keptNames.contains(String($0)) }
+        text.split { !($0.isASCII && $0.isLetter) }.contains { $0.count >= 3 && !keptNames.contains($0.lowercased()) }
     }
 
-    private static let keptNames: Set<String> = ["XDict", "MDict", "mdx", "mdd", "App", "Control", "Option", "Command",
-                                                 "Shift"]
+    /// Lowercase, compared lowercased: written as the names, these would read as prose to the string catalog's check.
+    private static let keptNames: Set<String> = ["xdict", "mdict", "mdx", "mdd", "app", "control", "option", "command",
+                                                 "shift"]
 
     public static func english(in texts: [String]) -> [String] { texts.filter(isEnglish) }
 
