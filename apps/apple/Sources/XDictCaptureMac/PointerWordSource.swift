@@ -14,6 +14,8 @@ public protocol PointerWordSource: Sendable {
         at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome
+    /// What the one lane is doing now — for the "capture stuck" notice (ADR-0014 decision 6), which the consumer words.
+    func laneState() -> LaneState
 }
 
 /// **The real screen, through the one lane as hover work** (XDict ADR-0014 decision 6): coalesced with the hovers
@@ -75,6 +77,8 @@ public struct SystemPointerWords: PointerWordSource {
             }
         })
     }
+
+    public func laneState() -> LaneState { lane.current() }
 
     /// The lane's refusal as the read's failure: a stuck lane is an app not answering; a hover that waited too long is
     /// one past its deadline.

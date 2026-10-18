@@ -3,27 +3,60 @@ import ApplicationServices
 import Observation
 import SwiftUI
 import XDictAnywhere
+import XDictCapture
 import XDictCaptureMac
 import XDictBase
 import XDictContract
 import XDictEntryView
+import XDictLibrary
 import XDictSearch
 import XDictUI
 import os
-import XDictTokens
 
 /// **Lookup from anywhere** (plan-macos-v1 WI-8): a selection in any app reaches a panel by it — by the lookup shortcut
-/// (the selection read through the Accessibility API), by the Service "Look Up in XDict" (the text macOS hands over), or
-/// by the menu-bar item — and the panel expands into the main window keeping query, dictionary and scroll (I5).
-/// Dismissal by Escape or a click elsewhere leaves the reader's app in front, its next key reaching it (I6): **the panel
-/// never activates XDict and never becomes key**.
+/// (the selection read through the Accessibility API), by the Service "Look Up in XDict" (the text macOS hands over), by
+/// the menu-bar item, or by hovering a word with the hover key (plan-capture WI-3) — and the panel expands into the main
+/// window keeping query, dictionary and scroll (I5). Dismissal by Escape or a click elsewhere leaves the reader's app in
+/// front, its next key reaching it (I6): **the panel never activates XDict and never becomes key**.
+///
+/// **It is capture's sink** (ADR-0014 decision 4): every trigger's request is numbered in the one `CaptureRequests` when it
+/// is asked, the shortcut's, the Service's and the menu's claiming presentation at once and a hover's when its word
+/// arrives; each term is handed over by `present`, and each request ends exactly once — the popover's acknowledgement per
+/// generation (`PresentationAcks`), or cancelled. **Only the term goes to search and the hooks**; a hover's sentence stays
+/// in the one ephemeral `CaptureContextSession`, dropped when the panel closes (decision 9).
 @MainActor
 @Observable
 final class LookupAnywhere {
     /// Where a lookup came from: what the instruments record, and what places the panel.
-    enum Source: String { case shortcut, service, menu }
+    enum Source: String {
+        case shortcut, service, menu, hover
+
+        init(_ trigger: CaptureTrigger) {
+            switch trigger {
+            case .selection: self = .shortcut
+            case .service: self = .service
+            case .menu: self = .menu
+            case .pointerGesture: self = .hover
+            }
+        }
+    }
 
     static let shared = LookupAnywhere()
+    /// Which launch this is (`main.swift`): in one a development instrument drives, hover is not started, so a held key
+    /// in a driven run never opens a lookup nobody asked for.
+    static var launch: HoverLaunch = .reader
+
+    /// Hover's settings, pause and watcher, and **the app's one book of capture requests**, every trigger's.
+    @ObservationIgnored private(set) lazy var hover = HoverControl(
+        defaults: .standard, requests: CaptureRequests(),
+        scripts: { HoverScripts.allowed(searchLanguages: XDictApp.library.entries.filter(\.enabled).map(\.languages.pair.search)) })
+    private var requests: CaptureRequests { hover.requests }
+    /// The presented request's context, and nothing else of it: memory only, cleared when the panel closes.
+    @ObservationIgnored private let contextSession = CaptureContextSession()
+    /// What the popover owes the request it presents.
+    @ObservationIgnored private var acks = PresentationAcks()
+    /// The query whose entry, or settled nothing-found, the visible popover has drawn.
+    @ObservationIgnored private var drawnQuery: String?
 
     /// How long the selection may take before the panel shows by the pointer, saying it is reading: the panel's budget is
     /// 1 s from the key (the E2E `panel.deadline` sub-stage), and a hung app may take the read's whole 2 s.
@@ -98,6 +131,8 @@ final class LookupAnywhere {
             MenuBarActions.showDictionaries(id)
         }
         state = made
+        hover.watcher.sink = self
+        hover.startAtLaunch(Self.launch)
     }
 
     // MARK: - Asking
@@ -105,10 +140,18 @@ final class LookupAnywhere {
     /// The shortcut: the selection of the app in front, or — with the panel showing that very lookup — expansion, the
     /// panel's keyboard route (it takes no keys of its own).
     func pressed() {
+        // **Numbered now, at the key**, before anything is read (ADR-0014 decision 4).
+        pressed(as: requests.beginPresenting(.selection))
+    }
+
+    /// The shortcut or the menu, for `request`.
+    private func pressed(as request: CaptureRequest) {
         let pressedAt = ContinuousClock.now
-        observe?("pressed", [:])
+        let source = Source(request.trigger)
+        observe?("pressed", ["request": request.number])
         guard let front = FrontApp.frontmost(), front.pid != getpid() || !isShown else {
-            if isShown { expand() } else { show(.refused(.noApp), query: nil, near: nil, source: .shortcut) }
+            requests.cancel(request)
+            if isShown { expand() } else { show(.refused(.noApp), query: nil, near: nil, source: source) }
             return
         }
         // No grant: the system's own request, once; the panel says what to do; the grant resumes this lookup.
@@ -116,12 +159,13 @@ final class LookupAnywhere {
         case .trusted:
             break
         case .asked, .waiting:
-            gate.onGranted = { [weak self] in self?.resume(front) }
+            requests.cancel(request)
+            gate.onGranted = { [weak self] in self?.resume(front, trigger: request.trigger) }
             startPolling()
-            show(.refused(.notTrusted), query: nil, near: nil, source: .shortcut)
+            show(.refused(.notTrusted), query: nil, near: nil, source: source)
             return
         }
-        read(front, pressedAt: pressedAt)
+        read(front, request: request, pressedAt: pressedAt)
     }
 
     @ObservationIgnored let gate = AccessibilityGate(check: AccessibilityGate.system)
@@ -138,40 +182,59 @@ final class LookupAnywhere {
         }
     }
 
-    /// The grant arrived while the request was open: the lookup that found none, carried on.
-    private func resume(_ front: FrontApp) {
+    /// The grant arrived while the request was open: the lookup that found none, carried on — as a new request of the same
+    /// trigger, since the one that found no grant ended.
+    private func resume(_ front: FrontApp, trigger: CaptureTrigger) {
         observe?("granted", [:])
         guard NSRunningApplication(processIdentifier: front.pid) != nil else { return }
-        read(front, pressedAt: .now)
+        read(front, request: requests.beginPresenting(trigger), pressedAt: .now)
     }
 
-    private func read(_ front: FrontApp, pressedAt: ContinuousClock.Instant) {
+    private func read(_ front: FrontApp, request: CaptureRequest, pressedAt: ContinuousClock.Instant) {
         reading?.cancel()
+        let source = Source(request.trigger)
         reading = Task { [weak self] in
             // The panel shows that it is reading if the read outlasts the grace; the answer replaces that.
             let waiting = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: Self.readGrace)
                 guard !Task.isCancelled else { return }
-                self?.show(.reading, query: nil, near: nil, source: .shortcut)
+                self?.show(.reading, query: nil, near: nil, source: source)
             }
             let outcome = await SelectionReader.read(from: front)
             waiting.cancel()
-            guard let self, !Task.isCancelled else { return }
-            self.answer(outcome, pressedAt: pressedAt)
+            guard let self else { return }
+            guard !Task.isCancelled else {
+                self.requests.cancel(request)
+                return
+            }
+            self.answer(outcome, request: request, pressedAt: pressedAt)
         }
     }
 
-    private func answer(_ outcome: SelectionOutcome, pressedAt: ContinuousClock.Instant) {
+    private func answer(_ outcome: SelectionOutcome, request: CaptureRequest, pressedAt: ContinuousClock.Instant) {
+        let source = Source(request.trigger)
         switch outcome {
-        case .selected(let selected, let box):
+        case .selected(let selected, _):
             if isShown, notice == .none, state?.model.lookup?.query == selected.text {
+                requests.cancel(request)
                 expand()  // the same selection again: the keyboard route to the main window
                 return
             }
-            show(.none, query: selected.text, near: box.map { PanelPlacement.flipped($0.rect, primaryHeight: Self.primaryHeight) },
-                 source: .shortcut)
+            do {
+                guard let term = try outcome.capturedTerm(trigger: request.trigger) else {
+                    requests.cancel(request)
+                    return
+                }
+                // Shown by `deliver`, the sink's one way in; a request overtaken meanwhile is refused and ends there.
+                _ = requests.present(term, for: request, to: self)
+            } catch {
+                // A selection the validating constructor refuses (a control character in it) is not a term.
+                requests.cancel(request)
+                show(.refused(.noWord(app: selected.app.name)), query: nil, near: nil, source: source)
+            }
         case .nothing(let refusal):
-            show(.refused(refusal), query: nil, near: nil, source: .shortcut)
+            requests.cancel(request)
+            show(.refused(refusal), query: nil, near: nil, source: source)
         }
         let elapsed = ContinuousClock.now - pressedAt
         log.info("selection answered in \(elapsed.components.attoseconds / 1_000_000_000_000_000 + elapsed.components.seconds * 1000) ms")
@@ -183,7 +246,9 @@ final class LookupAnywhere {
     /// request, so the reader's app — the last other app in front — is put back in front, and the panel's dismissal
     /// leaves it there with its next key.
     func service(_ raw: String?) {
-        observe?("service", ["text": raw ?? NSNull()])
+        // **Numbered now, as macOS hands the text over**, before the selection is read for its place.
+        let request = requests.beginPresenting(.service)
+        observe?("service", ["text": raw ?? NSNull(), "request": request.number])
         switch LookupText.term(raw) {
         case .term(let text):
             let previous = lastOtherApp
@@ -200,37 +265,86 @@ final class LookupAnywhere {
                     if front?.processIdentifier == getpid() { previous?.activate() }
                     if let previous, front == previous { break }
                 }
-                var word: CGRect?
+                // The click in Accessibility's coordinates (y down): the element there holds the selection where the
+                // reader's app, back in front after the Services menu, names no focused one (Notes, TextEdit).
+                let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
+                var outcome: SelectionOutcome?
                 if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    // The click in Accessibility's coordinates (y down): the element there holds the selection where
-                    // the reader's app, back in front after the Services menu, names no focused one (Notes, TextEdit).
-                    let under = clicked.map { CGPoint(x: $0.x, y: Self.primaryHeight - $0.y) }
-                    let outcome = await SelectionReader.read(from: reader, clicked: under)
+                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg)
                     self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
-                    if case .selected(let selected, let box?) = outcome, selected.text == text {
-                        word = PanelPlacement.flipped(box.rect, primaryHeight: Self.primaryHeight)
-                    }
                 }
-                // No box (Chrome gives none): where the reader Control-clicked the selection, as a word of no width.
-                if word == nil, let clicked { word = CGRect(x: clicked.x, y: clicked.y - Tokens.Inset.clickedWordRise,
-                                                            width: Tokens.Size.pointAnchor.width, height: Tokens.Row.clickedWord) }
-                self.show(.none, query: text, near: word, source: .service)
+                // **The Service's text is the query**, whatever the selection now says; the read supplies the box only
+                // where it agrees, else where the reader Control-clicked, as a word of no width (Chrome gives no box).
+                do {
+                    let term = try SelectionReader.serviceTerm(
+                        text, read: outcome, source: SourceApp(bundleID: previous?.bundleIdentifier), clicked: under)
+                    _ = self.requests.present(term, for: request, to: self)
+                } catch {
+                    self.requests.cancel(request)
+                    self.show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
+                }
             }
-        case .empty: show(.refused(.nothingSelected(app: "")), query: nil, near: nil, source: .service)
-        case .noWord: show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
-        case .tooLong(let characters): show(.refused(.tooLong(app: "", characters: characters)), query: nil, near: nil,
-                                            source: .service)
+        case .empty:
+            requests.cancel(request)
+            show(.refused(.nothingSelected(app: "")), query: nil, near: nil, source: .service)
+        case .noWord:
+            requests.cancel(request)
+            show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
+        case .tooLong(let characters):
+            requests.cancel(request)
+            show(.refused(.tooLong(app: "", characters: characters)), query: nil, near: nil, source: .service)
         }
     }
 
-    /// The menu-bar item's Look Up Selection: as the shortcut, once the menu has closed and the reader's app is in front
-    /// again.
+    /// The menu-bar item's Look Up Selection: as the shortcut — numbered at the click — once the menu has closed and the
+    /// reader's app is in front again.
     func lookUpFromMenu() {
-        observe?("menu", [:])
+        let request = requests.beginPresenting(.menu)
+        observe?("menu", ["request": request.number])
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
-            self.pressed()
+            self.pressed(as: request)
         }
+    }
+
+    // MARK: - Capture's sink
+
+    /// A term presented for its request: shown in the popover, the term alone to search, its context to the session.
+    private func accept(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
+        guard state != nil else { return .refused }
+        let term = delivery.term
+        contextSession.hold(term.context, request: delivery.request.number, generation: delivery.generation)
+        acks.delivered(delivery.request, generation: delivery.generation, term: term.term)
+        if drawnQuery != term.term { drawnQuery = nil }
+        show(.none, query: term.term, near: PanelAnchor.rect(for: term.box, primaryHeight: Self.primaryHeight),
+             source: Source(delivery.request.trigger))
+        observe?("presented", ["request": delivery.request.number, "generation": delivery.generation,
+                               "trigger": delivery.request.trigger.rawValue])
+        if let ack = acks.shown(popoverVisible: isShown) { acknowledge(ack) }
+        // The same term already drawn in the popover: shown at once, as nothing new will draw.
+        if drawnQuery == term.term, let ack = acks.drew(query: term.term, popoverVisible: isShown) { acknowledge(ack) }
+        return .accepted
+    }
+
+    /// The panel drew a lookup of `query`: the presented request's acknowledgement, where it is that request's.
+    private func drew(query: String?) {
+        guard isShown else { return }
+        drawnQuery = query
+        if let ack = acks.drew(query: query, popoverVisible: isShown) { acknowledge(ack) }
+    }
+
+    /// The panel's placeholder changed: a settled nothing-found is a drawn lookup of its query.
+    fileprivate func placeholderChanged(_ placeholder: EntryPlaceholder) {
+        switch placeholder {
+        case .noResults, .noResultsIncomplete, .noDictionaries: drew(query: state?.model.lookup?.query)
+        case .start, .searching, .none: break
+        }
+    }
+
+    private func acknowledge(_ ack: PresentationAck) {
+        requests.acknowledge(ack.request, generation: ack.generation, ack.outcome)
+        observe?("acknowledged", ["request": ack.request.number, "generation": ack.generation,
+                                  "outcome": ack.outcome.rawValue])
     }
 
     // MARK: - The panel
@@ -289,6 +403,8 @@ final class LookupAnywhere {
     /// oscillates (Codex §3). Polled from here rather than a ResizeObserver in the page: the entry page's scripts are
     /// the confinement's, and the settling an observer would catch happens within those passes.
     private func entryFinished() {
+        // A document finished in the popover: the presented term's, if the panel's query is still its own.
+        drew(query: state?.model.lookup?.query)
         shownEntry += 1
         fit.began(entry: shownEntry)
         let entry = shownEntry
@@ -316,6 +432,12 @@ final class LookupAnywhere {
 
     func close(why: String) {
         reading?.cancel()
+        // **Closing supersedes every request so far** (ADR-0014 decision 4): each still open ends cancelled, a late result
+        // is not presented over the dismissal, and the presented request's context goes with the panel (decision 9).
+        requests.close()
+        contextSession.clear()
+        acks.closed()
+        drawnQuery = nil
         guard let panel, panel.isShown || escape != nil else { return }
         panel.close()
         if let escape { HotkeyCenter.shared.escape.pop(escape) }
@@ -400,6 +522,15 @@ private struct PanelRoot: View {
                             anywhere.close(why: "showDictionaries")
                             MenuBarActions.showDictionaries()
                         })
+            .onChange(of: state.placeholder) { _, placeholder in anywhere.placeholderChanged(placeholder) }
+    }
+}
+
+/// **The sink's one way in** (ADR-0014 decision 4). `CaptureSink` is called synchronously by `CaptureRequests.present`,
+/// which every trigger reaches from the main actor; the assumption is checked, and fails loud where it is wrong.
+extension LookupAnywhere: CaptureSink {
+    nonisolated func deliver(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
+        MainActor.assumeIsolated { accept(delivery) }
     }
 }
 

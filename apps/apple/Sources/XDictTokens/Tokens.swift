@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "699fdcfa03c24f0fb5a9c265534481dd3cdfe1d34b09e4e9bf8b008074a89232"
+    public static let sourceDigest = "4c3df6536641b1bde791e1e48ff98d907d5814cf0e7752f8519397f2f3bc887f"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -370,6 +370,16 @@ public enum Tokens {
         public static let appHostileStrideY: CGFloat = 340
         /// Around a transcription the gallery captures, so its edge glyphs are whole.
         public static let captureMargin: CGFloat = 6
+    }
+
+    /// Capture's distances, in screen points: how far from a word a resting pointer may be, and how far it may drift and still rest (ADR-0014 decision 11). Handed into the capture targets, which may not import the tokens.
+    public enum Capture {
+        /// How far left or right of a word's box a resting pointer may be and still mean it: one rule for every capture path, as XiaolaiDict measured word boxes from text layout, web layout and OCR disagreeing at their edges (screen-word spike, finding 7).
+        public static let hitAcross: CGFloat = 3
+        /// How far above or below a word's box a resting pointer may be and still mean it: tighter than across, since a line above or below is another word (screen-word spike, finding 7).
+        public static let hitDown: CGFloat = 2
+        /// How far a resting pointer may drift and still be resting: a hand held on a word twitches by a point or two, and counting that as movement restarted the dwell every time (XiaolaiDict ADR-0045).
+        public static let restDrift: CGFloat = 2
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).

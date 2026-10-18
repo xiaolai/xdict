@@ -1,0 +1,188 @@
+import ApplicationServices
+import Foundation
+import Synchronization
+import Testing
+import XDictCapture
+@testable import XDictCaptureMac
+
+/// The stand-ins hover's behavioural tests share — **one spelling each** (ported from XiaolaiDict's `HoverTestFakes`, plan-capture
+/// WI-3): two copies of a fake drift, and then a test proves something about the copy.
+
+/// Events a test emits by hand.
+@MainActor
+final class ScriptedHoverEvents: HoverEventSource {
+    private var handler: (@MainActor (HoverEvent) -> Void)?
+    var installs = true
+    private(set) var stops = 0
+
+    func start(_ handler: @escaping @MainActor (HoverEvent) -> Void) -> Bool {
+        guard installs else { return false }
+        self.handler = handler
+        return true
+    }
+
+    func stop() {
+        handler = nil
+        stops += 1
+    }
+
+    func emit(_ event: HoverEvent) { handler?(event) }
+
+    /// Down, up, down with the event's own times.
+    func doubleTap(from instant: TimeInterval, modifier: HoverModifier = .option) {
+        emit(.modifiers([modifier], at: instant, location: nil))
+        emit(.modifiers([], at: instant + 0.08, location: nil))
+        emit(.modifiers([modifier], at: instant + 0.2, location: nil))
+    }
+}
+
+/// Where the pointer is and what is held, set by the test.
+@MainActor
+final class ScriptedPointer {
+    var at = UpPoint(x: 100, y: 100)
+    var held: Set<HoverModifier> = []
+    func read() -> (UpPoint, Set<HoverModifier>) { (at, held) }
+}
+
+/// A settle timer the test fires.
+@MainActor
+final class ManualSchedule {
+    private var pending: [Int: @MainActor () -> Void] = [:]
+    private var serial = 0
+
+    var armed: Int { pending.count }
+
+    func schedule(_ delay: Duration, _ work: @escaping @MainActor () -> Void) -> HoverWatcher.Cancel {
+        serial += 1
+        let mine = serial
+        pending[mine] = work
+        return { [weak self] in self?.pending[mine] = nil }
+    }
+
+    /// Runs whatever is armed, as the timer would.
+    func fire() {
+        let due = pending
+        pending.removeAll()
+        for key in due.keys.sorted() { due[key]?() }
+    }
+}
+
+/// A reader whose reads end when the test says so.
+@MainActor
+final class ScriptedHoverReader: HoverReading {
+    struct Ask: Equatable {
+        let point: CGPoint
+        let held: Set<HoverModifier>
+        let tapped: Bool
+        let request: CaptureRequest
+    }
+
+    var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
+    private(set) var asks: [Ask] = []
+    private(set) var remembered: [String] = []
+    private(set) var forgotten: [String] = []
+    private(set) var hoversEnded = 0
+    private var waiting: [CheckedContinuation<HoverReader.Outcome, Never>] = []
+
+    var pendingReads: Int { waiting.count }
+
+    func read(
+        at point: CGPoint, modifiersHeld: Set<HoverModifier>, tappedTwice: Bool, pointerStillFor: Duration,
+        begin: @MainActor () -> CaptureRequest
+    ) async -> HoverReader.Outcome {
+        asks.append(Ask(point: point, held: modifiersHeld, tapped: tappedTwice, request: begin()))
+        return await withCheckedContinuation { waiting.append($0) }
+    }
+
+    func remember(_ key: String) { remembered.append(key) }
+    func forget(_ key: String) { forgotten.append(key) }
+    func endHover() { hoversEnded += 1 }
+
+    /// Ends the oldest read in flight with a word, for the request the newest ask was given.
+    func answerWord(_ text: String = "hold", bounds: ReadBounds? = nil) {
+        guard let ask = asks.last else { return }
+        answer(.word(HoverFixtures.hit(text, bounds: bounds), request: ask.request, key: "key-\(text)-\(ask.request.number)"))
+    }
+
+    func answer(_ outcome: HoverReader.Outcome) {
+        guard !waiting.isEmpty else { return }
+        waiting.removeFirst().resume(returning: outcome)
+    }
+}
+
+/// The app's side: a sink that takes every term it is handed and records it.
+final class RecordingSink: CaptureSink {
+    let delivered = Mutex<[CaptureDelivery]>([])
+    func deliver(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
+        delivered.withLock { $0.append(delivery) }
+        return .accepted
+    }
+    var terms: [String] { delivered.withLock { $0.map(\.term.term) } }
+    var all: [CaptureDelivery] { delivered.withLock { $0 } }
+}
+
+/// A screen whose Accessibility answers what the test scripted — through the one combined job, as the real one.
+final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
+    /// Read only after the test has set it up, from the one read in flight.
+    var targetOutcome: PointerWordReader.TargetOutcome = .none(.nothingAtPointer)
+    var readOutcome: PointerWordReader.Outcome = .miss(.noText(app: "TextEdit", role: nil))
+    var hostReading: HostReading = .notWebContent
+    var windows: [ListedWindow] = []
+    var lane: LaneState = .idle
+    private(set) var reads = 0
+    private(set) var textReads = 0
+
+    func listedWindows() -> [ListedWindow] { windows }
+
+    func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome {
+        targetOutcome
+    }
+
+    func readUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
+        budget: Duration
+    ) async -> PointerWordReader.GatedOutcome {
+        reads += 1
+        if refuses(hostReading) { return .refused(hostReading) }
+        textReads += 1
+        return .read(readOutcome)
+    }
+
+    func laneState() -> LaneState { lane }
+}
+
+enum HoverFixtures {
+    /// The tolerance a resting pointer may drift by, as XiaolaiDict measured it (2 pt; the app hands in its token).
+    static let rest: CGFloat = 2
+
+    /// A word read through the text-range dialect, its sentence the word itself.
+    static func hit(_ text: String, bundleID: String = "com.apple.TextEdit", bounds: ReadBounds? = nil) -> PointerWordReader.Hit {
+        guard let word = TextSegmenter.word(in: text, utf16Offset: 0) else { preconditionFailure("no word in \(text)") }
+        return PointerWordReader.Hit(word: word, acquisition: .textRange, appName: "TextEdit", bundleID: bundleID, bounds: bounds)
+    }
+
+    /// An Accessibility target in an app that is not this one. The element is never asked anything: the scripted screen
+    /// answers instead.
+    static func target(bundleID: String = "com.apple.TextEdit") -> PointerWordReader.Target {
+        PointerWordReader.Target(element: AXUIElementCreateApplication(getpid() + 1), appName: "TextEdit", bundleID: bundleID)
+    }
+
+    /// Lets already-started work run, for an assertion that something did **not** happen. It cannot prove an absence,
+    /// only give the absence a fair chance to be broken: a slow machine can make it miss a defect, never invent one.
+    @MainActor
+    static func drain() async {
+        for turn in 0..<250 {
+            if turn < 200 { await Task.yield() } else { try? await Task.sleep(for: .milliseconds(1)) }
+        }
+    }
+
+    /// Lets started work run until `condition` holds, a millisecond a turn, bounded so a failure ends rather than hangs.
+    @MainActor
+    static func settle(until condition: @MainActor () -> Bool) async {
+        let end = ContinuousClock.now + .seconds(10)
+        while ContinuousClock.now < end {
+            if condition() { return }
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+    }
+}

@@ -1453,6 +1453,22 @@
         }
       }
     },
+    "Add an App…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an App…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加应用…"
+          }
+        }
+      }
+    },
     "Added" : {
       "localizations" : {
         "en" : {
@@ -1517,6 +1533,22 @@
         }
       }
     },
+    "Always" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Always"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "始终"
+          }
+        }
+      }
+    },
     "American English" : {
       "localizations" : {
         "en" : {
@@ -1529,6 +1561,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "美式英语"
+          }
+        }
+      }
+    },
+    "An app has stopped answering, so hover cannot read words until it does. Looking up a selection with the shortcut still works." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An app has stopped answering, so hover cannot read words until it does. Looking up a selection with the shortcut still works."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有个应用停止了响应，在它恢复之前，悬停无法读取词语。用快捷键查选中的内容仍然可用。"
           }
         }
       }
@@ -1909,6 +1957,22 @@
         }
       }
     },
+    "Chinese characters" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chinese characters"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汉字"
+          }
+        }
+      }
+    },
     "Choose the dictionaries installed on this Mac to add. XDict converts a copy of each once; the dictionaries themselves are not changed." : {
       "localizations" : {
         "en" : {
@@ -1973,6 +2037,22 @@
         }
       }
     },
+    "Command %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Command %@"
+          }
+        }
+      }
+    },
     "Configure Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -2017,6 +2097,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Control"
+          }
+        }
+      }
+    },
+    "Control %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Control %@"
           }
         }
       }
@@ -2693,6 +2789,22 @@
         }
       }
     },
+    "For %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "For %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@"
+          }
+        }
+      }
+    },
     "Format" : {
       "localizations" : {
         "en" : {
@@ -2753,6 +2865,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通用"
+          }
+        }
+      }
+    },
+    "Gesture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gesture"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "手势"
           }
         }
       }
@@ -2851,6 +2979,86 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Hold" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住"
+          }
+        }
+      }
+    },
+    "Hover Is Off in Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover Is Off in Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停查词已在设置中关闭"
+          }
+        }
+      }
+    },
+    "Hover key" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover key"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停按键"
+          }
+        }
+      }
+    },
+    "Hover reads nothing in these apps. Looking up a selection works in any app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover reads nothing in these apps. Looking up a selection works in any app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停在这些应用中什么也不读取。查选中的内容在任何应用中都可用。"
+          }
+        }
+      }
+    },
+    "Hover resumes %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover resumes %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停查词将于%@恢复"
           }
         }
       }
@@ -3031,6 +3239,22 @@
         }
       }
     },
+    "Japanese kana" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Japanese kana"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "日文假名"
+          }
+        }
+      }
+    },
     "Jump to Selection" : {
       "localizations" : {
         "en" : {
@@ -3127,6 +3351,22 @@
         }
       }
     },
+    "Korean" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Korean"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "韩文"
+          }
+        }
+      }
+    },
     "Language" : {
       "localizations" : {
         "en" : {
@@ -3171,6 +3411,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "以下是文件还在时的检查结果。"
+          }
+        }
+      }
+    },
+    "Latin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Latin"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拉丁字母"
           }
         }
       }
@@ -3251,6 +3507,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询所选内容"
+          }
+        }
+      }
+    },
+    "Look up the word under the pointer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look up the word under the pointer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询指针下的词"
+          }
+        }
+      }
+    },
+    "Looks up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Looks up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询"
           }
         }
       }
@@ -3427,6 +3715,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "需要处理"
+          }
+        }
+      }
+    },
+    "Never look up in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never look up in"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从不在这些应用中查询"
           }
         }
       }
@@ -4029,6 +4333,22 @@
         }
       }
     },
+    "Option %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Option %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Option %@"
+          }
+        }
+      }
+    },
     "Original style" : {
       "localizations" : {
         "en" : {
@@ -4073,6 +4393,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典有一部分已损坏，因此无法读取本次查询。"
+          }
+        }
+      }
+    },
+    "Password managers" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Password managers"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "密码管理器"
+          }
+        }
+      }
+    },
+    "Pause Hover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pause Hover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂停悬停查词"
           }
         }
       }
@@ -4170,6 +4522,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放词典自带的录音。"
+          }
+        }
+      }
+    },
+    "Press Twice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Press Twice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "连按两次"
           }
         }
       }
@@ -4494,6 +4862,38 @@
         }
       }
     },
+    "Rest the pointer on a word while you use the key. Never in the apps below." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest the pointer on a word while you use the key. Never in the apps below."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用按键的同时，把指针停在词上。下列应用中从不查询。"
+          }
+        }
+      }
+    },
+    "Resume Hover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Resume Hover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "恢复悬停查词"
+          }
+        }
+      }
+    },
     "Return to Original Word" : {
       "localizations" : {
         "en" : {
@@ -4794,6 +5194,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Shift"
+          }
+        }
+      }
+    },
+    "Shift %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shift %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shift %@"
           }
         }
       }
@@ -5458,6 +5874,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跟随系统"
+          }
+        }
+      }
+    },
+    "The writing systems of the dictionaries you use." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The writing systems of the dictionaries you use."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "取自你所用词典的文字。"
           }
         }
       }
@@ -6246,6 +6678,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典自带某个词的录音、且 macOS 能播放时，播放录音而不用系统语音。"
+          }
+        }
+      }
+    },
+    "Words in any writing system" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Words in any writing system"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "任何文字的词"
+          }
+        }
+      }
+    },
+    "Words in apps that do not share their text need Screen Recording, which you can allow in Set Up XDict." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Words in apps that do not share their text need Screen Recording, which you can allow in Set Up XDict."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不共享文本的应用中的词语需要“录屏”权限，可以在“设置 XDict”中允许。"
+          }
+        }
+      }
+    },
+    "Words written in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Words written in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用%@书写的词"
           }
         }
       }

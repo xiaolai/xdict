@@ -42,7 +42,35 @@ read call on purpose, and `PointerWordReader.read` and `.host` are internal (tes
 through `@testable import`), so `readUnlessRefused` is the only public way to read a hover's text. Third round of WI-2: eight more tests in `SiteExclusionTests` (a parent that cannot be read, a
 frame with no address, the walk's limit, a cycle, the combined job twice, and random trees against a model of the rule).
 
+## Added in plan-capture WI-3
+
+| XDict file | Origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `HoverWatcher.swift` (`HoverEventSource`, `HoverWatcher`, `SystemHoverEvents`) | XiaolaiDict `Sources/MacCapture/HoverWatcher.swift`. Changed: XiaolaiDict's `HoverDelivering` panel protocol replaced by the app's one `CaptureRequests` and a `CaptureSink` — a request numbered when its read is asked, presented (claimed) when its word is delivered as a `CapturedTerm`, and ended exactly once (cancelled here when its read is dropped or finds nothing); the word's box handed over as read (y down) and the pointer flipped once, the consumer flipping the box; "seen" is the consumer's terminal acknowledgement (`onEnd`), which forgets a word not shown; the rest tolerance handed in (decision 11); the screens read as `UpRect`s | `HoverWatcherSequenceTests` (18 by name; `theWordsBoxIsDeliveredFlippedAboutThePrimaryDisplay` became `theWordsBoxIsDeliveredAsReadBesideThePointerFlippedOnce`, as above; `stoppingEndsTheHover` from `HoverWatcherRoundTwoTests`; new: `aReadThatFoundNothingEndsItsRequest`); `HoverWatcherTests` (13 by name; `aPausedXiaolaiDictRefusesBeforeItReadsAnything` as `aPausedXDictRefusesBeforeItReadsAnything`) | 0015, 0045; XDict ADR-0014 d.4, d.6, d.11 |
+| `HoverReader.swift` (`HoverReading`, `CaptureHealth`, `HoverReader`) | XiaolaiDict `Sources/MacCapture/HoverReader.swift`, Accessibility only: the recogniser, its capture guard and the pending context are WI-4's. Changed: the site check and the text read are one lane job, `PointerWordSource.readUnlessRefused` (WI-2), the only way text is read; the script filter is the consumer's `allowedScripts` (`.scriptNotAllowed`); the outcome typed (`Nothing`), metadata only; "capture stuck" is the lane's state (`laneState()`), reported once per wedge and once on recovery | `HoverReaderSourceTests` (`aWordInAScriptNotStudiedIsRefused` as `aWordInAScriptNotAllowedIsRefused`, `aWordIsSuppressedOnlyOnceRemembered`; new: `anExcludedAppIsRefusedBeforeItsTextIsRead`, `ourOwnWindowIsRefusedWithoutReading`); `HoverSiteTests` (`anExcludedSiteIsRefusedBeforeItsTextIsRead`; new: `anUnreadableSiteIsRefusedWhileSitesAreExcluded`); new `HoverLaneHealthTests` | 0015, 0042, 0046; XDict ADR-0014 d.6, d.9 |
+
+Not moved with them, and why: `aNoticeForAnAbandonedReadIsNotShown`, `aNoticeForAHoverThatNoLongerStandsIsNotShown`,
+`aBlockedReadIsAskedAgainWhenTheCaptureFinishes`, `aReAskKeepsItsNumber`, `HoverCaptureTargetTests`,
+`HoverCaptureReleaseTests`, `CaptureWedgeTests` and `withoutAnElementThePixelsAreNotReadWhileSitesAreExcluded` are the
+recogniser's and its guard's (WI-4); `noSiteListNoHostQuestion` describes a host question asked only with a list, which
+the combined job of WI-2 replaced (the walk is part of every read, and an empty list refuses nothing); `ScreenWordHostTests`
+are WI-2's `SiteExclusionTests`; `HoverDeliveryTests` (XiaolaiDict's app delegate) is `RequestNumberingTests` in
+`XDictCaptureTests` and the app's acknowledgement tests in `XDictAnywhereTests`.
+
+Added to the tests after verification: `HoverWatcherSequenceTests.aHoverPresentedAfterAShortcutStillReadingSupersedesIt`,
+`HoverReaderSourceTests.ourListedWindowIsRefusedBeforeTheLaneIsAsked` and `aHoverWithTheKeyUpIsRefusedAtTheGate`.
+
+## Composed in `XDictAnywhere` in plan-capture WI-3
+
+The reader's settings and the watcher's one owner live in the composition layer, not here (ADR-0014 d.5): they hold
+`UserDefaults` and the tokens, which the capture targets may not import.
+
+| XDict file | Origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `Sources/XDictAnywhere/HoverControl.swift` (`CaptureTolerances`, `HoverControl`, `HoverPauseMenu`) | XiaolaiDict `Sources/XiaolaiDict/HoverControl.swift` and the `HoverPauseMenu` of `Sources/XiaolaiDict/MenuBarItem.swift`. Changed: the requests are the app's one `CaptureRequests`; the scripts are read from the enabled dictionaries at decision time, never stored (`effectivePolicy`); the stuck lane is the consumer's `CaptureNotice`; on/off in an injected `UserDefaults`; the capture distances from the tokens (`CaptureTolerances`) | `HoverPauseWiringTests` (5 by name; `theDelegateCanBeBuiltTheWayTheAdaptorBuildsIt` not moved: XDict's app has no delegate built through the Objective-C runtime); `CaptureHealthWiringTests.aStuckCaptureReachesTheObservedState`; new `HoverControlTests` (`theScriptsComeFromTheProviderAtDecisionTime`, `hoverIsOnUntilTheReaderTurnsItOff`, `hoverOffStartsNoWatcher`, `theTolerancesAreTheTokens`) | 0015, 0045; XDict ADR-0014 d.4, d.10, d.11 |
+| `Sources/XDictAnywhere/HoverPolicyStore.swift` (`HoverPolicyStore`) | XiaolaiDict `Sources/Capture/HoverPolicyStore.swift`. Changed: the scripts are never stored or read back (derived each time by `HoverScripts`) | `HoverPolicyStoreTests` (8 by name; renamed with the scripts no longer stored: `aPolicyStoredBeforeScriptsExistedKeepsItsExclusions` as `aPolicyStoredBeforeTheGestureExistedKeepsItsExclusions`, `anEmptyScriptSetIsCorrectedOnTheWayIn` as `storedScriptsAreNeverTrusted`) | 0015; XDict ADR-0014 d.10 |
+
 ## Not moved
 
-`HoverWatcher`, `HoverReader`, `PendingContext` (plan-capture WI-3), `ScreenTextRecogniser`, `ScreenRecordingAccess`,
+`PendingContext` (plan-capture WI-4, with the recogniser), `ScreenTextRecogniser`, `ScreenRecordingAccess`,
 `ScreenMetricsAppKit` and the Screen Recording half of `Permission` (WI-4).
