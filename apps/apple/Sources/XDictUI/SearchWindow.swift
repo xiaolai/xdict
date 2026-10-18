@@ -87,6 +87,13 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
+            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+                .disabled(!state.canPronounce)
+                .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
+                .accessibilityIdentifier("toolbar.pronounce")
+        }
+        .visibilityPriority(.low)
+        ToolbarItem(placement: .primaryAction) {
             SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })

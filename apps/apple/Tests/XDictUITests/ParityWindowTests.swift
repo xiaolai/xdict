@@ -54,6 +54,15 @@ struct ParityWindowTests {
         #expect(ToolbarLayout.tabTitle(word: nil) == "XDict")
     }
 
+    /// The title bar's speaker reads the selection, else the entry's word (owner, 2026-10-18).
+    @Test func theSpeakerReadsTheSelectionElseTheWord() {
+        #expect(SearchWindowState.spokenText(selection: "word of mouth", word: "word") == "word of mouth")
+        #expect(SearchWindowState.spokenText(selection: "  spoken  \n", word: "word") == "spoken")
+        #expect(SearchWindowState.spokenText(selection: "   ", word: "word") == "word")
+        #expect(SearchWindowState.spokenText(selection: nil, word: "word") == "word")
+        #expect(SearchWindowState.spokenText(selection: nil, word: nil) == nil)
+    }
+
     @Test func theTitleIsXDictWithTheCountUnderIt() {
         #expect(Self.text(ToolbarLayout.windowTitle) == "XDict")
         #expect(Self.chinese(ToolbarLayout.windowTitle) == "XDict")

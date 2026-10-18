@@ -38,7 +38,7 @@ public struct SearchCommands: Commands {
                     .disabled(window?.hasEntry != true)
             }
             Divider()
-            Button("Pronounce") { window?.pronounceShown() }
+            Button("Pronounce") { window?.pronounceSelectionOrShown() }
                 .keyboardShortcut("p", modifiers: [.command, .option])
                 .disabled(window?.canPronounce != true)
         }
