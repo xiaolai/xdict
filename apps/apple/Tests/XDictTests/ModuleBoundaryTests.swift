@@ -64,7 +64,7 @@ struct ModuleBoundaryTests {
         // lane, the readers, the never-prompting probe. Neither ScreenCaptureKit nor Vision (WI-4), nothing that draws.
         // What it binds today, inside `captureMacMayBind`, the ceiling `captureReachesNothingOfThisPackage` holds.
         "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "os"],
-        "XDictCaptureMacTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
+        "XDictCaptureMacTests": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
