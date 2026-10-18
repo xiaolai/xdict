@@ -71,6 +71,33 @@ public struct SetupBoard: Equatable, Sendable {
     }
 }
 
+/// **The setup window as the E2E stage reads it from outside** (`Tools/lookup/keys.swift ax`; G7, 2026-10-18): SwiftUI does
+/// not expose the board's rows to a walk of the app's own views, which read an empty tree while the external walk read
+/// every row. The `setup` checks read the external walk's nodes (role, id, texts, depth, in reading order).
+public enum SetupWindowReading {
+    /// The nodes of a `keys ax` answer; nil when it is not one (the tool refused, or wrote something else).
+    public static func nodes(fromKeysAX data: Data) -> [[String: Any]]? {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["nodes"] as? [[String: Any]]
+    }
+
+    public static func identifiers(_ nodes: [[String: Any]]) -> Set<String> {
+        Set(nodes.compactMap { $0["id"] as? String }.filter { !$0.isEmpty })
+    }
+
+    /// The texts of the window's content: its first child and everything under it, as the window's content view was
+    /// read before; the title bar's buttons and title come after it and are left out.
+    public static func contentTexts(_ nodes: [[String: Any]]) -> [String] {
+        guard let start = nodes.firstIndex(where: { $0["depth"] as? Int == 1 }) else { return [] }
+        var out: [String] = []
+        for (index, node) in nodes[start...].enumerated() {
+            if index > 0, (node["depth"] as? Int ?? 0) <= 1 { break }
+            out += node["texts"] as? [String] ?? []
+        }
+        return out
+    }
+}
+
 /// **Whether the setup window speaks only Chinese** (E2E `setup.chineseOnly`): the English it still shows, from the texts
 /// its Accessibility tree read; and the verdict, which fails on no text at all, since an empty tree (a window not yet
 /// drawn, or read before it was) has no English in it and would otherwise pass without reading anything.

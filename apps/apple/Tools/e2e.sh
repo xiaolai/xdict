@@ -1228,7 +1228,7 @@ substage_sound() {
 substage_setup() {
     local work="$reports/setup" suite="ai.xdict.e2e.setup" phase out
     rm -rf "$work"
-    mkdir -p "$work"
+    mkdir -p "$work/first" "$work/second"
     defaults delete "$suite" >/dev/null 2>&1 || true
     if is_running "$exe"; then
         flunk - "setup: XDict is already running (pid ${PIDS[*]}), so the window read would not be this run's"
@@ -1239,16 +1239,28 @@ substage_setup() {
         local language=()
         [ "$phase" = first ] || language=(-AppleLanguages "(zh-Hans)")
         open -n --stdout "$work/$phase.out" --stderr "$work/$phase.err" "$app" --args --setup-report "$phase" \
-            --library-dir "$work/library" --suite "$suite" --out "$out" "${language[@]}" \
+            --library-dir "$work/library" --suite "$suite" --work "$work/$phase" --out "$out" "${language[@]}" \
             || { flunk - "setup: the app could not be started ($phase)"; return 0; }
-        local waited=0
-        while [ ! -s "$out" ] && [ "$waited" -lt 600 ]; do sleep 0.1; waited=$((waited + 1)); done
+        # Each checkpoint the instrument writes is answered once with the window as `keys ax` reads it from outside
+        # (G7, 2026-10-18: SwiftUI does not expose the board's rows to the app's own walk of its views).
+        local waited=0 checkpoint pid
+        while [ ! -s "$out" ] && [ "$waited" -lt 1200 ]; do
+            for checkpoint in "$work/$phase"/checkpoint-*.json; do
+                case $checkpoint in *.ax.json | *'*'*) continue ;; esac
+                [ ! -e "${checkpoint%.json}.ax.json" ] || continue
+                pid=$(plutil -extract pid raw -o - "$checkpoint" 2>/dev/null || echo "")
+                "$kit/lookup/keys" ax "$pid" 2000 >"${checkpoint%.json}.ax.tmp" 2>&1 || true
+                mv "${checkpoint%.json}.ax.tmp" "${checkpoint%.json}.ax.json"
+            done
+            sleep 0.1
+            waited=$((waited + 1))
+        done
         for _ in $(seq 1 50); do is_running "$exe" || break; sleep 0.1; done
         quit_bundle >/dev/null 2>&1 || true
         if [ -s "$out" ]; then
             findings "$out"
         else
-            flunk - "setup: the $phase launch wrote no findings within 60 s ($(head -c 300 "$work/$phase.err" 2>/dev/null))"
+            flunk - "setup: the $phase launch wrote no findings within 120 s ($(head -c 300 "$work/$phase.err" 2>/dev/null))"
         fi
     done
     defaults delete "$suite" >/dev/null 2>&1 || true
