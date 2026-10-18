@@ -1,7 +1,7 @@
 import Foundation
 import Synchronization
 import Testing
-import XDictCapture
+@testable import XDictCapture
 
 /// **The identified sink** (ADR-0014 decision 4; Codex: `accepted|refused` plus an unqualified `shown(Bool)` raced):
 /// requests numbered synchronously, exactly one terminal acknowledgement per request carrying its number and the
@@ -123,6 +123,51 @@ struct CaptureSinkTests {
         #expect(ended.map(\.request) == [delivered.number])
         #expect(ended.allSatisfy { $0.outcome == .cancelled })
         #expect(requests.terminal(of: delivered)?.outcome == .cancelled)
+    }
+
+    /// **A stale generation never ends an open request**: delivered twice, the first delivery's acknowledgement is
+    /// refused and the request stays open for the second's.
+    @Test func aStaleGenerationLeavesTheRequestOpen() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let request = requests.begin(.pointerGesture)
+        _ = requests.deliver(try term(), for: request, to: consumer)
+        _ = requests.deliver(try term("held"), for: request, to: consumer)
+        let generations = consumer.delivered.withLock { $0.map(\.generation) }
+        #expect(generations.count == 2 && generations[0] != generations[1])
+        #expect(!requests.acknowledge(request, generation: generations[0], .shown), "the stale generation was taken")
+        #expect(requests.terminal(of: request) == nil, "the request ended on a stale answer")
+        #expect(requests.acknowledge(request, generation: generations[1], .notShown))
+        #expect(requests.terminal(of: request)?.outcome == .notShown)
+    }
+
+    /// **An acknowledgement before any delivery is refused**, and the request stays open to be delivered.
+    @Test func anAcknowledgementBeforeDeliveryIsRefused() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let request = requests.begin(.selection)
+        #expect(!requests.acknowledge(request, generation: 1, .shown))
+        #expect(requests.terminal(of: request) == nil)
+        #expect(requests.deliver(try term(), for: request, to: consumer) == .accepted)
+    }
+
+    /// **Bounded**: a long run of requests keeps only the open ones and a small ring of recently ended numbers.
+    @Test func aLongRunOfRequestsDoesNotGrowTheBook() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let word = try term()
+        for _ in 0..<5_000 {
+            let request = requests.begin(.pointerGesture)
+            _ = requests.deliver(word, for: request, to: consumer)
+            let generation = try #require(consumer.delivered.withLock { $0.last?.generation })
+            requests.acknowledge(request, generation: generation, .shown)
+            consumer.delivered.withLock { $0.removeAll() }
+        }
+        let open = requests.begin(.menu)
+        _ = requests.deliver(word, for: open, to: consumer)
+        #expect(requests.retained.open == 1)
+        #expect(requests.retained.ended <= CaptureRequests.endedMemory)
+        // A request older than the ring is stale: never delivered and never acknowledged.
+        let ancient = CaptureRequest(number: 1, trigger: .pointerGesture)
+        #expect(requests.deliver(word, for: ancient, to: consumer) == .refused)
+        #expect(!requests.acknowledge(ancient, generation: 1, .shown))
     }
 
     @Test func anUnknownRequestIsNeverAcknowledged() {

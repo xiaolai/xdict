@@ -55,18 +55,49 @@ public protocol CaptureSink: AnyObject, Sendable {
 /// - `begin` numbers synchronously, under the lock, in the order asked.
 /// - `deliver` stamps a fresh generation and hands the term over; a request already ended, or a consumer that is gone,
 ///   is refused — and a refusal ends the request cancelled.
-/// - `acknowledge` records the first terminal answer whose generation matches the request's own; any other answer — a
-///   duplicate, one for another generation, a late one after a cancel — changes nothing and says so.
+/// - `acknowledge` records the first terminal answer whose generation is the request's **latest delivery**; an answer
+///   before any delivery, for an older generation, a duplicate, or one after a cancel changes nothing and says so.
 /// - `cancel` (Escape, a newer shortcut) ends a request not yet ended; `consumerGone` ends every delivered request still
 ///   open.
+///
+/// **Bounded.** Only open delivered requests and the last `endedMemory` ended numbers are kept. A request whose number
+/// is at or below one that fell out of that ring, and that is not open, counts as ended: it was outlived by
+/// `endedMemory` endings and is stale.
 public final class CaptureRequests: Sendable {
     private struct State {
         var issued = 0
         var generations = 0
-        /// The generation each delivered request was given.
-        var delivered: [Int: Int] = [:]
+        /// Open delivered requests and the generation of each one's latest delivery.
+        var open: [Int: Int] = [:]
+        /// Recently ended requests, oldest first in `endedOrder`.
         var ended: [Int: CaptureAcknowledgement] = [:]
+        var endedOrder: [Int] = []
+        /// The highest number that fell out of the ended ring.
+        var forgottenThrough = 0
+
+        func known(_ request: CaptureRequest) -> Bool { request.number > 0 && request.number <= issued }
+
+        func isEnded(_ number: Int) -> Bool {
+            ended[number] != nil || (number <= forgottenThrough && open[number] == nil)
+        }
+
+        mutating func end(_ number: Int, generation: Int, _ outcome: CaptureOutcome) -> CaptureAcknowledgement? {
+            guard !isEnded(number) else { return nil }
+            open[number] = nil
+            let ack = CaptureAcknowledgement(request: number, generation: generation, outcome: outcome)
+            ended[number] = ack
+            endedOrder.append(number)
+            if endedOrder.count > CaptureRequests.endedMemory {
+                let gone = endedOrder.removeFirst()
+                ended[gone] = nil
+                forgottenThrough = max(forgottenThrough, gone)
+            }
+            return ack
+        }
     }
+
+    /// How many ended numbers are remembered, for duplicate and late answers. A count, not a design value.
+    static let endedMemory = 64
 
     private let state = Mutex(State())
 
@@ -83,18 +114,18 @@ public final class CaptureRequests: Sendable {
     /// cannot deadlock.
     public func deliver(_ term: CapturedTerm, for request: CaptureRequest, to sink: (any CaptureSink)?) -> CaptureDeliveryAnswer {
         let generation: Int? = state.withLock { state in
-            guard Self.known(request, in: state), state.ended[request.number] == nil else { return nil }
+            guard state.known(request), !state.isEnded(request.number) else { return nil }
             state.generations += 1
-            state.delivered[request.number] = state.generations
+            state.open[request.number] = state.generations
             return state.generations
         }
         guard let generation else { return .refused }
         guard let sink else {
-            end(request.number, generation: generation, .cancelled)
+            _ = state.withLock { $0.end(request.number, generation: generation, .cancelled) }
             return .refused
         }
         let answer = sink.deliver(CaptureDelivery(term: term, request: request, generation: generation))
-        if answer == .refused { end(request.number, generation: generation, .cancelled) }
+        if answer == .refused { _ = state.withLock { $0.end(request.number, generation: generation, .cancelled) } }
         return answer
     }
 
@@ -102,12 +133,8 @@ public final class CaptureRequests: Sendable {
     @discardableResult
     public func acknowledge(_ request: CaptureRequest, generation: Int, _ outcome: CaptureOutcome) -> Bool {
         state.withLock { state in
-            guard Self.known(request, in: state), state.delivered[request.number] == generation,
-                  state.ended[request.number] == nil
-            else { return false }
-            state.ended[request.number] = CaptureAcknowledgement(request: request.number, generation: generation,
-                                                                 outcome: outcome)
-            return true
+            guard state.known(request), state.open[request.number] == generation else { return false }
+            return state.end(request.number, generation: generation, outcome) != nil
         }
     }
 
@@ -115,11 +142,8 @@ public final class CaptureRequests: Sendable {
     @discardableResult
     public func cancel(_ request: CaptureRequest) -> Bool {
         state.withLock { state in
-            guard Self.known(request, in: state), state.ended[request.number] == nil else { return false }
-            let generation = state.delivered[request.number] ?? 0
-            state.ended[request.number] = CaptureAcknowledgement(request: request.number, generation: generation,
-                                                                 outcome: .cancelled)
-            return true
+            guard state.known(request) else { return false }
+            return state.end(request.number, generation: state.open[request.number] ?? 0, .cancelled) != nil
         }
     }
 
@@ -127,27 +151,16 @@ public final class CaptureRequests: Sendable {
     /// open, and their delivery to nobody is refused.
     public func consumerGone() -> [CaptureAcknowledgement] {
         state.withLock { state in
-            state.delivered.keys.sorted().compactMap { number -> CaptureAcknowledgement? in
-                guard state.ended[number] == nil, let generation = state.delivered[number] else { return nil }
-                let ack = CaptureAcknowledgement(request: number, generation: generation, outcome: .cancelled)
-                state.ended[number] = ack
-                return ack
-            }
+            state.open.sorted { $0.key < $1.key }.compactMap { state.end($0.key, generation: $0.value, .cancelled) }
         }
     }
 
     public func terminal(of request: CaptureRequest) -> CaptureAcknowledgement? {
-        state.withLock { Self.known(request, in: $0) ? $0.ended[request.number] : nil }
+        state.withLock { $0.known(request) ? $0.ended[request.number] : nil }
     }
 
-    private func end(_ number: Int, generation: Int, _ outcome: CaptureOutcome) {
-        state.withLock { state in
-            guard state.ended[number] == nil else { return }
-            state.ended[number] = CaptureAcknowledgement(request: number, generation: generation, outcome: outcome)
-        }
-    }
-
-    private static func known(_ request: CaptureRequest, in state: State) -> Bool {
-        request.number > 0 && request.number <= state.issued
+    /// How much the book holds, for the bound's test.
+    var retained: (open: Int, ended: Int) {
+        state.withLock { ($0.open.count, $0.ended.count) }
     }
 }
