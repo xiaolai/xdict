@@ -85,6 +85,8 @@ fun j(r: Resource): Map<String, Any?> = when (r) {
 }
 fun j(k: FindingKind): String = k.name.lowercase().split('_').mapIndexed { n, w -> if (n == 0) w else w.replaceFirstChar { it.uppercase() } }.joinToString("")
 fun j(f: HealthFinding) = mapOf("kind" to j(f.kind), "count" to f.count, "name" to f.name, "examples" to f.examples.map { mapOf("key" to it.key, "text" to it.text) })
+fun j(o: DisplayOption) = mapOf("id" to o.id, "attribute" to o.attribute, "values" to o.values, "defaultValue" to o.defaultValue)
+fun j(d: DisplayOptions) = mapOf("version" to d.version, "options" to d.options.map { j(it) }, "css" to d.css)
 fun j(h: Health) = mapOf("version" to h.version, "entries" to h.entries, "findings" to h.findings.map { j(it) }, "classes" to h.classes.map { mapOf("name" to it.name, "count" to it.count) })
 fun j(f: Feature): Map<String, Any?> = when (f) {
     is Feature.FormatVersion -> mapOf("type" to "formatVersion", "version" to f.version)
@@ -217,6 +219,16 @@ fun main(args: Array<String>) {
     list(x["links"]).forEachIndexed { n, c -> check("links[$n]", c["link"], outcome { j(core.link(dict, c["url"] as String, origin, view())) }) }
     list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view().copy(originalStyle = c["originalStyle"] == true))) }) }
     check("health", x["health"], outcome { j(core.health(dict, null)) })
+
+    // ADR-0013: the display options tiny declares (none), then each case's dictionary imported and opened.
+    val d = obj(x["displayOptions"])
+    check("displayOptions.tiny", d["tiny"], outcome { j(core.displayOptions(dict)) })
+    list(d["cases"]).forEachIndexed { n, c ->
+        val casePkg = Package(at(c["mdx"] as String), listOf(), (c["sidecars"] as List<*>).map { at(it as String) })
+        core.`import`(casePkg, null)
+        val caseDict = (core.open(casePkg) as Opened.Ready).dict
+        check("displayOptions.cases[$n]", c["result"], outcome { j(core.displayOptions(caseDict)) })
+    }
 
     val b = obj(x["byteSource"])
     val mdx = File(dir, "tiny.mdx").readBytes()

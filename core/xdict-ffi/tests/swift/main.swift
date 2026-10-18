@@ -81,6 +81,12 @@ func j(_ f: HealthFinding) -> [String: Any] {
 
 func j(_ c: HealthClass) -> [String: Any] { ["name": c.name, "count": c.count] }
 
+func j(_ o: DisplayOption) -> [String: Any] {
+    ["id": o.id, "attribute": o.attribute, "values": o.values, "defaultValue": o.defaultValue]
+}
+
+func j(_ d: DisplayOptions) -> [String: Any] { ["version": d.version, "options": d.options.map(j), "css": d.css] }
+
 func j(_ k: FindingKind) -> String {
     switch k {
     case .missingFile: return "missingFile"
@@ -335,6 +341,16 @@ for (i, c) in (x["resources"] as! [[String: Any]]).enumerated() {
     })
 }
 check("health", x["health"], outcome { j(try core.health(dict: dict, progress: nil)) })
+
+// ADR-0013: the display options tiny declares (none), then each case's dictionary imported and opened.
+let d = x["displayOptions"] as! [String: Any]
+check("displayOptions.tiny", d["tiny"], outcome { j(try core.displayOptions(dict: dict)) })
+for (i, c) in (d["cases"] as! [[String: Any]]).enumerated() {
+    let casePackage = Package(mdx: at(c["mdx"] as! String), mdd: [], sidecars: (c["sidecars"] as! [String]).map(at))
+    _ = try core.import(package: casePackage, progress: nil)
+    guard case let .ready(caseDict, _, _) = try core.open(package: casePackage) else { fatalError("not open") }
+    check("displayOptions.cases[\(i)]", c["result"], outcome { j(try core.displayOptions(dict: caseDict)) })
+}
 
 let b = x["byteSource"] as! [String: Any]
 let mdx = try Data(contentsOf: dir.appendingPathComponent("tiny.mdx"))

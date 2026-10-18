@@ -78,6 +78,11 @@ pub fn write_fixture(fixture: &Path, out: &Path) -> Result<(), Error> {
         let rebuilt = Spec { title: string(field(file, "title")?)?.into(), ..spec.clone() };
         write_file(&rebuilt, field(mdx, "entries")?, &out.join(string(field(file, "name")?)?))?;
     }
+    // Dictionaries of their own entries, for the display options each declares (ADR-0013).
+    for file in description.get("displayOptions").map(array).transpose()?.into_iter().flatten() {
+        let own = Spec { title: string(field(file, "title")?)?.into(), ..spec.clone() };
+        write_file(&own, field(file, "entries")?, &out.join(string(field(file, "name")?)?))?;
+    }
     Ok(())
 }
 

@@ -459,3 +459,33 @@ record! {
         pub dropped: u64,
     }
 }
+
+record! {
+    /// The display options that apply to an open dictionary's edition, and the CSS that shows the reader's choice
+    /// (ADR-0013). A small contract of its own, not part of the style report. The shell sets each option's
+    /// `attribute` on the entry document's root to the reader's value and applies `css` to every entry of the
+    /// dictionary; an absent attribute, or a value not listed, shows `default_value`. Every id, attribute and value is
+    /// the core's own catalogue, never text from the dictionary.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct DisplayOptions {
+        /// The catalogue's version ([`crate::DISPLAY_OPTIONS`]).
+        pub version: u32,
+        /// The options that apply, in the catalogue's order; empty when none does.
+        pub options: Vec<DisplayOption>,
+        /// The rules for every option listed, display only; empty when none applies.
+        pub css: String,
+    }
+
+    /// One option that applies: what a shell lists, stores the reader's choice under and sets on the root.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct DisplayOption {
+        /// The option's id (`pronunciation`): with the lineage, the key of the reader's stored choice.
+        pub id: String,
+        /// The root attribute the shell sets (`data-xdict-opt-pronunciation`).
+        pub attribute: String,
+        /// The values, in the order a shell lists them.
+        pub values: Vec<String>,
+        /// What the edition shows when the reader has chosen nothing.
+        pub default_value: String,
+    }
+}

@@ -1,5 +1,5 @@
 {
-  "comment": "A tiny dictionary written by xdict-mdx-writer from this description: our own text, no dictionary content. `cargo run -p xdict-conformance -- <dir>` writes tiny.mdx, tiny.mdd and the sidecar.",
+  "comment": "A tiny dictionary written by xdict-mdx-writer from this description: our own text, no dictionary content. `cargo run -p xdict-conformance -- <dir>` writes tiny.mdx, tiny.mdd and the sidecars, and the MDX files of displayOptions.",
   "mdx": {
     "name": "tiny.mdx",
     "title": "Tiny",
@@ -18,7 +18,33 @@
     { "name": "tiny.mdd", "entries": [["\\run.mp3", "ID3 not really audio"]] }
   ],
   "sidecars": [
-    { "name": "tiny.css", "text": ".tiny { color: black !important }" }
+    { "name": "tiny.css", "text": ".tiny { color: black !important }" },
+    { "name": "prn-noad.css", "text": ".fbm_NOAD { margin: 0 }\nspan.ph { font-weight: normal }" }
+  ],
+  "displayOptions": [
+    {
+      "name": "prn.mdx",
+      "title": "Pronounced",
+      "entries": [
+        ["zabo", "<b>zabo</b><span class=\"pr\"> | <span class=\"ph t_respell\" data-d-prn=\"US\">ˈzäbō</span><span class=\"ph t_IPA\" data-d-prn=\"IPA\">ˈzɑboʊ</span> | </span> a made-up word"],
+        ["quill", "<b>quill</b> a feather pen"],
+        ["zabos", "@@@LINK=zabo"]
+      ]
+    },
+    {
+      "name": "prn-plain.mdx",
+      "title": "Pronounced, plain",
+      "entries": [
+        ["zabo", "<b>zabo</b><span class=\"pr\"> | <span class=\"ph t_IPA\" data-d-prn=\"IPA\">ˈzɑboʊ</span><span class=\"ph t_respell\" data-d-prn=\"US\">ˈzäbō</span> | </span> a made-up word"]
+      ]
+    },
+    {
+      "name": "prn-one.mdx",
+      "title": "Pronounced once",
+      "entries": [
+        ["zabo", "<b>zabo</b><span class=\"pr\"> | <span class=\"ph t_IPA\" data-d-prn=\"IPA\">ˈzɑboʊ</span> | </span> a made-up word"]
+      ]
+    }
   ],
   "defective": [
     { "name": "tiny-v4.mdx", "defect": "unknownFormatVersion" },
