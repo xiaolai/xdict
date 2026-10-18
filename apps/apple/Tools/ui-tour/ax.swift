@@ -284,21 +284,22 @@ case "menubar":
     }
     emit(["menubar": bar])
 case "reset":
-    // Every window but the main one closed (the main window holds the `scope` picker), by its own close button.
+    // Every window but the main one closed (the main window's search field holds the `scope.menu` button), by its own
+    // close button.
     var closed = 0
-    for window in windows(app) where find(window, ["scope"]) == nil {
+    for window in windows(app) where find(window, ["scope.menu"]) == nil {
         if let button = attribute(window, kAXCloseButtonAttribute) {
             if AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success { closed += 1 }
         }
     }
     emit(["closed": closed])
 case "size":
-    // The main window (the one holding the `scope` picker) set to a width and height in points: the routes at the
+    // The main window (the one holding the `scope.menu` button) set to a width and height in points: the routes at the
     // window's minimum width.
     guard arguments.count == 5, let width = Double(arguments[3]), let height = Double(arguments[4]) else {
         fail("size <pid> <width> <height>", code: 2)
     }
-    guard let main = windows(app).first(where: { find($0, ["scope"]) != nil }) else { fail("no main window") }
+    guard let main = windows(app).first(where: { find($0, ["scope.menu"]) != nil }) else { fail("no main window") }
     var size = CGSize(width: width, height: height)
     guard let value = AXValueCreate(.cgSize, &size),
           AXUIElementSetAttributeValue(main, kAXSizeAttribute as CFString, value) == .success else {

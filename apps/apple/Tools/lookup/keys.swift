@@ -11,8 +11,8 @@
 //                               texts, depth); an entry's web content is not descended into
 //   keys web <pid>              the shown entry as read: how many elements, its links (and which has the keyboard),
 //                               and the app's focused element read after it
-//   keys geometry <pid>         frames (screen points, top-left origin) of the main window, its toolbar, the scope
-//                               bar, the page's notices, the entry's web area and the entry's first text
+//   keys geometry <pid>         frames (screen points, top-left origin) of the main window, its toolbar, the
+//                               page's notices, the entry's web area and the entry's first text
 //
 // **The grant it needs** (as `Tools/hostile/pointer.swift`): a command started over SSH is judged by TCC as its
 // session's responsible process, `sshd-keygen-wrapper`, which needs Accessibility to post events and to read another
@@ -236,13 +236,11 @@ if command == "geometry" {
             string($0, kAXRoleAttribute) == "AXStaticText" && !(string($0, kAXValueAttribute) ?? "").isEmpty
         }
     }
-    // What stands between the toolbar and the entry since the parity window (P6): the scope bar, and the page's notices
-    // while a dictionary could not search.
-    let scopeBar = first(in: main, 0) { string($0, "AXIdentifier") == "scope.bar" }
+    // What may stand between the toolbar and the entry (P6): the page's notices while a dictionary could not search;
+    // the scope is the search field's menu since 2026-10-18, not a row of its own.
     let notices = first(in: main, 0) { string($0, "AXIdentifier") == "page.notices" }
     var found: [String: Any] = [:]
-    for (name, item) in [("window", main), ("toolbar", toolbar), ("scopeBar", scopeBar), ("notices", notices),
-                         ("web", web), ("text", text)] {
+    for (name, item) in [("window", main), ("toolbar", toolbar), ("notices", notices), ("web", web), ("text", text)] {
         found[name] = item.flatMap(frame) ?? NSNull()
     }
     found["textValue"] = text.flatMap { string($0, kAXValueAttribute) } ?? NSNull()

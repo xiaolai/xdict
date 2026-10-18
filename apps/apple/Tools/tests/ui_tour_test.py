@@ -117,17 +117,27 @@ def rowed(*words, semibold=0):
         for i, w in enumerate(words)], description="search results")
 
 
-def apple_window(title, *extra):
+def scope_menu(chosen):
+    """The search field's magnifier, the scope menu's button (P6, XDict's own since 2026-10-18; P42)."""
+    return node("AXButton", (523, 14, 28, 24), description="Search in", identifier="scope.menu", value=chosen)
+
+
+def apple_window(title, *extra, chosen="All Dictionaries"):
+    placeholder = "Search" if chosen == "All Dictionaries" else f"Search in {chosen}"
     return {"windows": [node("AXWindow", (0, 0, 859, 837), [
         node("AXToolbar", (0, 0, 859, 52), [
             button("Back", 100, "Show the previous result"), button("Forward", 136, "Show the next result"),
             button("Smaller Text", 440, "Decrease font size"), button("Bigger Text", 476, "Increase font size"),
-            node("AXTextField", (520, 7, 327, 38), subrole="AXSearchField", placeholder="Search"),
+            node("AXTextField", (520, 7, 327, 38), [scope_menu(chosen)], subrole="AXSearchField",
+                 placeholder=placeholder),
             node("AXStaticText", (180, 0, 200, 52), value="XDict")]),
-        node("AXRadioGroup", (183, 52, 676, 36), [node("AXRadioButton", (190 + 60 * i, 59, 60, 22), title=t,
-                                                       value="1" if i == 0 else "0")
-                                                  for i, t in enumerate(["All", "Alpha", "Beta"])]),
         *extra], subrole="AXStandardWindow", title=title)]}
+
+
+# The scope bar XDict had before 2026-10-18, a radio group under the toolbar: P6 is red on it now.
+scope_bar = node("AXRadioGroup", (183, 52, 676, 36), [node("AXRadioButton", (190 + 60 * i, 59, 60, 22), title=t,
+                                                           value="1" if i == 0 else "0")
+                                                      for i, t in enumerate(["All", "Alpha", "Beta"])])
 
 
 def old_window(title, *extra):
@@ -187,7 +197,8 @@ cases = {
     "window.min": ({"windows": [node("AXWindow", (0, 0, 400, 300), subrole="AXStandardWindow")]},
                    {"windows": [node("AXWindow", (0, 0, 640, 420), subrole="AXStandardWindow")]}),
     "main.narrow": (apple_window("XDict"), old_window("apple")),
-    "scope.one": (apple_window("XDict"), old_window("apple")),
+    "scope.one": (apple_window("XDict", chosen="Beta"), apple_window("XDict")),
+    "scope.click": (apple_window("XDict", chosen="Beta"), apple_window("XDict", scope_bar)),
     "entry.find": (apple_window("XDict", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
                    old_window("apple")),
     # Apple's page: dividers named by the dictionaries after the first; XDict's old window had one entry, no divider.
@@ -203,7 +214,6 @@ cases = {
         node("AXButton", (1460, 1248, 140, 48), title="Print")])), old_window("orange")),
 }
 cases["search.next"] = cases["search.result"]
-cases["scope.one"][0]["windows"][0]["children"][1]["children"][2]["value"] = "1"
 cases["window.min"][0]["windows"][0]["frame"] = [0, 0, 400, 300]
 cases["main.narrow"][0]["windows"][0]["frame"] = [0, 0, 859, 837]
 driven = {r[0] for r in ROUTES if r[4] is not None}
@@ -223,6 +233,19 @@ for route in parity.MENU_RULES:
 shared = {"menubar": apple_menus["menubar"] + [{"title": "Edit", "items": [{"title": "Share…", "items": []}]}]}
 assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "P45 never red"
 assert parity.menus_share({"menubar": apple_menus["menubar"][1:]}), "P45 without Services"
+# P6: the scope is the search field's menu. The bar alone, the bar beside the menu, a menu button not named "Search in",
+# and a placeholder that does not name the chosen dictionary are each red.
+assert parity.scope_menu(apple_window("XDict")) is None
+assert parity.scope_menu(apple_window("XDict", scope_bar)), "the old scope bar beside the menu"
+bar_only = apple_window("XDict", scope_bar)
+bar_only["windows"][0]["children"][0]["children"][4]["children"] = []
+assert parity.scope_menu(bar_only), "the scope bar without the menu"
+unnamed = apple_window("XDict")
+unnamed["windows"][0]["children"][0]["children"][4]["children"][0]["description"] = "search"
+assert parity.scope_menu(unnamed), "a magnifier not named 'Search in'"
+mislabelled = apple_window("XDict", chosen="Beta")
+mislabelled["windows"][0]["children"][0]["children"][4]["placeholder"] = "Search"
+assert parity.scope_selected(1)(mislabelled), "Beta chosen but the placeholder says Search"
 print(f"ui_tour_test: parity ok ({sum(len(v) for v in parity.TREE_RULES.values())} tree rules, "
       f"{sum(len(v) for v in parity.MENU_RULES.values())} menu rules)")
 # A drop aims at the dictionary table's own frame, never the window's centre (dark-en dropV3Mdd, 2026-10-18), and a
