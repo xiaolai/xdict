@@ -91,7 +91,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "a11a2d9c32a33067cdf086a116ef54098834d498",
+  "apps/apple/Package.swift": "072bc9b3d892c3cbaabb89a919ff3261d765a4b0",
   "core/Cargo.toml": "fc70231c5b417790a5224d56d8b1aff2faa1c2d1",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
@@ -134,6 +134,19 @@
     "XDictAnywhere"
    ],
    "dir": "apps/apple/Tests/XDictAnywhereTests/",
+   "type": "test"
+  },
+  "XDictAppleImport": {
+   "deps": [],
+   "dir": "apps/apple/Sources/XDictAppleImport/",
+   "type": "regular"
+  },
+  "XDictAppleImportTests": {
+   "deps": [
+    "XDictAppleImport",
+    "XDictTestSupport"
+   ],
+   "dir": "apps/apple/Tests/XDictAppleImportTests/",
    "type": "test"
   },
   "XDictBase": {
@@ -258,6 +271,7 @@
   },
   "XDictService": {
    "deps": [
+    "XDictAppleImport",
     "XDictBase",
     "XDictContract",
     "XDictCore"
@@ -267,11 +281,13 @@
   },
   "XDictServiceTests": {
    "deps": [
+    "XDictAppleImport",
     "XDictClient",
     "XDictContract",
     "XDictCore",
     "XDictInstruments",
-    "XDictService"
+    "XDictService",
+    "XDictTestSupport"
    ],
    "dir": "apps/apple/Tests/XDictServiceTests/",
    "type": "test"
