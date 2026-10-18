@@ -8,12 +8,12 @@ public protocol PointerWordSource: Sendable {
     func listedWindows() -> [ListedWindow]
     /// Who owns the pixel, through Accessibility, without reading any text.
     func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome
-    /// The site `target` shows, judged on every enclosing web area — asked only when the reader excluded a site.
-    func host(
-        of target: PointerWordReader.Target, isExcluded: @escaping @Sendable (String) -> Bool, budget: Duration
-    ) async -> HostReading
-    /// The word at `point` in `target`, through Accessibility, within `budget`.
-    func read(at point: CGPoint, in target: PointerWordReader.Target, budget: Duration) async -> PointerWordReader.Outcome
+    /// **The site check and the text read as one lane job** — the only way to read a hover's text, so no page can
+    /// navigate between a check and a read. The text is read only where `refuses` does not refuse the site.
+    func readUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
+        budget: Duration
+    ) async -> PointerWordReader.GatedOutcome
 }
 
 /// **The real screen, through the one lane as hover work** (XDict ADR-0014 decision 6): coalesced with the hovers
@@ -24,12 +24,15 @@ public struct SystemPointerWords: PointerWordSource {
     private let access: AccessibilityAccess
     private let tolerance: HitTolerance
     private let limits: CaptureLimits
+    private let client: @Sendable (Duration) -> any AccessibilityReading
 
     /// `tolerance` comes from the composition layer's tokens (decision 11), never a literal here.
     public init(
         tolerance: HitTolerance, limits: CaptureLimits = .shipped, lane: AccessibilityLane = .system,
-        access: AccessibilityAccess = .system
+        access: AccessibilityAccess = .system,
+        client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) }
     ) {
+        self.client = client
         self.tolerance = tolerance
         self.limits = limits
         self.lane = lane
@@ -47,32 +50,28 @@ public struct SystemPointerWords: PointerWordSource {
         at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]
     ) async -> PointerWordReader.TargetOutcome {
         let access = access
+        let client = client
         let budget = PointerWordReader.budget
         return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
             PointerWordReader.target(at: point, access: access, windows: windows, ownProcess: getpid(),
-                                     with: AccessibilitySession(budget: budget))
+                                     with: client(budget))
         }, refused: { .none(.failed(Self.failure(for: $0))) })
     }
 
-    public func host(
-        of target: PointerWordReader.Target, isExcluded: @escaping @Sendable (String) -> Bool, budget: Duration
-    ) async -> HostReading {
-        await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.host(of: target, isExcluded: isExcluded, with: AccessibilitySession(budget: budget))
-        }, refused: { _ in .unreadable })
-    }
-
-    public func read(
-        at point: CGPoint, in target: PointerWordReader.Target, budget: Duration
-    ) async -> PointerWordReader.Outcome {
+    public func readUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
+        budget: Duration
+    ) async -> PointerWordReader.GatedOutcome {
         let tolerance = tolerance
         let limits = limits
+        let client = client
         return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.read(at: point, in: target, tolerance: tolerance, limits: limits, with: AccessibilitySession(budget: budget))
+            PointerWordReader.readUnlessRefused(at: point, in: target, tolerance: tolerance, limits: limits,
+                                                refuses: refuses, with: client(budget))
         }, refused: { refusal in
             switch refusal {
-            case .cancelled, .superseded: .cancelled
-            case .overstayed, .stuck: .miss(.failed(Self.failure(for: refusal), app: target.appName))
+            case .cancelled, .superseded: .read(.cancelled)
+            case .overstayed, .stuck: .read(.miss(.failed(Self.failure(for: refusal), app: target.appName)))
             }
         })
     }
