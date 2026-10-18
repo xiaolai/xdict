@@ -109,6 +109,46 @@ else bad "the map names what is no sub-stage: $(cat "$scratch/why")"; fi
 same "map control: a catch-all rule overrides the fail-safe (so the fail-safe is what selected everything)" "launch" \
     "$(XDICT_E2E_AFFECTED_MAP=$scratch/catch-all.map bash $affected --paths apps/apple/no-rule-names-this.file)"
 
+# --- hover (plan-capture WI-5): defined, extra, and selected by what it reads ----------------------------------------
+hover_all="hover.accessibility hover.ocr hover.exclusions hover.permission hover.popover"
+hover_lab="hover.accessibility hover.ocr hover.exclusions"
+got=$(bash $plan substages)
+case " $(tr '\n' ' ' <<<"$got") " in *" hover."*) bad "a hover sub-stage is default, so a release would require it: $got" ;;
+    *) ok "no hover sub-stage is default: a bare run and a release leave them out" ;; esac
+got=$(bash $plan expand all)
+got=" $(tr '\n' ' ' <<<"$got") "
+missing=""; for s in $hover_all; do case $got in *" $s "*) ;; *) missing="$missing $s" ;; esac; done
+[ -z "$missing" ] && ok "all names every hover sub-stage" || bad "all leaves out$missing"
+# hover_selects <what> <wanted sub-stages> <path...>: each wanted sub-stage in the path's selection.
+hover_selects() {
+    local what=$1 wanted=$2 got missing="" s
+    shift 2
+    got=" $(bash $affected --paths "$@" | tr '\n' ' ') "
+    for s in $wanted; do case $got in *" $s "*) ;; *) missing="$missing $s" ;; esac; done
+    [ -z "$missing" ] && ok "$what" || bad "$what: missed$missing (got$got)"
+}
+# shellcheck disable=SC2086 # the names are words
+same "the capture lab's code selects the sub-stages it runs in, and no other" "$(lines $hover_lab)" \
+    "$(bash $affected --paths apps/apple/Sources/XDictCaptureLab/ReadPoint.swift)"
+hover_selects "the pure capture target selects every hover sub-stage" "$hover_all" apps/apple/Sources/XDictCapture/HoverPolicy.swift
+hover_selects "the readers and the lane select every hover sub-stage" "$hover_all selection.hosts" \
+    apps/apple/Sources/XDictCaptureMac/HoverReader.swift
+hover_selects "the hover control (linked by the app and the lab) selects every hover sub-stage" "$hover_all" \
+    apps/apple/Sources/XDictAnywhere/HoverControl.swift
+hover_selects "the app's hover wiring selects the popover" "hover.popover" apps/apple/Sources/XDict/LookupAnywhere.swift
+hover_selects "Settings' hover rows select the permission sub-stage" "hover.permission setup" \
+    apps/apple/Sources/XDictUI/HoverSettings.swift apps/apple/Sources/XDictUI/HoverSentences.swift
+hover_selects "the menu-bar pause group selects the popover" "hover.popover menubar.item" \
+    apps/apple/Sources/XDictUI/MenuBarMenu.swift
+hover_selects "the popover's view selects the popover" "hover.popover panel.expand" apps/apple/Sources/XDictUI/LookupPopover.swift
+# Its control: without the hand list's `launches` lines for them, no sub-stage starts the lab, and the selection above is
+# no longer exact (the lab's code is named by no map rule: the graph decides).
+grep -v '^launches hover\.' affected-hand.map >"$scratch/no-lab.hand"
+got=$(XDICT_AFFECTED_HAND=$scratch/no-lab.hand bash $affected --paths apps/apple/Sources/XDictCaptureLab/ReadPoint.swift)
+# shellcheck disable=SC2086 # the names are words
+[ "$got" != "$(lines $hover_lab)" ] && ok "control: the hand list's launches are what select exactly the lab's sub-stages" \
+    || bad "control: the hand list without hover's launches selected the same: $got"
+
 
 # --- paths the map does not name: the generated graph (Tools/affected_graph.py) -------------------------------------
 lab_subs="hostile.binding hostile.faults reader hostile.production hostile.controls entries.lab"

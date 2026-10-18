@@ -111,6 +111,17 @@ class Matrix(unittest.TestCase):
             self.reaches(path, needing("editions"), "the editions are made by it")
         self.reaches(apple("Tools/library/health-expected.json"), needing("corpus"), "shipped with the corpus")
 
+    def test_the_capture_lab(self):
+        """hover's lab sub-stages start `XDictCaptureLab` (the hand list's `launches`): what it is compiled of reaches
+        their keys, the readers it drives included (plan-capture WI-5)."""
+        lab = {"hover.accessibility", "hover.ocr", "hover.exclusions"}
+        inputs = {p for p in under(apple("Sources/XDictCaptureLab/")) | under(apple("Sources/XDictCaptureMac/"))
+                  | under(apple("Sources/XDictCapture/")) if p.endswith(".swift")}   # PROVENANCE.md is no input
+        self.assertGreater(len(inputs), 30)
+        for path in sorted(inputs):
+            self.reaches(path, lab, "the capture lab is built of it")
+        self.reaches(apple("Tools/build-lab.sh"), lab, "the kit carries the capture lab")
+
     def test_every_chinese_sentence_check_reads_the_catalog(self):
         """Every instrument function that renders a catalog string in Chinese (`String(localized:` and `zh-Hans`):
         each check it reports belongs to a sub-stage the catalog reaches."""
