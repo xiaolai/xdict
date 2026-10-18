@@ -103,6 +103,35 @@ struct SelectionReaderTests {
         #expect(reason == .searchLimitReached(app: "Reader", limit: SelectionReader.webAreaSearchLimit))
     }
 
+    /// **The Service's read: the element under the reader's Control-click** (E2E `services.notes`, 2026-10-18). Once the
+    /// Services menu had closed, Notes answered with no focused selection and a window too large to search for a page,
+    /// and TextEdit with no focused selection at all, though the text view under the click still held the selection:
+    /// the panel fell back to a 16 pt box at the pointer and sat 3 pt over Notes' 23 pt line. That element, or one of
+    /// its parents, is read after the focused element and before the page search, its box exact.
+    @Test func theElementUnderTheClickIsReadWhenTheFocusHasNothing() {
+        let tree = FakeAccessibility()
+        let window = tree.element(1), view = tree.element(2), paragraph = tree.element(3)
+        tree.set(tree.application, kAXFocusedWindowAttribute, window)
+        var parent = window
+        for index in 10...(SelectionReader.webAreaSearchLimit + 20) {
+            let child = tree.element(Int32(index))
+            tree.set(parent, kAXChildrenAttribute, [child] as CFArray)
+            parent = child
+        }
+        tree.set(paragraph, kAXParentAttribute, view)
+        tree.set(view, kAXSelectedTextAttribute, "crème brûlée 煎饼" as CFString)
+        tree.set(view, kAXSelectedTextRangeAttribute, rangeValue(40, 15))
+        tree.set(view, kAXStringForRangeParameterizedAttribute, argument: rangeValue(40, 15), "crème brûlée 煎饼" as CFString)
+        tree.set(view, kAXBoundsForRangeParameterizedAttribute, argument: rangeValue(40, 15),
+                 rectValue(CGRect(x: 429, y: 140, width: 166, height: 23)))
+        #expect(read(tree) == .nothing(.searchLimitReached(app: "Reader", limit: SelectionReader.webAreaSearchLimit)),
+                "without the click, as in the E2E run")
+        let outcome = SelectionReader.read(application: tree.application, of: app, with: tree, under: paragraph)
+        guard case .selected(let selection, let bounds) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(selection.text == "crème brûlée 煎饼")
+        #expect(bounds == SelectionBox(rect: CGRect(x: 429, y: 140, width: 166, height: 23), quality: .exact))
+    }
+
     @Test func aLockedScreenIsNotNothingSelected() {
         let tree = FakeAccessibility()
         tree.fail(tree.application, kAXFocusedUIElementAttribute, with: .accessibilityRefused)
