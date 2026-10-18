@@ -65,6 +65,22 @@
         }
       }
     },
+    "%@ is already excluded." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is already excluded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 已被排除。"
+          }
+        }
+      }
+    },
     "%@ is unavailable. %@" : {
       "localizations" : {
         "en" : {
@@ -1469,6 +1485,22 @@
         }
       }
     },
+    "Add Site" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Site"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加网站"
+          }
+        }
+      }
+    },
     "Added" : {
       "localizations" : {
         "en" : {
@@ -1497,6 +1529,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有词典"
+          }
+        }
+      }
+    },
+    "Allow XDict in Login Items" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Allow XDict in Login Items"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“登录项”中允许 XDict"
           }
         }
       }
@@ -3127,6 +3175,22 @@
         }
       }
     },
+    "Hover reads nothing on these sites, nor on a page whose address cannot be read while any site is listed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover reads nothing on these sites, nor on a page whose address cannot be read while any site is listed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停不读取这些网站；只要列有任何网站，也不读取无法得知地址的网页。"
+          }
+        }
+      }
+    },
     "Hover reads words from the screen where an app does not share its text." : {
       "localizations" : {
         "en" : {
@@ -3155,6 +3219,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "悬停查词将于%@恢复"
+          }
+        }
+      }
+    },
+    "How long the pointer rests on a word before hover looks it up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How long the pointer rests on a word before hover looks it up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指针在词上停留多久后，悬停才查询它。"
           }
         }
       }
@@ -3363,6 +3443,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳到所选内容"
+          }
+        }
+      }
+    },
+    "Keep XDict in the menu bar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep XDict in the menu bar"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "让 XDict 留在菜单栏"
           }
         }
       }
@@ -3847,6 +3943,22 @@
         }
       }
     },
+    "Never look up on" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Never look up on"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从不在这些网站上查询"
+          }
+        }
+      }
+    },
     "New Tab" : {
       "localizations" : {
         "en" : {
@@ -4313,6 +4425,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开词典设置"
+          }
+        }
+      }
+    },
+    "Open Login Items Settings…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Login Items Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“登录项”设置…"
           }
         }
       }
@@ -5006,6 +5134,22 @@
         }
       }
     },
+    "Rest time" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rest time"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停留时间"
+          }
+        }
+      }
+    },
     "Resume Hover" : {
       "localizations" : {
         "en" : {
@@ -5504,6 +5648,22 @@
         }
       }
     },
+    "Site" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Site"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站"
+          }
+        }
+      }
+    },
     "Smaller Text" : {
       "localizations" : {
         "en" : {
@@ -5628,6 +5788,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "那部词典已不在你的词库中。"
+          }
+        }
+      }
+    },
+    "That is not a site. Type a name such as example.com, or paste an address." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That is not a site. Type a name such as example.com, or paste an address."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这不是网站。请输入 example.com 这样的名称，或粘贴网址。"
           }
         }
       }
@@ -6822,6 +6998,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典自带某个词的录音、且 macOS 能播放时，播放录音而不用系统语音。"
+          }
+        }
+      }
+    },
+    "With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭所有窗口后，XDict 仍在运行：快捷键、服务和悬停查询照常可用。关闭此项时，XDict 随最后一个窗口退出。"
           }
         }
       }

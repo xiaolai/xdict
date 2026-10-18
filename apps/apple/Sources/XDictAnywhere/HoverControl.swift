@@ -181,6 +181,44 @@ public final class HoverControl {
         store.save(stored)
     }
 
+    // MARK: - Excluded sites and the rest time (Settings ▸ General)
+
+    /// The sites the reader excluded, as stored hosts, in one order.
+    public var excludedSites: [String] { policy.excludedHosts.sorted() }
+
+    /// **The reader typed a site to exclude**: a name or a pasted address, kept as its host (`HoverPolicy.siteHost`) in
+    /// the one stored policy, which the gate reads at once. What is not a site is refused and nothing is stored.
+    public func addExcludedSite(_ typed: String) -> ExcludedSiteAnswer {
+        guard let host = HoverPolicy.siteHost(fromTyped: typed) else { return .notASite }
+        // A list saved before hosts were reduced may hold a whole address: compared as the host it names.
+        let stored = Set(policy.excludedHosts.map { HoverPolicy.siteHost(fromTyped: $0) ?? HoverPolicy.normalisedHost($0) })
+        guard !stored.contains(host) else { return .alreadyExcluded(host) }
+        var changed = policy
+        changed.excludedHosts.insert(host)
+        setPolicy(changed)
+        return .added(host)
+    }
+
+    public func removeExcludedSite(_ host: String) {
+        var changed = policy
+        changed.excludedHosts.remove(host)
+        setPolicy(changed)
+    }
+
+    /// The rest the picker shows: the stored one, or the choice nearest it when it is none of them.
+    public var settle: HoverPolicy.Settle {
+        let stored = policy.settleMilliseconds
+        return HoverPolicy.Settle(rawValue: stored)
+            ?? HoverPolicy.settleChoices.min { abs($0.milliseconds - stored) < abs($1.milliseconds - stored) }
+            ?? .standard
+    }
+
+    public func setSettle(_ settle: HoverPolicy.Settle) {
+        var changed = policy
+        changed.settleMilliseconds = settle.milliseconds
+        setPolicy(changed)
+    }
+
     /// Starts watching where the reader has hover on. Called once there is a popover to present into — never in an
     /// instrument run.
     /// **The one way hover starts at launch**: never in a driven run, never when the reader turned it off.
@@ -197,6 +235,14 @@ public final class HoverControl {
         if on { watcher.start() } else { watcher.stop() }
         isWatching = watcher.isWatching
     }
+}
+
+/// What adding a site to exclude did, as kinds (the view layer words them).
+public enum ExcludedSiteAnswer: Sendable, Equatable {
+    case added(String)
+    case alreadyExcluded(String)
+    /// Neither a host name nor an address holding one.
+    case notASite
 }
 
 /// **Which launch this is** (plan-capture WI-3): the reader's, or one a development instrument drives, in which hover is
