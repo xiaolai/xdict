@@ -161,6 +161,9 @@ public final class CaptureRequests: Sendable {
         let (claimed, endings) = state.withLock { state -> (Bool, [CaptureAcknowledgement]) in
             guard state.known(request), !state.isEnded(request.number) else { return (false, []) }
             if state.sequence.isCurrent(request.number) { return (true, []) }
+            // Fail-closed, unreachable today: every claim ends the open requests below it (`endBelow`) and `close` ends
+            // them all, so an open request is never older than the presented one. Kept so a change to that invariant
+            // refuses and ends the request rather than presenting it out of order.
             guard state.sequence.claim(request.number) else {
                 return (false, state.end(request.number, generation: state.open[request.number] ?? 0, .cancelled).map { [$0] } ?? [])
             }
