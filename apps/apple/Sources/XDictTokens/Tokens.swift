@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "2f1fc526e698adf7d9d3e77a5d0a692b990fe668fd3136587cbaa26a2db5b0d4"
+    public static let sourceDigest = "699fdcfa03c24f0fb5a9c265534481dd3cdfe1d34b09e4e9bf8b008074a89232"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -354,8 +354,6 @@ public enum Tokens {
         public static let narrowPane = CGSize(width: 360, height: 700)
         /// The gallery's pane, about the main window's entry column.
         public static let galleryPane = CGSize(width: 820, height: 900)
-        /// The corpus instrument window: a main window size, the same as the lab window.
-        public static let corpusWindow = CGSize(width: 900, height: 700)
     }
 
     /// Strides, bounds and margins of the instruments' windows and captures.
