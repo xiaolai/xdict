@@ -91,7 +91,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "bd33ae1c5dc7f8883a1468c6df3d1c7d48755795",
+  "apps/apple/Package.swift": "7b16904bef2d9264608f9fcaf30d9e73b0a6be68",
   "core/Cargo.toml": "8e96898c7e4a1b21f920104e9b25a0b82a2bca64",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
@@ -111,6 +111,7 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
     "XDictCaptureMac",
     "XDictClient",
     "XDictContract",
@@ -128,6 +129,7 @@
   "XDictAnywhere": {
    "deps": [
     "XDictBase",
+    "XDictCapture",
     "XDictCaptureMac",
     "XDictTokens"
    ],
@@ -137,7 +139,9 @@
   "XDictAnywhereTests": {
    "deps": [
     "XDictAnywhere",
-    "XDictCaptureMac"
+    "XDictCapture",
+    "XDictCaptureMac",
+    "XDictTokens"
    ],
    "dir": "apps/apple/Tests/XDictAnywhereTests/",
    "type": "test"
@@ -392,6 +396,7 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
     "XDictCaptureMac",
     "XDictContract",
     "XDictEntryView",
@@ -408,6 +413,7 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
     "XDictCaptureMac",
     "XDictContract",
     "XDictLibrary",

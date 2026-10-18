@@ -33,15 +33,23 @@ struct TestInventoryTests {
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
         // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
         // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
-        "XDictAnywhereTests": 37,
+        // 37 → 66 (plan-capture WI-3): 38 were present (the floor above counted one short); the composition layer for
+        // capture — HoverPolicyStoreTests (8) and HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name
+        // from XiaolaiDict, fourteen added (the control's scripts, its default and tolerances, hover off starting nothing,
+        // the derived scripts, the popover's acknowledgements, the anchor): 38 + 14 + 14 = 66. 66 → 69: a driven launch
+        // starts no hover, and which launch it is, both ways (HoverLaunchTests).
+        "XDictAnywhereTests": 69,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
-        "XDictUITests": 29,
+        // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
+        "XDictUITests": 33,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
         // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
         // macOS capture target's controls.
-        "XDictTests": 40,
+        // 40 → 42 (WI-3): the captured context's data-flow rule and its control; 42 → 44: every driven instrument turns
+        // hover off, and its control; 44 → 46: the app starts hover only with its launch, and its control.
+        "XDictTests": 46,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -50,14 +58,19 @@ struct TestInventoryTests {
         "XDictTokensTests": 6,
         // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
         "XDictAppleSourceTests": 16,
-        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
-        "XDictCaptureTests": 261,
+        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name;
+        // 261 → 269 (WI-3): one numbering across the four triggers (5) and the ephemeral context session (3).
+        "XDictCaptureTests": 269,
         // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
         // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
         // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
         // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
-        "XDictCaptureMacTests": 113,
+        // 113 → 153 (WI-3): the hover watcher and reader, XiaolaiDict's HoverWatcherSequenceTests (18, with
+        // stoppingEndsTheHover), HoverWatcherTests (13), HoverReaderSourceTests (2) and HoverSiteTests (1) moved by name,
+        // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing);
+        // 153 → 156: a hover supersedes a shortcut still reading, the compositor's own window, the key up at the gate.
+        "XDictCaptureMacTests": 156,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

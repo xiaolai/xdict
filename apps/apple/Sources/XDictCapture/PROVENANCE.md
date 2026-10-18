@@ -34,10 +34,11 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | XDict file | Tests | ADR |
 |---|---|---|
 | `CapturedTerm.swift` (trigger, acquisition, source app, pointer, word box, context outcome, validating constructor) | `CapturedTermTests` (14) | XDict ADR-0014 d.2, d.3 |
-| `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement) | `CaptureSinkTests` (9) | XDict ADR-0014 d.4; 0045 |
+| `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement; one numbering with presentation claims since WI-3) | `CaptureSinkTests` (9), `RequestNumberingTests` (5, WI-3) | XDict ADR-0014 d.4; 0045 |
 | `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
 | `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
 | `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration) | through the ported tests (`MeasuredMetrics.swift`) | XDict ADR-0014 d.5, d.11 |
+| `CaptureContextSession.swift` (the one ephemeral session the presented request's context lives in; added in plan-capture WI-3) | `CaptureContextSessionTests` (3), seen failing against a missing type | XDict ADR-0014 d.9 |
 | `CaptureDescriptions.swift` (metadata-only descriptions and empty mirrors of `SentenceContext`, `ContextOutcome`, `CapturedTerm`; added in plan-capture WI-2) | `PointerWordReaderTests.noDescriptionOfAResultCarriesItsSentence` (in `XDictCaptureMacTests`), seen failing against leaking descriptions | XDict ADR-0014 d.9 |
 
 ## What changed on the way (re-checked against XDict, ADR-0014)
@@ -78,12 +79,14 @@ capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagM
 - ~~WI-2: the Service-text-wins rule~~ — done in plan-capture WI-2: `SelectionReader.serviceTerm` in `XDictCaptureMac`,
   with `SelectionCaptureTests` (the selection disagrees, the app has exited, the pointer moved into the submenu).
 - WI-4: the pending context handle's cancel, and the recogniser using `CaptureLimits.observations` and the tile limits.
-- WI-3: `RequestSequence` (presentation claims) and `CaptureRequests` (acknowledgements) joined into one numbering for
-  every trigger, in one order.
+- ~~WI-3: `RequestSequence` and `CaptureRequests` joined into one numbering~~ — done in plan-capture WI-3:
+  `CaptureRequests` holds the `RequestSequence` (`begin`, `beginPresenting`, `present`, `close`), with
+  `RequestNumberingTests` across shortcut, Service, menu and hover.
 
 ## Not moved (decision 10, and the WI-1 brief)
 
 `ReadingPlace` (document URLs, titles, ledger fields), `CaptureQuality` and `MisreadSigns` (study-ledger quality),
-`PlacePolicy`'s place stripping, `HoverPolicyStore` (settings storage: WI-3), `DrawerGeometry`, `SentenceExcerpt`,
+`PlacePolicy`'s place stripping, `HoverPolicyStore` (settings storage: moved in WI-3 to `XDictAnywhere`, the
+composition layer; its row is in `XDictCaptureMac/PROVENANCE.md`), `DrawerGeometry`, `SentenceExcerpt`,
 `RevealSequence` (panel and developer code), `ProcessResolver` and `SystemOverlaySurface` (the Mac adapter's and the E2E
 panel stage's), and every `MacCapture` file (WI-2).
