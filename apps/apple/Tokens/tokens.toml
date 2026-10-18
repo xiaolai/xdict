@@ -31,6 +31,7 @@ placeholder = { kind = "length", swift = "Placeholder", doc = "The picture a blo
 instrumentFrame = { kind = "rect", swift = "InstrumentFrame", doc = "Window frames of development instruments (the lab, the E2E instruments): never in front of a reader." }
 instrumentSize = { kind = "size", swift = "InstrumentSize", doc = "Pane sizes the instruments picture an entry at." }
 instrumentLength = { kind = "length", swift = "InstrumentLength", doc = "Strides, bounds and margins of the instruments' windows and captures." }
+capture = { kind = "length", swift = "Capture", doc = "Capture's distances, in screen points: how far from a word a resting pointer may be, and how far it may drift and still rest (ADR-0014 decision 11). Handed into the capture targets, which may not import the tokens." }
 css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
 palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
 accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
@@ -351,3 +352,8 @@ space-image = { main = "0.75em", why = "Around an illustration, about half a lin
 [fill]
 bp-narrow = { value = "480px", why = "A pane at most this wide (a column under about 30em) turns a float into an illustration (R16)." }
 bp-wide = { value = "481px", why = "The first width past bp-narrow: a float beside text gets its space above (R16)." }
+
+[capture]
+hitAcross = { value = 3, why = "How far left or right of a word's box a resting pointer may be and still mean it: one rule for every capture path, as XiaolaiDict measured word boxes from text layout, web layout and OCR disagreeing at their edges (screen-word spike, finding 7)." }
+hitDown = { value = 2, why = "How far above or below a word's box a resting pointer may be and still mean it: tighter than across, since a line above or below is another word (screen-word spike, finding 7)." }
+restDrift = { value = 2, why = "How far a resting pointer may drift and still be resting: a hand held on a word twitches by a point or two, and counting that as movement restarted the dwell every time (XiaolaiDict ADR-0045)." }
