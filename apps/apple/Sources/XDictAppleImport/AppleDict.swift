@@ -118,7 +118,11 @@ func loadProperties(bundle: URL, bounds: Bounds = .production) throws -> Propert
     guard let info = parsed as? [String: Any] else { throw AppleImportError.malformedInfoPlist(.notADictionary) }
     // ADR-0011 decision 11: format 3 is the only one these bundles are known in; anything else is refused by kind.
     // A `Bool` is not a version, though Foundation would bridge `true` to 1.
-    let version = info["IDXDictionaryVersion"].flatMap { $0 is Bool ? nil : $0 as? Int }
+    // Asked of Core Foundation, not with `is Bool`: Swift casts an `NSNumber` of 0 or 1 to `Bool` too, which reported
+    // the format 1 bundles' version as absent.
+    let version = info["IDXDictionaryVersion"].flatMap { value -> Int? in
+        CFGetTypeID(value as CFTypeRef) == CFBooleanGetTypeID() ? nil : value as? Int
+    }
     guard version == 3 else { throw AppleImportError.notVersion3(found: version) }
     guard let rawIndexes = info["IDXDictionaryIndexes"] as? [Any] else { throw AppleImportError.malformedInfoPlist(.indexes) }
     let indexes = try rawIndexes.map { e -> [String: Any] in
