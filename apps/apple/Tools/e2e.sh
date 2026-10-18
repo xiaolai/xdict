@@ -62,6 +62,32 @@ if [ "${1:-}" = --list-stages ]; then
     bash "$PLAN" substages
     exit 0
 fi
+# **Every sub-stage asked for has its driver**: `substage_<name, dots as underscores>`, or `substage_<group>` for a
+# group's one launch, defined in the run script below. Checked before anything is locked, built or shipped, so a
+# sub-stage defined ahead of its driver (hover, library.apple) fails in a second, by name (plan-capture WI-5).
+# `e2e.sh --drivers [name...]` runs only this check, and runs nothing, so `make test-tools` reads it from an agent's shell.
+check_drivers() {
+    local table sub group function_name missing=""
+    table=$(bash "$PLAN" table) || return 1
+    for sub in "$@"; do
+        group=$(awk -F'\t' -v s="$sub" '$1 == s { print $4; exit }' <<<"$table")
+        if [ -n "$group" ] && [ "$group" != - ]; then function_name="substage_$group"; else function_name="substage_${sub//./_}"; fi
+        grep -q "^$function_name() {" "$SELF" || missing="$missing $sub ($function_name)"
+    done
+    [ -n "$missing" ] || return 0
+    echo "e2e: FAIL: Tools/e2e.sh has no driver for:$missing" >&2
+    return 1
+}
+if [ "${1:-}" = --drivers ]; then
+    shift
+    case "$*" in *[!a-z0-9.\ ]*) echo "e2e: FAIL: a stage or sub-stage name is lower-case words and dots; got '$*'" >&2; exit 1 ;; esac
+    # shellcheck disable=SC2068 # names, validated above, split on purpose
+    asked=$(bash "$PLAN" expand $@) || exit 1
+    # shellcheck disable=SC2086 # sub-stage names, split on purpose
+    check_drivers $asked || exit 1
+    echo "every sub-stage asked for has its driver"
+    exit 0
+fi
 # shellcheck source=Tools/e2e-requested.sh
 source Tools/e2e-requested.sh
 
@@ -87,6 +113,8 @@ if [ -n "$only" ]; then
     SUBSTAGES=$owners
 fi
 SUBSTAGES=$(tr '\n' ' ' <<<"$SUBSTAGES")
+# shellcheck disable=SC2086 # sub-stage names, split on purpose
+check_drivers $SUBSTAGES || fail "see above: a sub-stage asked for has no driver yet; nothing was built, locked or shipped"
 # shellcheck disable=SC2086 # sub-stage names, split on purpose
 NEEDS=" $(bash "$PLAN" needs $SUBSTAGES | tr '\n' ' ') "
 needs() { case $NEEDS in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
@@ -1349,7 +1377,11 @@ for sub in "${WANTED[@]}"; do
         for other in "${WANTED[@]}"; do [ "$(group_of "$other")" != "$group" ] || members+=("$other"); done
         function_name="substage_$group"
     fi
-    declare -F "$function_name" >/dev/null || { STAGE=$sub; flunk - "$sub: this script has no $function_name"; continue; }
+    # Every sub-stage of the group fails, not only the first: the others would otherwise go unrecorded.
+    if ! declare -F "$function_name" >/dev/null; then
+        for member in "${members[@]}"; do STAGE=$member; flunk - "$member: this script has no $function_name"; done
+        continue
+    fi
     STAGE=${members[0]}
     echo
     echo "-- ${members[*]}"
