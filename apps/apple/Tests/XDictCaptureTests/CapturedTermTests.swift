@@ -68,11 +68,22 @@ struct CapturedTermTests {
     }
 
     @Test func aRangeThatSplitsASurrogatePairIsRefused() {
-        // 𠮷 is two UTF-16 units; a range starting on its low half has no character.
-        #expect(throws: CaptureValueError.range) {
+        // 𠮷 is two UTF-16 units; a range starting on its low half, or ending inside it, has no whole character. Its own
+        // error, so the term check (which would also refuse) cannot stand in for it.
+        #expect(throws: CaptureValueError.rangeSplitsCharacter) {
             try make("𠮷", sentence: "x𠮷y", range: NSRange(location: 2, length: 2))
         }
+        #expect(throws: CaptureValueError.rangeSplitsCharacter) {
+            try make("x𠮷", sentence: "x𠮷y", range: NSRange(location: 0, length: 2))
+        }
         #expect(throws: Never.self) { try make("𠮷", sentence: "x𠮷y", range: NSRange(location: 1, length: 2)) }
+    }
+
+    /// The range's length is the term's own, in UTF-16 units.
+    @Test func aRangeOfAnotherLengthIsRefused() {
+        #expect(throws: CaptureValueError.range) {
+            try make("hold", sentence: "the ship's hold", range: NSRange(location: 11, length: 3))
+        }
     }
 
     @Test func aRangeThatDoesNotHoldTheTermIsRefused() {

@@ -38,6 +38,16 @@ struct CaptureLimitsTests {
         #expect((window.text as NSString).substring(with: window.range) == "hold")
     }
 
+    /// **The start of the cut lands on a low surrogate and is moved past it**: 99 units around `hold` at 600 start at
+    /// 553, the second half of a 𠮷.
+    @Test func theStartOfTheCutNeverBeginsOnALowSurrogate() throws {
+        let text = String(repeating: "𠮷", count: 300) + "hold" + String(repeating: "𠮷", count: 300)
+        let window = try #require(try limits(context: 99).window(of: text, around: NSRange(location: 600, length: 4)))
+        #expect(!window.text.unicodeScalars.contains("\u{FFFD}"), "the cut began on half a pair")
+        #expect(window.text.utf16.count <= 99)
+        #expect((window.text as NSString).substring(with: window.range) == "hold")
+    }
+
     /// **A term longer than the limit is refused, not cut**: capture never truncates a key.
     @Test func aTermLongerThanTheLimitIsNotCut() throws {
         let term = String(repeating: "a", count: 201)
