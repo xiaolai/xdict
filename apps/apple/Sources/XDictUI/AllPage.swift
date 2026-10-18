@@ -9,7 +9,7 @@ import XDictSearch
 /// search says so in the page's notices.
 public enum AllPage {
     /// Whether the window shows the All page for this lookup: a typed word, over every dictionary. A link's lookup is
-    /// in its own dictionary, and one dictionary chosen in the scope bar shows only that one.
+    /// in its own dictionary, and one dictionary chosen in the search field's scope menu shows only that one.
     public static func applies(scope: SearchScope, mode: MatchMode) -> Bool {
         scope == .all && mode == .reader
     }

@@ -44,7 +44,7 @@ struct ShortcutRecorder: View {
     @State private var monitor: Any?
 
     var body: some View {
-        Button {
+        Button {  // placement: shortcut-field
             recording ? stop() : start()
         } label: {
             if recording {

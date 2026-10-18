@@ -15,7 +15,7 @@ public struct SearchCommands: Commands {
     public init() {}
 
     public var body: some Commands {
-        CommandGroup(replacing: .textEditing) {
+        CommandGroup(replacing: .textEditing) {  // placement: P33
             Menu("Find") {
                 Button("Search For a New Word…") { window?.focusSearch() }
                     .keyboardShortcut("f", modifiers: [.command, .option])
@@ -38,11 +38,11 @@ public struct SearchCommands: Commands {
                     .disabled(window?.hasEntry != true)
             }
             Divider()
-            Button("Pronounce") { window?.pronounceSelectionOrShown() }
+            Button("Pronounce") { window?.pronounceSelectionOrShown() }  // placement: P48
                 .keyboardShortcut("p", modifiers: [.command, .option])
                 .disabled(window?.canPronounce != true)
         }
-        CommandMenu("Go") {
+        CommandMenu("Go") {  // placement: P35
             Button("Back") { window?.model.back() }
                 .keyboardShortcut("[")
                 .disabled(window?.model.canGoBack != true)
@@ -53,7 +53,7 @@ public struct SearchCommands: Commands {
                 .keyboardShortcut("[", modifiers: [.command, .option])
                 .disabled(window?.model.canReturnToOrigin != true)
         }
-        CommandMenu("Search") {
+        CommandMenu("Search") {  // placement: P36
             Toggle(isOn: scoped(.all)) { Text(SearchSentences.allDictionaries) }
                 .keyboardShortcut(ScopeShortcut.all, modifiers: .command)
             let enabled = window?.model.known.filter(\.enabled) ?? []
@@ -76,7 +76,7 @@ public struct SearchCommands: Commands {
                 .keyboardShortcut(ScopeShortcut.previous, modifiers: .command)
                 .disabled(window == nil)
         }
-        CommandGroup(after: .toolbar) {
+        CommandGroup(after: .toolbar) {  // placement: P34
             Button("Bigger Text") { window?.entry.zoomIn() }
                 .keyboardShortcut("+")
                 .disabled(window == nil)
@@ -103,7 +103,7 @@ public struct SearchCommands: Commands {
             Divider()
         }
         // File ▸ Print… (P32, P44): the shown entry.
-        CommandGroup(replacing: .printItem) {
+        CommandGroup(replacing: .printItem) {  // placement: P32
             Button("Print…") { window?.entry.printEntry() }
                 .keyboardShortcut("p")
                 .disabled(window?.hasEntry != true)

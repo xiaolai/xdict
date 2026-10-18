@@ -35,11 +35,12 @@ def judge(name, expect, nodes):
 
 
 def scope_chosen(nodes, name):
-    """The scope bar shows `name` chosen (Q1, P6): the `scope.option` titled `name` has value 1 and no other has."""
-    options = [n for n in nodes if n.get("id") == "scope.option"]
-    chosen = [n.get("texts", []) for n in options if "1" in n.get("texts", [])]
-    ok = len(chosen) == 1 and name in chosen[0]
-    return ok, f"the scope bar's options, as read: {[n.get('texts') for n in options]}; chosen {chosen}"
+    """The window shows `name` chosen (Q1, P6, P42): the search field's scope menu button (`scope.menu`) carries it as
+    its value, and the field reads "Search in <name>" (its placeholder, and so its label)."""
+    menus = [n.get("texts", []) for n in nodes if n.get("id") == "scope.menu"]
+    fields = [n.get("texts", []) for n in nodes if n.get("id") == "search-field"]
+    ok = len(menus) == 1 and name in menus[0] and any(f"Search in {name}" in texts for texts in fields)
+    return ok, f"the scope menu's button, as read: {menus}; the search field: {fields}"
 
 
 def descendants(nodes, ident):
@@ -76,13 +77,13 @@ def results_read(nodes, rows, sections):
 
 
 def entry_placement(geometry):
-    """Where the entry starts (P6): right under the scope bar, or under the page's notices while they are shown, within
-    1 pt; never under the toolbar alone, since the 36 pt scope bar sits between. None when a frame is missing, with
-    the reason."""
-    bar, notices, web = geometry.get("scopeBar"), geometry.get("notices"), geometry.get("web")
-    if not bar or not web:
-        return None, f"no scope bar or no entry to measure: {geometry}"
-    above = max([bar["y"] + bar["height"]] + ([notices["y"] + notices["height"]] if notices else []))
+    """Where the entry starts (P6): right under the toolbar, or under the page's notices while they are shown, within
+    1 pt; no band where the scope bar's 36 pt row was (the scope is the search field's menu since 2026-10-18). None
+    when a frame is missing, with the reason."""
+    toolbar, notices, web = geometry.get("toolbar"), geometry.get("notices"), geometry.get("web")
+    if not toolbar or not web:
+        return None, f"no toolbar or no entry to measure: {geometry}"
+    above = max([toolbar["y"] + toolbar["height"]] + ([notices["y"] + notices["height"]] if notices else []))
     band = web["y"] - above
-    under = "the page's notices" if notices and notices["y"] + notices["height"] == above else "the scope bar"
+    under = "the page's notices" if notices and notices["y"] + notices["height"] == above else "the toolbar"
     return abs(band) <= 1, f"the entry starts {band:g} pt below {under}'s bottom"

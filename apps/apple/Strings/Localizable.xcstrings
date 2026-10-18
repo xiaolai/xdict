@@ -1469,22 +1469,6 @@
         }
       }
     },
-    "All" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "All"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部"
-          }
-        }
-      }
-    },
     "All Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -4590,6 +4574,22 @@
         }
       }
     },
+    "Search In" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search In"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索范围"
+          }
+        }
+      }
+    },
     "Search in" : {
       "localizations" : {
         "en" : {
@@ -4602,6 +4602,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询语言"
+          }
+        }
+      }
+    },
+    "Search in %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search in %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 %@ 中搜索"
           }
         }
       }
@@ -4876,22 +4892,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在设置中显示"
-          }
-        }
-      }
-    },
-    "Show more dictionaries" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show more dictionaries"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示更多词典"
           }
         }
       }
@@ -6632,22 +6632,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS 找不到 XDict，无法在登录时打开。"
-          }
-        }
-      }
-    },
-    "more dictionaries" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "more dictionaries"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更多词典"
           }
         }
       }

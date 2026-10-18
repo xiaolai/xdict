@@ -7,9 +7,10 @@ import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
 /// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the Smaller/Bigger Text pair and the
-/// search field at its trailing edge; the scope bar runs under it; the sidebar of matching headwords appears only after
-/// a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep their contract. The menus
-/// (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
+/// search field at its trailing edge, whose magnifier holds the scope menu (P6, XDict's own); the sidebar of matching
+/// headwords appears only after a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep
+/// their contract. The menus (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word,
+/// Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
@@ -61,7 +62,7 @@ public struct SearchWindow: View {
 
     /// Back/Forward | title | space | Smaller/Bigger Text | search (P3). At the 400 pt minimum the two pairs go to the
     /// overflow before the search field does (P8).
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
             ControlGroup {
                 Button { state.model.back() } label: { Label("Back", systemImage: "chevron.backward") }
@@ -87,16 +88,17 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
                 .disabled(!state.canPronounce)
                 .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
                 .accessibilityIdentifier("toolbar.pronounce")
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
-                        onChange: { state.typedText($0) },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
+            Self.searchField(text: state.model.text, known: state.model.known, scope: state.model.scope,
+                             focus: state.searchFocus, onScope: { state.model.setScope($0) },
+                             onChange: { state.typedText($0) }, onSubmit: { state.submit() },
+                             onMove: { state.move($0) }, onCancel: { state.cancel() })
                 // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
                 // hosted AppKit view by its ideal, and NSSearchField has none, so the range left it near its least
                 // (owner, 2026-10-18). At the 400 pt minimum it is 152 pt, so the pairs still overflow first (P8).
@@ -104,23 +106,32 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.high)
     }
+
+    /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the
+    /// scope menu's lines, which also set the magnifier (P6).
+    static func searchField(text: String, known: [SearchSource], scope: SearchScope, focus: Int,
+                            onScope: @escaping (SearchScope) -> Void, onChange: @escaping (String) -> Void,
+                            onSubmit: @escaping () -> Void, onMove: @escaping (Int) -> Bool,
+                            onCancel: @escaping () -> Bool) -> SearchField {
+        SearchField(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
+                    scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
+                    onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
+    }
 }
 
-/// The entry pane: the scope bar over the entry view, the page's notices, and a placeholder while there is nothing to
-/// read.
+/// The entry pane: the page's notices over the entry view, and a placeholder while there is nothing to read. The entry
+/// starts right under the toolbar: the scope is the search field's menu (P6), not a row of its own.
 struct EntryDetail: View {
     let state: SearchWindowState
 
     var body: some View {
         VStack(spacing: 0) {
-            ScopeBar(state: state)
-                .frame(height: ScopeBarLayout.height)
-                .background { FindKeys(state: state) }
             PageNotices(state: state)
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
                 .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }
         }
+        .background { FindKeys(state: state) }
     }
 
     @ViewBuilder private var placeholder: some View {
@@ -131,11 +142,11 @@ struct EntryDetail: View {
             } description: {
                 Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
-                Button("Add Dictionaries…") {
-                    SettingsRoute.shared.requestImport()
+                EmptyStateActions {
+                    Button("Add Dictionaries…") { SettingsRoute.shared.requestImport() }
+                } secondary: {
+                    Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
                 }
-                .buttonStyle(.borderedProminent)
-                Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
             }
             .coversPane()
         case .start:
@@ -171,15 +182,17 @@ struct PageNotices: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 ForEach(troubled) { section in
-                    HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                        Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
-                        if let sentence = SearchSentences.status(section.status) {
-                            ProblemStatus(sentence: sentence, compact: true)
+                    // A strip's row (R2): the name and its sentence lead, the way on small at the trailing edge.
+                    ActionRow(.strip) {
+                        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+                            Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
+                            if let sentence = SearchSentences.status(section.status) {
+                                ProblemStatus(sentence: sentence, compact: true)
+                            }
                         }
-                        Spacer(minLength: Tokens.Space.xs)
+                    } actions: {
                         if let next = section.next, SearchSentences.isButton(next) {
                             Button(SearchSentences.action(next)) { state.perform(next) }
-                                .controlSize(.small)
                         }
                     }
                     .accessibilityElement(children: .contain)
@@ -212,7 +225,7 @@ struct PronounceButton: View {
     let state: SearchWindowState
 
     var body: some View {
-        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P41
             .disabled(!state.canPronounce)
             .help(help)
             .accessibilityIdentifier("pronounce")

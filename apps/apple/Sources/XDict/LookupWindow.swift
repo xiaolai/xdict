@@ -540,7 +540,7 @@ final class LookupWindowRun: LookupStage {
 
     /// What the window must show at a checkpoint, as VoiceOver reads it, since the Apple parity (2026-10-17): the
     /// list's first rows (the sidebar holds headwords, one each, P9); each dictionary that could not search, its sentence
-    /// and next action, in the page; and the scope bar's choice. An entry `#id:text` is an element of that identifier
+    /// and next action, in the page; and the scope menu's choice. An entry `#id:text` is an element of that identifier
     /// with that text.
     private func expectations(_ name: String) -> [String: [String]] {
         guard let model = state?.model else { return [:] }
@@ -561,14 +561,12 @@ final class LookupWindowRun: LookupStage {
                 }
             }
         }
-        // The scope bar's choice: the radio group by its name, and the option of the chosen scope's title with value 1
-        // (`#id=value:text`), so a name merely shown, not chosen, does not pass.
-        present.append("#scope:\(String(localized: "Dictionaries"))")
-        if case .one(let id) = model.scope, let source = model.source(id) {
-            present.append("#scope.option=1:\(source.name)")
-        } else {
-            present.append("#scope.option=1:\(String(localized: "All"))")
-        }
+        // The scope menu's choice (P6, P42): the search field's magnifier, named "Search In" and carrying the chosen
+        // scope's title as its value (`#id=text:text`, the name last since a name may hold a colon), so a name merely
+        // offered in the menu, not chosen, does not pass.
+        let chosen = SearchScopeMenu.items(known: model.known, scope: model.scope).first(where: \.checked)?.title
+            ?? String(localized: SearchSentences.allDictionaries)
+        present.append("#scope.menu=\(String(localized: SearchScopeMenu.title)):\(chosen)")
         return ["present": present, "absent": [], "ordered": []]
     }
 }

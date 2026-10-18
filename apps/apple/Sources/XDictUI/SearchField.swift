@@ -1,12 +1,18 @@
 import AppKit
 import SwiftUI
+import XDictSearch
 
 /// **The search field**: AppKit's own `NSSearchField`, so it looks, reads to VoiceOver and edits as every Mac search
 /// field does, with what the window needs on top — the keyboard whenever `focus` changes (at launch, and by Search,
 /// ⌥⌘F: I1), Return to look up, ↑ and ↓ to move through suggestions or into the results, Escape to put suggestions away.
+/// Its magnifier drops down the scope menu (`SearchScopeMenu`, P6), and its placeholder names the chosen scope.
 struct SearchField: NSViewRepresentable {
     let text: String
     let prompt: String
+    /// The scope menu's lines; none, no menu.
+    var scopes: [SearchScopeMenu.Item] = []
+    /// A line of the scope menu chosen.
+    var onScope: (SearchScope) -> Void = { _ in }
     /// The field takes the keyboard whenever this changes.
     let focus: Int
     let onChange: (String) -> Void
@@ -31,6 +37,13 @@ struct SearchField: NSViewRepresentable {
     func updateNSView(_ field: KeyboardSearchField, context: Context) {
         context.coordinator.parent = self
         if field.stringValue != text { field.stringValue = text }
+        if field.placeholderString != prompt {
+            field.placeholderString = prompt
+            field.setAccessibilityLabel(prompt)
+        }
+        if !scopes.isEmpty {
+            field.showScopes(scopes, target: context.coordinator, action: #selector(Coordinator.choseScope(_:)))
+        }
         if context.coordinator.focus != focus {
             context.coordinator.focus = focus
             field.takeKeyboard()
@@ -38,9 +51,18 @@ struct SearchField: NSViewRepresentable {
     }
 
     @MainActor
-    final class Coordinator: NSObject, NSSearchFieldDelegate {
+    final class Coordinator: NSObject, NSSearchFieldDelegate, NSMenuItemValidation {
         var parent: SearchField?
         var focus = 0
+
+        @objc func choseScope(_ sender: NSMenuItem) {
+            guard let choice = sender.representedObject as? SearchScopeMenu.Choice else { return }
+            parent?.onScope(choice.scope)
+        }
+
+        func validateMenuItem(_ line: NSMenuItem) -> Bool {
+            line.action == #selector(choseScope(_:)) ? SearchScopeMenu.validate(line) : true
+        }
 
         func controlTextDidChange(_ notification: Notification) {
             guard let field = notification.object as? NSSearchField else { return }
@@ -71,6 +93,9 @@ struct SearchField: NSViewRepresentable {
 /// A search field that can be asked for the keyboard before it is in a window, and takes it once it is.
 final class KeyboardSearchField: NSSearchField {
     private var wantsKeyboard = false
+    /// The scope menu's lines last shown (`showScopes`), and AppKit's own magnifier, put back for every dictionary.
+    var scopes: [SearchScopeMenu.Item] = []
+    var plainMagnifier: NSImage?
 
     func takeKeyboard() {
         guard let window else {
