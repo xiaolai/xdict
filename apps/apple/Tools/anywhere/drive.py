@@ -23,6 +23,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import front  # noqa: E402
 import hostcondition  # noqa: E402
+import selection  # noqa: E402
 
 kit, work, app, fixtures, out = sys.argv[1:6]
 asked = set(sys.argv[6:])
@@ -224,7 +225,11 @@ def not_selected(host, raw, what):
 
 def select(host, needle):
     answer = tool("select", HOSTS[host], needle)
-    return answer if "error" not in answer else None, answer
+    if "error" in answer:
+        return None, answer
+    # Anything but the needle itself is a failed selection with its own reason, never handed on as the needle.
+    wrong = selection.refused(needle, answer)
+    return (None, {"error": wrong, "box": answer.get("box")}) if wrong else (answer, answer)
 
 
 def shortcut_panel(combo=DEFAULT):
