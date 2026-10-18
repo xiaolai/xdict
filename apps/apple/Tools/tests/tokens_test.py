@@ -305,6 +305,9 @@ class Check(unittest.TestCase):
             "guard dx <= CGFloat(3) else { return }": [("distance", "3")],
             "func near(_ p: CGPoint, tolerance: CGFloat = 3) -> Bool { true }": [("default", "3")],
             "guard dx<=3 else { return }": [("distance", "3")],
+            "guard dx <= 3 as CGFloat else { return }": [("distance", "3")],
+            "guard 3 as CGFloat >= dx else { return }": [("distance", "3")],
+            "guard dx <= CGFloat(exactly: 3)! else { return }": [("distance", "3")],
             "let r = box.insetBy(dx: -3, dy: -2)": [("geometry", "-3"), ("geometry", "-2")],
         }
         for code, expected in cases.items():
@@ -332,6 +335,10 @@ class Check(unittest.TestCase):
             "static let slop = 2\nfunc f(x: CGFloat) -> CGFloat { x + CGFloat(Self.slop) }": [("capture-unitless-name", "2")],
             "let edgeRatio = CGFloat(2)": [],
             "static let memory = 64\nlet kept = memory + 1": [],
+            "static let slop = 2\nlet s = CGFloat(exactly: Self.slop) ?? 0": [("capture-unitless-name", "2")],
+            "let t = CGFloat(exactly: 3)!": [("capture-unitless-name", "3")],
+            "let t = CGFloat(exactly: 3) ?? 0": [("capture-unitless-name", "3")],
+            "static let edgeRatio = 2\nlet s = CGFloat(exactly: edgeRatio)!": [],
         }
         for code, expected in cases.items():
             with self.subTest(code=code):
