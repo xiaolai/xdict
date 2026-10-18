@@ -6,8 +6,9 @@ import XDictCapture
 
 /// **Hover, in Settings ▸ General** (plan-capture WI-3; ADR-0012 d.1: General holds how a lookup starts, beside the
 /// lookup shortcut): the switch, the key and the gesture, the writing systems hover looks up — derived from the enabled
-/// dictionaries' languages, shown and not chosen — the apps hover never reads, and why hover cannot read now, when it
-/// cannot. Rows, not a form: they sit in the General pane's form.
+/// dictionaries' languages, shown and not chosen — the apps hover never reads, Screen Recording for the apps that share no
+/// text (plan-capture WI-4), and why hover cannot read now, when it cannot. Rows, not a form: they sit in the General
+/// pane's form.
 public struct HoverSettings: View {
     let hover: HoverControl
 
@@ -44,12 +45,35 @@ public struct HoverSettings: View {
             }
             .accessibilityIdentifier("hover.scripts")
             excludedApps
+            screenRecording
             if let notice = hover.notice {
                 Text(HoverSentences.notice(notice))
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("hover.notice")
             }
         }
+    }
+
+    /// **Screen Recording, the one place it is asked for** (plan-capture WI-4; ADR-0014 decision 7): showing the row reads
+    /// the grant without calling anything that could prompt before the reader used it; its button is the only request.
+    @ViewBuilder private var screenRecording: some View {
+        LabeledContent {
+            switch hover.screenRecording {
+            case .notSetUp:
+                Button { Task { await hover.setUpScreenRecording() } } label: { Text("Allow…") }  // placement: form-row
+                    .accessibilityIdentifier("hover.screenRecording.allow")
+            case .allowed:
+                Text("Allowed")
+            case .notAllowed, .couldNotTell:
+                Button { Task { await hover.refreshScreenRecording() } } label: { Text("Check Again") }  // placement: form-row
+                    .accessibilityIdentifier("hover.screenRecording.check")
+            }
+        } label: {
+            Text("Screen Recording")
+            Text(HoverSentences.screenRecording(hover.screenRecording))
+        }
+        .accessibilityIdentifier("hover.screenRecording")
+        .task { await hover.refreshScreenRecording() }
     }
 
     /// The password managers by rule, as one row with what it covers a click away; then the reader's own, each removable.
