@@ -5,6 +5,7 @@ import XDictContract
 import XDictInstruments
 import XDictLibrary
 import XDictUI
+import XDictTokens
 
 /// `XDict --library-drop <library-dir> --ready <file> --expect <file name>`: a development instrument for the E2E
 /// `library` stage's drag-and-drop check (run on the E2E Mac only; never on the build Mac, whose screen is the
@@ -17,7 +18,7 @@ import XDictUI
 enum LibraryDropReport {
     static let flag = "--library-drop"
     /// Where the window stands: top left, in global points from the top left of the main display.
-    static let frame = CGRect(x: 80, y: 80, width: 720, height: 480)
+    static let frame = Tokens.InstrumentFrame.libraryDrop
 
     static func run(_ arguments: [String]) -> Never {
         guard let directory = Instrument.value(after: flag, in: arguments).map(URL.init(fileURLWithPath:)),

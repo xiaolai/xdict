@@ -7,7 +7,7 @@
 [data-xdict-space-by=padding]{margin-top:0 !important;padding-top:var(--xdict-space-at, var(--xdict-space-want)) !important}
 /* Apple's hanging sense number (parity P22): the block's text 1em in from the dictionary's own inset, the number 1em */
 /* out of it (frame.js `hang`, which writes both measures in em). */
-[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + 1em) !important;text-indent:0 !important}
+[data-xdict-hang]{padding-left:calc(var(--xdict-hang-pad, 0em) + var(--xdict-hang-default)) !important;text-indent:0 !important}
 [data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}
 /* Apple's etymology (parity P25): its text close under its label, Apple's 0.2em as the spacing scale's 0.25em (the */
 /* space after a heading; a margin off the scale fails the gallery's invariants), whether the label heads the section's box or is */
@@ -39,7 +39,7 @@ text-align:start}
 /* No fills anywhere (owner, 2026-10-15): the header row is told by weight and the space under it. */
 [data-xdict-table=data] th,[data-xdict-table=data] thead td{font-weight:var(--xdict-weight-bold);
 padding-bottom:var(--xdict-space-2)}
-[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 0.25em 0 0}
+[data-xdict-table=layout]{border-spacing:0}[data-xdict-table=layout] td{padding:0 var(--xdict-layout-cell-gap) 0 0}
 :not([data-xdict-scroll])>table[data-xdict-table=data]{display:block;overflow-x:auto;max-width:100%}
 img{max-width:100%;height:auto}
 /* R16's classes (WI-11, 2026-10-17): frame.js reads each shown image's class (`data-xdict-img`, from its natural */
@@ -48,8 +48,8 @@ img{max-width:100%;height:auto}
 /* An illustration, alone or beside text: a block at the text's edge, at most 20em square, half a line around it */
 /* (the space above is frame.js's, `data-xdict-space=image`, so it collapses to exactly that). */
 img:is([data-xdict-img=illustration],[data-xdict-img=inline]){display:block !important;float:none !important;
-position:static !important;clear:none !important;width:auto !important;height:auto !important;max-width:min(100%, 20em) !important;
-max-height:20em !important;margin-inline:0 !important;margin-block-end:var(--xdict-space-image) !important;
+position:static !important;clear:none !important;width:auto !important;height:auto !important;max-width:min(100%, var(--xdict-image-max)) !important;
+max-height:var(--xdict-image-max) !important;margin-inline:0 !important;margin-block-end:var(--xdict-space-image) !important;
 box-sizing:border-box !important}
 [data-xdict-img-holder=illustration],[data-xdict-img-holder=inline]{display:block !important;padding-block:0 !important;
 border-block:0 !important;clear:none !important}
@@ -57,11 +57,11 @@ border-block:0 !important;clear:none !important}
 img[data-xdict-captioned]{margin-block-end:var(--xdict-space-1) !important}
 /* A figure in a table cell: the cell's padding is its space. */
 img[data-xdict-img=table]{width:auto !important;height:auto !important;max-width:100% !important;
-max-height:20em !important;margin:0 !important;box-sizing:border-box !important}
+max-height:var(--xdict-image-max) !important;margin:0 !important;box-sizing:border-box !important}
 /* A floated picture: on its side, at most 40% of the column and 16em tall, 1em from the text it faces; the block */
 /* holding it clears it before the next (`data-xdict-clears`). */
-img[data-xdict-img=float]{width:auto !important;height:auto !important;max-width:min(40%, 12em) !important;
-max-height:16em !important;margin-bottom:var(--xdict-space-2) !important;
+img[data-xdict-img=float]{width:auto !important;height:auto !important;max-width:min(40%, var(--xdict-float-max-width)) !important;
+max-height:var(--xdict-float-max-height) !important;margin-bottom:var(--xdict-space-2) !important;
 position:static !important;box-sizing:border-box !important}
 img[data-xdict-img=float][data-xdict-side=end]{float:inline-end !important;
 margin-inline:var(--xdict-space-4) 0 !important}
@@ -69,19 +69,19 @@ img[data-xdict-img=float][data-xdict-side=start]{float:inline-start !important;
 margin-inline:0 var(--xdict-space-4) !important}
 [data-xdict-clears]{display:flow-root !important}
 /* 4px above it only beside text: in a narrow pane its space above is frame.js's (`--xdict-space-at`, type.css). */
-@media (min-width:481px){img[data-xdict-img=float]{margin-top:var(--xdict-space-1) !important}}
+@media (min-width:{{fill-bp-wide}}){img[data-xdict-img=float]{margin-top:var(--xdict-space-1) !important}}
 /* In a narrow pane (a column under about 30em) a float leaves no room for its text: it becomes an illustration. */
-@media (max-width:480px){[data-xdict-img-holder=float]{display:block !important;padding-block:0 !important;clear:none !important}[data-xdict-float-box]{float:none !important;margin-inline:0 !important}img[data-xdict-img=float][data-xdict-side]{float:none !important;clear:none !important;display:block !important;
-max-width:min(100%, 20em) !important;max-height:20em !important;margin-inline:0 !important;
+@media (max-width:{{fill-bp-narrow}}){[data-xdict-img-holder=float]{display:block !important;padding-block:0 !important;clear:none !important}[data-xdict-float-box]{float:none !important;margin-inline:0 !important}img[data-xdict-img=float][data-xdict-side]{float:none !important;clear:none !important;display:block !important;
+max-width:min(100%, var(--xdict-image-max)) !important;max-height:var(--xdict-image-max) !important;margin-inline:0 !important;
 margin-block-end:var(--xdict-space-image) !important}}
 /* A badge or ornament (a small image floated in a heading): inline after the text, the text's height. */
 img:is([data-xdict-img=badge],[data-xdict-img=icon]){font-size:inherit !important}
 img[data-xdict-img=badge]{float:none !important;position:static !important;display:inline !important;
-width:auto !important;height:1em !important;max-height:1.25em !important;vertical-align:-0.125em !important;
-margin-block:0 !important;margin-inline:0.25em 0 !important}
+width:auto !important;height:var(--xdict-badge-height) !important;max-height:var(--xdict-badge-max-height) !important;vertical-align:var(--xdict-badge-baseline) !important;
+margin-block:0 !important;margin-inline:var(--xdict-badge-gap) 0 !important}
 /* A small image in text (an icon that is not a speaker): R16's small rule. */
 img[data-xdict-img=icon]{float:none !important;display:inline !important;width:auto !important;
-height:1.25em !important;vertical-align:-0.2em !important;margin-block:0 !important;margin-inline:0.125em !important}
+height:var(--xdict-icon-image-height) !important;vertical-align:var(--xdict-icon-image-baseline) !important;margin-block:0 !important;margin-inline:var(--xdict-icon-image-gap) !important}
 /* An image used as text (a phrase with tone marks): its own size, never the small rule's, on the line's middle. */
 img[data-xdict-img=text]{display:inline-block !important;float:none !important;width:auto !important;
 height:auto !important;max-width:100% !important;vertical-align:middle !important;margin-block:0 !important}
@@ -97,11 +97,11 @@ border-radius:var(--xdict-radius) !important}
 /* A caption the dictionary wrote under its picture: secondary text, small, against the picture. */
 [data-xdict-caption]{font-size:var(--xdict-fs-s) !important;line-height:var(--xdict-leading) !important;
 color:var(--xdict-text-2) !important;text-align:start !important;margin-block:var(--xdict-space-1) 0 !important;
-max-width:20em !important}
+max-width:var(--xdict-image-max) !important}
 /* A list level (R9, G14; owner, 2026-10-17): flush when its items show no number or bullet, one indent (1.5em) */
 /* when they do, whatever margin or padding the dictionary gave it. `data-xdict-list` is frame.js's reading. */
 ul,ol{margin-inline-start:0 !important;padding-inline-start:0 !important}
-[data-xdict-list=marked]{padding-inline-start:1.5em !important}
+[data-xdict-list=marked]{padding-inline-start:var(--xdict-indent) !important}
 /* A plain link the dictionary leaves uncoloured gets XDict's link colour, not WebKit's default (#0000EE, */
 /* #9E9EFF in dark); zero specificity, so a colour the core mapped from the dictionary still wins. */
 :where(a:any-link){color:var(--xdict-link)}

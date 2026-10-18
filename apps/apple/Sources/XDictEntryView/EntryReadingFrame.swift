@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **The XDict reading frame** (ADR-0010; `dev-docs/reading-style.md`): the shell's stylesheet for the reading surface.
 /// It defines the style tokens (§1) per theme and sets the page, the column, the tables' quirks reset, containment and
@@ -29,17 +30,13 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// default, B. A presentation attribute the shell sets for the panel, never inferred from the pane's width.
     public static let panel = EntryReadingFrame(rawValue: 1 << 6)
 
-    /// The paper an entry in its own style is drawn on in dark: the dictionary's colours assume a white page, so a
-    /// light one, a little dimmer than white.
-    static let paper = "#ecebe6"
-
-    /// The page's insets (the reading style's own padding values, written out: original style loads no tokens but the
-    /// palette), `contain: layout` (R13: nothing pins itself over the pane), and the paper: white in light, `paper` in
-    /// dark, with dark text where the dictionary sets none. The dictionary's own margins and colours stay its own.
-    /// XDict's marks draw with the palette; on the paper they take its light values in dark too.
+    /// The page's insets (the reading style's padding tokens), `contain: layout` (R13: nothing pins itself over the
+    /// pane), and the paper: the page colour in light, `--xdict-paper` in dark, with `--xdict-paper-text` where the
+    /// dictionary sets none. The dictionary's own margins and colours stay its own. XDict's marks draw with the palette;
+    /// on the paper they take its light values in dark too.
     static var minimalCSS: String { minimalCSS(.bundled) }
     static func minimalCSS(_ style: EntryStyle) -> String {
-        style.css("minimal.css", ["paper": paper, "light-palette": colours.map { "--xdict-\($0.0):\($0.1);" }.joined()])
+        style.css("minimal.css", ["light-palette": colours.map { "--xdict-\($0.0):\($0.1);" }.joined()])
     }
 
     /// In original style transcriptions draw in the bundled phonetic faces too (a dictionary's own IPA font is often
@@ -60,9 +57,9 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         /// Light then dark: each at least 7:1 on every surface and tint of the palette, in both themes.
         public var values: (light: String, dark: String) {
             switch self {
-            case .teal: ("#055959", "#81ecec")
-            case .red: ("#901114", "#fec9c2")
-            case .indigo: ("#3f3a8c", "#c4c1ff")
+            case .teal: Tokens.ReadingStyle.accentTeal
+            case .red: Tokens.ReadingStyle.accentRed
+            case .indigo: Tokens.ReadingStyle.accentIndigo
             }
         }
 
@@ -87,74 +84,25 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
         return subtracting(Self.accentBits).union(accent.bit)
     }
 
-    /// **The tokens (§1), in one place.** Names are fixed by the spec; values are the gallery's to tune. Colours per
-    /// theme on `:root[data-xdict-theme=…]`, which the appearance script sets.
-    static let tokens: [(String, String)] = [
-        ("base", "16px"),
-        // New York, as Apple's own dictionaries (parity P18); the Sans choice is `sansCSS`.
-        ("font-cjk", #""Songti SC", "STSong""#),
-        ("font", #"ui-serif, "New York", var(--xdict-font-cjk), serif"#),
-        // The system face, for what Apple's dictionaries set in it: the part of speech and sense numbers (P21, P22).
-        ("font-ui", #"-apple-system, system-ui, "Helvetica Neue", "PingFang SC", sans-serif"#),
-        // XDict's own face first (`EntryFonts`: Charis; Noto Sans in Sans, below), then what the Mac may have.
-        ("font-phon", #""\#(EntryFonts.serif)", \#(phonFallbacks)"#),
-        // The text face, kept where `--xdict-font` means the phonetic face (inside a transcription, `typeCSS`).
-        ("font-text", "var(--xdict-font)"),
-        ("font-mono", #"ui-monospace, "SF Mono", Menlo, monospace"#),
-        ("fs-xs", "0.75rem"), ("fs-s", "0.875rem"), ("fs-m", "1rem"), ("fs-l", "1.125rem"), ("fs-xl", "1.25rem"),
-        ("fs-xxl", "1.5rem"), ("fs-min", "var(--xdict-fs-xs)"), ("fs-max", "var(--xdict-fs-xxl)"),
-        // The headword: Apple renders NOAD's at 22.7 px at the default size, weight 500 (P19).
-        ("fs-hw", "1.4375rem"), ("weight-headword", "500"),
-        // Apple's dictionaries' `line-height: 140%` (P18).
-        ("leading", "1.4"), ("leading-tight", "1.3"), ("weight-bold", "600"),
-        ("space-1", "0.25rem"), ("space-2", "0.5rem"), ("space-3", "0.75rem"), ("space-4", "1rem"), ("space-5", "1.5rem"),
-        ("gap", "var(--xdict-space-2)"), ("indent", "1.5em"), ("indent-max", "calc(3 * var(--xdict-indent))"),
-        // No measure: the text runs the pane's width at Apple's 16 pt inset (P17, owner 2026-10-17).
-        ("measure", "none"), ("pad-block", "1.25rem"), ("pad-inline", "1rem"),
-        ("cell-pad", "0.25em 0.75em"), ("radius", "6px"), ("hit", "24px"), ("icon", "1em"),
-        // The transcription in the secondary label colour (P20).
-        ("phon-colour", "var(--xdict-text-2)"),
-        ("mark", "#ffe36e"), ("mark-current", "#ff9632"),
-    ]
+    /// **The tokens (§1)**: `Tokens/tokens.toml`'s reading-style groups, generated into `Style/tokens.css` (`:root`),
+    /// `Style/palette.css` (per theme and accent hue) and `Style/density.css` (R7a), and into `Tokens.ReadingStyle` as
+    /// data. Names are fixed by the spec; values are the gallery's to tune, in the source (`Tools/tokens.py`).
+    static var tokens: [(String, String)] { Tokens.ReadingStyle.root }
 
     /// SIL 7.000 renamed Charis SIL and Gentium Plus; the new names first, the old for an earlier install.
     static let phonFallbacks = #""Charis", "Charis SIL", "Doulos SIL", "Gentium", "Gentium Plus", var(--xdict-font)"#
 
-    /// §1.3: surfaces, text, and eight hue families × deep / plain / tint, light then dark. The neutrals and the link
-    /// are the system's (parity P26, P27; owner 2026-10-17): CanvasText, secondaryLabelColor, quaternaryLabelColor and
-    /// linkColor as Apple's Dictionary renders them on its page (#ffffff, dark #1e1e1e), composited opaque. Light's
-    /// secondary label (50% black, #808080) reads 3.95:1 on white, under 4.5:1: it is darkened to the lightest grey
-    /// that holds 4.5:1 on every surface and tint (#6d6d6d; `palette.py`, 2026-10-17). Dark's (54.9% white) holds as is.
-    static let colours: [(String, String, String)] = [
-        ("bg", "#ffffff", "#1e1e1e"), ("panel", "#f3f3f5", "#2a2a2c"), ("text", "#000000", "#ffffff"),
-        ("text-2", "#6d6d6d", "#9a9a9a"), ("rule", "#e6e6e6", "#343434"), ("plate", "transparent", "#ececef"),
-        ("link", "#0068da", "#419cff"),
-        // The one accent every chromatic text colour becomes (owner, 2026-10-16: flatten); the red family's deep tier.
-        ("accent", "#055959", "#81ecec"),
-        ("red-deep", "#901114", "#fec9c2"), ("red", "#af342f", "#fb988d"), ("red-tint", "#ffebe8", "#3e2724"),
-        ("orange-deep", "#773a00", "#ffcba9"), ("orange", "#9b4e01", "#f2a26a"), ("orange-tint", "#ffece0", "#3c291d"),
-        ("yellow-deep", "#5c4c00", "#ecd78a"), ("yellow", "#796502", "#cfb656"), ("yellow-tint", "#f6f0da", "#332e19"),
-        ("green-deep", "#035e23", "#aaeab2"), ("green", "#047b30", "#80cd8b"), ("green-tint", "#e3f6e5", "#223324"),
-        ("teal-deep", "#055959", "#81ecec"), ("teal", "#057575", "#3bcfcf"), ("teal-tint", "#daf7f6", "#163333"),
-        ("blue-deep", "#02489f", "#c0d9fe"), ("blue", "#2063bf", "#8ab9ff"), ("blue-tint", "#e8f1fe", "#232e3f"),
-        ("purple-deep", "#622c91", "#e2ccfe"), ("purple", "#7c48ae", "#c9a3f5"), ("purple-tint", "#f4ecff", "#32293c"),
-        ("pink-deep", "#881356", "#fec5dc"), ("pink", "#a63470", "#f297bf"), ("pink-tint", "#feeaf2", "#3c2730"),
-    ]
+    /// §1.3: surfaces, text, and eight hue families × deep / plain / tint, light then dark (the source says why each
+    /// is what it is: the neutrals and the link are the system's, P26, P27).
+    static var colours: [(String, String, String)] { Tokens.ReadingStyle.palette }
 
     /// The palette alone, per theme: what the core's colour tokens need even with no frame ("Original style").
-    static var paletteCSS: String {
-        func block(_ pairs: [(String, String)]) -> String { pairs.map { "--xdict-\($0.0):\($0.1);" }.joined() }
-        return ":root[data-xdict-theme=light]{\(block(colours.map { ($0.0, $0.1) }))}"
-            + ":root[data-xdict-theme=dark]{\(block(colours.map { ($0.0, $0.2) }))}"
-            + Accent.allCases.map { a in
-                ":root[data-xdict-theme=light][data-xdict-hue=\(a.rawValue)]{--xdict-accent:\(a.values.light)}"
-                    + ":root[data-xdict-theme=dark][data-xdict-hue=\(a.rawValue)]{--xdict-accent:\(a.values.dark)}"
-            }.joined()
-    }
+    static var paletteCSS: String { paletteCSS(.bundled) }
+    static func paletteCSS(_ style: EntryStyle) -> String { style.css("palette.css") }
 
-    static var tokensCSS: String {
-        func block(_ pairs: [(String, String)]) -> String { pairs.map { "--xdict-\($0.0):\($0.1);" }.joined() }
-        return EntryFonts.fontFaceCSS + ":root{\(block(tokens))}" + paletteCSS
+    static var tokensCSS: String { tokensCSS(.bundled) }
+    static func tokensCSS(_ style: EntryStyle) -> String {
+        EntryFonts.fontFaceCSS + style.css("tokens.css") + paletteCSS(style)
             + #":root[data-xdict-face=sans]{--xdict-font:-apple-system, "Helvetica Neue", var(--xdict-font-cjk), sans-serif;"#
             + #"--xdict-font-cjk:"PingFang SC", "Hiragino Sans GB";--xdict-font-phon:"\#(EntryFonts.sans)", \#(phonFallbacks)}"#
             + ":lang(zh-Hant){--xdict-font-cjk:\"PingFang TC\"}:lang(ja){--xdict-font-cjk:\"Hiragino Sans\"}"
@@ -172,8 +120,8 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// colour, so it follows the theme, the link colour and hover. No URL but `data:`, which the policy already allows.
     static let speakerSVG = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'>"
         + "<path d='M1.5 5.5h3l4-3.2v11.4l-4-3.2h-3z'/>"
-        + "<path d='M10.6 5.2a3.6 3.6 0 0 1 0 5.6' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/>"
-        + "<path d='M12.4 3a6.6 6.6 0 0 1 0 10' fill='none' stroke='black' stroke-width='1.5' stroke-linecap='round'/>"
+        + "<path d='M10.6 5.2a3.6 3.6 0 0 1 0 5.6' fill='none' stroke='black' stroke-width='\(Tokens.EntryText.glyphStroke)' stroke-linecap='round'/>"
+        + "<path d='M12.4 3a6.6 6.6 0 0 1 0 10' fill='none' stroke='black' stroke-width='\(Tokens.EntryText.glyphStroke)' stroke-linecap='round'/>"
         + "</svg>"
 
     static var speakerMask: String { mask(speakerSVG) }
@@ -216,7 +164,7 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// spaces is put on the scale and the space tokens, and the three strong roles win over their descendants'
     /// normalized declarations from a cascade layer; a transcription keeps its colour.
     static var typeCSS: String { typeCSS(.bundled) }
-    static func typeCSS(_ style: EntryStyle) -> String { style.css("type.css") }
+    static func typeCSS(_ style: EntryStyle) -> String { style.css("type.css") + style.css("density.css") }
 }
 
 extension EntryScripts {
@@ -241,7 +189,7 @@ extension EntryScripts {
         let minimal = frame.contains(.minimal)
             ? EntryReadingFrame.minimalCSS(style) + controls + EntryReadingFrame.marksCSS(style)
                 + EntryReadingFrame.originalPhonCSS(style) : ""
-        let tokens = (frame.subtracting([.sans, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS : EntryReadingFrame.tokensCSS)
+        let tokens = (frame.subtracting([.sans, EntryReadingFrame.accentBits]).isEmpty ? EntryReadingFrame.paletteCSS(style) : EntryReadingFrame.tokensCSS(style))
             + (frame.contains(.panel) ? EntryReadingFrame.popoverColoursCSS : "")
         return style.script("frame.js", [
             "theme": scheme.rawValue, "face": frame.contains(.sans) ? "sans" : "serif", "hue": frame.accent.rawValue,

@@ -1,5 +1,6 @@
 import SwiftUI
 import XDictSearch
+import XDictTokens
 
 /// **What covers the entry pane while there is no entry to read** (UI review X1, 2026-10-17; Apple parity P12, P14).
 /// Every placeholder fills the pane and the entry behind it is closed, so neither the eye nor VoiceOver reaches a
@@ -51,19 +52,19 @@ struct StartPage: View {
         ScrollView {
             VStack(spacing: 0) {
                 Text("Type a word to look up in…")
-                    .font(.system(size: 18, design: .serif))
-                    .padding(.bottom, 20)
+                    .font(Tokens.TextRole.startPrompt.font)
+                    .padding(.bottom, Tokens.Space.xl)
                 ForEach(Array(names.enumerated()), id: \.offset) { _, name in
                     Text(verbatim: name)
-                        .font(.system(size: 20, design: .serif))
-                        .frame(minHeight: 32)
+                        .font(Tokens.TextRole.startName.font)
+                        .frame(minHeight: Tokens.Row.startName)
                 }
             }
             .multilineTextAlignment(.center)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity)
-            .padding(.top, 36)
-            .padding(.horizontal, 16)
+            .padding(.top, Tokens.Inset.startTop)
+            .padding(.horizontal, Tokens.Inset.startSide)
         }
         .accessibilityIdentifier("start")
     }
@@ -92,10 +93,10 @@ struct NoResultsIncomplete: View {
 struct NoEntriesFound: View {
     var body: some View {
         Text("No entries found.")
-            .font(.system(size: 24))
+            .font(Tokens.TextRole.noEntries.font)
             .foregroundStyle(.secondary)
-            .padding(.leading, 19)
-            .padding(.top, 10)
+            .padding(.leading, Tokens.Inset.entryLeading)
+            .padding(.top, Tokens.Inset.entryTop)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .accessibilityIdentifier("no-entries")
     }

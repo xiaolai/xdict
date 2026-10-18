@@ -1,6 +1,7 @@
 import SwiftUI
 import XDictEntryView
 import XDictLibrary
+import XDictTokens
 
 /// **The strip above the table** (ADR-0012 d.2): why the library itself cannot be used, a dictionary asked for that has
 /// gone, each import under way with its progress and Cancel, and what the last addition could not do — the Library
@@ -12,7 +13,7 @@ struct SettingsLibraryStrip: View {
 
     var body: some View {
         let underWay = SettingsDictionaries.underWay(order: library.entries.map(\.id), phases: library.phases)
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: Tokens.Space.xs) {
             if let unreadable = library.unreadable {
                 line(symbol: "exclamationmark.triangle") { Text(LibrarySentences.unreadable(unreadable)) }
             }
@@ -29,7 +30,7 @@ struct SettingsLibraryStrip: View {
     }
 
     private func line(symbol: String, @ViewBuilder text: () -> some View) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
             Image(systemName: symbol).foregroundStyle(.secondary).accessibilityHidden(true)
             text().frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
         }
@@ -38,7 +39,7 @@ struct SettingsLibraryStrip: View {
 
     /// One import under way: its name, how far, and Cancel while it can be cancelled.
     private func progress(_ entry: LibraryEntry, _ phase: EntryPhase) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: Tokens.Space.sm) {
             Text(verbatim: entry.displayName).lineLimit(1)
             if case .importing(let done, let total) = phase, total > 0 {
                 ProgressView(value: Double(done), total: Double(total)) {
@@ -64,7 +65,7 @@ struct SettingsLibraryStrip: View {
     @ViewBuilder private var notices: some View {
         let notices = library.notices
         if !notices.isEmpty {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
                 Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange).accessibilityHidden(true)
                 Group {
                     if notices.count == 1, let only = notices.first {
@@ -89,7 +90,7 @@ struct SettingsLibraryStrip: View {
 
     private var noticeDetails: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: Tokens.Space.sm) {
                 ForEach(Array(library.notices.enumerated()), id: \.offset) { _, notice in
                     Text(LibrarySentences.notice(notice)).fixedSize(horizontal: false, vertical: true)
                         .textSelection(.enabled)
@@ -97,8 +98,8 @@ struct SettingsLibraryStrip: View {
             }
             .padding()
         }
-        .frame(width: 360)
-        .frame(maxHeight: 320)
+        .frame(width: Tokens.Window.noticesPopoverWidth)
+        .frame(maxHeight: Tokens.Window.noticesPopoverMaxHeight)
     }
 }
 
@@ -121,7 +122,7 @@ struct SettingsAddRemoveBar: View {
                     }
                 }
             } label: {
-                Image(systemName: "plus").frame(width: 24, height: 20)
+                Image(systemName: "plus").frame(width: Tokens.Size.tableButton.width, height: Tokens.Size.tableButton.height)
             }
             .menuIndicator(.hidden)
             .menuStyle(.borderlessButton)
@@ -131,7 +132,7 @@ struct SettingsAddRemoveBar: View {
             .accessibilityLabel(Text("Add Dictionaries…"))
             .accessibilityIdentifier("settings.add")
             Button(action: remove) {
-                Image(systemName: "minus").frame(width: 24, height: 20).contentShape(Rectangle())
+                Image(systemName: "minus").frame(width: Tokens.Size.tableButton.width, height: Tokens.Size.tableButton.height).contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
             .disabled(!canRemove)
@@ -162,7 +163,7 @@ struct SettingsDictionaryOptions: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             problem
             HStack(alignment: .firstTextBaseline) {
                 Toggle(isOn: $originalStyle) { Text("Original style") }
@@ -181,7 +182,7 @@ struct SettingsDictionaryOptions: View {
     @ViewBuilder private var problem: some View {
         let phase = library.phases[entry.id]
         if entry.offer != nil {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 Text("The file of this dictionary changed. Is it still the same dictionary?")
                 HStack {
                     Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }

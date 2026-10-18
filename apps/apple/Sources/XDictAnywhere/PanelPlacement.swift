@@ -1,19 +1,21 @@
 import CoreGraphics
+import XDictTokens
 
 /// **The lookup popover's size, and the word it points at** (plan-macos-v1 WI-8; P41): its width and the height bounds
 /// its entry is fitted within, and the selection's Accessibility rectangle in AppKit's screen coordinates (y up), where
 /// its anchor goes. Where the popover sits beside that anchor is AppKit's (`LookupPopover`).
 public enum PanelPlacement {
     /// Kept clear of the screen's edges when the room for the entry is measured.
-    public static let margin: CGFloat = 8
+    public static let margin: CGFloat = Tokens.Inset.panelScreenMargin
 
     /// The panel's height bounds (Codex's UX decision §3, 2026-10-17): header plus the entry, 140–560 pt, opening at
     /// 180 pt while the entry loads.
-    public static let minimumHeight: CGFloat = 140
-    public static let maximumHeight: CGFloat = 560
-    public static let initialHeight: CGFloat = 180
+    public static let minimumHeight: CGFloat = Tokens.Window.panelMinHeight
+    public static let maximumHeight: CGFloat = Tokens.Window.panelMaxHeight
+    public static let initialHeight: CGFloat = Tokens.Window.panelInitialHeight
     /// Its width: 390 pt, the Look Up popover's body (P41, 2026-10-17); 360 and 640 bound it.
-    public static let widths: (min: CGFloat, default: CGFloat, max: CGFloat) = (360, 390, 640)
+    public static let widths: (min: CGFloat, default: CGFloat, max: CGFloat) = (
+        Tokens.Window.panelMinWidth, Tokens.Window.popoverBody, Tokens.Window.panelMaxWidth)
 
     /// The panel's height for an entry `document` points tall under `chrome` points of header, within the bounds and
     /// the room `available` beside the selection; the opening height when the entry could not be measured.

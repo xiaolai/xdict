@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictSpeech
+import XDictTokens
 
 /// **Speech, in Settings** (⌘,; plan-macos-v1 WI-7, `platform-architecture.md` §4a): the reader's accent for English,
 /// the voice it will use, and what is worth knowing about that voice, with the way to a better one. Rows, not a form:
@@ -30,7 +31,7 @@ public struct SpeechSettings: View {
                 Text("Voice")
             }
             if let caveat = Voices.caveat(for: tags, among: Voices.installed) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: Tokens.Space.s) {
                     Text(SpeechSentences.caveat(caveat))
                         .foregroundStyle(.secondary)
                     Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }

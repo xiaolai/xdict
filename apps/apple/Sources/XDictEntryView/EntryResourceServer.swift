@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **What the scheme handler answers, decided apart from WebKit** so every rule is a unit test: one bound dictionary,
 /// the one document the view is showing, and for every request either an answer or a refusal.
@@ -130,12 +131,17 @@ public final class EntryResourceServer {
     nonisolated static func placeholder(label: String) -> Data {
         let escaped = label.replacingOccurrences(of: "&", with: "&amp;").replacingOccurrences(of: "<", with: "&lt;")
             .replacingOccurrences(of: ">", with: "&gt;").replacingOccurrences(of: "\"", with: "&quot;")
-        let width = min(max(80, escaped.count * 7 + 24), 480)
+        typealias Box = Tokens.Placeholder
+        typealias Words = Tokens.EntryText
+        let width = min(max(Box.minWidth, CGFloat(escaped.count) * Box.charWidth + Box.padding), Box.maxWidth)
+        func px(_ value: CGFloat) -> String { value == value.rounded() ? String(Int(value)) : String(describing: value) }
         let svg = """
-            <svg xmlns="http://www.w3.org/2000/svg" width="\(width)" height="28" role="img" aria-label="\(escaped)">\
-            <rect x="0.5" y="0.5" width="\(width - 1)" height="27" rx="4" fill="#f2f2f2" stroke="#8a8a8a" \
-            stroke-dasharray="3 2"/><text x="12" y="18" font-family="-apple-system, sans-serif" font-size="12" \
-            fill="#3a3a3a">\(escaped)</text></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="\(px(width))" height="\(px(Box.height))" role="img" \
+            aria-label="\(escaped)"><rect x="\(px(Box.edge))" y="\(px(Box.edge))" width="\(px(width - 2 * Box.edge))" \
+            height="\(px(Box.height - 2 * Box.edge))" rx="\(px(Box.radius))" fill="\(Words.placeholderFill)" \
+            stroke="\(Words.placeholderStroke)" stroke-dasharray="\(Words.placeholderDash)"/><text x="\(px(Box.textX))" \
+            y="\(px(Box.textBaseline))" font-family="\(Words.placeholderFont)" font-size="\(px(Box.fontSize))" \
+            fill="\(Words.placeholderText)">\(escaped)</text></svg>
             """
         return Data(svg.utf8)
     }

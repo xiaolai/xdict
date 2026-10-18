@@ -9,6 +9,7 @@ import XDictEntryView
 import XDictSearch
 import XDictUI
 import os
+import XDictTokens
 
 /// **Lookup from anywhere** (plan-macos-v1 WI-8): a selection in any app reaches a panel by it — by the lookup shortcut
 /// (the selection read through the Accessibility API), by the Service "Look Up in XDict" (the text macOS hands over), or
@@ -201,7 +202,8 @@ final class LookupAnywhere {
                     }
                 }
                 // No box (Chrome gives none): where the reader Control-clicked the selection, as a word of no width.
-                if word == nil, let clicked { word = CGRect(x: clicked.x, y: clicked.y - 8, width: 1, height: 16) }
+                if word == nil, let clicked { word = CGRect(x: clicked.x, y: clicked.y - Tokens.Inset.clickedWordRise,
+                                                            width: Tokens.Size.pointAnchor.width, height: Tokens.Row.clickedWord) }
                 self.show(.none, query: text, near: word, source: .service)
             }
         case .empty: show(.refused(.nothingSelected(app: "")), query: nil, near: nil, source: .service)

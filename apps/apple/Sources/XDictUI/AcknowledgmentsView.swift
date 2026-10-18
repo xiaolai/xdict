@@ -1,4 +1,5 @@
 import SwiftUI
+import XDictTokens
 
 /// **XDict ▸ Acknowledgments** (plan-macos-v1 WI-10): every third-party notice the app carries, as shipped in
 /// `Contents/Resources/Acknowledgments.txt` (`Tools/notices.py`; `make test` holds it to the crates the service links
@@ -23,11 +24,11 @@ public struct AcknowledgmentsView: View {
             if let notices {
                 // Headings as headings and the text in the body face, not a monospaced dump (UI review A-02).
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: Tokens.Space.m) {
                         ForEach(Array(Self.blocks(notices).enumerated()), id: \.offset) { _, block in
                             switch block {
                             case .heading(let text):
-                                Text(verbatim: text).font(.title3.bold()).padding(.top, 8)
+                                Text(verbatim: text).font(.title3.bold()).padding(.top, Tokens.Space.sm)
                             case .text(let text):
                                 Text(verbatim: text).font(.body).foregroundStyle(.secondary)
                             }
@@ -35,14 +36,15 @@ public struct AcknowledgmentsView: View {
                     }
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(20)
+                    .padding(Tokens.Space.xl)
                 }
             } else {
                 Text("The acknowledgments are missing from this copy of XDict.")
                     .padding()
             }
         }
-        .frame(minWidth: 560, idealWidth: 640, minHeight: 400, idealHeight: 560)
+        .frame(minWidth: Tokens.Window.acknowledgmentsMinWidth, idealWidth: Tokens.Window.acknowledgmentsIdealWidth,
+               minHeight: Tokens.Window.acknowledgmentsMinHeight, idealHeight: Tokens.Window.acknowledgmentsIdealHeight)
     }
 
     enum Block: Equatable {

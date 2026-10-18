@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import XDictTokens
 
 /// **Apple's dictionary table** (parity P39): an `NSTableView` in a bordered scroll view — no header, alternating rows
 /// 20 pt tall, a checkbox, the name in the 12 pt system font and the languages in secondary text — that reorders by
@@ -94,7 +95,7 @@ struct DictionaryTable: NSViewRepresentable {
         table.rowSizeStyle = .custom
         table.usesAlternatingRowBackgroundColors = true
         table.gridStyleMask = []
-        table.intercellSpacing = NSSize(width: 4, height: 0)
+        table.intercellSpacing = NSSize(width: Tokens.Space.xs, height: 0)
         table.style = .plain
         table.allowsEmptySelection = true
         table.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
@@ -163,7 +164,7 @@ struct DictionaryTable: NSViewRepresentable {
 
         private func label(_ text: String, color: NSColor) -> NSView {
             let field = NSTextField(labelWithString: text)
-            field.font = .systemFont(ofSize: 12)
+            field.font = Tokens.TextRole.tableCell.nsFont
             field.textColor = color
             field.lineBreakMode = .byTruncatingTail
             return centred(field)

@@ -1,5 +1,6 @@
 import Foundation
 import XDictSearch
+import XDictTokens
 
 /// **The main window's measures, as Apple's Dictionary has them** (parity ledger P1, P2, P5, P9; owner's decisions of
 /// 2026-10-17, which replace Codex's 640 pt toolbar of the same day): a 400 × 300 pt minimum, the title "Dictionary" with
@@ -7,14 +8,17 @@ import XDictSearch
 /// appears only after a search. At the minimum the toolbar's Back/Forward and text-size pairs go to its overflow before
 /// the search field does (P8).
 public enum ToolbarLayout {
-    public static let minimumWindow: (width: CGFloat, height: CGFloat) = (400, 300)
+    public static let minimumWindow: (width: CGFloat, height: CGFloat) = (Tokens.Window.mainMinimumWidth,
+                                                                         Tokens.Window.mainMinimumHeight)
     /// The content's minimum height: the window's less the 52 pt toolbar (measured: 300 pt content made a 352 pt window).
-    public static let minimumContentHeight: CGFloat = minimumWindow.height - 52
-    public static let searchWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (110, 327, 420)
-    public static let sidebar: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (150, 183, 320)
+    public static let minimumContentHeight: CGFloat = minimumWindow.height - Tokens.Control.toolbar
+    public static let searchWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (
+        Tokens.Window.searchFieldMin, Tokens.Window.searchFieldIdeal, Tokens.Window.searchFieldMax)
+    public static let sidebar: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (
+        Tokens.Window.sidebarMin, Tokens.Window.sidebarIdeal, Tokens.Window.sidebarMax)
 
     /// Below this width the title gives way to the search field (P8).
-    public static func titleYields(width: CGFloat) -> Bool { width < 560 }
+    public static func titleYields(width: CGFloat) -> Bool { width < Tokens.Window.titleYields }
 
     /// The title sits over the content column, beside the field: it gives way when that column, the window less the
     /// sidebar, is narrow. A 583 pt window with the 183 pt sidebar a search brings leaves a 400 pt column; Apple's
@@ -33,10 +37,10 @@ public enum ToolbarLayout {
 /// **The scope bar's buttons that fit** (P6, P8): every one when they all fit, else as many as fit beside the »
 /// overflow button, "All" always.
 public enum ScopeBarLayout {
-    public static let height: CGFloat = 36
-    public static let buttonHeight: CGFloat = 22
-    public static let leading: CGFloat = 7
-    public static let moreWidth: CGFloat = 36
+    public static let height: CGFloat = Tokens.Control.scopeBar
+    public static let buttonHeight: CGFloat = Tokens.Row.scopeButton
+    public static let leading: CGFloat = Tokens.Inset.scopeLeading
+    public static let moreWidth: CGFloat = Tokens.Control.scopeMore
 
     /// How many of the buttons, of `widths` in order, show in `available` points.
     public static func shown(widths: [CGFloat], available: CGFloat) -> Int {

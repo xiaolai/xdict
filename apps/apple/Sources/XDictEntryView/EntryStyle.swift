@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **The reading style's text** (plan-verification §4.6): the frame's CSS and the shell's scripts, kept as files in
 /// `Style/` so a person edits CSS as CSS. The app uses `bundled` and nothing else: the files' text compiled into the
@@ -36,13 +37,14 @@ public struct EntryStyle: Sendable, Equatable {
     }
 
     /// A stylesheet: its lines joined with nothing between them (the CSS is written a rule or part of one per line),
-    /// each without its indentation, and a line that is wholly a `/* … */` comment left out; then its `{{name}}`s.
+    /// each without its indentation, and a line that is wholly a `/* … */` comment left out; then its `{{name}}`s, and
+    /// the tokens' `{{fill-<name>}}`s (`Tokens.ReadingStyle.fills`: values where `var()` cannot go, a media query).
     func css(_ name: String, _ values: [String: String] = [:]) -> String {
         let lines = text(name).split(separator: "\n", omittingEmptySubsequences: false).compactMap { line -> Substring? in
             let trimmed = line.drop { $0 == " " || $0 == "\t" }
             return trimmed.hasPrefix("/*") && trimmed.hasSuffix("*/") ? nil : trimmed
         }
-        return Self.fill(lines.joined(), values, in: name)
+        return Self.fill(lines.joined(), values.merging(Tokens.ReadingStyle.fills) { given, _ in given }, in: name)
     }
 
     /// A script, as written; then its `{{name}}`s.

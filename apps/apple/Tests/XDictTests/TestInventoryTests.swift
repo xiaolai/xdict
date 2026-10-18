@@ -39,6 +39,8 @@ struct TestInventoryTests {
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
         "XDictAppleImportTests": 72,
+        // Added with the design tokens (2026-10-18): the generated file against its source, and both faces of a token.
+        "XDictTokensTests": 6,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
