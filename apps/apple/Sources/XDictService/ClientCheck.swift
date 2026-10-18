@@ -1,5 +1,5 @@
 import Foundation
-import Security
+import XDictAppleSource
 import XDictBase
 import XDictContract
 
@@ -44,24 +44,9 @@ enum ClientCheck: Sendable, Equatable {
         let description: String
     }
 
-    /// The `TeamIdentifier` of this process's own signature.
+    /// The `TeamIdentifier` of this process's own signature (`SigningTeam`, shared with the app, which names the same
+    /// app-group container by it).
     static func ownTeam() -> Result<String, Unavailable> {
-        var code: SecCode?
-        guard SecCodeCopySelf(SecCSFlags(), &code) == errSecSuccess, let code else {
-            return .failure(Unavailable(description: "SecCodeCopySelf failed"))
-        }
-        var staticCode: SecStaticCode?
-        guard SecCodeCopyStaticCode(code, SecCSFlags(), &staticCode) == errSecSuccess, let staticCode else {
-            return .failure(Unavailable(description: "SecCodeCopyStaticCode failed"))
-        }
-        var information: CFDictionary?
-        let status = SecCodeCopySigningInformation(staticCode, SecCSFlags(rawValue: kSecCSSigningInformation), &information)
-        guard status == errSecSuccess, let signing = information as? [String: Any] else {
-            return .failure(Unavailable(description: "SecCodeCopySigningInformation failed: \(status)"))
-        }
-        guard let team = signing[kSecCodeInfoTeamIdentifier as String] as? String, !team.isEmpty else {
-            return .failure(Unavailable(description: "this process's signature names no team"))
-        }
-        return .success(team)
+        SigningTeam.own().mapError { Unavailable(description: $0.description) }
     }
 }

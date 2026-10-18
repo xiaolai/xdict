@@ -78,7 +78,9 @@ public enum SyntheticAppleBundle {
     /// `version`: `IDXDictionaryVersion`, left out when nil. `keyTextIndex: false` leaves out the `KeyText.index`
     /// entry, as the system "Apple Dictionary" does.
     public static func plist(css: String? = "DefaultStyle.css", variable: [String] = ["DCSKeyword", "DCSHeadword"],
-                             version: Int? = 3, keyTextIndex: Bool = true, bundleVersion: String? = nil) throws -> Data {
+                             version: Int? = 3, keyTextIndex: Bool = true, bundleVersion: String? = nil,
+                             displayName: String = "Test Dict", identifier: String? = nil,
+                             languages: (index: String, description: String)? = nil) throws -> Data {
         var indexes: [[String: Any]] = [["IDXIndexPath": "EntryID.index"]]
         if keyTextIndex {
             indexes.append([
@@ -93,13 +95,18 @@ public enum SyntheticAppleBundle {
         }
         indexes.append(["IDXIndexPath": "Body.data", "HeapDataCompressionType": 2] as [String: Any])
         var info: [String: Any] = [
-            "CFBundleDisplayName": "Test Dict",
+            "CFBundleDisplayName": displayName,
             "DCSDictionaryCopyright": "Test copyright",
             "IDXDictionaryIndexes": indexes,
         ]
         if let version { info["IDXDictionaryVersion"] = version }
         if let css { info["DCSDictionaryCSS"] = css }
         if let bundleVersion { info["CFBundleVersion"] = bundleVersion }
+        if let identifier { info["CFBundleIdentifier"] = identifier }
+        if let languages {
+            info["DCSDictionaryLanguages"] = [["DCSDictionaryIndexLanguage": languages.index,
+                                               "DCSDictionaryDescriptionLanguage": languages.description]]
+        }
         return try PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0)
     }
 
@@ -120,10 +127,11 @@ public enum SyntheticAppleBundle {
         ("e2", "beta", "<p>second</p>", []),
     ]
 
-    /// Writes a bundle named `Test.dictionary` under `root` and returns it.
+    /// Writes a bundle named `<name>.dictionary` under `root` and returns it.
     @discardableResult
-    public static func make(in root: URL, entries: [Entry] = defaultEntries, _ o: Overrides = Overrides()) throws -> URL {
-        let bundle = root.appendingPathComponent("Test.dictionary")
+    public static func make(in root: URL, name: String = "Test", entries: [Entry] = defaultEntries,
+                            _ o: Overrides = Overrides()) throws -> URL {
+        let bundle = root.appendingPathComponent("\(name).dictionary")
         let res = bundle.appendingPathComponent("Contents/Resources")
         try FileManager.default.createDirectory(at: res, withIntermediateDirectories: true)
         let xmls = entries.map { entry($0.id, $0.title, $0.body) }

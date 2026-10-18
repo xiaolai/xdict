@@ -64,9 +64,12 @@ struct ModuleBoundaryTests {
         "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
-        // `Security` reads the service's own signature for the client requirement (`ClientCheck`); `CryptoKit` hashes an
-        // Apple dictionary snapshot for its source revision (`AppleImports`, ADR-0011 decision 7).
-        "XDictService": ["CryptoKit", "Foundation", "Security", "Synchronization", "os"],
+        // Its signature and an Apple snapshot's hash come from `XDictAppleSource` (`SigningTeam`, `Manifest`).
+        "XDictService": ["Foundation", "Synchronization", "os"],
+        // `Security` reads the process's own signing team, which names the app-group container (`SigningTeam`);
+        // `CryptoKit` hashes an Apple dictionary's files for its source revision (`Manifest`, ADR-0011 decision 7).
+        "XDictAppleSource": ["CryptoKit", "Foundation", "Security"],
+        "XDictAppleSourceTests": ["Foundation", "Testing"],
         // The app's side of the contract: NSXPC, its locks, its log.
         "XDictClient": ["Foundation", "Synchronization", "os"],
         // The E2E instruments, compiled into the app and run by its flags.

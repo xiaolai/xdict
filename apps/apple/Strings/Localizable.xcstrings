@@ -1389,6 +1389,22 @@
         }
       }
     },
+    "Add Apple Dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Apple Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加 Apple 词典"
+          }
+        }
+      }
+    },
     "Add Apple Dictionaries…" : {
       "localizations" : {
         "en" : {
@@ -1437,6 +1453,22 @@
         }
       }
     },
+    "Added" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Added"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已添加"
+          }
+        }
+      }
+    },
     "All" : {
       "localizations" : {
         "en" : {
@@ -1465,6 +1497,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有词典"
+          }
+        }
+      }
+    },
+    "Already imported" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already imported"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已导入"
           }
         }
       }
@@ -1513,6 +1561,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "另一个 App 已占用此快捷键。"
+          }
+        }
+      }
+    },
+    "Apple removed this dictionary’s files; this copy still reads." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple removed this dictionary’s files; this copy still reads."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 已移除这部词典的文件；这份副本仍可查阅。"
+          }
+        }
+      }
+    },
+    "Apple updated %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple updated %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 更新了 %@。"
           }
         }
       }
@@ -1715,6 +1795,38 @@
         }
       }
     },
+    "Cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已取消"
+          }
+        }
+      }
+    },
+    "Cancelling…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelling…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在取消…"
+          }
+        }
+      }
+    },
     "Check the spelling, or try a shorter form of the word." : {
       "localizations" : {
         "en" : {
@@ -1777,6 +1889,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在检查词条…… %@"
+          }
+        }
+      }
+    },
+    "Choose the dictionaries installed on this Mac to add. XDict converts a copy of each once; the dictionaries themselves are not changed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the dictionaries installed on this Mac to add. XDict converts a copy of each once; the dictionaries themselves are not changed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择要添加的、已安装在这台 Mac 上的词典。XDict 会把每部词典的副本转换一次，词典本身不会被改动。"
           }
         }
       }
@@ -1877,6 +2005,54 @@
         }
       }
     },
+    "Convert Again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Convert Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新转换"
+          }
+        }
+      }
+    },
+    "Converting…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converting…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在转换…"
+          }
+        }
+      }
+    },
+    "Converts the installed dictionary again and keeps the result as this dictionary. You can undo it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converts the installed dictionary again and keeps the result as this dictionary. You can undo it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新转换已安装的词典，并把结果保留为这部词典。此操作可以撤销。"
+          }
+        }
+      }
+    },
     "Copy" : {
       "localizations" : {
         "en" : {
@@ -1889,6 +2065,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拷贝"
+          }
+        }
+      }
+    },
+    "Copying…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copying…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在拷贝…"
           }
         }
       }
@@ -2421,6 +2613,22 @@
         }
       }
     },
+    "Finding the dictionaries installed on this Mac…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Finding the dictionaries installed on this Mac…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在查找这台 Mac 上安装的词典…"
+          }
+        }
+      }
+    },
     "Find…" : {
       "localizations" : {
         "en" : {
@@ -2627,6 +2835,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "来自 %@ 的图片"
+          }
+        }
+      }
+    },
+    "Import" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入"
           }
         }
       }
@@ -3123,6 +3347,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "下一个"
+          }
+        }
+      }
+    },
+    "No Apple dictionaries are installed on this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Apple dictionaries are installed on this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 上没有安装 Apple 词典。"
           }
         }
       }
@@ -5544,6 +5784,22 @@
         }
       }
     },
+    "To add a dictionary that is not listed, download it in Dictionary.app ▸ Settings, then open this list again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To add a dictionary that is not listed, download it in Dictionary.app ▸ Settings, then open this list again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要添加未列出的词典，请先在 Dictionary.app ▸ 设置中下载它，然后再次打开此列表。"
+          }
+        }
+      }
+    },
     "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do." : {
       "localizations" : {
         "en" : {
@@ -5722,6 +5978,22 @@
         }
       }
     },
+    "Waiting" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待中"
+          }
+        }
+      }
+    },
     "Waiting for your approval in System Settings ▸ General ▸ Login Items." : {
       "localizations" : {
         "en" : {
@@ -5864,6 +6136,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 不附带任何词典。请添加你自己的 MDict 文件（.mdx 和 .mdd）。"
+          }
+        }
+      }
+    },
+    "XDict converted this dictionary but could not add it. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict converted this dictionary but could not add it. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 已转换这部词典，但未能添加它。请再试一次。"
           }
         }
       }
@@ -6056,6 +6344,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 的词典服务无法访问它的共享文件夹，因此无法转换 Apple 词典。请重新安装 XDict。"
+          }
+        }
+      }
+    },
+    "XDict’s dictionary service did not finish converting this dictionary. Try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict’s dictionary service did not finish converting this dictionary. Try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 的词典服务未能完成这部词典的转换。请再试一次。"
           }
         }
       }

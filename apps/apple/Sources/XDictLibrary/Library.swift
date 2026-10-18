@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import XDictAppleSource
 import XDictClient
 import XDictContract
 import os
@@ -98,6 +99,10 @@ public final class Library {
     public private(set) var readingStyles: [UUID: StyleState] = [:]
     /// Why the stored library could not be read: until it can, nothing is added and nothing is saved.
     public private(set) var unreadable: LibraryStoreError?
+    /// Each Apple dictionary's edition and lineage, kept past its removal (`AppleLineage`, ADR-0011 decision 8).
+    public private(set) var appleLineages: [String: AppleLineage] = [:]
+    /// What became of each Apple dictionary's installed bundle, as last compared (`setAppleStatus`).
+    public private(set) var appleStatus: [UUID: AppleStatus] = [:]
 
     /// Every change of phase, for the instruments: who measured what, when.
     @ObservationIgnored public var onPhase: (@MainActor (UUID, EntryPhase) -> Void)?
@@ -115,6 +120,9 @@ public final class Library {
     /// Dictionaries waiting for their health check, and the one being checked.
     @ObservationIgnored private var checks: [UUID] = []
     @ObservationIgnored private var checking: (id: UUID, dict: DictId, job: HealthJob?)?
+    /// Apple dictionaries the reader asked to Convert Again: the new edition their import makes is joined to the
+    /// dictionary's lineage, as one recorded join the reader can undo (ADR-0011 decision 8).
+    @ObservationIgnored private var convertingAgain: Set<UUID> = []
 
     /// The import under way: its entry, and the service's job once it has one.
     private final class Running {
@@ -151,7 +159,9 @@ public final class Library {
         busy += 1
         defer { busy -= 1; wake() }
         do {
-            entries = try store.load()?.entries ?? []
+            let document = try store.load()
+            entries = document?.entries ?? []
+            appleLineages = document?.appleLineages ?? [:]
         } catch {
             unreadable = error
             log.error("the library could not be read (\(String(describing: error), privacy: .public)); it is left as it is")
@@ -290,9 +300,15 @@ public final class Library {
         let outcome = await job.outcome()
         switch outcome {
         case .success(let imported):
+            let again = convertingAgain.remove(id) != nil
             // Opened while the import still holds its turn, so `settled` waits for the dictionary to answer.
-            if let opening = recordImport(id, imported) { await open(opening, package: package) }
+            if let opening = recordImport(id, imported) {
+                // Convert Again said what it does: the new edition joins this dictionary, recorded and undoable.
+                if again, entries.first(where: { $0.id == opening })?.offer != nil { _ = await acceptJoin(opening) }
+                await open(opening, package: package)
+            }
         case .failure(let failure):
+            convertingAgain.remove(id)
             let refusal = ImportRefusal(failure, fileName: { [entries] file in
                 entries.lazy.flatMap(\.files).first { $0.id == file }?.fileName
             })
@@ -370,6 +386,12 @@ public final class Library {
             entry.offer = JoinOffer(edition: imported.edition, mintedLineage: imported.lineage,
                                     earlierEdition: earlier.0, earlierLineage: earlier.1)
             entry.join = nil
+        } else if entry.edition == nil, entry.offer == nil, let source = entry.appleSource,
+                  let earlier = appleLineages[source.bundleIdentifier], earlier.lineage != imported.lineage {
+            // A fresh import of an Apple dictionary the reader once had (removed, or split from its lineage): a new
+            // lineage, with the join to the earlier one suggested, never applied (ADR-0011 decision 8).
+            entry.offer = JoinOffer(edition: imported.edition, mintedLineage: imported.lineage,
+                                    earlierEdition: earlier.edition, earlierLineage: earlier.lineage)
         }
         entry.edition = imported.edition
         entry.lineage = imported.lineage
@@ -513,6 +535,79 @@ public final class Library {
         phases[id] = nil
         health[id] = nil
         readingStyles[id] = nil
+        appleStatus[id] = nil
+    }
+
+    // MARK: - Apple dictionaries (ADR-0011)
+
+    /// The bundles an Apple dictionary in the library was converted from: what the sheet says is "Already imported".
+    public var importedAppleBundles: Set<String> {
+        Set(entries.compactMap { $0.appleSource?.bundleIdentifier })
+    }
+
+    /// The conversion folders the library names: what the launch sweep keeps (decision 9). Nil while the library could
+    /// not be read, when nothing may be swept: its dictionaries' folders would look unnamed.
+    public var appleConversions: Set<UUID>? {
+        unreadable == nil ? Set(entries.compactMap { $0.appleSource?.conversion }) : nil
+    }
+
+    /// **Adds what a conversion published** in `folder` (`AppleImports/<conversion>/`) through the ordinary import path
+    /// (decision 2), its source kept beside it (decision 10). The import mints its lineage, or suggests the join to the
+    /// lineage the same bundle had before (decision 8). Answers the new entry's id; nil when the folder holds no
+    /// dictionary or the library cannot be written, said in `notices`.
+    @discardableResult
+    public func addConversion(in folder: URL, source: AppleSourceRecord, languages: LanguagePair?) -> UUID? {
+        guard unreadable == nil, let package = convertedPackage(in: folder) else { return nil }
+        guard var entry = try? Self.entry(for: package) else {
+            notices.append(.finder(.unreadable(fileName: package.mdx.lastPathComponent)))
+            return nil
+        }
+        entry.appleSource = source
+        if let languages, languages.search != nil || languages.explanation != nil {
+            entry.languages = Languages(proposal: LanguageProposal(pair: languages, basis: .stated))
+        }
+        entries.append(entry)
+        save()
+        enqueue(entry.id)
+        return entry.id
+    }
+
+    /// **Convert Again** (decision 8): the dictionary `id` now reads the files published in `folder`. A new edition is
+    /// joined to its lineage by one recorded join the reader can undo (`undoJoin`); an image-only change is a new MDD
+    /// under the same edition, and nothing is joined (decision 7). False when `id` is gone or the folder holds no
+    /// dictionary.
+    @discardableResult
+    public func convertAgain(_ id: UUID, in folder: URL, source: AppleSourceRecord) -> Bool {
+        guard unreadable == nil, let at = index(id), running?.id != id, !queue.contains(id),
+              let package = convertedPackage(in: folder), let made = try? Self.entry(for: package) else { return false }
+        entries[at].files = made.files
+        entries[at].root = made.root
+        entries[at].notes = made.notes
+        entries[at].appleSource = source
+        entries[at].refusal = nil
+        appleStatus[id] = .current
+        convertingAgain.insert(id)
+        save()
+        enqueue(id)
+        return true
+    }
+
+    /// Records what became of each Apple dictionary's bundle: `installed` is this Mac's bundles by identifier, each
+    /// with its source revision now (nil when it could not be read, which offers nothing).
+    public func setAppleStatus(installed: [String: InstalledSource], converter: UInt32 = AppleConverter.revision) {
+        var status: [UUID: AppleStatus] = [:]
+        for entry in entries {
+            guard let source = entry.appleSource else { continue }
+            status[entry.id] = AppleStatus.of(source, installed: installed[source.bundleIdentifier], converter: converter)
+        }
+        appleStatus = status
+    }
+
+    /// The one dictionary a conversion folder holds, or nil with the finder's problem in `notices`.
+    private func convertedPackage(in folder: URL) -> FoundPackage? {
+        let found = PackageFinder.find(in: [folder])
+        notices += found.problems.map(LibraryNotice.finder)
+        return found.packages.count == 1 ? found.packages.first : nil
     }
 
     // MARK: - Reading style (ADR-0010)
@@ -703,8 +798,13 @@ public final class Library {
 
     private func save() {
         guard unreadable == nil else { return }
+        // An Apple dictionary with no open question has settled on its lineage: what a later fresh import suggests.
+        for entry in entries where entry.offer == nil {
+            guard let source = entry.appleSource, let edition = entry.edition, let lineage = entry.lineage else { continue }
+            appleLineages[source.bundleIdentifier] = AppleLineage(edition: edition, lineage: lineage)
+        }
         do {
-            try store.save(LibraryDocument(entries: entries))
+            try store.save(LibraryDocument(entries: entries, appleLineages: appleLineages))
         } catch {
             notices.append(.notSaved(error))
         }

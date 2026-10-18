@@ -138,6 +138,12 @@ apps/apple/Sources/XDictEntryView/EntryWebView.swift hostile.production hostile.
 apps/apple/Sources/XDictEntryView/EntryViewController.swift hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
 apps/apple/Sources/XDictEntryView/EntryPane.swift   hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound hostile.controls
 apps/apple/Sources/XDictEntryView/*                 hostile.production hostile.faults hostile.binding hostile.app reader entries.quick entries.persistence lookup.core lookup.a11y sound
+# The Apple import (ADR-0011, plan WI-5): its sub-stage is extra, so a bare `library` does not bring it.
+apps/apple/Sources/XDictLibrary/Apple*              library.apple
+apps/apple/Sources/XDictAppleSource/*               library.apple
+apps/apple/Sources/XDictAppleImport/*               library.apple
+apps/apple/Sources/XDictService/AppleImports.swift  library.apple
+apps/apple/Sources/XDictUI/AppleImport*             library.apple
 apps/apple/Sources/XDictLibrary/*                   library lookup.core hostile.app entries.quick entries.persistence sound
 apps/apple/Sources/XDictSearch/*                    lookup hostile.app entries.quick sound panel
 apps/apple/Sources/XDictSpeech/*                    sound
