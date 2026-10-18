@@ -167,9 +167,8 @@ public enum HoverRefusal: String, Sendable, Equatable, CaseIterable {
     /// A capture is already running. Two simultaneous `SCScreenshotManager` captures deadlock —
     /// measured 6 times out of 6 — so a second one is refused rather than started.
     case captureInFlight
-    /// The word is not written in a script the reader studies. Unlike every other refusal here,
-    /// this one is a setting the reader chose and can change, so its text has to say so.
-    case scriptNotStudied
+    /// The word is written in a script the consumer did not allow (`HoverPolicy.allowedScripts`).
+    case scriptNotAllowed
     /// The reader moved on while the capture was running. The capture itself cannot be stopped —
     /// it is a detached task and a `SCScreenshotManager` call that does not honour cancellation —
     /// so what is refused is *accepting its answer*, which is the part that would otherwise deliver
@@ -232,18 +231,15 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     public var gesture: HoverGesture
     /// How long the pointer must be still. Debouncing is non-negotiable.
     public var settleMilliseconds: Int
-    /// The scripts the reader studies. A word in any other is read and then dropped.
+    /// **The scripts a captured word may be written in, handed in by the consumer** — nil or empty filters nothing.
+    /// Capture's own filter, not a setting moved from XiaolaiDict (ADR-0014 decision 10): no default here, since the
+    /// consumer derives it (from the enabled dictionaries' languages, plan-capture WI-3).
     ///
     /// **Scripts and not languages, because only one of the two is decidable here.** A single word
-    /// carries far too little for `NLLanguageRecognizer` to separate English from German, and the
-    /// hover path often has no sentence to give it — so a setting called "English only" would
-    /// refuse *Schadenfreude* and the reader would have no way to find out why. The script a word
-    /// is written in is a property of its characters, and `CaptureScript.dominant` reads it exactly.
-    ///
-    /// Latin alone by default: the reader this app is for studies English, and a popup over every
-    /// Chinese word they pass is the noise the switch exists to remove. A reader whose study
-    /// dictionary is 譯典通 adds `han` and is served by the same setting.
-    public var scripts: Set<CaptureScript>
+    /// carries far too little for `NLLanguageRecognizer` to separate English from German (XiaolaiDict
+    /// ADR-0015). The script a word is written in is a property of its characters, and
+    /// `CaptureScript.dominant` reads it exactly.
+    public var allowedScripts: Set<CaptureScript>?
 
     /// The rests the reader can choose between, named.
     ///
@@ -297,28 +293,25 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         "co.zeit.hyper",
     ]
 
-    /// The scripts a reader studies unless they say otherwise.
-    public static let defaultScripts: Set<CaptureScript> = [.latin]
-
     public static let shipped = HoverPolicy(
         modifier: .option, excludedApps: defaultExcludedApps, excludedHosts: [],
         settleMilliseconds: 180)
 
     public init(
         modifier: HoverModifier, excludedApps: Set<String>, excludedHosts: Set<String>,
-        settleMilliseconds: Int, scripts: Set<CaptureScript> = HoverPolicy.defaultScripts,
+        settleMilliseconds: Int, allowedScripts: Set<CaptureScript>? = nil,
         gesture: HoverGesture = .hold
     ) {
         self.modifier = modifier
         self.excludedApps = excludedApps
         self.excludedHosts = excludedHosts
         self.settleMilliseconds = settleMilliseconds
-        self.scripts = scripts
+        self.allowedScripts = allowedScripts
         self.gesture = gesture
     }
 
     /// **Decoded with a default, because the policy is stored as one blob.** A value written
-    /// before `scripts` existed carries no such key, and a synthesised decoder would throw on it —
+    /// before a field existed carries no such key, and a synthesised decoder would throw on it —
     /// which `HoverPolicyStore.load` turns into `.shipped`, silently discarding every app and site
     /// the reader had excluded. That would read as the exclusions resetting themselves one launch
     /// after an update, with nothing said. Every field a later version adds needs this treatment.
@@ -328,8 +321,7 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         excludedApps = try values.decode(Set<String>.self, forKey: .excludedApps)
         excludedHosts = try values.decode(Set<String>.self, forKey: .excludedHosts)
         settleMilliseconds = try values.decode(Int.self, forKey: .settleMilliseconds)
-        scripts = try values.decodeIfPresent(Set<CaptureScript>.self, forKey: .scripts)
-            ?? HoverPolicy.defaultScripts
+        allowedScripts = try values.decodeIfPresent(Set<CaptureScript>.self, forKey: .allowedScripts)
         // Added after readers already had a stored policy. The synthesised decoder throws on a
         // blob written before a field existed, and `HoverPolicyStore.load` turns a throw into
         // `.shipped` — silently discarding every exclusion the reader had set.
@@ -364,19 +356,20 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         return .look
     }
 
-    /// Whether a word the reader rested on is written in a script they study.
+    /// Whether a captured word is written in an allowed script.
     ///
     /// **Asked after the word has been read, never inside `decide`.** The gate runs before any
     /// text exists — that is what makes the ordinary refusal cost one set comparison — so the
     /// script cannot be one of its inputs. This is the second line, beside the repeat check, and
     /// what it saves is everything downstream of capture.
     ///
-    /// **Text in no script at all is looked up.** A capture of `42`, of punctuation, or of a
+    /// **Text in no script at all is allowed.** A capture of `42`, of punctuation, or of a
     /// script this does not enumerate names nothing — and refusing there would make the filter
-    /// quietly wider than the reader set it, in precisely the captures OCR is least sure of.
-    public func studies(_ text: String) -> Bool {
+    /// quietly wider than it was set, in precisely the captures OCR is least sure of.
+    public func allows(_ text: String) -> Bool {
+        guard let allowed = allowedScripts, !allowed.isEmpty else { return true }
         guard let script = CaptureScript.dominant(in: text) else { return true }
-        return scripts.contains(script)
+        return allowed.contains(script)
     }
 
     /// Whether `bundleID` is an app hover never reads — the one predicate the gate and
