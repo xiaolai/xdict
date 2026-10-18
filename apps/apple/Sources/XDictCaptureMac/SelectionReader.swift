@@ -1,43 +1,7 @@
-import AppKit
 import ApplicationServices
 import XDictBase
+import XDictCapture
 import os
-
-/// The app a selection is read from, captured on the main actor before the Accessibility work moves off it.
-public struct FrontApp: Hashable, Sendable {
-    public let pid: pid_t
-    public let name: String
-    public let bundleID: String?
-
-    public init(pid: pid_t, name: String, bundleID: String?) {
-        self.pid = pid
-        self.name = name
-        self.bundleID = bundleID
-    }
-
-    /// The frontmost app, with a process ID Accessibility can use. **macOS 27 reports some apps — Safari, launched from
-    /// a system cryptex — with process ID -1** (XiaolaiDict, measured); the window server knows the real one, and is
-    /// asked only then: the owner of an on-screen ordinary window whose app has that bundle identifier.
-    @MainActor
-    public static func frontmost() -> FrontApp? {
-        NSWorkspace.shared.frontmostApplication.flatMap(resolving)
-    }
-
-    /// `app`, with a process ID Accessibility can use.
-    @MainActor
-    public static func resolving(_ app: NSRunningApplication) -> FrontApp? {
-        let name = app.localizedName ?? app.bundleIdentifier ?? "?"
-        if app.processIdentifier > 0 { return FrontApp(pid: app.processIdentifier, name: name, bundleID: app.bundleIdentifier) }
-        guard let bundle = app.bundleIdentifier else { return nil }
-        let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-            as? [[String: Any]] ?? []
-        let owner = windows.lazy
-            .filter { $0[kCGWindowLayer as String] as? Int == 0 }
-            .compactMap { $0[kCGWindowOwnerPID as String] as? pid_t }
-            .first { NSRunningApplication(processIdentifier: $0)?.bundleIdentifier == bundle }
-        return owner.map { FrontApp(pid: $0, name: name, bundleID: bundle) }
-    }
-}
 
 /// Where the selected term is on screen: **y down, from the primary screen's top-left**, as the Accessibility API
 /// answers. `exact` is the term's own box; `containing` holds the punctuation trimmed from it too.
@@ -57,17 +21,25 @@ public struct SelectionBox: Hashable, Sendable {
               box.height.isFinite, box.width > 0, box.height > 0 else { return nil }
         return SelectionBox(rect: box, quality: quality)
     }
+
+    /// The box as capture hands it over (XDict ADR-0014 decision 2): measured, of its quality.
+    var measured: WordBox {
+        .measured(ReadBounds(rect: DownRect(rect), quality: quality == .exact ? .exact : .containing))
+    }
 }
 
 /// What the reader had selected, and in which app.
 public struct SelectedText: Hashable, Sendable {
-    /// The term looked up (`LookupText`): the selection less its wrapping punctuation.
+    /// The term: the selection less its wrapping punctuation (`SelectedTerm`), admitted by the consumer's limit.
     public let text: String
     public let app: FrontApp
+    /// The dialect that read it: the text range or the text markers.
+    public let acquisition: CaptureAcquisition
 
-    public init(text: String, app: FrontApp) {
+    public init(text: String, app: FrontApp, acquisition: CaptureAcquisition) {
         self.text = text
         self.app = app
+        self.acquisition = acquisition
     }
 }
 
@@ -80,6 +52,7 @@ public enum SelectionRefusal: Hashable, Sendable {
     case searchLimitReached(app: String, limit: Int)
     /// Only whitespace and punctuation.
     case noWord(app: String)
+    /// Longer than the consumer admits (`TermAdmission`), in characters: refused whole, never cut.
     case tooLong(app: String, characters: Int)
     case failed(CaptureError, app: String)
     /// This process may not read other apps: Accessibility is not granted.
@@ -92,10 +65,21 @@ public enum SelectionOutcome: Hashable, Sendable {
     /// What was selected — and where it is on screen, where the app could say: what the panel is placed by.
     case selected(SelectedText, box: SelectionBox?)
     case nothing(SelectionRefusal)
+
+    /// **The selection as capture hands it over** (XDict ADR-0014 decision 2): the term, `trigger` (the shortcut and the
+    /// menu read the selection alike), the dialect that read it, the app, the measured box or none, and no context — the
+    /// selection path reads none. Nil for a refusal; a term the validating constructor refuses throws.
+    public func capturedTerm(trigger: CaptureTrigger) throws(CaptureValueError) -> CapturedTerm? {
+        guard case .selected(let selected, let box) = self else { return nil }
+        return try CapturedTerm.make(
+            term: selected.text, trigger: trigger, acquisition: selected.acquisition, confidence: 1,
+            source: SourceApp(bundleID: selected.app.bundleID), pointer: nil, box: box?.measured ?? .absent,
+            context: .unavailable(.notCaptured))
+    }
 }
 
 /// **Reads the frontmost app's selection through the Accessibility API** (plan-macos-v1 WI-8, I2; moved from
-/// XiaolaiDict's `SelectionReader`). Apps speak one of two dialects:
+/// XiaolaiDict's `SelectionReader`, then down from `XDictAnywhere`, plan-capture WI-2). Apps speak one of two dialects:
 ///
 /// - **text range**: `AXSelectedText` and `AXSelectedTextRange` — Cocoa text views (TextEdit, Notes);
 /// - **text markers**: `AXSelectedTextMarkerRange` — WebKit (Safari, Mail) and Chromium.
@@ -103,9 +87,10 @@ public enum SelectionOutcome: Hashable, Sendable {
 /// **Re-checked against the MDX-first model** (ADR-0001): XDict looks the term up in the reader's dictionaries and puts
 /// the panel by the word, and keeps no reading history, so XiaolaiDict's sentence context, provenance and lemma stayed
 /// behind with the study ledger they served. What came: the dialects, the page search, waking Chromium, the term's own
-/// box read back before it is believed, and every number from another process checked before it is summed.
+/// box read back before it is believed, and every number from another process checked before it is summed. **The
+/// admission limit is handed in** (XDict ADR-0014 decision 3): lookup's, never capture's, and never a cut.
 public enum SelectionReader {
-    /// The whole read, however many requests it takes.
+    /// The whole read, however many requests it takes — the hit test of the clicked position included.
     public static let budget: Duration = .seconds(2)
     /// Nodes visited looking for a browser window's page. A tree this search cannot cross is reported, not treated as
     /// "no page".
@@ -114,52 +99,80 @@ public enum SelectionReader {
     /// levels under the view that holds the selection.
     static let underParents = 8
 
-    /// Synchronous IPC into another app, so it runs detached — never on the main actor, whose panel must appear within
-    /// its budget whatever the app does. This process's own windows are read on the main actor instead: a request
-    /// about this process is serviced in-process, and SwiftUI must be asked from the main thread.
-    /// `clicked` is where the reader Control-clicked the selection (Accessibility's coordinates, y down), for the
-    /// Service: the element there is read when the focused one has nothing.
-    public static func read(from app: FrontApp, clicked: CGPoint? = nil) async -> SelectionOutcome {
-        guard AXIsProcessTrusted() else { return .nothing(.notTrusted) }
-        if app.pid == getpid() { return await MainActor.run { readNow(app, clicked: clicked) } }
-        let work = Task.detached(priority: .userInitiated) { () -> SelectionOutcome in
-            AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), AccessibilitySession.messagingTimeout)
-            return readNow(app, clicked: clicked)
+    /// **Another app's selection is read through the one lane** (XDict ADR-0014 decision 6), as an explicit request:
+    /// ahead of every hover, under the explicit messaging timeout, its session — and so its hit test of `clicked` — made
+    /// when its turn comes, so the budget is the read's and not the queue's. **This process's own windows are read on
+    /// the main actor and never through the lane**: a request about this process is serviced in-process, on the calling
+    /// thread, and SwiftUI must be asked from the main one (XiaolaiDict ADR-0042). `clicked` is where the reader
+    /// Control-clicked the selection (Accessibility's coordinates, y down), for the Service: the element there is read
+    /// when the focused one has nothing. `access` is asked first and never prompts; `client` makes the read's requests
+    /// (the real session, or a test's tree).
+    public static func read(
+        from app: FrontApp, clicked: CGPoint? = nil, admitting admission: TermAdmission, access: AccessibilityAccess = .system,
+        lane: AccessibilityLane = .system, budget: Duration = budget,
+        client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) }
+    ) async -> SelectionOutcome {
+        guard access.granted() else { return .nothing(.notTrusted) }
+        if app.pid == getpid() {
+            return await MainActor.run { readNow(app, clicked: clicked, admission, client(budget)) }
         }
-        return await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
+        return await lane.run(.explicit, timeout: AccessibilitySession.messagingTimeout, budget: budget, {
+            readNow(app, clicked: clicked, admission, client(budget))
+        }, refused: { refusal in
+            log.notice("selection read not run: \(String(describing: refusal), privacy: .public)")
+            return .nothing(.failed(failure(for: refusal), app: app.name))
+        })
     }
 
-    private static func readNow(_ app: FrontApp, clicked: CGPoint?) -> SelectionOutcome {
-        let application = AXUIElementCreateApplication(app.pid)
-        var under: AXUIElement?
-        if let clicked {
-            var hit: AXUIElement?
-            if AXUIElementCopyElementAtPosition(application, Float(clicked.x), Float(clicked.y), &hit) == .success {
-                under = hit
-            }
+    /// What a lane's refusal means for the reader. **A stuck lane is an app that is not answering** — the read ahead is
+    /// blocked inside another process — and the lane itself reports it as stuck (`AccessibilityLane.current()`); the
+    /// reader's sentence for it is "did not answer", which is what happened.
+    static func failure(for refusal: LaneRefusal) -> CaptureError {
+        switch refusal {
+        case .cancelled, .superseded: .cancelled
+        case .overstayed: .deadlineExceeded
+        case .stuck: .notResponding
         }
-        return read(application: application, of: app, with: AccessibilitySession(budget: budget), under: under)
+    }
+
+    private static func readNow(
+        _ app: FrontApp, clicked: CGPoint?, _ admission: TermAdmission, _ ax: some AccessibilityReading
+    ) -> SelectionOutcome {
+        read(application: AXUIElementCreateApplication(app.pid), of: app, with: ax, clicked: clicked, admitting: admission)
+    }
+
+    /// The read with the clicked position hit-tested **inside it**: one request of the read's own client, so the time
+    /// it takes is the read's, and a hung or stalled hit test ends the read as any request does.
+    public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
+                            clicked: CGPoint?, admitting admission: TermAdmission) -> SelectionOutcome {
+        let under: AXUIElement?
+        do throws(CaptureError) {
+            under = try clicked.flatMap { (point) throws(CaptureError) in try ax.hitTest(application, at: point) }
+        } catch {
+            return .nothing(.failed(error, app: app.name))
+        }
+        return read(application: application, of: app, with: ax, under: under, admitting: admission)
     }
 
     /// The whole read, against any Accessibility client — the real one, or a test's. `under` is the element under the
     /// reader's Control-click, where there was one.
     public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
-                            under: AXUIElement? = nil) -> SelectionOutcome {
+                            under: AXUIElement? = nil, admitting admission: TermAdmission) -> SelectionOutcome {
         do {
             try ax.wake(application)
             switch try find(in: application, under: under, ax) {
             case .found(let capture):
-                switch LookupText.term(capture.text) {
-                case .empty: return .nothing(.nothingSelected(app: app.name))
-                case .noWord: return .nothing(.noWord(app: app.name))
-                case .tooLong(let characters): return .nothing(.tooLong(app: app.name, characters: characters))
-                case .term(let text):
-                    // Where it is: worth having, not worth the selection — but a cancellation is the reader moving on.
-                    let box = try SelectedTerm(from: capture.text).flatMap { (term) throws(CaptureError) in
-                        try orNone { () throws(CaptureError) in try bounds(of: capture, term: term, ax) }
-                    }
-                    return .selected(SelectedText(text: text, app: app), box: box)
+                guard !capture.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    return .nothing(.nothingSelected(app: app.name))
                 }
+                guard let term = SelectedTerm(from: capture.text) else { return .nothing(.noWord(app: app.name)) }
+                guard admission.admits(term.text) else {
+                    return .nothing(.tooLong(app: app.name, characters: term.text.count))
+                }
+                // Where it is: worth having, not worth the selection — but a cancellation is the reader moving on.
+                let box = try orNone { () throws(CaptureError) in try bounds(of: capture, term: term, ax) }
+                let acquisition: CaptureAcquisition = capture.markers == nil ? .textRange : .textMarkers
+                return .selected(SelectedText(text: term.text, app: app, acquisition: acquisition), box: box)
             case .nothing:
                 return .nothing(.nothingSelected(app: app.name))
             case .searchLimitReached:
@@ -168,6 +181,33 @@ public enum SelectionReader {
         } catch {
             return .nothing(.failed(error, app: app.name))
         }
+    }
+
+    /// **The Service's text is the query, whatever the selection now says** (XDict ADR-0014 decision 2, carried from
+    /// plan-capture WI-1's verification). macOS hands the Service its text; the selection is read afterwards, from an
+    /// app that may have changed it, quit, or lost it to the Services submenu the pointer moved into. So the term is
+    /// always `serviceText`, the acquisition always `.serviceText`, and the read supplies **geometry only where it
+    /// agrees**: a selection that reads back as other text supplies neither context nor a box, and the placement falls
+    /// back to where the reader Control-clicked (`clicked`), valid only now. No context is read on this path.
+    public static func serviceTerm(
+        _ serviceText: String, read outcome: SelectionOutcome?, source: SourceApp, clicked: DownPoint?
+    ) throws(CaptureValueError) -> CapturedTerm {
+        let fallback: WordBox = clicked.map(WordBox.clickPlacement) ?? .absent
+        let box: WordBox
+        let context: ContextOutcome
+        switch outcome {
+        case .selected(let selected, let measured)? where selected.text == serviceText:
+            box = measured?.measured ?? fallback
+            context = .unavailable(.notCaptured)
+        case .selected?:
+            box = fallback
+            context = .unavailable(.disagreesWithServiceText)
+        case .nothing?, nil:
+            box = fallback
+            context = .unavailable(.notCaptured)
+        }
+        return try CapturedTerm.make(term: serviceText, trigger: .service, acquisition: .serviceText, confidence: 1,
+                                     source: source, pointer: nil, box: box, context: context)
     }
 
     // MARK: - Finding the selection

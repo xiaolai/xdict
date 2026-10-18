@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictAnywhere
+import XDictCaptureMac
 import XDictContract
 import XDictLibrary
 import XDictSearch

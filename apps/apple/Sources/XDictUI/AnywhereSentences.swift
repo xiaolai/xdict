@@ -1,5 +1,6 @@
 import Foundation
 import XDictAnywhere
+import XDictCaptureMac
 
 /// **What lookup from anywhere tells the reader, in their language** (plan-macos-v1 WI-8): the selection reader and the
 /// shortcut hand kinds, these word them. Every sentence is in `Strings/Localizable.xcstrings`, in English and Simplified

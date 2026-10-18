@@ -31,7 +31,9 @@ struct TestInventoryTests {
         "XDictSpeechTests": 31,
         // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
-        "XDictAnywhereTests": 64,
+        // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
+        // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
+        "XDictAnywhereTests": 37,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         "XDictUITests": 29,
         "XDictEntryViewTests": 43,
@@ -50,8 +52,10 @@ struct TestInventoryTests {
         "XDictAppleSourceTests": 16,
         // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
         "XDictCaptureTests": 261,
-        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane.
-        "XDictCaptureMacTests": 22,
+        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
+        // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
+        // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission).
+        "XDictCaptureMacTests": 68,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

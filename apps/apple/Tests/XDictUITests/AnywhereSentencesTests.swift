@@ -2,6 +2,7 @@ import Carbon.HIToolbox
 import Foundation
 import Testing
 import XDictAnywhere
+import XDictCaptureMac
 import XDictUI
 
 /// **What lookup from anywhere tells the reader** (plan-macos-v1 WI-8): why a selection could not be looked up, each
