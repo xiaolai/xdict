@@ -187,7 +187,8 @@ struct MainWindow: View {
             // A ⌘-clicked word opens in a new tab of this window, looked up as typed and Return (P47).
             made.openInNewTab = { [openWindow] word in
                 NewTabLookups.shared.hand(word)
-                NewTab.open { openWindow(id: XDictApp.mainWindow) }
+                NewTab.open(make: { openWindow(id: XDictApp.mainWindow) },
+                            failed: { NewTabLookups.shared.failed(word) })
             }
             if let word = NewTabLookups.shared.take() {
                 Task {
@@ -250,7 +251,10 @@ struct MenuBarLabel: View {
         Self.icon
             .accessibilityLabel(Text(verbatim: "XDict"))
             .task {
-                LookupAnywhere.shared.openMainWindow = { openWindow(id: XDictApp.mainWindow) }
+                LookupAnywhere.shared.openMainWindow = {
+                    NewTabLookups.shared.cancel()
+                    openWindow(id: XDictApp.mainWindow)
+                }
                 MenuBarActions.open = { openWindow(id: $0) }
                 // Every way into Settings ▸ Dictionaries opens Settings through here, so it works with no other window
                 // open (ADR-0012 d.4).
@@ -292,6 +296,7 @@ enum MenuBarActions {
                                                      && $0.isVisible }) {
             window.makeKeyAndOrderFront(nil)
         } else {
+            NewTabLookups.shared.cancel()
             open?(XDictApp.mainWindow)
         }
     }
@@ -357,7 +362,10 @@ struct FileAndHelpCommands: Commands {
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
-            Button("New Tab") { NewTab.open { openWindow(id: XDictApp.mainWindow) } }
+            Button("New Tab") {
+                NewTabLookups.shared.cancel()   // a word ⌘-clicked earlier is not this tab's (P47)
+                NewTab.open(make: { openWindow(id: XDictApp.mainWindow) })
+            }
                 .keyboardShortcut("t")
             // Settings ▸ Dictionaries with the open panel up; the pane's `+` ▸ Add MDX Files… shows the same ⌘O (ADR-0012
             // d.3).
@@ -375,7 +383,8 @@ struct FileAndHelpCommands: Commands {
 /// A new main window, put in the front main window's tab group once SwiftUI has made it.
 @MainActor
 enum NewTab {
-    static func open(_ make: () -> Void) {
+    /// `failed` runs when no new main window appeared within `NewTabLookups.bound`.
+    static func open(make: () -> Void, failed: @escaping @MainActor () -> Void = {}) {
         let host = NSApp.keyWindow.flatMap { isMain($0) ? $0 : nil }
         let before = Set(NSApp.windows.map(ObjectIdentifier.init))
         make()
@@ -388,6 +397,7 @@ enum NewTab {
                 }
                 try? await Task.sleep(for: .milliseconds(25))
             }
+            failed()
         }
     }
 
