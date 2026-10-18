@@ -294,18 +294,18 @@ struct EntryPageTests {
     }
 
     /// **Apple's compact divider** (popover.png, popover.dark.png): the name leading at the title's 24 pt inset, in the
-    /// system font at 20 pt and the label colour, then a hairline to 27 pt from the trailing edge; a 40 pt band (an
+    /// system font at 13 pt semibold (owner, 2026-10-18: smaller than Apple's 20) and the secondary label colour, then a hairline to 27 pt from the trailing edge; a 40 pt band (an
     /// 8 pt gap each side of the 24 pt row), not following the text size, as the title row does not.
     @Test func thePopoverDividerIsApplesCompactOne() {
         let divider = EntryPageDivider(name: "LDOC", zoom: 2, style: .popover)
-        #expect(divider.label.font?.pointSize == 20)
-        #expect(divider.label.textColor == .labelColor)
+        #expect(divider.label.font?.pointSize == 13)
+        #expect(divider.label.textColor == .secondaryLabelColor)
         #expect(divider.label.alignment == .natural)
         #expect(divider.fittingSize.height == 40)
         #expect(divider.accessibilityRole() == .staticText, "nothing to press")
         #expect(EntryPageDivider.Popover.leading == 24 && EntryPageDivider.Popover.trailing == 27)
         divider.setZoom(1)
-        #expect(divider.label.font?.pointSize == 20)
+        #expect(divider.label.font?.pointSize == 13)
         let window = EntryPageDivider(name: "LDOC", zoom: 1)
         #expect(window.style == .window && window.label.font?.pointSize == 18)
     }

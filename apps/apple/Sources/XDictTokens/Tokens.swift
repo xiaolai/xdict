@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "55f5829c613156de175bbec3d0efbb351f501f0ea63b2882fa2ef7a2e344d548"
+    public static let sourceDigest = "afecb41df5fdba8b9a8e8121b1ee286b3e633c1312c70fd03173313b67f5249b"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -218,6 +218,8 @@ public enum Tokens {
         public static let panelTitle = TokenFont(size: 20, weight: .regular, design: .default, italic: false)
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let panelFooter = TokenFont(size: 13, weight: .semibold, design: .default, italic: false)
+        /// A dictionary's name above its entry in the lookup popover: the footer rows' size, well under the 20 pt headword (owner, 2026-10-18: a smaller font).
+        public static let panelDictionaryName = TokenFont(size: 13, weight: .semibold, design: .default, italic: false)
         /// Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12).
         public static let tableCell = TokenFont(size: 12, weight: .regular, design: .default, italic: false)
     }

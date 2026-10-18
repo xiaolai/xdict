@@ -23,6 +23,14 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
         view.state = .active
         return view
     }()
+    /// The reader's solidity (`PanelAppearance`): an opaque window colour over the frosting, at their opacity, under the
+    /// entry. Appearance-aware, so a forced light or dark popup gets its own window colour.
+    let solid: NSView = {
+        let view = NSView()
+        view.wantsLayer = true
+        view.autoresizingMask = [.width, .height]
+        return view
+    }()
     /// Told when the popover closed by itself (transient behaviour), not by `close()`.
     public var onClose: (() -> Void)?
     private var closing = false
@@ -33,6 +41,17 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
         popover.animates = false
         popover.hasFullSizeContent = true
         popover.delegate = self
+        solid.frame = frost.bounds
+        frost.addSubview(solid)
+    }
+
+    /// The reader's shade and solidity, applied before each showing.
+    func apply(_ look: PanelAppearance) {
+        popover.appearance = look.appearance
+        let appearance = look.appearance ?? NSApp.effectiveAppearance
+        appearance.performAsCurrentDrawingAppearance {
+            solid.layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(look.solidity).cgColor
+        }
     }
 
     public var isShown: Bool { popover.isShown }
@@ -60,7 +79,9 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
     }
 
     /// Shows `content` at `size` by the word (or the pointer), or resizes it in place when already shown.
-    public func show(_ content: NSView, size: CGSize, word: CGRect?, pointer: CGPoint, visible: CGRect) {
+    public func show(_ content: NSView, size: CGSize, word: CGRect?, pointer: CGPoint, visible: CGRect,
+                     look: PanelAppearance = .current(in: .standard)) {
+        apply(look)
         if content.superview !== frost {
             content.removeFromSuperview()
             content.translatesAutoresizingMaskIntoConstraints = false

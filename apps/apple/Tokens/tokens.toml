@@ -141,6 +141,7 @@ startName = { size = 20, design = "serif", source = "P14" }
 noEntries = { size = 24, source = "P12" }
 panelTitle = { size = 20, source = "P41" }
 panelFooter = { size = 13, weight = "semibold", source = "P41" }
+panelDictionaryName = { size = 13, weight = "semibold", why = "A dictionary's name above its entry in the lookup popover: the footer rows' size, well under the 20 pt headword (owner, 2026-10-18: a smaller font)." }
 tableCell = { size = 12, why = "Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12)." }
 
 [colour]
