@@ -191,7 +191,10 @@ final class LookupAnywhere {
                 }
                 var word: CGRect?
                 if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    let outcome = await SelectionReader.read(from: reader)
+                    // The click in Accessibility's coordinates (y down): the element there holds the selection where
+                    // the reader's app, back in front after the Services menu, names no focused one (Notes, TextEdit).
+                    let under = clicked.map { CGPoint(x: $0.x, y: Self.primaryHeight - $0.y) }
+                    let outcome = await SelectionReader.read(from: reader, clicked: under)
                     self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
                     if case .selected(let selected, let box?) = outcome, selected.text == text {
                         word = PanelPlacement.flipped(box.rect, primaryHeight: Self.primaryHeight)
