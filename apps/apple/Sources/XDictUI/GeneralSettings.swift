@@ -10,6 +10,8 @@ public struct GeneralSettings: View {
     private let defaults: UserDefaults
     private let domain: String
     @State private var language: InterfaceLanguage
+    @AppStorage(PanelAppearance.shadeKey) private var shade: PanelAppearance.Shade = .system
+    @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
     private let registrar: ShortcutRegistrar
     private let openSetup: () -> Void
 
@@ -52,6 +54,30 @@ public struct GeneralSettings: View {
             .accessibilityIdentifier("interface-language")
             .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
             Section { ShortcutSettings(registrar: registrar) }
+            Section {
+                Picker(selection: $shade) {
+                    Text("Follow System").tag(PanelAppearance.Shade.system)
+                    Text("Light").tag(PanelAppearance.Shade.light)
+                    Text("Dark").tag(PanelAppearance.Shade.dark)
+                } label: {
+                    Text("Lookup popup")
+                    Text("Its shade, apart from the rest of XDict.")
+                }
+                .pickerStyle(.segmented)
+                .accessibilityIdentifier("panel-shade")
+                LabeledContent {
+                    Slider(value: $solidity, in: 0...1) {
+                        Text("Background")
+                    } minimumValueLabel: {
+                        Text("Glass")
+                    } maximumValueLabel: {
+                        Text("Solid")
+                    }
+                    .accessibilityIdentifier("panel-solidity")
+                } label: {
+                    Text("Background")
+                }
+            }
             Section {
                 LabeledContent {
                     Button { openSetup() } label: { Text("Show Setup…") }

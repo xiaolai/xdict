@@ -66,8 +66,9 @@ public struct LookupPanelView: View {
     public static let chromeHeight: CGFloat = PanelLook.topSpace + PanelLook.titleRow + PanelLook.footerGap
         + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1) + PanelLook.bottomInset
 
-    /// The popover's title row (P41): its 20 pt title, then a rule to the trailing inset. The popover's title is the
-    /// dictionary's name; XDict's keeps the speaker before the headword (owner, 2026-10-17). No switcher: every
+    /// The popover's title row (P41): its 20 pt title. Apple's runs a rule after it to the trailing inset; XDict's has none
+    /// (owner, 2026-10-18). The popover's title is the dictionary's name; XDict's keeps the speaker before the headword
+    /// (owner, 2026-10-17). No switcher: every
     /// dictionary is stacked below under its own name, as Apple's popover stacks them (owner, 2026-10-18).
     private var header: some View {
         HStack(spacing: Tokens.Inset.panelRuleGap) {
@@ -83,10 +84,7 @@ public struct LookupPanelView: View {
                 .truncationMode(.tail)
                 .layoutPriority(1)
                 .accessibilityIdentifier("panel.query")
-            Rectangle()
-                .fill(.separator)
-                .frame(minWidth: Tokens.Inset.panelRuleGap, maxWidth: .infinity, maxHeight: Tokens.Line.hairline)
-                .accessibilityHidden(true)
+            Spacer(minLength: 0)
         }
         .frame(height: PanelLook.titleRow)
         .padding(.top, PanelLook.topSpace)

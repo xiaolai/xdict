@@ -1629,6 +1629,22 @@
         }
       }
     },
+    "Background" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Background"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "背景"
+          }
+        }
+      }
+    },
     "Base size %@ px, from the dictionary’s page rule “%@”." : {
       "localizations" : {
         "en" : {
@@ -2629,6 +2645,22 @@
         }
       }
     },
+    "Follow System" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Follow System"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "跟随系统"
+          }
+        }
+      }
+    },
     "Fonts kept: %lld" : {
       "localizations" : {
         "en" : {
@@ -2705,6 +2737,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "通用"
+          }
+        }
+      }
+    },
+    "Glass" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Glass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "玻璃"
           }
         }
       }
@@ -2935,6 +2983,22 @@
         }
       }
     },
+    "Its shade, apart from the rest of XDict." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Its shade, apart from the rest of XDict."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "弹窗自己的深浅，不随 XDict 其余部分。"
+          }
+        }
+      }
+    },
     "Jump to Selection" : {
       "localizations" : {
         "en" : {
@@ -3079,6 +3143,22 @@
         }
       }
     },
+    "Light" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "浅色"
+          }
+        }
+      }
+    },
     "Locate…" : {
       "localizations" : {
         "en" : {
@@ -3139,6 +3219,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询所选内容"
+          }
+        }
+      }
+    },
+    "Lookup popup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup popup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词弹窗"
           }
         }
       }
@@ -4780,6 +4876,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缩小文字"
+          }
+        }
+      }
+    },
+    "Solid" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solid"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "实心"
           }
         }
       }

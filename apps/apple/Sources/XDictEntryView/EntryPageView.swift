@@ -82,8 +82,8 @@ final class EntryPageDivider: NSView {
             setAccessibilityRole(.disclosureTriangle)
             setAccessibilityValue(1)
         case .popover:
-            label.font = Tokens.TextRole.panelTitle.nsFont
-            label.textColor = .labelColor
+            label.font = Tokens.TextRole.panelDictionaryName.nsFont
+            label.textColor = .secondaryLabelColor
             label.alignment = .natural
             label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             NSLayoutConstraint.activate([
