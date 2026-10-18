@@ -1,5 +1,6 @@
 import Foundation
 import XDictContract
+import XDictLibrary
 
 /// **Why an Apple dictionary was not converted, in the reader's language** (ADR-0011 decision 11; ADR-0007 decision 10:
 /// the service hands kinds, the view layer words them). Every sentence is in `Strings/Localizable.xcstrings`, in English
@@ -45,7 +46,59 @@ public enum AppleImportSentences {
         }
     }
 
-    private static func size(_ bytes: UInt64) -> String {
+    static func size(_ bytes: UInt64) -> String {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .binary)
     }
+
+    // MARK: - The sheet (plan WI-5)
+
+    public static let title = LocalizedStringResource("Add Apple Dictionaries")
+    public static let intro = LocalizedStringResource("""
+        Choose the dictionaries installed on this Mac to add. XDict converts a copy of each once; the dictionaries \
+        themselves are not changed.
+        """)
+    /// ADR-0011 decision 1: how to get one that is not listed.
+    public static let howToDownload = LocalizedStringResource("""
+        To add a dictionary that is not listed, download it in Dictionary.app ▸ Settings, then open this list again.
+        """)
+    public static let none = LocalizedStringResource("No Apple dictionaries are installed on this Mac.")
+    public static let finding = LocalizedStringResource("Finding the dictionaries installed on this Mac…")
+    public static let alreadyImported = LocalizedStringResource("Already imported")
+    public static let importButton = LocalizedStringResource("Import")
+
+    /// Where one import is, in the row's own words; nil while nothing was asked.
+    public static func step(_ step: AppleImportStep?) -> LocalizedStringResource? {
+        switch step {
+        case nil: nil
+        case .waiting: LocalizedStringResource("Waiting")
+        case .copying: LocalizedStringResource("Copying…")
+        case .converting: LocalizedStringResource("Converting…")
+        case .cancelling: LocalizedStringResource("Cancelling…")
+        case .added: LocalizedStringResource("Added")
+        case .cancelled: LocalizedStringResource("Cancelled")
+        case .failed(let failure): Self.failure(failure)
+        }
+    }
+
+    public static func failure(_ failure: AppleImportFailure) -> LocalizedStringResource {
+        switch failure {
+        case .refused(let refusal): Self.refusal(refusal)
+        case .noContainer: Self.refusal(.noContainer)
+        case .service: LocalizedStringResource("XDict’s dictionary service did not finish converting this dictionary. Try again.")
+        case .notAdded: LocalizedStringResource("XDict converted this dictionary but could not add it. Try again.")
+        }
+    }
+
+    // MARK: - Settings ▸ Dictionaries' problem row (decisions 7–9)
+
+    /// Apple changed the bundle, or XDict changed the converter: Convert Again is offered.
+    public static func updated(name: String) -> LocalizedStringResource {
+        LocalizedStringResource("Apple updated \(name).")
+    }
+
+    public static let convertAgain = LocalizedStringResource("Convert Again")
+    public static let convertAgainHelp = LocalizedStringResource("""
+        Converts the installed dictionary again and keeps the result as this dictionary. You can undo it.
+        """)
+    public static let removed = LocalizedStringResource("Apple removed this dictionary’s files; this copy still reads.")
 }

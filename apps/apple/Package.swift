@@ -27,7 +27,7 @@ let package = Package(
 
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
-        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictEntryView",
+        .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictContract", "XDictEntryView",
                                                 "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTokens"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
@@ -77,10 +77,17 @@ let package = Package(
         // packages found in what the reader chose and kept inside it, imports with progress, cancel and retry, the
         // order, names, languages and enablement, a changed edition recognised, and lineage joins made only by the
         // reader and undone exactly. Kinds, never sentences: the view layer words them. No core: it asks the service.
-        .target(name: "XDictLibrary", dependencies: ["XDictClient", "XDictContract"]),
+        .target(name: "XDictLibrary", dependencies: ["XDictAppleSource", "XDictClient", "XDictContract"]),
+
+        // **What the app and the service both say about an Apple dictionary's files** (ADR-0011 decisions 4, 7, 9 and
+        // 11): the bounded walk and the versioned manifest hash (the source revision), written once so the app compares
+        // an installed bundle with what the service stamped by the same code; the installed bundles found under the
+        // AssetsV2 path; the app's byte-for-byte copy into the shared container, and the launch sweep of it. It reads
+        // names, sizes, bytes and `Info.plist`, never a bundle's data, which only the converter parses.
+        .target(name: "XDictAppleSource", dependencies: ["XDictContract"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
                                                         "XDictTokens", "XDictUI"]),
 
@@ -106,7 +113,7 @@ let package = Package(
 
         // The dictionary service: sandboxed, with no file and no network entitlement, and the only process that runs
         // the core (ADR-0001 decision 5), answering the frozen contract.
-        .executableTarget(name: "XDictService", dependencies: ["XDictAppleImport", "XDictBase", "XDictContract", "XDictCore"]),
+        .executableTarget(name: "XDictService", dependencies: ["XDictAppleImport", "XDictAppleSource", "XDictBase", "XDictContract", "XDictCore"]),
 
         // **Apple's dictionaries, converted to MDX once** (ADR-0011): a snapshot of an installed `*.dictionary` bundle in
         // the service's own container, written out as an `.mdx` + `.mdd` pair the core then reads like any other. Swift,
@@ -125,11 +132,15 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
+        .testTarget(name: "XDictUITests", dependencies: ["XDictAnywhere", "XDictAppleSource", "XDictBase", "XDictContract", "XDictLibrary", "XDictSearch",
                                                         "XDictSpeech", "XDictTestSupport", "XDictUI"]),
         // The library without a service: packages found on disk, bookmarks across a move, languages, names, the
         // document, refusals and sounds; the model against a fake of the service.
-        .testTarget(name: "XDictLibraryTests", dependencies: ["XDictClient", "XDictContract", "XDictLibrary"]),
+        .testTarget(name: "XDictLibraryTests", dependencies: ["XDictAppleSource", "XDictClient", "XDictContract",
+                                                             "XDictLibrary"]),
+        // The installed bundles found, copied and swept over synthetic AssetsV2 trees the tests write (no Apple
+        // content), and the manifest the app and the service share.
+        .testTarget(name: "XDictAppleSourceTests", dependencies: ["XDictAppleSource", "XDictContract", "XDictTestSupport"]),
         // The main window's model against a fake of the service: scope, order, painting as each answers, paging,
         // unavailable dictionaries, suggestions, the trail, and the entry view's content over the contract.
         .testTarget(name: "XDictSearchTests", dependencies: ["XDictClient", "XDictContract", "XDictEntryView",
@@ -147,7 +158,7 @@ let package = Package(
         // The one test target besides the service that reaches the core: the service's own listener, over a real NSXPC
         // connection in this process, asked through the real client and the instruments' scenarios; and the core's
         // types mapped into the contract's.
-        .testTarget(name: "XDictServiceTests", dependencies: ["XDictAppleImport", "XDictClient", "XDictContract", "XDictCore",
+        .testTarget(name: "XDictServiceTests", dependencies: ["XDictAppleImport", "XDictAppleSource", "XDictClient", "XDictContract", "XDictCore",
                                                               "XDictInstruments", "XDictService", "XDictTestSupport"]),
         // The converter over synthetic bundles the tests write themselves (no Apple content, ADR-0011): the bundle's
         // structure, the entry transform, the writer, its bounds, refusals and determinism, read back by a reader that

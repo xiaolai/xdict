@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import XDictAppleImport
+import XDictAppleSource
 import XDictContract
 @testable import XDictService
 import XDictTestSupport

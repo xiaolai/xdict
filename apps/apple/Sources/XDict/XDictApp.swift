@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictAnywhere
+import XDictAppleSource
 import XDictBase
 import XDictClient
 import XDictEntryView
@@ -24,6 +25,13 @@ struct XDictApp: App {
     static var service: ServiceClient { setup.service }
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
     @MainActor static let library = Library(store: LibraryStore(directory: setup.libraryDirectory), backend: service)
+    /// Add Apple Dictionaries… and Convert Again (ADR-0011), through the app-group container the service shares.
+    @MainActor static let appleImporter = AppleImporter(library: library, backend: service,
+                                                        root: SharedContainer.appleImports())
+    @MainActor static var appleImport: AppleImportHost {
+        let root = setup.appleAssets
+        return AppleImportHost(importer: appleImporter, discover: { InstalledBundles.discover(root: root) })
+    }
 
     var body: some Scene {
         WindowGroup(id: Self.mainWindow) {
@@ -86,7 +94,7 @@ struct XDictApp: App {
     @MainActor @ViewBuilder static func settings(_ pane: SettingsTab) -> some View {
         switch pane {
         case .dictionaries:
-            SettingsDictionaries(library: library, route: .shared)
+            SettingsDictionaries(library: library, route: .shared, appleImport: appleImport)
                 .task { await LibraryLaunch.once() }
         case .readingAndSpeech:
             ReadingSettings()
@@ -142,8 +150,12 @@ struct AppSetup: Sendable {
     var speechVolume: Float = 1
     /// The defaults suite the accent is kept in; nil for the reader's own.
     var speechSuite: String?
-    /// The reader's own run, not an instrument's: only it opens the setup board by itself.
+    /// The reader's own run, not an instrument's: only it opens the setup board by itself, and only it sweeps the
+    /// shared container's Apple conversions (an instrument's scratch library names none of the reader's).
     var isReader = false
+    /// Where installed Apple dictionaries are found (ADR-0011 decision 11): the AssetsV2 path, or under an instrument,
+    /// a synthetic tree of its own (`--apple-assets`).
+    var appleAssets = InstalledBundles.systemRoot
 
     var speechDefaults: UserDefaults {
         speechSuite.flatMap(UserDefaults.init(suiteName:)) ?? .standard
@@ -189,6 +201,12 @@ enum LibraryLaunch {
         guard !started else { return }
         started = true
         await XDictApp.library.start()
+        // ADR-0011 decisions 7 and 9: the launch sweep, then each Apple dictionary compared with its installed bundle.
+        if XDictApp.setup.isReader { XDictApp.appleImporter.sweep() }
+        let host = XDictApp.appleImport
+        if !XDictApp.library.importedAppleBundles.isEmpty {
+            await host.importer.checkForUpdates(installed: await host.find())
+        }
     }
 }
 
