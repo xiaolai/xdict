@@ -42,7 +42,7 @@ struct PronunciationBanner: View {
                         }
                     }
                 }
-                Button {
+                Button {  // placement: glyph
                     dismissed = shown.serial
                 } label: {
                     Image(systemName: "xmark.circle.fill")

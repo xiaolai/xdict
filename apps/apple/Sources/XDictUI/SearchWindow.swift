@@ -61,7 +61,7 @@ public struct SearchWindow: View {
 
     /// Back/Forward | title | space | Smaller/Bigger Text | search (P3). At the 400 pt minimum the two pairs go to the
     /// overflow before the search field does (P8).
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
             ControlGroup {
                 Button { state.model.back() } label: { Label("Back", systemImage: "chevron.backward") }
@@ -87,7 +87,7 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
                 .disabled(!state.canPronounce)
                 .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
                 .accessibilityIdentifier("toolbar.pronounce")
@@ -131,11 +131,11 @@ struct EntryDetail: View {
             } description: {
                 Text("XDict reads the MDict dictionaries you have. Add them, then look words up here.")
             } actions: {
-                Button("Add Dictionaries…") {
-                    SettingsRoute.shared.requestImport()
+                EmptyStateActions {
+                    Button("Add Dictionaries…") { SettingsRoute.shared.requestImport() }
+                } secondary: {
+                    Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
                 }
-                .buttonStyle(.borderedProminent)
-                Button("Open Dictionary Settings") { state.showDictionaries?(nil) }
             }
             .coversPane()
         case .start:
@@ -214,7 +214,7 @@ struct PronounceButton: View {
     let state: SearchWindowState
 
     var body: some View {
-        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }
+        Button { state.pronounceShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P41
             .disabled(!state.canPronounce)
             .help(help)
             .accessibilityIdentifier("pronounce")

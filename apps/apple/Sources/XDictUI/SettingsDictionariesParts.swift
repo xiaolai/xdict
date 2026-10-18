@@ -115,7 +115,7 @@ struct SettingsAddRemoveBar: View {
     let remove: () -> Void
 
     var body: some View {
-        HStack(spacing: 0) {
+        HStack(spacing: 0) {  // placement: P39
             Menu {
                 ForEach(SettingsDictionaries.addMenu, id: \.self) { item in
                     if item.opensWithCommandO {

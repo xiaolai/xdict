@@ -46,7 +46,7 @@ struct XDictApp: App {
             // The standard View items for the sidebar and the toolbar (UI review A-05).
             SidebarCommands()
             ToolbarCommands()
-            CommandGroup(after: .appSettings) {
+            CommandGroup(after: .appSettings) {  // placement: P31
                 Button { MenuBarActions.openSetup() } label: { Text("Set Up XDict…") }
             }
             AcknowledgmentsCommand()
@@ -347,7 +347,7 @@ struct AcknowledgmentsCommand: Commands {
     @Environment(\.openWindow) private var openWindow
 
     var body: some Commands {
-        CommandGroup(after: .appInfo) {
+        CommandGroup(after: .appInfo) {  // placement: P31
             Button { openWindow(id: XDictApp.acknowledgmentsWindow) } label: { Text("Acknowledgments") }
         }
     }
@@ -361,7 +361,7 @@ struct FileAndHelpCommands: Commands {
     @Environment(\.openURL) private var openURL
 
     var body: some Commands {
-        CommandGroup(after: .newItem) {
+        CommandGroup(after: .newItem) {  // placement: P32
             Button("New Tab") {
                 NewTabLookups.shared.cancel()   // a word ⌘-clicked earlier is not this tab's (P47)
                 NewTab.open(make: { openWindow(id: XDictApp.mainWindow) })
@@ -372,7 +372,7 @@ struct FileAndHelpCommands: Commands {
             Button("Add Dictionaries…") { SettingsRoute.shared.requestImport() }
             .keyboardShortcut("o")
         }
-        CommandGroup(replacing: .help) {
+        CommandGroup(replacing: .help) {  // placement: P38
             Button("XDict Help") {
                 if let site = URL(string: "https://xdict.ai") { openURL(site) }
             }

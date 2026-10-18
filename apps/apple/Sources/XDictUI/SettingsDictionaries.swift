@@ -227,7 +227,9 @@ public struct SettingsDictionaries: View {
                     Add files or a folder, or drop them here.
                     """)
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
+                EmptyStateActions {
+                    Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
+                }
             }
             .padding(Tokens.Space.xxl)
         }
@@ -278,17 +280,23 @@ public struct SettingsDictionaries: View {
                 LibraryDetail(library: library, entry: entry, locate: { route.locate() })
                     .id(entry.preferencesKey)
                 Divider()
-                // R3: Remove from Library apart at the leading edge, never the default; Done the default action.
-                SheetFooter(destructive: {
-                    Button("Remove from Library", role: .destructive) { route.dismiss(); remove(id) }
-                }, primary: {
-                    Button { route.dismiss() } label: { Text("Done") }
-                })
-                .padding(Tokens.Space.m)
+                Self.detailsFooter(remove: { route.dismiss(); remove(id) }, close: { route.dismiss() })
+                    .padding(Tokens.Space.m)
             }
             // The form scrolls inside; the sheet never extends past the window (`detailsSheetSize`).
             .frame(width: size.width, height: size.height)
         }
+    }
+
+    /// The details sheet's footer (R3): Remove from Library apart at the leading edge, never the default; Done the
+    /// default action; Escape closes the sheet, which has nothing to cancel (what it changes applies at once).
+    static func detailsFooter(remove: @escaping () -> Void, close: @escaping () -> Void)
+        -> SheetFooter<Button<Text>, EmptyView, Button<Text>> {
+        SheetFooter(destructive: {
+            Button("Remove from Library", role: .destructive, action: remove)
+        }, primary: {
+            Button(action: close) { Text("Done") }
+        }, closeOnEscape: close)
     }
 
     private func add(_ item: AddItem) {
