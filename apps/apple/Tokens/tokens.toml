@@ -24,6 +24,10 @@ line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
 size = { kind = "size", swift = "Size", doc = "Fixed two-dimensional sizes." }
 text = { kind = "font", swift = "TextRole", doc = "Text roles: a system text style where one fits, else a size Apple measured." }
 colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's semantic colours first; a literal only where Apple's page was measured." }
+entryText = { kind = "string", swift = "EntryText", doc = "Values the entry view writes into CSS, SVG or a script as text: the reading inset, glyph strokes, the blocked image's placeholder, the popover glass measured." }
+divider = { kind = "length", swift = "PageDivider", doc = "The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41)." }
+print = { kind = "length", swift = "Print", doc = "The printed entry page's section names." }
+placeholder = { kind = "length", swift = "Placeholder", doc = "The picture a blocked image becomes (SVG px): its host's name in a dashed box." }
 css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
 palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
 accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
@@ -122,7 +126,47 @@ link = { system = "linkColor" }
 entryRule = { light = "#929292", dark = "#5c5c5c", source = "P15" }
 entryPage = { light = "#ffffff", dark = "#1e1e1e", source = "P27" }
 
-# The reading style (EntryReadingFrame.tokens, held equal by EntryTokensCSSTests until phase 2 makes this the source).
+[entryText]
+readingInset = { value = "8px 14px", why = "Every entry's inset whatever its CSS, as GoldenDict pads its articles: many MDict sheets say body{margin:0}." }
+glyphStroke = { value = "1.5", why = "The stroke of XDict's drawn glyphs (speaker, chevron, arrow) on their 16-unit grid: SF Symbols' regular weight." }
+placeholderFill = { value = "#f2f2f2", why = "A blocked image's box: a light neutral, so it reads as a stand-in, not content." }
+placeholderStroke = { value = "#8a8a8a", why = "A blocked image's dashed edge, 3:1 on the page." }
+placeholderDash = { value = "3 2", why = "The dashes of a blocked image's edge: a stand-in, not a frame." }
+placeholderText = { value = "#3a3a3a", why = "A blocked image's host name, 7:1 on its fill." }
+placeholderFont = { value = "-apple-system, sans-serif", why = "A blocked image's host name, in the system face." }
+glassLightBusy = { value = "#939bb1", source = "P41" }
+glassLightWhite = { value = "#dcdee3", source = "P41" }
+glassDarkDesktop = { value = "#343e4f", source = "P41" }
+glassDarkDeepest = { value = "#202336", source = "P41" }
+
+[divider]
+height = { value = 32, source = "P15" }
+font = { value = 18, source = "P15" }
+triangle = { value = 5.5, source = "P15" }
+triangleCentre = { value = 29, source = "P15" }
+ruleStart = { value = 45, source = "P15" }
+trailing = { value = 16, source = "P15" }
+gap = { value = 12, source = "P15" }
+popoverBand = { value = 40, source = "P41" }
+popoverGap = { value = 8, source = "P41" }
+
+[print]
+nameOffset = { value = 6, why = "A printed section's name sits this far into its header band, as Apple's prints." }
+nameHeight = { value = 16, why = "A printed section name's line: its 12 pt text and leading." }
+
+[placeholder]
+minWidth = { value = 80, why = "A blocked image's narrowest box, so a short host still reads as a box." }
+maxWidth = { value = 480, why = "A blocked image's widest box; a longer host is cut by the box." }
+charWidth = { value = 7, why = "The width a host's character is given at the 12 px font: a sizing estimate, as SVG text cannot be measured here." }
+padding = { value = 24, why = "A blocked image's text inset, both sides together." }
+height = { value = 28, why = "A blocked image's box height: one line of 12 px text with room." }
+radius = { value = 4, why = "A blocked image's box corners." }
+textX = { value = 12, why = "Where a blocked image's text starts: half the padding." }
+textBaseline = { value = 18, why = "A blocked image's text baseline in its 28 px box." }
+fontSize = { value = 12, why = "A blocked image's host name, a step under the body." }
+edge = { value = 0.5, why = "Half a pixel: a one-pixel stroke drawn on the pixel grid." }
+
+# The reading style (`Style/tokens.css`, `palette.css`, `density.css` and `Tokens.ReadingStyle` are generated from these).
 [css]
 base = { value = "16px", source = "P18" }
 font-cjk = { value = '"Songti SC", "STSong"', source = "P18" }
@@ -162,6 +206,43 @@ icon = { value = "1em", why = "A control's glyph: 1em of the text it sits in (se
 phon-colour = { value = "var(--xdict-text-2)", source = "P20" }
 mark = { value = "#ffe36e", why = "A find match: a soft yellow every text colour of the palette holds its contrast on." }
 mark-current = { value = "#ff9632", why = "The current find match: orange, told apart from the other matches' yellow." }
+paper = { value = "#ecebe6", why = "Original style's page in dark: the dictionary's colours assume a white page, so a light one, a little dimmer than white." }
+paper-text = { value = "#1d1d1f", why = "Original style's text where the dictionary sets none: near-black on the light paper." }
+paper-pad-inline = { value = "clamp(0.75rem, 4vw, 2rem)", why = "Original style's side inset: the column's, growing with the pane up to 2rem." }
+hairline = { value = "1px", source = "P24" }
+focus-ring = { value = "2px", why = "A focused control's ring: the platform's 2 px focus outline." }
+control-gap = { value = "0.15em", why = "Between a control's glyph and its tag (section 5.5)." }
+glyph-baseline = { value = "-0.15em", why = "A glyph box's drop below the baseline, so a 1em glyph centres on the x-height (section 8)." }
+tag-tracking = { value = "0.02em", why = "An accent tag's letter-spacing in small caps (section 5.2)." }
+tag-gap = { value = "0.56em", why = "After an accent tag: 0.35em of the text at the tag's own 0.625em size (section 8.4)." }
+label-tracking = { value = "0.02em", why = "A label's letter-spacing (R11)." }
+frequency-tracking = { value = "0.08em", why = "A frequency label's wider letter-spacing, its dots read apart (R11)." }
+heading-tracking = { value = "0.03em", source = "P24" }
+rule-gap = { value = "0.3em", why = "A section label's rule under its text (P24): close, below the descenders." }
+arrow-gap = { value = "0.2em", why = "Between the lookup arrow and its word (section 8.1)." }
+marker-raise = { value = "0.2em", why = "The marker dot's lift from the baseline, to the x-height's middle (section 8.1)." }
+marker-size = { value = "0.35em", why = "The one marker: a dot this wide (section 8.1)." }
+marker-gap = { value = "0.35em", why = "Between the marker dot and its text (section 8.1)." }
+marker-gutter = { value = "0.7em", why = "The gutter a leading marker hangs in: the dot and its gap (section 8.1)." }
+half-line = { value = "0.5lh", why = "Half the line box: what a hanging glyph centres on, whatever display its content has." }
+label-gap = { value = "0.35em", why = "After a label, before the next word or control (section 8.4)." }
+label-before = { value = "0.25em", why = "Before a label, after the word it follows (R11)." }
+speaker-gap = { value = "0.35em", why = "After a speaker or a lead box of speakers, before the transcription (section 8.4)." }
+speaker-before = { value = "0.25em", why = "Before a speaker, set against the word it follows (section 5.5)." }
+chevron-gap = { value = "0.25em", why = "Between the disclosure chevron and its head's text (section 8.1)." }
+sensenum-gap = { value = "0.25em", why = "After a sense number (R11)." }
+hang-default = { value = "1em", source = "P22" }
+layout-cell-gap = { value = "0.25em", why = "Between the cells of a table used for layout: words apart, not columns (R16)." }
+image-max = { value = "20em", why = "An illustration's largest side (R16)." }
+float-max-width = { value = "12em", why = "A floated picture's widest, beside text (R16)." }
+float-max-height = { value = "16em", why = "A floated picture's tallest, beside text (R16)." }
+badge-height = { value = "1em", why = "A badge or ornament in a heading: the text's height (R16)." }
+badge-max-height = { value = "1.25em", why = "A badge's tallest, a little over the text (R16)." }
+badge-baseline = { value = "-0.125em", why = "A badge's drop, so it sits on the text's baseline optically (R16)." }
+badge-gap = { value = "0.25em", why = "Between a heading's text and the badge after it (R16)." }
+icon-image-height = { value = "1.25em", why = "A small image in text: R16's small rule." }
+icon-image-baseline = { value = "-0.2em", why = "A small image's drop, centred on the text (R16)." }
+icon-image-gap = { value = "0.125em", why = "Either side of a small image in text (R16)." }
 
 [palette]
 bg = { light = "#ffffff", dark = "#1e1e1e", source = "P27" }

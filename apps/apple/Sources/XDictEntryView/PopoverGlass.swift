@@ -1,4 +1,5 @@
 import Foundation
+import XDictTokens
 
 /// **The lookup popover's glass, as measured** (P41; owner, 2026-10-18: "keep each dictionary's own colours where they
 /// pass 4.5:1 on the popover's glass, flatten only the colours that fail"). The popover material blends what is behind
@@ -11,7 +12,9 @@ public enum PopoverGlass {
     /// WCAG AA for body text.
     public static let minimum: Double = 4.5
 
-    public static let samples: (light: [String], dark: [String]) = (["#939bb1", "#dcdee3"], ["#343e4f", "#202336"])
+    public static let samples: (light: [String], dark: [String]) = (
+        [Tokens.EntryText.glassLightBusy, Tokens.EntryText.glassLightWhite],
+        [Tokens.EntryText.glassDarkDesktop, Tokens.EntryText.glassDarkDeepest])
 
     /// Whether a palette token is a text colour (the others are surfaces, rules and tints, never text).
     public static func isText(_ token: String) -> Bool {

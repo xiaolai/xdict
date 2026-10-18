@@ -150,17 +150,23 @@ extension TokenFont.Design {
 /// Apple's page, chosen by the drawing appearance. `nsColor` for AppKit, `color` for SwiftUI.
 public struct TokenColour {
     public let nsColor: NSColor
+    private let pair: (light: UInt32, dark: UInt32)?
 
-    public init(_ system: NSColor) { nsColor = system }
+    public init(_ system: NSColor) { (nsColor, pair) = (system, nil) }
 
     /// `0xRRGGBB` in light and in dark.
     public init(light: UInt32, dark: UInt32) {
         nsColor = NSColor(name: nil) { appearance in
             Self.srgb(appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? dark : light)
         }
+        pair = (light, dark)
     }
 
     public var color: Color { Color(nsColor: nsColor) }
+
+    /// The colour in the theme the caller chose rather than the drawing appearance's (an entry page drawn dark while
+    /// the app is light). A system colour stays dynamic: it has no fixed value.
+    public func fixed(dark: Bool) -> NSColor { pair.map { Self.srgb(dark ? $0.dark : $0.light) } ?? nsColor }
 
     static func srgb(_ rgb: UInt32) -> NSColor {
         func channel(_ shift: UInt32) -> CGFloat { CGFloat((rgb >> shift) & 0xFF) / 255 }

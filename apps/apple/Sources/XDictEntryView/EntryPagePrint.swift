@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import XDictTokens
 
 /// **Printing the All page as Apple's Dictionary prints it** (parity P44): every expanded dictionary's entry, in the
 /// page's order, each under its name; the divider's triangle and rule are the screen's, not the paper's. Each frame is
@@ -80,11 +81,11 @@ final class EntryPagePrintView: NSView {
         super.init(frame: NSRect(x: 0, y: 0, width: width, height: height))
         for (section, image) in sections {
             let name = NSTextField(labelWithString: section.name)
-            name.font = .systemFont(ofSize: 12)
+            name.font = Tokens.TextRole.tableCell.nsFont
             name.textColor = .secondaryLabelColor
             name.alignment = .center
             name.lineBreakMode = .byTruncatingTail
-            name.frame = NSRect(x: 0, y: CGFloat(section.top) + 6, width: width, height: 16)
+            name.frame = NSRect(x: 0, y: CGFloat(section.top) + Tokens.Print.nameOffset, width: width, height: Tokens.Print.nameHeight)
             addSubview(name)
             let picture = NSImageView(frame: NSRect(x: 0, y: CGFloat(section.top + EntryPrintPlan.header), width: width,
                                                     height: CGFloat(section.height)))
