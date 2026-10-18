@@ -73,9 +73,10 @@ let package = Package(
 
         // **Capture on macOS** (ADR-0014 decisions 5 to 7; plan-capture WI-2), ported from XiaolaiDict's `MacCapture`
         // and moved down from `XDictAnywhere`: the Accessibility session and the one lane every out-of-process read takes,
-        // the selection reader, the word reader's three dialects, and the never-prompting permission probe. AppKit and
-        // Accessibility, the pure target and the identities; never ScreenCaptureKit or Vision (WI-4), the tokens, search,
-        // the client, the contract or a view, held transitively by `ModuleBoundaryTests`. Provenance per file:
+        // the selection reader, the word reader's three dialects, and the never-prompting permission probe; since WI-4 the
+        // recogniser (ScreenCaptureKit and Vision, behind the Screen Recording setup row). AppKit and Accessibility, the
+        // pure target and the identities; never the tokens, search, the client, the contract or a view, held transitively
+        // by `ModuleBoundaryTests`. Provenance per file:
         // `Sources/XDictCaptureMac/PROVENANCE.md`.
         .target(name: "XDictCaptureMac", dependencies: ["XDictBase", "XDictCapture"], exclude: ["PROVENANCE.md"]),
 
@@ -169,8 +170,9 @@ let package = Package(
         // Capture without a window server: the ported XiaolaiDict tests by name, and ADR-0014's objection checks.
         .testTarget(name: "XDictCaptureTests", dependencies: ["XDictCapture"]),
         // Capture on macOS against scripted Accessibility trees and a fake lane clock: never a window, never the real
-        // Accessibility API, never this Mac's grant.
-        .testTarget(name: "XDictCaptureMacTests", dependencies: ["XDictCapture", "XDictCaptureMac"]),
+        // Accessibility API, never this Mac's grant. The recogniser's reading replays recorded Vision observations of
+        // synthetic text (`Fixtures/recognition`, read by path), never a screen capture.
+        .testTarget(name: "XDictCaptureMacTests", dependencies: ["XDictCapture", "XDictCaptureMac"], exclude: ["Fixtures"]),
         // Lookup from anywhere without a keyboard, a window or another app: Carbon faked (a real global shortcut would
         // be taken from the reader while the suite ran), the Accessibility API faked, the panel's geometry as numbers.
         .testTarget(name: "XDictAnywhereTests", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictTokens"]),

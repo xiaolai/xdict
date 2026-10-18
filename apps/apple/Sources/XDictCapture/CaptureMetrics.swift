@@ -14,12 +14,16 @@ public struct CaptureMetrics: Sendable, Equatable {
     public let strip: StripMetrics
     /// The band's tiling slacks, in band **pixels**.
     public let tiling: TilingMetrics
+    /// How far two readings of one window's frame may disagree and still be the same frame, in screen points: the
+    /// compositor and ScreenCaptureKit round independently (plan-capture WI-4).
+    public let frameDrift: CGFloat
 
-    public init(hit: HitTolerance, restTolerance: CGFloat, strip: StripMetrics, tiling: TilingMetrics) {
+    public init(hit: HitTolerance, restTolerance: CGFloat, strip: StripMetrics, tiling: TilingMetrics, frameDrift: CGFloat) {
         self.hit = hit
         self.restTolerance = restTolerance
         self.strip = strip
         self.tiling = tiling
+        self.frameDrift = frameDrift
     }
 }
 

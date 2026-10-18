@@ -1,0 +1,527 @@
+{
+  "about" : "Two panes side by side; the sentence is the left pane's alone. Vision read the second row's 'after' as 'ter', moving that row's left edge by about a line height; the paragraph finder reads the move as a change of indentation and starts the paragraph there, not marked as cut (a recorded finding, not asserted here).",
+  "expect" : {
+    "endsWith" : "soft with salt.",
+    "excludes" : [
+      "market",
+      "clock"
+    ],
+    "mayBeCut" : false,
+    "wantsMore" : 0,
+    "word" : "ledger"
+  },
+  "lines" : [
+    {
+      "box" : [
+        0.029004,
+        0.379167,
+        0.389222,
+        0.054167
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.029004,
+            0.379167,
+            0.021145,
+            0.054167
+          ],
+          "text" : "The",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.051647,
+            0.38,
+            0.038922,
+            0.053333
+          ],
+          "text" : "keeper",
+          "utf16Offset" : 4
+        },
+        {
+          "box" : [
+            0.092066,
+            0.38,
+            0.011976,
+            0.053333
+          ],
+          "text" : "of",
+          "utf16Offset" : 11
+        },
+        {
+          "box" : [
+            0.105539,
+            0.38,
+            0.017964,
+            0.053333
+          ],
+          "text" : "the",
+          "utf16Offset" : 14
+        },
+        {
+          "box" : [
+            0.125,
+            0.38,
+            0.046407,
+            0.053333
+          ],
+          "text" : "northern",
+          "utf16Offset" : 18
+        },
+        {
+          "box" : [
+            0.172904,
+            0.38,
+            0.025449,
+            0.053333
+          ],
+          "text" : "light",
+          "utf16Offset" : 27
+        },
+        {
+          "box" : [
+            0.19985,
+            0.38,
+            0.043413,
+            0.053333
+          ],
+          "text" : "counted",
+          "utf16Offset" : 33
+        },
+        {
+          "box" : [
+            0.24476,
+            0.38,
+            0.031437,
+            0.053333
+          ],
+          "text" : "every",
+          "utf16Offset" : 41
+        },
+        {
+          "box" : [
+            0.277695,
+            0.38,
+            0.022455,
+            0.053333
+          ],
+          "text" : "ship",
+          "utf16Offset" : 47
+        },
+        {
+          "box" : [
+            0.301647,
+            0.38,
+            0.022455,
+            0.053333
+          ],
+          "text" : "that",
+          "utf16Offset" : 52
+        },
+        {
+          "box" : [
+            0.325599,
+            0.38,
+            0.040419,
+            0.053333
+          ],
+          "text" : "passed",
+          "utf16Offset" : 57
+        },
+        {
+          "box" : [
+            0.367515,
+            0.38,
+            0.017964,
+            0.053333
+          ],
+          "text" : "the",
+          "utf16Offset" : 64
+        },
+        {
+          "box" : [
+            0.386976,
+            0.379167,
+            0.03125,
+            0.054167
+          ],
+          "text" : "rocks",
+          "utf16Offset" : 68
+        }
+      ],
+      "text" : "The keeper of the northern light counted every ship that passed the rocks"
+    },
+    {
+      "box" : [
+        0.040544,
+        0.43,
+        0.364895,
+        0.07
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.040544,
+            0.43,
+            0.013629,
+            0.07
+          ],
+          "text" : "ter",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.056138,
+            0.43,
+            0.027507,
+            0.07
+          ],
+          "text" : "dusk",
+          "utf16Offset" : 4
+        },
+        {
+          "box" : [
+            0.08561,
+            0.43,
+            0.019648,
+            0.07
+          ],
+          "text" : "and",
+          "utf16Offset" : 9
+        },
+        {
+          "box" : [
+            0.107223,
+            0.43,
+            0.031437,
+            0.07
+          ],
+          "text" : "wrote",
+          "utf16Offset" : 13
+        },
+        {
+          "box" : [
+            0.140625,
+            0.43,
+            0.027507,
+            0.07
+          ],
+          "text" : "each",
+          "utf16Offset" : 19
+        },
+        {
+          "box" : [
+            0.170097,
+            0.43,
+            0.029472,
+            0.07
+          ],
+          "text" : "name",
+          "utf16Offset" : 24
+        },
+        {
+          "box" : [
+            0.201534,
+            0.43,
+            0.021613,
+            0.07
+          ],
+          "text" : "into",
+          "utf16Offset" : 29
+        },
+        {
+          "box" : [
+            0.225112,
+            0.43,
+            0.007859,
+            0.07
+          ],
+          "text" : "a",
+          "utf16Offset" : 34
+        },
+        {
+          "box" : [
+            0.234936,
+            0.43,
+            0.035367,
+            0.07
+          ],
+          "text" : "ledger",
+          "utf16Offset" : 36
+        },
+        {
+          "box" : [
+            0.272268,
+            0.43,
+            0.035367,
+            0.07
+          ],
+          "text" : "whose",
+          "utf16Offset" : 43
+        },
+        {
+          "box" : [
+            0.3096,
+            0.43,
+            0.033402,
+            0.07
+          ],
+          "text" : "pages",
+          "utf16Offset" : 49
+        },
+        {
+          "box" : [
+            0.344966,
+            0.43,
+            0.023578,
+            0.07
+          ],
+          "text" : "had",
+          "utf16Offset" : 55
+        },
+        {
+          "box" : [
+            0.370509,
+            0.43,
+            0.03493,
+            0.07
+          ],
+          "text" : "gone",
+          "utf16Offset" : 59
+        }
+      ],
+      "text" : "ter dusk and wrote each name into a ledger whose pages had gone"
+    },
+    {
+      "box" : [
+        0.02891,
+        0.502902,
+        0.071354,
+        0.051627
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.02891,
+            0.502902,
+            0.021109,
+            0.048384
+          ],
+          "text" : "soft",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.051177,
+            0.504339,
+            0.022417,
+            0.048099
+          ],
+          "text" : "with",
+          "utf16Offset" : 5
+        },
+        {
+          "box" : [
+            0.074751,
+            0.505861,
+            0.025513,
+            0.048668
+          ],
+          "text" : "salt.",
+          "utf16Offset" : 10
+        }
+      ],
+      "text" : "soft with salt."
+    },
+    {
+      "box" : [
+        0.568675,
+        0.379167,
+        0.351796,
+        0.054167
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.568675,
+            0.379167,
+            0.007672,
+            0.054167
+          ],
+          "text" : "A",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.577844,
+            0.38,
+            0.04491,
+            0.053333
+          ],
+          "text" : "different",
+          "utf16Offset" : 2
+        },
+        {
+          "box" : [
+            0.624251,
+            0.38,
+            0.028443,
+            0.053333
+          ],
+          "text" : "pane",
+          "utf16Offset" : 12
+        },
+        {
+          "box" : [
+            0.654192,
+            0.38,
+            0.031437,
+            0.053333
+          ],
+          "text" : "holds",
+          "utf16Offset" : 17
+        },
+        {
+          "box" : [
+            0.687126,
+            0.38,
+            0.007485,
+            0.053333
+          ],
+          "text" : "a",
+          "utf16Offset" : 23
+        },
+        {
+          "box" : [
+            0.696108,
+            0.38,
+            0.046407,
+            0.053333
+          ],
+          "text" : "different",
+          "utf16Offset" : 25
+        },
+        {
+          "box" : [
+            0.744012,
+            0.38,
+            0.026946,
+            0.053333
+          ],
+          "text" : "story",
+          "utf16Offset" : 35
+        },
+        {
+          "box" : [
+            0.772455,
+            0.38,
+            0.031437,
+            0.053333
+          ],
+          "text" : "about",
+          "utf16Offset" : 41
+        },
+        {
+          "box" : [
+            0.805389,
+            0.38,
+            0.007485,
+            0.053333
+          ],
+          "text" : "a",
+          "utf16Offset" : 47
+        },
+        {
+          "box" : [
+            0.814371,
+            0.38,
+            0.038922,
+            0.053333
+          ],
+          "text" : "market",
+          "utf16Offset" : 49
+        },
+        {
+          "box" : [
+            0.85479,
+            0.38,
+            0.026946,
+            0.053333
+          ],
+          "text" : "town",
+          "utf16Offset" : 56
+        },
+        {
+          "box" : [
+            0.883234,
+            0.379167,
+            0.037238,
+            0.054167
+          ],
+          "text" : "whose",
+          "utf16Offset" : 61
+        }
+      ],
+      "text" : "A different pane holds a different story about a market town whose"
+    },
+    {
+      "box" : [
+        0.568573,
+        0.438302,
+        0.075103,
+        0.053707
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.568573,
+            0.438302,
+            0.027282,
+            0.05079
+          ],
+          "text" : "clock",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.597063,
+            0.44004,
+            0.01914,
+            0.049487
+          ],
+          "text" : "ran",
+          "utf16Offset" : 6
+        },
+        {
+          "box" : [
+            0.617408,
+            0.441281,
+            0.026267,
+            0.050728
+          ],
+          "text" : "fast.",
+          "utf16Offset" : 10
+        }
+      ],
+      "text" : "clock ran fast."
+    }
+  ],
+  "name" : "two-panes",
+  "pointer" : "ledger",
+  "recordedBy" : "RecognitionRecorder (ScreenTextRecogniser.recognise + recogniseWhole), synthetic text",
+  "region" : [
+    1336,
+    300
+  ]
+}
