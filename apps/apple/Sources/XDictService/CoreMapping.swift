@@ -330,3 +330,16 @@ extension XDictContract.ReadingStyle {
                                                       space: c.space, dropped: c.dropped))
     }
 }
+
+// MARK: - Display options (ADR-0013)
+
+extension XDictContract.DisplayOptions {
+    init(_ options: XDictCore.DisplayOptions) {
+        self.init(version: options.version,
+                  options: options.options.map {
+                      XDictContract.DisplayOption(id: $0.id, attribute: $0.attribute, values: $0.values,
+                                                  defaultValue: $0.defaultValue)
+                  },
+                  css: options.css)
+    }
+}

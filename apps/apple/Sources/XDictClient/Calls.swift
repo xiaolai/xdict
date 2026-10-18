@@ -110,7 +110,7 @@ extension ServiceOperation {
     var namedDicts: [DictId] {
         switch self {
         case .close(let dict), .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _),
-             .health(let dict), .readingStyle(let dict): [dict]
+             .health(let dict), .readingStyle(let dict), .displayOptions(let dict): [dict]
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion: []
@@ -126,6 +126,7 @@ extension ServiceOperation {
         case .resource(let dict, let path, let render): .resource(dict: rename(dict), path: path, render: render)
         case .health(let dict): .health(dict: rename(dict))
         case .readingStyle(let dict): .readingStyle(dict: rename(dict))
+        case .displayOptions(let dict): .displayOptions(dict: rename(dict))
         case .lookup(let query, let dicts, let options): .lookup(query: query, dicts: dicts.map(rename), options: options)
         case .suggest(let prefix, let dicts, let limit): .suggest(prefix: prefix, dicts: dicts.map(rename), limit: limit)
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
