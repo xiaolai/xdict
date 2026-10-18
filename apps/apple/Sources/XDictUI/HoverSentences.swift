@@ -47,7 +47,21 @@ public enum HoverSentences {
         case .captureStuck:
             LocalizedStringResource("An app has stopped answering, so hover cannot read words until it does. Looking up a selection with the shortcut still works.")
         case .screenRecordingNeeded:
-            LocalizedStringResource("Words in apps that do not share their text need Screen Recording, which you can allow in Set Up XDict.")
+            LocalizedStringResource("Hover needs Screen Recording to read words in apps that do not share their text. Allow it in the Screen Recording row.")
+        }
+    }
+
+    /// What the Screen Recording row says under its title, by what the grant is now.
+    public static func screenRecording(_ row: ScreenRecordingRow) -> LocalizedStringResource {
+        switch row {
+        case .notSetUp:
+            LocalizedStringResource("Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once.")
+        case .allowed:
+            LocalizedStringResource("Hover reads words from the screen where an app does not share its text.")
+        case .notAllowed:
+            LocalizedStringResource("Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again.")
+        case .couldNotTell:
+            LocalizedStringResource("Could not tell whether Screen Recording is allowed. Check again in a moment.")
         }
     }
 

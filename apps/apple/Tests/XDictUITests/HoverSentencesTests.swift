@@ -27,6 +27,18 @@ struct HoverSentencesTests {
         #expect(some == String(localized: HoverSentences.scripts([.latin, .han])), "the order followed the set's")
     }
 
+    /// **The Screen Recording row says each state its own way** (plan-capture WI-4), the refusal naming where macOS keeps
+    /// the switch, and the notice sending the reader to the row by its own title — not to a window XDict does not have.
+    @Test func theScreenRecordingRowSaysEachStateAndTheNoticeNamesIt() {
+        let rows: [ScreenRecordingRow] = [.notSetUp, .allowed, .notAllowed, .couldNotTell]
+        let texts = rows.map { String(localized: HoverSentences.screenRecording($0)) }
+        #expect(Set(texts).count == rows.count, "\(texts)")
+        #expect(String(localized: HoverSentences.screenRecording(.notAllowed)).contains("Privacy & Security"))
+        let notice = String(localized: HoverSentences.notice(.screenRecordingNeeded))
+        #expect(notice.contains("Screen Recording row"), "\(notice)")
+        #expect(!notice.contains("Set Up XDict"), "the notice sends the reader to a window that does not hold the row")
+    }
+
     /// **Each notice capture can give is its own sentence**, the stuck lane saying what still works.
     @Test func eachNoticeIsItsOwnSentence() {
         let texts = CaptureNotice.allCases.map { String(localized: HoverSentences.notice($0)) }

@@ -43,7 +43,8 @@ struct TestInventoryTests {
         "XDictAnywhereTests": 76,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
-        "XDictUITests": 33,
+        // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
+        "XDictUITests": 34,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
