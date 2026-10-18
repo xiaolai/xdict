@@ -62,14 +62,23 @@ final class LookupAnywhere {
     /// its app cannot say. A global mouse monitor, which needs no permission.
     @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date)?
     @ObservationIgnored private var secondaryClickMonitor: Any?
+    @ObservationIgnored private var ownClickMonitor: Any?
 
     func start() {
         guard state == nil else { return }
         lastOtherApp = NSWorkspace.shared.frontmostApplication.flatMap { $0.processIdentifier == getpid() ? nil : $0 }
-        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { [weak self] event in
+        // A global monitor is not sent the app's own events, so a right-click in XDict's own windows needs the local one
+        // too; without it the Service from an entry found no click and anchored at the pointer, in the Services submenu
+        // (owner's screenshot, 2026-10-18: the popover's arrow pointed well away from the word).
+        let remember: (NSEvent) -> Void = { [weak self] event in
             guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return }
             let point = NSEvent.mouseLocation
             MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date()) }
+        }
+        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: remember)
+        ownClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
+            remember(event)
+            return event
         }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification, object: nil, queue: .main) { [weak self] note in
