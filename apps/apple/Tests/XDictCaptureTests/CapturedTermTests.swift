@@ -84,6 +84,12 @@ struct CapturedTermTests {
         #expect(throws: CaptureValueError.range) {
             try make("hold", sentence: "the ship's hold", range: NSRange(location: 11, length: 3))
         }
+        // **Only the length can tell these apart**: Swift compares a precomposed é (1 unit) equal to e plus a
+        // combining accent (2 units), so the term check passes and the range would not hold the term's own units.
+        #expect("\u{E9}" == "e\u{301}", "the premise: Swift calls them equal")
+        #expect(throws: CaptureValueError.range) {
+            try make("\u{E9}", sentence: "caf" + "e\u{301}", range: NSRange(location: 3, length: 2))
+        }
     }
 
     @Test func aRangeThatDoesNotHoldTheTermIsRefused() {
