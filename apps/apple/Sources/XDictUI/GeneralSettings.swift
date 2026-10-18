@@ -13,6 +13,8 @@ public struct GeneralSettings: View {
     @State private var language: InterfaceLanguage
     @AppStorage(PanelAppearance.shadeKey) private var shade: PanelAppearance.Shade = .system
     @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
+    /// The app delegate reads the same key of the same suite (`MenuBarResidence`); on for a reader who never chose.
+    @AppStorage(MenuBarResidence.key) private var keepsRunning = true
     private let registrar: ShortcutRegistrar
     private let hover: HoverControl
     private let openSetup: () -> Void
@@ -36,6 +38,19 @@ public struct GeneralSettings: View {
             }
             .accessibilityLabel(Text("Open XDict when you log in"))
             .accessibilityIdentifier("launch-at-login")
+            if login.needsApproval {
+                LabeledContent {
+                    Button { login.openLoginItems() } label: { Text("Open Login Items Settings…") }  // placement: form-row
+                        .accessibilityIdentifier("launch-at-login.approve")
+                } label: {
+                    Text("Allow XDict in Login Items")
+                }
+            }
+            Toggle(isOn: $keepsRunning) {
+                Text("Keep XDict in the menu bar")
+                Text("With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window.")
+            }
+            .accessibilityIdentifier("keep-in-menu-bar")
             if let failure = login.failure {
                 // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
                 VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
@@ -93,5 +108,9 @@ public struct GeneralSettings: View {
         }
         .settingsPane()
         .onAppear { login.refresh() }
+        // The reader may have been to Login Items and back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            login.refresh()
+        }
     }
 }

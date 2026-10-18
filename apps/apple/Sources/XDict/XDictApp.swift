@@ -241,6 +241,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             Task { await LibraryLaunch.once() }
         }
     }
+
+    /// **The reader's Settings ▸ General switch**: on (the default), XDict stays in the menu bar with every window closed;
+    /// off, it quits with its last window. The menu-bar item is inserted either way (`MenuBarResidence`).
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MenuBarResidence(defaults: .standard).terminatesAfterLastWindowClosed
+    }
 }
 
 /// The menu-bar item's icon, and the scene actions it hands over.
