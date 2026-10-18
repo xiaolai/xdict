@@ -43,4 +43,14 @@ struct SetupBoardTests {
         #expect(Set(sentences).count == sentences.count, "\(sentences)")
         #expect(String(localized: done.detail(.dictionaries)) == "Dictionaries answering lookups: 3.")
     }
+
+    /// **`setup.chineseOnly` reads something before it passes**: an empty Accessibility tree has no English in it, and
+    /// passed the check without the window having been read (lookup E2E diagnosis, 2026-10-18).
+    @Test func chineseOnlyFailsWhenNothingWasRead() {
+        #expect(!SetupLanguageCheck.chineseOnly(texts: [], preferredLanguage: "zh-Hans-CN"))
+        #expect(SetupLanguageCheck.chineseOnly(texts: ["词典", "XDict 设置"], preferredLanguage: "zh-Hans-CN"))
+        #expect(!SetupLanguageCheck.chineseOnly(texts: ["词典", "Accessibility"], preferredLanguage: "zh-Hans-CN"))
+        #expect(!SetupLanguageCheck.chineseOnly(texts: ["词典"], preferredLanguage: "en-US"))
+        #expect(SetupLanguageCheck.english(in: ["词典", "Add Dictionaries", "mdx"]) == ["Add Dictionaries"])
+    }
 }

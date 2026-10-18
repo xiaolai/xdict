@@ -96,9 +96,11 @@ enum SetupReport {
                        "after relaunch: accent \(accent.rawValue), language \(language.rawValue)")
         let window = show(library: library, trusted: { AccessibilityGate.system(false) })
         _ = await identifiers(in: window, waitingFor: "setup.dictionaries.needed")
-        let english = texts(in: window.contentView).filter(Self.isEnglish)
-        findings.check("setup.chineseOnly", english.isEmpty && Locale.preferredLanguages.first?.hasPrefix("zh") == true,
-                       "languages \(Locale.preferredLanguages.prefix(2)); English left: \(english)")
+        let read = texts(in: window.contentView)
+        let english = SetupLanguageCheck.english(in: read)
+        findings.check("setup.chineseOnly",
+                       SetupLanguageCheck.chineseOnly(texts: read, preferredLanguage: Locale.preferredLanguages.first),
+                       "languages \(Locale.preferredLanguages.prefix(2)); \(read.count) texts read; English left: \(english)")
         window.close()
         return findings
     }
@@ -137,12 +139,5 @@ enum SetupReport {
             [element.accessibilityLabel(), element.accessibilityValue() as? String, element.accessibilityTitle()]
                 .compactMap { $0 }.filter { !$0.isEmpty }
         }
-    }
-
-    /// A run of three Latin letters that is not one of the names XDict keeps in every language.
-    static func isEnglish(_ text: String) -> Bool {
-        var stripped = text
-        for name in ["XDict", "MDict", "mdx", "mdd"] { stripped = stripped.replacingOccurrences(of: name, with: "") }
-        return stripped.contains(/[A-Za-z]{3,}/)
     }
 }
