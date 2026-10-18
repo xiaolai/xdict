@@ -110,29 +110,44 @@ public enum SelectionReader {
     /// Nodes visited looking for a browser window's page. A tree this search cannot cross is reported, not treated as
     /// "no page".
     public static let webAreaSearchLimit = 400
+    /// The element under the click and its parents read for a selection: a text view's paragraph, line or run is a few
+    /// levels under the view that holds the selection.
+    static let underParents = 8
 
     /// Synchronous IPC into another app, so it runs detached — never on the main actor, whose panel must appear within
     /// its budget whatever the app does. This process's own windows are read on the main actor instead: a request
     /// about this process is serviced in-process, and SwiftUI must be asked from the main thread.
-    public static func read(from app: FrontApp) async -> SelectionOutcome {
+    /// `clicked` is where the reader Control-clicked the selection (Accessibility's coordinates, y down), for the
+    /// Service: the element there is read when the focused one has nothing.
+    public static func read(from app: FrontApp, clicked: CGPoint? = nil) async -> SelectionOutcome {
         guard AXIsProcessTrusted() else { return .nothing(.notTrusted) }
-        if app.pid == getpid() { return await MainActor.run { readNow(app) } }
+        if app.pid == getpid() { return await MainActor.run { readNow(app, clicked: clicked) } }
         let work = Task.detached(priority: .userInitiated) { () -> SelectionOutcome in
             AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), AccessibilitySession.messagingTimeout)
-            return readNow(app)
+            return readNow(app, clicked: clicked)
         }
         return await withTaskCancellationHandler { await work.value } onCancel: { work.cancel() }
     }
 
-    private static func readNow(_ app: FrontApp) -> SelectionOutcome {
-        read(application: AXUIElementCreateApplication(app.pid), of: app, with: AccessibilitySession(budget: budget))
+    private static func readNow(_ app: FrontApp, clicked: CGPoint?) -> SelectionOutcome {
+        let application = AXUIElementCreateApplication(app.pid)
+        var under: AXUIElement?
+        if let clicked {
+            var hit: AXUIElement?
+            if AXUIElementCopyElementAtPosition(application, Float(clicked.x), Float(clicked.y), &hit) == .success {
+                under = hit
+            }
+        }
+        return read(application: application, of: app, with: AccessibilitySession(budget: budget), under: under)
     }
 
-    /// The whole read, against any Accessibility client — the real one, or a test's.
-    public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading) -> SelectionOutcome {
+    /// The whole read, against any Accessibility client — the real one, or a test's. `under` is the element under the
+    /// reader's Control-click, where there was one.
+    public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
+                            under: AXUIElement? = nil) -> SelectionOutcome {
         do {
             try ax.wake(application)
-            switch try find(in: application, ax) {
+            switch try find(in: application, under: under, ax) {
             case .found(let capture):
                 switch LookupText.term(capture.text) {
                 case .empty: return .nothing(.nothingSelected(app: app.name))
@@ -171,11 +186,21 @@ public enum SelectionReader {
         case searchLimitReached
     }
 
-    /// The focused element first, then — only if that has nothing — the focused window's page. Safari reports no focused
-    /// element when it is not frontmost, and focus can sit in its address bar, yet a selection in the page is there.
-    private static func find(in application: AXUIElement, _ ax: some AccessibilityReading) throws(CaptureError) -> Search {
+    /// The focused element first, then the element under the reader's click and its parents, then — only if those
+    /// have nothing — the focused window's page. Safari reports no focused element when it is not frontmost, and focus
+    /// can sit in its address bar, yet a selection in the page is there. Once the Services menu has closed, Notes and
+    /// TextEdit answer with no focused selection while the text view under the click holds it (E2E, 2026-10-18).
+    private static func find(in application: AXUIElement, under: AXUIElement?,
+                             _ ax: some AccessibilityReading) throws(CaptureError) -> Search {
         let focused = try ax.element(application, kAXFocusedUIElementAttribute, ofApplication: true)
         if let focused, let found = try capture(from: focused, ax) { return .found(found) }
+        var current = under
+        for _ in 0..<underParents {
+            guard let element = current else { break }
+            if let found = try capture(from: element, ax) { return .found(found) }
+            guard let parent = try ax.element(element, kAXParentAttribute), parent != element else { break }
+            current = parent
+        }
         var window = try ax.element(application, kAXFocusedWindowAttribute, ofApplication: true)
         if window == nil { window = try ax.element(application, kAXMainWindowAttribute, ofApplication: true) }
         guard let window else { return .nothing }
