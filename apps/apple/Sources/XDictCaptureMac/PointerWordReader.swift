@@ -100,7 +100,9 @@ public enum PointerWordReader {
     }
 
     /// A hung app must not stall a hover. Per request; the whole read is bounded by `budget`.
-    public static let messagingTimeout: Float = 0.25
+    public static let messagingTimeoutDuration: Duration = .milliseconds(250)
+    /// The same, in the seconds `AXUIElementSetMessagingTimeout` takes.
+    public static var messagingTimeout: Float { Float(messagingTimeoutDuration / .seconds(1)) }
     /// The whole hover read, however many requests it takes, the hit test included: where the recogniser is measured to
     /// be as fast (XiaolaiDict, 250–570 ms warm), so past it reading the pixels is the cheaper answer.
     public static let budget: Duration = .milliseconds(500)
