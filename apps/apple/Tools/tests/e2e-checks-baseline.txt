@@ -201,3 +201,27 @@ appleImport.updateOffered
 appleImport.convertAgainJoins
 appleImport.removedStillReads
 appleImport.sweptAtLaunch
+# added by plan-capture WI-5: hover, defined and never run
+hover.access
+hover.ax.textedit
+hover.ax.safari
+hover.ax.boxMeasured
+hover.ax.sentence
+hover.ax.ownProcessUnread
+hover.screenRecording.access
+hover.ocr.word
+hover.ocr.boxMeasured
+hover.ocr.firstThenSettled
+hover.ocr.axPreferred
+hover.exclusions.passwords
+hover.exclusions.noPixels
+hover.permission.access
+hover.permission.rowMatchesGrant
+hover.permission.noPromptBeforeRow
+hover.permission.noticeNamesRow
+hover.popover.opens
+hover.popover.acknowledged
+hover.popover.keyReleasedQuiet
+hover.popover.pauseSilences
+hover.popover.resumeReads
+hover.popover.offInSettings

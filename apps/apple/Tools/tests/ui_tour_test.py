@@ -65,6 +65,15 @@ assert len(ids) == len(set(ids)), "route ids repeat"
 assert all(r[1] in ("full", "empty", "reader") for r in ROUTES)
 undriven = {r[0] for r in ROUTES if r[4] is None}
 assert undriven == set(NOT_DRIVEN_WHY), undriven ^ set(NOT_DRIVEN_WHY)
+# Hover's routes (plan-capture WI-5): the General rows and the Screen Recording row as this Mac's grant leaves them,
+# driven; the row's other states and the hover popover, which need a grant changed or another app's text, not.
+hover_driven = {"settings.general.hover", "settings.general.screenRecording", "menubar.hoverPause",
+                "menubar.hoverPaused", "menubar.hoverOff"}
+hover_undriven = {"settings.general.screenRecordingNotSetUp", "settings.general.screenRecordingNotAllowed",
+                  "settings.general.screenRecordingAllowed", "settings.general.screenRecordingCouldNotTell",
+                  "hover.popover"}
+assert hover_driven <= set(ids) - undriven, hover_driven - (set(ids) - undriven)
+assert hover_undriven <= undriven, hover_undriven - undriven
 # The pseudo language: longer, accented, every format directive kept exactly; on the real catalog, every value of every
 # form (plural forms and substitutions included) keeps its source's directives, so the copy formats as the app does.
 assert pseudo.pseudo("Look Up").startswith("⟦Ļööķ Ûþ"), pseudo.pseudo("Look Up")

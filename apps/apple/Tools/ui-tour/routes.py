@@ -204,6 +204,26 @@ ROUTES = [
      [SETTINGS, ("wait", 1), ("click", "General")]),
     ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
      [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
+    # Hover (plan-capture WI-3, WI-4; defined by WI-5): its rows in Settings ▸ General and the menu-bar pause group. The
+    # tour's launch deletes XDict's preferences, so hover is on, with the Option key and Hold.
+    ("settings.general.hover", "full", "⌘, ▸ General, the hover rows", "'Look up the word under the pointer' on, "
+     "Hover key (Option ⌥), Gesture (Hold | Press Twice), Looks up (the writing systems of the enabled dictionaries, "
+     "shown and not chosen), Password managers: Always, Never look up in with Add an App…, then Screen Recording "
+     "(P50, P52)", [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.8)]),
+    ("settings.general.screenRecording", "full", "⌘, ▸ General, the Screen Recording row", "The row in the state macOS "
+     "holds for XDict.app on this Mac: not set up with Allow…, allowed, not allowed with where System Settings keeps "
+     "the switch and Check Again, or could not tell with Check Again; showing it asks for nothing, so no system prompt "
+     "(P52; ADR-0014 decision 7)", [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 1.5)]),
+    ("menubar.hoverPause", "full", "Click XDict's menu-bar item, then Pause Hover", "Pause Hover's lengths: For 15 "
+     "minutes, For 1 hour, For 8 hours, between Dictionaries… and Settings… (P51)",
+     [("extra",), ("press", "Pause Hover"), ("wait", 0.6)]),
+    ("menubar.hoverPaused", "full", "Pause Hover ▸ For 15 minutes, then XDict's menu-bar item again", "'Hover resumes "
+     "in 15 minutes' or 14 (disabled) and Resume Hover where Pause Hover was (P51)",
+     [("extra",), ("press", "Pause Hover"), ("wait", 0.6), ("press", "For 15 minutes"), ("wait", 0.6), ("extra",)]),
+    ("menubar.hoverOff", "full", "⌘, ▸ General, switch hover off, then XDict's menu-bar item", "'Hover Is Off in "
+     "Settings', disabled, where Pause Hover was (P51)",
+     [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.8), ("click", "hover.enabled"), ("wait", 0.6),
+      ("extra",)]),
     # Not driven
     ("settings.dictionaries.appleUpdated", "full", "An imported Apple dictionary whose bundle Apple updated", "Beneath "
      "the table, 'Apple updated <name>.' with Convert Again; after it, 'Kept as the same dictionary…' with Undo "
@@ -219,6 +239,18 @@ ROUTES = [
     ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Nothing to Look Up' and 'Open "
      "Accessibility Settings'", None),
     ("sound.recording", "full", "A sound:// link in an entry", "The recording plays, or a notice says why not", None),
+    ("settings.general.screenRecordingNotSetUp", "full", "The Screen Recording row before XDict ever asked",
+     "'Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once.' "
+     "and Allow… (P52)", None),
+    ("settings.general.screenRecordingAllowed", "full", "The Screen Recording row with the grant given", "'Hover reads "
+     "words from the screen where an app does not share its text.' and 'Allowed', no button (P52)", None),
+    ("settings.general.screenRecordingNotAllowed", "full", "The Screen Recording row with the grant refused", "'Not "
+     "allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check "
+     "again.' and Check Again (P52)", None),
+    ("settings.general.screenRecordingCouldNotTell", "full", "The Screen Recording row when macOS gave no answer",
+     "'Could not tell whether Screen Recording is allowed. Check again in a moment.' and Check Again (P52)", None),
+    ("hover.popover", "full", "Hold Option with the pointer resting on a word in another app (TextEdit)", "XDict's "
+     "lookup popover beside the word (P41, P50); released and moved away, it stays until dismissed", None),
 ]
 
 NOT_DRIVEN_WHY = {
@@ -234,4 +266,12 @@ NOT_DRIVEN_WHY = {
                                           "E2E library.apple stage converts a synthetic one and changes it",
     "settings.dictionaries.appleRemoved": "needs an imported Apple dictionary whose installed bundle then goes; the "
                                           "E2E library.apple stage removes its synthetic one",
+    "settings.general.screenRecordingNotSetUp": "only the state macOS holds for XDict.app on this Mac is shown "
+                                                "(settings.general.screenRecording), and grants are never changed by "
+                                                "script",
+    "settings.general.screenRecordingAllowed": "as settings.general.screenRecordingNotSetUp",
+    "settings.general.screenRecordingNotAllowed": "as settings.general.screenRecordingNotSetUp",
+    "settings.general.screenRecordingCouldNotTell": "macOS answers on this Mac; there is no way to make it not answer",
+    "hover.popover": "needs the hover key held over another app's text; the tour drives XDict alone, whose own windows "
+                     "hover never reads (ADR-0014 decision 6); the E2E hover.popover sub-stage does it",
 }
