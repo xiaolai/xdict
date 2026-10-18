@@ -58,8 +58,8 @@ public enum CaptureScript: String, Codable, Sendable, CaseIterable, Comparable {
     ///
     /// **Letterhood is asked of Unicode, never inferred from the block.** A block holds a script's
     /// punctuation too: `U+30FB ・` is a separator sitting inside Katakana, and counting it as kana
-    /// made `水・` Japanese — which, through the han-absorption rule, refused a Chinese word for a
-    /// reader who studies Chinese. `isAlphabetic` is what separates the letters from the furniture,
+    /// made `水・` Japanese — which, through the han-absorption rule, refused a Chinese word where
+    /// only han was allowed. `isAlphabetic` is what separates the letters from the furniture,
     /// and it keeps `U+30FC ー`, a modifier letter, where it belongs: ラーメン is one word.
     ///
     /// **The blocks are listed in full rather than approximately.** Text a scalar classifier cannot

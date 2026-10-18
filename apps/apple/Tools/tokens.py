@@ -30,7 +30,9 @@ hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshn
   `let`/`var` of a `CGFloat` type given a literal; and a tolerance compared bare with a distance (`hypot(`, `distance`,
   `dx`/`dy`, `.minX`... `.width`, `.x`/`.y` on the other side of `<`, `<=`, `>`, `>=`), written as a literal or as a
   constant whose type is inferred (`static let horizontal = 3`, reported at its declaration): capture's shape
-  (ADR-0014 decision 11). A ratio (the other side divides) is not a distance.
+  (ADR-0014 decision 11). A ratio (the other side divides) is not a distance. Inside Sources/XDictCapture, a floating
+  constant or default, a literal bound through CGFloat(...) or `as CGFloat`, and a whole number the file later wraps as
+  CGFloat must be 0 or 1, handed in, or named with a Ratio, Fraction or Overlap suffix.
   CSS: lengths (px pt rem em lh vw vh ch ex) and colours (#hex, rgb(), hsl()) outside tokens.css and outside the
   fallback of a `var(`.
   ALLOWED, and nothing else:
@@ -826,6 +828,12 @@ FLOAT_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*" + FLOAT_TYPE + r"
 # dimensionless fraction it is; the checker cannot tell a Double ratio from a Double length by its type (ADR-0014 d.11).
 CAPTURE_DIR = "Sources/XDictCapture/"
 FRACTION_NAME = re.compile(r"(?:Ratio|Fraction|Overlap)$")
+# A literal bound to a name through a floating wrapper: `let t = CGFloat(3)`, `let t = 3 as CGFloat`.
+WRAPPED_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*(?:" + FLOAT_TYPE
+                              + r"\(\s*(-?\d[\d_]*(?:\.\d+)?)\s*\)|(-?\d[\d_]*(?:\.\d+)?)\s+as\s+" + FLOAT_TYPE
+                              + r")\s*(?:$|//|\n)", re.M)
+# A whole number bound to a name, which the file later wraps as a floating value (`CGFloat(slop)`).
+WHOLE_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*=\s*(-?\d[\d_]*)\s*(?:$|//|\n)", re.M)
 
 
 def distance_comparisons(clean):
@@ -870,6 +878,16 @@ def unnamed_fractions(clean):
             out.append(("capture-unitless-name", start, raw))
     for m in DEFAULT_PARAM.finditer(clean):
         if numeric_value(m.group(2)) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
+            out.append(("capture-unitless-name", m.start(2), m.group(2)))
+    for m in WRAPPED_CONSTANT.finditer(clean):
+        start, raw = (m.start(2), m.group(2)) if m.group(2) is not None else (m.start(3), m.group(3))
+        if numeric_value(raw) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
+            out.append(("capture-unitless-name", start, raw))
+    for m in WHOLE_CONSTANT.finditer(clean):
+        name = re.escape(m.group(1))
+        wrapped = re.search(r"\b" + FLOAT_TYPE + r"\(\s*(?:Self\.|self\.|\w+\.)?" + name + r"\s*\)|\b"
+                            + name + r"\s+as\s+" + FLOAT_TYPE, clean)
+        if wrapped and numeric_value(m.group(2)) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
             out.append(("capture-unitless-name", m.start(2), m.group(2)))
     return out
 

@@ -327,6 +327,11 @@ class Check(unittest.TestCase):
             "func f(minimumOverlap: CGFloat = 0.2) -> Bool { true }": [],
             "init(confidence: Double = 1) {}": [],
             "static let count = 3": [],
+            "let t = CGFloat(3)": [("capture-unitless-name", "3")],
+            "let t = 3 as CGFloat": [("capture-unitless-name", "3")],
+            "static let slop = 2\nfunc f(x: CGFloat) -> CGFloat { x + CGFloat(Self.slop) }": [("capture-unitless-name", "2")],
+            "let edgeRatio = CGFloat(2)": [],
+            "static let memory = 64\nlet kept = memory + 1": [],
         }
         for code, expected in cases.items():
             with self.subTest(code=code):
