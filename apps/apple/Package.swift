@@ -75,7 +75,7 @@ let package = Package(
         // Accessibility, the pure target and the identities; never ScreenCaptureKit or Vision (WI-4), the tokens, search,
         // the client, the contract or a view, held transitively by `ModuleBoundaryTests`. Provenance per file:
         // `Sources/XDictCaptureMac/PROVENANCE.md`.
-        .target(name: "XDictCaptureMac", exclude: ["PROVENANCE.md"]),
+        .target(name: "XDictCaptureMac", dependencies: ["XDictBase"], exclude: ["PROVENANCE.md"]),
 
         // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
         // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport

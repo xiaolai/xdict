@@ -63,8 +63,8 @@ struct ModuleBoundaryTests {
         // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
         // lane, the readers, the never-prompting probe. Neither ScreenCaptureKit nor Vision (WI-4), nothing that draws.
         // What it binds today, inside `captureMacMayBind`, the ceiling `captureReachesNothingOfThisPackage` holds.
-        "XDictCaptureMac": ["ApplicationServices"],
-        "XDictCaptureMacTests": ["Foundation", "Synchronization", "Testing"],
+        "XDictCaptureMac": ["ApplicationServices", "Synchronization", "os"],
+        "XDictCaptureMacTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the

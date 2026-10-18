@@ -50,8 +50,8 @@ struct TestInventoryTests {
         "XDictAppleSourceTests": 16,
         // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
         "XDictCaptureTests": 261,
-        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the never-prompting Accessibility probe.
-        "XDictCaptureMacTests": 3,
+        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane.
+        "XDictCaptureMacTests": 22,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
