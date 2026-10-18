@@ -168,7 +168,9 @@ private func convertSnapshot(_ bundle: URL, into outDir: URL, name: String, boun
     let transformer = EntryTransformer(cssAttrs: cssAttrs)
     var articles: [ParsedArticle] = []
     articles.reserveCapacity(raw.count)
-    for a in raw {
+    for (n, a) in raw.enumerated() {
+        // The long silent stretch between reading and writing: asked every 1,024 entries (ADR-0011 decision 5).
+        if n % 1_024 == 0 { try steps.building(done: n, total: raw.count) }
         do {
             articles.append(try transformer.transform(a.xml, address: a.address, stats: stats))
         } catch let fault as EntryFault {
