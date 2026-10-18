@@ -24,12 +24,13 @@ public enum AppleImport {
 }
 
 /// **Where a conversion is, asked of its checkpoint** (ADR-0011 decision 5): before every section of `Body.data` is
-/// inflated (`reading`: bytes of the body's data window passed, of all), and before every output block is built or
-/// written (`writing`: records passed, of the MDX's and the MDD's together). A checkpoint that answers `false` stops the
+/// inflated (`reading`: bytes of the body's data window passed, of all), every 1,024 entries transformed (`building`:
+/// entries passed, of all), and before every output block is built or written (`writing`: records passed, of the
+/// MDX's and the MDD's together). A checkpoint that answers `false` stops the
 /// conversion there as `AppleImportError.cancelled`.
 public struct ConversionStep: Equatable, Sendable {
     public enum Phase: Equatable, Sendable {
-        case reading, writing
+        case reading, building, writing
     }
 
     public let phase: Phase
@@ -73,6 +74,10 @@ final class Steps {
 
     func reading(done: Int, total: Int) throws {
         try ask(ConversionStep(phase: .reading, done: done, total: total))
+    }
+
+    func building(done: Int, total: Int) throws {
+        try ask(ConversionStep(phase: .building, done: done, total: total))
     }
 
     /// Before an output block: `records` more will have been passed once it is built.
