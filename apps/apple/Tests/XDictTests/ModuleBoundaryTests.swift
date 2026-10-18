@@ -61,9 +61,12 @@ struct ModuleBoundaryTests {
         "XDictCapture": captureMayBind,
         "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
         // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
-        // lane, the readers, the never-prompting probe. Neither ScreenCaptureKit nor Vision (WI-4), nothing that draws.
-        // What it binds today, inside `captureMacMayBind`, the ceiling `captureReachesNothingOfThisPackage` holds.
-        "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "os"],
+        // lane, the readers, the never-prompting probe; since WI-4 the recogniser, ScreenCaptureKit's capture and
+        // Vision's reading, behind the Screen Recording setup row (`ScreenCaptureUseTests` holds where ScreenCaptureKit
+        // is named). Nothing that draws. What it binds today, inside `captureMacMayBind`, the ceiling
+        // `captureReachesNothingOfThisPackage` holds.
+        "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit", "Synchronization", "Vision",
+                            "os"],
         "XDictCaptureMacTests": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
@@ -315,15 +318,16 @@ struct ModuleBoundaryTests {
     /// **Capture's targets** (ADR-0014 decision 5): each reaches only the targets of this package named for it, directly
     /// or through another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any
     /// view can arrive by a dependency — and binds nothing beyond its own set. The pure target reaches nothing; the macOS
-    /// target reaches the pure one and the identities, and binds AppKit and Accessibility but not ScreenCaptureKit or
-    /// Vision (those arrive with the recogniser, plan-capture WI-4).
+    /// target reaches the pure one and the identities, and binds AppKit, Accessibility, and since the recogniser
+    /// (plan-capture WI-4) ScreenCaptureKit and Vision — never SwiftUI, WebKit or a view.
     static let captureRules: [String: (reach: Set<String>, bind: Set<String>)] = [
         "XDictCapture": (reach: [], bind: captureMayBind),
         "XDictCaptureMac": (reach: ["XDictBase", "XDictCapture"], bind: captureMacMayBind),
     ]
     static var captureTargets: Set<String> { Set(captureRules.keys) }
     static let captureMayBind: Set<String> = ["CoreGraphics", "Foundation", "NaturalLanguage", "Synchronization", "os"]
-    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "os"]
+    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit",
+                                                 "Synchronization", "Vision", "os"]
 
     @Test func captureReachesNothingOfThisPackage() throws {
         let targets = try Manifest.dump().targets
@@ -364,9 +368,9 @@ struct ModuleBoundaryTests {
                                      files: ["XDictCapture": [("Clean.swift", ["Foundation", "NaturalLanguage"])]]) == [])
     }
 
-    /// **The macOS target's controls**: the pure target and the identities are allowed and named nowhere; a planted
-    /// ScreenCaptureKit, Vision or search import is named, and so is a dependency on the composition layer, with what it
-    /// drags in (the tokens and their UI frameworks).
+    /// **The macOS target's controls**: the pure target, the identities, ScreenCaptureKit and Vision are allowed and named
+    /// nowhere; a planted SwiftUI, WebKit or search import is named, and so is a dependency on the composition layer, with
+    /// what it drags in (the tokens and their UI frameworks).
     @Test func captureMacReachingFurtherIsNamed() {
         func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
             Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
@@ -374,12 +378,13 @@ struct ModuleBoundaryTests {
         let base = target("XDictBase", []), pure = target("XDictCapture", [])
         let clean = ["XDictCaptureMac": target("XDictCaptureMac", ["XDictBase", "XDictCapture"]), "XDictBase": base,
                      "XDictCapture": pure]
-        let cleanFiles = ["XDictCaptureMac": [(file: "Lane.swift", modules: ["ApplicationServices", "XDictCapture", "XDictBase"])]]
+        let cleanFiles = ["XDictCaptureMac": [(file: "Lane.swift", modules: ["ApplicationServices", "XDictCapture", "XDictBase"]),
+                                              (file: "Recogniser.swift", modules: ["ScreenCaptureKit", "Vision", "XDictCapture"])]]
         #expect(Self.captureProblems(targets: clean, files: cleanFiles) == [])
         let planted = ["XDictCaptureMac": [(file: "Planted.swift",
-                                            modules: ["ScreenCaptureKit", "Vision", "XDictSearch", "XDictCapture"])]]
+                                            modules: ["SwiftUI", "WebKit", "XDictSearch", "XDictCapture"])]]
         #expect(Self.captureProblems(targets: clean, files: planted)
-                == ["XDictCaptureMac/Planted.swift imports ScreenCaptureKit", "XDictCaptureMac/Planted.swift imports Vision",
+                == ["XDictCaptureMac/Planted.swift imports SwiftUI", "XDictCaptureMac/Planted.swift imports WebKit",
                     "XDictCaptureMac/Planted.swift imports XDictSearch"])
         var through = clean
         through["XDictCaptureMac"] = target("XDictCaptureMac", ["XDictBase", "XDictCapture", "XDictAnywhere"])

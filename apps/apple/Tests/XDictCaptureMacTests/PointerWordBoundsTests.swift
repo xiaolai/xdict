@@ -11,6 +11,11 @@ enum Measured {
         guard let tolerance = HitTolerance(horizontal: 3, vertical: 2) else { preconditionFailure("a valid tolerance") }
         return tolerance
     }()
+    /// The recogniser's, since plan-capture WI-4: the strip 300/150/600 pt, tiling slacks of 4 and 16 band pixels, a
+    /// window's frame the same within 1 pt — the numbers `XDictCaptureTests`' `Measured` hands in too.
+    static let strip = StripMetrics(initialHeight: 300, growthStep: 150, maximumHeight: 600)
+    static let tiling = TilingMetrics(edgeSlack: 4, holeSlack: 16)
+    static let metrics = CaptureMetrics(hit: hit, restTolerance: 2, strip: strip, tiling: tiling, frameDrift: 1)
 }
 
 /// A text view of fixed-width glyphs: character i spans x 100+10i … 110+10i, y 200 … 220 (y down) — one fake for two

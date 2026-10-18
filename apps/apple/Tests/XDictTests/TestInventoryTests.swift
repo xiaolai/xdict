@@ -72,7 +72,11 @@ struct TestInventoryTests {
         // stoppingEndsTheHover), HoverWatcherTests (13), HoverReaderSourceTests (2) and HoverSiteTests (1) moved by name,
         // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing);
         // 153 → 156: a hover supersedes a shortcut still reading, the compositor's own window, the key up at the gate.
-        "XDictCaptureMacTests": 156,
+        // 156 → 205 (WI-4): the recogniser, XiaolaiDict's RecognitionScopeTests (8), ScreenTextRecogniserRunTests (8),
+        // StripReadingTests (8), ScreenTextRecogniserBandTests (5) and two ScreenRecordingAccessTests moved by name;
+        // twenty-three added (the acquisition limits, the term handed over, the setup row's gate, where ScreenCaptureKit
+        // is named, the recorded recognitions).
+        "XDictCaptureMacTests": 205,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

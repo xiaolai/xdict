@@ -1,0 +1,84 @@
+{
+  "about" : "A terminal line wider than one tile (2800 px): a path read as one run, the pointer on its third segment.",
+  "expect" : {
+    "excludes" : [
+
+    ],
+    "mayBeCut" : false,
+    "sentence" : "cd /Users/reader/projects/harbour-notes && make ledger-index",
+    "wantsMore" : 0,
+    "word" : "projects"
+  },
+  "lines" : [
+    {
+      "box" : [
+        0.028571,
+        0.475,
+        0.361607,
+        0.05
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.028571,
+            0.475,
+            0.014732,
+            0.05
+          ],
+          "text" : "cd",
+          "utf16Offset" : 0
+        },
+        {
+          "box" : [
+            0.044643,
+            0.475,
+            0.220982,
+            0.05
+          ],
+          "text" : "/Users/reader/projects/harbour-notes",
+          "utf16Offset" : 3
+        },
+        {
+          "box" : [
+            0.266964,
+            0.475,
+            0.016071,
+            0.05
+          ],
+          "text" : "&&",
+          "utf16Offset" : 40
+        },
+        {
+          "box" : [
+            0.284375,
+            0.475,
+            0.030804,
+            0.05
+          ],
+          "text" : "make",
+          "utf16Offset" : 43
+        },
+        {
+          "box" : [
+            0.316518,
+            0.475,
+            0.073661,
+            0.05
+          ],
+          "text" : "ledger-index",
+          "utf16Offset" : 48
+        }
+      ],
+      "text" : "cd /Users/reader/projects/harbour-notes && make ledger-index"
+    }
+  ],
+  "name" : "terminal-path",
+  "pointer" : "projects",
+  "recordedBy" : "RecognitionRecorder (ScreenTextRecogniser.recognise + recogniseWhole), synthetic text",
+  "region" : [
+    1400,
+    300
+  ]
+}
