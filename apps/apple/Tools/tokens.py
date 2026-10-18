@@ -815,7 +815,10 @@ def allowed(kind, value, text, pos):
 # Spaced on both sides, or `<=`/`>=` unspaced (`dx<=3`); an unspaced `<` or `>` is a generic, not a comparison.
 COMPARISON = re.compile(r"\s(?:<=|>=|<|>)\s|(?<=[\w)\]])(?:<=|>=)(?=[-\w(])")
 DISTANCE_TERM = re.compile(r"\bhypot\(|\bdistance\b|\b(?:dx|dy)\b|\.(?:minX|maxX|minY|maxY|midX|midY|width|height|x|y)\b")
-OPERAND = r"((?:CGFloat|Double|Float)\(-?\d[\d_]*(?:\.\d+)?\)|-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)"
+# A literal also counts written through a floating wrapper inline: `CGFloat(3)`, `CGFloat(exactly: 3)!`, `3 as CGFloat`.
+OPERAND = (r"((?:CGFloat|Double|Float)\((?:exactly:\s*)?-?\d[\d_]*(?:\.\d+)?\)!?"
+           r"|-?\d[\d_]*(?:\.\d+)?\s+as\s+(?:CGFloat|Double|Float)\b"
+           r"|-?(?:\d[\d_]*(?:\.\d+)?)|(?:Self\.|self\.)?[A-Za-z_]\w*)")
 RIGHT_OPERAND = re.compile(r"\s*" + OPERAND + r"(?=\s*(?:$|[,{})?:&|;]|else\b))")
 LEFT_OPERAND = re.compile(r"(?:^|[\s(!,{])" + OPERAND + r"\s*$")
 INFERRED = r"\b(?:let|var)\s+{name}\s*(?::\s*(?:CGFloat|Double|Float)\s*)?=\s*(-?\d[\d_]*(?:\.\d+)?)\s*(?:$|//|\n)"
@@ -828,11 +831,13 @@ FLOAT_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*" + FLOAT_TYPE + r"
 # dimensionless fraction it is; the checker cannot tell a Double ratio from a Double length by its type (ADR-0014 d.11).
 CAPTURE_DIR = "Sources/XDictCapture/"
 FRACTION_NAME = re.compile(r"(?:Ratio|Fraction|Overlap)$")
-# A literal bound to a name through a floating wrapper: `let t = CGFloat(3)`, `let t = 3 as CGFloat`.
+# A literal bound to a name through a floating wrapper: `let t = CGFloat(3)`, `let t = 3 as CGFloat`, and the failable
+# `let t = CGFloat(exactly: 3)!` or `CGFloat(exactly: 3) ?? 0`.
 WRAPPED_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*(?::\s*\w+\s*)?=\s*(?:" + FLOAT_TYPE
-                              + r"\(\s*(-?\d[\d_]*(?:\.\d+)?)\s*\)|(-?\d[\d_]*(?:\.\d+)?)\s+as\s+" + FLOAT_TYPE
+                              + r"\(\s*(?:exactly:\s*)?(-?\d[\d_]*(?:\.\d+)?)\s*\)(?:!|\s*\?\?\s*[^\n/]*?)?"
+                              + r"|(-?\d[\d_]*(?:\.\d+)?)\s+as\s+" + FLOAT_TYPE
                               + r")\s*(?:$|//|\n)", re.M)
-# A whole number bound to a name, which the file later wraps as a floating value (`CGFloat(slop)`).
+# A whole number bound to a name, which the file later wraps as a floating value (`CGFloat(slop)`, `CGFloat(exactly: slop)`).
 WHOLE_CONSTANT = re.compile(r"\b(?:let|var)\s+(\w+)\s*=\s*(-?\d[\d_]*)\s*(?:$|//|\n)", re.M)
 
 
@@ -849,7 +854,8 @@ def distance_comparisons(clean):
                 if operand_match is None or not DISTANCE_TERM.search(other) or " / " in other:
                     continue
                 operand = operand_match.group(1)
-                wrapped = re.fullmatch(r"(?:CGFloat|Double|Float)\((.*)\)", operand)
+                wrapped = (re.fullmatch(r"(?:CGFloat|Double|Float)\((?:exactly:\s*)?(.*)\)!?", operand)
+                           or re.fullmatch(r"(.*?)\s+as\s+(?:CGFloat|Double|Float)", operand))
                 if wrapped:
                     operand = wrapped.group(1)
                 if base is None:
@@ -885,7 +891,7 @@ def unnamed_fractions(clean):
             out.append(("capture-unitless-name", start, raw))
     for m in WHOLE_CONSTANT.finditer(clean):
         name = re.escape(m.group(1))
-        wrapped = re.search(r"\b" + FLOAT_TYPE + r"\(\s*(?:Self\.|self\.|\w+\.)?" + name + r"\s*\)|\b"
+        wrapped = re.search(r"\b" + FLOAT_TYPE + r"\(\s*(?:exactly:\s*)?(?:Self\.|self\.|\w+\.)?" + name + r"\s*\)|\b"
                             + name + r"\s+as\s+" + FLOAT_TYPE, clean)
         if wrapped and numeric_value(m.group(2)) not in (0, 1) and not FRACTION_NAME.search(m.group(1)):
             out.append(("capture-unitless-name", m.start(2), m.group(2)))
