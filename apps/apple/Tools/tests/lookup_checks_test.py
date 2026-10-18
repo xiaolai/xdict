@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """The lookup driver's readings of the window (`Tools/lookup/lookup_checks.py`): each check passes on the window the
-parity design draws (P6 scope bar, P9-P11 merged results, P15 All page) and fails on the one the 2026-10-18 E2E run
+parity design draws (P6 scope menu, P9-P11 merged results, P15 All page) and fails on the one the 2026-10-18 E2E run
 read, so none of them can pass on an empty or a stale window.
 
     python3 -I Tools/tests/lookup_checks_test.py
@@ -17,16 +17,17 @@ def node(role, ident="", texts=(), depth=0):
     return {"role": role, "id": ident, "texts": list(texts), "depth": depth}
 
 
-def window(chosen="All", label=True):
-    group = node("AXRadioGroup", "scope", ["Dictionaries"] if label else [], 2)
-    options = [node("AXRadioButton", "scope.option", [n, n, "1" if n == chosen else "0"], 3)
-               for n in ("All", "Alpha", "Beta")]
+def window(chosen="All Dictionaries", label=True):
+    # The search field and its magnifier, the scope menu's button: "Search in", the chosen scope as its value (P6, P42).
+    prompt = "Search" if chosen == "All Dictionaries" else f"Search in {chosen}"
+    field = node("AXTextField", "search-field", [prompt], 2)
+    menu = node("AXButton", "scope.menu", (["Search in"] if label else []) + [chosen], 3)
     table = [node("AXTable", "results", ["search results"], 2)] + [
         node("AXRow", "", [], 3) if i % 2 == 0 else node("AXStaticText", "", [w], 4)
         for i, w in enumerate(["", "apple", "", "apple polisher", "", "applet"])]
     page = [node("AXDisclosureTriangle", "page.divider.Beta", ["Beta", "1"], 3),
             node("AXDisclosureTriangle", "page.divider.LDOCE", ["LDOCE", "1"], 3)]
-    return [node("AXWindow", "main", [], 0), node("AXGroup", "scope.bar", [], 1), group] + options + table + page
+    return [node("AXWindow", "main", [], 0), field, menu] + table + page
 
 
 SECTIONS = [("Alpha", "results"), ("Beta", "results"), ("Records", "noMatch"), ("LDOCE", "results")]
@@ -34,26 +35,35 @@ SECTIONS = [("Alpha", "results"), ("Beta", "results"), ("Records", "noMatch"), (
 
 class Where(unittest.TestCase):
     def test_an_item_with_a_value_needs_the_value(self):
+        # What the lookup instrument expects (LookupWindow.swift): the menu button's name, then the chosen scope.
         nodes = window(chosen="Beta")
-        self.assertIsNotNone(checks.where("#scope.option=1:Beta", nodes))
-        self.assertIsNone(checks.where("#scope.option=1:Alpha", nodes), "shown, not chosen")
-        self.assertIsNotNone(checks.where("#scope.option:Alpha", nodes))
-        self.assertIsNotNone(checks.where("#scope:Dictionaries", nodes))
-        self.assertIsNone(checks.where("#scope:Dictionaries", window(label=False)))
+        self.assertIsNotNone(checks.where("#scope.menu=Search in:Beta", nodes))
+        self.assertIsNone(checks.where("#scope.menu=Search in:Alpha", nodes), "offered, not chosen")
+        self.assertIsNone(checks.where("#scope.menu=Search in:Beta", window(chosen="Beta", label=False)))
+        self.assertIsNotNone(checks.where("#scope.menu=Search in:Dict: Two", window(chosen="Dict: Two")),
+                             "a name holding a colon")
 
     def test_judge_fails_an_empty_window(self):
         self.assertFalse(checks.judge("x", {"present": []}, [])["pass"])
-        self.assertTrue(checks.judge("x", {"present": ["#scope.option=1:All"]}, window())["pass"])
+        self.assertTrue(checks.judge("x", {"present": ["#scope.menu=Search in:All Dictionaries"]}, window())["pass"])
 
 
 class Scope(unittest.TestCase):
-    def test_the_chosen_option_alone_has_value_one(self):
+    def test_the_menu_button_and_the_placeholder_name_the_chosen_scope(self):
         self.assertTrue(checks.scope_chosen(window(chosen="Beta"), "Beta")[0])
-        self.assertFalse(checks.scope_chosen(window(chosen="All"), "Beta")[0])
+        self.assertFalse(checks.scope_chosen(window(chosen="All Dictionaries"), "Beta")[0])
 
-    def test_the_old_unlabelled_group_fails(self):
-        # 2026-10-18: the group read with no text at all and its buttons carried no identifier.
-        old = [node("AXRadioGroup", "scope", [], 2), node("AXRadioButton", "", ["Beta"], 3)]
+    def test_the_placeholder_alone_or_the_button_alone_fails(self):
+        nodes = [n if n["id"] != "search-field" else dict(n, texts=["Search"]) for n in window(chosen="Beta")]
+        self.assertFalse(checks.scope_chosen(nodes, "Beta")[0], "the field still says Search")
+        nodes = [n if n["id"] != "scope.menu" else dict(n, texts=["Search in", "All Dictionaries"])
+                 for n in window(chosen="Beta")]
+        self.assertFalse(checks.scope_chosen(nodes, "Beta")[0], "the button still says All Dictionaries")
+
+    def test_the_old_scope_bar_fails(self):
+        # Before 2026-10-18: a radio group of scope.option buttons, no menu button in the field.
+        old = [node("AXRadioGroup", "scope", ["Dictionaries"], 2),
+               node("AXRadioButton", "scope.option", ["Beta", "Beta", "1"], 3)]
         self.assertFalse(checks.scope_chosen(old, "Beta")[0])
 
 
@@ -84,29 +94,29 @@ class Results(unittest.TestCase):
 
 
 class Placement(unittest.TestCase):
-    BAR = {"x": 0, "y": 277, "width": 800, "height": 36}
+    TOOLBAR = {"x": 0, "y": 225, "width": 800, "height": 52}
 
-    def test_under_the_scope_bar(self):
-        ok, detail = checks.entry_placement({"scopeBar": self.BAR, "web": {"x": 0, "y": 313, "width": 800,
-                                                                           "height": 300}})
+    def test_right_under_the_toolbar(self):
+        ok, detail = checks.entry_placement({"toolbar": self.TOOLBAR, "web": {"x": 0, "y": 277, "width": 800,
+                                                                             "height": 300}})
         self.assertTrue(ok, detail)
 
     def test_under_the_notices_when_shown(self):
-        notices = {"x": 0, "y": 313, "width": 800, "height": 57}
-        self.assertTrue(checks.entry_placement({"scopeBar": self.BAR, "notices": notices,
-                                                "web": {"x": 0, "y": 370, "width": 800, "height": 300}})[0])
-        self.assertFalse(checks.entry_placement({"scopeBar": self.BAR, "notices": notices,
-                                                 "web": {"x": 0, "y": 313, "width": 800, "height": 300}})[0])
+        notices = {"x": 0, "y": 277, "width": 800, "height": 57}
+        self.assertTrue(checks.entry_placement({"toolbar": self.TOOLBAR, "notices": notices,
+                                                "web": {"x": 0, "y": 334, "width": 800, "height": 300}})[0])
+        self.assertFalse(checks.entry_placement({"toolbar": self.TOOLBAR, "notices": notices,
+                                                 "web": {"x": 0, "y": 277, "width": 800, "height": 300}})[0])
 
-    def test_right_under_the_toolbar_fails(self):
-        # The pre-parity placement: the entry at the toolbar's bottom, under where the scope bar now is.
-        self.assertFalse(checks.entry_placement({"scopeBar": self.BAR, "web": {"x": 0, "y": 277, "width": 800,
-                                                                            "height": 300}})[0])
+    def test_a_band_where_the_scope_bar_was_fails(self):
+        # The scope bar's 36 pt row, gone since 2026-10-18: an entry still starting under it leaves a band.
+        self.assertFalse(checks.entry_placement({"toolbar": self.TOOLBAR, "web": {"x": 0, "y": 313, "width": 800,
+                                                                              "height": 300}})[0])
 
     def test_nothing_to_measure_is_no_verdict(self):
-        ok, detail = checks.entry_placement({"scopeBar": self.BAR, "web": None})
+        ok, detail = checks.entry_placement({"toolbar": self.TOOLBAR, "web": None})
         self.assertIsNone(ok)
-        self.assertIn("no scope bar or no entry", detail)
+        self.assertIn("no toolbar or no entry", detail)
 
 
 if __name__ == "__main__":

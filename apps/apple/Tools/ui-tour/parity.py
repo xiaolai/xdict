@@ -10,7 +10,8 @@ green on a tree shaped as Apple's and red on one shaped as XDict's before the pa
 """
 import re
 
-# The tour's fixture library, in the reader's order (Tools/build-fixtures.sh): what the scope bar lists after "All".
+# The tour's fixture library, in the reader's order (Tools/build-fixtures.sh): what the scope menu lists after "All
+# Dictionaries".
 FIXTURE_DICTIONARIES = ["Alpha", "Beta"]
 # The same, as the Search menu names them (Apple's menu gives full names, its bar short ones; XDict has one name).
 MENU_DICTIONARIES = FIXTURE_DICTIONARIES
@@ -154,28 +155,40 @@ def search_placeholder(tree):
     return None
 
 
-def scope_bar(tree):
-    groups = [g for g in find(tree, "AXRadioGroup")
-              if [label(b) for b in g.get("children", []) if b.get("role") == "AXRadioButton"][:1] == ["All"]]
-    if not groups:
-        return "no scope bar: a radio group whose first button is 'All'"
-    names = [label(b) for b in groups[0]["children"] if b.get("role") == "AXRadioButton"]
-    if names[1:1 + len(FIXTURE_DICTIONARIES)] != FIXTURE_DICTIONARIES:
-        return f"the scope bar lists {names}, not All then {FIXTURE_DICTIONARIES}"
-    toolbar = find(tree, "AXToolbar")
-    if toolbar and groups[0]["frame"][1] < toolbar[0]["frame"][1] + toolbar[0]["frame"][3] - 1:
-        return "the scope bar is not under the toolbar"
+def scope_button(tree):
+    """The search field's magnifier, the scope menu's button (`scope.menu`), or None."""
+    field = search_field(tree)
+    buttons = find({"windows": [field]}, "AXButton", ident="scope.menu") if field else []
+    return buttons[0] if buttons else None
+
+
+def scope_menu(tree):
+    """P6, XDict's own since 2026-10-18 (24 dictionaries overflowed Apple's scope bar): the scope is the search field's
+    menu, its magnifier a button named "Search in" (P42), and no scope bar remains under the toolbar. The menu's lines
+    show only while it is open (route scope.menu, a picture)."""
+    button = scope_button(tree)
+    if button is None:
+        return "no scope menu: the search field holds no 'scope.menu' button"
+    if button.get("description") != "Search in":
+        return f"the scope menu's button is named {button.get('description')!r}, not 'Search in'"
+    if find(tree, "AXRadioGroup"):
+        return "a scope bar (a radio group) is still under the toolbar"
     return None
 
 
 def scope_selected(index):
+    """One dictionary chosen (P7 by ⌘2, P6 by the menu): the menu's button carries its name as its value, and the
+    search field's placeholder reads "Search in <name>"."""
     def rule(tree):
         name = FIXTURE_DICTIONARIES[index]
-        for group in find(tree, "AXRadioGroup"):
-            for button in group.get("children", []):
-                if button.get("role") == "AXRadioButton" and label(button) == name:
-                    return None if str(button.get("value")) == "1" else f"{name} is not the chosen scope"
-        return f"no scope button {name!r}"
+        button, field = scope_button(tree), search_field(tree)
+        if button is None or field is None:
+            return "no search field with its scope menu"
+        if str(button.get("value")) != name:
+            return f"the scope menu's button says {button.get('value')!r}, not {name!r}"
+        if field.get("placeholder") != f"Search in {name}":
+            return f"the search field says {field.get('placeholder')!r}, not 'Search in {name}'"
+        return None
     return rule
 
 
@@ -244,12 +257,14 @@ def no_entries_line(tree):
     lines = find(tree, "AXStaticText", "No entries found.")
     if not lines:
         return "no 'No entries found.' line"
-    bars = find(tree, "AXRadioGroup")
-    if bars:
-        bar = bars[0]["frame"]
+    # The pane's top left: under the toolbar (the scope is the field's menu, P6), right of the sidebar when it shows.
+    toolbar, table = find(tree, "AXToolbar"), results_table(tree)
+    if toolbar:
+        top = toolbar[0]["frame"][1] + toolbar[0]["frame"][3]
+        left = table["frame"][0] + table["frame"][2] if table else (main_window(tree).get("frame") or [0])[0]
         x, y = lines[0]["frame"][:2]
-        if not (0 <= x - bar[0] <= 40 and 0 <= y - (bar[1] + bar[3]) <= 80):
-            return f"'No entries found.' is at {lines[0]['frame']}, not at the pane's top left (bar {bar})"
+        if not (0 <= x - left <= 40 and 0 <= y - top <= 80):
+            return f"'No entries found.' is at {lines[0]['frame']}, not at the pane's top left ({left:g}, {top:g})"
     return None
 
 
@@ -267,7 +282,7 @@ def narrow(tree):
     f = field["frame"]
     if window and f[0] + f[2] > window[0] + window[2] + 2:
         return "the search field runs out of the window at 400 pt"
-    return scope_bar(tree)
+    return scope_menu(tree)
 
 
 def find_bar(tree):
@@ -399,10 +414,10 @@ def print_panel(tree):
 
 TREE_RULES = {
     "main.start": [("P2", title_xdict), ("P2", title_no_count), ("P3", toolbar_order), ("P4", toolbar_help),
-                   ("P5", search_placeholder), ("P6", scope_bar), ("P9", no_sidebar), ("P14", start_page),
+                   ("P5", search_placeholder), ("P6", scope_menu), ("P9", no_sidebar), ("P14", start_page),
                    ("P42", toolbar_order)],
     "search.result": [("P2", title_found), ("P9", sidebar_table), ("P9", sidebar_flat), ("P9", notices_in_page),
-                      ("P43", sidebar_fonts), ("P6", scope_bar)],
+                      ("P43", sidebar_fonts), ("P6", scope_menu)],
     "search.live": [("P10", rows_include("take off")), ("P2", title_found)],
     "search.next": [("P11", sidebar_table)],
     "search.didyoumean": [("P13", lambda t: None if "Did you mean?" in texts(t) else "no 'Did you mean?'"),
@@ -411,6 +426,7 @@ TREE_RULES = {
     "window.min": [("P1", minimum_size)],
     "main.narrow": [("P8", narrow)],
     "scope.one": [("P7", scope_selected(1))],
+    "scope.click": [("P6", scope_selected(1)), ("P6", scope_menu)],
     "entry.find": [("P30", find_bar)],
     "page.all": [("P15", page_dividers("Beta", "Records")), ("P16", title_xdict)],
     "page.collapse": [("P15", page_collapsed("Beta"))],
