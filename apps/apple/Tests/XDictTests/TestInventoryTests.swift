@@ -55,8 +55,9 @@ struct TestInventoryTests {
         // (plan-capture WI-4): no shipped target holds a development instrument's flag, and its control. 48 → 51: the
         // capture lab's sentence exemption held to its folder, and no log line inside capture interpolating the text read,
         // with its control. 51 → 53: a context read inside a string interpolation, and a log call across lines or through
-        // a local, each named by its control.
-        "XDictTests": 53,
+        // a local, each named by its control. 53 → 55 by transfer (manifest §7): XiaolaiDict's
+        // ScriptFilterWiringTests.theSelectionShortcutIsNotFilteredByScript and theAppReadsOnlyTheDefaultsSuiteItWasGiven.
+        "XDictTests": 55,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -96,8 +97,10 @@ struct TestInventoryTests {
         // one not presented cancelling its context). 226 → 230: an excluded app and an unattributable window refused before
         // any capture call, an allowed one captured, and a word refused after the read cancelling its context. 230 → 232:
         // a recognised word refused the presentation, or refused as a term, cancels its context and empties the book.
-        // 232 → 233: one recognised line longer than the context limit is cut around the word.
-        "XDictCaptureMacTests": 233,
+        // 232 → 233: one recognised line longer than the context limit is cut around the word. 233 → 239 by transfer
+        // (manifest §7): XiaolaiDict's HoverAuditTests for wholeWordRange (3) and sameGeometry (1), and two of its
+        // ScriptFilterWiringTests (theSuppressionKeyTellsTwoAppsApart, releasingTheModifierClearsTheSuppressedWord).
+        "XDictCaptureMacTests": 239,
         // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
         // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
         // read through hover's reader at one point, and the process's lines and exits.
