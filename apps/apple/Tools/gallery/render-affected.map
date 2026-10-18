@@ -95,7 +95,7 @@ apps/apple/Sources/XDictEntryView/EntryStyleFiles.swift     none
 # Behaviour no still picture of an entry shows, or "Original style", which none of the four views draws: their routes.
 apps/apple/Sources/XDictEntryView/Style/find*.js            route:entry.find route:page.find
 apps/apple/Sources/XDictEntryView/Style/readability-core.js route:entry.find route:page.find
-apps/apple/Sources/XDictEntryView/Style/speaker-clicks.js   route:speech.pronounce route:sound.recording
+apps/apple/Sources/XDictEntryView/Style/speaker-clicks.js   route:speech.pronounce
 apps/apple/Sources/XDictEntryView/Style/placeholder-clicks.js route:trail.followed
 apps/apple/Sources/XDictEntryView/Style/minimal.css         route:settings.dictionaries.originalStyle
 apps/apple/Sources/XDictEntryView/Style/original-phon.css   route:settings.dictionaries.originalStyle
