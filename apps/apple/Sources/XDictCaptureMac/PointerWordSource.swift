@@ -8,8 +8,10 @@ public protocol PointerWordSource: Sendable {
     func listedWindows() -> [ListedWindow]
     /// Who owns the pixel, through Accessibility, without reading any text.
     func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome
-    /// The site `target` shows, if it is a web page — asked only when the reader excluded a site.
-    func host(of target: PointerWordReader.Target, budget: Duration) async -> HostReading
+    /// The site `target` shows, judged on every enclosing web area — asked only when the reader excluded a site.
+    func host(
+        of target: PointerWordReader.Target, isExcluded: @escaping @Sendable (String) -> Bool, budget: Duration
+    ) async -> HostReading
     /// The word at `point` in `target`, through Accessibility, within `budget`.
     func read(at point: CGPoint, in target: PointerWordReader.Target, budget: Duration) async -> PointerWordReader.Outcome
 }
@@ -47,9 +49,11 @@ public struct SystemPointerWords: PointerWordSource {
         }, refused: { .none(.failed(Self.failure(for: $0))) })
     }
 
-    public func host(of target: PointerWordReader.Target, budget: Duration) async -> HostReading {
+    public func host(
+        of target: PointerWordReader.Target, isExcluded: @escaping @Sendable (String) -> Bool, budget: Duration
+    ) async -> HostReading {
         await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.host(of: target, with: AccessibilitySession(budget: budget))
+            PointerWordReader.host(of: target, isExcluded: isExcluded, with: AccessibilitySession(budget: budget))
         }, refused: { _ in .unreadable })
     }
 

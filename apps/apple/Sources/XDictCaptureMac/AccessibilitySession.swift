@@ -109,6 +109,13 @@ extension AccessibilityReading {
         return area
     }
 
+    /// **The web area enclosing `area`, walking outward from its parent** — the step the site check takes from a frame to
+    /// the page around it, as often as there are pages. `.application` where none encloses it.
+    func enclosingWebArea(of area: AXUIElement) throws(CaptureError) -> PageWalk {
+        guard let parent = try element(area, kAXParentAttribute), parent != area else { return .application }
+        return try walkToPage(from: parent)
+    }
+
     /// The walk up to the page, **saying how it ended** (XiaolaiDict, audit round 3, #34): a walk that stopped short is
     /// not one that reached the application. At most `webAreaAncestorLimit` parents, and an element that names itself as
     /// its own parent ends it — the guard is what makes the bound the worst case rather than the usual one.
