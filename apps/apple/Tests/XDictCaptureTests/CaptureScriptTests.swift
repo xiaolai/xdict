@@ -4,6 +4,13 @@ import XDictCapture
 /// The capture script filter's classifier, moved from XiaolaiDict's `DictionaryLanguageTests` (the `dominant` cases;
 /// the probe-word cases stayed with the dictionary side).
 struct CaptureScriptTests {
+    /// Captured text opens with punctuation or a digit; a first-scalar reading names no script for it. Moved by name;
+    /// the `ProbeScript.of` halves stayed with the dictionary probe.
+    @Test func theFirstScalarClassifierIsNotEnoughForCapturedText() {
+        #expect(CaptureScript.dominant(in: "“hold”") == .latin)
+        #expect(CaptureScript.dominant(in: "3D") == .latin)
+    }
+
     /// Letters decide; everything else is ignored rather than counted as a script of its own.
     @Test func punctuationDigitsAndSpacesDoNotVote() {
         #expect(CaptureScript.dominant(in: "well-being") == .latin)

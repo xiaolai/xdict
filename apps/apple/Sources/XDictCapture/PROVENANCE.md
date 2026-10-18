@@ -6,7 +6,8 @@ XiaolaiDict names, now in `Tests/XDictCaptureTests/`) and the ADR behind it. "AD
 XiaolaiDict's; XDict's are written "XDict ADR-00nn".
 
 **Provenance check (2026-10-18, by reading).** Every origin file below and its tests were read in full while porting.
-`git log` over them names one author, the owner (24 commits); no file carries a licence header, a copyright line or
+`git log` over the ported source and test paths names one author, the owner: 23 commits (an earlier count of 24 took in
+`Sources/CaptureModel`, which is not ported); no file carries a licence header, a copyright line or
 text from another project, and none of them is, or was translated from, third-party code. XiaolaiDict has no licence
 file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 
@@ -25,7 +26,7 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `ScreenSpace.swift` (`UpPoint`, `DownPoint`, `UpRect`) | `Sources/Capture/ScreenSpace.swift` | `ScreenSpaceTests` | 0016 |
 | `WordBounds.swift` (`DownRect`, `WordBounds`, `ReadBounds`) | `Sources/Capture/WordBounds.swift` | `WordBoundsTests` | 0016 |
 | `TextSegmenter.swift` (`SentenceContext`, `WordAtPoint`, `TextSegmenter`) | `Sources/DictionaryModel/TextSegmenter.swift` | `SelectionContextTests`, the segmenter cases of `ScreenReadingTests` | 0016 |
-| `CaptureScript.swift` | `ProbeScript.dominant(in:)` and `letterScript(of:)` of `Sources/DictionaryModel/DictionaryLanguage.swift` | `CaptureScriptTests` (from `DictionaryLanguageTests`: `punctuationDigitsAndSpacesDoNotVote`, `anyKanaMakesItJapaneseHoweverManyHanThereAre`, `latinReachesPastAscii`, `punctuationInsideAScriptsBlockDoesNotVote`, `theScriptsAreRecognisedWhereverUnicodePutsThem`, `composedAndDecomposedTextAgree`, `aBlockNamedForOneScriptCanHoldAnother`, `presentationFormsFoldToTheLettersTheyAre`, `kanaBeyondTheOriginalBlocksIsStillKana`, `amongLettersTheMajorityScriptWins`) | 0015 |
+| `CaptureScript.swift` | `ProbeScript.dominant(in:)` and `letterScript(of:)` of `Sources/DictionaryModel/DictionaryLanguage.swift` | `CaptureScriptTests` (from `DictionaryLanguageTests`: `theFirstScalarClassifierIsNotEnoughForCapturedText` (its `dominant` half), `punctuationDigitsAndSpacesDoNotVote`, `anyKanaMakesItJapaneseHoweverManyHanThereAre`, `latinReachesPastAscii`, `punctuationInsideAScriptsBlockDoesNotVote`, `theScriptsAreRecognisedWhereverUnicodePutsThem`, `composedAndDecomposedTextAgree`, `aBlockNamedForOneScriptCanHoldAnother`, `presentationFormsFoldToTheLettersTheyAre`, `kanaBeyondTheOriginalBlocksIsStillKana`, `amongLettersTheMajorityScriptWins`) | 0015 |
 | `CaptureExclusions.swift` | the password-manager list of `Sources/Capture/PlacePolicy.swift` (the list only) | `HoverPolicyTests` (`itShipsExcludingPasswordManagers`) | 0015 |
 
 ## New in XDict (no XiaolaiDict origin; written test-first, each test seen failing against a stub)
@@ -50,6 +51,34 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 - **Capture's own lists.** The excluded apps are `CaptureExclusions`, not the study ledger's `PlacePolicy`; the script
   filter is `CaptureScript`, not the dictionary probe (decision 10).
 - `XiaolaiDictBase` (`Duration.seconds`, the log subsystem) is replaced inline; the log carries metadata only.
+
+- **The script filter is capture's own, not the study setting.** XiaolaiDict's `HoverPolicy.scripts`, `studies(_:)`,
+  `.scriptNotStudied` and the Latin default were the reader's study choice; ADR-0014 decision 10 does not move it. It
+  became `allowedScripts` (handed in, nil or empty filters nothing, no default, no stored key `scripts`), `allows(_:)`
+  and `.scriptNotAllowed`. No ported test covered the old setting; `HoverScriptFilterTests` is new.
+- **Dimensionless constants are named as fractions.** Inside this target a floating constant is either handed in or
+  named with a `Ratio`, `Fraction` or `Overlap` suffix (`tokens.py` enforces it): `sameRowGapRatio`,
+  `paragraphPitchRatio`, `paragraphGapRatio`, `marginToleranceRatio`, `edgeContactRatio`, `minimumGutterRatio` and
+  `CaptureEdge`'s `edgeFraction` were renamed on the way.
+
+## Tests of the origin not moved
+
+From `DictionaryLanguageTests`, 11 tests stay with the dictionary side, as dictionary-language or probe-word logic, not
+capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagMatchesTheBundlesShorterOne`,
+`noADIndexesEnglishAndExplainsInIt`, `theChineseHalfIsNotTheOneForStudyingEnglish`,
+`traditionalIsNotOfferedToASimplifiedReader`, `regionDoesNotSeparateAReaderFromTheirDictionary`,
+`aDictionaryDeclaringNothingTeachesNobodyByMetadata` (a dictionary's declared languages); `everyProbeWordHasAScript`,
+`theProbeWordsCoverTheScriptsThatSeparateTheLanguages` (the probe words); `bothClassifiersAgreeAboutWhatAScalarIs`
+(compares with `ProbeScript.of`, not moved); and the `ProbeScript.of` half of
+`theFirstScalarClassifierIsNotEnoughForCapturedText` (its `dominant` half moved by name).
+
+## Open, by work item (TODO)
+
+- WI-2: the Service-text-wins rule — acquisition `.serviceText` with disagreeing Accessibility text yields no context
+  and no geometry — belongs to the reader, with its test there.
+- WI-4: the pending context handle's cancel, and the recogniser using `CaptureLimits.observations` and the tile limits.
+- WI-3: `RequestSequence` (presentation claims) and `CaptureRequests` (acknowledgements) joined into one numbering for
+  every trigger, in one order.
 
 ## Not moved (decision 10, and the WI-1 brief)
 
