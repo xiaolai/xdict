@@ -435,7 +435,21 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 Task { _ = await pane.show(section.item.reference) }
             }
         }
+        onFramesChanged?()
         return nil
+    }
+
+    /// Told after the frames were made or kept for the page's sections and scroll position: the key-view order follows.
+    var onFramesChanged: (() -> Void)?
+
+    /// The frame Tab reaches from the results: the first expanded, made frame on screen (`EntryPagePlan.firstKeyFrame`).
+    var firstKeyView: EntryWebView? {
+        let index = EntryPagePlan.firstKeyFrame(tops: sections.map { Double($0.holder.frame.minY) },
+                                                heights: sections.map(\.frameHeight),
+                                                collapsed: sections.map(\.collapsed),
+                                                made: sections.map { $0.pane != nil },
+                                                top: Double(scroll.contentView.bounds.minY))
+        return index.flatMap { sections[$0].pane?.view }
     }
 
     @objc private func scrolled() {

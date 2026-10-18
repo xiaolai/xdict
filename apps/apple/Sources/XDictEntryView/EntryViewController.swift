@@ -103,6 +103,16 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private var focusPane: EntryPane? { pane ?? page?.frameInFocus(window: view.window) }
     /// Every pane shown: the single entry's, or each frame of the page.
     private var allPanes: [EntryPane] { pane.map { [$0] } ?? page?.panes ?? [] }
+    /// **The key-view order** (lookup E2E, 2026-10-18): Tab from `keyViewPredecessor` (the window's results list) reaches
+    /// `keyViewTarget`, and Shift-Tab from any frame returns to it. Re-applied whenever a pane or the page's frames change.
+    public weak var keyViewPredecessor: NSView? { didSet { relinkKeyViews() } }
+    /// Where Tab from the results lands: the single entry's web view, or the page's first frame on screen.
+    public var keyViewTarget: NSView? { pane?.view ?? page?.firstKeyView }
+
+    private func relinkKeyViews() {
+        for pane in allPanes { pane.view.keyViewPredecessor = keyViewPredecessor }
+    }
+
     /// The All page's sections, while it is shown (tests and instruments).
     var pageSections: [EntryPageSection]? { page?.sections }
     var pagePanes: [EntryPane]? { page?.panes }
@@ -199,6 +209,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
                     made.view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
                     made.view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
                 ])
+                relinkKeyViews()
             }
         }
         guard let pane else { return false }
@@ -252,6 +263,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
         page.onRefusal = { [weak self] why in self?.refuse(why) }
         page.onContentHeightChanged = { [weak self] in self?.onContentHeightChanged?() }
+        page.onFramesChanged = { [weak self] in self?.relinkKeyViews() }
         container.addSubview(page.scroll)
         NSLayoutConstraint.activate([
             page.scroll.topAnchor.constraint(equalTo: container.topAnchor),

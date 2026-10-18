@@ -11,6 +11,28 @@ import WebKit
 struct EntryPageTests {
     // MARK: - The plan
 
+    /// **Tab from the results reaches the page** (lookup E2E, 2026-10-18: Tab went back to the search field): the frame
+    /// Tab lands in is the first expanded, made frame still on screen at the page's scroll position; else the first
+    /// expanded, made frame; none when no frame is made.
+    @Test func tabLandsInTheFirstFrameOnScreen() {
+        let tops: [Double] = [0, 300, 600, 900]
+        let heights: [Double] = [300, 300, 300, 300]
+        let open = [false, false, false, false]
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: open,
+                                            made: [true, true, true, false], top: 0) == 0)
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: [true, false, false, false],
+                                            made: [true, true, true, false], top: 0) == 1, "a collapsed frame is hidden")
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: open,
+                                            made: [false, true, true, false], top: 0) == 1, "an unmade frame has no view")
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: open,
+                                            made: [true, true, true, false], top: 650) == 2, "scrolled past 0 and 1")
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: open,
+                                            made: [true, true, false, false], top: 950) == 0,
+                "nothing made on screen: the first made frame")
+        #expect(EntryPagePlan.firstKeyFrame(tops: tops, heights: heights, collapsed: open,
+                                            made: [false, false, false, false], top: 0) == nil)
+    }
+
     @Test func onlyTheFirstSectionGoesWithoutADivider() {
         #expect(!EntryPagePlan.hasDivider(at: 0, collapsed: false))
         #expect(EntryPagePlan.hasDivider(at: 0, collapsed: true), "a collapsed first section could never be expanded")
