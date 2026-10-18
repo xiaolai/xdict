@@ -50,7 +50,7 @@ public enum ImportRefusal: Codable, Hashable, Sendable {
         case .wire(.core(let core)):
             self = Self(core)
         case .wire(.interrupted), .wire(.invalidated), .wire(.timedOut), .wire(.undecodable), .wire(.contractMismatch),
-             .wire(.refused), .superseded, .reopenNeedsImport, .needsFiles:
+             .wire(.refused), .wire(.appleImport), .superseded, .reopenNeedsImport, .needsFiles:
             self = .serviceFailed
         }
     }

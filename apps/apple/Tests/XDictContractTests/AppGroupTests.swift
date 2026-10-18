@@ -1,13 +1,17 @@
 import Foundation
 import Testing
-import XDictBase
+import XDictContract
 
 /// **The app and its service share one app-group container** (ADR-0011 decision 4, amended 2026-10-18): its identifier
 /// is the team's prefix and the app's bundle identifier, the team read at run time from the process's own signature,
 /// never written in a tracked file.
 struct AppGroupTests {
-    @Test func theGroupIsTheTeamsPrefixAndTheAppsIdentifier() {
+    @Test func theGroupIsTheTeamsPrefixAndTheAppsIdentifier() throws {
         #expect(AppGroup.identifier(team: "ABCDE12345") == "ABCDE12345.ai.xdict.app")
+        let plist = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appending(path: "Resources/Info.plist")
+        let info = try PropertyListSerialization.propertyList(from: Data(contentsOf: plist), format: nil) as? [String: Any]
+        #expect(info?["CFBundleIdentifier"] as? String == AppGroup.app, "the group's suffix is the app's identifier")
     }
 
     /// Only what Apple issues — ten upper-case letters and digits — becomes part of an identifier.

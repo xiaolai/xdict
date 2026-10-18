@@ -60,7 +60,7 @@ public enum Limits {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle: return nil
+             .lineage, .health, .readingStyle, .converted: return nil
         }
     }
 
@@ -163,7 +163,7 @@ public enum Deadlines {
     static func warm(_ operation: ServiceOperation) -> Duration? {
         switch operation {
         // Bookkeeping: answered from memory, nothing read.
-        case .versions, .close, .cancel: .seconds(2)
+        case .versions, .close, .cancel, .cancelConversion: .seconds(2)
         // Headers and indexes, not bodies: reopening three packages took 1.6 ms (spike 1), paging 66,355 records 50 ms
         // (ADR-0007 row 23), 128 concurrent lookups and entries 3.6–7.3 ms (spike 1). Two orders of magnitude over the
         // worst, and five times the whole reader loop's warm p95 goal of 1 s (plan WI-10). The lineage calls read or
@@ -179,7 +179,7 @@ public enum Deadlines {
         // normalized once per edition, then remembered; like a resource, bounded at 15 s.
         case .readingStyle: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
-        case .importPackage, .health: nil
+        case .importPackage, .health, .convertApple: nil
         }
     }
 }

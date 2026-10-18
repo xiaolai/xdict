@@ -24,6 +24,8 @@ public enum WireError: Error, Codable, Hashable, Sendable {
     case contractMismatch(service: UInt32, client: UInt32)
     /// Refused before the core was asked, or a reply refused before anything saw it.
     case refused(Refusal)
+    /// An Apple dictionary snapshot the service would not convert (contract 6; ADR-0011 decision 11).
+    case appleImport(AppleImportRefusal)
 }
 
 /// The core's `CoreError`, one case per variant with its typed payload (ADR-0007 decision 10).
