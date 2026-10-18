@@ -29,6 +29,7 @@ import time
 
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
+import aim  # noqa: E402
 from axcheck import checks, dictionaries_table  # noqa: E402
 import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
@@ -242,10 +243,11 @@ class Session:
     def drop(self, file):
         """A file dragged in from another window (Tools/library/dragsource) onto the window in front (Settings ▸
         Dictionaries, ADR-0012)."""
-        target = [w for w in self.ax("windows")["windows"] if w["layer"] == 0]
-        if not target:
-            raise Failed("no window to drop onto")
-        x, y, w, h = target[0]["frame"]
+        # The table's own centre (aim.py), not the window's, which the strip or problem box can push off the table.
+        try:
+            tx, ty = aim.drop_target(self.ax("tree"))
+        except aim.NoTarget as missing:
+            raise Failed(f"nothing to drop onto: {missing}")
         ready = os.path.join(self.work, "drag.ready")
         source = subprocess.Popen([dragsource, file, "40", "80", ready])
         try:
@@ -256,10 +258,13 @@ class Session:
             else:
                 raise Failed("the drag source window never came up")
             cx, cy = open(ready).read().split()
-            run(pointer, "drag", cx, cy, int(x + w * 0.6), int(y + h * 0.5))
+            run(pointer, "drag", cx, cy, tx, ty)
             source.wait(timeout=10)
             if source.returncode != 0:
-                raise Failed(f"the drag ended without a drop (dragsource exited {source.returncode})")
+                there = self.ax("at", tx, ty).get("element") or {}
+                raise Failed(f"the drag ended without a drop (dragsource exited {source.returncode}); aimed at the "
+                             f"table's centre ({tx}, {ty}), where AX has {there.get('role')!r} "
+                             f"{there.get('identifier') or there.get('description') or there.get('title')!r}")
         finally:
             if source.poll() is None:
                 source.kill()

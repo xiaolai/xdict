@@ -61,6 +61,27 @@ struct DictionaryTable: NSViewRepresentable {
     let importFiles: (([URL]) -> Void)?
     let key: (KeyAction, UUID) -> Void
 
+    /// Where a drag from elsewhere should end to land on the table: its centre, in global points with the origin top
+    /// left (as `pointer` takes them), from its frame on screen (origin bottom left). The drop instrument aims here, not
+    /// at the window's centre, which the strip or the problem box can push off the table (ADR-0012 d.7).
+    nonisolated static func dropPoint(tableOnScreen frame: CGRect, mainScreenHeight: CGFloat) -> CGPoint {
+        CGPoint(x: frame.midX, y: mainScreenHeight - frame.midY)
+    }
+
+    /// The table's frame on screen (origin bottom left), when it is in a window.
+    static func screenFrame(in root: NSView) -> CGRect? {
+        guard let table = find(in: root), let window = table.window, let scroll = table.enclosingScrollView else {
+            return nil
+        }
+        return window.convertToScreen(scroll.convert(scroll.bounds, to: nil))
+    }
+
+    private static func find(in view: NSView) -> NSTableView? {
+        if let table = view as? KeyedTableView, table.accessibilityIdentifier() == "settings.dictionaries" { return table }
+        for child in view.subviews { if let found = find(in: child) { return found } }
+        return nil
+    }
+
     static let dragType = NSPasteboard.PasteboardType("ai.xdict.app.dictionary-row")
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }

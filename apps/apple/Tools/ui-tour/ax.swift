@@ -18,6 +18,7 @@
 //   ax key <combo>                      one key with modifiers (cmd, opt, shift, ctrl), US layout: letters, digits,
 //                                       = - [ ] , . / and return, tab, space, escape, arrows
 //   ax extra <pid>                    the app's menu-bar extra opened (AXExtrasMenuBar), left open
+//   ax at <pid> <x> <y>                 the element under a point (global top-left), as `tree` writes one
 //
 // The grant: started over SSH, TCC judges it as `sshd-keygen-wrapper`, which holds Accessibility on the E2E Mac. Without
 // it every command refuses (exit 3), since an unread tree reads as an empty window.
@@ -309,6 +310,15 @@ case "extra":
           let item = children(extras as! AXUIElement).first else { fail("the app shows no menu-bar extra") }
     _ = AXUIElementPerformAction(item, kAXPressAction as CFString)
     emit(["opened": frame(item) ?? []])
+case "at":
+    // What is under a point (global top-left): a refused drop names what it landed on.
+    guard arguments.count >= 5, let x = Float(arguments[3]), let y = Float(arguments[4]) else {
+        fail("usage: ax at <pid> <x> <y>", code: 2)
+    }
+    var hit: AXUIElement?
+    let result = AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), x, y, &hit)
+    guard result == .success, let hit else { emit(["at": [x, y], "element": NSNull()]) }
+    emit(["at": [x, y], "element": node(hit, depth: 59)])
 default:
     fail("unknown command \(arguments[1])", code: 2)
 }
