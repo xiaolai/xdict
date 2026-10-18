@@ -1,5 +1,4 @@
 import Foundation
-import XDictSearch
 import XDictTokens
 
 /// **The main window's measures, as Apple's Dictionary has them** (parity ledger P1, P2, P5, P9; owner's decisions of
@@ -47,32 +46,5 @@ public enum ToolbarLayout {
     /// Under the title after a search: how many headwords the list found; nothing for none, or for spelling guesses.
     public static func subtitle(found: Int?) -> LocalizedStringResource? {
         found.map { LocalizedStringResource("\($0) found") }
-    }
-}
-
-/// **The scope bar's buttons that fit** (P6, P8): every one when they all fit, else as many as fit beside the »
-/// overflow button, "All" always.
-public enum ScopeBarLayout {
-    public static let height: CGFloat = Tokens.Control.scopeBar
-    public static let buttonHeight: CGFloat = Tokens.Row.scopeButton
-    public static let leading: CGFloat = Tokens.Inset.scopeLeading
-    public static let moreWidth: CGFloat = Tokens.Control.scopeMore
-
-    /// How many of the buttons, of `widths` in order, show in `available` points.
-    public static func shown(widths: [CGFloat], available: CGFloat) -> Int {
-        let room = available - leading
-        if widths.reduce(0, +) <= room { return widths.count }
-        var used: CGFloat = 0, count = 0
-        for width in widths {
-            guard used + width <= room - moreWidth else { break }
-            used += width
-            count += 1
-        }
-        return max(min(1, widths.count), count)
-    }
-
-    /// The scopes the bar offers, in its order: All, then each enabled dictionary in the reader's order.
-    public static func scopes(_ known: [SearchSource]) -> [SearchScope] {
-        [.all] + known.filter(\.enabled).map { .one($0.id) }
     }
 }

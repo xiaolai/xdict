@@ -43,16 +43,13 @@ struct AppleImportSheet: View {
             list
             Text(AppleImportSentences.howToDownload).font(.callout).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
-            HStack {
-                Spacer()
-                Button { done() } label: { Text(importer.steps.isEmpty ? "Cancel" : "Done") }
-                    .keyboardShortcut(.cancelAction)
-                    .accessibilityIdentifier("appleImport.close")
-                Button { startImport() } label: { Text(AppleImportSentences.importButton) }
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(choice.toImport(steps: importer.steps).isEmpty)
-                    .accessibilityIdentifier("appleImport.import")
-            }
+            // R3: Cancel (Done once imports have started) left of Import, the default action.
+            SheetFooter([
+                FooterAction(.cancel, title: Text(importer.steps.isEmpty ? "Cancel" : "Done"),
+                             identifier: "appleImport.close", perform: done),
+                FooterAction(.primary, title: Text(AppleImportSentences.importButton), identifier: "appleImport.import",
+                             isDisabled: choice.toImport(steps: importer.steps).isEmpty, perform: startImport),
+            ])
         }
         .padding(Tokens.Space.l)
         .frame(width: size.width, height: size.height)
@@ -66,7 +63,7 @@ struct AppleImportSheet: View {
     @ViewBuilder private var list: some View {
         if !found {
             HStack(spacing: Tokens.Space.sm) {
-                ProgressView().controlSize(.small)
+                ProgressView().controlSize(.small)  // placement: spinner
                 Text(AppleImportSentences.finding).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -103,22 +100,30 @@ struct AppleImportRowView: View {
     let cancel: () -> Void
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.sm) {
-            Toggle(isOn: Binding(get: { row.isChosen }, set: { _ in toggle() })) {
-                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                    Text(verbatim: row.name)
-                    HStack(spacing: Tokens.Space.sm) {
-                        if !row.language.isEmpty { Text(verbatim: row.language) }
-                        Text(verbatim: AppleImportSentences.size(row.bytes))
+        // A row of the sheet's list (R2): the bundle and what became of it lead, Cancel small at the trailing edge.
+        ActionRow(.strip) {
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.sm) {
+                Toggle(isOn: Binding(get: { row.isChosen }, set: { _ in toggle() })) {
+                    VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                        Text(verbatim: row.name)
+                        HStack(spacing: Tokens.Space.sm) {
+                            if !row.language.isEmpty { Text(verbatim: row.language) }
+                            Text(verbatim: AppleImportSentences.size(row.bytes))
+                        }
+                        .font(.caption).foregroundStyle(.secondary)
+                        ProgressBarView(bar: bar)
                     }
-                    .font(.caption).foregroundStyle(.secondary)
-                    progress
                 }
+                .toggleStyle(.checkbox)
+                .disabled(!row.isChooseable)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                status
             }
-            .toggleStyle(.checkbox)
-            .disabled(!row.isChooseable)
-            Spacer()
-            status
+        } actions: {
+            if case .available = row.availability, row.canCancel {
+                Button { cancel() } label: { Text("Cancel") }
+                    .accessibilityIdentifier("appleImport.cancel.\(row.id)")
+            }
         }
         .foregroundStyle(isRefused ? .secondary : .primary)
         .accessibilityElement(children: .contain)
@@ -129,12 +134,10 @@ struct AppleImportRowView: View {
         if case .refused = row.availability { true } else { false }
     }
 
-    @ViewBuilder private var progress: some View {
-        if case .converting(let done, let total) = row.step, total > 0 {
-            ProgressView(value: Double(done), total: Double(total))
-        } else if row.step == .copying || row.step == .waiting {
-            ProgressView().progressViewStyle(.linear)
-        }
+    /// How far its import is: a count while converting, a moving bar while copying or waiting.
+    private var bar: ProgressBar {
+        if case .converting(let done, let total) = row.step { return ProgressBar.of(done: done, total: total) }
+        return row.step == .copying || row.step == .waiting ? .indeterminate : .none
     }
 
     @ViewBuilder private var status: some View {
@@ -145,15 +148,8 @@ struct AppleImportRowView: View {
             Text(AppleImportSentences.refusal(refusal)).font(.caption).foregroundStyle(.secondary)
                 .multilineTextAlignment(.trailing)
         case .available:
-            HStack(spacing: Tokens.Space.xs) {
-                if let sentence = AppleImportSentences.step(row.step) {
-                    Text(sentence).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
-                }
-                if row.canCancel {
-                    Button { cancel() } label: { Text("Cancel") }
-                        .controlSize(.small)
-                        .accessibilityIdentifier("appleImport.cancel.\(row.id)")
-                }
+            if let sentence = AppleImportSentences.step(row.step) {
+                Text(sentence).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
             }
         }
     }

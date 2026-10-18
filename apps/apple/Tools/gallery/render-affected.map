@@ -119,7 +119,6 @@ apps/apple/Sources/XDictAnywhere/PanelPlacement.swift       routes:panel
 apps/apple/Sources/XDict/LookupAnywhere.swift               routes:panel
 apps/apple/Sources/XDictUI/AllPage.swift                    routes:page
 apps/apple/Sources/XDictUI/Search*.swift                    routes:search
-apps/apple/Sources/XDictUI/ScopeBar.swift                   route:scope.*
 apps/apple/Sources/XDictUI/Toolbar*.swift                   routes:search
 apps/apple/Sources/XDictUI/MenuBarMenu.swift                route:menubar.extra
 apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes:panel route:settings.dictionaries route:settings.general

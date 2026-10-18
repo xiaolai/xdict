@@ -555,8 +555,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             let alert = NSAlert()
             alert.messageText = String(localized: EntrySentences.openRemote(host: host))
             alert.informativeText = String(localized: EntrySentences.openRemoteDetail(url: remote.absoluteString))
-            alert.addButton(withTitle: String(localized: EntrySentences.openInBrowser))
-            alert.addButton(withTitle: String(localized: EntrySentences.cancel))
+            alert.addButton(withTitle: String(localized: EntrySentences.openInBrowser))  // placement: system-alert
+            alert.addButton(withTitle: String(localized: EntrySentences.cancel))  // placement: system-alert
             presentedPrompt = alert
             alert.beginSheetModal(for: window) { [weak self] response in
                 MainActor.assumeIsolated { self?.answered(response == .alertFirstButtonReturn) }
@@ -617,8 +617,8 @@ final class EntryFindBar: NSView {
     let field = NSSearchField()
     let count = NSTextField(labelWithString: "")
     /// Previous and Next as one chevron pair, as Safari's and TextEdit's find bars draw them (UI review M-14).
-    let steps = NSSegmentedControl()
-    private let done = NSButton()
+    let steps = NSSegmentedControl()  // placement: P30
+    private let done = NSButton()  // placement: P30
     var onQuery: ((String) -> Void)?
     var onStep: ((Bool) -> Void)?
     var onDone: (() -> Void)?

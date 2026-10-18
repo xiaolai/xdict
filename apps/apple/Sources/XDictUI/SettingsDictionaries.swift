@@ -227,7 +227,9 @@ public struct SettingsDictionaries: View {
                     Add files or a folder, or drop them here.
                     """)
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
+                EmptyStateActions {
+                    Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
+                }
             }
             .padding(Tokens.Space.xxl)
         }
@@ -275,20 +277,24 @@ public struct SettingsDictionaries: View {
         if case .details(let id) = route.presentation, let entry = library.entries.first(where: { $0.id == id }) {
             let size = Self.detailsSheetSize(paneHeight: paneHeight)
             VStack(spacing: 0) {
-                LibraryDetail(library: library, entry: entry,
-                              remove: { route.dismiss(); remove(id) }, locate: { route.locate() })
+                LibraryDetail(library: library, entry: entry, locate: { route.locate() })
                     .id(entry.preferencesKey)
                 Divider()
-                HStack {
-                    Spacer()
-                    Button { route.dismiss() } label: { Text("Done") }
-                        .keyboardShortcut(.defaultAction)
-                }
-                .padding(Tokens.Space.m)
+                Self.detailsFooter(remove: { route.dismiss(); remove(id) }, close: { route.dismiss() })
+                    .padding(Tokens.Space.m)
             }
             // The form scrolls inside; the sheet never extends past the window (`detailsSheetSize`).
             .frame(width: size.width, height: size.height)
         }
+    }
+
+    /// The details sheet's footer (R3): Remove from Library apart at the leading edge, never the default; Done the
+    /// default action; Escape closes the sheet, which has nothing to cancel (what it changes applies at once).
+    static func detailsFooter(remove: @escaping () -> Void, close: @escaping () -> Void) -> SheetFooter {
+        SheetFooter([
+            FooterAction(.destructive, title: Text("Remove from Library"), perform: remove),
+            FooterAction(.primary, title: Text("Done"), perform: close),
+        ], closeOnEscape: close)
     }
 
     private func add(_ item: AddItem) {
