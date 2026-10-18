@@ -91,6 +91,12 @@ class SelectionIsTheNeedle(unittest.TestCase):
                                                         "dialect": "tripleClick"})
         self.assertEqual(said, "selected 'The abbé took off at noon. abbé\\n\\n' (tripleClick), not 'crème brûlée 煎饼'")
 
+    def test_the_refusal_names_every_way_tried(self):
+        said = selection.refused("crème", {"selected": "", "dialect": "drag",
+                                           "tried": ["markers: set 0, selected nil", "drag across {}: selected \"\""]})
+        self.assertEqual(said, "selected '' (drag), not 'crème'; tried: markers: set 0, selected nil; "
+                               "drag across {}: selected \"\"")
+
     def test_nothing_selected_is_refused(self):
         self.assertEqual(selection.refused("abbé", {"dialect": "find"}), "selected None (find), not 'abbé'")
 
