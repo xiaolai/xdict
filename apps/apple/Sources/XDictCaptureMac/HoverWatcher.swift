@@ -46,7 +46,24 @@ public final class HoverWatcher {
     private var cancelSettle: Cancel?
     private var readTask: Task<Void, Never>?
     /// What a read found, kept until the session says whether to deliver it.
-    private var found: [Int: (hit: PointerWordReader.Hit, request: CaptureRequest, key: String)] = [:]
+    private var found: [Int: Found] = [:]
+    /// A read's answer awaiting the session's word: a word to present, or a notice to tell (plan-capture WI-4).
+    private enum Found {
+        case word(PointerWordReader.Hit, request: CaptureRequest, key: String)
+        case recognised(Recognition, request: CaptureRequest, key: String, context: PendingContext?)
+        case notice(CaptureNotice, request: CaptureRequest)
+
+        var request: CaptureRequest {
+            switch self {
+            case .word(_, let request, _), .recognised(_, let request, _, _), .notice(_, let request): request
+            }
+        }
+
+        /// Nobody will show it: a pending context it carries is cancelled.
+        func discard() {
+            if case .recognised(_, _, _, let context) = self { context?.cancel() }
+        }
+    }
     /// Each request's number and when it was asked — **by origin**, so a tap served after the read it waited for keeps
     /// the number and the time of the gesture that asked.
     private var origins: [Int: (request: CaptureRequest, instant: ContinuousClock.Instant)] = [:]
@@ -62,6 +79,8 @@ public final class HoverWatcher {
     public weak var sink: (any CaptureSink)?
     /// Whether the lane is answering — forwarded from the reader for the consumer's notice.
     public var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
+    /// What the consumer should tell the reader (Screen Recording needed), for a hover that still stands. Kinds only.
+    public var onNotice: (@MainActor (CaptureNotice) -> Void)?
 
     init(
         policy: @escaping @MainActor () -> HoverPolicy, requests: CaptureRequests, restTolerance: CGFloat,
@@ -79,6 +98,8 @@ public final class HoverWatcher {
         self.reader = reader
         session = HoverSession(now: now(), restTolerance: restTolerance)
         reader.onCaptureHealth = { [weak self] health in self?.onCaptureHealth?(health) }
+        // **A read refused for the busy capture is asked again when it ends**, not when the pointer next twitches.
+        reader.onCaptureReleased = { [weak self] in self?.captureReleased() }
         // **Every ending is the consumer's word on a word delivered**: one not shown is forgotten, so resting on it asks
         // again. Told on whatever thread ended it; the watcher's state is the main actor's.
         requests.onEnd { [weak self] ack in
@@ -87,16 +108,17 @@ public final class HoverWatcher {
     }
 
     /// **The watcher the app runs**: the system's events, pointer, screens, timer and clock, and a reader over `source`
-    /// on the same policy and pause. `restTolerance` comes from the composition layer's tokens (decision 11).
+    /// on the same policy and pause, starting its pending contexts in `contexts` — the consumer's session's book, so a
+    /// presented term's handle is found there. `restTolerance` comes from the composition layer's tokens (decision 11).
     public convenience init(
         policy: @escaping @MainActor () -> HoverPolicy, pause: @escaping @MainActor () -> HoverPause,
-        requests: CaptureRequests, source: any PointerWordSource, restTolerance: CGFloat
+        requests: CaptureRequests, source: any PointerWordSource, contexts: PendingContexts, restTolerance: CGFloat
     ) {
         self.init(
             policy: policy, requests: requests, restTolerance: restTolerance,
             primaryHeight: { HoverWatcher.primaryHeight(among: NSScreen.screens.map { UpRect($0.frame) }) },
             events: SystemHoverEvents(), pointer: HoverWatcher.systemPointer, schedule: HoverWatcher.onMainQueue,
-            now: { .now }, reader: HoverReader(policy: policy, pause: pause, source: source))
+            now: { .now }, reader: HoverReader(policy: policy, pause: pause, source: source, contexts: contexts))
     }
 
     public var isWatching: Bool { watching }
@@ -173,7 +195,7 @@ public final class HoverWatcher {
         case .deliver(let intent):
             deliver(intent)
         case .drop(let intent, let why):
-            found.removeValue(forKey: intent.serial)
+            found.removeValue(forKey: intent.serial)?.discard()
             finishOrigin(intent.origin)
             log.debug("hover dropped: \(why.rawValue, privacy: .public)")
         }
@@ -215,7 +237,14 @@ public final class HoverWatcher {
         let end: HoverSession.ReadEnd
         switch outcome {
         case .word(let hit, let request, let key):
-            found[intent.serial] = (hit, request, key)
+            found[intent.serial] = .word(hit, request: request, key: key)
+            end = .word
+        case .recognised(let read, let request, let key, let context):
+            found[intent.serial] = .recognised(read, request: request, key: key, context: context)
+            end = .word
+        case .needsScreenRecording(let request):
+            // **Told only for a hover that still stands**: the session decides, as it does for a word.
+            found[intent.serial] = .notice(.screenRecordingNeeded, request: request)
             end = .word
         case .quiet(.captureInFlight):
             end = .captureBusy
@@ -233,23 +262,45 @@ public final class HoverWatcher {
         let asked = origins.removeValue(forKey: intent.origin) ?? (word.request, now())
         let pointer = primaryHeight().map { PointerSample(point: intent.point.flipped(aboutPrimaryHeight: $0), at: asked.instant) }
         let term: CapturedTerm
+        let key: String
         do {
-            term = try word.hit.capturedTerm(pointer: pointer)
+            switch word {
+            case .word(let hit, _, let read):
+                term = try hit.capturedTerm(pointer: pointer)
+                key = read
+            case .recognised(let recognition, _, let read, let context):
+                // **The rest of the sentence travels as its handle**; the session finds the reading by it.
+                term = try recognition.capturedTerm(pointer: pointer, context: context.map { .pending($0.handle) })
+                key = read
+            case .notice(let notice, let request):
+                // Nothing is presented for a notice: its request ends, and the consumer tells the reader.
+                requests.cancel(request)
+                onNotice?(notice)
+                return
+            }
         } catch {
             // A read the validating constructor refuses is not a word: its request ends, and nothing is remembered.
+            word.discard()
             requests.cancel(word.request)
             log.notice("hover: a read was refused as a captured term (\(String(describing: error), privacy: .public))")
             return
         }
         guard requests.present(term, for: word.request, to: sink) == .accepted else {
+            word.discard()
             log.debug("hover dropped: a later request has the presentation")
             return
         }
         // Remembered on delivery, so a rest on the same word does not ask again while it comes up — and **forgotten if
         // its presentation never draws**, by the consumer's acknowledgement (`ended`).
-        reader.remember(word.key)
-        delivered[word.request.number] = word.key
+        reader.remember(key)
+        delivered[word.request.number] = key
         while delivered.count > Self.rememberedDeliveries, let oldest = delivered.keys.min() { delivered[oldest] = nil }
+    }
+
+    /// The one capture ended: a hover refused for it is asked again, at the pointer as it is now.
+    private func captureReleased() {
+        let (at, held) = pointer()
+        feed(.captureReleased(at, held: held))
     }
 
     /// A request ended. A word delivered under it and not shown is forgotten.

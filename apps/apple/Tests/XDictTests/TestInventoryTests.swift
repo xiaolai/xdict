@@ -37,8 +37,10 @@ struct TestInventoryTests {
         // capture — HoverPolicyStoreTests (8) and HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name
         // from XiaolaiDict, fourteen added (the control's scripts, its default and tolerances, hover off starting nothing,
         // the derived scripts, the popover's acknowledgements, the anchor): 38 + 14 + 14 = 66. 66 → 69: a driven launch
-        // starts no hover, and which launch it is, both ways (HoverLaunchTests).
-        "XDictAnywhereTests": 69,
+        // starts no hover, and which launch it is, both ways (HoverLaunchTests). 69 → 76 (plan-capture WI-4): the Screen
+        // Recording row asks nothing before it is used, at launch either, asks once when used, shows a standing grant, its
+        // notice, the session's book shared with the reader, the recogniser's distances from the tokens.
+        "XDictAnywhereTests": 76,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         "XDictUITests": 33,
@@ -75,8 +77,15 @@ struct TestInventoryTests {
         // 156 → 205 (WI-4): the recogniser, XiaolaiDict's RecognitionScopeTests (8), ScreenTextRecogniserRunTests (8),
         // StripReadingTests (8), ScreenTextRecogniserBandTests (5) and two ScreenRecordingAccessTests moved by name;
         // twenty-three added (the acquisition limits, the term handed over, the setup row's gate, where ScreenCaptureKit
-        // is named, the recorded recognitions).
-        "XDictCaptureMacTests": 205,
+        // is named, the recorded recognitions). 205 → 226: the hover reader's pixel path, XiaolaiDict's
+        // HoverCaptureTargetTests (2), HoverCaptureReleaseTests (1), CaptureWedgeTests (1), HoverPendingContextTests (3),
+        // withoutAnElementThePixelsAreNotReadWhileSitesAreExcluded, aRefusedCaptureAsksTheReaderNotTheSystem,
+        // thecaptureGuardIsHeldUntilReleased and four watcher cases (aNoticeForAnAbandonedReadIsNotShown,
+        // aNoticeForAHoverThatNoLongerStandsIsNotShown, aBlockedReadIsAskedAgainWhenTheCaptureFinishes, aReAskKeepsItsNumber)
+        // moved by name; seven added (Accessibility first, a site refused through Accessibility, an excluded app's
+        // recognition, an overdue context, a notice told and its request ended, a recognised word presented pending, and
+        // one not presented cancelling its context).
+        "XDictCaptureMacTests": 226,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
