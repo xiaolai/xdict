@@ -34,6 +34,11 @@ func readRecords(_ url: URL, isMDD: Bool) throws -> [([UInt8], [UInt8])] {
         #expect(try FileManager.default.contentsOfDirectory(atPath: out.path).sorted() == ["T.mdd", "T.mdx"])
     }
 
+    /// Keeping Apple's pronunciation markers changes the bytes written (ADR-0013 decision 1), so it is revision 2.
+    @Test func keepingPronunciationMarkersIsRevisionTwo() {
+        #expect(AppleImport.converterRevision == 2)
+    }
+
     @Test func resourcePathsSurviveASymlinkedTempDirectory() throws {
         // /var -> /private/var made relative-path arithmetic wrong once: keys came out as "\sources\..."
         let root = try SyntheticAppleBundle.tempDir()

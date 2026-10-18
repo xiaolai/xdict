@@ -126,6 +126,37 @@ import XDictTestSupport
         #expect(stats.transformPasses == 1)
     }
 
+    // MARK: semantic markers (ADR-0013 decision 1)
+
+    /// Two variants of one pronunciation, each marked by Apple's `d:prn` (synthetic text, no dictionary's).
+    static let variants = "<span class=\"ph t_respell\" d:prn=\"a\">ruh</span><span class=\"ph t_IPA\" d:prn=\"b\">ri</span>"
+    static let keptVariants =
+        "<span class=\"ph t_respell\" data-d-prn=\"a\">ruh</span><span class=\"ph t_IPA\" data-d-prn=\"b\">ri</span>"
+
+    @Test func pronunciationMarkersAreKeptWhenTheStylesheetSelectsNoAttribute() throws {
+        #expect(try html(Self.variants, css: []).contains(Self.keptVariants))
+    }
+
+    @Test func pronunciationMarkersAreKeptOnceWhenTheStylesheetSelectsThem() throws {
+        let out = try html(Self.variants, css: ["data-d-prn"])
+        #expect(out.contains(Self.keptVariants))
+        #expect(out.components(separatedBy: "data-d-prn").count == 3, "one attribute per variant")
+    }
+
+    /// The marker is Apple's namespace, not the letter d: another prefix bound to it is the same attribute.
+    @Test func pronunciationMarkersAreKeptUnderAnotherPrefix() throws {
+        let out = try html("<span xmlns:apple=\"\(SyntheticAppleBundle.dNS)\" class=\"ph\" apple:prn=\"a\">ruh</span>", css: [])
+        #expect(out.contains("<span class=\"ph\" data-d-prn=\"a\">ruh</span>"))
+    }
+
+    /// Only Apple's `prn` is a kept marker: a `prn` in another namespace, a plain attribute spelled like the output
+    /// and another of Apple's attributes are still dropped, and an unknown namespace is still refused.
+    @Test func onlyApplesPronunciationMarkerIsKept() throws {
+        let other = "<span xmlns:h=\"\(xhtmlNS)\" h:prn=\"a\" data-d-prn=\"b\" d:pr=\"c\">ruh</span>"
+        #expect(try html(other, css: []).contains("<span>ruh</span>"))
+        #expect(throws: EntryFault.self) { try html("<span xmlns:o=\"urn:other\" o:prn=\"a\">ruh</span>", css: []) }
+    }
+
     @Test func deepNestingWithinTheLimitIsAccepted() throws {
         _ = try parse(entry(String(repeating: "<b>", count: 200) + "x" + String(repeating: "</b>", count: 200)))
     }
