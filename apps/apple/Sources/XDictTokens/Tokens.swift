@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "66bf5a4c4a8f0269a98608eb2f2ce20c9beb4e9891eff0a9ada658c3bfe5991b"
+    public static let sourceDigest = "d866a68778d047ccb2d5c52420ca1fd400ac5a6f673813a84f897f682815fa50"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -58,6 +58,12 @@ public enum Tokens {
         public static let panelBottom: CGFloat = 8
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let panelEntryFade: CGFloat = 16
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let panelRuleGap: CGFloat = 8
+        /// The lookup panel keeps clear of the screen's edges by this much when its room is measured.
+        public static let panelScreenMargin: CGFloat = 8
+        /// A Control-clicked word with no box: its point taken as the middle of a 16 pt line.
+        public static let clickedWordRise: CGFloat = 8
         /// The Details sheet's margin above and below inside the Settings window, so it never hangs past it.
         public static let settingsSheetMargin: CGFloat = 12
         /// The Settings window's margin kept above and below it on the screen (ADR-0012 d.6).
@@ -78,6 +84,10 @@ public enum Tokens {
         public static let panelFooter: CGFloat = 26
         /// Apple-measured (P14, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let startName: CGFloat = 32
+        /// The box under the Settings table keeps at least two lines' room, so it does not jump as a selection changes (ADR-0012 d.6).
+        public static let optionsBoxMin: CGFloat = 60
+        /// The line a Control-clicked word with no box is taken to stand on.
+        public static let clickedWord: CGFloat = 16
     }
 
     /// The sizes of controls and bars.
@@ -88,6 +98,8 @@ public enum Tokens {
         public static let scopeMore: CGFloat = 36
         /// The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window.
         public static let toolbar: CGFloat = 52
+        /// The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06).
+        public static let shortcutFieldMin: CGFloat = 140
         /// What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt.
         public static let popoverChrome: CGFloat = 26
     }
@@ -122,12 +134,42 @@ public enum Tokens {
         public static let detailsSheetMax: CGFloat = 640
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let popoverBody: CGFloat = 390
+        /// The lookup panel's narrowest, bounding the popover's 390 pt body (P41) from below.
+        public static let panelMinWidth: CGFloat = 360
+        /// The lookup panel's widest, bounding the popover's body from above.
+        public static let panelMaxWidth: CGFloat = 640
+        /// The lookup panel's lowest: header and a line of entry (Codex UX decision 3, 2026-10-17).
+        public static let panelMinHeight: CGFloat = 140
+        /// The lookup panel's tallest; a longer entry scrolls (Codex UX decision 3, 2026-10-17).
+        public static let panelMaxHeight: CGFloat = 560
+        /// The lookup panel's height while its entry loads (Codex UX decision 3, 2026-10-17).
+        public static let panelInitialHeight: CGFloat = 180
+        /// The Acknowledgments window's narrowest: a licence's line reads whole.
+        public static let acknowledgmentsMinWidth: CGFloat = 560
+        /// The Acknowledgments window's opening width.
+        public static let acknowledgmentsIdealWidth: CGFloat = 640
+        /// The Acknowledgments window's lowest.
+        public static let acknowledgmentsMinHeight: CGFloat = 400
+        /// The Acknowledgments window's opening height.
+        public static let acknowledgmentsIdealHeight: CGFloat = 560
+        /// The pronunciation banner's widest: as wide as its words, never the window's (UI review M-15).
+        public static let bannerMax: CGFloat = 520
+        /// The library notices' popover: a sentence a line.
+        public static let noticesPopoverWidth: CGFloat = 360
+        /// The library notices' popover's tallest; more scrolls.
+        public static let noticesPopoverMaxHeight: CGFloat = 320
+        /// The visible screen height assumed when AppKit names no main screen (none attached yet), so Settings still bounds its height.
+        public static let fallbackScreenHeight: CGFloat = 800
+        /// The content column's width before the first layout measures it: wide, so the title shows until then (P8).
+        public static let initialColumn: CGFloat = 1000
     }
 
     /// Corner radii.
     public enum Radius {
         /// Apple-measured (P43, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let sidebarSelection: CGFloat = 8
+        /// The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's.
+        public static let banner: CGFloat = 16
     }
 
     /// Rule and outline widths.
@@ -138,6 +180,10 @@ public enum Tokens {
 
     /// Fixed two-dimensional sizes.
     public enum Size {
+        /// A rect of no extent at a point: AppKit refuses an empty one as an anchor or a content rect.
+        public static let pointAnchor = CGSize(width: 1, height: 1)
+        /// The menu bar extra's image: the menu bar's thickness on macOS 27.
+        public static let menuBarIcon = CGSize(width: 22, height: 22)
         /// The +/- buttons under the Settings table: the 20 pt row's height (P39), a little wider than tall.
         public static let tableButton = CGSize(width: 24, height: 20)
     }
@@ -169,7 +215,9 @@ public enum Tokens {
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let panelTitle = TokenFont(size: 20, weight: .regular, design: .default, italic: false)
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let panelFooter = TokenFont(size: 13, weight: .regular, design: .default, italic: false)
+        public static let panelFooter = TokenFont(size: 13, weight: .semibold, design: .default, italic: false)
+        /// Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12).
+        public static let tableCell = TokenFont(size: 12, weight: .regular, design: .default, italic: false)
     }
 
     /// Colours: the system's semantic colours first; a literal only where Apple's page was measured.
@@ -272,6 +320,60 @@ public enum Tokens {
         public static let fontSize: CGFloat = 12
         /// Half a pixel: a one-pixel stroke drawn on the pixel grid.
         public static let edge: CGFloat = 0.5
+    }
+
+    /// Window frames of development instruments (the lab, the E2E instruments): never in front of a reader.
+    public enum InstrumentFrame {
+        /// The lab's entry window: a main window's size, clear of the menu bar.
+        public static let labWindow = CGRect(x: 100, y: 120, width: 900, height: 700)
+        /// The lab's window for a dictionary checked at a smaller size.
+        public static let labSmallWindow = CGRect(x: 100, y: 120, width: 600, height: 500)
+        /// The reader stage's window, which real pointer events drive.
+        public static let reader = CGRect(x: 160, y: 160, width: 720, height: 640)
+        /// The reader stage's drop window, beside the reader window, not over it.
+        public static let dropTarget = CGRect(x: 920, y: 360, width: 300, height: 300)
+        /// The fault and binding probes' window.
+        public static let probe = CGRect(x: 80, y: 200, width: 480, height: 320)
+        /// Where the hostile stage shows a page's refused popup, to see it stay empty.
+        public static let popup = CGRect(x: 60, y: 460, width: 300, height: 200)
+        /// The refused popup's web view, filling its window.
+        public static let popupView = CGRect(x: 0, y: 0, width: 300, height: 200)
+        /// The first of the hostile stage's tiled windows, four a row.
+        public static let hostileTile = CGRect(x: 40, y: 140, width: 320, height: 260)
+        /// The first of the app's hostile windows, two a row.
+        public static let appHostileTile = CGRect(x: 40, y: 80, width: 480, height: 300)
+        /// The drop instrument's window.
+        public static let libraryDrop = CGRect(x: 80, y: 80, width: 720, height: 480)
+        /// The sound stage's window.
+        public static let soundReport = CGRect(x: 120, y: 90, width: 900, height: 650)
+        /// Where the corpus instrument's window opens; its size is the stage's.
+        public static let corpusOrigin = CGRect(x: 100, y: 80, width: 0, height: 0)
+        /// Where the gallery's windows open; their size is the gallery's pane.
+        public static let galleryOrigin = CGRect(x: 80, y: 60, width: 0, height: 0)
+    }
+
+    /// Pane sizes the instruments picture an entry at.
+    public enum InstrumentSize {
+        /// The narrow pane the lab and the corpus stage picture an entry in: the lookup panel's width.
+        public static let narrowPane = CGSize(width: 360, height: 700)
+        /// The gallery's pane, about the main window's entry column.
+        public static let galleryPane = CGSize(width: 820, height: 900)
+    }
+
+    /// Strides, bounds and margins of the instruments' windows and captures.
+    public enum InstrumentLength {
+        /// The narrowest pane XDICT_LAB_WIDTH may ask the gallery for.
+        public static let galleryMinWidth: CGFloat = 320
+        /// The widest pane XDICT_LAB_WIDTH may ask the gallery for.
+        public static let galleryMaxWidth: CGFloat = 1600
+        /// The hostile stage's tile and its gap, across.
+        public static let hostileStride: CGFloat = 330
+        /// The app's hostile windows' tile and gap, across.
+        public static let appHostileStrideX: CGFloat = 500
+        /// The app's hostile windows' tile and gap, down.
+        public static let appHostileStrideY: CGFloat = 340
+        /// Around a transcription the gallery captures, so its edge glyphs are whole.
+        public static let captureMargin: CGFloat = 6
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).

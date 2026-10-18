@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictSearch
+import XDictTokens
 
 /// **The scope bar** (Apple parity P6, P8, P42): under the toolbar, 36 pt high across the pane, "All" then each enabled
 /// dictionary by name as AppKit's accessory-bar toggles — text only, the chosen one on a grey capsule — read by
@@ -83,7 +84,7 @@ final class ScopeBarView: NSView {
 
     override func layout() {
         super.layout()
-        rule.frame = NSRect(x: 0, y: 0, width: bounds.width, height: 1)
+        rule.frame = NSRect(x: 0, y: 0, width: bounds.width, height: Tokens.Line.hairline)
         let widths = buttons.map { ceil($0.fittingSize.width) }
         let shown = ScopeBarLayout.shown(widths: widths, available: bounds.width)
         var x: CGFloat = 0

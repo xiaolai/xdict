@@ -7,6 +7,7 @@ import XDictEntryView
 import XDictLibrary
 import XDictSearch
 import XDictUI
+import XDictTokens
 
 /// `XDict --entry-corpus <corpus> --library-dir <dir> --sample <sample.json> --out <file>`, then `--persistence set` and
 /// `--persistence check` (each a launch of its own): a development instrument for the E2E `entries` stage (run on the E2E
@@ -125,7 +126,7 @@ final class AppCorpusRun {
 
     func window(_ title: String, width: Double = 900, height: Double = 700, suite: String = "ai.xdict.app.e2e.entries")
         -> InstrumentWindow {
-        InstrumentWindow(title, frame: NSRect(x: 100, y: 80, width: width, height: height), library: library,
+        InstrumentWindow(title, frame: NSRect(origin: Tokens.InstrumentFrame.corpusOrigin.origin, size: CGSize(width: width, height: height)), library: library,
                          backend: client, suite: suite, opener: RecordingOpener())
     }
 
@@ -278,7 +279,8 @@ final class AppCorpusRun {
         // The window narrowed until the entry itself is 360 points wide, its sidebar as the reader left it.
         let entryWidth = entry.view.frame.width
         let size = window.window.contentLayoutRect.size
-        window.window.setContentSize(NSSize(width: max(size.width - (entryWidth - 360), 360), height: size.height))
+        window.window.setContentSize(NSSize(width: max(size.width - (entryWidth - Tokens.InstrumentSize.narrowPane.width), Tokens.InstrumentSize.narrowPane.width),
+                                                height: size.height))
         try? await Task.sleep(for: .milliseconds(800))
         var narrow = await InstrumentPage.evaluate(entry.webView, """
             return { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth,

@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// **The gallery's check of the phonetic face** (owner, 2026-10-16; made from the IPA study's used-font check,
 /// `dev-docs/artifacts/reading-frame/ipa-font/`): on a framed page, every shown transcription's text (up to twelve,
@@ -18,8 +19,9 @@ enum GalleryPhon {
         if let box = result["box"] as? [String: Double], let x = box["x"], let y = box["y"], let w = box["w"],
            let h = box["h"], w > 0, h > 0 {
             let configuration = WKSnapshotConfiguration()
-            configuration.rect = CGRect(x: x - 6, y: y - 6, width: w + 12, height: h + 12)
-            configuration.snapshotWidth = NSNumber(value: (w + 12) * 2)
+            configuration.rect = CGRect(x: x, y: y, width: w, height: h)
+                .insetBy(dx: -Tokens.InstrumentLength.captureMargin, dy: -Tokens.InstrumentLength.captureMargin)
+            configuration.snapshotWidth = NSNumber(value: configuration.rect.width * 2)
             if let image = try? await webView.takeSnapshot(configuration: configuration),
                let tiff = image.tiffRepresentation, let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]),
                (try? png.write(to: crop)) != nil {

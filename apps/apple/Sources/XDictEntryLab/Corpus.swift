@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// One sampled entry, as `entries_corpus` chose it (`XDICT_ENTRIES_SAMPLE_OUT`): the dictionary's folder, the key, which
 /// record under it.
@@ -51,7 +52,7 @@ enum CorpusRun {
             let content = try core.open(root.appending(path: name))
             let log = EventLog()
             let controller = EntryViewController(environment: environment("corpus", log: log))
-            let window = labWindow(name, frame: NSRect(x: 100, y: 120, width: 900, height: 700), view: controller.view)
+            let window = labWindow(name, frame: Tokens.InstrumentFrame.labWindow, view: controller.view)
             var tally: [String: Int] = ["entries": 0, "images": 0, "sheets": 0, "notLoaded": 0, "outside": 0]
             for entry in byDict[name] ?? [] {
                 let before = log.finishedCount
@@ -120,7 +121,7 @@ enum CorpusRun {
             let content = try core.open(folder)
             let log = EventLog()
             let controller = EntryViewController(environment: environment("fold", log: log))
-            let window = labWindow("fold \(name)", frame: NSRect(x: 100, y: 120, width: 900, height: 700), view: controller.view)
+            let window = labWindow("fold \(name)", frame: Tokens.InstrumentFrame.labWindow, view: controller.view)
             defer { controller.closeEntry(); window.close() }
             guard await controller.show(EntryReference(key: key), from: content), await log.waitForFinished(1, seconds: 20) else {
                 out[name] = ["worked": false, "why": "the entry did not load"]
@@ -166,7 +167,7 @@ enum CorpusRun {
         let content = try core.open(folder)
         let log = EventLog()
         let controller = EntryViewController(environment: environment("long", log: log))
-        let window = labWindow("hold", frame: NSRect(x: 100, y: 120, width: 900, height: 700), view: controller.view)
+        let window = labWindow("hold", frame: Tokens.InstrumentFrame.labWindow, view: controller.view)
         defer { controller.closeEntry(); window.close() }
         let started = Date()
         guard await controller.show(EntryReference(key: "hold"), from: content), await log.waitForFinished(1, seconds: 30) else {
@@ -185,7 +186,7 @@ enum CorpusRun {
             report["find \(query)"] = ["visible": found?.visible ?? -1, "hidden": found?.hidden ?? -1,
                                        "innerText": expected, "seconds": Date().timeIntervalSince(findStarted)]
         }
-        window.setContentSize(NSSize(width: 360, height: 700))
+        window.setContentSize(Tokens.InstrumentSize.narrowPane)
         try await Task.sleep(for: .milliseconds(800))
         var narrow = await labEvaluate(controller.webView, """
             return { scrollWidth: document.documentElement.scrollWidth, clientWidth: document.documentElement.clientWidth,
@@ -205,7 +206,7 @@ enum CorpusRun {
             let content = try core.open(root.appending(path: name))
             let log = EventLog()
             let controller = EntryViewController(environment: environment("persistence", log: log))
-            let window = labWindow(name, frame: NSRect(x: 100, y: 120, width: 600, height: 500), view: controller.view)
+            let window = labWindow(name, frame: Tokens.InstrumentFrame.labSmallWindow, view: controller.view)
             defer { controller.closeEntry(); window.close() }
             guard await controller.show(EntryReference(key: "run"), from: content), await log.waitForFinished(1, seconds: 20) else {
                 out[name] = "did not load"

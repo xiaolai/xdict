@@ -3,6 +3,7 @@ import SwiftUI
 import XDictEntryView
 import XDictLibrary
 import XDictSearch
+import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
 /// toolbar holds Back/Forward, the title "Dictionary" with "N found" under it, the Smaller/Bigger Text pair and the
@@ -13,7 +14,7 @@ public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
     /// The content column's width: the title over it yields when it is narrow (P8).
-    @State private var column: CGFloat = 1_000
+    @State private var column: CGFloat = Tokens.Window.initialColumn
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -153,14 +154,14 @@ struct PageNotices: View {
 
     private func notices(_ troubled: [ResultSection]) -> some View {
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 ForEach(troubled) { section in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
                         Text(verbatim: section.name).fontWeight(.medium).lineLimit(1)
                         if let sentence = SearchSentences.status(section.status) {
                             ProblemStatus(sentence: sentence, compact: true)
                         }
-                        Spacer(minLength: 4)
+                        Spacer(minLength: Tokens.Space.xs)
                         if let next = section.next, SearchSentences.isButton(next) {
                             Button(SearchSentences.action(next)) { state.perform(next) }
                                 .controlSize(.small)
@@ -171,8 +172,8 @@ struct PageNotices: View {
                 }
             }
             .font(.callout)
-            .padding(.horizontal, 19)
-            .padding(.vertical, 6)
+            .padding(.horizontal, Tokens.Inset.entryLeading)
+            .padding(.vertical, Tokens.Space.s)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(.background)
             Divider()

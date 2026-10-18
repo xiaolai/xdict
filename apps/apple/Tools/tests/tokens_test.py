@@ -133,7 +133,39 @@ class Generation(unittest.TestCase):
         self.assertIn("TokenColour(light: 0x929292, dark: 0x5c5c5c)", swift)
         css = (root.path / tokens.CSS_OUT).read_text()
         self.assertIn(":root{\n--xdict-space-1:0.25rem;\n}", css)
-        self.assertIn(":root[data-xdict-theme=dark][data-xdict-hue=teal]{\n--xdict-accent:#81ecec;\n}", css)
+        palette = (root.path / tokens.PALETTE_OUT).read_text()
+        self.assertIn(":root[data-xdict-theme=light]{\n--xdict-bg:#ffffff;\n}", palette)
+        self.assertIn(":root[data-xdict-theme=dark][data-xdict-hue=teal]{\n--xdict-accent:#81ecec\n}", palette)
+        self.assertIn('public static let accentTeal = (light: "#055959", dark: "#81ecec")', swift)
+
+    def test_the_new_kinds_generate(self):
+        source = SOURCE.replace(
+            'accent = { kind = "css-accent", doc = "Accents." }\n',
+            'accent = { kind = "css-accent", doc = "Accents." }\n'
+            'density = { kind = "css-density", doc = "Density." }\n'
+            'fill = { kind = "css-fill", doc = "Fills." }\n'
+            'frames = { kind = "rect", swift = "Frames", doc = "Frames." }\n'
+            'words = { kind = "string", swift = "Words", doc = "Words." }\n') + (
+            '\n[density]\nspace-sense = { main = "0.75em", panel = "0.5em", why = "Between senses in each density." }\n'
+            'space-image = { main = "0.75em", why = "Around a picture, the same in both." }\n'
+            '\n[fill]\nbp-narrow = { value = "480px", why = "A media query cannot read var()." }\n'
+            '\n[frames]\nlab = { x = 100, y = 120, width = 900, height = 700, why = "The lab window, clear of the menu bar." }\n'
+            '\n[words]\ninset = { value = "8px 14px", why = "Every entry\'s reading inset." }\n')
+        root = Root(self, source)
+        self.assertEqual(root.run("gen").returncode, 0)
+        density = (root.path / tokens.DENSITY_OUT).read_text()
+        self.assertIn(":root{\n--xdict-space-sense:0.75em;\n--xdict-space-image:0.75em;\n}", density)
+        self.assertIn(":root[data-xdict-density=panel]{\n--xdict-space-sense:0.5em;\n}", density)
+        swift = (root.path / tokens.SWIFT_OUT).read_text()
+        self.assertIn('"fill-bp-narrow": "480px",', swift)
+        self.assertIn("public static let lab = CGRect(x: 100, y: 120, width: 900, height: 700)", swift)
+        self.assertIn('public static let inset = "8px 14px"', swift)
+        data, toks, _ = tokens.load(str(root.path))
+        self.assertTrue(tokens.find(data, toks, "480px")[0].startswith("{{fill-bp-narrow}} = 480px"))
+
+    def test_a_css_literal_is_found_as_written(self):
+        data, toks, _ = tokens.load(str(Root(self).path))
+        self.assertEqual(tokens.find(data, toks, "0.25em")[0][:6], "[space")  # no 0.25em token: neighbours only
 
     def test_a_stale_or_edited_output_fails_check(self):
         root = Root(self)
@@ -165,8 +197,9 @@ class Find(unittest.TestCase):
         self.assertIn("[space] no 14; nearest: Tokens.Space.m = 12, Tokens.Space.l = 16", lines)
         self.assertIn("[inset] no 14; nearest: Tokens.Inset.entryLeading = 19", lines)
 
-    def test_a_css_length_is_compared_in_px(self):
-        self.assertTrue(tokens.find(self.data, self.toks, "4px")[1].startswith("var(--xdict-space-1) = 0.25rem"))
+    def test_a_css_length_is_found_as_written(self):
+        self.assertEqual(tokens.find(self.data, self.toks, "0.25rem"),
+                         ["var(--xdict-space-1) = 0.25rem    [why: The reading style's first step.]"])
 
     def test_a_name_finds_by_part(self):
         self.assertEqual(len(tokens.find(self.data, self.toks, "leading")), 1)

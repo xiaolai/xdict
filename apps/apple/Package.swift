@@ -28,7 +28,7 @@ let package = Package(
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
         .target(name: "XDictUI", dependencies: ["XDictAnywhere", "XDictBase", "XDictContract", "XDictEntryView",
-                                                "XDictLibrary", "XDictSearch", "XDictSpeech"]),
+                                                "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTokens"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
         // dictionary looked up on its own and its results painted as they arrive (Q12), paged to every record (Q10);
@@ -59,7 +59,7 @@ let package = Package(
         // behind a seam, the one Escape claim, and what registering it answered — the selection read through the
         // Accessibility API (both dialects, the term less its punctuation, and where it is on screen), the text the
         // Service is handed, and where the panel goes beside the word. Kinds, never sentences: the view layer words them.
-        .target(name: "XDictAnywhere", dependencies: ["XDictBase"]),
+        .target(name: "XDictAnywhere", dependencies: ["XDictBase", "XDictTokens"]),
 
         // **The app's side of the contract** (plan-macos-v1 WI-3): `ServiceClient` — request ids, deadlines, credits,
         // generations per caller, reconnection, handles reopened after a restart, payload ceilings — over a transport
@@ -82,13 +82,13 @@ let package = Package(
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
         .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
-                                                        "XDictUI"]),
+                                                        "XDictTokens", "XDictUI"]),
 
         // **A development instrument, never in XDict.app** (`Tools/build-lab.sh`, `Tools/build-bundle.sh` holds the app
         // to its two executables): the production entry view, fed by the core linked in directly, so the E2E stages can
         // render the hostile battery and real dictionaries before the service answers entries (WI-3). It is the only
         // place a confinement layer can be switched off (`--disable-layer`), for the isolated per-layer controls.
-        .executableTarget(name: "XDictEntryLab", dependencies: ["XDictCore", "XDictEntryView"]),
+        .executableTarget(name: "XDictEntryLab", dependencies: ["XDictCore", "XDictEntryView", "XDictTokens"]),
 
         // **The core, and who may reach it.** `xdictFFI` is libxdict_ffi.a and its C header as an XCFramework, and
         // `XDictCore` the UniFFI binding generated from that archive; both are written by `Tools/build-core.sh` into

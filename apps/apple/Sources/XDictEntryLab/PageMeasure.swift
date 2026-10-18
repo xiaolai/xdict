@@ -3,6 +3,7 @@ import Foundation
 import WebKit
 import XDictCore
 import XDictEntryView
+import XDictTokens
 
 /// **The All page's first paint** (Apple parity P15; ADR-0010 amendment of 2026-10-18): every dictionary folder under
 /// `--page <dir>` opened, each word looked up in all of them, and the production entry view's page shown in a 900 × 700
@@ -58,7 +59,7 @@ enum PageMeasure {
         var environment = environment()
         environment.events = { log.note($0) }
         let controller = EntryViewController(environment: environment)
-        let window = labWindow("single", frame: NSRect(x: 100, y: 120, width: 900, height: 700), view: controller.view)
+        let window = labWindow("single", frame: Tokens.InstrumentFrame.labWindow, view: controller.view)
         defer {
             controller.closeEntry()
             window.close()
@@ -73,7 +74,7 @@ enum PageMeasure {
     /// The page, lazily (the screen and one beyond) or with every frame made at once.
     private static func page(_ items: [EntryPageItem], all: Bool) async -> [String: Any] {
         let controller = EntryViewController(environment: environment())
-        let window = labWindow("page", frame: NSRect(x: 100, y: 120, width: 900, height: 700), view: controller.view)
+        let window = labWindow("page", frame: Tokens.InstrumentFrame.labWindow, view: controller.view)
         defer {
             controller.closeEntry()
             window.close()

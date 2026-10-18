@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictAnywhere
+import XDictTokens
 
 /// **Lookup from anywhere, in Settings** (plan-macos-v1 WI-8): the lookup shortcut — shown, rebindable by a recorder,
 /// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). Rows, not a
@@ -53,7 +54,7 @@ struct ShortcutRecorder: View {
             }
         }
         // One width either way, and a name VoiceOver can say (UI review S-06).
-        .frame(minWidth: 140)
+        .frame(minWidth: Tokens.Control.shortcutFieldMin)
         .accessibilityLabel(recording ? Text("Type Shortcut")
                             : Text("Lookup shortcut, \(ShortcutDisplay.spoken(registrar.current))"))
         .accessibilityIdentifier("shortcut.recorder")

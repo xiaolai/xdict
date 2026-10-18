@@ -9,6 +9,7 @@ import XDictSearch
 import XDictSpeech
 import XDictUI
 import os
+import XDictTokens
 
 /// The app: the main window (plan-macos-v1 WI-6) — search, results and the entry — opened at launch with its search
 /// field holding the keyboard, more with ⌘N; Settings (⌘,), whose Dictionaries pane is the only dictionary list
@@ -246,7 +247,7 @@ struct MenuBarLabel: View {
             return Image(systemName: "character.book.closed")
         }
         image.isTemplate = true
-        image.size = NSSize(width: 22, height: 22)
+        image.size = Tokens.Size.menuBarIcon
         return Image(nsImage: image)
     }()
 }

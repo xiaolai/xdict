@@ -15,8 +15,12 @@
 
 **What is generated**, byte for byte from the source and its SHA-256:
   Sources/XDictTokens/Tokens.swift            `public enum Tokens { enum Space { static let m: CGFloat = 12 } ... }`
-  Sources/XDictEntryView/Style/tokens.css     the reading style's `--xdict-*` custom properties
-`gen --check` (in `make test-tools`) fails a stale or hand-edited one; `TokensFreshnessTests` holds the digest too.
+  Sources/XDictEntryView/Style/tokens.css     the reading style's `--xdict-*` on :root (injected by EntryReadingFrame)
+  Sources/XDictEntryView/Style/palette.css    the palette per theme and the accent per hue
+  Sources/XDictEntryView/Style/density.css    R7a's space by role, main window and lookup panel
+A `css-fill` token is written into a stylesheet's `{{fill-<name>}}` when the sheet is installed (`EntryStyle.css`), for
+the places `var()` cannot reach: a media query. `gen --check` and `check` both run in `make test-tools`: a stale or
+hand-edited output, or a literal anywhere `check` looks, fails it. `TokensFreshnessTests` holds the digest too.
 
 **What `check` looks for** (Swift under Sources/, CSS under Style/), and what it allows:
   Swift: numeric literals in `.padding(`, `spacing:`, `Spacer(minLength:`, `.frame(`, `.offset(`, `cornerRadius`,
