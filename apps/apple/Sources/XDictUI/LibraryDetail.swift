@@ -7,21 +7,19 @@ import XDictTokens
 
 /// **One dictionary's details**: the question a changed file asks (and the undo of its answer), the reader's name for
 /// it, its languages (asked when the file name did not state them, L3), its About from the header (R11: title,
-/// description, format, entries, edition), what the reader should know about its files, the files themselves, and
-/// Remove.
+/// description, format, entries, edition), what the reader should know about its files, and the files themselves.
+/// Remove from Library is the sheet's, apart at its footer's leading edge (R3, `SheetFooter`).
 struct LibraryDetail: View {
     let library: Library
     let entry: LibraryEntry
-    /// Remove, undoable, and Locate… (the open panel), as the Library list does them.
-    let remove: () -> Void
+    /// Locate… (the open panel), as the Library list does it.
     let locate: () -> Void
     /// ADR-0010 Q3: this dictionary in its own style, kept under its lineage (never its path), off by default.
     @AppStorage private var originalStyle: Bool
 
-    init(library: Library, entry: LibraryEntry, remove: @escaping () -> Void = {}, locate: @escaping () -> Void = {}) {
+    init(library: Library, entry: LibraryEntry, locate: @escaping () -> Void = {}) {
         self.library = library
         self.entry = entry
-        self.remove = remove
         self.locate = locate
         _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
     }
@@ -63,9 +61,6 @@ struct LibraryDetail: View {
                 ForEach(entry.files, id: \.id) { file in
                     Text(verbatim: file.fileName).textSelection(.enabled)
                 }
-            }
-            Section {
-                Button("Remove from Library", role: .destructive) { remove() }
             }
         }
         .formStyle(.grouped)
@@ -134,12 +129,15 @@ struct LibraryDetail: View {
                         Text(verbatim: file).font(.subheadline).foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
-                ProblemStatus(sentence: sentence)
-                switch LibraryRowAction.for(phase) {
-                case .locate: Button("Locate…") { locate() }
-                case .showInFinder: Button("Show in Finder") { LibraryRowAction.showInFinder(entry) }
-                case .tryAgain: Button("Try Again") { library.retry(entry.id) }
-                case .cancel, .none: EmptyView()
+                ActionRow {
+                    ProblemStatus(sentence: sentence)
+                } actions: {
+                    switch LibraryRowAction.for(phase) {
+                    case .locate: Button("Locate…") { locate() }
+                    case .showInFinder: Button("Show in Finder") { LibraryRowAction.showInFinder(entry) }
+                    case .tryAgain: Button("Try Again") { library.retry(entry.id) }
+                    case .cancel, .none: EmptyView()
+                    }
                 }
             }
         }
@@ -179,25 +177,30 @@ struct LibraryDetail: View {
 
     private func joinQuestion(_ offer: JoinOffer) -> some View {
         Section {
-            Text("The file of this dictionary changed. Is it still the same dictionary?")
-            Text("""
-                If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You can \
-                change your mind afterwards.
-                """)
-                .font(.callout).foregroundStyle(.secondary)
-            HStack {
-                Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
-                    .keyboardShortcut(.defaultAction)
+            // The question leads, its two answers trailing, the primary one rightmost (R1); Return stays the sheet's
+            // Done (R3).
+            ActionRow {
+                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                    Text("The file of this dictionary changed. Is it still the same dictionary?")
+                    Text("""
+                        If it is, what you keep about it carries over. If not, it becomes a dictionary of its own. You \
+                        can change your mind afterwards.
+                        """)
+                        .font(.callout).foregroundStyle(.secondary)
+                }
+            } secondary: {
                 Button("A Different Dictionary") { library.declineJoin(entry.id) }
+            } primary: {
+                Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
             }
         }
     }
 
     private var joined: some View {
         Section {
-            HStack {
+            ActionRow {
                 Text("Kept as the same dictionary as the file it replaced.")
-                Spacer()
+            } actions: {
                 Button("Undo") { Task { _ = await library.undoJoin(entry.id) } }
             }
         }
@@ -206,10 +209,11 @@ struct LibraryDetail: View {
     private var languages: some View {
         Section("Languages") {
             if entry.languages.needsAsking {
-                VStack(alignment: .leading, spacing: Tokens.Space.s) {
+                ActionRow {
                     Text(entry.languages.basis == .unknown
                          ? LocalizedStringResource("XDict could not tell this dictionary's languages from its file name. Which are they?")
                          : LocalizedStringResource("XDict guessed these languages from the file name. Are they right?"))
+                } actions: {
                     Button("Confirm") { library.confirmLanguages(entry.id) }
                         .disabled(entry.languages.pair.search == nil || entry.languages.pair.explanation == nil)
                 }

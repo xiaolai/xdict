@@ -28,14 +28,18 @@ struct PronunciationBanner: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     // Once only (the pronunciation decides): a better voice than the compact one that spoke.
+                    // The tip and its way on as Settings ▸ Reading & Speech shows them (R1, R4): the sentence leads, the
+                    // button trails at regular size.
                     if let tip = shown.tip {
-                        Text(SpeechSentences.caveat(tip))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("voice-tip")
-                        Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }
-                            .controlSize(.small)
+                        ActionRow {
+                            Text(SpeechSentences.caveat(tip))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("voice-tip")
+                        } actions: {
+                            Button("Open Read & Speak Settings") { NSWorkspace.shared.open(Voices.voiceSettingsURL) }
+                        }
                     }
                 }
                 Button {
