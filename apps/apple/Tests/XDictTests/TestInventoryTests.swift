@@ -37,7 +37,7 @@ struct TestInventoryTests {
         "XDictTests": 37,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18).
-        "XDictAppleImportTests": 64,
+        "XDictAppleImportTests": 67,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

@@ -89,6 +89,43 @@ import XDictTestSupport
         #expect(throws: EntryFault.self) { try parse(xml) }
     }
 
+    /// **One pass over an entry, whatever placeholder look-alikes it holds** (security review, 2026-10-18): an entry
+    /// spelling the first K placeholder prefixes once cost K + 1 passes, O(n²) in a crafted entry. The prefix is now
+    /// chosen by one scan, deterministically (the smallest absent, ADR-0011 decision 6), and the output is unchanged.
+    @Test func placeholderLookalikesCostOnePass() throws {
+        let k = 2_000
+        let lookalikes = (["apple2mdx-link:"] + (1..<k).map { "apple2mdx-link\($0):" }).joined(separator: " ")
+        let body = { (text: String) in "<p>\(text) <a href=\"x-dictionary:r:e2\">beta</a></p>" }
+        let stats = Stats()
+        let crafted = try parse(entry(body(lookalikes)), stats: stats)
+        #expect(stats.transformPasses == 1, "\(stats.transformPasses) passes over one entry")
+        #expect(crafted.placeholder == "apple2mdx-link\(k):")
+        let ordinary = try parse(entry(body("X")))
+        let keyByID = [Array("e2".utf8): "beta"]
+        let got = String(decoding: try patchLinks(crafted, keyByID: keyByID, keys: [], stats: Stats()), as: UTF8.self)
+        let plain = String(decoding: try patchLinks(ordinary, keyByID: keyByID, keys: [], stats: Stats()), as: UTF8.self)
+        #expect(got == plain.replacingOccurrences(of: "<p>X ", with: "<p>\(lookalikes) "))
+        #expect(plain.contains("href=\"entry://beta\""))
+    }
+
+    /// The control: the counter counts, one per entry transformed, so a loop of passes would show.
+    @Test func thePassCounterCounts() throws {
+        let stats = Stats()
+        _ = try parse(entry("<p>a</p>"), stats: stats)
+        _ = try parse(entry("<p>apple2mdx-link: b</p>"), stats: stats)
+        #expect(stats.transformPasses == 2)
+    }
+
+    /// A placeholder look-alike the entry spells only after decoding (a character reference) cannot be ruled out by the
+    /// scan of its bytes; it is refused, by one pass, never looped over.
+    @Test func aLookalikeHiddenBehindAReferenceIsRefusedInOnePass() throws {
+        let stats = Stats()
+        #expect(throws: EntryFault.self) {
+            try parse(entry("<p>apple2mdx&#45;link: <a href=\"x-dictionary:r:e2\">b</a></p>"), stats: stats)
+        }
+        #expect(stats.transformPasses == 1)
+    }
+
     @Test func deepNestingWithinTheLimitIsAccepted() throws {
         _ = try parse(entry(String(repeating: "<b>", count: 200) + "x" + String(repeating: "</b>", count: 200)))
     }
