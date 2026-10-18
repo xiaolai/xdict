@@ -32,6 +32,7 @@ extension ConformanceScenario {
             return c.fail("tiny did not import and open, so nothing else was asked")
         }
         await questions(x, dict: dict, edition: i.edition, render: render, &c)
+        await displayOptions(x, dir: dir, tiny: dict, &c)
         let second = await byteSource(x, dir: dir, first: dict, render: render, &c)
         await errors(x, dir: dir, second: second, render: render, &c)
         await lifecycle(x, dict: dict, second: second, &c)

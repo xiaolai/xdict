@@ -9,6 +9,7 @@ mod entities;
 mod facts;
 mod images;
 mod normalize;
+mod options;
 mod phon;
 mod repair;
 mod rewrite;
@@ -26,6 +27,7 @@ pub use normalize::{
     css_styled_within, entry_normalized_within, html_normalized_unstripped_within, html_normalized_within,
     html_styled_within,
 };
+pub use options::{DISPLAY_OPTIONS, Declared, Refused, declared, display_css};
 pub use phon::Transcriptions;
 pub use rewrite::{
     Rewritten, Written, css, css_text, css_text_within, html, html_text, html_text_within, script, script_text_within,

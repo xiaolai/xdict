@@ -57,6 +57,23 @@ public final class ServiceEntryContent: EntryContent {
         }
     }
 
+    /// What the bound edition declares (ADR-0013), as the core read it in the service. An answer with an option outside
+    /// the catalogue's shape is refused whole, so nothing of it reaches a page; the view records why.
+    public func displayOptions() async throws -> EntryDisplayOptions {
+        let delivered = try await backend.request(.displayOptions(dict: dict)).get()
+        guard case .displayOptions(let declared) = delivered.answer else {
+            throw ClientFailure.wire(.undecodable(detail: "not display options"))
+        }
+        let options = try declared.options.map { option in
+            guard let taken = EntryDisplayOption(id: option.id, attribute: option.attribute, values: option.values,
+                                                 defaultValue: option.defaultValue) else {
+                throw ClientFailure.wire(.undecodable(detail: "a display option not in the catalogue's shape: \(option.id)"))
+            }
+            return taken
+        }
+        return EntryDisplayOptions(options: options, css: declared.css)
+    }
+
     public func link(_ url: String, origin: EntryLinkOrigin) async throws -> EntryLink {
         let from: LinkOrigin = switch origin {
         case .entry(let reference): .entry(entry: self.reference(reference))

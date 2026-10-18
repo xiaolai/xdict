@@ -19,8 +19,8 @@
 /// What the converter is, apart from what it converts.
 public enum AppleImport {
     /// **Bumped with any change to the bytes written** (ADR-0011 decision 7): an imported copy made by an older revision
-    /// is offered a fresh conversion.
-    public static let converterRevision = 1
+    /// is offered a fresh conversion. 2: Apple's pronunciation markers are kept (ADR-0013 decision 1).
+    public static let converterRevision = 2
 }
 
 /// **Where a conversion is, asked of its checkpoint** (ADR-0011 decision 5): before every section of `Body.data` is

@@ -43,7 +43,9 @@ public enum Contract {
     /// words why a sheet was not read in the reader's language instead of showing the core's English.
     /// 6 (2026-10-18): the operations `convertApple` and `cancelConversion`, the answer `converted` and the error
     /// `appleImport`: an Apple dictionary snapshot converted in the service (ADR-0011, plan WI-4).
-    public static let version: UInt32 = 6
+    /// 7 (2026-10-18): the operation `displayOptions` and its answer, the display options an open dictionary's edition
+    /// declares, with its defaults and the core's CSS (ADR-0013 decisions 2, 4 and 6), for Settings and the entry view.
+    public static let version: UInt32 = 7
 }
 
 // MARK: - The request
@@ -206,13 +208,16 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     case convertApple(staging: UUID)
     /// Stop this connection's conversion, running or waiting, at its next step; it then answers `cancelled`.
     case cancelConversion
+    /// The display options an open dictionary's edition declares (ADR-0013): which apply, their values and defaults,
+    /// and the CSS that keys on them. Read by the core from the edition's markup, in the service; a short call.
+    case displayOptions(dict: DictId)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
         }
     }
 
@@ -221,7 +226,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
         }
     }
 
@@ -230,7 +235,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
-             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion: false
+             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: false
         }
     }
 
@@ -241,7 +246,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry, .resource: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
-             .readingStyle, .convertApple, .cancelConversion: nil
+             .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
         }
     }
 
@@ -251,7 +256,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
         case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
-             .readingStyle(let dict):
+             .readingStyle(let dict), .displayOptions(let dict):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion: []
@@ -274,6 +279,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .health: .health
         case .readingStyle: .readingStyle
         case .convertApple: .converted
+        case .displayOptions: .displayOptions
         }
     }
 
@@ -283,7 +289,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage, .health, .convertApple: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf, .readingStyle, .cancelConversion: false
+             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions: false
         }
     }
 }
@@ -403,13 +409,15 @@ public enum Answer: Codable, Hashable, Sendable {
     case readingStyle(ReadingStyle)
     /// What a conversion published (contract 6).
     case converted(Converted)
+    /// The display options the dictionary's edition declares (contract 7).
+    case displayOptions(DisplayOptions)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted: false
+             .lineage, .health, .readingStyle, .converted, .displayOptions: false
         }
     }
 
@@ -438,6 +446,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .health: .health
         case .readingStyle: .readingStyle
         case .converted: .converted
+        case .displayOptions: .displayOptions
         }
     }
 }
@@ -455,7 +464,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
-    case readingStyle, converted
+    case readingStyle, converted, displayOptions
 }
 
 // MARK: - Events

@@ -423,6 +423,17 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         applyPreferences()
     }
 
+    /// A display option of the dictionary in focus, as the reader chooses it (ADR-0013 d.4): stored as intent under its
+    /// lineage, and applied to every frame of that dictionary at once, without fetching an entry again.
+    public func setDisplayChoice(_ value: String, option: String) {
+        guard let pane = focusPane else { return }
+        environment.preferences.setDisplayChoice(value, option: option, for: pane.binding.dictionary)
+        applyPreferences()
+    }
+
+    /// The values the shown entry's root is given (tests and instruments).
+    var displayValues: [EntryDisplayValue] { shownPane?.displayValues ?? [] }
+
     private func currentFrame(for dictionary: String) -> EntryReadingFrame {
         environment.readingFrame.applied(originalStyle: environment.preferences.originalStyle(for: dictionary))
             .with(accent: environment.preferences.accent())
@@ -437,6 +448,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         pane?.setZoom(environment.preferences.zoom())
         page?.setZoom(environment.preferences.zoom())
         for pane in allPanes {
+            pane.setDisplayValues(environment.preferences.displayValues(pane.display, for: pane.binding.dictionary))
             pane.setFrame(currentFrame(for: pane.binding.dictionary))
             pane.setScheme(currentScheme(for: pane.binding.dictionary))
         }
@@ -565,6 +577,16 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView? {
         environment.newWindow?(configuration, action)
+    }
+
+    func displayValues(_ options: EntryDisplayOptions, for pane: EntryPane) -> [EntryDisplayValue] {
+        environment.preferences.displayValues(options, for: pane.binding.dictionary)
+    }
+
+    /// What the reader can see changed in place: Find is counted again over it, as after a new document.
+    func displayApplied(_ pane: EntryPane) {
+        guard owns(pane), !findBar.isHidden, !findBar.field.stringValue.isEmpty else { return }
+        performFind(findBar.field.stringValue)
     }
 
     func documentFinished(_ pane: EntryPane) {

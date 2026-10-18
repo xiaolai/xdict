@@ -40,7 +40,8 @@ public struct ConformanceScenario: Sendable {
     /// The keys each part of `tiny/expected.json` may hold.
     static let known: [String: Set<String>] = [
         "": ["comment", "view", "versions", "newWrongProtocol", "openBeforeImport", "import", "open", "lookups",
-             "suggestions", "entries", "links", "resources", "health", "byteSource", "errors", "lifecycle", "lineages"],
+             "suggestions", "entries", "links", "resources", "health", "byteSource", "errors", "lifecycle", "lineages",
+             "displayOptions"],
         "byteSource": ["comment", "name", "identity", "sidecar", "import", "open", "resourceFromPath", "resourceFromSource",
                        "shortRead"],
         "errors": ["comment", "unsupported", "malformed", "notFound", "cancelled", "sourceChanged"],
