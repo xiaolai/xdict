@@ -1763,6 +1763,22 @@
         }
       }
     },
+    "Both" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Both"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两者"
+          }
+        }
+      }
+    },
     "British English" : {
       "localizations" : {
         "en" : {
@@ -2835,6 +2851,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "IPA" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "IPA"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "国际音标"
           }
         }
       }
@@ -4206,6 +4238,22 @@
         }
       }
     },
+    "Pronunciation" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pronunciation"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "音标"
+          }
+        }
+      }
+    },
     "Quit XDict" : {
       "localizations" : {
         "en" : {
@@ -4426,6 +4474,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缺少资源分卷“%@”：其中的图片和声音将无法找到。"
+          }
+        }
+      }
+    },
+    "Respelling" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Respelling"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "拼读注音"
           }
         }
       }

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictContract
 import XDictLibrary
 import XDictTestSupport
 import XDictUI
@@ -56,6 +57,45 @@ struct SettingsDictionariesTests {
         #expect(Self.text(SettingsDictionaries.noSelection, "zh-Hans") == "选择一部词典以查看它的选项。")
         #expect(Self.text(SettingsDictionaries.details) == "Details…")
         #expect(Self.text(SettingsDictionaries.details, "zh-Hans") == "详细信息…")
+    }
+
+    // MARK: - ADR-0013 d.6: the selected dictionary's display options, beside Original style
+
+    static let pronunciation = DisplayOption(id: "pronunciation", attribute: "data-xdict-opt-pronunciation",
+                                             values: ["respell", "ipa", "both"], defaultValue: "ipa")
+    static let edition = Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32))
+
+    /// A row per option the selected edition declares, and none while the answer is unknown, failed, of another
+    /// edition, or declares nothing; an option the shell cannot name, or in another shape than the catalogue's, is
+    /// not offered.
+    @Test func theOptionsRowShowsOnlyWhenTheEditionDeclaresOptions() {
+        let declared = DisplayOptions(version: 1, options: [Self.pronunciation], css: ".a{}")
+        #expect(SettingsDictionaries.displayOptionRows(.read(declared, edition: Self.edition), edition: Self.edition)
+            .map(\.id) == ["pronunciation"])
+        #expect(SettingsDictionaries.displayOptionRows(nil, edition: Self.edition).isEmpty)
+        #expect(SettingsDictionaries.displayOptionRows(.reading, edition: Self.edition).isEmpty)
+        #expect(SettingsDictionaries.displayOptionRows(.unavailable, edition: Self.edition).isEmpty)
+        #expect(SettingsDictionaries.displayOptionRows(.read(DisplayOptions(version: 1, options: [], css: ""),
+                                                             edition: Self.edition), edition: Self.edition).isEmpty)
+        let other = Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "ef", count: 32))
+        #expect(SettingsDictionaries.displayOptionRows(.read(declared, edition: other), edition: Self.edition).isEmpty,
+                "another edition's options were offered")
+        let unknown = DisplayOption(id: "future", attribute: "data-xdict-opt-future", values: ["a", "b"], defaultValue: "a")
+        let malformed = DisplayOption(id: "pronunciation", attribute: "data-xdict-opt-x", values: ["ipa"], defaultValue: "ipa")
+        #expect(SettingsDictionaries.displayOptionRows(.read(DisplayOptions(version: 1, options: [unknown, malformed], css: ""),
+                                                             edition: Self.edition), edition: Self.edition).isEmpty)
+    }
+
+    /// The option and its values, named in English and in Chinese.
+    @Test func theOptionAndItsValuesAreNamedInBothLanguages() throws {
+        let title = try #require(SettingsDictionaries.optionTitle("pronunciation"))
+        #expect(Self.text(title) == "Pronunciation")
+        #expect(Self.text(title, "zh-Hans") == "音标")
+        let names = try ["respell", "ipa", "both"].map { try #require(SettingsDictionaries.optionValue("pronunciation", $0)) }
+        #expect(names.map { Self.text($0) } == ["Respelling", "IPA", "Both"])
+        #expect(names.map { Self.text($0, "zh-Hans") } == ["拼读注音", "国际音标", "两者"])
+        #expect(SettingsDictionaries.optionTitle("future") == nil)
+        #expect(SettingsDictionaries.optionValue("pronunciation", "future") == nil)
     }
 
     // MARK: - ADR-0012: what the Library window did

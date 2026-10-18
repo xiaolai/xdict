@@ -12,10 +12,10 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Config, CoreError, DictInfo, Entry, EntryRef, Feature, FileIdentity, FindingKind,
-    FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem, How, ImportReason, Imported,
-    IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page, Problem, ReadingStyle,
-    Resource, SkipReason, SkippedSheet, StyleChanges, Versions, View,
+    BaseSource, BlockReason, Config, CoreError, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, Feature,
+    FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem, How,
+    ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page,
+    Problem, ReadingStyle, Resource, SkipReason, SkippedSheet, StyleChanges, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -156,6 +156,21 @@ pub enum FindingKind {
     RepeatedEntries,
     OddHeadwords,
     Repaired,
+}
+
+#[uniffi::remote(Record)]
+pub struct DisplayOptions {
+    pub version: u32,
+    pub options: Vec<DisplayOption>,
+    pub css: String,
+}
+
+#[uniffi::remote(Record)]
+pub struct DisplayOption {
+    pub id: String,
+    pub attribute: String,
+    pub values: Vec<String>,
+    pub default_value: String,
 }
 
 #[uniffi::remote(Record)]
@@ -480,6 +495,11 @@ impl Core {
     /// What the reading style does to an open dictionary (ADR-0010): shown in the Library's details pane.
     pub fn reading_style(&self, dict: String) -> Result<ReadingStyle, CoreError> {
         self.0.reading_style(dict)
+    }
+
+    /// The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013).
+    pub fn display_options(&self, dict: String) -> Result<DisplayOptions, CoreError> {
+        self.0.display_options(dict)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

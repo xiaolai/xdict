@@ -78,10 +78,14 @@ struct Dict {
     sheet: StyleSheet,
     /// What the edition's sheets decide for its reading style (ADR-0010), read once, on first use.
     style: OnceLock<Arc<EditionStyle>>,
+    /// The display options that apply to the edition (ADR-0013), read once, on first use.
+    options: OnceLock<DisplayOptions>,
 }
 
 /// The version of the reading style's rules (ADR-0010): raised with any change to what normalization writes.
 pub const STYLE: u32 = xdict_entry::STYLE;
+/// The display options catalogue's version (ADR-0013): raised with any change to an option, a value or its CSS.
+pub const DISPLAY_OPTIONS: u32 = xdict_entry::DISPLAY_OPTIONS;
 /// The most sheets an edition's style is read from, and the most bytes in all.
 const STYLE_SHEETS: usize = 256;
 const STYLE_BYTES: usize = 32 << 20;
@@ -325,8 +329,16 @@ impl Core {
             let sidecars = package.sidecars.iter().map(|s| (s.name().to_owned(), OpenedSource::open(s))).collect();
             let info = info(&mdx);
             let sheet = StyleSheet::parse(&mdx.header().stylesheet);
-            let dict =
-                Dict { edition: record.edition.clone(), mdx_source, mdx, mdd, sidecars, sheet, style: OnceLock::new() };
+            let dict = Dict {
+                edition: record.edition.clone(),
+                mdx_source,
+                mdx,
+                mdd,
+                sidecars,
+                sheet,
+                style: OnceLock::new(),
+                options: OnceLock::new(),
+            };
             let mut state = self.lock()?;
             let handle = state.next_handle;
             state.next_handle = handle.checked_add(1).ok_or_else(|| CoreError::internal("handles exhausted"))?;
@@ -626,23 +638,7 @@ impl Core {
                 Err(e) => skipped.push(SkippedSheet { path, reason: SkipReason::Unreadable { detail: e.to_string() } }),
             }
         }
-        // The base is measured on a fixed, evenly spaced sample of the edition's entries (ADR-0010 d.4): the same
-        // whichever entry is opened first. A record too large or unreadable is passed over.
-        let mut entries = Vec::new();
-        let count = opened.mdx.len();
-        let step = (count / CALIBRATION_ENTRIES).max(1);
-        for i in (0..count).step_by(step).take(CALIBRATION_ENTRIES) {
-            if opened.mdx.record_size(i).is_ok_and(|n| n <= CALIBRATION_BYTES)
-                && opened.mdx.record_read_size(i).is_ok_and(|n| n <= CALIBRATION_BLOCK_BYTES)
-                && let Ok(record) = opened.mdx.record(i)
-            {
-                let text = String::from_utf8_lossy(&record.data);
-                if !text.trim_start().starts_with("@@@LINK=") {
-                    entries.push(opened.sheet.apply(&text).into_owned());
-                }
-            }
-        }
-        opened.mdx_source.unchanged()?;
+        let entries = sample(opened)?;
         // The base is measured under the sheets the sample links; if it links none, under all of them.
         let names: std::collections::HashSet<String> =
             entries.iter().flat_map(|e| xdict_entry::linked_sheets(e)).collect();
@@ -723,6 +719,35 @@ impl Core {
     /// [`Self::style_report`], flat, for the bindings: what the Library's details pane shows (ADR-0010).
     pub fn reading_style(&self, dict: String) -> Result<ReadingStyle, CoreError> {
         self.style_report(dict).map(|report| ReadingStyle::from(&report))
+    }
+
+    /// The display options that apply to an open dictionary's edition, with its defaults, and their CSS (ADR-0013).
+    /// An option applies where the edition's sample of entries (the reading style's) carries its markup contract;
+    /// the defaults come from the edition's sheets. Read once per open dictionary.
+    pub fn display_options(&self, dict: String) -> Result<DisplayOptions, CoreError> {
+        guard(|| {
+            let opened = self.dict(&dict)?;
+            if let Some(options) = opened.options.get() {
+                return Ok(options.clone());
+            }
+            let style = self.edition_style(&opened)?;
+            let entries = sample(&opened)?;
+            let declared = xdict_entry::declared(&style.style, entries.iter().map(String::as_str));
+            let choices: Vec<(&str, &str)> = declared.iter().map(|d| (d.id, d.default)).collect();
+            let css = xdict_entry::display_css(&choices)
+                .map_err(|e| CoreError::internal(format!("the display options' own catalogue was refused: {e}")))?;
+            let options = declared
+                .into_iter()
+                .map(|d| DisplayOption {
+                    id: d.id.into(),
+                    attribute: d.attribute.into(),
+                    values: d.values.into_iter().map(String::from).collect(),
+                    default_value: d.default.into(),
+                })
+                .collect();
+            let made = DisplayOptions { version: DISPLAY_OPTIONS, options, css };
+            Ok(opened.options.get_or_init(|| made).clone())
+        })
     }
 
     /// What the health check finds in an open dictionary's edition (plan-macos-v1 WI-12).
@@ -937,6 +962,28 @@ impl Core {
         let handle = self.parse_handle(dict)?;
         self.lock()?.open.get(&handle).cloned().ok_or_else(|| CoreError::stale(format!("{dict} is closed")))
     }
+}
+
+/// A fixed, evenly spaced sample of an edition's entries, the MDX header's compact styles applied: the same whichever
+/// entry is opened first (ADR-0010 d.4). The reading style's base is measured on it, and the display options that
+/// apply are read from it (ADR-0013). A redirect, or a record too large or unreadable, is passed over.
+fn sample(opened: &Dict) -> Result<Vec<String>, CoreError> {
+    let mut entries = Vec::new();
+    let count = opened.mdx.len();
+    let step = (count / CALIBRATION_ENTRIES).max(1);
+    for i in (0..count).step_by(step).take(CALIBRATION_ENTRIES) {
+        if opened.mdx.record_size(i).is_ok_and(|n| n <= CALIBRATION_BYTES)
+            && opened.mdx.record_read_size(i).is_ok_and(|n| n <= CALIBRATION_BLOCK_BYTES)
+            && let Ok(record) = opened.mdx.record(i)
+        {
+            let text = String::from_utf8_lossy(&record.data);
+            if !text.trim_start().starts_with("@@@LINK=") {
+                entries.push(opened.sheet.apply(&text).into_owned());
+            }
+        }
+    }
+    opened.mdx_source.unchanged()?;
+    Ok(entries)
 }
 
 /// Runs a call so that a panic inside it comes back as `Internal` (ADR-0003 decision 4).

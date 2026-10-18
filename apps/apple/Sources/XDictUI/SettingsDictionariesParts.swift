@@ -1,4 +1,5 @@
 import SwiftUI
+import XDictContract
 import XDictEntryView
 import XDictLibrary
 import XDictTokens
@@ -169,6 +170,12 @@ struct SettingsDictionaryOptions: View {
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             problem
+            ForEach(SettingsDictionaries.displayOptionRows(library.displayOptions[entry.id], edition: entry.edition),
+                    id: \.id) { declared in
+                if let option = EntryDisplayOption(declared) {
+                    SettingsDisplayOptionRow(option: option, dictionary: entry.preferencesKey)
+                }
+            }
             HStack(alignment: .firstTextBaseline) {
                 Toggle(isOn: $originalStyle) { Text("Original style") }
                     .toggleStyle(.checkbox)
@@ -179,6 +186,7 @@ struct SettingsDictionaryOptions: View {
                     .accessibilityIdentifier("settings.details")
             }
         }
+        .task(id: entry.edition) { await library.loadDisplayOptions(entry.id) }
     }
 
     /// One problem at a time, the most pressing first: the changed file's question, then why it cannot be used, then an
@@ -235,5 +243,31 @@ struct SettingsDictionaryOptions: View {
                 }
             }
         }
+    }
+}
+
+/// **One display option of the selected dictionary** (ADR-0013 d.6), as Apple's dictionary panes offer theirs: a pop-up
+/// of its values. It shows the effective choice (the stored intent where this edition declares it, else the edition's
+/// default) and stores the reader's pick as intent under the lineage, where the entry view reads it.
+struct SettingsDisplayOptionRow: View {
+    let option: EntryDisplayOption
+    @AppStorage private var stored: String?
+
+    init(option: EntryDisplayOption, dictionary: String) {
+        self.option = option
+        _stored = AppStorage(EntryPreferences.displayChoiceKey(option.id, dictionary))
+    }
+
+    var body: some View {
+        Picker(selection: Binding(get: { EntryPreferences.effective(stored, of: option) }, set: { stored = $0 })) {
+            ForEach(option.values, id: \.self) { value in
+                if let name = SettingsDictionaries.optionValue(option.id, value) { Text(name).tag(value) }
+            }
+        } label: {
+            if let title = SettingsDictionaries.optionTitle(option.id) { Text(title) }
+        }
+        .pickerStyle(.menu)
+        .fixedSize()
+        .accessibilityIdentifier("settings.option.\(option.id)")
     }
 }

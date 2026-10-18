@@ -68,14 +68,31 @@ enum EntryScripts {
 
     static let handlerName = "xdictEntry"
 
-    /// The shell's scripts, in the order they are installed at document start, before any of the page's.
-    static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame, style: EntryStyle = .bundled) -> [String] {
-        [style.script("find-core.js"), style.script("find.js"), style.script("readability-core.js"),
-         appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
-         style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),
-         style.script("pron-run-core.js"), style.script("pron-run.js"), style.script("word-clicks-core.js"),
-         style.script("word-clicks.js")]
+    /// The shell's scripts, in the order they are installed at document start, before any of the page's. The display
+    /// options' script comes first, so the root holds the shell's values before anything else runs.
+    static func installed(_ scheme: EntryColourScheme, frame: EntryReadingFrame, style: EntryStyle = .bundled,
+                          display: EntryDisplayOptions = .none, values: [EntryDisplayValue] = []) -> [String] {
+        [Self.display(display, values: values, style: style)].compactMap { $0 }
+            + [style.script("find-core.js"), style.script("find.js"), style.script("readability-core.js"),
+               appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
+               style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),
+               style.script("pron-run-core.js"), style.script("pron-run.js"), style.script("word-clicks-core.js"),
+               style.script("word-clicks.js")]
     }
+
+    /// **A dictionary's display options** (ADR-0013 d.3): the root given `values`, the default included, and the core's
+    /// CSS installed with them, from the shell's world. The values and the CSS travel as one JSON literal, never as
+    /// script text; nil when the edition declares nothing.
+    static func display(_ options: EntryDisplayOptions, values: [EntryDisplayValue], style: EntryStyle = .bundled) -> String? {
+        guard !options.options.isEmpty else { return nil }
+        let given: [String: Any] = ["values": values.map { [$0.attribute, $0.value] }, "css": options.css]
+        guard let json = try? JSONSerialization.data(withJSONObject: given, options: [.sortedKeys]),
+              let literal = String(data: json, encoding: .utf8) else { return nil }
+        return style.script("display-options.js", ["given": literal])
+    }
+
+    /// The live change (ADR-0013 d.3): the shown document's root given new values in place, answered with what it holds.
+    static let setDisplay = "return window.__xdictDisplay ? window.__xdictDisplay.set(v) : null"
 
     /// **A click on XDict's speaker is XDict's** (the core marks it `data-xdict-control="speaker"`): on the window, in
     /// the capture phase, installed before any page script, so it runs first. It stops the click going further into

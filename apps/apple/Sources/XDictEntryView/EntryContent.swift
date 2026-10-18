@@ -87,6 +87,13 @@ public protocol EntryContent: Sendable {
     /// `path` as it travels: the part of the URL after `r/` or `sound/`, still percent-encoded (ADR-0007 decision 8).
     func resource(_ path: String) async throws -> EntryResource
     func link(_ url: String, origin: EntryLinkOrigin) async throws -> EntryLink
+    /// The display options the bound edition declares (ADR-0013), asked once per web view, before its first entry.
+    func displayOptions() async throws -> EntryDisplayOptions
+}
+
+extension EntryContent {
+    /// A content that cannot say declares nothing: its entries show as the dictionary wrote them.
+    public func displayOptions() async throws -> EntryDisplayOptions { .none }
 }
 
 /// Where the view lands in an entry once it has loaded (plan-macos-v1 WI-6): its top; the anchor a link named; or the

@@ -61,12 +61,13 @@ enum Fixtures {
         .readingStyle(dict: dict),
         .convertApple(staging: staging),
         .cancelConversion,
+        .displayOptions(dict: dict),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 17
+    static let operationCases = 18
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -86,6 +87,7 @@ enum Fixtures {
         case .readingStyle: 14
         case .convertApple: 15
         case .cancelConversion: 16
+        case .displayOptions: 17
         }
     }
 
@@ -135,7 +137,15 @@ enum Fixtures {
         .health(health),
         .readingStyle(readingStyle),
         .converted(converted),
+        .displayOptions(displayOptions),
     ]
+
+    /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
+    static let displayOptions = DisplayOptions(
+        version: 1,
+        options: [DisplayOption(id: "pronunciation", attribute: "data-xdict-opt-pronunciation",
+                                values: ["respell", "ipa", "both"], defaultValue: "ipa")],
+        css: ":root[data-xdict-opt-pronunciation=\"respell\"] .t_IPA { display: none !important; }\n")
 
     static let converted = Converted(
         conversion: UUID(uuidString: "0D6E8C4B-1A2F-4E3D-9B7C-5F6A8E2D1C0B") ?? UUID(),
@@ -158,7 +168,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 14
+    static let answerCases = 15
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -175,6 +185,7 @@ enum Fixtures {
         case .health: 11
         case .readingStyle: 12
         case .converted: 13
+        case .displayOptions: 14
         }
     }
 

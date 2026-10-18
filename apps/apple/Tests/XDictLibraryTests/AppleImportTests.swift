@@ -349,6 +349,17 @@ struct AppleImportTests {
                 "a bundle that cannot be read now offers nothing")
     }
 
+    /// Revision 2 keeps Apple's pronunciation markers (ADR-0013 decision 1): an import made by revision 1 is offered
+    /// Convert Again by the revision the app ships, never regenerated silently.
+    @Test func aRevisionOneImportIsOfferedConvertAgain() throws {
+        #expect(AppleConverter.revision == 2)
+        let record = AppleSourceRecord(bundleIdentifier: "x", bundleVersion: nil,
+                                       sourceRevision: "m1:" + String(repeating: "a", count: 64), converterRevision: 1,
+                                       conversion: UUID())
+        let same = InstalledSource(sourceRevision: record.sourceRevision)
+        #expect(AppleStatus.of(record, installed: same, converter: AppleConverter.revision) == .updated)
+    }
+
     /// Convert Again's new edition joins the dictionary as one recorded join, which Undo splits exactly (ADR-0002 d.3).
     @Test func convertAgainJoinsTheNewEditionOnceAndUndoes() async throws {
         let oxford = try bundle()

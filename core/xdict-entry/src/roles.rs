@@ -1352,7 +1352,7 @@ fn merge(into: &mut Props, over: &Props) {
 }
 
 /// A tag's attributes, names in lower case and values unquoted, at most [`ATTRIBUTES`] of them.
-fn attributes(tag: &str) -> Vec<(String, String)> {
+pub(crate) fn attributes(tag: &str) -> Vec<(String, String)> {
     let mut out = Vec::new();
     let inner = tag.trim_start_matches('<');
     let name_len = inner.find(|c: char| c.is_ascii_whitespace() || c == '/' || c == '>').unwrap_or(inner.len());

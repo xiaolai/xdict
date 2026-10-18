@@ -29,7 +29,10 @@ Every suite runs these steps in this order, against a fresh `Core`, and compares
    [`suggestions`], [`entries`]
    (edition defaults to the imported one; `cspContains` is a
    substring of the returned policy), [`links`] (origin: the entry `run`/0), [`resources`], in the view
-   [`view`]. Then `health` of the handle, with no progress [`health`] (WI-12, added 2026-10-16).
+   [`view`]. Then `health` of the handle, with no progress [`health`] (WI-12, added 2026-10-16). Then
+   `display_options` of the handle [`displayOptions.tiny`], and, for each of [`displayOptions.cases`], `import` and
+   `open` of the package (the case's `mdx`, no volumes, its `sidecars`), then `display_options` of that handle
+   [`result`] (ADR-0013, added 2026-10-18). The cases' MDX files are `tiny/dictionary.json`'s `displayOptions`.
 5. [`byteSource`]: the same MDX bytes through a `ByteSource` the suite implements, under the name and identity
    given, with its own sidecar (also a source): `import`, `open`, then `tiny.css` from the first handle and from
    this one (`open` takes the copy's package). Then an import through a source that returns one byte too few.
@@ -99,4 +102,5 @@ the script is started), so a deliberately wrong expectation can be shown to fail
 naming `lookups[0].total`. 2026-10-14: the matrix's `formatVersion` and both entries' `lossyBytes` altered failed
 all four, 96 failures each (32 variants × 3). 2026-10-14: the 14 `lineages` expectations altered (the labels swapped, the
 split's lineage in capitals, the null a label, each refusal's `what` or `type` changed) failed all four, 14 failures
-each, each named.
+each, each named. 2026-10-18: `displayOptions.cases[0]`'s `defaultValue` changed from `ipa` to `respell` failed all four,
+one failure each, naming `displayOptions.cases[0].options[0].defaultValue`.
