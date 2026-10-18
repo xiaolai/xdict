@@ -38,7 +38,7 @@ ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
     # The main window
-    ("main.start", "full", "Launch XDict", "As Apple's Dictionary (P2–P6, P14): the title 'Dictionary'; Back / "
+    ("main.start", "full", "Launch XDict", "As Apple's Dictionary (P2–P6, P14): the title 'XDict' (XDict's own); Back / "
      "Forward, Smaller / Bigger Text and the search field ('Search') in the toolbar; the scope bar (All, Alpha, Beta, "
      "...) under it; no sidebar; 'Type a word to look up in…' and the dictionaries' names, centred", []),
     ("window.min", "full", "Ask for a 100 × 100 pt main window (P1)", "It takes Apple's minimum, 400 × 300 pt",

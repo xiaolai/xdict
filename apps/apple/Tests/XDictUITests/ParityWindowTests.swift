@@ -44,14 +44,27 @@ struct ParityWindowTests {
         #expect(!ToolbarLayout.titleYields(window: 640, sidebar: 0))
     }
 
-    /// **P2**: the title is "Dictionary" always; "N found" under it counts the list, in the reader's grammar, and is
-    /// absent for no result and for spelling guesses.
-    @Test func theTitleIsDictionaryWithTheCountUnderIt() {
-        #expect(Self.text(ToolbarLayout.windowTitle) == "Dictionary")
-        #expect(Self.chinese(ToolbarLayout.windowTitle) == "词典")
+    /// **P2, XDict's own**: the title is "XDict" always (owner, 2026-10-18; Apple's says "Dictionary"); "N found" under
+    /// it counts the list, in the reader's grammar, and is absent for no result and for spelling guesses.
+    @Test func theTitleIsXDictWithTheCountUnderIt() {
+        #expect(Self.text(ToolbarLayout.windowTitle) == "XDict")
+        #expect(Self.chinese(ToolbarLayout.windowTitle) == "XDict")
         #expect(Self.text(ToolbarLayout.subtitle(found: 45)) == "45 found")
         #expect(Self.text(ToolbarLayout.subtitle(found: 1)) == "1 found")
         #expect(ToolbarLayout.subtitle(found: nil) == nil)
+    }
+
+    /// **P5**: the search field is Apple's 327 pt at an 859 pt window, wider in a wider window up to its most, narrower
+    /// only in a narrower one, never under its least (owner, 2026-10-18: "search field's width is too short").
+    @Test func theSearchFieldIsApplesWidthAndFollowsTheWindow() {
+        #expect(ToolbarLayout.searchFieldWidth(window: 859) == 327)
+        #expect(ToolbarLayout.searchFieldWidth(window: 1000) > 327)
+        #expect(ToolbarLayout.searchFieldWidth(window: 2000) == ToolbarLayout.searchWidth.max)
+        #expect(ToolbarLayout.searchFieldWidth(window: 700) < 327)
+        #expect(ToolbarLayout.searchFieldWidth(window: 400) >= ToolbarLayout.searchWidth.min)
+        #expect(ToolbarLayout.searchFieldWidth(window: 100) == ToolbarLayout.searchWidth.min)
+        let widths = stride(from: CGFloat(400), through: 2000, by: 50).map { ToolbarLayout.searchFieldWidth(window: $0) }
+        #expect(widths == widths.sorted(), "the field never narrows as the window widens")
     }
 
     /// **P6, P8**: every scope when they fit; else as many as fit beside the » button, "All" always.

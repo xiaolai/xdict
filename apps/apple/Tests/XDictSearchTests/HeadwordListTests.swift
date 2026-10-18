@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import Testing
 import XDictClient
 import XDictContract
@@ -130,6 +131,35 @@ struct HeadwordListTests {
         #expect(model.shown == nil)
     }
 
+    /// **P2, the title's count never blinks while typing** (owner, 2026-10-18: the titlebar's text flashed): a new list
+    /// being asked for keeps the last settled count under the title until it settles itself, rather than dropping it
+    /// (which turned the two-line title into one and back at every pause in typing).
+    @Test func theCountHoldsUntilTheNextListSettles() async {
+        let backend = Self.backend()
+        let model = await Self.model(backend)
+        model.submit("apple")
+        #expect(await eventually { model.found == 4 })
+        await backend.hold(Fixture.handle("B"))
+        Self.type(model, "apple p")
+        #expect(await eventually { model.listing?.typed == "apple p" && model.listing?.settled == false })
+        #expect(model.found == 4, "the unsettled list took the count away")
+        await backend.release(Fixture.handle("B"))
+        #expect(await eventually { model.found == 1 })
+    }
+
+    /// **P2**: a list that settles at the count already shown does not set it again, so the title is not laid out anew.
+    @Test func theSameCountIsNotSetAgain() async {
+        let model = await Self.model(Self.backend())
+        model.submit("apple")
+        #expect(await eventually { model.found == 4 })
+        let changed = Changed()
+        withObservationTracking { _ = model.found } onChange: { changed.mark() }
+        model.submit("Apple")
+        #expect(await eventually { model.listing?.typed == "Apple" && model.listing?.settled == true })
+        #expect(model.found == 4)
+        #expect(!changed.value, "the same count was set again")
+    }
+
     /// **P7**: ⌘} and ⌘{ step the scope through All and each enabled dictionary, wrapping.
     @Test func theScopeStepsThroughAllAndEachDictionary() async {
         let model = await Self.model(Self.backend())
@@ -153,4 +183,12 @@ struct FixedGuesser: SpellingGuesser {
     }
 
     func guesses(for word: String) -> [String] { words }
+}
+
+/// Whether an observed property changed.
+final class Changed: @unchecked Sendable {
+    private let lock = NSLock()
+    private var marked = false
+    var value: Bool { lock.withLock { marked } }
+    func mark() { lock.withLock { marked = true } }
 }
