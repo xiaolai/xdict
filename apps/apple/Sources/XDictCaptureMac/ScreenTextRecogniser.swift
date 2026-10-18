@@ -242,14 +242,26 @@ public final class ScreenTextRecogniser: Sendable {
                                                     count: run.text.utf16.count)
         let start = TextSegmenter.wordStart(nearest: within, in: run.text) ?? 0
         let offset = block.offsetShift + run.utf16Offset + start
-        guard let word = TextSegmenter.word(in: block.text, utf16Offset: offset, clipped: blockClipped) else { return nil }
+        // **The limit inside a line too** (decision 3): the paragraph is capped by whole lines, and one line can be longer
+        // than the limit, so what is segmented is cut to it around the word first, on whole characters; an end the cut
+        // made is a cut end.
+        let token = NSRange(location: offset, length: max(0, min(run.text.utf16.count - start, limits.contextUTF16)))
+        guard let window = limits.window(of: block.text, around: token) else { return nil }
+        let windowStart = offset - window.range.location
+        var trimmed: TextSegmenter.Clipping = []
+        if windowStart > 0 { trimmed.insert(.start) }
+        if windowStart + window.text.utf16.count < (block.text as NSString).length { trimmed.insert(.end) }
+        let local = window.range.location
+        guard let word = TextSegmenter.word(in: window.text, utf16Offset: local, clipped: blockClipped.union(trimmed))
+        else { return nil }
 
-        let span = Self.span(of: word.sentence, containing: offset, in: block.text)
+        let found = Self.span(of: word.sentence, containing: local, in: window.text)
+        let span = NSRange(location: found.location + windowStart, length: found.length)
         let covering = block.lines(covering: span, in: lines)
         let clipped = clipping(paragraph.open, across: covering.map { lines[$0].box })
         // **One clipping answer**: the geometric one is an input to the segmenter, and the segmenter's the only output.
-        let settled = clipped == blockClipped ? word : TextSegmenter.word(in: block.text, utf16Offset: offset,
-                                                                          clipped: clipped)
+        let settled = clipped == blockClipped ? word : TextSegmenter.word(in: window.text, utf16Offset: local,
+                                                                          clipped: clipped.union(trimmed))
         guard let settled else { return nil }
         // **And the junction, which neither answer sees**: a sentence across two observations cut where they meet.
         let junction = zip(covering, covering.dropFirst()).contains { CaptureEdge.cutsBetween(lines[$0].box, lines[$1].box) }

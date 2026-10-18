@@ -22,9 +22,11 @@ public struct CaptureLimits: Sendable, Equatable {
     /// How far neighbouring tiles overlap, in **pixels**.
     public let tileOverlapPixels: Int
 
-    /// Nil where a limit cannot be applied: not positive, or a tile no wider than its overlap (which cannot tile).
+    /// Nil where a limit cannot be applied: not positive, a context over the ceiling, or a tile no wider than its overlap
+    /// (which cannot tile).
     public init?(readRadiusUTF16: Int, contextUTF16: Int, observations: Int, tilePixels: Int, tileOverlapPixels: Int) {
-        guard readRadiusUTF16 > 0, contextUTF16 > 0, observations > 0, tileOverlapPixels > 0,
+        guard readRadiusUTF16 > 0, contextUTF16 > 0, contextUTF16 <= Self.contextCeilingUTF16, observations > 0,
+              tileOverlapPixels > 0,
               tilePixels > tileOverlapPixels
         else { return nil }
         self.readRadiusUTF16 = readRadiusUTF16
@@ -36,8 +38,12 @@ public struct CaptureLimits: Sendable, Equatable {
 
     /// The values XiaolaiDict shipped and measured: a 2000-unit read radius each side, a 1000-unit context, 2000 px
     /// tiles overlapping by 600; 512 observations bounds one strip (a 600 pt strip of 14 pt text holds about 40 rows).
+    /// **The most context any limit may allow, in UTF-16 units** — XiaolaiDict's sentence bound. A limit may tighten it,
+    /// never loosen it, and the captured term refuses a longer sentence (`CaptureValueError.contextTooLong`).
+    public static let contextCeilingUTF16 = 1000
+
     public static let shipped = CaptureLimits(
-        uncheckedReadRadius: 2000, context: 1000, observations: 512, tile: 2000, overlap: 600)
+        uncheckedReadRadius: 2000, context: contextCeilingUTF16, observations: 512, tile: 2000, overlap: 600)
 
     private init(uncheckedReadRadius: Int, context: Int, observations: Int, tile: Int, overlap: Int) {
         readRadiusUTF16 = uncheckedReadRadius
@@ -47,7 +53,8 @@ public struct CaptureLimits: Sendable, Equatable {
         tileOverlapPixels = overlap
     }
 
-    /// `text` cut to at most `contextUTF16` units around `range`, without splitting a surrogate pair — what a reader
+    /// `text` cut to at most `contextUTF16` units around `range`, on whole characters — never inside a surrogate pair or
+    /// a combining sequence (an extended grapheme cluster, as `NSString` composes them) — what a reader
     /// hands to segmentation, never after it. The range is moved into the cut text; nil where `range` is not inside
     /// `text` or is longer than the limit itself (the term is never cut).
     public func window(of text: String, around range: NSRange) -> (text: String, range: NSRange)? {
@@ -60,9 +67,17 @@ public struct CaptureLimits: Sendable, Equatable {
         var start = max(0, range.location - spare / 2)
         var end = min(units.count, start + contextUTF16)
         start = max(0, end - contextUTF16)
-        // Never begin on a low surrogate or end after a high one.
-        if start > 0, start < units.count, UTF16.isTrailSurrogate(units[start]) { start += 1 }
-        if end < units.count, end > 0, UTF16.isLeadSurrogate(units[end - 1]) { end -= 1 }
+        // **Whole characters only**: a start inside a composed character moves past it, an end inside one moves before
+        // it — a surrogate pair, a base and its combining marks, an emoji sequence alike.
+        let composed = text as NSString
+        if start > 0, start < units.count {
+            let character = composed.rangeOfComposedCharacterSequence(at: start)
+            if character.location < start { start = NSMaxRange(character) }
+        }
+        if end > 0, end < units.count {
+            let character = composed.rangeOfComposedCharacterSequence(at: end)
+            if character.location < end { end = character.location }
+        }
         guard start <= range.location, end >= range.location + range.length else { return nil }
         let cut = String(decoding: units[start..<end], as: UTF16.self)
         return (cut, NSRange(location: range.location - start, length: range.length))

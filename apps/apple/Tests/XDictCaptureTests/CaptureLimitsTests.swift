@@ -48,6 +48,25 @@ struct CaptureLimitsTests {
         #expect((window.text as NSString).substring(with: window.range) == "hold")
     }
 
+    /// **Nor a combining sequence**: both ends of a 100-unit cut around the é at 600 land inside an é (an e and its
+    /// combining acute, two units each, starting at even offsets) and are moved to whole characters.
+    @Test func theCutNeverSplitsACombiningSequence() throws {
+        let text = String(repeating: "e\u{301}", count: 600)
+        let window = try #require(try limits(context: 100).window(of: text, around: NSRange(location: 600, length: 2)))
+        #expect(window.text.utf16.count <= 100)
+        #expect(window.text.allSatisfy { $0 == "e\u{301}" }, "a character was cut: \(window.text.unicodeScalars.first.map(\.value) ?? 0)")
+        #expect(window.text.unicodeScalars.first == "e" && window.text.unicodeScalars.last == "\u{301}")
+        #expect((window.text as NSString).substring(with: window.range) == "e\u{301}")
+    }
+
+    /// **A limit may tighten the ceiling, never loosen it**: the captured term refuses a longer sentence whatever a reader
+    /// was handed.
+    @Test func aContextLimitOverTheCeilingIsRefused() throws {
+        #expect(CaptureLimits(readRadiusUTF16: 10, contextUTF16: CaptureLimits.contextCeilingUTF16 + 1, observations: 1,
+                              tilePixels: 2, tileOverlapPixels: 1) == nil)
+        #expect(try limits(context: CaptureLimits.contextCeilingUTF16).contextUTF16 == CaptureLimits.contextCeilingUTF16)
+    }
+
     /// **A term longer than the limit is refused, not cut**: capture never truncates a key.
     @Test func aTermLongerThanTheLimitIsNotCut() throws {
         let term = String(repeating: "a", count: 201)
