@@ -3,7 +3,7 @@ resolver = "3"
 members = ["xdict-mdx", "xdict-mdx-writer", "xdict-core", "xdict-conformance", "xdict-ffi", "xdict-wasm", "xdict-mmap", "xdict-identity", "xdict-lookup", "xdict-entry", "xdict-health"]
 
 [workspace.package]
-version = "0.0.2"
+version = "0.0.3"
 edition = "2024"
 license = "ISC"
 repository = "https://github.com/xiaolai/xdict"
