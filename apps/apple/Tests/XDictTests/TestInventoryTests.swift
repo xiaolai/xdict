@@ -58,7 +58,10 @@ struct TestInventoryTests {
         // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
         // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
         // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
-        "XDictCaptureMacTests": 113,
+        // 113 → 153 (WI-3): the hover watcher and reader, XiaolaiDict's HoverWatcherSequenceTests (18, with
+        // stoppingEndsTheHover), HoverWatcherTests (13), HoverReaderSourceTests (2) and HoverSiteTests (1) moved by name,
+        // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing).
+        "XDictCaptureMacTests": 153,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
