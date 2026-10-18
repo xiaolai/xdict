@@ -51,11 +51,11 @@ struct ModuleBoundaryTests {
         // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
         "XDictSpeech": ["AVFAudio", "Foundation", "os"],
         "XDictSpeechTests": ["AVFAudio", "Foundation", "Testing"],
-        // Lookup from anywhere (WI-8): Carbon's hot keys, the Accessibility API, the front app and the window list
-        // (`AppKit`, `CoreGraphics`), the shortcut's state the Settings field observes, its log.
-        "XDictAnywhere": ["AppKit", "ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation",
-                          "os"],
-        "XDictAnywhereTests": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
+        // Lookup from anywhere (WI-8): Carbon's hot keys, the Accessibility gate (`ApplicationServices`), the panel's
+        // geometry (`CoreGraphics`), the shortcut's state the Settings field observes, its log. The selection reader and
+        // the front app moved down to `XDictCaptureMac` (plan-capture WI-2), and `AppKit` with them.
+        "XDictAnywhere": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "os"],
+        "XDictAnywhereTests": ["Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
         // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
         // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
         "XDictCapture": captureMayBind,
@@ -63,7 +63,7 @@ struct ModuleBoundaryTests {
         // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
         // lane, the readers, the never-prompting probe. Neither ScreenCaptureKit nor Vision (WI-4), nothing that draws.
         // What it binds today, inside `captureMacMayBind`, the ceiling `captureReachesNothingOfThisPackage` holds.
-        "XDictCaptureMac": ["ApplicationServices", "Synchronization", "os"],
+        "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "os"],
         "XDictCaptureMacTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],

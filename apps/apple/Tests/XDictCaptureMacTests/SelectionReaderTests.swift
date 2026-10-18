@@ -1,18 +1,21 @@
 import ApplicationServices
 import Foundation
 import Testing
-import XDictAnywhere
+import XDictCaptureMac
 
 /// **The selection, read as VoiceOver reads it** (plan-macos-v1 WI-8, I2): which element, which dialect, the term less
 /// its punctuation, and where it is on screen — against a scripted Accessibility tree. Moved from XiaolaiDict
 /// (`SelectionReaderTests`) with the reader, re-checked against the MDX-first model (ADR-0001): XDict looks the term up
 /// and puts the panel by it, and keeps no sentence and no provenance, so the tests of those stayed behind. The real apps
-/// are the E2E `selection.hosts` sub-stage's.
+/// are the E2E `selection.hosts` sub-stage's. Moved again, by name, from `XDictAnywhereTests` with the reader (plan-capture
+/// WI-2): the admission limit is the consumer's (XDict ADR-0014 decision 3), so these hand in lookup's 200.
 struct SelectionReaderTests {
     private let app = FrontApp(pid: 1, name: "Reader", bundleID: "com.example.reader")
+    /// What lookup admits today (`LookupText.maximumLength`): handed in, never capture's own.
+    static let admission = TermAdmission(maximumCharacters: 200)
 
     private func read(_ tree: FakeAccessibility) -> SelectionOutcome {
-        SelectionReader.read(application: tree.application, of: app, with: tree)
+        SelectionReader.read(application: tree.application, of: app, with: tree, admitting: Self.admission)
     }
 
     /// A Cocoa text view: the selected text, its range and its box.
@@ -126,7 +129,8 @@ struct SelectionReaderTests {
                  rectValue(CGRect(x: 429, y: 140, width: 166, height: 23)))
         #expect(read(tree) == .nothing(.searchLimitReached(app: "Reader", limit: SelectionReader.webAreaSearchLimit)),
                 "without the click, as in the E2E run")
-        let outcome = SelectionReader.read(application: tree.application, of: app, with: tree, under: paragraph)
+        let outcome = SelectionReader.read(application: tree.application, of: app, with: tree, under: paragraph,
+                                           admitting: Self.admission)
         guard case .selected(let selection, let bounds) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(selection.text == "crème brûlée 煎饼")
         #expect(bounds == SelectionBox(rect: CGRect(x: 429, y: 140, width: 166, height: 23), quality: .exact))
@@ -472,6 +476,19 @@ final class FakeAccessibility: AccessibilityReading {
     }
 
     func element(_ number: Int32) -> AXUIElement { AXUIElementCreateApplication(90_000 + number) }
+
+    /// What the hit test finds at a point, by its coordinates.
+    private var hits: [String: AXUIElement] = [:]
+    /// Every hit test asked, in order.
+    private(set) var hitTests: [CGPoint] = []
+
+    /// `element` is what a hit test at `point` finds under the application.
+    func hit(_ point: CGPoint, _ element: AXUIElement) { hits["\(point.x) \(point.y)"] = element }
+
+    func hitTest(_ root: AXUIElement, at point: CGPoint) throws(CaptureError) -> AXUIElement? {
+        hitTests.append(point)
+        return root == application ? hits["\(point.x) \(point.y)"] : nil
+    }
 
     func set(_ element: AXUIElement, _ name: String, argument: CFTypeRef? = nil, _ value: CFTypeRef) {
         values[Key(element: element, name: name, argument: argument.map(Self.describe))] = value
