@@ -30,6 +30,17 @@ struct FailureTests {
         #expect(try refusal(o) == .notVersion3(found: 4))
     }
 
+    /// A plist integer of 0 or 1 is an `NSNumber` that Swift also casts to `Bool`: it is still a version, reported as
+    /// found (the third-party format 1 bundles; 2026-10-18).
+    @Test func formatOneIsRefusedNamingItsVersion() throws {
+        var o = SyntheticAppleBundle.Overrides()
+        o.plist = try SyntheticAppleBundle.plist(version: 1)
+        #expect(try refusal(o) == .notVersion3(found: 1))
+        let boolean: [String: Any] = ["IDXDictionaryVersion": true, "IDXDictionaryIndexes": [Any]()]
+        o.plist = try PropertyListSerialization.data(fromPropertyList: boolean, format: .xml, options: 0)
+        #expect(try refusal(o) == .notVersion3(found: nil), "a <true/> is not a version")
+    }
+
     @Test func aMissingVersionIsRefusedByKind() throws {
         var o = SyntheticAppleBundle.Overrides()
         o.plist = try SyntheticAppleBundle.plist(version: nil)
