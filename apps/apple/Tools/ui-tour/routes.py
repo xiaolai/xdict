@@ -80,7 +80,7 @@ ROUTES = [
                          ("wait", 1)]),
     ("scope.one", "full", "Look up 'apple', then ⌘2 (P7)", "Beta chosen: the field reads 'Search in Beta', its "
      "magnifier in the accent colour; the list and entry Beta's", look_up("apple") + [("key", "cmd+2"), ("wait", 1.2)]),
-    ("scope.menu", "full", "Look up 'apple', click the search field's magnifier (P6)", "The 'Search in' menu: All "
+    ("scope.menu", "full", "Look up 'apple', click the search field's magnifier (P6)", "The 'Search In' menu: All "
      "Dictionaries checked (⌘0), then Alpha (⌘1), Beta (⌘2) and the rest in the reader's order, one that cannot "
      "answer greyed", look_up("apple") + [("click", "scope.menu"), ("wait", 0.8)]),
     ("scope.click", "full", "Look up 'apple', choose Beta in the magnifier's menu (P6)", "Beta chosen: the field "

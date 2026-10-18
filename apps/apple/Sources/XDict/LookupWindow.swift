@@ -561,7 +561,7 @@ final class LookupWindowRun: LookupStage {
                 }
             }
         }
-        // The scope menu's choice (P6, P42): the search field's magnifier, named "Search in" and carrying the chosen
+        // The scope menu's choice (P6, P42): the search field's magnifier, named "Search In" and carrying the chosen
         // scope's title as its value (`#id=text:text`, the name last since a name may hold a colon), so a name merely
         // offered in the menu, not chosen, does not pass.
         let chosen = SearchScopeMenu.items(known: model.known, scope: model.scope).first(where: \.checked)?.title

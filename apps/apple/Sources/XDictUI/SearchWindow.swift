@@ -95,19 +95,27 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            SearchField(text: state.model.text,
-                        prompt: String(localized: SearchScopeMenu.prompt(known: state.model.known,
-                                                                         scope: state.model.scope)),
-                        scopes: SearchScopeMenu.items(known: state.model.known, scope: state.model.scope),
-                        onScope: { state.model.setScope($0) }, focus: state.searchFocus,
-                        onChange: { state.typedText($0) },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
+            Self.searchField(text: state.model.text, known: state.model.known, scope: state.model.scope,
+                             focus: state.searchFocus, onScope: { state.model.setScope($0) },
+                             onChange: { state.typedText($0) }, onSubmit: { state.submit() },
+                             onMove: { state.move($0) }, onCancel: { state.cancel() })
                 // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
                 // hosted AppKit view by its ideal, and NSSearchField has none, so the range left it near its least
                 // (owner, 2026-10-18). At the 400 pt minimum it is 152 pt, so the pairs still overflow first (P8).
                 .frame(width: ToolbarLayout.searchFieldWidth(window: window))
         }
         .visibilityPriority(.high)
+    }
+
+    /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the
+    /// scope menu's lines, which also set the magnifier (P6).
+    static func searchField(text: String, known: [SearchSource], scope: SearchScope, focus: Int,
+                            onScope: @escaping (SearchScope) -> Void, onChange: @escaping (String) -> Void,
+                            onSubmit: @escaping () -> Void, onMove: @escaping (Int) -> Bool,
+                            onCancel: @escaping () -> Bool) -> SearchField {
+        SearchField(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
+                    scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
+                    onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
     }
 }
 
