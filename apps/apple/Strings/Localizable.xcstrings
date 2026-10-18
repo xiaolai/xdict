@@ -4142,6 +4142,22 @@
         }
       }
     },
+    "Read the selection aloud, or the entry’s word when nothing is selected" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read the selection aloud, or the entry’s word when nothing is selected"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "朗读选中的内容；没有选中时朗读词条的词头"
+          }
+        }
+      }
+    },
     "Reading" : {
       "localizations" : {
         "en" : {

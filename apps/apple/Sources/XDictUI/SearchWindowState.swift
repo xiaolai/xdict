@@ -104,6 +104,20 @@ public final class SearchWindowState {
         speak(word)
     }
 
+    /// What the speaker says: the selection, trimmed, when there is one, else the entry's word.
+    public static func spokenText(selection: String?, word: String?) -> String? {
+        let selected = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return selected.isEmpty ? word : selected
+    }
+
+    /// The title bar's speaker and Edit ▸ Pronounce: the entry's selected text, else the shown word.
+    public func pronounceSelectionOrShown() {
+        Task { @MainActor in
+            guard let text = Self.spokenText(selection: await entry.selectedText(), word: shownWord) else { return }
+            speak(text)
+        }
+    }
+
     /// Shows the model's entry in the pane, from its dictionary as the library has it now: for a typed word over every
     /// dictionary, the All page (P15) with every dictionary's entry, the shown one among them.
     public func present(_ shown: SearchModel.Shown) async {

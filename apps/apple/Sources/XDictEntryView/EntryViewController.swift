@@ -486,6 +486,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
     }
 
+    /// The entry's selected text, or nil when nothing is selected.
+    public func selectedText() async -> String? { await focusPane?.selectedText() }
+
     /// Edit ▸ Find ▸ Jump to Selection (⌘J, P33): the entry scrolled to its selection.
     public func jumpToSelection() {
         Task { @MainActor in await focusPane?.jumpToSelection() }
