@@ -71,20 +71,16 @@ struct XDictApp: App {
         .commandsRemoved()
 
         Settings {
-            // Dictionaries first: Apple's Settings opens on its dictionary list (parity P39). The other panes are XDict's
-            // own (Lookup Anywhere, speech, the reading accent, login), at Apple's width.
+            // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
+            // dictionary list (parity P39). The other two are XDict's own, at Apple's width.
             TabView {
-                Tab("Dictionaries", systemImage: "books.vertical") {
-                    SettingsDictionaries(library: Self.library, openLibrary: { MenuBarActions.openLibrary() })
-                        .task { await LibraryLaunch.once() }
+                ForEach(SettingsTab.allCases, id: \.self) { pane in
+                    Tab {
+                        Self.settings(pane)
+                    } label: {
+                        Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
+                    }
                 }
-                Tab("General", systemImage: "gearshape") {
-                    GeneralSettings(login: Self.loginItem, defaults: .standard, domain: XDictIdentity.app,
-                                    openSetup: { MenuBarActions.openSetup() })
-                }
-                Tab("Reading", systemImage: "book") { ReadingSettings() }
-                Tab("Speech", systemImage: "speaker.wave.2") { SpeechSettings() }
-                Tab("Lookup", systemImage: "keyboard") { ShortcutSettings(registrar: LookupAnywhere.shared.registrar) }
             }
         }
 
@@ -97,6 +93,21 @@ struct XDictApp: App {
                         openLibrary: { MenuBarActions.openLibrary() })
         } label: {
             MenuBarLabel()
+        }
+    }
+
+    /// One Settings pane's content (ADR-0012 d.1): the lookup shortcut sits in General, the speech rows in Reading &
+    /// Speech.
+    @MainActor @ViewBuilder private static func settings(_ pane: SettingsTab) -> some View {
+        switch pane {
+        case .dictionaries:
+            SettingsDictionaries(library: library, openLibrary: { MenuBarActions.openLibrary() })
+                .task { await LibraryLaunch.once() }
+        case .readingAndSpeech:
+            ReadingSettings()
+        case .general:
+            GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
+                            registrar: LookupAnywhere.shared.registrar, openSetup: { MenuBarActions.openSetup() })
         }
     }
 

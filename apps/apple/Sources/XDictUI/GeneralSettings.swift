@@ -1,17 +1,21 @@
 import SwiftUI
+import XDictAnywhere
 
-/// **General, in Settings** (⌘,; plan-macos-v1 WI-9): launch at login, with what the system says of it, and the language
-/// of XDict's own words. The accent is under Reading, the shortcut under Lookup, the dictionaries' order and languages
-/// under Dictionaries (the library's own list, WI-5).
+/// **General, in Settings** (⌘,; plan-macos-v1 WI-9, ADR-0012 d.1): launch at login, with what the system says of it, the
+/// language of XDict's own words, the lookup shortcut (`ShortcutSettings`, once the Lookup pane) and Show Setup…. The
+/// accent and speech are under Reading & Speech, the dictionaries' order and languages under Dictionaries.
 public struct GeneralSettings: View {
     @Bindable private var login: LaunchAtLogin
     private let defaults: UserDefaults
     private let domain: String
     @State private var language: InterfaceLanguage
+    private let registrar: ShortcutRegistrar
     private let openSetup: () -> Void
 
-    public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, openSetup: @escaping () -> Void) {
+    public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, registrar: ShortcutRegistrar,
+                openSetup: @escaping () -> Void) {
         self.login = login
+        self.registrar = registrar
         self.defaults = defaults
         self.domain = domain
         self.openSetup = openSetup
@@ -46,11 +50,14 @@ public struct GeneralSettings: View {
             }
             .accessibilityIdentifier("interface-language")
             .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
-            LabeledContent {
-                Button { openSetup() } label: { Text("Show Setup…") }
-                    .accessibilityIdentifier("show-setup")
-            } label: {
-                Text("Setup")
+            Section { ShortcutSettings(registrar: registrar) }
+            Section {
+                LabeledContent {
+                    Button { openSetup() } label: { Text("Show Setup…") }
+                        .accessibilityIdentifier("show-setup")
+                } label: {
+                    Text("Setup")
+                }
             }
         }
         .settingsPane()

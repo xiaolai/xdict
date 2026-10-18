@@ -2919,22 +2919,6 @@
         }
       }
     },
-    "Lookup" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Lookup"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查询"
-          }
-        }
-      }
-    },
     "Lookup shortcut" : {
       "localizations" : {
         "en" : {
@@ -3966,6 +3950,22 @@
         }
       }
     },
+    "Reading & Speech" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading & Speech"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读与语音"
+          }
+        }
+      }
+    },
     "Reading the dictionary’s style…" : {
       "localizations" : {
         "en" : {
@@ -4572,22 +4572,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "缩小文字"
-          }
-        }
-      }
-    },
-    "Speech" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Speech"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "语音"
           }
         }
       }
