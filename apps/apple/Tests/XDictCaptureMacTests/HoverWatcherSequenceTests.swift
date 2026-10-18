@@ -289,6 +289,24 @@ struct HoverWatcherSequenceTests {
         #expect(rig.reader.hoversEnded >= 1)
     }
 
+    /// **A hover presented after a shortcut that is still reading supersedes it** (WI-3 verification): the hover's word
+    /// claims presentation, so the shortcut's late read is refused rather than shown over it. Red if the watcher hands its
+    /// word over with `deliver`, which claims nothing.
+    @Test func aHoverPresentedAfterAShortcutStillReadingSupersedesIt() async throws {
+        let rig = Rig()
+        let shortcut = rig.requests.beginPresenting(.selection)
+        await rig.rest()
+        rig.reader.answerWord("tide")
+        await HoverFixtures.settle { !rig.sink.all.isEmpty }
+        let hover = try #require(rig.sink.all.first?.request)
+        #expect(rig.requests.isCurrent(hover), "the hover's word did not claim presentation")
+        let late = try CapturedTerm.make(term: "wave", trigger: .selection, acquisition: .textRange, confidence: 1,
+                                         source: SourceApp(bundleID: nil), pointer: nil, box: .absent,
+                                         context: .unavailable(.notCaptured))
+        #expect(rig.requests.present(late, for: shortcut, to: rig.sink) == .refused,
+                "an older shortcut's late read was presented over a newer hover")
+    }
+
     /// **A read that found nothing ends its request** (new in XDict: every request ends exactly once, ADR-0014 d.4).
     @Test func aReadThatFoundNothingEndsItsRequest() async {
         let rig = Rig()
