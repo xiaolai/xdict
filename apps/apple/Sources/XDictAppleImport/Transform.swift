@@ -42,6 +42,8 @@ struct EntryFault: Error, CustomStringConvertible {
 
 final class Stats {
     var counts: [String: Int] = [:]
+    /// Passes over an entry's XML (`EntryTransformer.transform`), for the tests: one per entry, whatever it holds.
+    var transformPasses = 0
     func bump(_ key: String, _ n: Int = 1) { counts[key, default: 0] += n }
     func merge(_ other: Stats) { for (k, v) in other.counts { counts[k, default: 0] += v } }
 }
@@ -229,21 +231,41 @@ struct EntryTransformer {
         guard String(validating: bytes, as: UTF8.self) != nil else { throw EntryFault("entry is not valid UTF-8") }
         try checkXMLCharacters(bytes)
 
-        // The placeholder prefix must not occur anywhere in the entry's own text.
-        var attempt = 0
-        while true {  // every failed attempt means the text really contains that prefix, so this ends
-            defer { attempt += 1 }
-            let prefix = attempt == 0 ? linkPlaceholder : "apple2mdx-link\(attempt):"
-            let local = Stats()
-            var article = try transformOnce(bytes, address: address, stats: local, linkPrefix: prefix)
-            let found = countOccurrences(of: Array(prefix.utf8), in: article.html)
-            if found == article.links.count {
-                article.placeholder = prefix
-                stats.merge(local)
-                return article
-            }
-            if found < article.links.count { throw EntryFault("\(article.id): link placeholders lost in serialization") }
+        // The placeholder prefix must not occur anywhere in the entry's own text. One scan picks the smallest attempt
+        // whose prefix the bytes do not hold, then one pass: never a pass per look-alike (a crafted entry spelling K
+        // prefixes once cost K + 1 passes). Deterministic, no nonce (ADR-0011 decision 6). A look-alike the text only
+        // spells after decoding (a character reference) shows as one occurrence too many, and the entry is refused.
+        let prefix = placeholderPrefix(absentFrom: bytes)
+        stats.transformPasses += 1
+        var article = try transformOnce(bytes, address: address, stats: stats, linkPrefix: prefix)
+        guard countOccurrences(of: Array(prefix.utf8), in: article.html) == article.links.count else {
+            throw EntryFault("\(article.id): link placeholders do not match the links")
         }
+        article.placeholder = prefix
+        return article
+    }
+
+    /// `apple2mdx-link:` (attempt 0) or `apple2mdx-link<n>:`, for the smallest attempt the bytes do not spell; found in
+    /// one scan over every `apple2mdx-link` in them.
+    func placeholderPrefix(absentFrom bytes: [UInt8]) -> String {
+        let stem = "apple2mdx-link"
+        var taken = Set<Int>()
+        var i = 0
+        while let at = bytes.find(stem, from: i) {
+            var j = at + stem.utf8.count
+            var n = 0
+            var digits = 0
+            while j < bytes.count, bytes[j] >= 0x30, bytes[j] <= 0x39, digits < 9 {
+                n = n * 10 + Int(bytes[j] - 0x30)
+                digits += 1
+                j += 1
+            }
+            // "apple2mdx-link:" is attempt 0; "apple2mdx-link0:" is no attempt's prefix, so it takes none.
+            if j < bytes.count, bytes[j] == 0x3a, digits == 0 || n > 0 { taken.insert(n) }
+            i = at + 1
+        }
+        let attempt = (0...taken.count).first { !taken.contains($0) } ?? taken.count
+        return attempt == 0 ? linkPlaceholder : "apple2mdx-link\(attempt):"
     }
 
     /// What an emitted element finally looks like: attributes renamed and filtered, a PDF `<img>` turned
