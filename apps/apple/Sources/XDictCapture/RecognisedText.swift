@@ -307,7 +307,7 @@ public enum LineJoiner {
     /// characters, which is what a sentence break inside a line looks like and what a column
     /// gutter never is.
     /// A ratio of line heights, dimensionless.
-    static let sameRowGap: Double = 1.0
+    static let sameRowGapRatio: Double = 1.0
 
     /// The observations grouped into visual lines.
     ///
@@ -425,7 +425,7 @@ public enum LineJoiner {
         // Negative where the boxes overlap horizontally, which is nearer still. Both sides are put
         // into points before they are compared; see `block(around:in:region:)`.
         let gap = max(a.minX, b.minX) - min(a.maxX, b.maxX)
-        return gap * region.width <= min(a.height, b.height) * region.height * CGFloat(sameRowGap)
+        return gap * region.width <= min(a.height, b.height) * region.height * CGFloat(sameRowGapRatio)
     }
 
     /// Lines of one paragraph sit close together, are set in the same size, and share a margin.
@@ -524,10 +524,10 @@ public enum LineJoiner {
 /// "Serendipity favours the prepared mind, yet the unglamorous preparation that nobody witness".
 /// Handed on as the word's context, it describes a sentence the reader never saw.
 public enum CaptureEdge {
-    public static func clips(_ boxes: [CGRect], tolerance: CGFloat = 0.004) -> Bool {
+    public static func clips(_ boxes: [CGRect], edgeFraction: CGFloat = 0.004) -> Bool {
         boxes.contains { box in
-            box.minX <= tolerance || box.maxX >= 1 - tolerance
-                || box.minY <= tolerance || box.maxY >= 1 - tolerance
+            box.minX <= edgeFraction || box.maxX >= 1 - edgeFraction
+                || box.minY <= edgeFraction || box.maxY >= 1 - edgeFraction
         }
     }
 
@@ -535,8 +535,8 @@ public enum CaptureEdge {
     /// full width, so text that ran into it may go on in a part of the window that cannot be seen. The top and bottom are
     /// not asked here: the strip's own edges are answered by `ParagraphFinder`, which asks whether the layout shows a
     /// boundary before them, and a box merely near them proves nothing either way.
-    public static func clipsAcross(_ boxes: [CGRect], tolerance: CGFloat = 0.004) -> Bool {
-        boxes.contains { $0.minX <= tolerance || $0.maxX >= 1 - tolerance }
+    public static func clipsAcross(_ boxes: [CGRect], edgeFraction: CGFloat = 0.004) -> Bool {
+        boxes.contains { $0.minX <= edgeFraction || $0.maxX >= 1 - edgeFraction }
     }
 
     /// **Whether text may be missing between two observations a sentence runs across.**
@@ -550,7 +550,7 @@ public enum CaptureEdge {
     /// to right and then down, so text goes missing when the earlier one was cut at the **right**
     /// margin or the later one at the **left** — that is where a wrap passes through the edge of
     /// what could be captured.
-    public static func cutsBetween(_ earlier: CGRect, _ later: CGRect, tolerance: CGFloat = 0.004) -> Bool {
-        earlier.maxX >= 1 - tolerance || later.minX <= tolerance
+    public static func cutsBetween(_ earlier: CGRect, _ later: CGRect, edgeFraction: CGFloat = 0.004) -> Bool {
+        earlier.maxX >= 1 - edgeFraction || later.minX <= edgeFraction
     }
 }

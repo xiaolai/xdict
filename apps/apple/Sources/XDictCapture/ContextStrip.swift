@@ -63,15 +63,15 @@ public enum ContextStrip {
 /// A window split into panes reads as rows that run across both. Measured 2026-10-11 on a 5344 px window with two
 /// terminal panes: without a column split, words in the middle of the left pane were lost, and a boundary set by hand
 /// at the wrong place (2000 px against a pane ending near 2500) is the defect this exists to prevent. A gutter is a band
-/// at least `minimumGutter` line heights wide, interior to the text, with no ink on any row — or, where no such band
+/// at least `minimumGutterRatio` line heights wide, interior to the text, with no ink on any row — or, where no such band
 /// exists, with no ink on any row but one: a title or a status line over both panes, which leaves the gutter present on
 /// a majority of rows as long as there are three or more. Two crossing rows are not tolerated, so a layout they cross
 /// is read as one column, which is what the reading was before columns were found at all.
 public enum ColumnLayout {
     /// **Wider than anything inside one row.** Fragments of one row are joined within one line height
-    /// (`LineJoiner.sameRowGap`), and the two columns measured for that rule sat 2.5 line heights apart; a word space is
+    /// (`LineJoiner.sameRowGapRatio`), and the two columns measured for that rule sat 2.5 line heights apart; a word space is
     /// a third of one.
-    static let minimumGutter: Double = 1.5
+    static let minimumGutterRatio: Double = 1.5
 
     /// The columns, left to right, in points across `region`, split at the middle of each gutter. One column where
     /// there is no gutter, and for a capture with no size.
@@ -83,7 +83,7 @@ public enum ColumnLayout {
             row.members.map { lines[$0].box.minX * width...max(lines[$0].box.minX, lines[$0].box.maxX) * width }
         }
         let height = Statistics.median(rows.map { $0.line.box.height * region.height }) ?? 0
-        let minimum = height * CGFloat(minimumGutter)
+        let minimum = height * CGFloat(minimumGutterRatio)
         // Empty on every row first; only where none is found may a minority of rows cross a gutter. Asked in this order,
         // a sparse pane — a single prompt beside a page of text — is still found by the strict rule, which the tolerant
         // one would fold into the margin.
@@ -151,21 +151,21 @@ public struct StripParagraph: Equatable, Sendable {
 /// followed by a capital is found there, in the joined text.
 public enum ParagraphFinder {
     /// A row this much further from the last than the column's median spacing starts a new paragraph.
-    static let paragraphPitch: Double = 1.5
+    static let paragraphPitchRatio: Double = 1.5
     /// A clear gap this many line heights tall starts a new paragraph, whatever the spacing elsewhere — the rule that
     /// holds where there are too few rows for a median to mean anything.
-    static let paragraphGap: Double = 1.5
+    static let paragraphGapRatio: Double = 1.5
     /// Two rows set this differently in size are not one paragraph — a title over body text. **Below `LineJoiner`'s
     /// 0.6, by measurement**: Vision boxed neighbouring rows of one 18 px canvas paragraph at 13.8 and 25.2 pt (0.55) on
     /// the E2E Mac, 2026-10-11, and 0.6 ended the paragraph there as `complete`. A heading is set apart by its gap too.
     static let sizeRatio: Double = 0.5
     /// Two left edges closer than this many line heights are one margin: Vision's boxes jitter, and a character is
     /// about half a line height wide.
-    static let marginTolerance: Double = 0.5
+    static let marginToleranceRatio: Double = 0.5
     /// **A row this close to the strip's top or bottom edge, in line heights, may be cut by it.** Vision reads a row the
     /// edge cuts in half with a short box, and that box failed the size test and closed the paragraph there as complete
     /// (the E2E Mac, 2026-10-11). Such a row is the strip's edge, not a boundary: the walk stops before it, open.
-    static let edgeContact: Double = 0.25
+    static let edgeContactRatio: Double = 0.25
 
     /// `maximumUTF16` is the acquisition limit on joined text (`CaptureLimits.contextUTF16`), applied here, before the
     /// paragraph is assembled and segmented.
@@ -234,7 +234,7 @@ public enum ParagraphFinder {
             let steps = zip(sorted, sorted.dropFirst())
                 .map { ($1.line.box.minY - $0.line.box.minY) * region.height }
                 .filter { $0 > height * 0.5 }
-            pitch = Statistics.median(steps) ?? height * CGFloat(ParagraphFinder.paragraphPitch)
+            pitch = Statistics.median(steps) ?? height * CGFloat(ParagraphFinder.paragraphPitchRatio)
         }
 
         func top(_ row: Int) -> CGFloat { rows[row].line.box.minY * region.height }
@@ -242,8 +242,8 @@ public enum ParagraphFinder {
         func left(_ row: Int) -> CGFloat { rows[row].line.box.minX * region.width }
         func height(_ row: Int) -> CGFloat { rows[row].line.box.height * region.height }
         func marked(_ row: Int) -> Bool { ListMarker.starts(rows[row].line.text) }
-        func touchesTop(_ row: Int) -> Bool { top(row) <= lineHeight * CGFloat(ParagraphFinder.edgeContact) }
-        func touchesBottom(_ row: Int) -> Bool { bottom(row) >= region.height - lineHeight * CGFloat(ParagraphFinder.edgeContact) }
+        func touchesTop(_ row: Int) -> Bool { top(row) <= lineHeight * CGFloat(ParagraphFinder.edgeContactRatio) }
+        func touchesBottom(_ row: Int) -> Bool { bottom(row) >= region.height - lineHeight * CGFloat(ParagraphFinder.edgeContactRatio) }
 
         func length(_ range: ClosedRange<Int>) -> Int {
             range.map { rows[$0].line.text.utf16.count }.reduce(0, +) + range.count - 1
@@ -251,8 +251,8 @@ public enum ParagraphFinder {
 
         /// Whether a row whose top and bottom are `upper` lies a paragraph away from one at `lower`.
         func breaks(upper: (top: CGFloat, bottom: CGFloat), lower: (top: CGFloat, bottom: CGFloat)) -> Bool {
-            lower.top - upper.top > pitch * CGFloat(ParagraphFinder.paragraphPitch)
-                || lower.top - upper.bottom > lineHeight * CGFloat(ParagraphFinder.paragraphGap)
+            lower.top - upper.top > pitch * CGFloat(ParagraphFinder.paragraphPitchRatio)
+                || lower.top - upper.bottom > lineHeight * CGFloat(ParagraphFinder.paragraphGapRatio)
         }
 
         func breaks(_ upper: Int, _ lower: Int) -> Bool {
@@ -262,7 +262,7 @@ public enum ParagraphFinder {
         }
 
         func sameMargin(_ a: Int, _ b: Int) -> Bool {
-            abs(left(a) - left(b)) <= lineHeight * CGFloat(ParagraphFinder.marginTolerance)
+            abs(left(a) - left(b)) <= lineHeight * CGFloat(ParagraphFinder.marginToleranceRatio)
         }
 
         /// Walks `top` upward to the paragraph's first row. True where a boundary was found, false where the strip ran
