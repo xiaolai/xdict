@@ -88,8 +88,9 @@ struct TestInventoryTests {
         // aNoticeForAHoverThatNoLongerStandsIsNotShown, aBlockedReadIsAskedAgainWhenTheCaptureFinishes, aReAskKeepsItsNumber)
         // moved by name; seven added (Accessibility first, a site refused through Accessibility, an excluded app's
         // recognition, an overdue context, a notice told and its request ended, a recognised word presented pending, and
-        // one not presented cancelling its context).
-        "XDictCaptureMacTests": 226,
+        // one not presented cancelling its context). 226 → 230: an excluded app and an unattributable window refused before
+        // any capture call, an allowed one captured, and a word refused after the read cancelling its context.
+        "XDictCaptureMacTests": 230,
         // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
         // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
         // read through hover's reader at one point, and the process's lines and exits.
