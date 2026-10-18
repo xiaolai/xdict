@@ -7,9 +7,10 @@ import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
 /// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the Smaller/Bigger Text pair and the
-/// search field at its trailing edge; the scope bar runs under it; the sidebar of matching headwords appears only after
-/// a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep their contract. The menus
-/// (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
+/// search field at its trailing edge, whose magnifier holds the scope menu (P6, XDict's own); the sidebar of matching
+/// headwords appears only after a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep
+/// their contract. The menus (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word,
+/// Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     @State private var columns = NavigationSplitViewVisibility.detailOnly
@@ -94,9 +95,10 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
-            SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
-                        onChange: { state.typedText($0) },
-                        onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
+            Self.searchField(text: state.model.text, known: state.model.known, scope: state.model.scope,
+                             focus: state.searchFocus, onScope: { state.model.setScope($0) },
+                             onChange: { state.typedText($0) }, onSubmit: { state.submit() },
+                             onMove: { state.move($0) }, onCancel: { state.cancel() })
                 // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
                 // hosted AppKit view by its ideal, and NSSearchField has none, so the range left it near its least
                 // (owner, 2026-10-18). At the 400 pt minimum it is 152 pt, so the pairs still overflow first (P8).
@@ -104,23 +106,32 @@ public struct SearchWindow: View {
         }
         .visibilityPriority(.high)
     }
+
+    /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the
+    /// scope menu's lines, which also set the magnifier (P6).
+    static func searchField(text: String, known: [SearchSource], scope: SearchScope, focus: Int,
+                            onScope: @escaping (SearchScope) -> Void, onChange: @escaping (String) -> Void,
+                            onSubmit: @escaping () -> Void, onMove: @escaping (Int) -> Bool,
+                            onCancel: @escaping () -> Bool) -> SearchField {
+        SearchField(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
+                    scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
+                    onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
+    }
 }
 
-/// The entry pane: the scope bar over the entry view, the page's notices, and a placeholder while there is nothing to
-/// read.
+/// The entry pane: the page's notices over the entry view, and a placeholder while there is nothing to read. The entry
+/// starts right under the toolbar: the scope is the search field's menu (P6), not a row of its own.
 struct EntryDetail: View {
     let state: SearchWindowState
 
     var body: some View {
         VStack(spacing: 0) {
-            ScopeBar(state: state)
-                .frame(height: ScopeBarLayout.height)
-                .background { FindKeys(state: state) }
             PageNotices(state: state)
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
                 .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }
         }
+        .background { FindKeys(state: state) }
     }
 
     @ViewBuilder private var placeholder: some View {

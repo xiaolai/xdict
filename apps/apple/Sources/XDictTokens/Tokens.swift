@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "afecb41df5fdba8b9a8e8121b1ee286b3e633c1312c70fd03173313b67f5249b"
+    public static let sourceDigest = "699fdcfa03c24f0fb5a9c265534481dd3cdfe1d34b09e4e9bf8b008074a89232"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -42,8 +42,6 @@ public enum Tokens {
         public static let startSide: CGFloat = 16
         /// The "Did you mean?" header starts where the sidebar rows' text starts.
         public static let sidebarHeaderLeading: CGFloat = 18
-        /// Apple-measured (P6, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let scopeLeading: CGFloat = 7
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let panelLeading: CGFloat = 24
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
@@ -76,8 +74,6 @@ public enum Tokens {
         public static let sidebar: CGFloat = 28
         /// Apple-measured (P39, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let settingsTable: CGFloat = 20
-        /// Apple-measured (P6, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let scopeButton: CGFloat = 22
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let panelTitle: CGFloat = 24
         /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
@@ -92,10 +88,6 @@ public enum Tokens {
 
     /// The sizes of controls and bars.
     public enum Control {
-        /// Apple-measured (P6, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let scopeBar: CGFloat = 36
-        /// Apple-measured (P6, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let scopeMore: CGFloat = 36
         /// The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window.
         public static let toolbar: CGFloat = 52
         /// The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06).
