@@ -38,6 +38,8 @@ struct TestInventoryTests {
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18).
         "XDictAppleImportTests": 67,
+        // Added with the design tokens (2026-10-18): the generated file against its source, and both faces of a token.
+        "XDictTokensTests": 6,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
