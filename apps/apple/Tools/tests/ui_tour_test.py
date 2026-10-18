@@ -119,7 +119,7 @@ def rowed(*words, semibold=0):
 
 def scope_menu(chosen):
     """The search field's magnifier, the scope menu's button (P6, XDict's own since 2026-10-18; P42)."""
-    return node("AXButton", (523, 14, 28, 24), description="Search in", identifier="scope.menu", value=chosen)
+    return node("AXButton", (523, 14, 28, 24), description="Search In", identifier="scope.menu", value=chosen)
 
 
 def apple_window(title, *extra, chosen="All Dictionaries"):
@@ -233,7 +233,7 @@ for route in parity.MENU_RULES:
 shared = {"menubar": apple_menus["menubar"] + [{"title": "Edit", "items": [{"title": "Share…", "items": []}]}]}
 assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "P45 never red"
 assert parity.menus_share({"menubar": apple_menus["menubar"][1:]}), "P45 without Services"
-# P6: the scope is the search field's menu. The bar alone, the bar beside the menu, a menu button not named "Search in",
+# P6: the scope is the search field's menu. The bar alone, the bar beside the menu, a menu button not named "Search In",
 # and a placeholder that does not name the chosen dictionary are each red.
 assert parity.scope_menu(apple_window("XDict")) is None
 assert parity.scope_menu(apple_window("XDict", scope_bar)), "the old scope bar beside the menu"
@@ -242,7 +242,7 @@ bar_only["windows"][0]["children"][0]["children"][4]["children"] = []
 assert parity.scope_menu(bar_only), "the scope bar without the menu"
 unnamed = apple_window("XDict")
 unnamed["windows"][0]["children"][0]["children"][4]["children"][0]["description"] = "search"
-assert parity.scope_menu(unnamed), "a magnifier not named 'Search in'"
+assert parity.scope_menu(unnamed), "a magnifier not named 'Search In'"
 mislabelled = apple_window("XDict", chosen="Beta")
 mislabelled["windows"][0]["children"][0]["children"][4]["placeholder"] = "Search"
 assert parity.scope_selected(1)(mislabelled), "Beta chosen but the placeholder says Search"

@@ -8,7 +8,7 @@ import XDictTestSupport
 @testable import XDictUI
 
 /// **The scope menu** (P6, XDict's own since 2026-10-18: 24 dictionaries overflowed the scope bar; P7, P8, P42): the
-/// search field's magnifier drops down "Search in": All Dictionaries, then each enabled dictionary in the reader's order,
+/// search field's magnifier drops down "Search In": All Dictionaries, then each enabled dictionary in the reader's order,
 /// the chosen one checked, one that cannot answer greyed, each with the Search menu's key. The chosen scope stays in
 /// sight: the placeholder names a single dictionary and the magnifier changes. Read on AppKit's own `NSSearchField`, its
 /// `searchMenuTemplate` and the search button's accessibility element, with the field's own coordinator as the target,
@@ -111,8 +111,41 @@ struct SearchScopeMenuTests {
         #expect(Self.chinese(one) == "在 Gamma 中搜索")
         // A scope no longer known reads as every dictionary, which the model falls back to.
         #expect(Self.english(SearchScopeMenu.prompt(known: Self.known, scope: .one(UUID()))) == "Search")
-        #expect(Self.english(SearchScopeMenu.title) == "Search in")
+        #expect(Self.english(SearchScopeMenu.title) == "Search In")
         #expect(Self.chinese(SearchScopeMenu.title) == "搜索范围")
+    }
+
+    /// The menu's heading has a key of its own: "Search in" is the Details sheet's search-language picker
+    /// (LibraryDetail), 查询语言 in Chinese, and a shared key made that picker read 搜索范围 (acceptance, 2026-10-18).
+    @Test func theMenuTitleAndTheDetailsPickerKeepTheirOwnWords() {
+        let picker = LocalizedStringResource("Search in")
+        #expect(Self.chinese(picker) == "查询语言")
+        #expect(Self.chinese(SearchScopeMenu.title) != Self.chinese(picker))
+        #expect(SearchScopeMenu.title.key != picker.key)
+    }
+
+    /// A scope no longer known (a restored history entry naming a removed dictionary) is every dictionary, as the
+    /// model searches it: All Dictionaries is checked, matching the button's value and the placeholder.
+    @Test func aRemovedScopeChecksAllDictionaries() {
+        let items = SearchScopeMenu.items(known: Self.known, scope: .one(UUID()))
+        #expect(items.map(\.checked) == [true, false, false, false])
+        #expect(SearchScopeMenu.items(known: Self.known, scope: .one(Self.off.id)).map(\.checked)
+                    == [true, false, false, false], "a disabled dictionary is not offered, so not chosen")
+    }
+
+    /// The window's own wiring (`SearchWindow.searchField`, what its toolbar shows): the placeholder, the menu and
+    /// so the magnifier follow the model's scope, never a constant.
+    @Test func theWindowWiresTheFieldToTheScope() {
+        func field(_ scope: SearchScope) -> SearchField {
+            SearchWindow.searchField(text: "", known: Self.known, scope: scope, focus: 0, onScope: { _ in },
+                                     onChange: { _ in }, onSubmit: {}, onMove: { _ in false }, onCancel: { false })
+        }
+        #expect(field(.all).prompt == String(localized: SearchScopeMenu.prompt(known: Self.known, scope: .all)))
+        let gamma = field(.one(Self.gamma.id))
+        #expect(gamma.prompt == String(localized: SearchScopeMenu.prompt(known: Self.known, scope: .one(Self.gamma.id))))
+        #expect(gamma.prompt != field(.all).prompt, "one dictionary is named in the placeholder")
+        #expect(gamma.scopes == SearchScopeMenu.items(known: Self.known, scope: .one(Self.gamma.id)))
+        #expect(SearchScopeMenu.isNarrowed(gamma.scopes) && !SearchScopeMenu.isNarrowed(field(.all).scopes))
     }
 
     @Test func theMagnifierChangesWhenOneDictionaryIsChosen() throws {
@@ -165,7 +198,7 @@ struct SearchScopeMenuTests {
 
     // MARK: - Accessibility
 
-    /// **P42**: the magnifier is a button named "Search in", identified `scope.menu`, its value the chosen scope, and
+    /// **P42**: the magnifier is a button named "Search In", identified `scope.menu`, its value the chosen scope, and
     /// it offers its menu (AXShowMenu) — what replaces the scope bar's radio group.
     @Test func theMenuButtonReadsItsNameAndTheChosenScope() throws {
         let coordinator = Self.coordinator()

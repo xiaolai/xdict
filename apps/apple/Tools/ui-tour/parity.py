@@ -164,13 +164,13 @@ def scope_button(tree):
 
 def scope_menu(tree):
     """P6, XDict's own since 2026-10-18 (24 dictionaries overflowed Apple's scope bar): the scope is the search field's
-    menu, its magnifier a button named "Search in" (P42), and no scope bar remains under the toolbar. The menu's lines
+    menu, its magnifier a button named "Search In" (P42), and no scope bar remains under the toolbar. The menu's lines
     show only while it is open (route scope.menu, a picture)."""
     button = scope_button(tree)
     if button is None:
         return "no scope menu: the search field holds no 'scope.menu' button"
-    if button.get("description") != "Search in":
-        return f"the scope menu's button is named {button.get('description')!r}, not 'Search in'"
+    if button.get("description") != "Search In":
+        return f"the scope menu's button is named {button.get('description')!r}, not 'Search In'"
     if find(tree, "AXRadioGroup"):
         return "a scope bar (a radio group) is still under the toolbar"
     return None

@@ -18,10 +18,10 @@ def node(role, ident="", texts=(), depth=0):
 
 
 def window(chosen="All Dictionaries", label=True):
-    # The search field and its magnifier, the scope menu's button: "Search in", the chosen scope as its value (P6, P42).
+    # The search field and its magnifier, the scope menu's button: "Search In", the chosen scope as its value (P6, P42).
     prompt = "Search" if chosen == "All Dictionaries" else f"Search in {chosen}"
     field = node("AXTextField", "search-field", [prompt], 2)
-    menu = node("AXButton", "scope.menu", (["Search in"] if label else []) + [chosen], 3)
+    menu = node("AXButton", "scope.menu", (["Search In"] if label else []) + [chosen], 3)
     table = [node("AXTable", "results", ["search results"], 2)] + [
         node("AXRow", "", [], 3) if i % 2 == 0 else node("AXStaticText", "", [w], 4)
         for i, w in enumerate(["", "apple", "", "apple polisher", "", "applet"])]
@@ -37,15 +37,15 @@ class Where(unittest.TestCase):
     def test_an_item_with_a_value_needs_the_value(self):
         # What the lookup instrument expects (LookupWindow.swift): the menu button's name, then the chosen scope.
         nodes = window(chosen="Beta")
-        self.assertIsNotNone(checks.where("#scope.menu=Search in:Beta", nodes))
-        self.assertIsNone(checks.where("#scope.menu=Search in:Alpha", nodes), "offered, not chosen")
-        self.assertIsNone(checks.where("#scope.menu=Search in:Beta", window(chosen="Beta", label=False)))
-        self.assertIsNotNone(checks.where("#scope.menu=Search in:Dict: Two", window(chosen="Dict: Two")),
+        self.assertIsNotNone(checks.where("#scope.menu=Search In:Beta", nodes))
+        self.assertIsNone(checks.where("#scope.menu=Search In:Alpha", nodes), "offered, not chosen")
+        self.assertIsNone(checks.where("#scope.menu=Search In:Beta", window(chosen="Beta", label=False)))
+        self.assertIsNotNone(checks.where("#scope.menu=Search In:Dict: Two", window(chosen="Dict: Two")),
                              "a name holding a colon")
 
     def test_judge_fails_an_empty_window(self):
         self.assertFalse(checks.judge("x", {"present": []}, [])["pass"])
-        self.assertTrue(checks.judge("x", {"present": ["#scope.menu=Search in:All Dictionaries"]}, window())["pass"])
+        self.assertTrue(checks.judge("x", {"present": ["#scope.menu=Search In:All Dictionaries"]}, window())["pass"])
 
 
 class Scope(unittest.TestCase):
@@ -56,7 +56,7 @@ class Scope(unittest.TestCase):
     def test_the_placeholder_alone_or_the_button_alone_fails(self):
         nodes = [n if n["id"] != "search-field" else dict(n, texts=["Search"]) for n in window(chosen="Beta")]
         self.assertFalse(checks.scope_chosen(nodes, "Beta")[0], "the field still says Search")
-        nodes = [n if n["id"] != "scope.menu" else dict(n, texts=["Search in", "All Dictionaries"])
+        nodes = [n if n["id"] != "scope.menu" else dict(n, texts=["Search In", "All Dictionaries"])
                  for n in window(chosen="Beta")]
         self.assertFalse(checks.scope_chosen(nodes, "Beta")[0], "the button still says All Dictionaries")
 

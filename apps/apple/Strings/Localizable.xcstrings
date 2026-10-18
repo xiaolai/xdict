@@ -4574,6 +4574,22 @@
         }
       }
     },
+    "Search In" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search In"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索范围"
+          }
+        }
+      }
+    },
     "Search in" : {
       "localizations" : {
         "en" : {
@@ -4585,7 +4601,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "搜索范围"
+            "value" : "查询语言"
           }
         }
       }
