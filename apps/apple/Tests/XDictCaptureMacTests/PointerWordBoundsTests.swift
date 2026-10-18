@@ -2,7 +2,7 @@ import ApplicationServices
 import Foundation
 import Testing
 import XDictCapture
-import XDictCaptureMac
+@testable import XDictCaptureMac
 
 /// The tolerance the ported tests were written against (XiaolaiDict ADR-0016: 3 pt across, 2 pt down), handed in as the
 /// app hands in its tokens' (XDict ADR-0014 decision 11).

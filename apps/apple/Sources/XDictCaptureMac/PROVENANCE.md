@@ -38,7 +38,8 @@ area, a security review's finding), two limit tests in `PointerWordReaderTests` 
 **For WI-3 (the hover reader): read a hover's text only through `PointerWordSource.readUnlessRefused`.** It is one lane
 job that checks the site (fail-closed: `unreadable` unless the walk to the application is complete and every web area on
 it decided) and then reads, so a page cannot navigate between a check and a read. The source offers no separate host or
-read call on purpose. Third round of WI-2: eight more tests in `SiteExclusionTests` (a parent that cannot be read, a
+read call on purpose, and `PointerWordReader.read` and `.host` are internal (tests reach them
+through `@testable import`), so `readUnlessRefused` is the only public way to read a hover's text. Third round of WI-2: eight more tests in `SiteExclusionTests` (a parent that cannot be read, a
 frame with no address, the walk's limit, a cycle, the combined job twice, and random trees against a model of the rule).
 
 ## Not moved
