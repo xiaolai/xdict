@@ -21,7 +21,8 @@ extension ServiceClient {
         case .wire(.timedOut(let deadline)): .timedOut(after: deadline)
         case .wire(.interrupted), .wire(.invalidated): .unreachable(String(describing: failure))
         case .wire(.undecodable), .wire(.contractMismatch): .unreadable(String(describing: failure))
-        case .wire(.core), .wire(.refused), .superseded, .fileUnavailable, .reopenNeedsImport, .needsFiles:
+        case .wire(.core), .wire(.refused), .wire(.appleImport), .superseded, .fileUnavailable, .reopenNeedsImport,
+             .needsFiles:
             .refused(String(describing: failure))
         }
     }

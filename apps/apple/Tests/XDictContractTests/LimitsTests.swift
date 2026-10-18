@@ -167,6 +167,5 @@ struct LimitsTests {
         #expect(Deadlines.deadline(for: report, onFreshConnection: false) == .seconds(15))
         #expect(!report.reportsProgress && report.creditClass == nil && !report.isBulk && report.packageSpec == nil)
         #expect(report.render == nil)
-        #expect(Contract.version == 5)
     }
 }

@@ -214,6 +214,7 @@ test-tools:
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/e2e-requested-test.sh
 	@Tools/tests/not-on-air-test.sh
+	@Tools/tests/expand-entitlements-test.sh
 	@Tools/tests/render-requested-test.sh
 	@Tools/tests/affected-graph-test.sh
 	@Tools/tests/remote-build-test.sh

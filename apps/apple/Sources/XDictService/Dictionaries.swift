@@ -114,8 +114,9 @@ final class Dictionaries: Sendable {
             // ADR-0010: the service reads the sheets and computes the report; the app only shows it.
             case .readingStyle(let dict):
                 return (.answer(.readingStyle(XDictContract.ReadingStyle(try core.readingStyle(dict: dict.rawValue)))), nil)
-            // `cancel` is the connection's, never the core's (`ConnectionSession`).
-            case .cancel:
+            // `cancel` is the connection's, never the core's (`ConnectionSession`); so are conversions, which never reach
+            // the core (`AppleImports`).
+            case .cancel, .convertApple, .cancelConversion:
                 return (.failure(.refused(.unsupportedOperation)), nil)
             }
         } catch let error as CoreError {

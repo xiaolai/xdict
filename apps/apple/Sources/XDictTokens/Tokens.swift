@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "75bbaca7b59e8c8735525869021f79144a8f4e2bc20ce566a2932fa1b4af55eb"
+    public static let sourceDigest = "66bf5a4c4a8f0269a98608eb2f2ce20c9beb4e9891eff0a9ada658c3bfe5991b"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -192,6 +192,86 @@ public enum Tokens {
         public static var entryRule: TokenColour { TokenColour(light: 0x929292, dark: 0x5c5c5c) }
         /// Apple-measured (P27, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static var entryPage: TokenColour { TokenColour(light: 0xffffff, dark: 0x1e1e1e) }
+    }
+
+    /// Values the entry view writes into CSS, SVG or a script as text: the reading inset, glyph strokes, the blocked image's placeholder, the popover glass measured.
+    public enum EntryText {
+        /// Every entry's inset whatever its CSS, as GoldenDict pads its articles: many MDict sheets say body{margin:0}.
+        public static let readingInset = "8px 14px"
+        /// The stroke of XDict's drawn glyphs (speaker, chevron, arrow) on their 16-unit grid: SF Symbols' regular weight.
+        public static let glyphStroke = "1.5"
+        /// A blocked image's box: a light neutral, so it reads as a stand-in, not content.
+        public static let placeholderFill = "#f2f2f2"
+        /// A blocked image's dashed edge, 3:1 on the page.
+        public static let placeholderStroke = "#8a8a8a"
+        /// The dashes of a blocked image's edge: a stand-in, not a frame.
+        public static let placeholderDash = "3 2"
+        /// A blocked image's host name, 7:1 on its fill.
+        public static let placeholderText = "#3a3a3a"
+        /// A blocked image's host name, in the system face.
+        public static let placeholderFont = "-apple-system, sans-serif"
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let glassLightBusy = "#939bb1"
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let glassLightWhite = "#dcdee3"
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let glassDarkDesktop = "#343e4f"
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let glassDarkDeepest = "#202336"
+    }
+
+    /// The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41).
+    public enum PageDivider {
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let height: CGFloat = 32
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let font: CGFloat = 18
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let triangle: CGFloat = 5.5
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let triangleCentre: CGFloat = 29
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let ruleStart: CGFloat = 45
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let trailing: CGFloat = 16
+        /// Apple-measured (P15, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let gap: CGFloat = 12
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let popoverBand: CGFloat = 40
+        /// Apple-measured (P41, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let popoverGap: CGFloat = 8
+    }
+
+    /// The printed entry page's section names.
+    public enum Print {
+        /// A printed section's name sits this far into its header band, as Apple's prints.
+        public static let nameOffset: CGFloat = 6
+        /// A printed section name's line: its 12 pt text and leading.
+        public static let nameHeight: CGFloat = 16
+    }
+
+    /// The picture a blocked image becomes (SVG px): its host's name in a dashed box.
+    public enum Placeholder {
+        /// A blocked image's narrowest box, so a short host still reads as a box.
+        public static let minWidth: CGFloat = 80
+        /// A blocked image's widest box; a longer host is cut by the box.
+        public static let maxWidth: CGFloat = 480
+        /// The width a host's character is given at the 12 px font: a sizing estimate, as SVG text cannot be measured here.
+        public static let charWidth: CGFloat = 7
+        /// A blocked image's text inset, both sides together.
+        public static let padding: CGFloat = 24
+        /// A blocked image's box height: one line of 12 px text with room.
+        public static let height: CGFloat = 28
+        /// A blocked image's box corners.
+        public static let radius: CGFloat = 4
+        /// Where a blocked image's text starts: half the padding.
+        public static let textX: CGFloat = 12
+        /// A blocked image's text baseline in its 28 px box.
+        public static let textBaseline: CGFloat = 18
+        /// A blocked image's host name, a step under the body.
+        public static let fontSize: CGFloat = 12
+        /// Half a pixel: a one-pixel stroke drawn on the pixel grid.
+        public static let edge: CGFloat = 0.5
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).

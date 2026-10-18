@@ -85,7 +85,7 @@ private func header(isMDD: Bool, title: String, description: String) -> [UInt8] 
 @discardableResult
 func writeMDict(items: [MDictItem], isMDD: Bool, title: String, description: String, to url: URL,
                 fileLimit: Int = Bounds.production.sourceFileBytes,
-                meter: OutputMeter = OutputMeter(limit: Bounds.production.outputBytes)) throws -> [Int] {
+                meter: OutputMeter = OutputMeter(limit: Bounds.production.outputBytes), steps: Steps? = nil) throws -> [Int] {
     guard !items.isEmpty else { throw AppleImportError.noEntries }
     for it in items { try validateKey(it.key, isMDD: isMDD) }
     let order = KeyOrder.order(items.map(\.key), isMDD: isMDD)
@@ -102,10 +102,14 @@ func writeMDict(items: [MDictItem], isMDD: Bool, title: String, description: Str
     var recordBlocks: [[UInt8]] = []
     var recordIndex: [UInt8] = []
     var plain: [UInt8] = []
+    var plainRecords = 0
     var offset = 0
     let recordLimit = 65536
     func flushRecords() throws {
         guard !plain.isEmpty else { return }
+        // Before each record block is built: where a cancellation stops a conversion (ADR-0011 decision 5).
+        try steps?.writing(adding: plainRecords)
+        plainRecords = 0
         let b = try block(plain)
         recordIndex += be64(b.count) + be64(plain.count)
         recordBlocks.append(b)
@@ -133,6 +137,7 @@ func writeMDict(items: [MDictItem], isMDD: Bool, title: String, description: Str
         if !plain.isEmpty, plain.count + recLen > recordLimit { try flushRecords() }
         plain += data
         plain += terminator
+        plainRecords += 1
         offset += recLen
     }
     try flushRecords()
@@ -179,7 +184,10 @@ func writeMDict(items: [MDictItem], isMDD: Bool, title: String, description: Str
     for b in keyBlocks { try file.put(b) }
     try file.put(be64(recordBlocks.count) + be64(items.count) + be64(recordIndex.count) + be64(recordBlocks.reduce(0) { $0 + $1.count }))
     try file.put(recordIndex)
-    for b in recordBlocks { try file.put(b) }
+    for b in recordBlocks {
+        try steps?.writing()
+        try file.put(b)
+    }
     try file.finish()
     return order
 }
