@@ -27,6 +27,8 @@ colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's seman
 css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
 palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
 accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
+density = { kind = "css-density", doc = "R7a's space before a role-marked block: the main window's (B), and the lookup panel's (A) where it differs; in em, so it follows the text." }
+fill = { kind = "css-fill", doc = "Values a stylesheet takes as `{{fill-<name>}}`, written in when the sheet is installed, where `var()` cannot go (a media query)." }
 
 [space]
 xxs = { value = 2, why = "The scale's smallest step: a label over its caption, two lines that read as one." }
@@ -199,3 +201,20 @@ pink-tint = { light = "#feeaf2", dark = "#3c2730", why = "Hue family pink, tint 
 teal = { light = "#055959", dark = "#81ecec", why = "The default accent: at least 7:1 on every surface and tint, in both themes." }
 red = { light = "#901114", dark = "#fec9c2", why = "The red accent: at least 7:1 on every surface and tint, in both themes." }
 indigo = { light = "#3f3a8c", dark = "#c4c1ff", why = "The indigo accent: at least 7:1 on every surface and tint, in both themes." }
+
+# R7a (WI-11, 2026-10-17): space grows with structural distance; translation < example < sense = subhead < heading =
+# phrase block < part-of-speech block; a heading binds to its first line.
+[density]
+space-translation = { main = "0em", panel = "0em", why = "A translation sits right under what it translates (R7a)." }
+space-example = { main = "0.5em", panel = "0.25em", why = "An example a half line under its sense (R7a, densities B and A)." }
+space-sense = { main = "0.75em", panel = "0.5em", why = "Between senses, more than an example's gap (R7a)." }
+space-subhead = { main = "0.75em", panel = "0.5em", why = "A phrase or derivative heading, at a sense's distance (R7a)." }
+space-heading = { main = "1em", panel = "0.75em", why = "Before a section heading: a line (R7a)." }
+space-phrase = { main = "1em", panel = "0.75em", why = "Before a phrase block, as before a heading (R7a)." }
+space-pos = { main = "1.5em", panel = "1em", why = "Before a part-of-speech block, the largest structural distance (R7a)." }
+space-after-heading = { main = "0.25em", why = "A heading binds to its first line (R7a); the same in both densities." }
+space-image = { main = "0.75em", why = "Around an illustration, about half a line (R16); the same in both densities." }
+
+[fill]
+bp-narrow = { value = "480px", why = "A pane at most this wide (a column under about 30em) turns a float into an illustration (R16)." }
+bp-wide = { value = "481px", why = "The first width past bp-narrow: a float beside text gets its space above (R16)." }

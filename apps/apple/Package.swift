@@ -45,7 +45,7 @@ let package = Package(
         // WebKit and AppKit, which nothing else in the view layer does. It gets bytes through `EntryContent`, never the
         // contract's types, so the service's client plugs in without the view knowing the wire (WI-3, WI-6).
         // `Style/` is compiled in as text by Tools/reading-style-gen.py (`EntryStyleFiles.swift`), never read at run time.
-        .target(name: "XDictEntryView", dependencies: ["XDictBase"], exclude: ["Style"]),
+        .target(name: "XDictEntryView", dependencies: ["XDictBase", "XDictTokens"], exclude: ["Style"]),
 
         // **Sound and speech** (plan-macos-v1 WI-7; `platform-architecture.md` §4a): the system's voices and which one
         // speaks a dictionary's declared language in the reader's accent, the reader's accent kept, and the output where
@@ -143,7 +143,7 @@ let package = Package(
         // The entry view's decisions, without a window or a web view (the build Mac opens neither): routing and refusal,
         // the policy on every response, the rule list, the navigation table, the switches' read-back, link routing, the
         // consent gate, find's counting and the readability rule (their JavaScript in JavaScriptCore), preferences.
-        .testTarget(name: "XDictEntryViewTests", dependencies: ["XDictEntryView"]),
+        .testTarget(name: "XDictEntryViewTests", dependencies: ["XDictEntryView", "XDictTokens"]),
         // The one test target besides the service that reaches the core: the service's own listener, over a real NSXPC
         // connection in this process, asked through the real client and the instruments' scenarios; and the core's
         // types mapped into the contract's.

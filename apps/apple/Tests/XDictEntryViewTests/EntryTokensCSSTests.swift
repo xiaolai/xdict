@@ -1,55 +1,46 @@
 import Foundation
 import Testing
 @testable import XDictEntryView
+import XDictTokens
 
-/// **`tokens.css` (generated from `Tokens/tokens.toml`) declares exactly the reading style's tokens** that
-/// `EntryReadingFrame` puts on the page today: every `--xdict-*` on `:root`, the palette per theme and the accents per
-/// hue, name for name and value for value. Phase 1 of the token system: the page is still drawn from
-/// `EntryReadingFrame.tokens`, and this holds the two equal until phase 2 draws it from the file.
+/// **Before the page is drawn from the generated sheets, they are what it is drawn from today, byte for byte**
+/// (phase 2 of the token system, test-first): `tokens.css` joined is `EntryReadingFrame.tokens`' `:root` block,
+/// `palette.css` is `paletteCSS`, `density.css` declares what `type.css`'s R7a block declares, and the generated Swift
+/// data is the arrays. Deleted with the arrays once the generated files are the only copy.
 struct EntryTokensCSSTests {
-    /// Each block of the file, by its selector, as its declarations in order.
-    static func blocks() throws -> [String: [(String, String)]] {
-        let css = try #require(EntryStyleFiles.text["tokens.css"], "tokens.css is not compiled in")
-        var out: [String: [(String, String)]] = [:], selector: String?
-        for line in css.split(separator: "\n").map(String.init) where !line.hasPrefix("/*") {
-            if line.hasSuffix("{") {
-                selector = String(line.dropLast())
-            } else if line == "}" {
-                selector = nil
-            } else if let selector, let colon = line.firstIndex(of: ":"), line.hasPrefix("--xdict-"), line.hasSuffix(";") {
-                out[selector, default: []].append((String(line[line.index(line.startIndex, offsetBy: 8)..<colon]),
-                                                   String(line[line.index(after: colon)...].dropLast())))
-            } else {
-                Issue.record("tokens.css: unexpected line \(line)")
-            }
+    static func declarations(_ css: String) -> [String] {
+        css.split(separator: "}").flatMap { block -> [String] in
+            let parts = block.split(separator: "{", maxSplits: 1)
+            guard parts.count == 2 else { return [] }
+            let selector = parts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            return parts[1].split(separator: ";").map { selector + " " + $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.hasSuffix(" ") }
         }
-        return out
     }
 
-    static func same(_ a: [(String, String)]?, _ b: [(String, String)]) -> Bool {
-        guard let a else { return false }
-        return a.map { $0.0 + ":" + $0.1 } == b.map { $0.0 + ":" + $0.1 }
+    @Test func theRootSheetIsTheFramesTokens() {
+        let legacy = ":root{" + EntryReadingFrame.tokens.map { "--xdict-\($0.0):\($0.1);" }.joined() + "}"
+        #expect(EntryStyle.bundled.css("tokens.css") == legacy)
     }
 
-    @Test func theRootTokensAreTheFramesTokens() throws {
-        #expect(Self.same(try Self.blocks()[":root"], EntryReadingFrame.tokens))
+    @Test func thePaletteSheetIsThePaletteCSS() {
+        #expect(EntryStyle.bundled.css("palette.css") == EntryReadingFrame.paletteCSS)
     }
 
-    @Test func thePaletteIsTheFramesPalette() throws {
-        let blocks = try Self.blocks()
-        #expect(Self.same(blocks[":root[data-xdict-theme=light]"], EntryReadingFrame.colours.map { ($0.0, $0.1) }))
-        #expect(Self.same(blocks[":root[data-xdict-theme=dark]"], EntryReadingFrame.colours.map { ($0.0, $0.2) }))
+    @Test func theDensitySheetDeclaresTypeCSSsBlock() throws {
+        let type = EntryStyle.bundled.css("type.css")
+        let start = try #require(type.range(of: ":root{--xdict-space-translation"))
+        let end = try #require(type.range(of: "--xdict-space-pos:1em}", range: start.upperBound..<type.endIndex))
+        #expect(Self.declarations(String(type[start.lowerBound..<end.upperBound]))
+                == Self.declarations(EntryStyle.bundled.css("density.css")))
     }
 
-    @Test func theAccentsAreTheFramesAccents() throws {
-        let blocks = try Self.blocks()
-        for accent in EntryReadingFrame.Accent.allCases {
-            #expect(Self.same(blocks[":root[data-xdict-theme=light][data-xdict-hue=\(accent.rawValue)]"],
-                              [("accent", accent.values.light)]))
-            #expect(Self.same(blocks[":root[data-xdict-theme=dark][data-xdict-hue=\(accent.rawValue)]"],
-                              [("accent", accent.values.dark)]))
+    @Test func theGeneratedDataIsTheArrays() {
+        #expect(Tokens.ReadingStyle.root.map { $0.0 + ":" + $0.1 } == EntryReadingFrame.tokens.map { $0.0 + ":" + $0.1 })
+        #expect(Tokens.ReadingStyle.palette.map { [$0.0, $0.1, $0.2] } == EntryReadingFrame.colours.map { [$0.0, $0.1, $0.2] })
+        for (accent, generated) in [(EntryReadingFrame.Accent.teal, Tokens.ReadingStyle.accentTeal),
+                                    (.red, Tokens.ReadingStyle.accentRed), (.indigo, Tokens.ReadingStyle.accentIndigo)] {
+            #expect(accent.values == generated)
         }
-        // `:root`, a palette per theme, and an accent per hue and theme: nothing else.
-        #expect(try Self.blocks().count == 3 + 2 * EntryReadingFrame.Accent.allCases.count)
     }
 }

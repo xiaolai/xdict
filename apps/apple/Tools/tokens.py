@@ -56,8 +56,14 @@ STYLE_DIR = "Sources/XDictEntryView/Style"
 SKIP_DIRS = ("Sources/XDictTokens",)
 SKIP_FILES = ("Sources/XDictEntryView/EntryStyleFiles.swift",)
 
-KINDS = {"length", "size", "font", "colour", "css", "css-palette", "css-accent"}
-SWIFT_KINDS = {"length", "size", "font", "colour"}
+KINDS = {"length", "size", "rect", "string", "font", "colour", "css", "css-palette", "css-accent", "css-density",
+         "css-fill"}
+# Kinds that become a Swift enum of the group's own name. The CSS kinds become `Tokens.ReadingStyle` (their data, for
+# the shell's checks and the palette it writes) and CSS files; `css-fill` becomes `Tokens.ReadingStyle.fills`, the
+# values of the `{{fill-<name>}}` placeholders a stylesheet uses where `var()` cannot go (a media query).
+SWIFT_KINDS = {"length", "size", "rect", "string", "font", "colour"}
+PALETTE_OUT = "Sources/XDictEntryView/Style/palette.css"
+DENSITY_OUT = "Sources/XDictEntryView/Style/density.css"
 TEXT_STYLES = ["largeTitle", "title", "title2", "title3", "headline", "subheadline", "body", "callout", "footnote",
                "caption", "caption2"]
 WEIGHTS = ["ultraLight", "thin", "light", "regular", "medium", "semibold", "bold", "heavy", "black"]
@@ -108,6 +114,12 @@ class Token:
             return num(f["value"])
         if k == "size":
             return num(f["width"]) + "x" + num(f["height"])
+        if k == "rect":
+            return f"{num(f['x'])},{num(f['y'])} {num(f['width'])}x{num(f['height'])}"
+        if k in ("string", "css-fill"):
+            return f["value"]
+        if k == "css-density":
+            return f["main"] + (" / panel " + f["panel"] if "panel" in f else "")
         if k == "font":
             if "system" in f:
                 return "." + f["system"]
@@ -130,12 +142,23 @@ class Token:
             return [f["value"]]
         if k == "size":
             return [f["width"], f["height"]]
+        if k == "rect":
+            return [f["x"], f["y"], f["width"], f["height"]]
         if k == "font" and "size" in f:
             return [f["size"]]
-        if k == "css":
+        if k in ("css", "css-fill"):
             px = css_px(f["value"])
             return [px] if px is not None else []
+        if k == "css-density":
+            return [p for p in (css_px(f["main"]), css_px(f.get("panel", ""))) if p is not None]
         return []
+
+    @property
+    def css_text(self):
+        """The literal as written in CSS, which `find` also matches exactly (`0.25em` is not `0.25rem`)."""
+        f = self.fields
+        return [v for v in (f.get("value"), f.get("main"), f.get("panel"), f.get("light"), f.get("dark"))
+                if isinstance(v, str)]
 
 
 def num(v):
@@ -219,6 +242,19 @@ def check_fields(kind, f, ids):
         allowed |= {"width", "height"}
         if not all(is_number(f.get(k)) and f.get(k) >= 0 for k in ("width", "height")):
             out.append("`width` and `height` must be numbers of points")
+    elif kind == "rect":
+        allowed |= {"x", "y", "width", "height"}
+        if not all(is_number(f.get(k)) for k in ("x", "y", "width", "height")):
+            out.append("`x`, `y`, `width` and `height` must be numbers of points")
+    elif kind in ("string", "css-fill"):
+        allowed |= {"value"}
+        if not isinstance(f.get("value"), str) or not f["value"].strip() or re.search(r'[\\"\n]', f["value"]):
+            out.append("`value` must be a string with no backslash, double quote or newline")
+    elif kind == "css-density":
+        allowed |= {"main", "panel"}
+        if not all(isinstance(f.get(k, "x"), str) and re.fullmatch(r"-?\d*\.?\d+(em|rem|px)", f.get(k, "0em"))
+                   for k in ("main", "panel")) or "main" not in f:
+            out.append("`main` (and `panel`, if the lookup panel's differs) must be CSS lengths")
     elif kind == "font":
         allowed |= {"system", "size", "weight", "design", "italic"}
         if "system" in f:
@@ -324,6 +360,11 @@ def render_swift(data, tokens, digest):
             elif t.kind == "size":
                 out.append(f"        public static let {t.name} = CGSize(width: {num(f['width'])}, "
                            f"height: {num(f['height'])})")
+            elif t.kind == "rect":
+                out.append(f"        public static let {t.name} = CGRect(x: {num(f['x'])}, y: {num(f['y'])}, "
+                           f"width: {num(f['width'])}, height: {num(f['height'])})")
+            elif t.kind == "string":
+                out.append(f'        public static let {t.name} = "{f["value"]}"')
             elif t.kind == "font":
                 if "system" in f:
                     weight = f", weight: .{f['weight']}" if "weight" in f else ""
@@ -339,34 +380,88 @@ def render_swift(data, tokens, digest):
                     out.append(f"        public static var {t.name}: TokenColour {{ TokenColour(light: "
                                f"0x{f['light'][1:]}, dark: 0x{f['dark'][1:]}) }}")
         out.append("    }")
+    out += render_reading_style(tokens)
     out += ["}", ""]
     return "\n".join(out)
 
 
-def render_css(data, tokens, digest):
-    out = [f"/* Generated by Tools/tokens.py from Tokens/tokens.toml (sha256 {digest}). Do not edit. */"]
+def camel(css_name):
+    head, *rest = css_name.split("-")
+    return head + "".join(p[:1].upper() + p[1:] for p in rest)
+
+
+def swift_string(s):
+    return json.dumps(s, ensure_ascii=False)
+
+
+def render_reading_style(tokens):
+    """The reading style's tokens as Swift data: what the shell checks colours against and writes into a sheet."""
     def by(kind):
         return [t for t in tokens if t.kind == kind]
-    out.append(":root{")
-    out += [f"--xdict-{t.name}:{t.fields['value']};" for t in by("css")]
-    out.append("}")
+    out = ["", "    /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).",
+           "    public enum ReadingStyle {",
+           "        /// Every `--xdict-<name>` on `:root`, in order.",
+           "        public static let root: [(String, String)] = ["]
+    out += [f"            ({swift_string(t.name)}, {swift_string(t.fields['value'])})," for t in by("css")]
+    out += ["        ]", "        /// The palette: name, light, dark.",
+            "        public static let palette: [(String, String, String)] = ["]
+    out += [f"            ({swift_string(t.name)}, {swift_string(t.fields['light'])}, {swift_string(t.fields['dark'])}),"
+            for t in by("css-palette")]
+    out += ["        ]", "        /// The accent hues, light and dark."]
+    out += [f"        public static let accent{camel(t.name)[:1].upper() + camel(t.name)[1:]} = "
+            f"(light: {swift_string(t.fields['light'])}, dark: {swift_string(t.fields['dark'])})" for t in by("css-accent")]
+    out += ["        /// The values of the `{{fill-<name>}}` placeholders, for what `var()` cannot reach (a media query).",
+            "        public static let fills: [String: String] = ["]
+    out += [f"            {swift_string('fill-' + t.name)}: {swift_string(t.fields['value'])}," for t in by("css-fill")]
+    if not by("css-fill"):
+        out[-1] = "        public static let fills: [String: String] = [:"
+    out += ["        ]", "    }"]
+    return out
+
+
+def css_header(digest):
+    return f"/* Generated by Tools/tokens.py from Tokens/tokens.toml (sha256 {digest}). Do not edit. */"
+
+
+def render_css(tokens, digest):
+    """`:root`'s tokens: one declaration a line, which `EntryStyle.css` joins into `:root{--xdict-a:b;...}`."""
+    out = [css_header(digest), ":root{"]
+    out += [f"--xdict-{t.name}:{t.fields['value']};" for t in tokens if t.kind == "css"]
+    out += ["}", ""]
+    return "\n".join(out)
+
+
+def render_palette(tokens, digest):
+    """The palette per theme, then each accent hue per theme (no `;` after the one declaration: as written before)."""
+    out = [css_header(digest)]
     for theme in ("light", "dark"):
         out.append(f":root[data-xdict-theme={theme}]{{")
-        out += [f"--xdict-{t.name}:{t.fields[theme]};" for t in by("css-palette")]
+        out += [f"--xdict-{t.name}:{t.fields[theme]};" for t in tokens if t.kind == "css-palette"]
         out.append("}")
-    for t in by("css-accent"):
+    for t in [t for t in tokens if t.kind == "css-accent"]:
         for theme in ("light", "dark"):
-            out.append(f":root[data-xdict-theme={theme}][data-xdict-hue={t.name}]{{")
-            out.append(f"--xdict-accent:{t.fields[theme]};")
-            out.append("}")
+            out += [f":root[data-xdict-theme={theme}][data-xdict-hue={t.name}]{{", f"--xdict-accent:{t.fields[theme]}",
+                    "}"]
     out.append("")
+    return "\n".join(out)
+
+
+def render_density(tokens, digest):
+    """R7a's space by role: the main window's on `:root`, the lookup panel's where it differs."""
+    dens = [t for t in tokens if t.kind == "css-density"]
+    out = [css_header(digest), ":root{"]
+    out += [f"--xdict-{t.name}:{t.fields['main']};" for t in dens]
+    out += ["}", ":root[data-xdict-density=panel]{"]
+    out += [f"--xdict-{t.name}:{t.fields['panel']};" for t in dens if "panel" in t.fields]
+    out += ["}", ""]
     return "\n".join(out)
 
 
 def generated(root):
     data, tokens, text = load(root)
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
-    return {SWIFT_OUT: render_swift(data, tokens, digest), CSS_OUT: render_css(data, tokens, digest)}
+    return {SWIFT_OUT: render_swift(data, tokens, digest), CSS_OUT: render_css(tokens, digest),
+            PALETTE_OUT: render_palette(tokens, digest), DENSITY_OUT: render_density(tokens, digest)}
 
 
 def cmd_gen(root, check=False):
@@ -404,6 +499,8 @@ def swift_path(t, data):
         return f"Tokens.{spec['swift']}.{t.name}"
     if t.kind == "css-accent":
         return f"--xdict-accent (hue {t.name})"
+    if t.kind == "css-fill":
+        return "{{fill-" + t.name + "}}"
     return f"var(--xdict-{t.name})"
 
 
@@ -442,7 +539,11 @@ def find(data, tokens, query, groups=None):
         if not hits and query.startswith("#"):
             hits = [t for t in pool if query.lower() in t.display().lower()]
         return [line_of(t, data) for t in hits]
-    exact = [t for t in pool if any(abs(n - value) < 1e-9 for n in t.numbers())]
+    if re.fullmatch(r"-?\d*\.?\d+[a-z%]+", query.strip()):
+        # A CSS literal: the token written so, since 0.25em and 0.25rem are not the same length.
+        exact = [t for t in pool if query.strip() in t.css_text]
+    else:
+        exact = [t for t in pool if any(abs(n - value) < 1e-9 for n in t.numbers())]
     if exact:
         return [line_of(t, data) for t in exact]
     out = []
@@ -596,7 +697,7 @@ KIND_GROUPS = {
     "geometry": ["window", "control", "row", "size", "space", "inset"],
     "constant": ["window", "control", "row", "inset", "space", "radius", "line", "size"],
     "radius": ["radius"], "line-spacing": ["space"], "font-size": ["text"], "opacity": [],
-    "colour": ["colour"], "css-length": ["css"], "css-colour": ["css", "palette"],
+    "colour": ["colour"], "css-length": ["css", "density", "fill"], "css-colour": ["css", "palette"],
 }
 
 
@@ -787,7 +888,7 @@ def scan(root):
         for fn in sorted(filenames):
             path = os.path.join(dirpath, fn)
             rel = os.path.relpath(path, root)
-            if rel.startswith(SKIP_DIRS) or rel in SKIP_FILES or rel == CSS_OUT:
+            if rel.startswith(SKIP_DIRS) or rel in SKIP_FILES or rel in (CSS_OUT, PALETTE_OUT, DENSITY_OUT):
                 continue
             if fn.endswith(".swift"):
                 scanner = scan_swift
