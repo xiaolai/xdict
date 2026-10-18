@@ -48,7 +48,7 @@ struct TestInventoryTests {
         // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
         "XDictAppleSourceTests": 16,
         // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name.
-        "XDictCaptureTests": 258,
+        "XDictCaptureTests": 259,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {
