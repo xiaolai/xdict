@@ -193,6 +193,22 @@ func click(_ point: CGPoint, right: Bool = false) {
     }
 }
 
+/// The text-marker range on `page` that reads back as exactly `needle`, searched from `index` outwards (start within
+/// ±`spread`, length within ±2), or nil: never a range that merely starts near it.
+func verifiedMarkers(_ page: AXUIElement, needle: String, at index: Int, length: Int, spread: Int = 24) -> CFTypeRef? {
+    for delta in [0] + (1...spread).flatMap({ [-$0, $0] }) where index + delta >= 0 {
+        for extra in [0, -1, 1, -2, 2] where length + extra > 0 {
+            let start = index + delta
+            guard let first = parameterized(page, "AXTextMarkerForIndex", start as CFNumber),
+                  let last = parameterized(page, "AXTextMarkerForIndex", (start + length + extra) as CFNumber),
+                  let range = parameterized(page, "AXTextMarkerRangeForUnorderedTextMarkers", [first, last] as CFArray)
+            else { continue }
+            if parameterized(page, "AXStringForTextMarkerRange", range) as? String == needle { return range }
+        }
+    }
+    return nil
+}
+
 switch command {
 case "activate":
     emit(["front": activate(argument(1)), "now": frontInfo()])
@@ -292,10 +308,12 @@ case "select":
            let whole = parameterized(page, "AXTextMarkerRangeForUnorderedTextMarkers", [start, end] as CFArray),
            let text = parameterized(page, "AXStringForTextMarkerRange", whole) as? NSString {
             let found = text.range(of: needle)
+            // The markers for the needle's place in the page's text, read back to be the needle: Chromium's
+            // `AXTextMarkerForIndex` counts the page's text its own way (line breaks between blocks), so the index in
+            // `AXStringForTextMarkerRange`'s string can land a few places off, on another line (E2E 2026-10-18: the
+            // first line selected for the third). The nearest start and length that read back as the needle are taken.
             if found.location != NSNotFound,
-               let first = parameterized(page, "AXTextMarkerForIndex", found.location as CFNumber),
-               let last = parameterized(page, "AXTextMarkerForIndex", (found.location + found.length) as CFNumber),
-               let markers = parameterized(page, "AXTextMarkerRangeForUnorderedTextMarkers", [first, last] as CFArray) {
+               let markers = verifiedMarkers(page, needle: needle, at: found.location, length: found.length) {
                 located = (found, markers)
                 break
             }
@@ -317,7 +335,7 @@ case "select":
     var (text, box) = selectedNow()
     var how = "markers"
     if text != needle {
-        // Chrome takes no selection set by markers (measured on the E2E Mac, 2026-10-15, its index markers differ):
+        // A host that takes no selection set by markers (Chrome, measured on the E2E Mac, 2026-10-15):
         // the reader's way instead — Find, the text typed, then Escape, which leaves the match selected.
         press("cmd+f")
         usleep(400_000)
@@ -338,24 +356,6 @@ case "select":
         usleep(500_000)
         (text, box) = selectedNow()
         how = "find"
-        // Chrome reports the match's place but not the match as its selection: the line it is on selected as a reader
-        // would, by a triple click (each fixture line is a paragraph of its own).
-        if text != needle, let at = box {
-            let point = CGPoint(x: at.minX + 4, y: at.midY)
-            for count in 1...3 {
-                for kind in [CGEventType.leftMouseDown, .leftMouseUp] {
-                    let event = CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point, mouseButton: .left)
-                    event?.setIntegerValueField(.mouseEventClickState, value: Int64(count))
-                    event?.post(tap: .cghidEventTap)
-                    usleep(30_000)
-                }
-            }
-            usleep(400_000)
-            let (after, afterBox) = selectedNow()
-            text = after
-            box = afterBox.flatMap { $0.width > 0 ? $0 : nil } ?? CGRect(x: at.minX, y: at.minY, width: 120, height: at.height)
-            how = "tripleClick"
-        }
     }
     emit(["dialect": how, "selected": json(text), "box": json(box.map(describe))])
 

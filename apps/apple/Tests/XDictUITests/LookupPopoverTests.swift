@@ -58,6 +58,31 @@ struct LookupPopoverTests {
                 == .maxY)
     }
 
+    /// **Shown again and again, it stays its size and by the word** (E2E of 2026-10-18: one popover, reused for every
+    /// lookup, grew by the opening-to-entry difference at each showing, 586, 812, 978, then the whole screen, its body
+    /// left at the bottom and its window over the word). Each showing opens at 180 pt and grows to the 560 pt cap, as
+    /// `LookupAnywhere` does; the window must be the body plus its chrome every time, its top edge under the word.
+    @Test func reusedTheWindowIsItsBodyEveryTimeAndUnderTheWord() async {
+        NSApplication.shared.setActivationPolicy(.accessory)
+        let visible = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let popover = LookupPopover()
+        let content = NSView(frame: CGRect(x: 0, y: 0, width: 390, height: 180))
+        for round in 0..<4 {
+            let word = CGRect(x: 300 + CGFloat(round) * 40, y: 760, width: 60, height: 16)
+            popover.show(content, size: CGSize(width: 390, height: 180), word: word, pointer: .zero, visible: visible)
+            await settle()
+            #expect(popover.frame?.height == 206, "round \(round) opened at \(String(describing: popover.frame))")
+            popover.resize(height: 560)
+            await settle()
+            let frame = popover.frame ?? .zero
+            #expect(frame.height == 586, "round \(round) grew to \(frame)")
+            #expect(frame.maxY <= word.minY + LookupPopover.chrome.height, "round \(round) over the word: \(frame)")
+            #expect(word.minY - frame.maxY <= 12, "round \(round) not by the word: \(frame)")
+            popover.close()
+            await settle()
+        }
+    }
+
     @Test func withoutAWordTheAnchorIsAPointAtThePointer() {
         #expect(LookupPopover.anchorRect(word: nil, pointer: CGPoint(x: 50, y: 60)) == CGRect(x: 50, y: 60, width: 1, height: 1))
     }
