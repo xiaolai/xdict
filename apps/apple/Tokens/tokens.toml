@@ -197,7 +197,6 @@ galleryOrigin = { x = 80, y = 60, width = 0, height = 0, why = "Where the galler
 [instrumentSize]
 narrowPane = { width = 360, height = 700, why = "The narrow pane the lab and the corpus stage picture an entry in: the lookup panel's width." }
 galleryPane = { width = 820, height = 900, why = "The gallery's pane, about the main window's entry column." }
-corpusWindow = { width = 900, height = 700, why = "The corpus instrument window: a main window size, the same as the lab window." }
 
 [instrumentLength]
 galleryMinWidth = { value = 320, why = "The narrowest pane XDICT_LAB_WIDTH may ask the gallery for." }
