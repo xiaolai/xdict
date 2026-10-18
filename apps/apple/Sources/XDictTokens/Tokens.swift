@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "7e23b4bf6b9524ca0083273a672e55074af520e3db85da90233304f5c7130d4b"
+    public static let sourceDigest = "e57903bf5f0a3204483880143582ffe7dc795dd6599d32de4294e5783832e5bc"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -192,5 +192,94 @@ public enum Tokens {
         public static var entryRule: TokenColour { TokenColour(light: 0x929292, dark: 0x5c5c5c) }
         /// Apple-measured (P27, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static var entryPage: TokenColour { TokenColour(light: 0xffffff, dark: 0x1e1e1e) }
+    }
+
+    /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).
+    public enum ReadingStyle {
+        /// Every `--xdict-<name>` on `:root`, in order.
+        public static let root: [(String, String)] = [
+            ("base", "16px"),
+            ("font-cjk", "\"Songti SC\", \"STSong\""),
+            ("font", "ui-serif, \"New York\", var(--xdict-font-cjk), serif"),
+            ("font-ui", "-apple-system, system-ui, \"Helvetica Neue\", \"PingFang SC\", sans-serif"),
+            ("font-phon", "\"XDict Phonetic Serif\", \"Charis\", \"Charis SIL\", \"Doulos SIL\", \"Gentium\", \"Gentium Plus\", var(--xdict-font)"),
+            ("font-text", "var(--xdict-font)"),
+            ("font-mono", "ui-monospace, \"SF Mono\", Menlo, monospace"),
+            ("fs-xs", "0.75rem"),
+            ("fs-s", "0.875rem"),
+            ("fs-m", "1rem"),
+            ("fs-l", "1.125rem"),
+            ("fs-xl", "1.25rem"),
+            ("fs-xxl", "1.5rem"),
+            ("fs-min", "var(--xdict-fs-xs)"),
+            ("fs-max", "var(--xdict-fs-xxl)"),
+            ("fs-hw", "1.4375rem"),
+            ("weight-headword", "500"),
+            ("leading", "1.4"),
+            ("leading-tight", "1.3"),
+            ("weight-bold", "600"),
+            ("space-1", "0.25rem"),
+            ("space-2", "0.5rem"),
+            ("space-3", "0.75rem"),
+            ("space-4", "1rem"),
+            ("space-5", "1.5rem"),
+            ("gap", "var(--xdict-space-2)"),
+            ("indent", "1.5em"),
+            ("indent-max", "calc(3 * var(--xdict-indent))"),
+            ("measure", "none"),
+            ("pad-block", "1.25rem"),
+            ("pad-inline", "1rem"),
+            ("cell-pad", "0.25em 0.75em"),
+            ("radius", "6px"),
+            ("hit", "24px"),
+            ("icon", "1em"),
+            ("phon-colour", "var(--xdict-text-2)"),
+            ("mark", "#ffe36e"),
+            ("mark-current", "#ff9632"),
+        ]
+        /// The palette: name, light, dark.
+        public static let palette: [(String, String, String)] = [
+            ("bg", "#ffffff", "#1e1e1e"),
+            ("panel", "#f3f3f5", "#2a2a2c"),
+            ("text", "#000000", "#ffffff"),
+            ("text-2", "#6d6d6d", "#9a9a9a"),
+            ("rule", "#e6e6e6", "#343434"),
+            ("plate", "transparent", "#ececef"),
+            ("link", "#0068da", "#419cff"),
+            ("accent", "#055959", "#81ecec"),
+            ("red-deep", "#901114", "#fec9c2"),
+            ("red", "#af342f", "#fb988d"),
+            ("red-tint", "#ffebe8", "#3e2724"),
+            ("orange-deep", "#773a00", "#ffcba9"),
+            ("orange", "#9b4e01", "#f2a26a"),
+            ("orange-tint", "#ffece0", "#3c291d"),
+            ("yellow-deep", "#5c4c00", "#ecd78a"),
+            ("yellow", "#796502", "#cfb656"),
+            ("yellow-tint", "#f6f0da", "#332e19"),
+            ("green-deep", "#035e23", "#aaeab2"),
+            ("green", "#047b30", "#80cd8b"),
+            ("green-tint", "#e3f6e5", "#223324"),
+            ("teal-deep", "#055959", "#81ecec"),
+            ("teal", "#057575", "#3bcfcf"),
+            ("teal-tint", "#daf7f6", "#163333"),
+            ("blue-deep", "#02489f", "#c0d9fe"),
+            ("blue", "#2063bf", "#8ab9ff"),
+            ("blue-tint", "#e8f1fe", "#232e3f"),
+            ("purple-deep", "#622c91", "#e2ccfe"),
+            ("purple", "#7c48ae", "#c9a3f5"),
+            ("purple-tint", "#f4ecff", "#32293c"),
+            ("pink-deep", "#881356", "#fec5dc"),
+            ("pink", "#a63470", "#f297bf"),
+            ("pink-tint", "#feeaf2", "#3c2730"),
+        ]
+        /// The accent hues, light and dark.
+        public static let accentTeal = (light: "#055959", dark: "#81ecec")
+        public static let accentRed = (light: "#901114", dark: "#fec9c2")
+        public static let accentIndigo = (light: "#3f3a8c", dark: "#c4c1ff")
+        /// The values of the `{{fill-<name>}}` placeholders, for what `var()` cannot reach (a media query).
+        public static let fills: [String: String] = [
+            "fill-bp-narrow": "480px",
+            "fill-bp-wide": "481px",
+        ]
     }
 }
