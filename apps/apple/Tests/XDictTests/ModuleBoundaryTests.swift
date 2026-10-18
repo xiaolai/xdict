@@ -57,9 +57,9 @@ struct ModuleBoundaryTests {
                           "os"],
         "XDictAnywhereTests": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
         // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
-        // (metadata only, decision 9). Nothing that draws, and no target of this package; `captureMayBind` is its ceiling.
-        "XDictCapture": ["CoreGraphics", "Foundation", "NaturalLanguage", "os"],
-        "XDictCaptureTests": ["CoreGraphics", "Foundation", "Testing"],
+        // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
+        "XDictCapture": captureMayBind,
+        "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
