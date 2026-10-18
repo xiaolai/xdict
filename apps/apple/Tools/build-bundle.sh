@@ -64,6 +64,11 @@ readonly LAB=XDictEntryLab
 readonly LAB_FLAG=--disable-layer
 # The lab's gallery reads the reading style from a directory (`--style-dir`); the app compiles it in and reads none.
 readonly LAB_STYLE_FLAG=--style-dir
+# The capture lab (plan-capture WI-4; ADR-0014 decision 8): hover's reader at any screen point, a deputy for whoever runs
+# it, so it never ships either. Its flag and its module's name are what neither shipped binary may hold, and what the
+# capture lab's binary must, or the reading saw nothing.
+readonly CAPTURE_LAB=XDictCaptureLab
+readonly CAPTURE_LAB_FLAG=--read-point
 # The app icon: Icon Composer's document, compiled by actool into Assets.car under this name (Tools/compile-icon.sh, on
 # a build Mac), which Info.plist's CFBundleIconName names. And the menu-bar glyph, a template image read at run time.
 readonly ICON_NAME=XDict
@@ -251,6 +256,14 @@ verify_no_development_lab() {
         || { echo "the app binary holds $LAB_FLAG, the development lab's flag"; return 1; }
     ! LC_ALL=C grep -aqF -- "$LAB_STYLE_FLAG" "$bundle/Contents/MacOS/$APP_NAME" \
         || { echo "the app binary holds $LAB_STYLE_FLAG: only the lab may read a style from a directory"; return 1; }
+    [ -z "$(find "$bundle" -iname "*$CAPTURE_LAB*" -print -quit)" ] \
+        || { echo "the bundle carries something named $CAPTURE_LAB"; return 1; }
+    for binary in "$bundle/Contents/MacOS/$APP_NAME" "$bundle/$XPC_PATH/Contents/MacOS/$SERVICE"; do
+        for mark in "$CAPTURE_LAB_FLAG" "$CAPTURE_LAB"; do
+            ! LC_ALL=C grep -aqF -- "$mark" "$binary" \
+                || { echo "${binary#"$bundle"/} holds $mark: the capture lab's instrument is in what ships"; return 1; }
+        done
+    done
 }
 
 # An entitlements file with the app group's team prefix expanded from the signing identity (ADR-0011 decision 4): the
@@ -415,6 +428,10 @@ assemble() {
         || fail "$products/$LAB does not hold $LAB_FLAG, so a search of the app binary for it would see nothing"
     LC_ALL=C grep -aqF -- "$LAB_STYLE_FLAG" "$products/$LAB" \
         || fail "$products/$LAB does not hold $LAB_STYLE_FLAG, so a search of the app binary for it would see nothing"
+    for mark in "$CAPTURE_LAB_FLAG" "$CAPTURE_LAB"; do
+        LC_ALL=C grep -aqF -- "$mark" "$products/$CAPTURE_LAB" \
+            || fail "$products/$CAPTURE_LAB does not hold $mark, so a search of the shipped binaries for it would see nothing"
+    done
 
     local contents=$STAGE/Contents xpc=$STAGE/$XPC_PATH number plist
     rm -rf "$STAGE_ROOT"

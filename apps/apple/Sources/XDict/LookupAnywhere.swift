@@ -51,8 +51,9 @@ final class LookupAnywhere {
         defaults: .standard, requests: CaptureRequests(),
         scripts: { HoverScripts.allowed(searchLanguages: XDictApp.library.entries.filter(\.enabled).map(\.languages.pair.search)) })
     private var requests: CaptureRequests { hover.requests }
-    /// The presented request's context, and nothing else of it: memory only, cleared when the panel closes.
-    @ObservationIgnored private let contextSession = CaptureContextSession()
+    /// The presented request's context, and nothing else of it: memory only, cleared when the panel closes. Capture's own
+    /// session (hover's), whose book holds a recognised word's pending context, so its handle is found here.
+    private var contextSession: CaptureContextSession { hover.contextSession }
     /// What the popover owes the request it presents.
     @ObservationIgnored private var acks = PresentationAcks()
     /// The query whose entry, or settled nothing-found, the visible popover has drawn.

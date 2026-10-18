@@ -17,6 +17,25 @@ public enum CaptureTolerances {
     }()
     /// How far a resting pointer may drift and still be resting.
     public static let restDrift: CGFloat = Tokens.Capture.restDrift
+    /// **Every distance the recogniser measures with** (plan-capture WI-4): the hit tolerance, the strip it reads and how it
+    /// grows, the tiling slacks in band pixels, and how far two readings of a window's frame may disagree.
+    public static let metrics = CaptureMetrics(
+        hit: hit, restTolerance: restDrift,
+        strip: StripMetrics(initialHeight: Tokens.Capture.stripStart, growthStep: Tokens.Capture.stripStep,
+                            maximumHeight: Tokens.Capture.stripMost),
+        tiling: TilingMetrics(edgeSlack: Tokens.Capture.tileEdgeSlack, holeSlack: Tokens.Capture.tileHoleSlack),
+        frameDrift: Tokens.Capture.frameDrift)
+}
+
+/// **The Screen Recording row's state, as kinds** (plan-capture WI-4; the view layer words them).
+public enum ScreenRecordingRow: Sendable, Equatable {
+    /// The row has not been used in this run and macOS reports no standing grant: nothing was asked.
+    case notSetUp
+    case allowed
+    /// macOS says no; only System Settings changes it now.
+    case notAllowed
+    /// The probe failed for a reason that is not a refusal.
+    case couldNotTell
 }
 
 /// **Everything the reader can do to hover, and the one place each of those values lives** (ported from XiaolaiDict's
@@ -29,7 +48,12 @@ public enum CaptureTolerances {
 /// - `policy`: the reader's, loaded once and saved on change, never decoded on the mouse-move path; its scripts are not
 ///   stored but read from `scripts` at decision time (`effectivePolicy`), so they follow the enabled dictionaries;
 /// - `requests`: the app's one numbering, shared with the shortcut, the Service and the menu (ADR-0014 d.4);
-/// - `notice`: the lane stuck, as the consumer's kind (`CaptureNotice.captureStuck`), observed so Settings can say it.
+/// - `notice`: the lane or the capture stuck, or the pixels needing Screen Recording, as the consumer's kind
+///   (`CaptureNotice`), observed so Settings can say it;
+/// - `contextSession`: **the one ephemeral session a presented sentence lives in** (ADR-0014 d.9), capture's own, whose
+///   book the reader starts its pending contexts in (d.8), so the consumer finds a presented term's handle there;
+/// - `screenRecording`: the Screen Recording row, **the only thing that asks** (d.7), through the one `ScreenRecordingAccess`
+///   the recogniser reads.
 @MainActor
 @Observable
 public final class HoverControl {
@@ -46,24 +70,33 @@ public final class HoverControl {
     /// Whether the watcher actually holds its monitors — **read back from the watcher**, not assumed from the setting:
     /// starting can fail, and a control that says "on" for a hover that is not running is wrong.
     public private(set) var isWatching = false
+    /// The Screen Recording row, as last read. Read only on the row's own refresh, and never by calling anything that can
+    /// prompt before the row was used (`ScreenRecordingAccess`).
+    public private(set) var screenRecording = ScreenRecordingRow.notSetUp
+    /// A hover needed the pixels and Screen Recording was not there for it, in this run.
+    public private(set) var neededScreenRecording = false
+    /// The presented request's context, and nothing else of it: memory only, cleared when presentation closes.
+    @ObservationIgnored public let contextSession = CaptureContextSession()
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let store: HoverPolicyStore
     @ObservationIgnored private let source: any PointerWordSource
+    @ObservationIgnored private let screen: ScreenRecordingAccess
     @ObservationIgnored private let scripts: @MainActor () -> Set<CaptureScript>?
 
     static let enabledKey = "hoverLookupEnabled"
 
-    /// `scripts` derives the allowed scripts from the enabled dictionaries (`HoverScripts`), at decision time; `source` is
-    /// the real screen through the one lane, or a test's.
+    /// `scripts` derives the allowed scripts from the enabled dictionaries (`HoverScripts`), at decision time; `screen` is
+    /// the one owner of the Screen Recording grant; `source` is the real screen through the one lane and that grant (nil),
+    /// or a test's.
     public init(
-        defaults: UserDefaults, requests: CaptureRequests,
-        source: any PointerWordSource = SystemPointerWords(tolerance: CaptureTolerances.hit),
-        scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
+        defaults: UserDefaults, requests: CaptureRequests, screen: ScreenRecordingAccess = .system,
+        source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
     ) {
         self.defaults = defaults
         self.requests = requests
-        self.source = source
+        self.screen = screen
+        self.source = source ?? SystemPointerWords(metrics: CaptureTolerances.metrics, screen: screen)
         self.scripts = scripts
         let store = HoverPolicyStore(defaults: defaults)
         self.store = store
@@ -74,8 +107,11 @@ public final class HoverControl {
         let watcher = HoverWatcher(
             policy: { [weak self] in self?.effectivePolicy ?? .shipped },
             pause: { [weak self] in self?.pauseSwitch ?? HoverPause() },
-            requests: requests, source: source, restTolerance: CaptureTolerances.restDrift)
+            requests: requests, source: source, contexts: contextSession.pending, restTolerance: CaptureTolerances.restDrift)
         watcher.onCaptureHealth = { [weak self] in self?.captureHealth = $0 }
+        watcher.onNotice = { [weak self] notice in
+            if notice == .screenRecordingNeeded { self?.neededScreenRecording = true }
+        }
         return watcher
     }
 
@@ -89,8 +125,41 @@ public final class HoverControl {
     /// The scripts hover looks up now, or nil for every script — what Settings shows.
     public var allowedScripts: Set<CaptureScript>? { scripts() }
 
-    /// What the reader should be told about hover, as a kind the view layer words.
-    public var notice: CaptureNotice? { captureHealth == .answering ? nil : .captureStuck }
+    /// What the reader should be told about hover, as a kind the view layer words: a stuck read first, then the pixels
+    /// needing a grant the row has not shown to be there.
+    public var notice: CaptureNotice? {
+        if captureHealth != .answering { return .captureStuck }
+        return neededScreenRecording && screenRecording != .allowed ? .screenRecordingNeeded : nil
+    }
+
+    /// **The row is shown**: what the grant is now — without calling anything that can prompt, unless the row was used in
+    /// this run or macOS reports a standing grant.
+    public func refreshScreenRecording() async {
+        screenRecording = Self.row(await screen.captureState())
+    }
+
+    /// **The reader used the row**: the only request (macOS prompts once ever; after that the reader is sent to System
+    /// Settings), and the answer shown.
+    public func setUpScreenRecording() async {
+        screenRecording = Self.row(Self.state(await screen.setUp()))
+    }
+
+    private static func state(_ probe: PermissionProbe) -> ScreenRecordingState {
+        switch probe {
+        case .granted: .granted
+        case .declined: .declined
+        case .couldNotTell: .couldNotTell
+        }
+    }
+
+    private static func row(_ state: ScreenRecordingState) -> ScreenRecordingRow {
+        switch state {
+        case .notSetUp: .notSetUp
+        case .granted: .allowed
+        case .declined: .notAllowed
+        case .couldNotTell: .couldNotTell
+        }
+    }
 
     /// Whether the reader has hover on: on for a reader who never chose, remembered for one who did, **through the
     /// injected suite**, never `.standard`.

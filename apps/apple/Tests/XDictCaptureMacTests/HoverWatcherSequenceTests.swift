@@ -307,6 +307,160 @@ struct HoverWatcherSequenceTests {
                 "an older shortcut's late read was presented over a newer hover")
     }
 
+    // MARK: - The pixel path (plan-capture WI-4)
+
+    /// **A notice for an abandoned read is not shown** (moved by name): hover stopped while the read was in flight, and
+    /// its refusal for Screen Recording comes back after. Red if the watcher tells the notice unconditionally.
+    @Test func aNoticeForAnAbandonedReadIsNotShown() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.watcher.stop()
+        rig.reader.answer(.needsScreenRecording(request: rig.reader.asks[0].request))
+        await rig.drain()
+        #expect(notices.isEmpty)
+    }
+
+    /// **A notice for a hover that no longer stands is not shown** (moved by name from `HoverWatcherRoundTwoTests`): the
+    /// pointer moved off before the read came back. Red if only cancellation is checked.
+    @Test func aNoticeForAHoverThatNoLongerStandsIsNotShown() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.pointer.at = UpPoint(x: 600, y: 100)
+        rig.events.emit(.pointerMoved)
+        rig.reader.answer(.needsScreenRecording(request: rig.reader.asks[0].request))
+        await rig.drain()
+        #expect(notices.isEmpty)
+    }
+
+    /// **A notice for a hover that stands is told once, and its request ends** — nothing is presented for it.
+    @Test func aNoticeIsToldAndItsRequestEnds() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.reader.answer(.needsScreenRecording(request: rig.reader.asks[0].request))
+        await HoverFixtures.settle { !notices.isEmpty }
+        #expect(notices == [.screenRecordingNeeded])
+        #expect(rig.sink.all.isEmpty)
+        #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
+    }
+
+    /// **A read refused for a busy capture is asked again when the capture finishes** (moved by name), not when the
+    /// pointer next twitches.
+    @Test func aBlockedReadIsAskedAgainWhenTheCaptureFinishes() async {
+        let rig = Rig()
+        await rig.rest()
+        rig.reader.answer(.quiet(.captureInFlight))
+        await rig.drain()
+        #expect(rig.reader.asks.count == 1)
+        rig.reader.onCaptureReleased?()
+        await rig.asks(2)
+        #expect(rig.reader.asks.count == 2, "nothing asked again when the capture was released")
+    }
+
+    /// **A read asked again after a busy capture keeps its first number** (moved by name from `HoverWatcherRoundTwoTests`).
+    /// Red if the re-ask takes a fresh one, which would let it claim presentation over a lookup made in between.
+    @Test func aReAskKeepsItsNumber() async {
+        let rig = Rig()
+        await rig.rest()
+        rig.reader.answer(.quiet(.captureInFlight))
+        await rig.drain()
+        rig.reader.onCaptureReleased?()
+        await rig.asks(2)
+        #expect(rig.reader.asks.map(\.request.number) == [rig.reader.asks[0].request.number, rig.reader.asks[0].request.number],
+                "the re-ask was numbered \(rig.reader.asks.map(\.request.number))")
+    }
+
+    /// **A recognised word is presented with its context pending** (ADR-0014 d.2): acquisition `recognition`, the context
+    /// the handle the consumer's session finds.
+    @Test func aRecognisedWordIsPresentedWithItsContextPending() async throws {
+        let rig = Rig()
+        await rig.rest()
+        let contexts = PendingContexts()
+        let gate = GrowthGate()
+        let context = contexts.start(fallback: .unavailable(.notCaptured), bound: RecognitionFixtures.patient, work: {
+            await gate.held()
+            return nil
+        })
+        rig.reader.answer(.recognised(RecognitionFixtures.recognition("He paid the fine."), request: rig.reader.asks[0].request,
+                                      key: "key-fine", context: context))
+        await HoverFixtures.settle { !rig.sink.all.isEmpty }
+        let term = try #require(rig.sink.all.first?.term)
+        #expect(term.term == "fine")
+        #expect(term.acquisition == .recognition)
+        #expect(term.context == .pending(context.handle))
+        #expect(context.end == nil, "a presented context was cancelled")
+        context.cancel()
+    }
+
+    /// **A recognised word that is not presented cancels its context** — it never outlives its request. Red if the drop
+    /// path forgets the context.
+    @Test func aRecognisedWordNotPresentedCancelsItsContext() async {
+        let rig = Rig()
+        await rig.rest()
+        let contexts = PendingContexts()
+        let context = contexts.start(fallback: .unavailable(.notCaptured), bound: RecognitionFixtures.patient, work: {
+            await GrowthGate().held()
+            return nil
+        })
+        rig.pointer.at = UpPoint(x: 600, y: 100)
+        rig.events.emit(.pointerMoved)
+        rig.reader.answer(.recognised(RecognitionFixtures.recognition("He paid the fine."), request: rig.reader.asks[0].request,
+                                      key: "key-fine", context: context))
+        await HoverFixtures.settle { context.end != nil }
+        #expect(context.end == .cancelled, "a context nobody will see went on being read")
+        #expect(rig.sink.all.isEmpty)
+    }
+
+    /// A context still being read, held until the test is done with it.
+    private func reading(_ contexts: PendingContexts) -> PendingContext {
+        contexts.start(fallback: .unavailable(.notCaptured), bound: RecognitionFixtures.patient, work: {
+            await GrowthGate().held()
+            return nil
+        })
+    }
+
+    /// **A recognised word whose presentation is refused cancels its context**: a newer request took the presentation
+    /// after this hover's was numbered, so the hover's word is refused — and the sentence read for it is let go and leaves
+    /// the book. Red if the refused-presentation path forgets the discard.
+    @Test func aRecognisedWordRefusedThePresentationCancelsItsContext() async {
+        let rig = Rig()
+        await rig.rest()
+        _ = rig.requests.beginPresenting(.selection)
+        let contexts = PendingContexts()
+        let context = reading(contexts)
+        rig.reader.answer(.recognised(RecognitionFixtures.recognition("He paid the fine."), request: rig.reader.asks[0].request,
+                                      key: "key-fine", context: context))
+        await HoverFixtures.settle { context.end != nil }
+        #expect(context.end == .cancelled, "a word refused the presentation kept its sentence being read")
+        #expect(contexts.count == 0, "the book kept a refused word's context")
+        #expect(rig.sink.all.isEmpty)
+    }
+
+    /// **A recognised word the validating constructor refuses cancels its context**: a control character in the word is
+    /// never a term, and the sentence read for it is let go and leaves the book. Red if the refused-term path forgets the
+    /// discard.
+    @Test func aRecognisedWordRefusedAsATermCancelsItsContext() async throws {
+        let rig = Rig()
+        await rig.rest()
+        let contexts = PendingContexts()
+        let context = reading(contexts)
+        let sentence = "He paid the fi\u{1}ne."
+        let words = try #require(SentenceContext(text: sentence, mayBeCut: false,
+                                                 selection: (sentence as NSString).range(of: "fi\u{1}ne"), cut: []))
+        let refused = Recognition(word: WordAtPoint(word: "fi\u{1}ne", sentence: words), confidence: 0.9, mayBeCut: false,
+                                  appName: "Ghostty", bundleID: "com.mitchellh.ghostty", gap: nil)
+        rig.reader.answer(.recognised(refused, request: rig.reader.asks[0].request, key: "key-refused", context: context))
+        await HoverFixtures.settle { context.end != nil }
+        #expect(context.end == .cancelled, "a refused term kept its sentence being read")
+        #expect(contexts.count == 0, "the book kept a refused term's context")
+        #expect(rig.sink.all.isEmpty)
+    }
+
     /// **A read that found nothing ends its request** (new in XDict: every request ends exactly once, ADR-0014 d.4).
     @Test func aReadThatFoundNothingEndsItsRequest() async {
         let rig = Rig()
@@ -375,7 +529,7 @@ struct HoverWatcherTests {
         paused.pause(for: .seconds(600), from: .now)
         let screen = ScriptedPointerWords()
         let watcher = HoverWatcher(policy: { .shipped }, pause: { paused }, requests: CaptureRequests(), source: screen,
-                                   restTolerance: HoverFixtures.rest)
+                                   contexts: PendingContexts(), restTolerance: HoverFixtures.rest)
         let outcome = await watcher.reader.read(
             at: .zero, modifiersHeld: [HoverPolicy.shipped.modifier], tappedTwice: false, pointerStillFor: .seconds(10),
             begin: { CaptureRequest(number: 0, trigger: .pointerGesture) })

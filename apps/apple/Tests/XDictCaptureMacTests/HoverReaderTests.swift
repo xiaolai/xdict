@@ -12,7 +12,7 @@ struct HoverReaderSourceTests {
     private func reader(_ screen: ScriptedPointerWords, scripts: Set<CaptureScript>? = [.latin]) -> HoverReader {
         var policy = HoverPolicy.shipped
         policy.allowedScripts = scripts
-        return HoverReader(policy: { policy }, source: screen)
+        return HoverReader(policy: { policy }, source: screen, contexts: PendingContexts())
     }
 
     private func read(_ reader: HoverReader) async -> HoverReader.Outcome {
@@ -124,7 +124,7 @@ struct HoverSiteTests {
     private func reader(_ screen: ScriptedPointerWords, sites: Set<String>) -> HoverReader {
         var policy = HoverPolicy.shipped
         policy.excludedHosts = sites
-        return HoverReader(policy: { policy }, source: screen)
+        return HoverReader(policy: { policy }, source: screen, contexts: PendingContexts())
     }
 
     private func read(_ reader: HoverReader) async -> HoverReader.Outcome {
@@ -169,7 +169,7 @@ struct HoverLaneHealthTests {
         let screen = ScriptedPointerWords()
         screen.targetOutcome = .found(HoverFixtures.target())
         screen.readOutcome = .miss(.failed(.notResponding, app: "TextEdit"))
-        let reader = HoverReader(policy: { .shipped }, source: screen)
+        let reader = HoverReader(policy: { .shipped }, source: screen, contexts: PendingContexts())
         var health: [CaptureHealth] = []
         reader.onCaptureHealth = { health.append($0) }
         func read() async -> HoverReader.Outcome {

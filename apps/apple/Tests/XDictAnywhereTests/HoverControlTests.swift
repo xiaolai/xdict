@@ -4,6 +4,7 @@ import Testing
 import XDictAnywhere
 import XDictCapture
 @testable import XDictCaptureMac
+import XDictTokens
 
 /// A screen that answers nothing and counts what it was asked: no real Accessibility, no grant of this Mac's.
 final class SilentPointerWords: PointerWordSource, @unchecked Sendable {
@@ -21,14 +22,38 @@ final class SilentPointerWords: PointerWordSource, @unchecked Sendable {
         return .read(.miss(.noText(app: "", role: nil)))
     }
     func laneState() -> LaneState { lane }
+    func recognise(at point: CGPoint, window: ListedWindow, policy: HoverPolicy) async throws -> Recognition {
+        throw RecognitionError.nothingUnderPointer
+    }
+}
+
+/// Screen Recording's system calls, counted, never made. `@unchecked`: every count is read and written under `lock`.
+final class CountedScreen: @unchecked Sendable {
+    private let lock = NSLock()
+    private var probed = 0
+    private var requested = 0
+    let answer: PermissionProbe
+    let standing: Bool
+    init(answer: PermissionProbe = .granted, standing: Bool = false) {
+        self.answer = answer
+        self.standing = standing
+    }
+    var probes: Int { lock.withLock { probed } }
+    var requests: Int { lock.withLock { requested } }
+    var access: ScreenRecordingAccess {
+        ScreenRecordingAccess(probe: { self.lock.withLock { self.probed += 1 }; return self.answer },
+                              preflight: { self.standing }, request: { self.lock.withLock { self.requested += 1 } })
+    }
 }
 
 @MainActor
 private func control(
-    _ defaults: UserDefaults? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
+    _ defaults: UserDefaults? = nil, screen: CountedScreen = CountedScreen(),
+    scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
 ) throws -> HoverControl {
     let suite = try defaults ?? #require(UserDefaults(suiteName: "ai.xdict.tests.hover.\(UUID().uuidString)"))
-    return HoverControl(defaults: suite, requests: CaptureRequests(), source: SilentPointerWords(), scripts: scripts)
+    return HoverControl(defaults: suite, requests: CaptureRequests(), screen: screen.access, source: SilentPointerWords(),
+                        scripts: scripts)
 }
 
 /// **The pause reaches the gate from the menu it is offered in** (XiaolaiDict's `HoverPauseWiringTests`, moved by name in
@@ -163,6 +188,79 @@ struct HoverControlTests {
         #expect(CaptureTolerances.hit.horizontal > 0 && CaptureTolerances.hit.vertical > 0)
         #expect(CaptureTolerances.hit.horizontal >= CaptureTolerances.hit.vertical, "across is the looser of the two")
         #expect(CaptureTolerances.restDrift > 0)
+    }
+}
+
+/// **Screen Recording, from Settings** (plan-capture WI-4; XDict ADR-0014 decision 7): the row is the only thing that asks,
+/// and before it nothing that could prompt is called — not at launch, not by Settings showing the row, not by a hover.
+@MainActor
+struct ScreenRecordingRowTests {
+    /// **Showing the row touches nothing** before it was used: it says "not set up" without asking the system. Red if the
+    /// row's refresh probes first.
+    @Test func showingTheRowAsksNothingBeforeItIsUsed() async throws {
+        let screen = CountedScreen()
+        let hover = try control(screen: screen)
+        await hover.refreshScreenRecording()
+        #expect(hover.screenRecording == .notSetUp)
+        #expect(screen.probes == 0 && screen.requests == 0)
+    }
+
+    /// **Starting hover at launch touches nothing either.**
+    @Test func launchingHoverAsksNothing() throws {
+        let screen = CountedScreen()
+        let hover = try control(screen: screen)
+        hover.startAtLaunch(.reader)
+        hover.watcher.stop()
+        #expect(screen.probes == 0 && screen.requests == 0)
+    }
+
+    /// **Using the row asks once and says what macOS answered**; after it, the row may check again on its own.
+    @Test func usingTheRowAsksAndSaysTheAnswer() async throws {
+        let screen = CountedScreen(answer: .declined)
+        let hover = try control(screen: screen)
+        await hover.setUpScreenRecording()
+        #expect(screen.requests == 1)
+        #expect(hover.screenRecording == .notAllowed)
+        await hover.refreshScreenRecording()
+        #expect(screen.requests == 1, "checking again asked again")
+        #expect(screen.probes == 2)
+    }
+
+    /// A grant macOS already reports needs no row: the row says allowed without asking.
+    @Test func aStandingGrantIsShownWithoutAsking() async throws {
+        let screen = CountedScreen(answer: .granted, standing: true)
+        let hover = try control(screen: screen)
+        await hover.refreshScreenRecording()
+        #expect(hover.screenRecording == .allowed)
+        #expect(screen.requests == 0)
+    }
+
+    /// **The notice reaches Settings** when a hover needed the pixels, and goes once the grant is there.
+    @Test func aScreenRecordingNoticeReachesTheObservedState() async throws {
+        let hover = try control(screen: CountedScreen(answer: .granted))
+        #expect(hover.notice == nil)
+        hover.watcher.onNotice?(.screenRecordingNeeded)
+        #expect(hover.notice == .screenRecordingNeeded)
+        await hover.setUpScreenRecording()
+        #expect(hover.notice == nil, "the notice stayed after the grant")
+    }
+
+    /// **The reader starts its pending contexts in the session's book**, so the consumer finds a presented term's handle.
+    @Test func theReaderStartsContextsInTheSessionsBook() throws {
+        let hover = try control()
+        let reader = try #require(hover.watcher.reader as? HoverReader)
+        #expect(reader.contexts === hover.contextSession.pending)
+    }
+
+    /// **The recogniser gets the tokens' strip, tiling and frame distances** (ADR-0014 d.11), valid by construction.
+    @Test func theRecognitionMetricsAreTheTokens() {
+        let metrics = CaptureTolerances.metrics
+        #expect(metrics.hit == CaptureTolerances.hit)
+        #expect(metrics.strip == StripMetrics(initialHeight: Tokens.Capture.stripStart, growthStep: Tokens.Capture.stripStep,
+                                              maximumHeight: Tokens.Capture.stripMost))
+        #expect(metrics.tiling == TilingMetrics(edgeSlack: Tokens.Capture.tileEdgeSlack, holeSlack: Tokens.Capture.tileHoleSlack))
+        #expect(metrics.frameDrift == Tokens.Capture.frameDrift)
+        #expect(metrics.strip.initialHeight < metrics.strip.maximumHeight, "a strip that cannot grow")
     }
 }
 

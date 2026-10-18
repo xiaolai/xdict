@@ -28,6 +28,7 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `TextSegmenter.swift` (`SentenceContext`, `WordAtPoint`, `TextSegmenter`) | `Sources/DictionaryModel/TextSegmenter.swift` | `SelectionContextTests`, the segmenter cases of `ScreenReadingTests` | 0016 |
 | `CaptureScript.swift` | `ProbeScript.dominant(in:)` and `letterScript(of:)` of `Sources/DictionaryModel/DictionaryLanguage.swift` | `CaptureScriptTests` (from `DictionaryLanguageTests`: `theFirstScalarClassifierIsNotEnoughForCapturedText` (its `dominant` half), `punctuationDigitsAndSpacesDoNotVote`, `anyKanaMakesItJapaneseHoweverManyHanThereAre`, `latinReachesPastAscii`, `punctuationInsideAScriptsBlockDoesNotVote`, `theScriptsAreRecognisedWhereverUnicodePutsThem`, `composedAndDecomposedTextAgree`, `aBlockNamedForOneScriptCanHoldAnother`, `presentationFormsFoldToTheLettersTheyAre`, `kanaBeyondTheOriginalBlocksIsStillKana`, `amongLettersTheMajorityScriptWins`) | 0015 |
 | `CaptureExclusions.swift` | the password-manager list of `Sources/Capture/PlacePolicy.swift` (the list only) | `HoverPolicyTests` (`itShipsExcludingPasswordManagers`) | 0015 |
+| `PendingContext.swift` (`PendingContextEnd`, `PendingContext`, `PendingContexts`; plan-capture WI-4) | `Sources/MacCapture/PendingContext.swift`, moved to the pure target and rebuilt: a handle in the term (`.pending`) and a book that finds it, exactly one ending (settled, cancelled, overdue with the first reading standing) heard once by every listener, the cancel ending it at once, the work waited for apart from the ending (`finished`, what the capture guard waits on), the book bounded, descriptions metadata only | new `PendingContextTests` (6) and `PendingContextsTests` (3), each seen failing (a missing type, then a mutated `cancel`); XiaolaiDict's `HoverPendingContextTests` moved by name to `XDictCaptureMacTests` with the reader | 0016; XDict ADR-0014 d.2, d.8, d.9 |
 
 ## New in XDict (no XiaolaiDict origin; written test-first, each test seen failing against a stub)
 
@@ -37,8 +38,8 @@ file, so this is a recorded check, not a given (XDict ADR-0014 Context).
 | `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement; one numbering with presentation claims since WI-3) | `CaptureSinkTests` (9), `RequestNumberingTests` (5, WI-3) | XDict ADR-0014 d.4; 0045 |
 | `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
 | `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
-| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration) | through the ported tests (`MeasuredMetrics.swift`) | XDict ADR-0014 d.5, d.11 |
-| `CaptureContextSession.swift` (the one ephemeral session the presented request's context lives in; added in plan-capture WI-3) | `CaptureContextSessionTests` (3), seen failing against a missing type | XDict ADR-0014 d.9 |
+| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration; `frameDrift` since WI-4) | through the ported tests (`MeasuredMetrics.swift`); the app's held to the tokens by `ScreenRecordingRowTests.theRecognitionMetricsAreTheTokens` | XDict ADR-0014 d.5, d.11 |
+| `CaptureContextSession.swift` (the one ephemeral session the presented request's context lives in; added in plan-capture WI-3; since WI-4 it holds the book of pending contexts, settles a held one to what its reading answers, and cancels it when its presentation is replaced, ends or closes) | `CaptureContextSessionTests` (3; 7 since WI-4), seen failing against a missing type, then against a session that only dropped the handle | XDict ADR-0014 d.8, d.9 |
 | `CaptureDescriptions.swift` (metadata-only descriptions and empty mirrors of `SentenceContext`, `ContextOutcome`, `CapturedTerm`; added in plan-capture WI-2) | `PointerWordReaderTests.noDescriptionOfAResultCarriesItsSentence` (in `XDictCaptureMacTests`), seen failing against leaking descriptions | XDict ADR-0014 d.9 |
 
 ## What changed on the way (re-checked against XDict, ADR-0014)
@@ -78,7 +79,11 @@ capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagM
 
 - ~~WI-2: the Service-text-wins rule~~ — done in plan-capture WI-2: `SelectionReader.serviceTerm` in `XDictCaptureMac`,
   with `SelectionCaptureTests` (the selection disagrees, the app has exited, the pointer moved into the submenu).
-- WI-4: the pending context handle's cancel, and the recogniser using `CaptureLimits.observations` and the tile limits.
+- ~~WI-4: the pending context handle's cancel~~ — done in plan-capture WI-4: `PendingContext.cancel`, with
+  `cancellingEndsItOnceAndStopsTheWork` and the session's `replacingEndingOrClosingCancelsThePendingContext`.
+- ~~WI-4: the recogniser using `CaptureLimits.observations` and the tile limits~~ — done in plan-capture WI-4:
+  `ScreenTextRecogniser.recognise`, with `RecognitionLimitTests` (`theTilesAreTheLimitsHandedIn`,
+  `noMoreObservationsThanTheLimitAreTaken`, `aSpentLimitReadsNoFurtherTile`) in `XDictCaptureMacTests`.
 - ~~WI-3: `RequestSequence` and `CaptureRequests` joined into one numbering~~ — done in plan-capture WI-3:
   `CaptureRequests` holds the `RequestSequence` (`begin`, `beginPresenting`, `present`, `close`), with
   `RequestNumberingTests` across shortcut, Service, menu and hover.

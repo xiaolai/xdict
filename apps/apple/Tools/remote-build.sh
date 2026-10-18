@@ -37,7 +37,7 @@ readonly NAME=${XDICT_REMOTE_NAME:-$(basename "$repo")}
 readonly LOCAL=${XDICT_REMOTE_LOCAL:-$PWD}
 readonly TREE_CMD=${XDICT_SOURCE_TREE_CMD:-Tools/source-tree.sh}
 readonly PRODUCTS=$LOCAL/.build/remote-products
-readonly NAMES="XDict XDictService XDictEntryLab"
+readonly NAMES="XDict XDictService XDictEntryLab XDictCaptureLab"
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "the checkout's folder name is not a plain name: $NAME"
 remote=xdict-build/$NAME
 

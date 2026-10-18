@@ -1,0 +1,45 @@
+{
+  "about" : "A Chinese sentence alone; the pointer on a word inside it. Vision dropped one character (的), as recorded.",
+  "expect" : {
+    "endsWith" : "回到了港口。",
+    "excludes" : [
+
+    ],
+    "mayBeCut" : false,
+    "startsWith" : "今天",
+    "wantsMore" : 0,
+    "word" : "渔船"
+  },
+  "lines" : [
+    {
+      "box" : [
+        0.044444,
+        0.4625,
+        0.370833,
+        0.0875
+      ],
+      "confidence" : 1,
+      "cutInside" : false,
+      "runs" : [
+        {
+          "box" : [
+            0.044444,
+            0.4625,
+            0.370833,
+            0.0875
+          ],
+          "text" : "今天潮水很高，渔船都回到了港口。",
+          "utf16Offset" : 0
+        }
+      ],
+      "text" : "今天潮水很高，渔船都回到了港口。"
+    }
+  ],
+  "name" : "chinese",
+  "pointer" : "渔船",
+  "recordedBy" : "RecognitionRecorder (ScreenTextRecogniser.recognise + recogniseWhole), synthetic text",
+  "region" : [
+    900,
+    300
+  ]
+}

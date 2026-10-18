@@ -100,6 +100,18 @@ struct CapturedTermTests {
 
     // MARK: - Characters
 
+    /// **A sentence over the context ceiling is refused, never cut** (decision 3): every reader cuts to the limit before
+    /// segmentation, so a longer one reaching the constructor is a reader's bug, failed loudly. The ceiling itself passes.
+    @Test func aSentenceOverTheContextCeilingIsRefused() throws {
+        let ceiling = CaptureLimits.contextCeilingUTF16
+        #expect(ceiling == CaptureLimits.shipped.contextUTF16)
+        let fits = "tide" + String(repeating: " ", count: ceiling - 4)
+        #expect(try make("tide", sentence: fits, range: NSRange(location: 0, length: 4)).term == "tide")
+        #expect(throws: CaptureValueError.contextTooLong) {
+            try make("tide", sentence: fits + "x", range: NSRange(location: 0, length: 4))
+        }
+    }
+
     @Test func aTermWithNULOrAControlCharacterIsRefused() {
         for term in ["ho\u{0}ld", "hold\u{7}", "\u{1B}[0m", "ho\u{85}ld", ""] {
             #expect(throws: CaptureValueError.term, "\(term.debugDescription) was accepted") { try make(term) }
