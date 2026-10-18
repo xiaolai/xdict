@@ -86,6 +86,7 @@ capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagM
 ## Not moved (decision 10, and the WI-1 brief)
 
 `ReadingPlace` (document URLs, titles, ledger fields), `CaptureQuality` and `MisreadSigns` (study-ledger quality),
-`PlacePolicy`'s place stripping, `HoverPolicyStore` (settings storage: WI-3), `DrawerGeometry`, `SentenceExcerpt`,
+`PlacePolicy`'s place stripping, `HoverPolicyStore` (settings storage: moved in WI-3 to `XDictAnywhere`, the
+composition layer; its row is in `XDictCaptureMac/PROVENANCE.md`), `DrawerGeometry`, `SentenceExcerpt`,
 `RevealSequence` (panel and developer code), `ProcessResolver` and `SystemOverlaySurface` (the Mac adapter's and the E2E
 panel stage's), and every `MacCapture` file (WI-2).

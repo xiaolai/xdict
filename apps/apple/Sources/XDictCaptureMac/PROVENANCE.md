@@ -57,6 +57,19 @@ the combined job of WI-2 replaced (the walk is part of every read, and an empty 
 are WI-2's `SiteExclusionTests`; `HoverDeliveryTests` (XiaolaiDict's app delegate) is `RequestNumberingTests` in
 `XDictCaptureTests` and the app's acknowledgement tests in `XDictAnywhereTests`.
 
+Added to the tests after verification: `HoverWatcherSequenceTests.aHoverPresentedAfterAShortcutStillReadingSupersedesIt`,
+`HoverReaderSourceTests.ourListedWindowIsRefusedBeforeTheLaneIsAsked` and `aHoverWithTheKeyUpIsRefusedAtTheGate`.
+
+## Composed in `XDictAnywhere` in plan-capture WI-3
+
+The reader's settings and the watcher's one owner live in the composition layer, not here (ADR-0014 d.5): they hold
+`UserDefaults` and the tokens, which the capture targets may not import.
+
+| XDict file | Origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `Sources/XDictAnywhere/HoverControl.swift` (`CaptureTolerances`, `HoverControl`, `HoverPauseMenu`) | XiaolaiDict `Sources/XiaolaiDict/HoverControl.swift` and the `HoverPauseMenu` of `Sources/XiaolaiDict/MenuBarItem.swift`. Changed: the requests are the app's one `CaptureRequests`; the scripts are read from the enabled dictionaries at decision time, never stored (`effectivePolicy`); the stuck lane is the consumer's `CaptureNotice`; on/off in an injected `UserDefaults`; the capture distances from the tokens (`CaptureTolerances`) | `HoverPauseWiringTests` (5 by name; `theDelegateCanBeBuiltTheWayTheAdaptorBuildsIt` not moved: XDict's app has no delegate built through the Objective-C runtime); `CaptureHealthWiringTests.aStuckCaptureReachesTheObservedState`; new `HoverControlTests` (`theScriptsComeFromTheProviderAtDecisionTime`, `hoverIsOnUntilTheReaderTurnsItOff`, `hoverOffStartsNoWatcher`, `theTolerancesAreTheTokens`) | 0015, 0045; XDict ADR-0014 d.4, d.10, d.11 |
+| `Sources/XDictAnywhere/HoverPolicyStore.swift` (`HoverPolicyStore`) | XiaolaiDict `Sources/Capture/HoverPolicyStore.swift`. Changed: the scripts are never stored or read back (derived each time by `HoverScripts`) | `HoverPolicyStoreTests` (8 by name; renamed with the scripts no longer stored: `aPolicyStoredBeforeScriptsExistedKeepsItsExclusions` as `aPolicyStoredBeforeTheGestureExistedKeepsItsExclusions`, `anEmptyScriptSetIsCorrectedOnTheWayIn` as `storedScriptsAreNeverTrusted`) | 0015; XDict ADR-0014 d.10 |
+
 ## Not moved
 
 `PendingContext` (plan-capture WI-4, with the recogniser), `ScreenTextRecogniser`, `ScreenRecordingAccess`,
