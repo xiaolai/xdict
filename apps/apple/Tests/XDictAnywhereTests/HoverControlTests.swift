@@ -139,12 +139,22 @@ struct HoverControlTests {
     }
 
     /// **Hover off starts nothing**: launching with the reader's hover turned off installs no watcher. Red if
-    /// `startIfEnabled` ignores the setting.
+    /// `startAtLaunch` ignores the setting.
     @Test func hoverOffStartsNoWatcher() throws {
         let hover = try control()
         hover.isEnabled = false
-        hover.startIfEnabled()
+        hover.startAtLaunch(.reader)
         #expect(!hover.isWatching, "a hover the reader turned off was started")
+        #expect(!hover.watcher.isWatching)
+    }
+
+    /// **A driven run starts no hover**, with hover on: a key the instrument holds must not open a lookup it did not ask
+    /// for. Red if `startAtLaunch` ignores the launch.
+    @Test func anInstrumentLaunchStartsNoWatcher() throws {
+        let hover = try control()
+        #expect(hover.isEnabled)
+        hover.startAtLaunch(.instrument)
+        #expect(!hover.isWatching, "a driven run started hover")
         #expect(!hover.watcher.isWatching)
     }
 
@@ -153,5 +163,23 @@ struct HoverControlTests {
         #expect(CaptureTolerances.hit.horizontal > 0 && CaptureTolerances.hit.vertical > 0)
         #expect(CaptureTolerances.hit.horizontal >= CaptureTolerances.hit.vertical, "across is the looser of the two")
         #expect(CaptureTolerances.restDrift > 0)
+    }
+}
+
+/// **Which launch this is, decided once from the arguments** (plan-capture WI-3): a typed value, so the decision cannot be
+/// negated by a stray `!`, tested both ways.
+struct HoverLaunchTests {
+    static let flags = ["--lookup-window", "--anywhere", "--measure"]
+
+    @Test func aLaunchWithoutAnInstrumentFlagIsTheReaders() {
+        #expect(HoverLaunch.of(arguments: [], instrumentFlags: Self.flags) == .reader)
+        #expect(HoverLaunch.of(arguments: ["--anywhere-not", "-NSDocumentRevisionsDebugMode", "YES"],
+                               instrumentFlags: Self.flags) == .reader, "a flag matched by prefix")
+    }
+
+    @Test func anyInstrumentFlagMakesItAnInstrumentRun() {
+        for flag in Self.flags {
+            #expect(HoverLaunch.of(arguments: ["--other", flag], instrumentFlags: Self.flags) == .instrument, "\(flag)")
+        }
     }
 }

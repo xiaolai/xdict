@@ -114,8 +114,9 @@ public final class HoverControl {
 
     /// Starts watching where the reader has hover on. Called once there is a popover to present into — never in an
     /// instrument run.
-    public func startIfEnabled() {
-        guard isEnabled else { return }
+    /// **The one way hover starts at launch**: never in a driven run, never when the reader turned it off.
+    public func startAtLaunch(_ launch: HoverLaunch) {
+        guard launch == .reader, isEnabled else { return }
         watcher.start()
         isWatching = watcher.isWatching
     }
@@ -126,6 +127,19 @@ public final class HoverControl {
         isEnabled = on
         if on { watcher.start() } else { watcher.stop() }
         isWatching = watcher.isWatching
+    }
+}
+
+/// **Which launch this is** (plan-capture WI-3): the reader's, or one a development instrument drives, in which hover is
+/// not started, so a key the instrument holds never opens a lookup it did not ask for. A type rather than a `Bool`, so
+/// the decision cannot be inverted by a stray `!` where it is made.
+public enum HoverLaunch: Sendable, Equatable {
+    case reader
+    case instrument
+
+    /// An instrument run when any of `instrumentFlags` is one of `arguments`, exactly.
+    public static func of(arguments: [String], instrumentFlags: [String]) -> HoverLaunch {
+        instrumentFlags.contains(where: arguments.contains) ? .instrument : .reader
     }
 }
 
