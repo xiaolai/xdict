@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "d866a68778d047ccb2d5c52420ca1fd400ac5a6f673813a84f897f682815fa50"
+    public static let sourceDigest = "3cae6c71142eb92131d1d4a8294d9c46ab6a669dd0fe355dcdbf88014bf6792b"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -162,6 +162,8 @@ public enum Tokens {
         public static let fallbackScreenHeight: CGFloat = 800
         /// The content column's width before the first layout measures it: wide, so the title shows until then (P8).
         public static let initialColumn: CGFloat = 1000
+        /// Apple-measured (P5, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let searchFieldAtWindow: CGFloat = 859
     }
 
     /// Corner radii.

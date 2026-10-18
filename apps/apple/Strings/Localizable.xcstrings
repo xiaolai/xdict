@@ -2197,22 +2197,6 @@
         }
       }
     },
-    "Dictionary" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Dictionary"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "词典"
-          }
-        }
-      }
-    },
     "Dictionary’s Own Colors" : {
       "localizations" : {
         "en" : {
@@ -6054,6 +6038,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典自带某个词的录音、且 macOS 能播放时，播放录音而不用系统语音。"
+          }
+        }
+      }
+    },
+    "XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict"
           }
         }
       }

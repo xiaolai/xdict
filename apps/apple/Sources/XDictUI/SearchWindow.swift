@@ -6,7 +6,7 @@ import XDictSearch
 import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
-/// toolbar holds Back/Forward, the title "Dictionary" with "N found" under it, the Smaller/Bigger Text pair and the
+/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the Smaller/Bigger Text pair and the
 /// search field at its trailing edge; the scope bar runs under it; the sidebar of matching headwords appears only after
 /// a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep their contract. The menus
 /// (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
@@ -15,6 +15,8 @@ public struct SearchWindow: View {
     @State private var columns = NavigationSplitViewVisibility.detailOnly
     /// The content column's width: the title over it yields when it is narrow (P8).
     @State private var column: CGFloat = Tokens.Window.initialColumn
+    /// The window's width: the search field follows it (P5). Apple's measured window until the first layout.
+    @State private var window: CGFloat = Tokens.Window.searchFieldAtWindow
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -33,6 +35,7 @@ public struct SearchWindow: View {
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { window = $0 }
         .toolbar { toolbar }
         // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
         // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
@@ -77,15 +80,19 @@ public struct SearchWindow: View {
                 Button { state.entry.zoomIn() } label: { Label("Bigger Text", systemImage: "textformat.size.larger") }
                     .help(Text("Increase font size"))
             }
+            // One two-segment control, as Apple's (P3), not two round buttons (owner, 2026-10-18): the same style
+            // that joins Back and Forward.
+            .controlGroupStyle(.navigation)
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
             SearchField(text: state.model.text, prompt: String(localized: "Search"), focus: state.searchFocus,
                         onChange: { state.typedText($0) },
                         onSubmit: { state.submit() }, onMove: { state.move($0) }, onCancel: { state.cancel() })
-                // No ideal width: the toolbar takes a hosted item's ideal as its floor, which sent the field to
-                // the overflow at 400 pt (P8). The toolbar grows it up to Apple's 327 pt instead (P5).
-                .frame(minWidth: ToolbarLayout.searchWidth.min, maxWidth: ToolbarLayout.searchWidth.ideal)
+                // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
+                // hosted AppKit view by its ideal, and NSSearchField has none, so the range left it near its least
+                // (owner, 2026-10-18). At the 400 pt minimum it is 152 pt, so the pairs still overflow first (P8).
+                .frame(width: ToolbarLayout.searchFieldWidth(window: window))
         }
         .visibilityPriority(.high)
     }
