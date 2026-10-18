@@ -126,6 +126,7 @@ apps/apple/Sources/XDictUI/WindowChrome.swift               routes:search routes
 apps/apple/Sources/XDictUI/Library*.swift                   route:settings.dictionaries*
 apps/apple/Sources/XDictUI/DictionaryTable.swift            route:settings.dictionaries*
 apps/apple/Sources/XDictUI/ProblemStatus.swift              route:settings.dictionaries* routes:search routes:panel
+apps/apple/Sources/XDictUI/AppleImport*.swift               route:settings.dictionaries.apple*
 apps/apple/Sources/XDictUI/Settings*.swift                  route:settings.*
 apps/apple/Sources/XDictUI/*Settings.swift                  route:settings.*
 apps/apple/Sources/XDictUI/Setup*.swift                     route:setup.* route:reader.firstLaunch
