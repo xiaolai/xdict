@@ -84,3 +84,23 @@ struct TokenValuesTests {
         #expect(Tokens.Colour.label.nsColor == NSColor.labelColor)
     }
 }
+
+/// **A Control-clicked word with no box is anchored on its line** (owner, 2026-10-18: the popover's arrow covered a
+/// quarter of the word). The anchor is one reading line tall, centred on the click, so the arrow's tip lands on the
+/// line's edge: the middle of the white space between two lines. The line is the reading style's own: `--xdict-base`
+/// times `--xdict-leading`.
+struct ClickedWordAnchorTests {
+    static func cssNumber(_ name: String, in css: String) throws -> Double {
+        let pattern = try Regex("--xdict-\(name):([0-9.]+)")
+        let match = try #require(css.firstMatch(of: pattern), "\(name) is not in tokens.css")
+        return try #require(Double(match.output[1].substring ?? ""))
+    }
+
+    @Test func theAnchorIsOneReadingLineCentredOnTheClick() throws {
+        let css = try String(contentsOf: TokensFreshnessTests.apple.appending(path: "Sources/XDictEntryView/Style/tokens.css"),
+                             encoding: .utf8)
+        let line = try Self.cssNumber("base", in: css) * (try Self.cssNumber("leading", in: css))
+        #expect(abs(Double(Tokens.Row.clickedWord) - line) < 0.001)
+        #expect(abs(Double(Tokens.Inset.clickedWordRise) - line / 2) < 0.001)
+    }
+}

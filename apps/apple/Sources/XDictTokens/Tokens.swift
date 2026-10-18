@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "3cae6c71142eb92131d1d4a8294d9c46ab6a669dd0fe355dcdbf88014bf6792b"
+    public static let sourceDigest = "55f5829c613156de175bbec3d0efbb351f501f0ea63b2882fa2ef7a2e344d548"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -62,8 +62,8 @@ public enum Tokens {
         public static let panelRuleGap: CGFloat = 8
         /// The lookup panel keeps clear of the screen's edges by this much when its room is measured.
         public static let panelScreenMargin: CGFloat = 8
-        /// A Control-clicked word with no box: its point taken as the middle of a 16 pt line.
-        public static let clickedWordRise: CGFloat = 8
+        /// A Control-clicked word with no box: its point taken as the middle of one reading line (16 pt base x 1.4 leading, css.base and css.leading), so the popover arrow lands on the line's edge, the middle of the white space between two lines.
+        public static let clickedWordRise: CGFloat = 11.2
         /// The Details sheet's margin above and below inside the Settings window, so it never hangs past it.
         public static let settingsSheetMargin: CGFloat = 12
         /// The Settings window's margin kept above and below it on the screen (ADR-0012 d.6).
@@ -86,8 +86,8 @@ public enum Tokens {
         public static let startName: CGFloat = 32
         /// The box under the Settings table keeps at least two lines' room, so it does not jump as a selection changes (ADR-0012 d.6).
         public static let optionsBoxMin: CGFloat = 60
-        /// The line a Control-clicked word with no box is taken to stand on.
-        public static let clickedWord: CGFloat = 16
+        /// The line a Control-clicked word with no box is taken to stand on: one reading line, 16 pt base x 1.4 leading (css.base, css.leading).
+        public static let clickedWord: CGFloat = 22.4
     }
 
     /// The sizes of controls and bars.

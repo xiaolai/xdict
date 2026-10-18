@@ -63,7 +63,7 @@ panelBottom = { value = 8, source = "P41" }
 panelEntryFade = { value = 16, source = "P41" }
 panelRuleGap = { value = 8, source = "P41" }
 panelScreenMargin = { value = 8, why = "The lookup panel keeps clear of the screen's edges by this much when its room is measured." }
-clickedWordRise = { value = 8, why = "A Control-clicked word with no box: its point taken as the middle of a 16 pt line." }
+clickedWordRise = { value = 11.2, why = "A Control-clicked word with no box: its point taken as the middle of one reading line (16 pt base x 1.4 leading, css.base and css.leading), so the popover arrow lands on the line's edge, the middle of the white space between two lines." }
 settingsSheetMargin = { value = 12, why = "The Details sheet's margin above and below inside the Settings window, so it never hangs past it." }
 settingsScreenMargin = { value = 40, why = "The Settings window's margin kept above and below it on the screen (ADR-0012 d.6)." }
 
@@ -75,7 +75,7 @@ panelTitle = { value = 24, source = "P41" }
 panelFooter = { value = 26, source = "P41" }
 startName = { value = 32, source = "P14" }
 optionsBoxMin = { value = 60, why = "The box under the Settings table keeps at least two lines' room, so it does not jump as a selection changes (ADR-0012 d.6)." }
-clickedWord = { value = 16, why = "The line a Control-clicked word with no box is taken to stand on." }
+clickedWord = { value = 22.4, why = "The line a Control-clicked word with no box is taken to stand on: one reading line, 16 pt base x 1.4 leading (css.base, css.leading)." }
 
 [control]
 scopeBar = { value = 36, source = "P6" }
