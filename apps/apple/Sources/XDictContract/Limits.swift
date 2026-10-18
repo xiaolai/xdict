@@ -60,7 +60,7 @@ public enum Limits {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted: return nil
+             .lineage, .health, .readingStyle, .converted, .displayOptions: return nil
         }
     }
 
@@ -178,6 +178,8 @@ public enum Deadlines {
         // ADR-0010: at most 64 sampled entries of up to 256 KiB and the edition's sheets (up to 32 MiB) read and
         // normalized once per edition, then remembered; like a resource, bounded at 15 s.
         case .readingStyle: .seconds(15)
+        // ADR-0013: the same sample of entries and the edition's sheets as the reading style reads, once per edition.
+        case .displayOptions: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
         case .importPackage, .health, .convertApple: nil
         }

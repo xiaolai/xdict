@@ -423,3 +423,37 @@ public struct StyleChanges: Codable, Hashable, Sendable {
         self.dropped = dropped
     }
 }
+
+// MARK: - Display options (ADR-0013; contract 7)
+
+/// The display options an open dictionary's edition declares, as the core's catalogue writes them: each applies where
+/// the edition's markup carries its contract. `css` keys every rule on one root attribute per option; an absent
+/// attribute, or a value outside the option's, means its default. No options and no CSS when none applies.
+public struct DisplayOptions: Codable, Hashable, Sendable {
+    /// The catalogue's version (`xdict_entry::DISPLAY_OPTIONS`).
+    public let version: UInt32
+    public let options: [DisplayOption]
+    public let css: String
+
+    public init(version: UInt32, options: [DisplayOption], css: String) {
+        self.version = version
+        self.options = options
+        self.css = css
+    }
+}
+
+/// One option: its id, the root attribute a shell sets to the reader's choice, its values in order, and its default for
+/// the edition.
+public struct DisplayOption: Codable, Hashable, Sendable {
+    public let id: String
+    public let attribute: String
+    public let values: [String]
+    public let defaultValue: String
+
+    public init(id: String, attribute: String, values: [String], defaultValue: String) {
+        self.id = id
+        self.attribute = attribute
+        self.values = values
+        self.defaultValue = defaultValue
+    }
+}
