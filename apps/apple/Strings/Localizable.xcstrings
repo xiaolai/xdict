@@ -2053,6 +2053,22 @@
         }
       }
     },
+    "Converting %@ again…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Converting %@ again…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在重新转换 %@…"
+          }
+        }
+      }
+    },
     "Converting…" : {
       "localizations" : {
         "en" : {
