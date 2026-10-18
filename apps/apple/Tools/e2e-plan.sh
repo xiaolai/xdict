@@ -50,7 +50,7 @@ substages() {
 }
 
 expand() {
-    local all wanted="" word stage
+    local all wanted="" word stage extra
     all=$(substages --all)
     [ $# -gt 0 ] || { substages; return 0; }
     for word in "$@"; do
@@ -61,7 +61,13 @@ expand() {
                 wanted="$wanted $word" ;;
             *)
                 stage=$(awk -F'\t' -v s="$word" '$2 == "default" && ($1 == s || index($1, s ".") == 1) && !seen[$1]++ { print $1 }' <<<"$rows")
-                [ -n "$stage" ] || fail "no stage called '$word'; the stages are: $(sed 's/\..*//' <<<"$all" | awk '!seen[$0]++' | tr '\n' ' ')"
+                if [ -z "$stage" ]; then
+                    # A stage whose sub-stages are all extra (hover, measure) exists: a bare name asks for its default
+                    # ones, and it has none, so name them rather than call the stage unknown.
+                    extra=$(awk -v s="$word" '$0 == s || index($0, s ".") == 1' <<<"$all" | tr '\n' ' ')
+                    [ -z "$extra" ] || fail "the stage '$word' has no default sub-stage, so its bare name asks for nothing; name them: $extra"
+                    fail "no stage called '$word'; the stages are: $(sed 's/\..*//' <<<"$all" | awk '!seen[$0]++' | tr '\n' ' ')"
+                fi
                 wanted="$wanted $stage" ;;
         esac
     done
