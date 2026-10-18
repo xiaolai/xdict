@@ -51,6 +51,11 @@ final class ScopeBarView: NSView {
         rule.boxType = .separator
         addSubview(rule)
         group.setAccessibilityIdentifier("scope")
+        group.setAccessibilityLabel(String(localized: "Dictionaries"))
+        // The bar itself, a plain group: where the entry below it starts is measured from its bottom.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.group)
+        setAccessibilityIdentifier("scope.bar")
     }
 
     @available(*, unavailable)
@@ -129,7 +134,8 @@ final class ScopeRadioGroup: NSView {
     override func accessibilityRole() -> NSAccessibility.Role? { .radioGroup }
 }
 
-/// One scope: an accessory-bar toggle, text only, read as a radio button.
+/// One scope: an accessory-bar toggle, text only, read as a radio button named by its title (`scope.option`), its value
+/// 1 when it is the chosen scope and 0 otherwise, as an AppKit radio button reads.
 final class ScopeButton: NSButton {
     convenience init(title: String, target: AnyObject, action: Selector) {
         self.init(frame: .zero)
@@ -141,8 +147,11 @@ final class ScopeButton: NSButton {
         showsBorderOnlyWhileMouseInside = true
         font = .systemFont(ofSize: NSFont.systemFontSize)
         controlSize = .regular
+        setAccessibilityIdentifier("scope.option")
+        setAccessibilityLabel(title)
     }
 
     override func accessibilityRole() -> NSAccessibility.Role? { .radioButton }
     override func accessibilitySubrole() -> NSAccessibility.Subrole? { .toggle }
+    override func accessibilityValue() -> Any? { NSNumber(value: state == .on ? 1 : 0) }
 }
