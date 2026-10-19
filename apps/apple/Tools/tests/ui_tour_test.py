@@ -175,6 +175,25 @@ assert "AXExtrasMenuBar" in roots_func, "press and click do not look in the menu
 # the route names the Chinese title too.
 assert any(s[0] == "press" and "For 15 minutes" in s and any("分钟" in n for n in s[1:])
            for s in by_id["menubar.hoverPaused"][4]), by_id["menubar.hoverPaused"][4]
+# **Menus opened from the menu bar are captured in light only** (2026-10-19): they draw in the menu bar's appearance, the
+# Mac's, which the tour's `--appearance` (NSApp.appearance) does not reach; every dark capture of them was byte for byte
+# the light one. Every menu route is light only, with its reason, and no other route is.
+menu_routes = [r[0] for r in ROUTES if r[0].startswith(("menu.", "menubar.")) and r[4] is not None]
+assert len(menu_routes) >= 10, menu_routes
+for route in menu_routes:
+    why = routes.not_in_appearance(route, "dark")
+    assert why and "menu bar" in why, (route, why)
+    assert routes.not_in_appearance(route, "light") is None, route
+for route in (r[0] for r in ROUTES if r[4] is not None and r[0] not in menu_routes):
+    assert routes.not_in_appearance(route, "dark") is None, route
+    assert routes.not_in_appearance(route, "light") is None, route
+# The control: a menu route in dark is named, a window route is not, and a route merely named like one ("menus.x",
+# "menubarx") is not.
+assert routes.not_in_appearance("menu.view", "dark") and not routes.not_in_appearance("main.start", "dark")
+assert not routes.not_in_appearance("menus.x", "dark") and not routes.not_in_appearance("menubarx", "dark")
+# tour.py walks a route only in the appearances it is captured in, and records why it skipped one.
+assert "not_in_appearance(route, appearance)" in tour_source, \
+    "tour.py does not ask routes.not_in_appearance before walking a route"
 # The pseudo language: longer, accented, every format directive kept exactly; on the real catalog, every value of every
 # form (plural forms and substitutions included) keeps its source's directives, so the copy formats as the app does.
 assert pseudo.pseudo("Look Up").startswith("⟦Ļööķ Ûþ"), pseudo.pseudo("Look Up")

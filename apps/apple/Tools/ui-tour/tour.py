@@ -33,7 +33,7 @@ import aim  # noqa: E402
 from axcheck import checks, dictionaries_table  # noqa: E402
 import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
-from routes import NOT_DRIVEN_WHY, ROUTES, defaults_commands, prefs  # noqa: E402
+from routes import NOT_DRIVEN_WHY, ROUTES, defaults_commands, not_in_appearance, prefs  # noqa: E402
 
 home, out = sys.argv[1:3]
 options = dict(zip([a for a in sys.argv[3:] if a != "--reader"][0::2], [a for a in sys.argv[3:] if a != "--reader"][1::2]))
@@ -390,7 +390,12 @@ def tour():
             routes = [r for r in ROUTES if r[1] == library and r[4] is not None and (not only or r[0] in only)]
             if not routes:
                 continue
+            appearance = variant.split("-")[0]
             for route, _, _, _, steps in routes:
+                why = not_in_appearance(route, appearance)
+                if why:
+                    results.append({"variant": name, "route": route, "notCaptured": why})
+                    continue
                 results.append(walk(variant, name, library, route, steps, folder))
     for route, library, _, _, steps in ROUTES:
         if steps is None and (not only or route in only):

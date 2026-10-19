@@ -62,6 +62,24 @@ def defaults_commands(domain, preferences):
     return [["defaults", "write", domain, key, "-bool", "YES" if value else "NO"] for key, value in preferences]
 
 
+# **Menus opened from the menu bar draw in the menu bar's appearance, which is the Mac's** (2026-10-19). The tour's
+# `--appearance` sets NSApp.appearance, which reaches XDict's windows but not these menus on macOS 27: every dark capture
+# of a menu (the menu-bar item's and the main menu's alike, menu.view and menu.window among them) was byte for byte, or
+# by eye, the light one, with dark text. A reader's XDict has no appearance of its own (only the lookup panel's shade),
+# so its menus always match the Mac. A dark capture of them would claim a look XDict never draws.
+MENU_BAR_APPEARANCE = ("drawn in the menu bar's appearance, the Mac's, which the tour's --appearance (NSApp.appearance) "
+                       "does not reach on macOS 27; a dark capture would show the light menu")
+NOT_IN_APPEARANCE = {("menu.", "dark"): MENU_BAR_APPEARANCE, ("menubar.", "dark"): MENU_BAR_APPEARANCE}
+
+
+def not_in_appearance(route, appearance):
+    """Why `route` is not captured in `appearance` ("light" or "dark"), or None when it is."""
+    for (prefix, excluded), why in NOT_IN_APPEARANCE.items():
+        if appearance == excluded and route.startswith(prefix):
+            return why
+    return None
+
+
 ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
