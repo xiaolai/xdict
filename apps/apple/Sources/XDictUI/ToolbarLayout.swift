@@ -25,9 +25,9 @@ public enum ToolbarLayout {
     public static func titleYields(window: CGFloat, sidebar: CGFloat) -> Bool { titleYields(width: window - sidebar) }
 
     /// The search field's width in a window `window` points wide (P5): Apple's 327 pt at its 859 pt window, in proportion
-    /// to the window between the field's least and most. Given to the field as its width, not a range: a toolbar sizes a
-    /// hosted AppKit view by its ideal, and an `NSSearchField` has no intrinsic width, so a min/max range alone left it
-    /// near its least whatever the window (owner, 2026-10-18: "search field's width is too short").
+    /// to the window between the field's least and most. A range alone left it near its least (owner, 2026-10-18: "search
+    /// field's width is too short"), and a SwiftUI width the toolbar measures once overflowed when the window was
+    /// stretched (2026-10-19), so `ToolbarFieldWidth` gives it to the toolbar's item as a preferred width.
     public static func searchFieldWidth(window: CGFloat) -> CGFloat {
         let scaled = (searchWidth.ideal * window / Tokens.Window.searchFieldAtWindow).rounded()
         return min(max(scaled, searchWidth.min), searchWidth.max)
