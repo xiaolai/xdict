@@ -190,6 +190,9 @@ public final class HoverReader: HoverReading {
                 return accept(hit, request: request, policy: policy, point: point)
             case .read(.cancelled):
                 return .quiet(.cancelled)
+            case .read(.miss(.secure(let app))):
+                // **A secure field is not read as pixels either.**
+                return .nothing(.miss(.secure(app: app)))
             case .read(.miss(let miss)):
                 // **The site was decided in the same job and not refused**: the pixels of the app Accessibility named.
                 log.info("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
