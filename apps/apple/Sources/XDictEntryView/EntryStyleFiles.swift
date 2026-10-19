@@ -1382,8 +1382,8 @@ var XDictFrameCore = (function () {
   // Elements whose text is never shown as text.
   var UNSHOWN = { SCRIPT: 1, STYLE: 1, TEMPLATE: 1, NOSCRIPT: 1, TEXTAREA: 1, TITLE: 1 };
 
-  // Whether `element` and every element above it let its text be seen: none unshown by tag, `display: none` or
-  // `opacity: 0`, and no more than DEPTH of them — past that the text is not read, before the rest are asked anything.
+  // Whether `element` and every element above it let its text be seen: none unshown by tag, `display: none`,
+  // `opacity: 0` or `content-visibility: hidden`, and no more than DEPTH of them — past that the text is not read, before the rest are asked anything.
   // One answer per element per call (`known`); `visibility` is inherited, so it is the text's own parent's alone
   // (`shown`). `aria-hidden` hides from assistive technology, not from the eye, and is no reason.
   function open(element, known) {
@@ -1394,7 +1394,10 @@ var XDictFrameCore = (function () {
       chain.push(e);
       if (UNSHOWN[e.tagName]) { verdict = false; break; }
       var style = getComputedStyle(e);
-      if (style.display === 'none' || style.opacity === '0') { verdict = false; break; }
+      // `content-visibility: hidden` skips the element's contents, the text read here being among them.
+      if (style.display === 'none' || style.opacity === '0' || style.contentVisibility === 'hidden') {
+        verdict = false; break;
+      }
     }
     for (var j = 0; j < chain.length; j++) known.set(chain[j], verdict);
     return verdict;
