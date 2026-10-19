@@ -306,6 +306,21 @@ def toolbar_fits(tree):
     return None
 
 
+def speaker_after_navigation(tree):
+    """The speaker right after Back/Forward, before the text-size pair (P48; owner, 2026-10-19: beside the text-size pair
+    it was the item a jump to a narrow window hid)."""
+    def x(name):
+        buttons = [n for n in find(tree, "AXButton") if n.get("description") == name or n.get("title") == name]
+        return buttons[0]["frame"][0] if buttons else None
+    xs = {name: x(name) for name in ("Forward", "Pronounce", "Smaller Text")}
+    missing = [name for name, at in xs.items() if at is None]
+    if missing:
+        return f"no {', '.join(missing)} in the toolbar"
+    if not xs["Forward"] < xs["Pronounce"] < xs["Smaller Text"]:
+        return f"the speaker is not between Forward and Smaller Text: x {xs}"
+    return None
+
+
 def find_bar(tree):
     fields = [n for n in find(tree, "AXTextField") if n.get("subrole") == "AXSearchField"]
     return None if len(fields) >= 2 else "no find bar's field beside the search field"
@@ -446,7 +461,7 @@ TREE_RULES = {
     "search.none": [("P12", no_entries_line), ("P2", title_no_count)],
     "window.min": [("P1", minimum_size)],
     "main.narrow": [("P8", narrow)],
-    "window.wide": [("P5", toolbar_fits), ("P48", toolbar_fits)],
+    "window.wide": [("P5", toolbar_fits), ("P48", toolbar_fits), ("P48", speaker_after_navigation)],
     "scope.one": [("P7", scope_selected(1))],
     "scope.click": [("P6", scope_selected(1)), ("P6", scope_menu)],
     "entry.find": [("P30", find_bar)],

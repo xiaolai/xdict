@@ -97,8 +97,8 @@ ROUTES = [
      "there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
     ("window.wide", "full", "Look up 'apple' at 700 pt, then stretch the window to 1400 pt (P5, P48)", "The search "
-     "field grown to its most (420 pt) at the toolbar's trailing edge, inside the window; the speaker and the text-size "
-     "pair beside it, none over it (2026-10-19: the speaker slid over the field and the field ran past the window)",
+     "field grown to its most (420 pt) at the toolbar's trailing edge, inside the window; the text-size pair beside it, "
+     "the speaker after Back / Forward (P48), none over the field (2026-10-19: the speaker slid over the field and the field ran past the window)",
      [("size", 700, 500)] + look_up("apple") + [("size", 1400, 700), ("wait", 1)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
      "'Open Dictionary Settings' button", []),
