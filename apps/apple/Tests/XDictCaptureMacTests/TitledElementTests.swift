@@ -157,6 +157,16 @@ struct TitledElementTests {
         #expect(word(read(tree, button, at: CGPoint(x: frame.midX, y: 140))) == nil)
     }
 
+    /// **A label wider than its frame is not drawn there as one line** (truncated, wrapped, or not in this font): nothing
+    /// is read from it, rather than a word placed where the text is not.
+    @Test func aLabelWiderThanItsFrameReadsNothing() throws {
+        let tree = TitledTree()
+        let text = "Extraordinarily long label"
+        let frame = CGRect(x: 100, y: 100, width: try width(of: text, style: .control) / 2, height: 24)
+        let button = tree.add(.init(role: "AXButton", title: text, frame: frame))
+        #expect(word(read(tree, button, at: CGPoint(x: frame.minX + 4, y: 112))) == nil)
+    }
+
     /// **A menu item: leading, after an inset nobody reports.** Where every inset the frame allows puts the same word
     /// under the pointer, it is read; where the frame is so much wider than the title that the inset decides, nothing is
     /// read here (the pixels answer it), never a guess.
