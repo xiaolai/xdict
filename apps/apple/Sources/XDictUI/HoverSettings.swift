@@ -54,7 +54,7 @@ public struct HoverSettings: View {
                 ForEach(HoverPolicy.ReadingMode.allCases) { Text(HoverSentences.readingMode($0)).tag($0) }
             } label: {
                 Text("Read text with")
-                Text("Automatic reads the text an app shares, and the screen where it shares none. Screen Only always reads the screen, and needs Screen Recording.")
+                Text("Automatic reads the text an app shares, and the screen where it shares none. Screen Only always reads the screen, and needs Screen Recording; while any site is in Never look up on, it reads nothing in web browsers.")
             }
             .accessibilityIdentifier("hover.readingMode")
             LabeledContent {

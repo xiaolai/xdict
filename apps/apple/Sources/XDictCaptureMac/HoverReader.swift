@@ -66,6 +66,8 @@ public final class HoverReader: HoverReading {
     private let ownBundleID: String?
     /// What one of XDict's own web views may answer, at most (`contextUTF16`).
     private let limits: CaptureLimits
+    /// The bundle identifier of a window's owner, by its pid; nil where it cannot be named.
+    private let bundleIDOf: @MainActor (pid_t) -> String?
     var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
     var onCaptureReleased: (@MainActor () -> Void)?
     /// The lane's wedge, and the capture's, as last reported.
@@ -86,8 +88,12 @@ public final class HoverReader: HoverReading {
         passesClicksThrough: @escaping @MainActor (UInt32) -> Bool = {
             HoverReader.passesClicksThrough($0, among: NSApp?.windows ?? [])
         },
-        ownBundleID: String? = Bundle.main.bundleIdentifier, limits: CaptureLimits = .shipped
+        ownBundleID: String? = Bundle.main.bundleIdentifier, limits: CaptureLimits = .shipped,
+        bundleIDOf: @escaping @MainActor (pid_t) -> String? = {
+            NSRunningApplication(processIdentifier: $0)?.bundleIdentifier
+        }
     ) {
+        self.bundleIDOf = bundleIDOf
         self.limits = limits
         self.passesClicksThrough = passesClicksThrough
         self.ownBundleID = ownBundleID
@@ -215,11 +221,19 @@ public final class HoverReader: HoverReading {
         at point: CGPoint, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy
     ) async -> Outcome {
         guard !Task.isCancelled else { return .quiet(.cancelled) }
-        if let refusal = CaptureAuthorization.refusal(host: .unreadable, policy: policy) { return .quiet(refusal) }
         let ours = getpid()
         let inOwnWindow = PointerWindow.ownership(at: point, in: windows, ours: ours) == .ours
         if inOwnWindow, let refusal = CaptureAuthorization.refusal(bundleID: ownBundleID, policy: policy) {
             return .quiet(refusal)
+        }
+        // **No page can be named without Accessibility**: while a site is listed, the window the capture would read is
+        // refused where it may hold one — a known browser's, or one whose owner cannot be named (`refusesUnnamedPage`).
+        // XDict's own window holds XDict's pages, never a site.
+        if !inOwnWindow, policy.refuses(.unreadable),
+           case .window(let chosen, _) = PointerTarget(point: point, windows: windows, accessibilityOwner: nil)
+               .captureWindow(excludingProcess: ours),
+           policy.refusesUnnamedPage(in: bundleIDOf(chosen.pid)) {
+            return .quiet(.excludedSite)
         }
         return await readThePixels(at: point, owner: inOwnWindow ? ours : nil, windows: windows, request: request,
                                    policy: policy, otherwise: .noTarget(.nothingAtPointer))
@@ -488,6 +502,8 @@ public final class HoverReader: HoverReading {
         _ read: Recognition, context: PendingContext?, request: CaptureRequest, policy: HoverPolicy, point: CGPoint
     ) -> Outcome {
         if let refusal = refusal(bundleID: read.bundleID, word: read.word.word, policy: policy) { return .quiet(refusal) }
+        // Screen Only's site rule asked again of the window actually captured, by the owner the capture named.
+        if policy.readingMode == .screenOnly, policy.refusesUnnamedPage(in: read.bundleID) { return .quiet(.excludedSite) }
         let key = Self.key(bundleID: read.bundleID, sentence: read.word.sentence.text, word: read.word.word, at: point)
         if key == lastLookedUp { return .quiet(.samePlace) }
         return .recognised(read, request: request, key: key, context: context)

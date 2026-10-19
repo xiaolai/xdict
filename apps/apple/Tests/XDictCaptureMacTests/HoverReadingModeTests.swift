@@ -7,8 +7,8 @@ import XDictCapture
 /// **Read text with: Automatic or Screen Only** (owner, 2026-10-19). Automatic is what shipped: Accessibility first, the
 /// pixels where it finds no word. Screen Only never asks Accessibility anything — no hit test, no site walk, no text, and
 /// none of XDict's own views — and reads the pixels, under every rule the pixels already keep: the app's exclusion by the
-/// window's owner, an unnameable page refused while any site is excluded, the window chosen by the compositor, and the
-/// Screen Recording gate.
+/// window's owner, a window that may hold an unnameable page (a known browser's, or one whose owner cannot be named)
+/// refused while any site is excluded, the window chosen by the compositor, and the Screen Recording gate.
 @MainActor
 struct HoverReadingModeTests {
     private static let theirs = ListedWindow(pid: getpid() + 1, bounds: CGRect(x: 0, y: 0, width: 500, height: 500),
@@ -74,16 +74,73 @@ struct HoverReadingModeTests {
         #expect(screen.laneTargets == 1)
     }
 
-    /// With any site excluded, a page cannot be named without Accessibility: Screen Only refuses, as the pixel path does
-    /// for an element it cannot name.
-    @Test func screenOnlyRefusesWhileAnySiteIsExcluded() async {
+    /// A Screen Only reader whose windows' owners are named by `owner` (the compositor's pid, as the app does by its
+    /// running application), with `example.com` excluded.
+    private func excludingASite(_ screen: ScriptedPointerWords, owner: @escaping @MainActor (pid_t) -> String?) -> HoverReader {
+        let policy = policy(.screenOnly) { $0.excludedHosts = ["example.com"] }
+        return HoverReader(policy: { policy }, source: screen, contexts: PendingContexts(),
+                           captureDeadline: RecognitionFixtures.patient, bundleIDOf: owner)
+    }
+
+    /// **With any site excluded, Screen Only fails closed where a page may be** (verifier, 2026-10-19: refusing every
+    /// window silenced hover in every app). A page cannot be named without Accessibility, so a known browser's window is
+    /// refused, and so is a window whose owner cannot be named; no pixel is read, nothing is asked of Accessibility.
+    @Test func screenOnlyRefusesABrowserOrAnUnnamedOwnerWhileASiteIsExcluded() async {
+        for owner: String? in ["com.apple.Safari", "com.google.Chrome", "org.mozilla.firefox", nil] {
+            let screen = screen(windows: [Self.theirs])
+            let outcome = await RecognitionFixtures.read(excludingASite(screen) { _ in owner })
+            guard case .quiet(.excludedSite) = outcome else {
+                Issue.record("\(owner ?? "an unnamed owner")'s window answered \(outcome) while a site is excluded")
+                continue
+            }
+            #expect(screen.recognitions == 0 && accessibilityAsked(screen) == 0)
+        }
+    }
+
+    /// **And reads every other app**: a terminal's window is not a page, so a listed site does not silence it.
+    @Test func screenOnlyReadsOtherAppsWhileASiteIsExcluded() async {
         let screen = screen(windows: [Self.theirs])
-        let reader = RecognitionFixtures.reader(screen, policy: policy(.screenOnly) { $0.excludedHosts = ["example.com"] })
-        guard case .quiet(.excludedSite) = await RecognitionFixtures.read(reader) else {
-            Issue.record("a page was read as pixels while a site is excluded")
+        let outcome = await RecognitionFixtures.read(excludingASite(screen) { _ in "com.mitchellh.ghostty" })
+        guard case .recognised(let read, _, _, _) = outcome else {
+            Issue.record("a terminal was not read while a site is excluded: \(outcome)")
             return
         }
-        #expect(screen.recognitions == 0 && accessibilityAsked(screen) == 0)
+        #expect(read.word.word == "fine")
+        #expect(accessibilityAsked(screen) == 0)
+    }
+
+    /// **XDict's own window holds XDict's pages, never a site**: read while a site is listed, whatever is behind it.
+    @Test func screenOnlyReadsXDictsOwnWindowWhileASiteIsExcluded() async {
+        let screen = screen(windows: [Self.ours, Self.theirs])
+        screen.recognition = .success(RecognitionFixtures.recognition("He paid the fine.", bundleID: "ai.xdict.app"))
+        let outcome = await RecognitionFixtures.read(excludingASite(screen) { _ in nil })
+        guard case .recognised = outcome else {
+            Issue.record("XDict's own window was refused while a site is excluded: \(outcome)")
+            return
+        }
+        #expect(screen.recognisedWindows == [Self.ours])
+    }
+
+    /// **The window's owner is asked again of the capture itself**: a browser's pixels whose window the compositor's pid
+    /// did not name as one (the window changed hands between the list and the capture) are refused, not a word.
+    @Test func aBrowsersRecognitionIsRefusedWhileASiteIsExcluded() async {
+        let screen = screen(windows: [Self.theirs])
+        screen.recognition = .success(RecognitionFixtures.recognition("He paid the fine.", bundleID: "com.apple.Safari"))
+        let outcome = await RecognitionFixtures.read(excludingASite(screen) { _ in "com.mitchellh.ghostty" })
+        guard case .quiet(.excludedSite) = outcome else {
+            Issue.record("a browser's recognised word was delivered while a site is excluded: \(outcome)")
+            return
+        }
+    }
+
+    /// The rule itself: only while a site is listed, only in Screen Only, and only a known browser or no owner at all.
+    @Test func thePixelSiteRuleRefusesOnlyBrowsersAndUnnamedOwners() {
+        let listing = policy(.screenOnly) { $0.excludedHosts = ["example.com"] }
+        #expect(listing.refusesUnnamedPage(in: "com.apple.Safari"))
+        #expect(listing.refusesUnnamedPage(in: nil))
+        #expect(!listing.refusesUnnamedPage(in: "com.mitchellh.ghostty"))
+        #expect(!policy(.screenOnly).refusesUnnamedPage(in: "com.apple.Safari"), "nothing listed, nothing refused")
+        #expect(!policy(.screenOnly).refusesUnnamedPage(in: nil))
     }
 
     /// XDict excluded by the reader: its own window is not read in Screen Only either.
