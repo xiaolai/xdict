@@ -12,12 +12,18 @@ import XDictCapture
 /// kind of control in (CoreText's UI fonts, at their system size: no size is written here). Where it sits is not known —
 /// leading, centred or trailing, pushed aside by an icon, a radio circle or a chevron (`LabelSlack.shift`), in a font
 /// down to `LabelSlack.smaller` smaller or as large as the frame allows — so **every such placement and size is tried,
-/// and a word is taken only where all of them put the pointer inside that same word**; anywhere else, nothing (verifier,
-/// 2026-10-19: one centred placement answered a word the pointer was not on for 14.5% of answers once a real label sat
-/// off centre). The pointer must also be within the line's height. A frame not wider than its label plus the tolerance
-/// answers nothing: the label may be truncated, wrapped, or not text at all (the Apple menu's "Apple" is a logo, 35 pt of
-/// text in a 34 pt frame, and is refused by name too). `TitleOracleTests` holds this against labels laid out at their
-/// true places: no answer is a word the pointer is not on. The pixels are the next path for every case this declines.
+/// and a word is taken only where all of them put the pointer inside that same word**; anywhere else, nothing. The slack
+/// is **a chosen safety margin, not a measurement**: no real control's offset was measured (2026-10-19). Under the
+/// oracle's assumed model of labels up to 12 pt off centre, one centred placement answered a word the pointer was not on
+/// for 14.5% of its answers (verifier, 2026-10-19); a label pushed further than the margin is outside what this guards.
+/// The pointer must also be within the line's height. A frame not wider than its label plus the tolerance answers nothing:
+/// the label may be truncated, wrapped, or not text at all (the Apple menu's "Apple" is a logo, 35 pt of text in a 34 pt
+/// frame, and is refused by name too). **Vertically the line is assumed centred**: a control taller than two of its lines
+/// (an icon above its label, as a toolbar item draws) answers nothing, since its label may sit anywhere in that height;
+/// the menu bar's items are exempt, one centred line in a bar 33 to 38 pt tall. Requiring agreement of top, centre and
+/// bottom placements instead would refuse every menu bar title, its bar being more than two lines tall on a notched
+/// screen. `TitleOracleTests` holds this against labels laid out at their true places in that model: no answer is a word
+/// the pointer is not on. The pixels are the next path for every case this declines.
 ///
 /// **Never `AXDescription`**: it is the label an icon is spoken by, not text on screen; read, it would look up "Back" from
 /// a chevron. **Never a secure field's anything**: `PointerWordReader` refuses one before any text attribute is asked.
@@ -79,21 +85,25 @@ enum ElementTitle {
         else { return nil }
         let ranges = TextSegmenter.wordRanges(in: text)
         guard !ranges.isEmpty, ranges.count <= PointerWordReader.maximumScannedWords,
-              frame.width > layout.width + tolerance.horizontal
+              frame.width > layout.width + tolerance.horizontal,
+              // Taller than two lines: the label may sit anywhere in the height, under an icon.
+              style == .menuBar || frame.height <= 2 * layout.lineHeight + tolerance.vertical
         else { return nil }
         // **Within the line's height**, at its smallest, centred in the frame.
         let smallest = smallestScale(of: font, slack: slack)
         guard abs(point.y - frame.midY) <= layout.lineHeight * smallest / 2 + tolerance.vertical else { return nil }
         let spans = ranges.map { layout.span(of: $0, in: text) }
-        // Every scale from the smallest font to the one that fills the frame. Within it the furthest origins either way
-        // are linear in the scale, piecewise, so the pointer's place on the line is monotone between the scales listed:
-        // its two ends, and where the off-centre bound meets the frame's edge.
+        // **Every scale from the smallest font to the one that fills the frame, checked at its two ends only.** The
+        // pointer's place on the line is furthest right at the leftmost placement and furthest left at the rightmost, so
+        // the word holds for every placement and scale if those two extremes stay in it. Each is (x − a)/s + b on either
+        // side of the scale where the off-centre bound meets the frame's edge; there the leftmost placement can only
+        // reach a minimum of its place and the rightmost only a maximum — never the extreme that decides — so the
+        // largest and smallest places lie at the ends. That middle scale was checked until 2026-10-20; dropping it
+        // changed no answer (verifier's mutant T03), and `TitleOracleTests.everySizeBetweenTheEndsAgrees` samples 401
+        // scales between the ends against this.
         let largest = frame.width / layout.width
-        var scales = [smallest, largest]
-        let kink = (frame.width - 2 * slack.shift) / layout.width
-        if kink > smallest, kink < largest { scales.append(kink) }
         var agreed: Int?
-        for scale in scales {
+        for scale in [smallest, largest] {
             let width = layout.width * scale
             let centred = frame.minX + (frame.width - width) / 2
             let lowest = min(frame.minX, centred - slack.shift)

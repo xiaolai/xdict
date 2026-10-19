@@ -143,6 +143,23 @@ struct HoverReadingModeTests {
         #expect(!policy(.screenOnly).refusesUnnamedPage(in: nil))
     }
 
+    /// **A browser's web apps are its windows too** (verifier, 2026-10-20: the list failed open for a site installed as a
+    /// web app, and for browsers it did not name): Safari's web apps, Chrome's, Edge's and Brave's, any listed browser's
+    /// `.app.` family, and the browsers added since, are refused; a name that only begins like a browser's is not.
+    @Test func aBrowsersWebAppsAndTheNewerBrowsersAreRefused() {
+        let listing = policy(.screenOnly) { $0.excludedHosts = ["example.com"] }
+        for planted in ["com.apple.Safari.WebApp.7C0E9D1A-2B3C-4D5E-8F90-A1B2C3D4E5F6",
+                        "com.google.Chrome.app.kjgfgldnnfoeklkmfkjfagphfepbbdan", "com.microsoft.edgemac.app.abcdefgh",
+                        "com.brave.Browser.app.abcdefgh", "com.vivaldi.Vivaldi.app.abcdefgh", "ai.perplexity.comet", "com.openai.atlas", "com.naver.Whale", "ru.yandex.desktop.yandex-browser",
+                        "one.ablaze.floorp", "org.chromium.Thorium", "io.wavebox.wavebox", "com.pushplaylabs.sidekick",
+                        "net.mullvad.mullvadbrowser", "io.gitlab.librewolf-community", "com.electron.min"] {
+            #expect(listing.refusesUnnamedPage(in: planted), "\(planted) was read while a site is listed")
+        }
+        for other in ["com.apple.mail", "com.google.Chromecast", "com.apple.SafariViewService2", "com.mitchellh.ghostty"] {
+            #expect(!listing.refusesUnnamedPage(in: other), "\(other) is not a browser")
+        }
+    }
+
     /// XDict excluded by the reader: its own window is not read in Screen Only either.
     @Test func screenOnlyKeepsXDictsOwnExclusion() async {
         let screen = screen(windows: [Self.ours])

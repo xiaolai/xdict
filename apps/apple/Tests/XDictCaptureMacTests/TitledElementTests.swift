@@ -198,6 +198,19 @@ struct TitledElementTests {
         #expect(answers(tree, done, across: roomy).isEmpty)
     }
 
+    /// **A control taller than two of its lines may draw its label anywhere in its height** — under an icon, as a toolbar
+    /// item does — so the pointer at its middle may be on the icon: it reads nothing. The menu bar's items are exempt:
+    /// they draw one line, centred, in a bar 33 to 38 pt tall.
+    @Test func aControlTallerThanTwoLinesReadsNothing() throws {
+        let tree = TitledTree()
+        let tall = try frame("Dictionaries", .control, pad: 8, x: 100, y: 100, height: 60)
+        let item = tree.add(.init(role: "AXButton", title: "Dictionaries", frame: tall))
+        #expect(answers(tree, item, across: tall).isEmpty)
+        let bar = try frame("Bookmarks", .menuBar, pad: 8, x: 99, y: 0, height: 38)
+        let title = tree.add(.init(role: "AXMenuBarItem", title: "Bookmarks", frame: bar))
+        #expect(word(read(tree, title, at: CGPoint(x: bar.minX + 38, y: bar.midY))) == "Bookmarks")
+    }
+
     /// **A label not narrower than its frame by the tolerance is not known to be drawn there as one line** (truncated,
     /// wrapped, or not in this font): nothing is read from it, rather than a word placed where the text is not.
     @Test func aLabelNotNarrowerThanItsFrameReadsNothing() throws {
