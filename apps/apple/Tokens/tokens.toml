@@ -66,7 +66,7 @@ panelScreenMargin = { value = 8, why = "The lookup panel keeps clear of the scre
 clickedWordRise = { value = 11.2, why = "A Control-clicked word with no box: its point taken as the middle of one reading line (16 pt base x 1.4 leading, css.base and css.leading), so the popover arrow lands on the line's edge, the middle of the white space between two lines." }
 settingsSheetMargin = { value = 12, why = "The Details sheet's margin above and below inside the Settings window, so it never hangs past it." }
 settingsScreenMargin = { value = 40, why = "The Settings window's margin kept above and below it on the screen (ADR-0012 d.6)." }
-hoverNoticeOffset = { value = 16, why = "The brief hover notice keeps this far clear of the pointer on both axes: a window of XDict's in front at the pointer refuses the next hover there, and the cursor's own arrow is about this size." }
+hoverNoticeOffset = { value = 16, why = "The brief hover notice keeps this far clear of the pointer on both axes: over the pointer it would hide the word being read, and the cursor's own arrow is about this size." }
 
 [row]
 sidebar = { value = 28, source = "P9" }
