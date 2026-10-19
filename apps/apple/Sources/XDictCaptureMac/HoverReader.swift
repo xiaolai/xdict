@@ -66,6 +66,8 @@ public final class HoverReader: HoverReading {
     private let ownBundleID: String?
     /// What one of XDict's own web views may answer, at most (`contextUTF16`).
     private let limits: CaptureLimits
+    /// The bundle identifier of a window's owner, by its pid; nil where it cannot be named.
+    private let bundleIDOf: @MainActor (pid_t) -> String?
     var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
     var onCaptureReleased: (@MainActor () -> Void)?
     /// The lane's wedge, and the capture's, as last reported.
@@ -86,8 +88,12 @@ public final class HoverReader: HoverReading {
         passesClicksThrough: @escaping @MainActor (UInt32) -> Bool = {
             HoverReader.passesClicksThrough($0, among: NSApp?.windows ?? [])
         },
-        ownBundleID: String? = Bundle.main.bundleIdentifier, limits: CaptureLimits = .shipped
+        ownBundleID: String? = Bundle.main.bundleIdentifier, limits: CaptureLimits = .shipped,
+        bundleIDOf: @escaping @MainActor (pid_t) -> String? = {
+            NSRunningApplication(processIdentifier: $0)?.bundleIdentifier
+        }
     ) {
+        self.bundleIDOf = bundleIDOf
         self.limits = limits
         self.passesClicksThrough = passesClicksThrough
         self.ownBundleID = ownBundleID
@@ -154,6 +160,9 @@ public final class HoverReader: HoverReading {
         let ours = getpid()
         let windows = PointerWindow.withoutClickThrough(source.listedWindows(), ours: ours,
                                                         passesClicksThrough: passesClicksThrough)
+        if policy.readingMode == .screenOnly {
+            return await readScreenOnly(at: point, windows: windows, request: request, policy: policy)
+        }
         let targeted: PointerWordReader.OwnTargetOutcome
         let inOwnWindow: Bool
         switch await resolve(at: point, windows: windows, policy: policy) {
@@ -190,6 +199,9 @@ public final class HoverReader: HoverReading {
                 return accept(hit, request: request, policy: policy, point: point)
             case .read(.cancelled):
                 return .quiet(.cancelled)
+            case .read(.miss(.secure(let app))):
+                // **A secure field is not read as pixels either.**
+                return .nothing(.miss(.secure(app: app)))
             case .read(.miss(let miss)):
                 // **The site was decided in the same job and not refused**: the pixels of the app Accessibility named.
                 log.info("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
@@ -197,6 +209,34 @@ public final class HoverReader: HoverReading {
                                            otherwise: .miss(miss))
             }
         }
+    }
+
+    /// **Read text with: Screen Only** (owner, 2026-10-19): Accessibility is never asked — no hit test, no site walk, no
+    /// text, none of XDict's own views — and the pixels are read under the rules they already keep. With no element, no
+    /// page can be named, so while the reader excludes any site it is refused, as the pixel path refuses an unnamed page;
+    /// XDict excluded by the reader refuses its own front window here, another app's exclusion is the recogniser's, by the
+    /// window's owner, before a pixel; the window is the compositor's front one at the point (XDict's when it is in
+    /// front); and without Screen Recording the reader is told so (`needsScreenRecording`).
+    private func readScreenOnly(
+        at point: CGPoint, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        guard !Task.isCancelled else { return .quiet(.cancelled) }
+        let ours = getpid()
+        let inOwnWindow = PointerWindow.ownership(at: point, in: windows, ours: ours) == .ours
+        if inOwnWindow, let refusal = CaptureAuthorization.refusal(bundleID: ownBundleID, policy: policy) {
+            return .quiet(refusal)
+        }
+        // **No page can be named without Accessibility**: while a site is listed, the window the capture would read is
+        // refused where it may hold one — a known browser's, or one whose owner cannot be named (`refusesUnnamedPage`).
+        // XDict's own window holds XDict's pages, never a site.
+        if !inOwnWindow, policy.refuses(.unreadable),
+           case .window(let chosen, _) = PointerTarget(point: point, windows: windows, accessibilityOwner: nil)
+               .captureWindow(excludingProcess: ours),
+           policy.refusesUnnamedPage(in: bundleIDOf(chosen.pid)) {
+            return .quiet(.excludedSite)
+        }
+        return await readThePixels(at: point, owner: inOwnWindow ? ours : nil, windows: windows, request: request,
+                                   policy: policy, otherwise: .noTarget(.nothingAtPointer))
     }
 
     /// Who owns the point, as `resolve` found it: an Accessibility target (true where it is XDict's own window), or one
@@ -310,16 +350,26 @@ public final class HoverReader: HoverReading {
             // No window a capture may read: what Accessibility found is the answer.
             return .nothing(otherwise)
         }
-        guard capturing.claim() else {
+        let abandoning = capturing.holdsAbandoned
+        guard let ticket = capturing.claim() else {
             reportIfStuck()
             return .quiet(.captureInFlight)
         }
+        if !abandoning, capturing.holdsAbandoned {
+            log.notice("hover: a capture held past \(CaptureGuard.abandonAfter.components.seconds, privacy: .public) s was set aside; this one starts")
+        }
         let source = source
         do {
-            let (recognition, context) = try await bounded { try await source.recognise(at: point, window: window, policy: policy) }
+            let (recognition, context) = try await bounded(ticket) {
+                try await source.recognise(at: point, window: window, policy: policy)
+            }
             let outcome = accept(recognition, context: context, request: request, policy: policy, point: point)
             if case .recognised = outcome {} else { context?.cancel() }
             return outcome
+        } catch RecognitionError.screenBusy {
+            // **A screenshot set aside is still blocked in ScreenCaptureKit**: this one was refused, never started beside
+            // it (`ScreenshotGate`); asked again when the capture set aside ends.
+            return .quiet(.captureInFlight)
         } catch RecognitionError.screenRecordingNeeded {
             // A reader who moved on is not told anything.
             return Task.isCancelled ? .quiet(.cancelled) : .needsScreenRecording(request: request)
@@ -327,7 +377,7 @@ public final class HoverReader: HoverReading {
             return Task.isCancelled ? .quiet(.cancelled) : .nothing(.recognition(error))
         } catch is CaptureTimedOut {
             // **The deadline passed and the capture still runs**: stuck now, not when the next hover happens to ask.
-            if capturing.isHeld { reportStuck(for: captureDeadline) }
+            if capturing.isCurrent(ticket) { reportStuck(for: captureDeadline) }
             return .nothing(.captureTimedOut)
         } catch {
             return .quiet(.cancelled)
@@ -349,14 +399,14 @@ public final class HoverReader: HoverReading {
     /// after the deadline answered. Where the first reading offers a growth, it runs on under the same guard as a pending
     /// context, bounded by what is left of the deadline; the guard is released when that work returns.
     private func bounded(
-        _ work: @escaping @Sendable () async throws -> Recognition
+        _ ticket: CaptureGuard.Ticket, _ work: @escaping @Sendable () async throws -> Recognition
     ) async throws -> (Recognition, PendingContext?) {
         let answer = Answer<FirstRead>()
         let capturing = capturing, contexts = contexts, deadline = captureDeadline
         let started = ContinuousClock.now
         let finished = Task { [weak self] in
             defer {
-                let (_, wasReported) = capturing.release()
+                let (_, wasReported) = capturing.release(ticket)
                 Task { @MainActor in self?.captureEnded(wasReported: wasReported) }
             }
             let first: Recognition
@@ -452,6 +502,8 @@ public final class HoverReader: HoverReading {
         _ read: Recognition, context: PendingContext?, request: CaptureRequest, policy: HoverPolicy, point: CGPoint
     ) -> Outcome {
         if let refusal = refusal(bundleID: read.bundleID, word: read.word.word, policy: policy) { return .quiet(refusal) }
+        // Screen Only's site rule asked again of the window actually captured, by the owner the capture named.
+        if policy.readingMode == .screenOnly, policy.refusesUnnamedPage(in: read.bundleID) { return .quiet(.excludedSite) }
         let key = Self.key(bundleID: read.bundleID, sentence: read.word.sentence.text, word: read.word.word, at: point)
         if key == lastLookedUp { return .quiet(.samePlace) }
         return .recognised(read, request: request, key: key, context: context)
