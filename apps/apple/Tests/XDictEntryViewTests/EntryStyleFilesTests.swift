@@ -47,7 +47,7 @@ struct EntryStyleFilesTests {
         #expect(installed[3].contains("\n" + (try script("colour-guard.js")) + "\n"))
         #expect(Array(installed[4...]) == (try ["placeholder-clicks.js", "speaker-clicks.js", "disclosure-core.js",
                                                 "disclosure.js", "pron-run-core.js", "pron-run.js", "word-clicks-core.js",
-                                                "word-clicks.js"].map(script)))
+                                                "word-clicks.js", "hover-word.js"].map(script)))
         for name in ["column.css", "type.css", "reading-labels.css"] {
             // The tokens' `{{fill-<name>}}`s are written in (a media query's breakpoint): nothing else is.
             let joined = EntryStyle.fill(try #require(disk[name]).split(separator: "\n").map { $0.drop { $0 == " " } }

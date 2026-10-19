@@ -73,6 +73,14 @@ public enum PointerWordReader {
             self.bundleID = bundleID
         }
 
+        /// `element` named by the app that owns it, as the running process says.
+        init(of element: AXUIElement) {
+            var pid: pid_t = 0
+            AXUIElementGetPid(element, &pid)
+            let running = NSRunningApplication(processIdentifier: pid)
+            self.init(element: element, appName: running?.localizedName ?? "pid \(pid)", bundleID: running?.bundleIdentifier)
+        }
+
         /// The process Accessibility found the element in.
         public var pid: pid_t {
             var pid: pid_t = 0
@@ -94,9 +102,37 @@ public enum PointerWordReader {
     public enum TargetOutcome: @unchecked Sendable {
         case found(Target)
         case none(TargetMiss)
-        /// The pointer is over one of XDict's own windows. **Nothing else must be tried**: falling through to the
-        /// recogniser would capture the window underneath XDict's panel.
-        case ourOwnWindow
+        /// The pointer is over one of XDict's own windows: **nothing of it is asked here**, off the main actor. The caller
+        /// asks again on the main actor (`ownTarget`), where a request about this process is safe (owner, 2026-10-19).
+        case ownWindow
+    }
+
+    /// What the main actor's hit test of XDict's own application found: never `ownWindow`, as it is the main actor's.
+    public enum OwnTargetOutcome: @unchecked Sendable {
+        case found(Target)
+        case none(TargetMiss)
+    }
+
+    /// **XDict's own window, hit-tested through XDict's own application — on the main actor** (owner, 2026-10-19: hover
+    /// reads XDict's main window, its entry, Settings and the popover). A request about this process is serviced
+    /// in-process, on the calling thread (XiaolaiDict ADR-0042), so the caller is the main actor
+    /// (`SystemPointerWords.ownTarget`) and never the lane. Asked of XDict's own application rather than the system-wide
+    /// element, so it cannot land in another app — no synchronous IPC from the main thread — and descended by the same
+    /// bounded rule as another app's own hit test, inside the same budget (`ax`'s).
+    public static func ownTarget(
+        at point: CGPoint, access: AccessibilityAccess, ownProcess: pid_t, with ax: some AccessibilityReading
+    ) -> OwnTargetOutcome {
+        guard access.granted() else { return .none(.accessibilityOff) }
+        let element: AXUIElement
+        do throws(CaptureError) {
+            guard let found = try ax.hitTest(AXUIElementCreateApplication(ownProcess), at: point) else {
+                return .none(.nothingAtPointer)
+            }
+            element = try descend(from: found, to: point, with: ax)
+        } catch {
+            return .none(.failed(error))
+        }
+        return .found(Target(of: element))
     }
 
     /// A hung app must not stall a hover. Per request; the whole read is bounded by `budget`.
@@ -110,29 +146,70 @@ public enum PointerWordReader {
     public static let maximumScannedWords = 120
 
     /// **Who owns the pixel, asked in this order**: the grant (never prompting, decision 7), then **the compositor's
-    /// window list, before Accessibility is asked anything** — where the window under the pointer is one of XDict's own,
-    /// at any level (its panel floats), the hit test itself would be serviced in-process on this thread, off the main
-    /// actor (XiaolaiDict ADR-0042) — then the system-wide hit test, a request of `ax` and so inside its budget, and the
-    /// owner's process checked once more, for a window that arrived since the list was taken.
+    /// window list, before Accessibility is asked anything** — where the window in front at the pointer is one of XDict's
+    /// own, at any level (the popover floats), the hit test would be serviced in-process on this thread, off the main
+    /// actor (XiaolaiDict ADR-0042), so it is handed back as `ownWindow` for the main actor — then the hit test, a request
+    /// of `ax` and so inside its budget, and the owner's process checked once more, for a window that arrived since the
+    /// list was taken (handed back the same way; the hit test that found it cannot be undone).
+    ///
+    /// **The hit test is the system-wide one only where no window of ours is under the point.** Where another app's
+    /// window is in front of one of ours, that app alone is asked — the system-wide hit test could go through a
+    /// click-through window to ours — and its answer descended to the element under the point (`descend`), as an app's
+    /// own hit test names only a coarse group in SwiftUI apps (System Settings, measured 2026-10-19). **That app is
+    /// refused before it is asked anything** where `refusesOwner` says so (the reader's excluded apps): its target is its
+    /// application element, unread, which the caller refuses by its bundle identifier. The system-wide hit test cannot
+    /// know the app before it answers; its element is not descended, and the caller refuses it before any text is read.
     public static func target(
         at point: CGPoint, access: AccessibilityAccess, windows: () -> [ListedWindow], ownProcess: pid_t,
-        with ax: some AccessibilityReading
+        refusesOwner: (pid_t) -> Bool, with ax: some AccessibilityReading
     ) -> TargetOutcome {
         guard access.granted() else { return .none(.accessibilityOff) }
-        if PointerWindow.ours(at: point, in: windows(), ours: ownProcess) { return .ourOwnWindow }
+        let root: AXUIElement
+        let throughItsApp: Bool
+        switch PointerWindow.ownership(at: point, in: windows(), ours: ownProcess) {
+        case .ours: return .ownWindow
+        case .notOurs: (root, throughItsApp) = (AXUIElementCreateSystemWide(), false)
+        case .coveringOurs(let owner):
+            if refusesOwner(owner) { return .found(Target(of: AXUIElementCreateApplication(owner))) }
+            (root, throughItsApp) = (AXUIElementCreateApplication(owner), true)
+        }
         let element: AXUIElement
         do throws(CaptureError) {
-            guard let found = try ax.hitTest(AXUIElementCreateSystemWide(), at: point) else { return .none(.nothingAtPointer) }
-            element = found
+            guard let found = try ax.hitTest(root, at: point) else { return .none(.nothingAtPointer) }
+            element = throughItsApp ? try descend(from: found, to: point, with: ax) : found
         } catch {
             return .none(.failed(error))
         }
-        var pid: pid_t = 0
-        AXUIElementGetPid(element, &pid)
-        guard pid != ownProcess else { return .ourOwnWindow }
-        let running = NSRunningApplication(processIdentifier: pid)
-        return .found(Target(element: element, appName: running?.localizedName ?? "pid \(pid)",
-                             bundleID: running?.bundleIdentifier))
+        let target = Target(of: element)
+        return target.pid == ownProcess ? .ownWindow : .found(target)
+    }
+
+    /// Levels descended from an app's own hit test, and the children weighed at one level: past either, the element
+    /// reached is the answer (a coarser one, which then reads as a miss and goes to the pixels).
+    public static let descentDepthLimit = 24
+    public static let descentChildLimit = 128
+
+    /// **From an app's own hit-test answer down to the element under the point**: at each level, the smallest child whose
+    /// frame holds the point — a table's column spans every row, so the row (then its cell, then its text) is taken.
+    /// Measured on System Settings (2026-10-19): this reached the element the system-wide hit test names at all twelve
+    /// points tried. Every element asked belongs to the app asked, never to this process.
+    static func descend(
+        from start: AXUIElement, to point: CGPoint, with ax: some AccessibilityReading
+    ) throws(CaptureError) -> AXUIElement {
+        var current = start
+        for _ in 0..<descentDepthLimit {
+            let children = try ax.elements(current, kAXChildrenAttribute)
+            guard !children.isEmpty, children.count <= descentChildLimit else { break }
+            var smallest: (element: AXUIElement, area: CGFloat)?
+            for child in children {
+                guard let frame = try ax.frame(child), frame.contains(point) else { continue }
+                let area = frame.width * frame.height
+                if smallest.map({ area < $0.area }) ?? true { smallest = (child, area) }
+            }
+            guard let smallest else { break }
+            current = smallest.element
+        }
+        return current
     }
 
     /// The three dialects in order, against any Accessibility client — the real one or a test's. `point` is global with
@@ -463,6 +540,9 @@ public enum PointerWordReader {
 
     private static func awaken(_ target: Target, _ ax: some AccessibilityReading) throws(CaptureError) {
         let pid = target.pid
+        // XDict's own tree is AppKit's and needs no waking; told it was being read by an assistive client, XDict would
+        // change itself for the rest of the launch. The same holds for `escalate`.
+        guard pid != getpid() else { return }
         let key = launchKey(pid)
         guard !awakened.withLock({ $0.contains(key) }) else { return }
         try ax.wake(AXUIElementCreateApplication(pid))
@@ -474,6 +554,7 @@ public enum PointerWordReader {
     /// nothing, rather than going out with `awaken`.
     private static func escalate(_ target: Target, _ ax: some AccessibilityReading) throws(CaptureError) {
         let pid = target.pid
+        guard pid != getpid() else { return }
         let key = launchKey(pid)
         guard !escalated.withLock({ $0.contains(key) }) else { return }
         try ax.enhance(AXUIElementCreateApplication(pid))

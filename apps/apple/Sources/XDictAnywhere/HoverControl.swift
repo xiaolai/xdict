@@ -75,6 +75,11 @@ public final class HoverControl {
     public private(set) var screenRecording = ScreenRecordingRow.notSetUp
     /// A hover needed the pixels and Screen Recording was not there for it, in this run.
     public private(set) var neededScreenRecording = false
+    /// **Where a notice the watcher tells is shown by the pointer** (owner's report, 2026-10-19: a miss showed nothing):
+    /// set by the consumer, which words and draws it. Kinds only, and at most once a while per kind (`HoverNoticeThrottle`).
+    @ObservationIgnored public var showBriefNotice: (@MainActor (CaptureNotice) -> Void)?
+    @ObservationIgnored private var briefs = HoverNoticeThrottle()
+    @ObservationIgnored private let now: @MainActor () -> ContinuousClock.Instant
     /// The reader's setting, as stored (`isEnabled`).
     private var enabled: Bool
     /// A reader's launch asked the watcher to start and it did not (`HoverWatcher.start` could not install its monitors).
@@ -92,6 +97,10 @@ public final class HoverControl {
     /// Starts the watcher and says whether it holds its monitors: the system's (`systemStart`), or a test's, which can
     /// fail where the system's monitors never do.
     @ObservationIgnored private let startWatcher: @MainActor (HoverWatcher) -> Bool
+    /// Warms the recogniser in the background (`ScreenTextRecogniser.warmUp`), or a test's count.
+    @ObservationIgnored private let warmUpRecognition: @MainActor () -> Void
+    /// Whether this launch has warmed it: once per launch, however often the watcher restarts.
+    @ObservationIgnored private var warmed = false
 
     static let enabledKey = "hoverLookupEnabled"
 
@@ -107,9 +116,13 @@ public final class HoverControl {
     public init(
         defaults: UserDefaults, requests: CaptureRequests, screen: ScreenRecordingAccess = .system,
         source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
-        startWatcher: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart
+        startWatcher: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart,
+        now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
+        warmUpRecognition: @escaping @MainActor () -> Void = { ScreenTextRecogniser.warmUp() }
     ) {
         self.startWatcher = startWatcher
+        self.warmUpRecognition = warmUpRecognition
+        self.now = now
         self.defaults = defaults
         self.requests = requests
         self.screen = screen
@@ -127,10 +140,16 @@ public final class HoverControl {
             pause: { [weak self] in self?.pauseSwitch ?? HoverPause() },
             requests: requests, source: source, contexts: contextSession.pending, restTolerance: CaptureTolerances.restDrift)
         watcher.onCaptureHealth = { [weak self] in self?.captureHealth = $0 }
-        watcher.onNotice = { [weak self] notice in
-            if notice == .screenRecordingNeeded { self?.neededScreenRecording = true }
-        }
+        watcher.onNotice = { [weak self] notice in self?.told(notice) }
         return watcher
+    }
+
+    /// A notice for a hover that still stands: kept for Settings where it is the grant's, and shown by the pointer unless
+    /// the same kind was shown a moment ago.
+    private func told(_ notice: CaptureNotice) {
+        if notice == .screenRecordingNeeded { neededScreenRecording = true }
+        guard briefs.allows(notice, at: now()) else { return }
+        showBriefNotice?(notice)
     }
 
     /// The policy the gate decides with: the reader's, with the scripts the enabled dictionaries allow now.
@@ -277,6 +296,31 @@ public final class HoverControl {
     private func start() {
         isWatching = startWatcher(watcher)
         startFailed = !isWatching
+        // **The recogniser warmed once, once hover watches in a reader's launch** — never in a driven run (only a
+        // reader's launch reaches here: `startAtLaunch`, `setEnabled`), never with hover off or a start that failed.
+        // Fire-and-forget: hover's start does not wait.
+        if isWatching, !warmed {
+            warmed = true
+            warmUpRecognition()
+        }
+    }
+}
+
+/// **How often a brief hover notice may be shown by the pointer**: once per kind within `interval`, so a reader
+/// double-tapping blank space, or resting on it with the key held, is told once rather than at every try.
+public struct HoverNoticeThrottle: Sendable {
+    /// A duration, not a design value: long enough that repeated tries read as one answer, short enough that the next
+    /// deliberate try is answered.
+    public static let interval: Duration = .seconds(2)
+    private var shown: [CaptureNotice: ContinuousClock.Instant] = [:]
+
+    public init() {}
+
+    /// Whether `notice` may be shown at `now`; a yes is remembered as shown.
+    public mutating func allows(_ notice: CaptureNotice, at now: ContinuousClock.Instant) -> Bool {
+        if let last = shown[notice], now - last < Self.interval { return false }
+        shown[notice] = now
+        return true
     }
 }
 

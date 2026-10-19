@@ -47,8 +47,10 @@ final class LookupAnywhere {
     static var launch: HoverLaunch = .reader
 
     /// Hover's settings, pause and watcher, and **the app's one book of capture requests**, every trigger's.
+    /// XDict's own entry views are read by their own script, never through Accessibility (`EntryWebView.hoverText`).
     @ObservationIgnored private(set) lazy var hover = HoverControl(
         defaults: .standard, requests: CaptureRequests(),
+        source: SystemPointerWords(metrics: CaptureTolerances.metrics, readsOwnView: Self.readsOwnEntry),
         scripts: { HoverScripts.allowed(searchLanguages: XDictApp.library.entries.filter(\.enabled).map(\.languages.pair.search)) })
     private var requests: CaptureRequests { hover.requests }
     /// The presented request's context, and nothing else of it: memory only, cleared when the panel closes. Capture's own
@@ -79,6 +81,8 @@ final class LookupAnywhere {
     @ObservationIgnored private var escape: EscapeStack.Entry?
     @ObservationIgnored private var clickMonitors: [Any] = []
     @ObservationIgnored private var reading: Task<Void, Never>?
+    /// The brief line by the pointer for a hover that read nothing.
+    @ObservationIgnored private let briefNotice = HoverNoticeHUD()
     @ObservationIgnored private let log = Logger(subsystem: XDictIdentity.app, category: "anywhere")
     /// Opens a main window: set by the scene, which alone holds SwiftUI's `openWindow`.
     @ObservationIgnored var openMainWindow: (() -> Void)?
@@ -133,6 +137,10 @@ final class LookupAnywhere {
         }
         state = made
         hover.watcher.sink = self
+        // A hover that read nothing, or needed a grant, says so by the pointer (owner's report, 2026-10-19).
+        hover.showBriefNotice = { [weak self] notice in
+            self?.briefNotice.show(String(localized: HoverSentences.brief(notice)), near: NSEvent.mouseLocation)
+        }
         hover.startAtLaunch(Self.launch)
     }
 

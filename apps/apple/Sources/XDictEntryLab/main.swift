@@ -35,6 +35,11 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
 
     private func run() async throws {
         guard let out = options.out else { throw LabFailure(description: "--out is missing") }
+        if options.mode == .hoverScript {
+            guard let cases = options.cases else { throw LabFailure(description: "--hover-script needs --cases") }
+            try Report.write(try await HoverScriptRun.run(cases: cases), to: out)
+            exit(0)
+        }
         let cache = FileManager.default.temporaryDirectory.appending(path: "xdict-lab-core-\(ProcessInfo.processInfo.processIdentifier)")
         let core = try LabCore(cache: cache, stripOffForTests: options.stripOffForTests)
         switch options.mode {
@@ -68,7 +73,7 @@ final class LabDelegate: NSObject, NSApplicationDelegate {
         case .page:
             try Report.write(try await PageMeasure.run(options: options, core: core), to: out)
             exit(0)
-        case nil:
+        case .hoverScript, nil:
             throw LabFailure(description: "no mode")
         }
     }
@@ -82,7 +87,8 @@ do {
 }
 MainActor.assumeIsolated {
     let app = NSApplication.shared
-    app.setActivationPolicy(.regular)
+    // The hover-script run shows nothing: its web view is in no window.
+    app.setActivationPolicy(options.mode == .hoverScript ? .accessory : .regular)
     let delegate = LabDelegate(options: options)
     app.delegate = delegate
     app.run()

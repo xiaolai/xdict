@@ -256,6 +256,83 @@ struct HoverWatcherSequenceTests {
         #expect(rig.reader.forgotten == rig.reader.remembered, "a word nobody saw stayed remembered")
     }
 
+    /// **A hover inside the presented popover replaces its presentation** (owner, 2026-10-19: hover works in XDict's own
+    /// windows, the popover included; the key held is what asks, so the popover cannot ask by itself). The second word is
+    /// numbered after the first, claims presentation, and is delivered under its own generation; the first's `shown`
+    /// stands, and both stay remembered.
+    @Test func aHoverInsideThePresentedPopoverReplacesItsPresentation() async throws {
+        let rig = Rig()
+        await rig.rest(at: UpPoint(x: 100, y: 100))
+        rig.reader.answerWord("tide")
+        await HoverFixtures.settle { rig.sink.all.count == 1 }
+        let first = try #require(rig.sink.all.first)
+        rig.requests.acknowledge(first.request, generation: first.generation, .shown)
+        // Into the popover, resting on a word of its entry with the key still held.
+        await rig.rest(at: UpPoint(x: 300, y: 400))
+        rig.reader.answer(.word(HoverFixtures.hit("wave", bundleID: "ai.xdict.app"), request: rig.reader.asks[1].request,
+                                key: "key-wave"))
+        await HoverFixtures.settle { rig.sink.all.count == 2 }
+        let second = try #require(rig.sink.all.last)
+        #expect(second.term.term == "wave")
+        #expect(second.request.number > first.request.number)
+        #expect(rig.requests.isCurrent(second.request))
+        #expect(rig.requests.terminal(of: first.request)?.outcome == .shown, "the first word's acknowledgement changed")
+        rig.requests.acknowledge(second.request, generation: second.generation, .shown)
+        await rig.drain()
+        #expect(rig.reader.forgotten.isEmpty)
+        #expect(rig.reader.remembered.count == 2)
+    }
+
+    /// **And one asked while the first word still draws supersedes it** (ADR-0014 d.4): the newer claim ends the first
+    /// cancelled, whose word is forgotten (resting on it again asks again), and the first's late draw acknowledges nothing.
+    @Test func aHoverInsideThePopoverWhileItsWordDrawsSupersedesIt() async throws {
+        let rig = Rig()
+        await rig.rest(at: UpPoint(x: 100, y: 100))
+        rig.reader.answerWord("tide")
+        await HoverFixtures.settle { rig.sink.all.count == 1 }
+        let first = try #require(rig.sink.all.first)
+        await rig.rest(at: UpPoint(x: 300, y: 400))
+        rig.reader.answer(.word(HoverFixtures.hit("wave", bundleID: "ai.xdict.app"), request: rig.reader.asks[1].request,
+                                key: "key-wave"))
+        await HoverFixtures.settle { rig.sink.all.count == 2 }
+        #expect(rig.requests.terminal(of: first.request)?.outcome == .cancelled)
+        await HoverFixtures.settle { !rig.reader.forgotten.isEmpty }
+        #expect(rig.reader.forgotten == [rig.reader.remembered[0]], "the superseded word stayed remembered")
+        #expect(!rig.requests.acknowledge(first.request, generation: first.generation, .shown),
+                "the superseded word's late draw was taken as its acknowledgement")
+    }
+
+    /// **XDict's own events are watched as well as other apps'** (owner, 2026-10-19: hover works in XDict's own windows).
+    /// A global monitor never sees an event sent to this app, so with XDict in front the hold key and the pointer reach
+    /// hover only through a local monitor — for every watched kind, its event handed back, never swallowed, its window
+    /// point taken to the screen. Red with the global monitors alone.
+    @Test func ourOwnEventsAreWatchedAndHandedBack() throws {
+        let monitors = RecordingMonitors()
+        let events = SystemHoverEvents(monitors: monitors.monitors)
+        var got: [HoverEvent] = []
+        #expect(events.start { got.append($0) })
+        #expect(monitors.global == SystemHoverEvents.watched.map(\.rawValue))
+        #expect(monitors.local.map(\.mask) == SystemHoverEvents.watched.map(\.rawValue))
+        #expect(monitors.removed == 0, "a monitor was removed while hover watches")
+        let moved = try #require(NSEvent.mouseEvent(
+            with: .mouseMoved, location: CGPoint(x: 10, y: 20), modifierFlags: [], timestamp: 1, windowNumber: 0,
+            context: nil, eventNumber: 0, clickCount: 0, pressure: 0))
+        let local = try #require(monitors.local.first { $0.mask == NSEvent.EventTypeMask.mouseMoved.rawValue })
+        #expect(local.handler(moved) === moved, "XDict's own event was swallowed")
+        #expect(got == [.pointerMoved])
+        events.stop()
+        #expect(monitors.removed == 2 * SystemHoverEvents.watched.count)
+    }
+
+    /// **A local monitor that cannot be installed leaves none of either kind**: hover is off, not half on.
+    @Test func aFailedLocalInstallRemovesEveryMonitor() {
+        let monitors = RecordingMonitors()
+        monitors.refuseLocal = true
+        let events = SystemHoverEvents(monitors: monitors.monitors)
+        #expect(!events.start { _ in })
+        #expect(monitors.removed == monitors.global.count + monitors.local.count)
+    }
+
     /// And one that drew stays remembered.
     @Test func aWordWhosePanelDrewStaysRemembered() async throws {
         let rig = Rig()
@@ -468,6 +545,45 @@ struct HoverWatcherSequenceTests {
         rig.reader.answer(.nothing(.miss(.noText(app: "TextEdit", role: nil))))
         await rig.drain()
         #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
+    }
+
+    /// **A hover that stands and found nothing says so** (owner's report, 2026-10-19: "nothing visible happens on a
+    /// miss"): the kind alone, no word and no sentence, told once; nothing is presented and its request ends. Red while a
+    /// miss ended in silence.
+    @Test func aHoverThatFoundNothingIsToldSo() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.reader.answer(.nothing(.miss(.noText(app: "TextEdit", role: "AXGroup"))))
+        await HoverFixtures.settle { !notices.isEmpty }
+        #expect(notices == [.nothingUnderPointer])
+        #expect(rig.sink.all.isEmpty)
+        #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
+    }
+
+    /// A capture that did not answer in time is not "nothing here": it is told as the stuck capture it is.
+    @Test func aCaptureThatTimedOutIsToldAsStuck() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.reader.answer(.nothing(.captureTimedOut))
+        await HoverFixtures.settle { !notices.isEmpty }
+        #expect(notices == [.captureStuck])
+    }
+
+    /// The control: a miss for a hover the reader already left is not told.
+    @Test func aMissForAHoverThatNoLongerStandsIsNotTold() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.pointer.at = UpPoint(x: 600, y: 100)
+        rig.events.emit(.pointerMoved)
+        rig.reader.answer(.nothing(.miss(.noText(app: "TextEdit", role: nil))))
+        await rig.drain()
+        #expect(notices.isEmpty)
     }
 }
 

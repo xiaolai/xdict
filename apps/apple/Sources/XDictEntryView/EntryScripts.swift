@@ -77,8 +77,15 @@ enum EntryScripts {
                appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
                style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),
                style.script("pron-run-core.js"), style.script("pron-run.js"), style.script("word-clicks-core.js"),
-               style.script("word-clicks.js")]
+               style.script("word-clicks.js"), style.script("hover-word.js")]
     }
+
+    /// **The word under a hover point, for hover in XDict's own window** (`EntryWebView.hoverText`): after the word
+    /// core it uses; it reads, never writes.
+    static var hoverWord: String { EntryStyle.bundled.script("hover-word.js") }
+
+    /// Asks it, in the shell's world, at CSS pixel (`x`, `y`) for at most `m` UTF-16 units.
+    static let askHoverWord = "return window.__xdictHoverWord ? window.__xdictHoverWord(x, y, m) : null"
 
     /// **A dictionary's display options** (ADR-0013 d.3): the root given `values`, the default included, and the core's
     /// CSS installed with them, from the shell's world. The values and the CSS travel as one JSON literal, never as

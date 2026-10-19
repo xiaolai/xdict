@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "2ad810124a812c104cbe8d7f8e08b70a85b0e44aafb0fa5bae8f491182d7738b"
+    public static let sourceDigest = "d34c435e7fbb0cbe7099779ebc8ea69f9f40bb4de58073cf73d86a9e8270f407"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -66,6 +66,8 @@ public enum Tokens {
         public static let settingsSheetMargin: CGFloat = 12
         /// The Settings window's margin kept above and below it on the screen (ADR-0012 d.6).
         public static let settingsScreenMargin: CGFloat = 40
+        /// The brief hover notice keeps this far clear of the pointer on both axes: over the pointer it would hide the word being read, and the cursor's own arrow is about this size.
+        public static let hoverNoticeOffset: CGFloat = 16
     }
 
     /// Row and line heights of lists, tables and the panel.
