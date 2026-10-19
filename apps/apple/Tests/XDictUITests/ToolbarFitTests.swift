@@ -191,8 +191,13 @@ struct ToolbarFitTests {
             #expect(abs(box.width - ToolbarLayout.searchFieldWidth(window: width)) <= tolerance,
                     "with room for everything, the field is \(box.width) pt, not P5's width, at \(at)")
         }
-        return Answer(shown: items.count, hidden: hidden, field: Int(box.width.rounded()),
-                      overflow: Self.items(window).overflow)
+        let overflow = Self.items(window).overflow
+        // P48: the speaker is never the item that goes; both pairs go to the overflow before it (owner, 2026-10-19).
+        if overflow.contains(String(localized: "Pronounce")) {
+            #expect(overflow.contains(String(localized: "Back/Forward")) && overflow.contains(String(localized: "Text Size")),
+                    "the speaker went to the overflow before a pair at \(at): \(overflow)")
+        }
+        return Answer(shown: items.count, hidden: hidden, field: Int(box.width.rounded()), overflow: overflow)
     }
 
     /// Widens step by step from the least width to the widest and back, checking each step, and answers what the
@@ -220,17 +225,11 @@ struct ToolbarFitTests {
         let window = try Self.window(test)
         defer { window.close() }
         let steady = try await Self.sweep(window, at: "\(test)")
-        // The steps' own answer at a width is the same widening and narrowing, but for the toolbar's keep-or-show band
-        // (`inBand`): at 700 pt, unified, no sidebar, widening shows the speaker and narrowing has it in the overflow.
+        // The steps' own answer at a width is the same widening and narrowing.
         for width in Self.grid {
             let out = steady.out[width].map(\.description) ?? "-", back = steady.back[width].map(\.description) ?? "-"
-            let line = "at \(Int(width)) pt, \(test): widening left \(out), narrowing \(back)"
-            if let widening = steady.out[width], let narrowing = steady.back[width],
-               Self.inBand(test, landing: width, got: widening, wanted: narrowing) {
-                withKnownIssue("the toolbar's keep-or-show band") { Issue.record("\(line)") }
-            } else {
-                #expect(steady.out[width] == steady.back[width], "\(line)")
-            }
+            #expect(steady.out[width] == steady.back[width],
+                    "at \(Int(width)) pt, \(test): widening left \(out), narrowing \(back)")
         }
         var table: [String] = [], banded: [String] = []
         for from in Self.grid {
@@ -261,36 +260,41 @@ struct ToolbarFitTests {
     }
 
     /// **The toolbar's keep-or-show band** (2026-10-19, measured; accepted by the coordinator as a known issue): the
-    /// toolbar keeps a shown item with less room than it needs to show a hidden one, so where the speaker only just fits
-    /// a jump and the steps can disagree about it. Setting the field's width before the jump, removing the title, a
-    /// re-layout or a 1 pt nudge do not change it. Exactly: no sidebar, the unified or unified compact style, landing at
-    /// 600 or 700 pt (the speaker after Back/Forward; it was 494-504 pt beside the text-size pair), the field the same,
-    /// and the speaker the only item that differs. Anything else is a hard failure.
+    /// toolbar keeps a shown item with less room than it needs to show a hidden one, so where an item only just fits a
+    /// jump and the steps can disagree about it. Setting the field's width before the jump, removing the title, a
+    /// re-layout or a 1 pt nudge do not change it. It follows the lowest item that only just fits: the speaker beside the
+    /// text-size pair (494-504 pt), the speaker after Back/Forward (600-700 pt), and now, with the speaker kept above both
+    /// pairs, Back/Forward. Exactly: a jump that shows Back/Forward where the steps had it in the overflow, the field the
+    /// same, landing at 400 pt in the unified style or at 600 pt in the unified compact style without a sidebar. Anything
+    /// else is a hard failure.
     static func inBand(_ test: Case, landing width: CGFloat, got: Answer, wanted: Answer) -> Bool {
         let style = Case.styles[test.style].0
-        let differs = Set(got.overflow).symmetricDifference(wanted.overflow)
-        return !test.sidebar && ["unified", "unifiedCompact"].contains(style) && [600, 700].contains(width)
-            && got.field == wanted.field && differs == [String(localized: "Pronounce")]
+        let pair = String(localized: "Back/Forward")
+        let landing = (style == "unified" && width == 400) || (style == "unifiedCompact" && !test.sidebar && width == 600)
+        return landing && got.field == wanted.field && Set(got.overflow).symmetricDifference(wanted.overflow) == [pair]
+            && wanted.overflow.contains(pair)
     }
 
     /// **The band is exactly that** (verifier, 2026-10-19: a known issue over every setup and jump let the round-1 bug
-    /// pass as known): only the speaker differing, with the field the same, without a sidebar, in a unified style, landing
-    /// at 600 or 700 pt. A lost field, another item, a sidebar, the expanded style or another width is a hard failure.
-    @Test func theBandIsOnlyTheSpeakerAtSixOrSevenHundredPoints() {
-        let unified = Case(sidebar: false, language: "en", style: 0)
+    /// pass as known): only Back/Forward shown by the jump where the steps hid it, the field the same, at the measured
+    /// landings. A lost field, the speaker, another item, the other direction, another style or width is a hard failure.
+    @Test func theBandIsOnlyBackForwardAtItsMeasuredLandings() {
+        let unified = Case(sidebar: true, language: "en", style: 0)
+        let compact = Case(sidebar: false, language: "en", style: 1)
+        let compactWithSidebar = Case(sidebar: true, language: "en", style: 1)
         let expanded = Case(sidebar: false, language: "en", style: 2)
-        let withSidebar = Case(sidebar: true, language: "en", style: 0)
-        let speakerShown = Answer(shown: 3, hidden: 1, field: 266, overflow: ["Text Size"])
-        let speakerHidden = Answer(shown: 2, hidden: 2, field: 266, overflow: ["Pronounce", "Text Size"])
-        #expect(Self.inBand(unified, landing: 700, got: speakerShown, wanted: speakerHidden))
-        #expect(Self.inBand(unified, landing: 600, got: speakerHidden, wanted: speakerShown))
-        #expect(!Self.inBand(unified, landing: 500, got: speakerShown, wanted: speakerHidden), "another width")
-        #expect(!Self.inBand(expanded, landing: 700, got: speakerShown, wanted: speakerHidden), "the expanded style")
-        #expect(!Self.inBand(withSidebar, landing: 700, got: speakerShown, wanted: speakerHidden), "a sidebar")
-        let fieldLost = Answer(shown: 2, hidden: 2, field: nil, overflow: ["Pronounce", "Search"])
-        #expect(!Self.inBand(unified, landing: 700, got: fieldLost, wanted: speakerHidden), "the field lost")
-        let pairHidden = Answer(shown: 2, hidden: 2, field: 266, overflow: ["Back/Forward", "Text Size"])
-        #expect(!Self.inBand(unified, landing: 700, got: pairHidden, wanted: speakerShown), "another item")
+        let pairShown = Answer(shown: 3, hidden: 1, field: 152, overflow: ["Text Size"])
+        let pairHidden = Answer(shown: 2, hidden: 2, field: 152, overflow: ["Back/Forward", "Text Size"])
+        #expect(Self.inBand(unified, landing: 400, got: pairShown, wanted: pairHidden))
+        #expect(Self.inBand(compact, landing: 600, got: pairShown, wanted: pairHidden))
+        #expect(!Self.inBand(unified, landing: 600, got: pairShown, wanted: pairHidden), "another width")
+        #expect(!Self.inBand(compactWithSidebar, landing: 600, got: pairShown, wanted: pairHidden), "a sidebar")
+        #expect(!Self.inBand(expanded, landing: 400, got: pairShown, wanted: pairHidden), "the expanded style")
+        #expect(!Self.inBand(unified, landing: 400, got: pairHidden, wanted: pairShown), "the other direction")
+        let fieldLost = Answer(shown: 2, hidden: 2, field: nil, overflow: ["Text Size", "Search"])
+        #expect(!Self.inBand(unified, landing: 400, got: fieldLost, wanted: pairHidden), "the field lost")
+        let speakerHidden = Answer(shown: 1, hidden: 3, field: 152, overflow: ["Back/Forward", "Pronounce", "Text Size"])
+        #expect(!Self.inBand(unified, landing: 400, got: speakerHidden, wanted: pairHidden), "the speaker")
     }
 
     /// No count line at all (before a search): the title alone.
@@ -329,6 +333,18 @@ struct ToolbarFitTests {
 
     /// **Every toolbar item has a name** (verifier, 2026-10-19: the Back/Forward pair, the text-size pair and the search
     /// field had none), for VoiceOver and the overflow menu, in the reader's language.
+    /// **Who goes first, pinned on the live toolbar** (P8, P48; owner, 2026-10-19): the search field last (`.user`),
+    /// then the speaker (`.high`), the two pairs first (`.low`).
+    @Test func theSpeakerOutlastsThePairsAndTheFieldOutlastsAll() async throws {
+        let window = Self.window(sidebar: false, subtitle: "")
+        defer { window.close() }
+        try await Self.resize(window, to: 1200)
+        let priorities = (window.toolbar?.items ?? []).filter { $0.view != nil }.map { "\($0.label)=\($0.visibilityPriority.rawValue)" }
+        let user = NSToolbarItem.VisibilityPriority.user.rawValue, high = NSToolbarItem.VisibilityPriority.high.rawValue
+        let low = NSToolbarItem.VisibilityPriority.low.rawValue
+        #expect(priorities == ["Back/Forward=\(low)", "Pronounce=\(high)", "Text Size=\(low)", "Search=\(user)"])
+    }
+
     @Test func everyToolbarItemHasAName() async throws {
         let window = Self.window(sidebar: false, subtitle: "")
         defer { window.close() }
