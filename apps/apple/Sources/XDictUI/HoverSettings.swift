@@ -49,6 +49,14 @@ public struct HoverSettings: View {
                 Text("How long the pointer rests on a word before hover looks it up.")
             }
             .accessibilityIdentifier("hover.settle")
+            // Where hover reads the text (owner, 2026-10-19): Automatic as shipped, or the screen only.
+            Picker(selection: policy(\.readingMode)) {
+                ForEach(HoverPolicy.ReadingMode.allCases) { Text(HoverSentences.readingMode($0)).tag($0) }
+            } label: {
+                Text("Read text with")
+                Text("Automatic reads the text an app shares, and the screen where it shares none. Screen Only always reads the screen, and needs Screen Recording.")
+            }
+            .accessibilityIdentifier("hover.readingMode")
             LabeledContent {
                 Text(HoverSentences.scripts(hover.allowedScripts))
             } label: {

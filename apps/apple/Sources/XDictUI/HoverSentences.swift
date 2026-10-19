@@ -22,6 +22,17 @@ public enum HoverSentences {
         }
     }
 
+    /// **Read text with**, each choice of the pop-up (owner, 2026-10-19).
+    public static func readingMode(_ mode: HoverPolicy.ReadingMode) -> LocalizedStringResource {
+        switch mode {
+        case .automatic:
+            LocalizedStringResource(
+                "Automatic", comment: "Read text with: the text an app shares first, the screen where it shares none")
+        case .screenOnly:
+            LocalizedStringResource("Screen Only", comment: "Read text with: always read the screen, needing Screen Recording")
+        }
+    }
+
     /// Named the way a reader names them, not the way Unicode does.
     public static func script(_ script: CaptureScript) -> LocalizedStringResource {
         switch script {

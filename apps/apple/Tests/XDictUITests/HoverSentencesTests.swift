@@ -16,6 +16,12 @@ struct HoverSentencesTests {
         #expect(Set(scripts).count == CaptureScript.allCases.count, "\(scripts)")
     }
 
+    /// **Read text with: each mode its own name**, as Apple names a pop-up's choices (Automatic; Screen Only).
+    @Test func eachReadingModeHasANameOfItsOwn() {
+        let names = HoverPolicy.ReadingMode.allCases.map { String(localized: HoverSentences.readingMode($0)) }
+        #expect(names == ["Automatic", "Screen Only"], "\(names)")
+    }
+
     /// **The scripts line says what the gate does**: every script where the dictionaries could hold any, else the named
     /// scripts, in one order whatever the set's.
     @Test func theScriptsLineNamesWhatHoverLooksUp() {

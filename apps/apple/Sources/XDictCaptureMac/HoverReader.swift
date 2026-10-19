@@ -154,6 +154,9 @@ public final class HoverReader: HoverReading {
         let ours = getpid()
         let windows = PointerWindow.withoutClickThrough(source.listedWindows(), ours: ours,
                                                         passesClicksThrough: passesClicksThrough)
+        if policy.readingMode == .screenOnly {
+            return await readScreenOnly(at: point, windows: windows, request: request, policy: policy)
+        }
         let targeted: PointerWordReader.OwnTargetOutcome
         let inOwnWindow: Bool
         switch await resolve(at: point, windows: windows, policy: policy) {
@@ -200,6 +203,26 @@ public final class HoverReader: HoverReading {
                                            otherwise: .miss(miss))
             }
         }
+    }
+
+    /// **Read text with: Screen Only** (owner, 2026-10-19): Accessibility is never asked — no hit test, no site walk, no
+    /// text, none of XDict's own views — and the pixels are read under the rules they already keep. With no element, no
+    /// page can be named, so while the reader excludes any site it is refused, as the pixel path refuses an unnamed page;
+    /// XDict excluded by the reader refuses its own front window here, another app's exclusion is the recogniser's, by the
+    /// window's owner, before a pixel; the window is the compositor's front one at the point (XDict's when it is in
+    /// front); and without Screen Recording the reader is told so (`needsScreenRecording`).
+    private func readScreenOnly(
+        at point: CGPoint, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        guard !Task.isCancelled else { return .quiet(.cancelled) }
+        if let refusal = CaptureAuthorization.refusal(host: .unreadable, policy: policy) { return .quiet(refusal) }
+        let ours = getpid()
+        let inOwnWindow = PointerWindow.ownership(at: point, in: windows, ours: ours) == .ours
+        if inOwnWindow, let refusal = CaptureAuthorization.refusal(bundleID: ownBundleID, policy: policy) {
+            return .quiet(refusal)
+        }
+        return await readThePixels(at: point, owner: inOwnWindow ? ours : nil, windows: windows, request: request,
+                                   policy: policy, otherwise: .noTarget(.nothingAtPointer))
     }
 
     /// Who owns the point, as `resolve` found it: an Accessibility target (true where it is XDict's own window), or one

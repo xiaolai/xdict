@@ -1742,6 +1742,39 @@
         }
       }
     },
+    "Automatic" : {
+      "comment" : "Read text with: the text an app shares first, the screen where it shares none",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自动"
+          }
+        }
+      }
+    },
+    "Automatic reads the text an app shares, and the screen where it shares none. Screen Only always reads the screen, and needs Screen Recording." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Automatic reads the text an app shares, and the screen where it shares none. Screen Only always reads the screen, and needs Screen Recording."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“自动”读取应用提供的文字，应用不提供时读取屏幕。“仅屏幕”始终读取屏幕，需要“屏幕录制”权限。"
+          }
+        }
+      }
+    },
     "Back" : {
       "localizations" : {
         "en" : {
@@ -4990,6 +5023,22 @@
         }
       }
     },
+    "Read text with" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read text with"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "读取文字方式"
+          }
+        }
+      }
+    },
     "Read the selection aloud, or the entry’s word when nothing is selected" : {
       "localizations" : {
         "en" : {
@@ -5291,6 +5340,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "用系统语音按字面朗读“%@”"
+          }
+        }
+      }
+    },
+    "Screen Only" : {
+      "comment" : "Read text with: always read the screen, needing Screen Recording",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen Only"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅屏幕"
           }
         }
       }
