@@ -10,9 +10,10 @@ import Foundation
 
 public enum CaptureTrigger: String, Sendable, Equatable, CaseIterable { case selection, service, pointerGesture, menu }
 /// `ownView`: read from one of XDict's own views by the view itself — the entry's own script — never through
-/// Accessibility (hover in XDict's own windows, 2026-10-19).
+/// Accessibility (hover in XDict's own windows, 2026-10-19). `elementTitle`: a control's label, read as a string and placed
+/// under the pointer by its font's metrics (a menu, a button, a tab), with no box measured.
 public enum CaptureAcquisition: String, Sendable, Equatable, CaseIterable {
-    case textRange, textMarkers, boundsScan, recognition, serviceText, ownView
+    case textRange, textMarkers, boundsScan, recognition, serviceText, ownView, elementTitle
 }
 public struct SourceApp: Sendable, Equatable {
     public let bundleID: String?

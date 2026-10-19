@@ -87,6 +87,21 @@ struct HoverRecognitionTests {
         #expect(screen.recognitions == 1)
     }
 
+    /// **A secure field refused by Accessibility is not read as pixels either**: the miss says secure, and the recogniser
+    /// is never asked — a password field's pixels are as private as its value. Red if `.secure` falls back to the pixels.
+    @Test func aSecureFieldIsNotHandedToThePixels() async {
+        let screen = RecognitionFixtures.screen()
+        screen.targetOutcome = .found(HoverFixtures.target())
+        screen.windows = [ListedWindow(pid: HoverFixtures.target().pid, bounds: CGRect(x: 0, y: 0, width: 500, height: 500),
+                                       windowID: 9)]
+        screen.readOutcome = .miss(.secure(app: "TextEdit"))
+        guard case .nothing(.miss(.secure)) = await RecognitionFixtures.read(RecognitionFixtures.reader(screen)) else {
+            Issue.record("a secure field's miss was not the answer")
+            return
+        }
+        #expect(screen.recognitions == 0, "a secure field's pixels were read")
+    }
+
     /// **The capture reads the named app's window** (moved by name from `HoverCaptureTargetTests`): Accessibility named
     /// one app and read nothing; another app's window comes first at the point. Red if the owner is not passed on.
     @Test func theCaptureReadsTheNamedAppsWindow() async {
