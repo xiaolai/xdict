@@ -39,8 +39,10 @@ struct TestInventoryTests {
         // the derived scripts, the popover's acknowledgements, the anchor): 38 + 14 + 14 = 66. 66 → 69: a driven launch
         // starts no hover, and which launch it is, both ways (HoverLaunchTests). 69 → 76 (plan-capture WI-4): the Screen
         // Recording row asks nothing before it is used, at launch either, asks once when used, shows a standing grant, its
-        // notice, the session's book shared with the reader, the recogniser's distances from the tokens.
-        "XDictAnywhereTests": 76,
+        // notice, the session's book shared with the reader, the recogniser's distances from the tokens. 76 → 80 (UI tour
+        // of the capture work, 2026-10-19): the menu and the switch show the setting in a driven run, its switch starts
+        // nothing there, a reader's launch watches what the setting says, and the setting is observed.
+        "XDictAnywhereTests": 80,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
@@ -57,7 +59,9 @@ struct TestInventoryTests {
         // with its control. 51 → 53: a context read inside a string interpolation, and a log call across lines or through
         // a local, each named by its control. 53 → 55 by transfer (manifest §7): XiaolaiDict's
         // ScriptFilterWiringTests.theSelectionShortcutIsNotFilteredByScript and theAppReadsOnlyTheDefaultsSuiteItWasGiven.
-        "XDictTests": 55,
+        // 55 → 59 (UI tour of the capture work, 2026-10-19): the menu and Settings' switch never read the watcher, and
+        // no row of the view layer says its label twice, each with its control.
+        "XDictTests": 59,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
