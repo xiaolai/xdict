@@ -18,9 +18,17 @@ LEAVES = CONTROLS | {"AXStaticText", "AXImage"}
 SCROLLED = {"AXScrollArea", "AXList", "AXOutline", "AXTable", "AXWebArea", "AXMenu", "AXMenuBarItem"}
 
 
+def same_row(a, b):
+    """Two frames side by side on one line: their heights overlap by half the shorter, and they are not one place."""
+    h = min(a[1] + a[3], b[1] + b[3]) - max(a[1], b[1])
+    return h >= min(a[3], b[3]) / 2 and abs(a[0] - b[0]) > 2
+
+
 def checks(tree):
     """What the tree says a reviewer should look at: controls without a label, elements outside their window,
-    sibling leaves drawn over each other. Truncation is not in the tree (AX gives the whole string): see the picture."""
+    sibling leaves drawn over each other, a row saying the same words twice, an identifier on more than one element of a
+    window (a container's taken over by its controls). Truncation is not in the tree (AX gives the whole string): see
+    the picture."""
     found = []
 
     def walk(node, window, scrolled, path):
@@ -43,6 +51,19 @@ def checks(tree):
                     found.append({"kind": "overlap", "where": here,
                                   "a": str(a.get("title") or a.get("value") or a.get("role"))[:40],
                                   "b": str(b.get("title") or b.get("value") or b.get("role"))[:40]})
+        texts = [k for k in leaves if k.get("role") == "AXStaticText" and k.get("value")]
+        for i, a in enumerate(texts):
+            for b in texts[i + 1:]:
+                if a["value"] == b["value"] and same_row(a["frame"], b["frame"]):
+                    found.append({"kind": "repeated-label", "where": here, "text": str(a["value"])[:60]})
+        # Controls side by side under one identifier: their row's, taken over, so neither can be found by its own.
+        named = {}
+        for kid in kids:
+            if kid.get("role") in CONTROLS and kid.get("identifier"):
+                named.setdefault(kid["identifier"], []).append(kid["role"])
+        for identifier, roles in named.items():
+            if len(roles) > 1:
+                found.append({"kind": "repeated-identifier", "where": here, "identifier": identifier, "roles": roles})
         for kid in kids:
             walk(kid, window, scrolled or role in SCROLLED, here)
 

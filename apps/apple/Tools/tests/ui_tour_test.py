@@ -33,6 +33,35 @@ assert kinds(window({"role": "AXStaticText", "value": "a", "frame": [10, 10, 60,
                     {"role": "AXStaticText", "value": "b", "frame": [20, 12, 60, 20]})) == ["overlap"]
 # The window's own buttons carry no title by design.
 assert kinds(window({"role": "AXButton", "subrole": "AXCloseButton", "frame": [4, 4, 12, 12]})) == []
+# A row that says its label twice (Settings ▸ General's Background row, 2026-10-19: the slider's own label drawn after
+# 'Glass ◯── Solid' as well as the row's). Its nodes as the tour captured them (light-en settings.general.ax.json), the
+# repeat nested once more under itself, as AX gave it; red on it, quiet with the slider's label hidden.
+background = [{"role": "AXStaticText", "value": "Background", "frame": [30, 1008.25, 72.5, 16]},
+              {"role": "AXButton", "title": "Glass", "frame": [273, 1011.375, 26.5, 13]},
+              {"role": "AXSlider", "identifier": "panel-solidity", "value": "0", "frame": [303.5, 1009.875, 160.5, 16]},
+              {"role": "AXButton", "title": "Solid", "frame": [468, 1011.375, 24.5, 13]}]
+again = {"role": "AXStaticText", "value": "Background", "frame": [497.5, 1009.306884765625, 72.5, 16],
+         "children": [{"role": "AXStaticText", "value": "Background", "frame": [497.5, 1009.306884765625, 72.5, 16]}]}
+row_window = {"windows": [{"role": "AXWindow", "frame": [0, 0, 600, 1106], "children": [
+    {"role": "AXGroup", "frame": [20, 990, 560, 50], "children": background + [again]}]}]}
+assert kinds(row_window) == ["repeated-label"], kinds(row_window)
+row_window["windows"][0]["children"][0]["children"] = background
+assert kinds(row_window) == [], kinds(row_window)
+# The same words in two rows, one under the other (a list of names), are not a repeat.
+assert kinds(window({"role": "AXStaticText", "value": "Alpha", "frame": [10, 10, 60, 20]},
+                    {"role": "AXStaticText", "value": "Alpha", "frame": [10, 40, 60, 20]})) == []
+# An identifier on a row's container is taken by every control in it (Settings ▸ General's site field and Add Site,
+# both `hover.excludedSites`, 2026-10-19): the tour then cannot find the field by its own. Repeated menu items are the
+# menu's own (`menuAction:`), not XDict's.
+assert kinds(window({"role": "AXTextField", "identifier": "hover.excludedSites", "description": "Site",
+                     "frame": [100, 10, 150, 16]},
+                    {"role": "AXButton", "identifier": "hover.excludedSites", "title": "Add Site",
+                     "frame": [260, 6, 75, 24]})) == ["repeated-identifier"]
+assert kinds(window({"role": "AXGroup", "identifier": "hover.excludedSites", "frame": [20, 0, 360, 40], "children": [
+    {"role": "AXTextField", "identifier": "hover.site.field", "description": "Site", "frame": [100, 10, 150, 16]},
+    {"role": "AXButton", "identifier": "hover.addSite", "title": "Add Site", "frame": [260, 6, 75, 24]}]})) == []
+assert kinds(window({"role": "AXMenuItem", "identifier": "menuAction:", "title": "Open", "frame": [0, 0, 90, 20]},
+                    {"role": "AXMenuItem", "identifier": "menuAction:", "title": "Quit", "frame": [0, 20, 90, 20]})) == []
 
 # Parity P39: Settings ▸ Dictionaries is Apple's table: described "Dictionaries", a checkbox in every row, 20 pt rows.
 def row(height=20, box=True):
@@ -67,13 +96,85 @@ undriven = {r[0] for r in ROUTES if r[4] is None}
 assert undriven == set(NOT_DRIVEN_WHY), undriven ^ set(NOT_DRIVEN_WHY)
 # Hover's routes (plan-capture WI-5): the General rows and the Screen Recording row as this Mac's grant leaves them,
 # driven; the row's other states and the hover popover, which need a grant changed or another app's text, not.
-hover_driven = {"settings.general.hover", "settings.general.screenRecording", "menubar.hoverPause",
-                "menubar.hoverPaused", "menubar.hoverOff"}
+hover_driven = {"settings.general", "settings.general.hover", "menubar.hoverPause", "menubar.hoverPaused",
+                "menubar.hoverOff"}
 hover_undriven = {"settings.general.screenRecordingNotSetUp", "settings.general.screenRecordingNotAllowed",
                   "settings.general.screenRecordingAllowed", "settings.general.screenRecordingCouldNotTell",
                   "hover.popover"}
 assert hover_driven <= set(ids) - undriven, hover_driven - (set(ids) - undriven)
 assert hover_undriven <= undriven, hover_undriven - undriven
+# **No two driven routes walk the same way** (2026-10-19: settings.general, .hover, .screenRecording and settings.lookup
+# differed only by a wait, and captured the same picture byte for byte). Waits are not a difference.
+import routes  # noqa: E402
+
+
+def walked(route):
+    return (route[1], tuple(s for s in route[4] if s[0] != "wait"))
+
+
+seen = {}
+for route in ROUTES:
+    if route[4] is not None:
+        assert walked(route) not in seen, f"{route[0]} walks as {seen.get(walked(route))} does"
+        seen[walked(route)] = route[0]
+same = [("a", "full", "", "", [("key", "cmd+,"), ("wait", 1)]), ("b", "full", "", "", [("key", "cmd+,"), ("wait", 2)])]
+assert walked(same[0]) == walked(same[1]), "control: two routes differing by a wait read as different"
+# **A setting a route needs is stored before its launch** (`("pref", key, value)`, applied by tour.py's Session after the
+# preferences are deleted), never reached by clicking a switch whose state the route cannot know: menubar.hoverOff
+# clicked hover's switch and turned hover on in three variants of four (2026-10-19).
+by_id = {r[0]: r for r in ROUTES}
+assert routes.prefs(by_id["menubar.hoverOff"][4]) == [("hoverLookupEnabled", False)], by_id["menubar.hoverOff"][4]
+assert not any(s[0] == "click" for s in by_id["menubar.hoverOff"][4]), "menubar.hoverOff clicks to set its state"
+for route in ROUTES:
+    routes.prefs(route[4] or [])
+for bad in ([("pref", "hoverLookupEnabled", "NO")], [("pref", "somethingElse", False)]):
+    try:
+        routes.prefs(bad)
+        raise AssertionError(f"routes.prefs took {bad}")
+    except ValueError:
+        pass
+# Each key is the one the app reads: HoverControl's `enabledKey`.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Sources", "XDictAnywhere",
+                       "HoverControl.swift"), encoding="utf-8") as f:
+    control_source = f.read()
+for key in routes.PREFS:
+    assert f'"{key}"' in control_source, f"no preference {key} in HoverControl.swift"
+# The commands the tour's Session runs to store them (routes.defaults_commands), run here against a scratch plist in
+# place of XDict's domain and read back: the route's value is what is stored, as a boolean.
+import plistlib  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+with tempfile.TemporaryDirectory() as scratch:
+    target = os.path.join(scratch, "prefs")
+    for argv in routes.defaults_commands(target, routes.prefs(by_id["menubar.hoverOff"][4])):
+        subprocess.run(argv, check=True, capture_output=True)
+    with open(target + ".plist", "rb") as f:
+        stored = plistlib.load(f)
+    assert stored == {"hoverLookupEnabled": False}, stored
+    for argv in routes.defaults_commands(target, [("hoverLookupEnabled", True)]):
+        subprocess.run(argv, check=True, capture_output=True)
+    with open(target + ".plist", "rb") as f:
+        assert plistlib.load(f) == {"hoverLookupEnabled": True}, "control: a true preference was not stored true"
+assert routes.defaults_commands("d", []) == [], "a route with no preference wrote one"
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "tour.py"), encoding="utf-8") as f:
+    tour_source = f.read()
+assert "defaults_commands(DOMAIN, preferences)" in tour_source and "prefs(steps)" in tour_source, \
+    "tour.py does not store a route's preferences through routes.defaults_commands"
+# The site field is the hover route's own state (P53): reached by its identifier, which the row no longer takes over.
+assert ("click", "hover.site.field") in by_id["settings.general.hover"][4], by_id["settings.general.hover"][4]
+# The menu-bar item's menu is not one of the app's windows: a press on Pause Hover finds it only if press and click
+# also look in the open menu-bar extra (`ax.swift`'s `roots`).
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "ax.swift"), encoding="utf-8") as f:
+    ax_source = f.read()
+press_case = ax_source.split('case "press", "click":', 1)[1].split("case ", 1)[0]
+assert "roots(app)" in press_case and "windows(app)" not in press_case, press_case
+roots_func = ax_source.split("func roots(", 1)[1].split("\n}\n", 1)[0] if "func roots(" in ax_source else ""
+assert "AXExtrasMenuBar" in roots_func, "press and click do not look in the menu-bar extra"
+# The pause lengths are said by the system in the reader's language ("For %@" is the catalog's key, not the title), so
+# the route names the Chinese title too.
+assert any(s[0] == "press" and "For 15 minutes" in s and any("分钟" in n for n in s[1:])
+           for s in by_id["menubar.hoverPaused"][4]), by_id["menubar.hoverPaused"][4]
 # The pseudo language: longer, accented, every format directive kept exactly; on the real catalog, every value of every
 # form (plural forms and substitutions included) keeps its source's directives, so the copy formats as the app does.
 assert pseudo.pseudo("Look Up").startswith("⟦Ļööķ Ûþ"), pseudo.pseudo("Look Up")
