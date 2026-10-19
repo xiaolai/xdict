@@ -63,11 +63,12 @@ private func control(
     _ defaults: UserDefaults? = nil, screen: CountedScreen = CountedScreen(),
     scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
     start: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart,
-    warmUp: @escaping @MainActor () -> Void = {}
+    warmUp: @escaping @MainActor () -> Void = {},
+    keepWarm: RecognitionKeepWarm = RecognitionKeepWarm(warm: {}, sleep: { _ in await Task.yield() })
 ) throws -> HoverControl {
     let suite = try defaults ?? #require(UserDefaults(suiteName: "ai.xdict.tests.hover.\(UUID().uuidString)"))
     return HoverControl(defaults: suite, requests: CaptureRequests(), screen: screen.access, source: SilentPointerWords(),
-                        scripts: scripts, startWatcher: start, warmUpRecognition: warmUp)
+                        scripts: scripts, startWatcher: start, warmUpRecognition: warmUp, keepWarm: keepWarm)
 }
 
 /// **The recogniser is warmed once, when hover starts in a reader's launch** (Vision's first recognition after idle took
@@ -117,6 +118,74 @@ struct RecognitionWarmUpTests {
         let hover = try control(start: ScriptedStarts([false]).start, warmUp: warmed.warm)
         hover.startAtLaunch(.reader)
         #expect(warmed.value == 0)
+    }
+
+    /// **Vision is kept warm exactly while the watcher runs in a reader's launch** (2026-10-19: its models are dropped
+    /// after minutes idle and took 24 s to load again): started with the watcher, stopped with hover off, started again
+    /// on, never in a driven run, never for a start that failed. Red if the keep-warm is not wired, or outlives hover.
+    @Test func visionIsKeptWarmOnlyWhileTheWatcherRuns() throws {
+        let reader = try control(start: ScriptedStarts([true]).start)
+        #expect(!reader.keepWarm.isRunning)
+        reader.startAtLaunch(.reader)
+        #expect(reader.keepWarm.isRunning)
+        reader.setEnabled(false)
+        #expect(!reader.keepWarm.isRunning, "kept warm with hover off")
+        reader.setEnabled(true)
+        #expect(reader.keepWarm.isRunning)
+        reader.setEnabled(false)
+
+        let driven = try control(start: ScriptedStarts([true]).start)
+        driven.startAtLaunch(.instrument)
+        driven.setEnabled(true)
+        #expect(!driven.keepWarm.isRunning, "kept warm in a driven run")
+
+        let failed = try control(start: ScriptedStarts([false]).start)
+        failed.startAtLaunch(.reader)
+        #expect(!failed.keepWarm.isRunning, "kept warm for a watcher that did not start")
+    }
+}
+
+/// **The keep-warm's own rule**: one warm-up per interval in which Vision answered nothing, none where it answered, and
+/// none after `stop`. The interval's sleep is the test's, released a tick at a time.
+@MainActor
+struct RecognitionKeepWarmTests {
+    /// A sleep that returns when the test says, one tick at a time.
+    final class Ticks: @unchecked Sendable {
+        private let lock = NSLock()
+        private var waiting: [CheckedContinuation<Void, Never>] = []
+        var pending: Int { lock.withLock { waiting.count } }
+        func sleep(_: Duration) async { await withCheckedContinuation { c in lock.withLock { waiting.append(c) } } }
+        func tick() { lock.withLock { waiting.isEmpty ? nil : waiting.removeFirst() }?.resume() }
+    }
+
+    private func settle(until condition: @MainActor () -> Bool) async {
+        for _ in 0..<2_000 where !condition() { try? await Task.sleep(for: .milliseconds(1)) }
+    }
+
+    @Test func aTickWarmsOnlyWhereVisionWasIdle() async {
+        @MainActor final class Vision {
+            var warmed = 0
+            var idle = true
+        }
+        let ticks = Ticks()
+        let vision = Vision()
+        let keepWarm = RecognitionKeepWarm(interval: .seconds(120), warm: { vision.warmed += 1 },
+                                           idle: { _ in vision.idle }, sleep: { await ticks.sleep($0) })
+        keepWarm.start()
+        await settle { ticks.pending == 1 }
+        ticks.tick()
+        await settle { vision.warmed == 1 && ticks.pending == 1 }
+        #expect(vision.warmed == 1, "an idle interval was not warmed")
+        vision.idle = false
+        ticks.tick()
+        await settle { ticks.pending == 1 }
+        #expect(vision.warmed == 1, "warmed although Vision had answered within the interval")
+        vision.idle = true
+        keepWarm.stop()
+        ticks.tick()
+        for _ in 0..<20 { try? await Task.sleep(for: .milliseconds(1)) }
+        #expect(vision.warmed == 1, "warmed after stop")
+        #expect(!keepWarm.isRunning)
     }
 }
 
