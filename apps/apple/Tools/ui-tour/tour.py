@@ -33,7 +33,7 @@ import aim  # noqa: E402
 from axcheck import checks, dictionaries_table  # noqa: E402
 import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
-from routes import NOT_DRIVEN_WHY, ROUTES, prefs  # noqa: E402
+from routes import NOT_DRIVEN_WHY, ROUTES, defaults_commands, prefs  # noqa: E402
 
 home, out = sys.argv[1:3]
 options = dict(zip([a for a in sys.argv[3:] if a != "--reader"][0::2], [a for a in sys.argv[3:] if a != "--reader"][1::2]))
@@ -141,8 +141,8 @@ class Session:
             os.makedirs(source)
         run("defaults", "delete", DOMAIN, check=False)
         # The route's own preferences (`("pref", key, value)`, routes.prefs), stored as a reader's choice would be.
-        for key, value in preferences:
-            run("defaults", "write", DOMAIN, key, "-bool", "YES" if value else "NO")
+        for argv in defaults_commands(DOMAIN, preferences):
+            run(*argv)
         args = ["-ApplePersistenceIgnoreState", "YES", "--lookup-window", self.work, "--fixtures", source]
         # `-AppleInterfaceStyle` does not reach AppKit for one app on macOS 27, and the Mac's own appearance is never
         # changed for a tour: the instrument sets XDict's (`--appearance`, XDictUI's InstrumentAppearance).

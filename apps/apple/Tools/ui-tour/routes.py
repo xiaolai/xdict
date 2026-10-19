@@ -55,6 +55,13 @@ def prefs(steps):
     return found
 
 
+def defaults_commands(domain, preferences):
+    """The `defaults write` commands storing `preferences` ((key, value) as `prefs` gives them) in `domain`, a defaults
+    domain or a plist's path: what tour.py's Session runs before a launch, and ui_tour_test runs against a scratch
+    plist."""
+    return [["defaults", "write", domain, key, "-bool", "YES" if value else "NO"] for key, value in preferences]
+
+
 ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
      "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),

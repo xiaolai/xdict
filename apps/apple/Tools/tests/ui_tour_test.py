@@ -139,9 +139,28 @@ with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "
     control_source = f.read()
 for key in routes.PREFS:
     assert f'"{key}"' in control_source, f"no preference {key} in HoverControl.swift"
+# The commands the tour's Session runs to store them (routes.defaults_commands), run here against a scratch plist in
+# place of XDict's domain and read back: the route's value is what is stored, as a boolean.
+import plistlib  # noqa: E402
+import subprocess  # noqa: E402
+import tempfile  # noqa: E402
+
+with tempfile.TemporaryDirectory() as scratch:
+    target = os.path.join(scratch, "prefs")
+    for argv in routes.defaults_commands(target, routes.prefs(by_id["menubar.hoverOff"][4])):
+        subprocess.run(argv, check=True, capture_output=True)
+    with open(target + ".plist", "rb") as f:
+        stored = plistlib.load(f)
+    assert stored == {"hoverLookupEnabled": False}, stored
+    for argv in routes.defaults_commands(target, [("hoverLookupEnabled", True)]):
+        subprocess.run(argv, check=True, capture_output=True)
+    with open(target + ".plist", "rb") as f:
+        assert plistlib.load(f) == {"hoverLookupEnabled": True}, "control: a true preference was not stored true"
+assert routes.defaults_commands("d", []) == [], "a route with no preference wrote one"
 with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "tour.py"), encoding="utf-8") as f:
     tour_source = f.read()
-assert "routes.prefs(" in tour_source or "prefs(steps)" in tour_source, "tour.py applies no route's preferences"
+assert "defaults_commands(DOMAIN, preferences)" in tour_source and "prefs(steps)" in tour_source, \
+    "tour.py does not store a route's preferences through routes.defaults_commands"
 # The site field is the hover route's own state (P53): reached by its identifier, which the row no longer takes over.
 assert ("click", "hover.site.field") in by_id["settings.general.hover"][4], by_id["settings.general.hover"][4]
 # The menu-bar item's menu is not one of the app's windows: a press on Pause Hover finds it only if press and click
