@@ -24,10 +24,17 @@ struct HoverWordScriptTests {
         var scripts = "hover"
         /// A function body the lab runs on the loaded page, outside the shell's world; its string answer is reported.
         var probe: String?
+        /// A function body the lab runs on the loaded page, outside the shell's world, to make a selection: the page is
+        /// then asked for its selection (`EntryWebView.selectionText`) instead of the word under a point.
+        var select: String?
+        /// Whether the selection's page is asked for the text around it too.
+        var sentence = true
     }
 
     struct Outcome: Sendable {
         let answer: EntryHoverText?
+        /// A selection page's answer, as the shell takes it (`EntrySelectionText.validated`).
+        var selection: EntrySelectionText?
         let milliseconds: Int
         /// From the page's load to its end, the shell's scripts' own work at load included.
         let loaded: Int
@@ -238,7 +245,7 @@ struct HoverWordScriptTests {
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
             let cases = folder.appending(path: "pages.json"), out = folder.appending(path: "report.json")
-            try JSONEncoder().encode(pages).write(to: cases)
+            try JSONEncoder().encode(pages + selectionPages).write(to: cases)
             let log = folder.appending(path: "lab.log")
             let status = try spawn(lab.path, ["--hover-script", "--cases", cases.path, "--out", out.path], log: log.path)
             guard status == 0 else {
@@ -252,7 +259,8 @@ struct HoverWordScriptTests {
                       let loaded = item["loaded"] as? Int else { continue }
                 // Checked again as the shell checks it: JSON keeps a boolean a boolean.
                 let answer = (item["answer"] as? [String: Any]).flatMap { EntryHoverText.validated($0, maxUTF16: 4_096) }
-                found[name] = Outcome(answer: answer, milliseconds: milliseconds, loaded: loaded,
+                let selection = EntrySelectionText.validated(item["selection"], maxUTF16: 4_096)
+                found[name] = Outcome(answer: answer, selection: selection, milliseconds: milliseconds, loaded: loaded,
                                       probe: item["probe"] as? String)
             }
             return .success(found)
@@ -261,7 +269,7 @@ struct HoverWordScriptTests {
         }
     }
 
-    private func outcome(_ name: String) throws -> Outcome {
+    func outcome(_ name: String) throws -> Outcome {
         let all = try Self.outcomes.get()
         return try #require(all[name], "no outcome for \(name)")
     }

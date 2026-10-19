@@ -24,6 +24,10 @@ enum HoverScriptRun {
         let scripts: String?
         /// A function body run on the loaded page, outside the shell's world, whose string answer is reported.
         let probe: String?
+        /// A function body run on the loaded page, outside the shell's world, that makes a selection: the page is then
+        /// asked for its selection (`selectionText`, the text around it where `sentence`) instead of a hover's word.
+        let select: String?
+        let sentence: Bool?
     }
 
     /// Whether the page in flight loaded: answered once, whether its end comes before or after the wait.
@@ -103,6 +107,15 @@ enum HoverScriptRun {
             guard let xy = (aimed as? [NSNumber])?.map(\.doubleValue), xy.count == 2 else {
                 throw LabFailure(description: "\(item.name): no point for #\(item.target)")
             }
+            if let select = item.select {
+                _ = try await view.callAsyncJavaScript(select, arguments: [:], in: nil, contentWorld: aiming)
+                let started = ContinuousClock.now
+                let selection = await view.selectionText(sentence: item.sentence ?? true, maxUTF16: item.max)
+                let took = ContinuousClock.now - started
+                results.append(["name": item.name, "milliseconds": Int(took / .milliseconds(1)), "loaded": loaded,
+                                "probe": probed, "answer": NSNull(), "selection": Self.reported(selection)])
+                continue
+            }
             let started = ContinuousClock.now
             let answer = await view.hoverText(at: CGPoint(x: xy[0], y: xy[1]), maxUTF16: item.max)
             let took = ContinuousClock.now - started
@@ -111,10 +124,23 @@ enum HoverScriptRun {
                 "milliseconds": Int(took / .milliseconds(1)),
                 "loaded": loaded,
                 "probe": probed,
-                "answer": answer.map { ["text": $0.text, "offset": $0.offset, "cutStart": $0.cutStart, "cutEnd": $0.cutEnd] }
-                    ?? NSNull(),
+                "answer": answer.map { Self.reported(word: $0) } ?? NSNull(),
             ])
         }
         return ["cases": results]
+    }
+
+    /// An answer as the script wrote it, for the test to check again as the shell does.
+    private static func reported(word text: EntryHoverText) -> [String: Any] {
+        ["text": text.text, "offset": text.offset, "cutStart": text.cutStart, "cutEnd": text.cutEnd]
+    }
+
+    private static func reported(_ selection: EntrySelectionText?) -> Any {
+        switch selection {
+        case nil: NSNull()
+        case .tooLong: ["over": true]
+        case .selected(let selected, let around?): ["selected": selected, "around": reported(word: around)]
+        case .selected(let selected, nil): ["selected": selected, "around": NSNull()]
+        }
     }
 }

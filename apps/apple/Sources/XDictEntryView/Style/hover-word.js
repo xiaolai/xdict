@@ -171,4 +171,73 @@
       cutStart: from > 0 || left.cut, cutEnd: to < all.length || right.cut
     };
   };
+
+  // Whether `node` sits no deeper than DEPTH elements below the root: past that nothing of it is read.
+  function shallow(node) {
+    var up = 0;
+    for (var a = node.nodeType === 1 ? node : node.parentNode; a && a.nodeType === 1; a = a.parentNode) {
+      if (++up > DEPTH + 1) return false;
+    }
+    return true;
+  }
+
+  // **The entry's selection, for the lookup shortcut, the menu and the Service in XDict's own window** (owner,
+  // 2026-10-20: the sentence is captured there too; an Accessibility request about our own web view waits on WebKit,
+  // which waits on our main thread). Out, the shown selected text — a line break between blocks — and, where `context`,
+  // the shown text of its block around it windowed to `max` on whole characters, the selection's offset in it and whether
+  // either end may be cut (null where the selection crosses blocks); `{over: true}` where the selection holds more than
+  // `max` units or more than the walk reaches, never cut; null where nothing shown is selected. The walk is the hover
+  // read's, bounded alike. It reads, never writes: no event, no request, the selection left as it is.
+  window.__xdictSelectionText = function (context, max) {
+    max = Math.max(1, Math.min(Math.floor(Number(max) || 0), CEILING));
+    var selection = window.getSelection();
+    if (!selection || selection.rangeCount !== 1 || selection.isCollapsed) return null;
+    var range = selection.getRangeAt(0);
+    var sc = range.startContainer, ec = range.endContainer;
+    if (!shallow(sc) || !shallow(ec)) return null;
+    var root = range.commonAncestorContainer;
+    if (root.nodeType !== 1) root = root.parentNode;
+    if (!root) return null;
+    var known = new Map(), parts = [], got = 0, steps = { n: 0, out: false };
+    var first = null, firstAt = 0, last = null, lastAt = 0, home = null, crossed = false;
+    // From the start container itself: a text node, or the element whose selected children follow it in the walk.
+    for (var n = sc; n; n = next(n, root, steps)) {
+      if (n.nodeType !== 3) continue;
+      if (range.comparePoint(n, 0) > 0) break;
+      if (range.comparePoint(n, n.data.length) < 0 || !shown(n, known)) continue;
+      var s = n === sc ? range.startOffset : 0, e = n === ec ? range.endOffset : n.data.length;
+      if (e <= s) continue;
+      var b = block(n);
+      var gap = first && b !== home ? 1 : 0;
+      if (got + gap + (e - s) > max) return { over: true };
+      if (gap) { parts.push('\n'); crossed = true; }
+      parts.push(n.data.substring(s, e));
+      got += gap + e - s;
+      if (!first) { first = n; firstAt = s; }
+      last = n; lastAt = e; home = b;
+    }
+    if (steps.out) return { over: true };
+    if (!first) return null;
+    var selected = parts.join('');
+    if (!context || crossed || !home || !open(home, known)) return { selected: selected, around: null };
+    // Each side is read SPAN units past what the window can use, as the hover read's is.
+    var need = max + SPAN;
+    var head = first.data.substring(Math.max(0, firstAt - need), firstAt);
+    var left = head.length >= need ? { text: '', cut: true } : before(first, home, need - head.length, known);
+    var tail = last.data.substring(lastAt, Math.min(last.data.length, lastAt + need));
+    var right = tail.length >= need ? { text: '', cut: true } : after(last, home, need - tail.length, known);
+    var all = left.text + head + selected + tail + right.text, at = left.text.length + head.length;
+    var end = at + selected.length;
+    var from = Math.max(0, at - Math.floor((max - selected.length) / 2)), to = Math.min(all.length, from + max);
+    from = boundary(all, Math.max(0, to - max), true);
+    to = boundary(all, to, false);
+    if (from > at || to < end) return { selected: selected, around: null };
+    return {
+      selected: selected,
+      around: {
+        text: all.substring(from, to), offset: at - from,
+        cutStart: from > 0 || left.cut, cutEnd: to < all.length || right.cut
+      }
+    };
+  };
 })();
