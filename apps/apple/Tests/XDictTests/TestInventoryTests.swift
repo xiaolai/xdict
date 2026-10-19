@@ -62,8 +62,9 @@ struct TestInventoryTests {
         // ScriptFilterWiringTests.theSelectionShortcutIsNotFilteredByScript and theAppReadsOnlyTheDefaultsSuiteItWasGiven.
         // 55 → 59 (UI tour of the capture work, 2026-10-19): the menu and Settings' switch never read the watcher, and
         // no row of the view layer says its label twice, each with its control. 59 → 61: the hover rows contain their
-        // controls and the site field is bordered, with its control.
-        "XDictTests": 61,
+        // controls and the site field is bordered, with its control. 61 → 64 (UI tour, 2026-10-19): no catalog value
+        // spaced after a full-width mark or twice, with its control, and the Chinese start prompt Apple's.
+        "XDictTests": 64,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.

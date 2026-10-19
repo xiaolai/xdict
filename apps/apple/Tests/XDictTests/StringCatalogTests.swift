@@ -253,6 +253,71 @@ struct StringCatalogTests {
         #expect(Self.notes(in: source).map(\.comment) == ["Hover gesture"])
     }
 
+    /// **Chinese is spaced as Chinese is** (UI tour, 2026-10-19): a full-width comma, full stop, colon, semicolon,
+    /// question or exclamation mark carries its own gap, so a space after one doubles it; and no value in either language
+    /// holds two spaces in a row.
+    @Test func noValueSpacesAfterFullWidthPunctuationOrTwice() throws {
+        let strings = try Self.strings(Self.catalog())
+        #expect(strings.count >= 100, "only \(strings.count) entries: the scan is not reading the catalog")
+        #expect(Self.misspaced(strings) == [])
+    }
+
+    /// The control: a space after each full-width mark and a double space are each named, in the language that has
+    /// them, plural forms included; a full-width mark followed by text, and a single space in English, are not.
+    @Test func aMisspacedValueIsNamed() {
+        let strings: [String: Any] = [
+            "Comma": ["localizations": ["en": Self.unit("Type, then look"), "zh-Hans": Self.unit("输入， 查找")]],
+            "Stop": ["localizations": ["en": Self.unit("Done."), "zh-Hans": Self.unit("完成。 再见")]],
+            "Colon": ["localizations": ["en": Self.unit("Key: value"), "zh-Hans": Self.unit("键： 值")]],
+            "Twice": ["localizations": ["en": Self.unit("Two  spaces"), "zh-Hans": Self.unit("两个")]],
+            "%lld plural": ["localizations": ["en": Self.plural(["other": "%lld items"]),
+                                              "zh-Hans": Self.plural(["other": "%lld 个，  共计"])]],
+            "Fine": ["localizations": ["en": Self.unit("Type a word, then look"), "zh-Hans": Self.unit("输入单词，查找：好。")]],
+        ]
+        #expect(Self.misspaced(strings) == [
+            "%lld plural (zh-Hans): %lld 个，  共计",
+            "Colon (zh-Hans): 键： 值",
+            "Comma (zh-Hans): 输入， 查找",
+            "Stop (zh-Hans): 完成。 再见",
+            "Twice (en): Two  spaces",
+        ])
+    }
+
+    /// **The start page's prompt in Chinese is Apple's** (P14): Dictionary.app's own zh_CN string for "Type a word to look
+    /// up in…" (its `Localizable.loctable`, macOS 27), with no comma. XDict's earlier "输入单词，在以下词典中查找…" showed
+    /// a gap of about one and a half characters after its comma in the start page's serif face (main.start, light-zh).
+    @Test func theChineseStartPromptIsApples() throws {
+        let strings = try Self.strings(Self.catalog())
+        let prompt = try #require(strings["Type a word to look up in…"], "the start page's prompt is not in the catalog")
+        #expect(Self.value(of: prompt, in: "zh-Hans") == "请键入要查询的字词…")
+    }
+
+    /// The full-width marks that carry their own gap.
+    static let fullWidthMarks: Set<Character> = ["，", "。", "：", "；", "？", "！", "、"]
+
+    /// Each value, in each language, with a space after a full-width mark or two spaces in a row, as "key (language):
+    /// value", sorted; plural forms and substitutions read as every other value.
+    static func misspaced(_ strings: [String: Any]) -> [String] {
+        func values(_ node: Any) -> [String] {
+            guard let node = node as? [String: Any] else { return [] }
+            var found: [String] = []
+            if let value = (node["stringUnit"] as? [String: Any])?["value"] as? String { found.append(value) }
+            for (key, kid) in node where key != "stringUnit" { found += values(kid) }
+            return found
+        }
+        var named: Set<String> = []
+        for (key, entry) in strings {
+            for language in languages {
+                guard let localization = localization(entry, language) else { continue }
+                for value in values(localization) {
+                    let afterMark = zip(value, value.dropFirst()).contains { fullWidthMarks.contains($0) && $1.isWhitespace }
+                    if afterMark || value.contains("  ") { named.insert("\(key) (\(language)): \(value)") }
+                }
+            }
+        }
+        return named.sorted()
+    }
+
     /// Each top-level key that sorts before the key above it, in the file's own order.
     static func outOfOrder(_ text: String) -> [String] {
         let keys = text.matches(of: /(?m)^    "((?:[^"\\]|\\.)*)" : \{$/).map { String($0.output.1) }
