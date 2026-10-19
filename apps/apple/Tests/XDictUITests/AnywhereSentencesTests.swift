@@ -15,6 +15,7 @@ struct AnywhereSentencesTests {
             .tooLong(app: "Notes", characters: 300), .failed(.notResponding, app: "Notes"),
             .failed(.accessibilityRefused, app: "Notes"), .failed(.deadlineExceeded, app: "Notes"),
             .failed(.accessibilityDisabled, app: "Notes"), .failed(.appUnavailable, app: "Notes"), .notTrusted, .noApp,
+            .tooLongToRead(app: "Notes"),
         ]
         let texts = refusals.map { String(localized: AnywhereSentences.refusal($0)) }
         #expect(Set(texts).count == refusals.count, "\(texts)")

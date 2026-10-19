@@ -95,7 +95,7 @@ struct SelectionCaptureTests {
         let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
         let outcome = await SelectionReader.read(
             from: ours, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
-            client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) })
+            client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) }, ownHolder: { .controls })
         #expect(outcome == .nothing(.nothingSelected(app: "XDict")))
         #expect(recorder.timeouts.withLock { $0 }.isEmpty, "the own-process read went through the lane")
         let threads = recorder.onMain.withLock { $0 }
@@ -109,7 +109,7 @@ struct SelectionCaptureTests {
         let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         let outcome = await SelectionReader.read(
             from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
-            client: { _ in ThreadNoting(recorder) })
+            client: { _ in ThreadNoting(recorder) }, ownHolder: { .controls })
         #expect(outcome == .nothing(.nothingSelected(app: "Reader")))
         #expect(recorder.timeouts.withLock { $0 } == [AccessibilitySession.messagingTimeout])
         #expect(recorder.onMain.withLock { $0 }.allSatisfy { !$0 }, "another app was asked from the main thread")
@@ -122,7 +122,8 @@ struct SelectionCaptureTests {
         for probe: PermissionProbe in [.declined, .couldNotTell] {
             let outcome = await SelectionReader.read(
                 from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: AccessibilityAccess(probe: { probe }),
-                lane: lane, client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) })
+                lane: lane, client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) },
+                ownHolder: { .controls })
             #expect(outcome == .nothing(.notTrusted))
         }
         #expect(recorder.clients.withLock { $0 } == 0 && recorder.timeouts.withLock { $0 }.isEmpty)
@@ -150,7 +151,8 @@ struct SelectionCaptureTests {
         let blocked = Blocked()
         let reading = Task {
             await SelectionReader.read(from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted,
-                                       lane: lane, budget: .milliseconds(20), client: { _ in blocked })
+                                       lane: lane, budget: .milliseconds(20), client: { _ in blocked },
+                                       ownHolder: { .controls })
         }
         let outcome = await Wait.value(of: reading)
         #expect(outcome == .nothing(.failed(.notResponding, app: "Reader")))

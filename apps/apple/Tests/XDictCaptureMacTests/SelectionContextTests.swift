@@ -369,14 +369,30 @@ struct SelectionContextReadTests {
         #expect(term.term == "rare")
     }
 
-    /// **XDict's own windows read nothing around the selection** (ADR-0014 d.6, as hover's hit test refuses them): the
-    /// term is looked up, the context is excluded and nothing around it is asked. Red while the own process is read.
-    @Test func ourOwnWindowsReadNothingAroundTheSelection() throws {
+    /// **XDict's own native controls are read around the selection like any app's** (owner, 2026-10-20: the shortcut,
+    /// the menu and the Service capture the sentence in XDict's own windows too; ADR-0014 d.6). Red while the own process
+    /// is refused outright (it had been, since the verifier's round of 2026-10-19).
+    @Test func ourOwnControlsAreReadAroundTheSelection() throws {
         let tree = FakeAccessibility()
         scriptDocument(tree, document: "An ephemeral beauty.", selected: "ephemeral", at: NSRange(location: 3, length: 9))
         let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
         let outcome = SelectionReader.read(application: tree.application, of: ours, with: tree,
                                            admitting: SelectionReaderTests.admission, excluding: .shipped)
+        guard case .selected(let selected, _) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(selected.text == "ephemeral")
+        #expect(placed(outcome)?.sentence == "An ephemeral beauty.")
+    }
+
+    /// **XDict listed under Never look up in reads nothing around its own selection**, as any app listed there: the term
+    /// is looked up, nothing around it is asked. The control for the test above.
+    @Test func anExcludedXDictReadsNothingAroundItsOwnSelection() throws {
+        let tree = FakeAccessibility()
+        scriptDocument(tree, document: "An ephemeral beauty.", selected: "ephemeral", at: NSRange(location: 3, length: 9))
+        let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
+        var policy = HoverPolicy.shipped
+        policy.excludedApps.insert("ai.xdict.app")
+        let outcome = SelectionReader.read(application: tree.application, of: ours, with: tree,
+                                           admitting: SelectionReaderTests.admission, excluding: policy)
         guard case .selected(let selected, _) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(selected.text == "ephemeral")
         #expect(selected.context == .unavailable(.excluded))

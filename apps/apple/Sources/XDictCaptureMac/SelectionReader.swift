@@ -65,6 +65,9 @@ public enum SelectionRefusal: Hashable, Sendable {
     case notTrusted
     /// No app is in front to read.
     case noApp
+    /// Longer than the app's own reading answers (`CaptureLimits.contextUTF16`, XDict's own web views): its length is
+    /// not known, so it is not given — refused whole, never cut.
+    case tooLongToRead(app: String)
 }
 
 public enum SelectionOutcome: Hashable, Sendable {
@@ -109,21 +112,27 @@ public enum SelectionReader {
     /// ahead of every hover, under the explicit messaging timeout, its session — and so its hit test of `clicked` — made
     /// when its turn comes, so the budget is the read's and not the queue's. **This process's own windows are read on
     /// the main actor and never through the lane**: a request about this process is serviced in-process, on the calling
-    /// thread, and SwiftUI must be asked from the main one (XiaolaiDict ADR-0042). `clicked` is where the reader
-    /// Control-clicked the selection (Accessibility's coordinates, y down), for the Service: the element there is read
-    /// when the focused one has nothing. `access` is asked first and never prompts; `client` makes the read's requests
-    /// (the real session, or a test's tree). `exclusions` is the reader's hover policy, **with no default**: its excluded
-    /// apps and sites decide whether the sentence around the selection is read (`contextOutcome`), in this same lane job.
+    /// thread, and SwiftUI must be asked from the main one (XiaolaiDict ADR-0042). What holds XDict's own selection is
+    /// `ownHolder`'s answer (AppKit's first responder, `OwnSelections`): a web view of XDict's is read by its own reading
+    /// and **never through Accessibility**, which would wait on WebKit while WebKit waits on the main thread (ADR-0014
+    /// d.6; owner, 2026-10-20: the sentence is captured in XDict's own windows too); native controls through
+    /// Accessibility. `clicked` is where the reader Control-clicked the selection (Accessibility's coordinates, y down),
+    /// for the Service: the element there is read when the focused one has nothing. `access` is asked first and never
+    /// prompts; `client` makes the read's requests (the real session, or a test's tree). `exclusions` is the reader's
+    /// hover policy, **with no default**: its excluded apps and sites decide whether the sentence around the selection
+    /// is read (`contextOutcome`), in this same lane job — XDict's own included, when the reader lists XDict. `ownHolder`
+    /// has no default either: forgetting it is a compile error, not XDict's entries read as nothing selected.
     public static func read(
         from app: FrontApp, clicked: CGPoint? = nil, admitting admission: TermAdmission, excluding exclusions: HoverPolicy,
         limits: CaptureLimits = .shipped, access: AccessibilityAccess = .system,
         lane: AccessibilityLane = .system, budget: Duration = budget,
-        client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) }
+        client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) },
+        ownHolder: @escaping @MainActor @Sendable () -> OwnSelectionHolder
     ) async -> SelectionOutcome {
         guard access.granted() else { return .nothing(.notTrusted) }
         let rules = Rules(admission: admission, exclusions: exclusions, limits: limits)
         if app.pid == getpid() {
-            return await MainActor.run { readNow(app, clicked: clicked, rules, client(budget)) }
+            return await readOwn(app, rules, budget: budget, holder: ownHolder, client: client)
         }
         return await lane.run(.explicit, timeout: AccessibilitySession.messagingTimeout, budget: budget, {
             readNow(app, clicked: clicked, rules, client(budget))
@@ -158,14 +167,81 @@ public enum SelectionReader {
              admitting: rules.admission, excluding: rules.exclusions, limits: rules.limits)
     }
 
+    /// **XDict's own selection, on the main actor**: what holds it decides how it is read — a web view by its own
+    /// reading (`readOwnView`), a native control through Accessibility, a secure field not at all.
+    @MainActor
+    private static func readOwn(
+        _ app: FrontApp, _ rules: Rules, budget: Duration, holder: @MainActor () -> OwnSelectionHolder,
+        client: (Duration) -> any AccessibilityReading
+    ) async -> SelectionOutcome {
+        switch holder() {
+        case .refused, .webView(nil): return .nothing(.nothingSelected(app: app.name))
+        case .webView(let reading?): return await readOwnView(reading, app, rules, budget: budget)
+        case .controls: return readNow(app, clicked: nil, rules, client(budget))
+        }
+    }
+
+    /// What a web view's reading answered first: its answer, the budget running out, or the reader moving on.
+    private enum ViewRead: Sendable {
+        case read(OwnSelectionAnswer?)
+        case timedOut
+        case cancelled
+    }
+
+    /// **One of XDict's own web views, read by its own means**, under the selection's budget, asked for at most
+    /// `limits.contextUTF16` units — and for the text around the selection only where the reader has not excluded XDict
+    /// (Never look up in); its answer was checked before it arrived (`OwnSelectionText`). The term is taken from it as
+    /// from any selection; the panel is placed by the pointer, as the view gives no box.
+    @MainActor
+    private static func readOwnView(
+        _ reading: @escaping OwnSelectionReading, _ app: FrontApp, _ rules: Rules, budget: Duration
+    ) async -> SelectionOutcome {
+        let sentence = !(app.bundleID.map(rules.exclusions.excludes(app:)) ?? false)
+        let most = rules.limits.contextUTF16
+        let answer = Answer<ViewRead>()
+        let asking = Task { @MainActor in answer.give(.read(await reading(sentence, most))) }
+        let timer = Task {
+            try? await Task.sleep(for: budget)
+            answer.give(.timedOut)
+        }
+        let first = await withTaskCancellationHandler {
+            await answer.value()
+        } onCancel: {
+            answer.give(.cancelled)
+        }
+        timer.cancel()
+        asking.cancel()
+        switch first {
+        case .cancelled: return .nothing(.failed(.cancelled, app: app.name))
+        case .timedOut: return .nothing(.failed(.deadlineExceeded, app: app.name))
+        case .read(nil): return .nothing(.nothingSelected(app: app.name))
+        case .read(.tooLong?): return .nothing(.tooLongToRead(app: app.name))
+        case .read(.selected(let text)?):
+            guard !text.selected.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return .nothing(.nothingSelected(app: app.name))
+            }
+            guard let term = SelectedTerm(from: text.selected) else { return .nothing(.noWord(app: app.name)) }
+            guard rules.admission.admits(term.text) else {
+                return .nothing(.tooLong(app: app.name, characters: term.text.count))
+            }
+            let context: ContextOutcome = sentence
+                ? ownContextOutcome(around: text.around, selected: text.selected, term: term, limits: rules.limits)
+                : .unavailable(.excluded)
+            return .selected(SelectedText(text: term.text, app: app, acquisition: .ownView, context: context), box: nil)
+        }
+    }
+
     /// The read with the clicked position hit-tested **inside it**: one request of the read's own client, so the time
-    /// it takes is the read's, and a hung or stalled hit test ends the read as any request does.
+    /// it takes is the read's, and a hung or stalled hit test ends the read as any request does. **XDict's own window is
+    /// never hit-tested**: the point may be over a web view of XDict's, whose hit test waits on WebKit while WebKit waits
+    /// on the main thread (ADR-0014 d.6).
     public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
                             clicked: CGPoint?, admitting admission: TermAdmission, excluding exclusions: HoverPolicy,
                             limits: CaptureLimits = .shipped) -> SelectionOutcome {
         let under: AXUIElement?
         do throws(CaptureError) {
-            under = try clicked.flatMap { (point) throws(CaptureError) in try ax.hitTest(application, at: point) }
+            under = app.pid == getpid() ? nil
+                : try clicked.flatMap { (point) throws(CaptureError) in try ax.hitTest(application, at: point) }
         } catch {
             return .nothing(.failed(error, app: app.name))
         }
@@ -174,13 +250,16 @@ public enum SelectionReader {
     }
 
     /// The whole read, against any Accessibility client — the real one, or a test's. `under` is the element under the
-    /// reader's Control-click, where there was one.
+    /// reader's Control-click, where there was one. **XDict's own controls are read from the focused element alone**:
+    /// not woken (told an assistive client reads it, XDict would change itself for the rest of the launch), not searched
+    /// for a page (the page would be a web view of XDict's, never asked through Accessibility), no element under a click.
     public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
                             under: AXUIElement? = nil, admitting admission: TermAdmission,
                             excluding exclusions: HoverPolicy, limits: CaptureLimits = .shipped) -> SelectionOutcome {
+        let ours = app.pid == getpid()
         do {
-            try ax.wake(application)
-            switch try find(in: application, under: under, ax) {
+            if !ours { try ax.wake(application) }
+            switch try find(in: application, under: ours ? nil : under, searchingThePage: !ours, ax) {
             case .found(let capture):
                 guard !capture.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     return .nothing(.nothingSelected(app: app.name))
@@ -251,10 +330,11 @@ public enum SelectionReader {
     }
 
     /// The focused element first, then the element under the reader's click and its parents, then — only if those
-    /// have nothing — the focused window's page. Safari reports no focused element when it is not frontmost, and focus
-    /// can sit in its address bar, yet a selection in the page is there. Once the Services menu has closed, Notes and
-    /// TextEdit answer with no focused selection while the text view under the click holds it (E2E, 2026-10-18).
-    private static func find(in application: AXUIElement, under: AXUIElement?,
+    /// have nothing, and `searchingThePage` — the focused window's page. Safari reports no focused element when it is not
+    /// frontmost, and focus can sit in its address bar, yet a selection in the page is there. Once the Services menu has
+    /// closed, Notes and TextEdit answer with no focused selection while the text view under the click holds it (E2E,
+    /// 2026-10-18).
+    private static func find(in application: AXUIElement, under: AXUIElement?, searchingThePage: Bool,
                              _ ax: some AccessibilityReading) throws(CaptureError) -> Search {
         let focused = try ax.element(application, kAXFocusedUIElementAttribute, ofApplication: true)
         if let focused, let found = try capture(from: focused, ax) { return .found(found) }
@@ -265,6 +345,7 @@ public enum SelectionReader {
             guard let parent = try ax.element(element, kAXParentAttribute), parent != element else { break }
             current = parent
         }
+        guard searchingThePage else { return .nothing }
         var window = try ax.element(application, kAXFocusedWindowAttribute, ofApplication: true)
         if window == nil { window = try ax.element(application, kAXMainWindowAttribute, ofApplication: true) }
         guard let window else { return .nothing }
