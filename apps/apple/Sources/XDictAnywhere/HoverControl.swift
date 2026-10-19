@@ -210,7 +210,7 @@ public final class HoverControl {
         let stored = policy.settleMilliseconds
         return HoverPolicy.Settle(rawValue: stored)
             ?? HoverPolicy.settleChoices.min { abs($0.milliseconds - stored) < abs($1.milliseconds - stored) }
-            ?? .standard
+            ?? HoverPolicy.Settle.standard
     }
 
     public func setSettle(_ settle: HoverPolicy.Settle) {
