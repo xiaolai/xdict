@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "9c1ae4bd92260192a6bd419a22eb8027e601b0c0e7735752b127f394765be240"
+    public static let sourceDigest = "2ad810124a812c104cbe8d7f8e08b70a85b0e44aafb0fa5bae8f491182d7738b"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -94,6 +94,8 @@ public enum Tokens {
         public static let shortcutFieldMin: CGFloat = 140
         /// What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt.
         public static let popoverChrome: CGFloat = 26
+        /// The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53).
+        public static let siteField: CGFloat = 140
     }
 
     /// Widths and heights of windows, panes, columns and sheets.

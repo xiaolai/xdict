@@ -80,6 +80,7 @@ clickedWord = { value = 22.4, why = "The line a Control-clicked word with no box
 toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window." }
 shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06)." }
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
+siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
