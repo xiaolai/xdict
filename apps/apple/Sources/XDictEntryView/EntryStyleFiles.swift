@@ -1333,10 +1333,34 @@ var XDictFrameCore = (function () {
     if (pending || !SPACE_CAP) return;
     pending = true;
     // A timer, not an animation frame: a pane in the background gets no frames, and still resizes.
-    setTimeout(function () { pending = false; overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }, 16);
+    setTimeout(function () {
+      pending = false;
+      if (tooDeep()) return;
+      overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
+    }, 16);
+  }
+  // **No pass reads a tree nested deeper than the HTML parser builds** (2026-10-19). The passes ask each element's
+  // ancestors (`closest`, `blockOf`, `hider`, `inInline`), so a page script's chain made them cost the square of its
+  // depth: 7.0 s at 10,000 for `spacing()` alone, and a 100,000-deep page had not loaded in 28 minutes. WebKit's parser
+  // nests no element deeper than 512 below the root, so no parsed entry is ever this deep; a deeper tree is a script's,
+  // and its page keeps its own look. One walk of the body, in document order, stopping at the first element too deep.
+  var DEEPEST = 512;
+  function tooDeep() {
+    var body = document.body, e = body, depth = 2;   // the root 1, the body 2: the depth `parentElement` counts
+    while (e) {
+      if (e.firstElementChild) { e = e.firstElementChild; if (++depth > DEEPEST) return true; continue; }
+      while (e !== body && !e.nextElementSibling) { e = e.parentElement; depth--; }
+      if (e === body) return false;
+      e = e.nextElementSibling;
+    }
+    return false;
   }
   install();
-  function start() { install(); name(document); bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops(); }
+  function start() {
+    install(); name(document);
+    if (tooDeep()) return;
+    bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
+  }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
   document.addEventListener('click', function () { setTimeout(later, 50); setTimeout(later, 400); });
