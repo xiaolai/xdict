@@ -412,6 +412,31 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         }
     }
 
+    /// **Whether a window read only as pixels may hold a page that cannot be named** (Screen Only; verifier, 2026-10-19:
+    /// refusing every window while a site was listed silenced hover in every app). Without Accessibility no page is
+    /// named, so while any site is listed (`refuses(.unreadable)`) a known browser's window is refused, and so is a
+    /// window whose owner cannot be named; every other app is read. **A gap, stated**: web content another app embeds (a
+    /// mail message, an Electron app's page) is read as that app's pixels, since nothing here can tell it is a page.
+    public func refusesUnnamedPage(in bundleID: String?) -> Bool {
+        guard refuses(.unreadable) else { return false }
+        guard let bundleID else { return true }
+        return Self.knownBrowsers.contains(bundleID)
+    }
+
+    /// The web browsers Screen Only refuses while a site is listed, by bundle identifier: each release channel its own.
+    public static let knownBrowsers: Set<String> = [
+        "com.apple.Safari", "com.apple.SafariTechnologyPreview",
+        "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.dev", "com.google.Chrome.canary",
+        "org.chromium.Chromium",
+        "org.mozilla.firefox", "org.mozilla.firefoxdeveloperedition", "org.mozilla.nightly",
+        "com.microsoft.edgemac", "com.microsoft.edgemac.Beta", "com.microsoft.edgemac.Dev", "com.microsoft.edgemac.Canary",
+        "com.brave.Browser", "com.brave.Browser.beta", "com.brave.Browser.nightly",
+        "company.thebrowser.Browser", "company.thebrowser.dia",
+        "com.operasoftware.Opera", "com.operasoftware.OperaGX", "com.vivaldi.Vivaldi",
+        "com.kagi.kagimacOS", "com.duckduckgo.macos.browser", "app.zen-browser.zen",
+        "org.torproject.torbrowser", "net.waterfox.waterfox", "org.mozilla.librewolf", "com.sigmaos.sigmaos.macos",
+    ]
+
     /// The host a reader means by what they typed — **a name, or a pasted address reduced to its
     /// host** — or nil where neither can be read. A pasted `https://docs.example.com/page` used to be
     /// stored whole and could never match a page's host, so the exclusion silently covered nothing.
