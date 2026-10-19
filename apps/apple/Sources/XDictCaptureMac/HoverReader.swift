@@ -313,16 +313,26 @@ public final class HoverReader: HoverReading {
             // No window a capture may read: what Accessibility found is the answer.
             return .nothing(otherwise)
         }
-        guard capturing.claim() else {
+        let abandoning = capturing.holdsAbandoned
+        guard let ticket = capturing.claim() else {
             reportIfStuck()
             return .quiet(.captureInFlight)
         }
+        if !abandoning, capturing.holdsAbandoned {
+            log.notice("hover: a capture held past \(CaptureGuard.abandonAfter.components.seconds, privacy: .public) s was set aside; this one starts")
+        }
         let source = source
         do {
-            let (recognition, context) = try await bounded { try await source.recognise(at: point, window: window, policy: policy) }
+            let (recognition, context) = try await bounded(ticket) {
+                try await source.recognise(at: point, window: window, policy: policy)
+            }
             let outcome = accept(recognition, context: context, request: request, policy: policy, point: point)
             if case .recognised = outcome {} else { context?.cancel() }
             return outcome
+        } catch RecognitionError.screenBusy {
+            // **A screenshot set aside is still blocked in ScreenCaptureKit**: this one was refused, never started beside
+            // it (`ScreenshotGate`); asked again when the capture set aside ends.
+            return .quiet(.captureInFlight)
         } catch RecognitionError.screenRecordingNeeded {
             // A reader who moved on is not told anything.
             return Task.isCancelled ? .quiet(.cancelled) : .needsScreenRecording(request: request)
@@ -330,7 +340,7 @@ public final class HoverReader: HoverReading {
             return Task.isCancelled ? .quiet(.cancelled) : .nothing(.recognition(error))
         } catch is CaptureTimedOut {
             // **The deadline passed and the capture still runs**: stuck now, not when the next hover happens to ask.
-            if capturing.isHeld { reportStuck(for: captureDeadline) }
+            if capturing.isCurrent(ticket) { reportStuck(for: captureDeadline) }
             return .nothing(.captureTimedOut)
         } catch {
             return .quiet(.cancelled)
@@ -352,14 +362,14 @@ public final class HoverReader: HoverReading {
     /// after the deadline answered. Where the first reading offers a growth, it runs on under the same guard as a pending
     /// context, bounded by what is left of the deadline; the guard is released when that work returns.
     private func bounded(
-        _ work: @escaping @Sendable () async throws -> Recognition
+        _ ticket: CaptureGuard.Ticket, _ work: @escaping @Sendable () async throws -> Recognition
     ) async throws -> (Recognition, PendingContext?) {
         let answer = Answer<FirstRead>()
         let capturing = capturing, contexts = contexts, deadline = captureDeadline
         let started = ContinuousClock.now
         let finished = Task { [weak self] in
             defer {
-                let (_, wasReported) = capturing.release()
+                let (_, wasReported) = capturing.release(ticket)
                 Task { @MainActor in self?.captureEnded(wasReported: wasReported) }
             }
             let first: Recognition

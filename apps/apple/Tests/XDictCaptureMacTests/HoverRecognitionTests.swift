@@ -196,12 +196,13 @@ struct HoverRecognitionTests {
     /// **The guard is held until released** (moved by name from `HoverAuditTests`).
     @Test func theCaptureGuardIsHeldUntilReleased() {
         let capture = CaptureGuard()
-        #expect(capture.claim())
-        #expect(!capture.claim(), "a second capture was let start")
+        let first = capture.claim()
+        #expect(first != nil)
+        #expect(capture.claim() == nil, "a second capture was let start")
         #expect(capture.isHeld)
-        capture.release()
+        if let first { capture.release(first) }
         #expect(!capture.isHeld)
-        #expect(capture.claim())
+        #expect(capture.claim() != nil)
     }
 
     /// **A capture that never returns says so, and AX stays available meanwhile** (moved by name from `CaptureWedgeTests`;
@@ -239,6 +240,34 @@ struct HoverRecognitionTests {
         screen.finishCapture()
         await HoverFixtures.settle { health.count == 2 }
         #expect(health.last == .answering, "the capture answered and nobody was told")
+    }
+
+    /// **A stalled capture no longer refuses every hover after it** (owner, 2026-10-19): held past the guard's bound, it is
+    /// set aside and the next hover captures; a third, while both still run, is refused as a capture in flight; when they
+    /// return, capture answers again. Red under the old guard (the second hover refused for the stall's whole run).
+    @Test func aStalledCaptureIsSetAsideOnceAndTheNextHoverCaptures() async throws {
+        let screen = RecognitionFixtures.screen()
+        screen.hangs = true
+        let capturing = CaptureGuard(abandonAfter: .milliseconds(10))
+        let reader = RecognitionFixtures.reader(screen, deadline: .milliseconds(30), capturing: capturing)
+        guard case .nothing(.captureTimedOut) = await RecognitionFixtures.read(reader) else {
+            Issue.record("the stalled capture was not given up on at its deadline")
+            return
+        }
+        guard case .nothing(.captureTimedOut) = await RecognitionFixtures.read(reader) else {
+            Issue.record("the hover after a stall did not capture")
+            return
+        }
+        #expect(screen.recognitions == 2)
+        #expect(capturing.holdsAbandoned)
+        guard case .quiet(.captureInFlight) = await RecognitionFixtures.read(reader) else {
+            Issue.record("a second stall was set aside while the first still runs")
+            return
+        }
+        #expect(screen.recognitions == 2, "a third capture started beside two stalled ones")
+        screen.finishCapture()
+        await HoverFixtures.settle { !capturing.isHeld && !capturing.holdsAbandoned }
+        #expect(!capturing.isHeld && !capturing.holdsAbandoned)
     }
 
     // MARK: - The pending context (moved by name from `HoverPendingContextTests`)
