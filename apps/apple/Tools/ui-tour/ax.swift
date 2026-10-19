@@ -136,6 +136,13 @@ func windows(_ app: AXUIElement) -> [AXUIElement] {
     (attribute(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
 }
 
+/// Where `press` and `click` look: the app's windows, then its menu-bar extra, whose open menu is no window of the app
+/// (Pause Hover was never found there, 2026-10-19).
+func roots(_ app: AXUIElement) -> [AXUIElement] {
+    let extras = attribute(app, "AXExtrasMenuBar").map { children($0 as! AXUIElement) } ?? []
+    return windows(app) + extras
+}
+
 func clickAt(_ x: Double, _ y: Double) {
     let point = CGPoint(x: x, y: y)
     for type in [CGEventType.mouseMoved, .leftMouseDown, .leftMouseUp] {
@@ -239,8 +246,8 @@ case "tree":
     emit(["windows": out, "truncated": budget <= 0])
 case "press", "click":
     let matches = Set(arguments.dropFirst(3))
-    guard let hit = windows(app).lazy.compactMap({ find($0, matches) }).first else {
-        fail("no element matching \(matches.sorted()) in any window")
+    guard let hit = roots(app).lazy.compactMap({ find($0, matches) }).first else {
+        fail("no element matching \(matches.sorted()) in any window or the menu-bar extra")
     }
     if arguments[1] == "press" {
         let result = AXUIElementPerformAction(hit, kAXPressAction as CFString)
