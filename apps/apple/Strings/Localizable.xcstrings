@@ -6851,7 +6851,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "输入单词，在以下词典中查找…"
+            "value" : "请键入要查询的字词…"
           }
         }
       }
