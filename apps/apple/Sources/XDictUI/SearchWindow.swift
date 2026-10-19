@@ -16,8 +16,6 @@ public struct SearchWindow: View {
     @State private var columns = NavigationSplitViewVisibility.detailOnly
     /// The content column's width: the title over it yields when it is narrow (P8).
     @State private var column: CGFloat = Tokens.Window.initialColumn
-    /// The window's width: the search field follows it (P5). Apple's measured window until the first layout.
-    @State private var window: CGFloat = Tokens.Window.searchFieldAtWindow
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -36,7 +34,6 @@ public struct SearchWindow: View {
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
         }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { window = $0 }
         .toolbar { toolbar }
         // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
         // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
@@ -60,51 +57,17 @@ public struct SearchWindow: View {
         }
     }
 
-    /// Back/Forward | title | space | Smaller/Bigger Text | search (P3). At the 400 pt minimum the two pairs go to the
-    /// overflow before the search field does (P8).
-    @ToolbarContentBuilder private var toolbar: some ToolbarContent {  // placement: P3
-        ToolbarItem(placement: .navigation) {
-            ControlGroup {
-                Button { state.model.back() } label: { Label("Back", systemImage: "chevron.backward") }
-                    .disabled(!state.model.canGoBack)
-                    .help(Text("Show the previous result"))
-                Button { state.model.forward() } label: { Label("Forward", systemImage: "chevron.forward") }
-                    .disabled(!state.model.canGoForward)
-                    .help(Text("Show the next result"))
-            }
-            .controlGroupStyle(.navigation)
-        }
-        .visibilityPriority(.low)
-        ToolbarItem(placement: .primaryAction) {
-            ControlGroup {
-                Button { state.entry.zoomOut() } label: { Label("Smaller Text", systemImage: "textformat.size.smaller") }
-                    .help(Text("Decrease font size"))
-                Button { state.entry.zoomIn() } label: { Label("Bigger Text", systemImage: "textformat.size.larger") }
-                    .help(Text("Increase font size"))
-            }
-            // One two-segment control, as Apple's (P3), not two round buttons (owner, 2026-10-18): the same style
-            // that joins Back and Forward.
-            .controlGroupStyle(.navigation)
-        }
-        .visibilityPriority(.low)
-        ToolbarItem(placement: .primaryAction) {
-            Button { state.pronounceSelectionOrShown() } label: { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
-                .disabled(!state.canPronounce)
-                .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
-                .accessibilityIdentifier("toolbar.pronounce")
-        }
-        .visibilityPriority(.low)
-        ToolbarItem(placement: .primaryAction) {
-            Self.searchField(text: state.model.text, known: state.model.known, scope: state.model.scope,
-                             focus: state.searchFocus, onScope: { state.model.setScope($0) },
-                             onChange: { state.typedText($0) }, onSubmit: { state.submit() },
-                             onMove: { state.move($0) }, onCancel: { state.cancel() })
-                // A width that follows the window (P5: 327 pt at 859 pt), not a min/max range: the toolbar sizes a
-                // hosted AppKit view by its ideal, and NSSearchField has none, so the range left it near its least
-                // (owner, 2026-10-18). At the 400 pt minimum it is 152 pt, so the pairs still overflow first (P8).
-                .frame(width: ToolbarLayout.searchFieldWidth(window: window))
-        }
-        .visibilityPriority(.high)
+    /// The toolbar (P3, `SearchToolbar`), wired to this window's search, entry and speaker.
+    private var toolbar: some ToolbarContent {
+        SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
+                      canPronounce: state.canPronounce, back: { state.model.back() },
+                      forward: { state.model.forward() }, smaller: { state.entry.zoomOut() },
+                      bigger: { state.entry.zoomIn() }, pronounce: { state.pronounceSelectionOrShown() },
+                      field: Self.searchField(text: state.model.text, known: state.model.known,
+                                              scope: state.model.scope, focus: state.searchFocus,
+                                              onScope: { state.model.setScope($0) },
+                                              onChange: { state.typedText($0) }, onSubmit: { state.submit() },
+                                              onMove: { state.move($0) }, onCancel: { state.cancel() }))
     }
 
     /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the

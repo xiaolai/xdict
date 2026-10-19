@@ -109,15 +109,21 @@ final class KeyboardSearchField: NSSearchField {
 
     private var resizeObserver: (any NSObjectProtocol)?
 
+    /// The toolbar item holding the field: last to go to the overflow (P8), as wide as the window asks (P5).
+    private func fitToolbar() {
+        ToolbarPriority.apply(self)
+        ToolbarFieldWidth.apply(self)
+    }
+
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
         resizeObserver = nil
         if let window {
-            DispatchQueue.main.async { [weak self] in self.map(ToolbarPriority.apply) }
+            DispatchQueue.main.async { [weak self] in self?.fitToolbar() }
             resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification,
                                                                     object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self.map(ToolbarPriority.apply) }
+                MainActor.assumeIsolated { self?.fitToolbar() }
             }
         }
         guard wantsKeyboard, window != nil else { return }
