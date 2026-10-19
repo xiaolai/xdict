@@ -105,18 +105,32 @@ Moved by name from XiaolaiDict at `044dac6`, each seen failing against a mutatio
 
 Not moved, and why (the code each covers is not in XDict):
 
-- XiaolaiDict's `SelectionReaderTests`, 7 of 24: `theRangeDialectCarriesTheExactRangeAndItsWindowsDocument`,
-  `aDialectWithContextIsUsedWholeNotMixed`, `anIncoherentSentenceIsDroppedAndSaidToBeMissing`,
-  `aFailedProvenanceReadKeepsTheSelection`, `provenanceNeverComesFromAnotherWindow`, `aSelectionSurvivesAFailedContextRead`
-  test the selection's sentence context and its provenance (window, document), which XDict's selection does not read
-  (`ContextOutcome.unavailable(.notCaptured)`; left behind in plan-macos-v1 WI-8, the owner's ruling on context for the
-  shortcut, menu and Service is open, manifest §6). `readsRunOneAtATime` is the lane's now: `AccessibilityLaneTests.readsNeverOverlap`.
-- XiaolaiDict's `Tests/MacCaptureTests/SelectionTests.swift`, 14 of 24: `SelectionWindowTests` (7) and `MarkerSentenceTests`
-  (3) test `SelectionWindow` and `MarkerSentence`, the window and the sentence read around a selection — not ported, for
-  the same reason (the pointer path's read window is `PointerWordReader`'s own code, under `PointerWordReaderTests`);
-  `CaptureTests`' `aCompleteSentenceIsReportedAsComplete`, `aDegradedContextSaysSo` and `theRangeFollowsTheTrimmedTerm`
-  test the selection's context quality, likewise absent; `aPassageIsRefused`'s behaviour is held by
-  `SelectionReaderTests.nothingNoWordAndTooLongAreToldApart` (the too-long refusal, typed).
+- XiaolaiDict's `SelectionReaderTests`: `aFailedProvenanceReadKeepsTheSelection` and `provenanceNeverComesFromAnotherWindow`
+  test the selection's provenance (window, document), which XDict does not read (ADR-0014 d.10). `readsRunOneAtATime` is
+  the lane's now: `AccessibilityLaneTests.readsNeverOverlap`. The other four moved on 2026-10-19 (below).
+- `CaptureTests.aPassageIsRefused`'s behaviour is held by `SelectionReaderTests.nothingNoWordAndTooLongAreToldApart` (the
+  too-long refusal, typed).
+
+## The selection's sentence (2026-10-19, owner: "sentence always captured" covers the shortcut, the menu and the Service)
+
+The selection path now reads the sentence around the selected text, in the read's own lane job and budget, into
+`SelectedText.context` and from there only into the captured term (`SelectionContext.swift`,
+`SelectionReader.contextOutcome`). Moved by name from XiaolaiDict at `044dac6`, with the code they cover:
+
+| XDict file | Origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `SelectionContext.swift` (`SelectionWindow`) | XiaolaiDict `Sources/MacCapture/SelectionText.swift` (`SelectionWindow`); `holds` made overflow-safe | `SelectionWindowTests` (7) (red against `holds` always true) | XDict ADR-0014 d.3 |
+| `SelectionContext.swift` (`MarkerSentence`) | XiaolaiDict `Sources/MacCapture/SelectionReader.swift` (`MarkerSentence`) | `MarkerSentenceTests` (3) (red against the leading whitespace not taken off the offset) | XDict ADR-0014 d.2 |
+| `SelectionContext.swift` (`contextOutcome`, `sentenceAround`, `sentenceCovering`) | XiaolaiDict `sentenceAroundSelectedRange` and `sentenceCovering`. Changed: one window of `CaptureLimits.readRadiusUTF16` (XiaolaiDict widened 400, 1,600, 6,400); the whole value read only when its reported length fits that window; the sentence cut to `contextUTF16` around the term; excluded apps and sites read nothing, the site by `PointerWordReader.host` (fail-closed) | `CaptureTests`: `aCompleteSentenceIsReportedAsComplete`, `aDegradedContextSaysSo`, `theRangeFollowsTheTrimmedTerm`; `SelectionReaderTests`: `theRangeDialectCarriesTheExactRange` (renamed from `theRangeDialectCarriesTheExactRangeAndItsWindowsDocument`: no document is read), `aDialectWithContextIsUsedWholeNotMixed`, `anIncoherentSentenceIsDroppedAndSaidToBeMissing`, `aSelectionSurvivesAFailedContextRead` (each red against the context stubbed as not captured) | XDict ADR-0014 d.2, d.3, d.9; ADR-0015; ADR-0020 |
+
+New in XDict, test-first (red against the stub): `SelectionContextReadTests` (9): an excluded app and an excluded site
+read nothing around the selection, an unreadable site is refused once any site is excluded, the bounded window, the whole
+value only when it fits, the cut to the limit, a cancellation still cancels, the sentence in every trigger's term, no
+description holding the sentence; after the verifier's round (2026-10-19), XDict's own windows read nothing around a
+selection, and an answer longer than was asked for (a window), or than `markerSentenceCeilingFactor` times
+`contextUTF16` (a sentence), is refused before it is searched — each red against its mutation.
+`XDictTests/SelectionExclusionWiringTests` holds the app handing over the reader's own
+policy (positive controls planted).
 - XiaolaiDict's `ScriptFilterWiringTests.everyRecordedLookupCarriesTheScriptItWasWrittenIn` and
   `theDrawerFiltersByTheScriptsTheReaderStudies` test the study ledger's rows and the history drawer, which XDict does not
   have (it records no reading history; manifest §6).

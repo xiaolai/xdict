@@ -92,7 +92,7 @@ struct LaneBarrierTests {
         let app = FrontApp(pid: 90_000, name: "Reader", bundleID: "com.example.reader")
         let clicked = CGPoint(x: 440, y: 150)
         let outcome = await SelectionReader.read(
-            from: app, clicked: clicked, admitting: SelectionReaderTests.admission,
+            from: app, clicked: clicked, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions,
             access: AccessibilityAccess(probe: { .granted }), lane: lane,
             client: { _ in
                 let tree = FakeAccessibility()

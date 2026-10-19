@@ -46,6 +46,27 @@ struct HoverSentencesTests {
         #expect(String(localized: HoverSentences.notice(.captureStuck)).contains("selection"))
     }
 
+    /// **Each rest the picker offers is named by its length, in the system's words**, every one its own: the choices are
+    /// capture's (`HoverPolicy.settleChoices`), never a list of the view's.
+    @Test func eachRestIsNamedByItsLength() {
+        let english = Locale(identifier: "en")
+        let names = HoverPolicy.settleChoices.map { HoverSentences.settle($0, locale: english) }
+        #expect(Set(names).count == HoverPolicy.settleChoices.count, "\(names)")
+        #expect(names.first?.contains(String(HoverPolicy.Settle.quick.milliseconds)) == true, "\(names)")
+    }
+
+    /// **A site that is not a site, and one already excluded, are each said**; adding one says nothing.
+    @Test func theSiteAnswersAreSaid() {
+        #expect(HoverSentences.excludedSite(.added("example.com")) == nil)
+        let refused = HoverSentences.excludedSite(.notASite).map { String(localized: $0) }
+        let twice = HoverSentences.excludedSite(.alreadyExcluded("example.com")).map { String(localized: $0) }
+        #expect(refused != nil && twice != nil && refused != twice)
+        let answers: [ExcludedSiteAnswer] = [.notASite, .alreadyExcluded("example.com"), .tooBroad, .listFull]
+        let sentences = answers.compactMap { HoverSentences.excludedSite($0).map { String(localized: $0) } }
+        #expect(Set(sentences).count == answers.count, "\(sentences)")
+        #expect(twice?.contains("example.com") == true, "\(String(describing: twice))")
+    }
+
     /// **The pause group's lines**: a pause length per duration, a paused hover saying when it comes back, and hover
     /// switched off said rather than left out.
     @Test func thePauseLinesSayWhatTheyDo() {

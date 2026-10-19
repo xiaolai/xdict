@@ -41,6 +41,28 @@ public enum HoverSentences {
         return LocalizedStringResource("Words written in \(names)", comment: "Hover's scripts; the placeholder is a list such as 'Latin and Chinese characters'")
     }
 
+    /// One rest of the rest-time picker, named by its length in the system's own words ("180 ms"), so the unit and the
+    /// digits are the reader's locale's.
+    public static func settle(_ settle: HoverPolicy.Settle, locale: Locale = .current) -> String {
+        Duration.milliseconds(settle.milliseconds)
+            .formatted(.units(allowed: [.milliseconds], width: .abbreviated).locale(locale))
+    }
+
+    /// What adding a site to exclude said: nothing when it was added.
+    public static func excludedSite(_ answer: ExcludedSiteAnswer) -> LocalizedStringResource? {
+        switch answer {
+        case .added: nil
+        case .alreadyExcluded(let host):
+            LocalizedStringResource("\(host) is already excluded.", comment: "The placeholder is a site's host, such as 'example.com'")
+        case .notASite:
+            LocalizedStringResource("That is not a site. Type a name such as example.com, or paste an address.")
+        case .tooBroad:
+            LocalizedStringResource("A single name such as com would cover every site under it. Type a site such as example.com.")
+        case .listFull:
+            LocalizedStringResource("The list is full. Remove a site to add another.")
+        }
+    }
+
     /// What the reader is told about hover, each notice its own sentence.
     public static func notice(_ notice: CaptureNotice) -> LocalizedStringResource {
         switch notice {

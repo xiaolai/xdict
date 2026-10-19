@@ -38,7 +38,7 @@ struct SelectionCaptureTests {
         tree.set(paragraph, kAXParentAttribute, view)
         tree.hit(clicked, paragraph)
         let outcome = SelectionReader.read(application: tree.application, of: app, with: tree, clicked: clicked,
-                                           admitting: SelectionReaderTests.admission)
+                                           admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions)
         #expect(tree.hitTests == [clicked])
         guard case .selected(let selected, let box) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(selected.text == "crème brûlée")
@@ -57,7 +57,7 @@ struct SelectionCaptureTests {
                 return (.success, root)
             }))
         let outcome = SelectionReader.read(application: AXUIElementCreateApplication(91_100), of: app, with: session,
-                                           clicked: CGPoint(x: 1, y: 1), admitting: SelectionReaderTests.admission)
+                                           clicked: CGPoint(x: 1, y: 1), admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions)
         #expect(outcome == .nothing(.failed(.deadlineExceeded, app: "Reader")))
         #expect(asked.withLock { $0 } == 0, "the read went on asking after its budget was spent")
     }
@@ -94,7 +94,7 @@ struct SelectionCaptureTests {
         let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
         let outcome = await SelectionReader.read(
-            from: ours, admitting: SelectionReaderTests.admission, access: Self.granted, lane: lane,
+            from: ours, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
             client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) })
         #expect(outcome == .nothing(.nothingSelected(app: "XDict")))
         #expect(recorder.timeouts.withLock { $0 }.isEmpty, "the own-process read went through the lane")
@@ -108,7 +108,7 @@ struct SelectionCaptureTests {
         let recorder = Recorder()
         let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         let outcome = await SelectionReader.read(
-            from: app, admitting: SelectionReaderTests.admission, access: Self.granted, lane: lane,
+            from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
             client: { _ in ThreadNoting(recorder) })
         #expect(outcome == .nothing(.nothingSelected(app: "Reader")))
         #expect(recorder.timeouts.withLock { $0 } == [AccessibilitySession.messagingTimeout])
@@ -121,7 +121,7 @@ struct SelectionCaptureTests {
         let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         for probe: PermissionProbe in [.declined, .couldNotTell] {
             let outcome = await SelectionReader.read(
-                from: app, admitting: SelectionReaderTests.admission, access: AccessibilityAccess(probe: { probe }),
+                from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: AccessibilityAccess(probe: { probe }),
                 lane: lane, client: { _ in recorder.clients.withLock { $0 += 1 }; return ThreadNoting(recorder) })
             #expect(outcome == .nothing(.notTrusted))
         }
@@ -149,7 +149,7 @@ struct SelectionCaptureTests {
         let lane = AccessibilityLane(bounds: bounds) { _ in }
         let blocked = Blocked()
         let reading = Task {
-            await SelectionReader.read(from: app, admitting: SelectionReaderTests.admission, access: Self.granted,
+            await SelectionReader.read(from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted,
                                        lane: lane, budget: .milliseconds(20), client: { _ in blocked })
         }
         let outcome = await Wait.value(of: reading)
@@ -162,19 +162,20 @@ struct SelectionCaptureTests {
     // MARK: - Handed over
 
     /// **The selection becomes a captured term** with its facts apart (decision 2): trigger and acquisition as two fields,
-    /// the measured box of its quality, the app, and no context — the selection path reads none.
+    /// the measured box of its quality, the app, and the context as read: this view answers no text around its
+    /// selection, so it says so (the sentence itself: `SelectionContextReadTests`).
     @Test func aSelectionIsHandedOverAsACapturedTerm() throws {
         let tree = FakeAccessibility()
         let view = textView(tree, 2, holding: "take off", box: CGRect(x: 10, y: 20, width: 60, height: 16))
         tree.set(tree.application, kAXFocusedUIElementAttribute, view)
         let outcome = SelectionReader.read(application: tree.application, of: app, with: tree,
-                                           admitting: SelectionReaderTests.admission)
+                                           admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions)
         let term = try #require(try outcome.capturedTerm(trigger: .selection))
         #expect(term.term == "take off")
         #expect(term.trigger == .selection && term.acquisition == .textRange)
         #expect(term.source == SourceApp(bundleID: "com.example.reader"))
         #expect(term.box == .measured(ReadBounds(rect: DownRect(x: 10, y: 20, width: 60, height: 16), quality: .exact)))
-        #expect(term.context == .unavailable(.notCaptured))
+        #expect(term.context == .unavailable(.appExposedNone))
         #expect(try SelectionOutcome.nothing(.noApp).capturedTerm(trigger: .menu) == nil)
     }
 
@@ -187,7 +188,8 @@ struct SelectionCaptureTests {
         tree.set(tree.application, kAXFocusedUIElementAttribute, field)
         tree.set(field, kAXSelectedTextAttribute, long as CFString)
         let wide = SelectionReader.read(application: tree.application, of: app, with: tree,
-                                        admitting: TermAdmission(maximumCharacters: 300))
+                                        admitting: TermAdmission(maximumCharacters: 300),
+                                        excluding: SelectionReaderTests.exclusions)
         guard case .selected(let selected, _) = wide else { Issue.record("got \(wide)"); return }
         #expect(selected.text == long && selected.text.count == 299)
     }
@@ -215,7 +217,7 @@ struct SelectionCaptureTests {
         let tree = FakeAccessibility()
         tree.fail(tree.application, kAXFocusedUIElementAttribute, with: .appUnavailable)
         let read = SelectionReader.read(application: tree.application, of: app, with: tree,
-                                        admitting: SelectionReaderTests.admission)
+                                        admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions)
         #expect(read == .nothing(.failed(.appUnavailable, app: "Reader")))
         let term = try SelectionReader.serviceTerm("take off", read: read, source: source, clicked: clicked)
         #expect(term.term == "take off" && term.acquisition == .serviceText)
@@ -232,7 +234,7 @@ struct SelectionCaptureTests {
         let item = textView(tree, 4, holding: "Look Up in XDict", box: CGRect(x: 690, y: 290, width: 140, height: 22))
         tree.hit(pointer, item)
         let read = SelectionReader.read(application: tree.application, of: app, with: tree, clicked: pointer,
-                                        admitting: SelectionReaderTests.admission)
+                                        admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions)
         let term = try SelectionReader.serviceTerm("ephemeral", read: read, source: source, clicked: clicked)
         #expect(term.term == "ephemeral")
         #expect(term.box == .clickPlacement(clicked))
