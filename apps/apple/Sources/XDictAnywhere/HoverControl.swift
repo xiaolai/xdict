@@ -24,7 +24,8 @@ public enum CaptureTolerances {
         strip: StripMetrics(initialHeight: Tokens.Capture.stripStart, growthStep: Tokens.Capture.stripStep,
                             maximumHeight: Tokens.Capture.stripMost),
         tiling: TilingMetrics(edgeSlack: Tokens.Capture.tileEdgeSlack, holeSlack: Tokens.Capture.tileHoleSlack),
-        frameDrift: Tokens.Capture.frameDrift)
+        frameDrift: Tokens.Capture.frameDrift,
+        label: LabelSlack(shift: Tokens.Capture.labelShift, smaller: Tokens.Capture.labelSmaller))
 }
 
 /// **The Screen Recording row's state, as kinds** (plan-capture WI-4; the view layer words them).
@@ -101,6 +102,9 @@ public final class HoverControl {
     @ObservationIgnored private let warmUpRecognition: @MainActor () -> Void
     /// Whether this launch has warmed it: once per launch, however often the watcher restarts.
     @ObservationIgnored private var warmed = false
+    /// **Vision kept warm while the watcher runs** (`RecognitionKeepWarm`): its models are dropped after minutes idle and
+    /// reloading them took 24 s, so a launch's warm-up alone left the first hover after a pause stalled.
+    @ObservationIgnored public let keepWarm: RecognitionKeepWarm
 
     static let enabledKey = "hoverLookupEnabled"
 
@@ -118,8 +122,10 @@ public final class HoverControl {
         source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
         startWatcher: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart,
         now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
-        warmUpRecognition: @escaping @MainActor () -> Void = { ScreenTextRecogniser.warmUp() }
+        warmUpRecognition: @escaping @MainActor () -> Void = { ScreenTextRecogniser.warmUp() },
+        keepWarm: RecognitionKeepWarm? = nil
     ) {
+        self.keepWarm = keepWarm ?? RecognitionKeepWarm()
         self.startWatcher = startWatcher
         self.warmUpRecognition = warmUpRecognition
         self.now = now
@@ -286,6 +292,7 @@ public final class HoverControl {
         isEnabled = on
         guard on else {
             watcher.stop()
+            keepWarm.stop()
             isWatching = false
             startFailed = false
             return
@@ -303,6 +310,8 @@ public final class HoverControl {
             warmed = true
             warmUpRecognition()
         }
+        // And kept warm while it watches, in the same launches only.
+        if isWatching { keepWarm.start() } else { keepWarm.stop() }
     }
 }
 

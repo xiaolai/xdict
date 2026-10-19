@@ -49,6 +49,7 @@ public struct SystemPointerWords: PointerWordSource {
     private let lane: AccessibilityLane
     private let access: AccessibilityAccess
     private let tolerance: HitTolerance
+    private let labels: LabelSlack
     private let limits: CaptureLimits
     private let recogniser: ScreenTextRecogniser
     private let client: @Sendable (Duration) -> any AccessibilityReading
@@ -70,6 +71,7 @@ public struct SystemPointerWords: PointerWordSource {
         self.windows = windows
         self.readsOwnView = readsOwnView
         self.tolerance = metrics.hit
+        labels = metrics.label
         self.limits = limits
         self.lane = lane
         self.access = access
@@ -104,11 +106,12 @@ public struct SystemPointerWords: PointerWordSource {
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome {
         let tolerance = tolerance
+        let labels = labels
         let limits = limits
         let client = client
         return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.readUnlessRefused(at: point, in: target, tolerance: tolerance, limits: limits,
-                                                refuses: refuses, with: client(budget))
+            PointerWordReader.readUnlessRefused(at: point, in: target, tolerance: tolerance, labels: labels,
+                                                limits: limits, refuses: refuses, with: client(budget))
         }, refused: { refusal in
             switch refusal {
             case .cancelled, .superseded: .read(.cancelled)
@@ -145,11 +148,12 @@ public struct SystemPointerWords: PointerWordSource {
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome {
         let tolerance = tolerance
+        let labels = labels
         let limits = limits
         let client = client
         return await lane.runOnMainActor(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
-            PointerWordReader.readUnlessRefused(at: point, in: target, tolerance: tolerance, limits: limits,
-                                                refuses: refuses, with: client(budget))
+            PointerWordReader.readUnlessRefused(at: point, in: target, tolerance: tolerance, labels: labels,
+                                                limits: limits, refuses: refuses, with: client(budget))
         }, refused: { refusal in
             switch refusal {
             case .cancelled, .superseded: .read(.cancelled)

@@ -26,10 +26,26 @@ public enum PointerWordReader {
         public let bundleID: String?
         /// Where the word is on screen, y down, where the dialect can say it and the box is worth trusting.
         public let bounds: ReadBounds?
+        /// The word was placed under the pointer by estimate, with no box measured (`elementTitle`): handed over as the
+        /// pointer's placement, never as a box.
+        public let placedByPointer: Bool
+
+        public init(
+            word: WordAtPoint, acquisition: CaptureAcquisition, appName: String, bundleID: String?, bounds: ReadBounds?,
+            placedByPointer: Bool = false
+        ) {
+            self.word = word
+            self.acquisition = acquisition
+            self.appName = appName
+            self.bundleID = bundleID
+            self.bounds = bounds
+            self.placedByPointer = placedByPointer
+        }
 
         /// **The word as capture hands it over** (XDict ADR-0014 decision 2): trigger `pointerGesture`, the dialect as the
-        /// acquisition, the measured box or none, and the sentence as an available context — its range the word's, its cut
-        /// ends where the text read was a window of a longer one.
+        /// acquisition, the measured box, the pointer's placement where the word was placed by estimate, or none, and the
+        /// sentence as an available context — its range the word's, its cut ends where the text read was a window of a
+        /// longer one.
         public func capturedTerm(pointer: PointerSample?) throws(CaptureValueError) -> CapturedTerm {
             let sentence = word.sentence
             var cut: CutEnds = []
@@ -38,9 +54,10 @@ public enum PointerWordReader {
             let context: ContextOutcome = sentence.selection.map {
                 ContextOutcome.available(sentence: sentence.text, term: $0, cut: cut, gap: nil)
             } ?? .unavailable(.appExposedNone)
+            let placement: WordBox = placedByPointer ? pointer.map { .clickPlacement($0.point) } ?? .absent : .absent
             return try CapturedTerm.make(
                 term: word.word, trigger: .pointerGesture, acquisition: acquisition, confidence: 1,
-                source: SourceApp(bundleID: bundleID), pointer: pointer, box: bounds.map(WordBox.measured) ?? .absent,
+                source: SourceApp(bundleID: bundleID), pointer: pointer, box: bounds.map(WordBox.measured) ?? placement,
                 context: context)
         }
     }
@@ -51,6 +68,9 @@ public enum PointerWordReader {
         case noText(app: String, role: String?)
         /// A request failed and ended the read.
         case failed(CaptureError, app: String)
+        /// A secure text field, or an element that says it holds protected content: **refused before any text attribute
+        /// was asked, and not to be read as pixels either**.
+        case secure(app: String)
     }
 
     public enum Outcome: Sendable, Equatable {
@@ -222,8 +242,8 @@ public enum PointerWordReader {
     /// `contextUTF16` around the word; the bounds scan refuses a value longer than the read window
     /// (`2 × readRadiusUTF16`) before tokenising it.
     static func read(
-        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
-        with ax: some AccessibilityReading
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, labels: LabelSlack = .exact,
+        limits: CaptureLimits = .shipped, with ax: some AccessibilityReading
     ) -> Outcome {
         let element = target.element
         func hit(_ found: Located, _ acquisition: CaptureAcquisition) -> Outcome {
@@ -231,10 +251,18 @@ public enum PointerWordReader {
                      bounds: found.bounds))
         }
         do throws(CaptureError) {
+            // The wake-up first: it reads nothing, and an app that does not answer it is asked nothing else.
             try awaken(target, ax)
+            // **A secure field is refused before any text is asked of it** — its text range, its value, its title: a
+            // password is never read, by any dialect, and never handed to the pixels.
+            if try isSecure(element, ax) { return .miss(.secure(app: target.appName)) }
             if let found = try textRange(element, at: point, tolerance, limits, ax) { return hit(found, .textRange) }
             if let found = try textMarkers(element, at: point, tolerance, limits, ax) { return hit(found, .textMarkers) }
             if let found = try boundsScan(element, at: point, tolerance, limits, ax) { return hit(found, .boundsScan) }
+            if let word = try title(element, at: point, tolerance, labels, limits, ax) {
+                return .hit(Hit(word: word, acquisition: .elementTitle, appName: target.appName,
+                                bundleID: target.bundleID, bounds: nil, placedByPointer: true))
+            }
             // **Nothing answered: ask the app, once, to build its tree for an assistive client.** Chrome exposes no page
             // until it is told one is reading it; this hover still misses — the tree arrives about two seconds later —
             // and the next one reads text. Asked only here, so an app that answers is never told.
@@ -325,12 +353,52 @@ public enum PointerWordReader {
     /// a check and a read made as two jobs. `refuses` is the consumer's policy (`HoverPolicy.refuses`): asked of every
     /// enclosing host and of the overall answer, and the text is read only when it does not refuse.
     public static func readUnlessRefused(
-        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
-        refuses: (HostReading) -> Bool, with ax: some AccessibilityReading
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, labels: LabelSlack,
+        limits: CaptureLimits = .shipped, refuses: (HostReading) -> Bool, with ax: some AccessibilityReading
     ) -> GatedOutcome {
         let site = host(of: target, isExcluded: { refuses(.known($0)) }, with: ax)
         if refuses(site) { return .refused(site) }
-        return .read(read(at: point, in: target, tolerance: tolerance, limits: limits, with: ax))
+        let first = read(at: point, in: target, tolerance: tolerance, labels: labels, limits: limits, with: ax)
+        // **A container's miss is descended once** (the owner's log, 2026-10-19: `AXToolbar`, `AXMenuBar`, `AXWindow`):
+        // to the child under the point, and where that is still the container, through its window. The element reached
+        // is checked and read as a target of its own — its site again, since a window can hold a page the container
+        // did not.
+        guard case .miss(.noText(_, let role)) = first, let role, containerRoles.contains(role) else { return .read(first) }
+        let inner: AXUIElement?
+        do throws(CaptureError) {
+            inner = try self.inner(of: target.element, at: point, with: ax)
+        } catch {
+            return .read(error == .cancelled ? .cancelled : .miss(.failed(error, app: target.appName)))
+        }
+        guard let inner else { return .read(first) }
+        let found = Target(element: inner, appName: target.appName, bundleID: target.bundleID)
+        let innerSite = host(of: found, isExcluded: { refuses(.known($0)) }, with: ax)
+        if refuses(innerSite) { return .refused(innerSite) }
+        let second = read(at: point, in: found, tolerance: tolerance, labels: labels, limits: limits, with: ax)
+        // The container's own miss stands where the element inside it had nothing either: it names where the hit landed.
+        if case .miss(.noText) = second { return .read(first) }
+        return .read(second)
+    }
+
+    /// Roles that hold controls rather than text: a hit on one is descended (`inner`). Measured on macOS 27.0.1: a hit
+    /// test that named `AXToolbar` or `AXMenuBar` with a titled child under the point; a SwiftUI window answering its
+    /// hosting group.
+    static let containerRoles: Set<String> = [
+        "AXWindow", "AXToolbar", "AXMenuBar", "AXMenu", "AXGroup", "AXSplitGroup", "AXScrollArea", "AXTabGroup",
+        "AXList", "AXOutline", "AXTable", "AXRow", "AXCell", "AXLayoutArea", "AXSheet", "AXRadioGroup",
+    ]
+
+    /// The element under `point` inside `container`: descended from it (`descend`), and where that reaches nothing
+    /// smaller, from its window — a toolbar's hit test where the window's title element, beside the toolbar's items, is
+    /// under the point. Nil where neither reaches another element; a failed request ends the read, as in any dialect.
+    static func inner(
+        of container: AXUIElement, at point: CGPoint, with ax: some AccessibilityReading
+    ) throws(CaptureError) -> AXUIElement? {
+        let below = try descend(from: container, to: point, with: ax)
+        if below != container { return below }
+        guard let window = try ax.element(container, kAXWindowAttribute), window != container else { return nil }
+        let throughWindow = try descend(from: window, to: point, with: ax)
+        return throughWindow == window || throughWindow == container ? nil : throughWindow
     }
 
     /// The combined job's answer: the site refused (and nothing read), or what the read found.
@@ -491,6 +559,31 @@ public enum PointerWordReader {
         return nil
     }
 
+    // MARK: - secure fields and titles
+
+    /// A secure text field (by role or subrole) or an element that says it holds protected content
+    /// (`AXContainsProtectedContent`). Neither request reads text.
+    private static func isSecure(_ element: AXUIElement, _ ax: some AccessibilityReading) throws(CaptureError) -> Bool {
+        if try ax.string(element, kAXSubroleAttribute) == kAXSecureTextFieldSubrole { return true }
+        if try ax.string(element, kAXRoleAttribute) == kAXSecureTextFieldSubrole { return true }
+        return try ax.attribute(element, "AXContainsProtectedContent", ofApplication: false) as? Bool == true
+    }
+
+    /// **The label of a control that exposes its text only as a string** (`ElementTitle`): its role says which attribute
+    /// holds the drawn text; its frame and its font place the word under the pointer, or nothing.
+    private static func title(
+        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ labels: LabelSlack,
+        _ limits: CaptureLimits, _ ax: some AccessibilityReading
+    ) throws(CaptureError) -> WordAtPoint? {
+        guard let source = ElementTitle.source(role: try ax.string(element, kAXRoleAttribute),
+                                               subrole: try ax.string(element, kAXSubroleAttribute)),
+              let frame = try ax.frame(element),
+              let text = try ax.string(element, source.attribute)
+        else { return nil }
+        return ElementTitle.word(in: text, frame: frame, style: source.style, at: point, tolerance: tolerance,
+                                 slack: labels, limits: limits)
+    }
+
     // MARK: - bounds scan
 
     private static func boundsScan(
@@ -581,7 +674,7 @@ public enum PointerWordReader {
 extension PointerWordReader.Hit: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     /// The dialect, the app and whether a box came: never the word's sentence, which is the reader's text.
     public var description: String {
-        "Hit(\(acquisition.rawValue), app: \(bundleID ?? "unknown"), box: \(bounds == nil ? "none" : "measured"))"
+        "Hit(\(acquisition.rawValue), app: \(bundleID ?? "unknown"), box: \(bounds != nil ? "measured" : placedByPointer ? "placement" : "none"))"
     }
     public var debugDescription: String { description }
     public var customMirror: Mirror { Mirror(self, children: [:]) }

@@ -175,7 +175,8 @@ struct SiteExclusionTests {
             case .unreadable: !excluded.isEmpty
             }
         }
-        return PointerWordReader.readUnlessRefused(at: .zero, in: target, tolerance: Measured.hit, refuses: policy, with: tree)
+        return PointerWordReader.readUnlessRefused(at: .zero, in: target, tolerance: Measured.hit, labels: Measured.label,
+                                                   refuses: policy, with: tree)
     }
 
     /// **The text is not read where the site refuses** — excluded, or unknown while anything is excluded — and is read

@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "d34c435e7fbb0cbe7099779ebc8ea69f9f40bb4de58073cf73d86a9e8270f407"
+    public static let sourceDigest = "c0bfbf5a3b558be58de6f2d7368051aa1fee4f8f5dd87c6291c2ca5cfe636157"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -396,6 +396,10 @@ public enum Tokens {
         public static let tileHoleSlack: CGFloat = 16
         /// How far two readings of one window's frame, the compositor's and ScreenCaptureKit's, may disagree and still be the same frame: the two round independently (XiaolaiDict ScreenTextRecogniser).
         public static let frameDrift: CGFloat = 1
+        /// How far from its frame's centre a control's label is assumed it may be drawn, pushed aside by an icon, a radio circle or a chevron: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume labels up to this far aside, and no control was measured), so a title's word is taken only where every placement up to this far aside agrees.
+        public static let labelShift: CGFloat = 12
+        /// How much smaller than the system's size for its kind a control's label is assumed it may be drawn: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume it); larger fonts are bounded by the frame the text must fit.
+        public static let labelSmaller: CGFloat = 2
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).

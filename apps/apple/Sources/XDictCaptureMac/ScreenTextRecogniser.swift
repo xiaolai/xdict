@@ -78,6 +78,8 @@ public enum RecognitionError: Error, Sendable, Equatable {
     case screenRecordingNeeded
     /// The grant could not be read — which is not its being absent.
     case screenRecordingUnreadable
+    /// Another screenshot is still in ScreenCaptureKit (`ScreenshotGate`): this one was refused, not started beside it.
+    case screenBusy
 }
 
 /// **The last path: the window under the pointer, captured and read by Vision, on-device** (ported from XiaolaiDict's
@@ -180,15 +182,26 @@ public final class ScreenTextRecogniser: Sendable {
         return Task.isCancelled ? nil : grown
     }
 
-    /// One capture of `target` and its reading.
+    /// One capture of `target` and its reading. **Each stage's time is logged, and nothing else of it** (owner,
+    /// 2026-10-19: a capture stalled past its deadline and the log could not say where): the screenshot and Vision, in
+    /// milliseconds, with the strip's size in pixels.
     private func read(_ target: CaptureTarget, at point: CGPoint, of window: ListedWindow) async throws -> Recognition {
         try Task.checkCancellation()
+        let began = ContinuousClock.now
         let image = try await capturer.capture(target, of: window)
+        let captured = ContinuousClock.now
         try Task.checkCancellation()
         let lines = try Self.recognise(image, limits: limits, slack: metrics.tiling) { tile in
             try Self.recogniseWhole(tile)
         }
+        let recognised = ContinuousClock.now
+        Self.log.info("capture: screenshot \(Self.milliseconds(captured - began), privacy: .public) ms, recognition \(Self.milliseconds(recognised - captured), privacy: .public) ms, \(image.width, privacy: .public)×\(image.height, privacy: .public) px")
         return try hit(in: lines, at: point, target: target)
+    }
+
+    /// A duration in whole milliseconds, for a log line.
+    static func milliseconds(_ duration: Duration) -> Int64 {
+        duration.components.seconds * 1_000 + duration.components.attoseconds / 1_000_000_000_000_000
     }
 
     private static let log = Logger(subsystem: XDictIdentity.app, category: "recognition")
@@ -201,7 +214,9 @@ public final class ScreenTextRecogniser: Sendable {
         case .couldNotTell: throw RecognitionError.screenRecordingUnreadable
         }
         try Task.checkCancellation()
+        let began = ContinuousClock.now
         let target = try await capturer.target(at: point, window: window, stripHeight: metrics.strip.initialHeight)
+        Self.log.info("capture: window found in \(Self.milliseconds(ContinuousClock.now - began), privacy: .public) ms")
         guard let bundleID = target.bundleID else { throw RecognitionError.unattributable }
         if CaptureAuthorization.refusal(bundleID: bundleID, policy: policy) != nil { throw RecognitionError.excludedApp }
         return target
@@ -366,6 +381,9 @@ public final class ScreenTextRecogniser: Sendable {
         return BandTiling.merged(read, bandWidth: image.width, slack: slack)
     }
 
+    /// When Vision last answered in this process — a real reading or a warm-up — for the keep-warm (`RecognitionKeepWarm`).
+    static let lastAnswered = Mutex<ContinuousClock.Instant?>(nil)
+
     /// One Vision call on `image`: accurate, no language correction (it "fixes" rare words into common ones), and the
     /// language detected, never pinned (pinned `en-US` read Chinese as Latin garbage; pinned `zh-Hans` misread 今天 as
     /// 念天 — XiaolaiDict ADR-0016).
@@ -375,6 +393,7 @@ public final class ScreenTextRecogniser: Sendable {
         request.usesLanguageCorrection = false
         request.automaticallyDetectsLanguage = true
         try VNImageRequestHandler(cgImage: image).perform([request])
+        lastAnswered.withLock { $0 = .now }
         return (request.results ?? []).compactMap { observation in
             guard let candidate = observation.topCandidates(1).first else { return nil }
             let text = candidate.string
@@ -440,7 +459,14 @@ protocol ScreenCapturing: Sendable {
 struct SystemScreenCapturer: ScreenCapturing {
     /// How far two readings of a window's frame may disagree (`CaptureMetrics.frameDrift`, from the tokens).
     let frameDrift: CGFloat
+    /// The screenshot gate this capturer takes: the process's one (`screenshots`), a test's own in its tests.
+    let gate: ScreenshotGate
     private let cache = ShareableContentCache()
+
+    init(frameDrift: CGFloat, gate: ScreenshotGate = SystemScreenCapturer.screenshots) {
+        self.frameDrift = frameDrift
+        self.gate = gate
+    }
 
     func target(at point: CGPoint, window listed: ListedWindow, stripHeight: CGFloat) async throws -> CaptureTarget {
         guard let live = Self.liveBounds(of: listed.windowID) else { throw RecognitionError.windowNotCapturable }
@@ -461,6 +487,10 @@ struct SystemScreenCapturer: ScreenCapturing {
     }
 
     func capture(_ target: CaptureTarget, of window: ListedWindow) async throws -> CGImage {
+        // **One screenshot at a time, refused rather than started beside another** (`ScreenshotGate`): the gate first,
+        // before anything else, so its use is observable without a screen.
+        guard gate.enter() else { throw RecognitionError.screenBusy }
+        defer { gate.done() }
         // Only this capturer makes targets with a real filter; any other is refused, never captured.
         guard let filter = target.filter as? SCContentFilter else { throw RecognitionError.windowNotCapturable }
         let config = SCStreamConfiguration()
@@ -475,6 +505,9 @@ struct SystemScreenCapturer: ScreenCapturing {
         }
         return image
     }
+
+    /// The process's one screenshot gate: two screenshots at once deadlock each other, whoever starts them.
+    static let screenshots = ScreenshotGate()
 
     /// The window's bounds as the compositor has them now, or nil where it is no longer on screen.
     private static func liveBounds(of windowID: CGWindowID) -> CGRect? {
