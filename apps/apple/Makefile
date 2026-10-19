@@ -59,7 +59,7 @@
 #   make release-bootstrap BUILD_NUMBER=<n>
 #                     the same, requiring evidence of the `launch` stage only (the skeleton's; plan-macos-v1 WI-2)
 #   make clean        remove the bundle and its stage (not SwiftPM's or cargo's caches)
-#   make clean-dev [APPLY=1] [ARGS="--air|--mbp16 --into <branch> --min-age-hours <n>"]
+#   make clean-dev [APPLY=1] [ARGS="--air|--build-host --into <branch> --min-age-hours <n>"]
 #                     what agents left on this Mac (merged git worktrees) and on BUILD_HOST (~/xdict-build copies):
 #                     a dry run with a table of what and why; APPLY=1 removes it (Tools/clean-dev.sh)
 
