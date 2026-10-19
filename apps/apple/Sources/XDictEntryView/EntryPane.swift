@@ -303,7 +303,13 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     private func installScripts() {
         let controller = view.configuration.userContentController
         controller.removeAllUserScripts()
-        for source in EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues) {
+        Self.install(EntryScripts.installed(scheme, frame: frame, style: style, display: display, values: displayValues),
+                     into: controller)
+    }
+
+    /// The shell's scripts as every entry installs them: at document start, the main frame only, in the shell's world.
+    static func install(_ sources: [String], into controller: WKUserContentController) {
+        for source in sources {
             controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentStart,
                                                   forMainFrameOnly: true, in: Self.world))
         }

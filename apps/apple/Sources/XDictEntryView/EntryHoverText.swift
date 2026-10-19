@@ -17,11 +17,31 @@ public struct EntryHoverText: Sendable, Equatable {
     static func validated(_ reply: Any?, maxUTF16: Int) -> EntryHoverText? {
         guard maxUTF16 > 0, let reply = reply as? [String: Any],
               Set(reply.keys) == ["text", "offset", "cutStart", "cutEnd"],
-              let text = reply["text"] as? String, (1...maxUTF16).contains(text.utf16.count),
+              let raw = reply["text"] as? NSString, paired(raw), let text = reply["text"] as? String,
+              (1...maxUTF16).contains(text.utf16.count),
               let offset = whole(reply["offset"]), (0..<text.utf16.count).contains(offset),
               let cutStart = flag(reply["cutStart"]), let cutEnd = flag(reply["cutEnd"])
         else { return nil }
         return EntryHoverText(text: text, offset: offset, cutStart: cutStart, cutEnd: cutEnd)
+    }
+
+    /// No surrogate alone: a window cut inside a pair is not text (it fails to become UTF-8, measured 2026-10-19).
+    /// Read from the reply's own string: a Swift `String` would already show a lone surrogate as U+FFFD.
+    private static func paired(_ text: NSString) -> Bool {
+        var awaitingTrail = false
+        for index in 0..<text.length {
+            let unit = text.character(at: index)
+            if UTF16.isLeadSurrogate(unit) {
+                if awaitingTrail { return false }
+                awaitingTrail = true
+            } else if UTF16.isTrailSurrogate(unit) {
+                if !awaitingTrail { return false }
+                awaitingTrail = false
+            } else if awaitingTrail {
+                return false
+            }
+        }
+        return !awaitingTrail
     }
 
     /// A number that is not a boolean and has no fraction.
@@ -40,6 +60,17 @@ public struct EntryHoverText: Sendable, Equatable {
 }
 
 extension EntryWebView {
+    /// An entry web view with the hover script and the word core it uses installed as every entry installs the shell's
+    /// scripts (`EntryPane.install`: the shell's world, document start, main frame only), and no entry: for the
+    /// development lab's hover-script run (`XDictEntryLab --hover-script`), which loads synthetic pages in it and asks
+    /// them through `hoverText`. The shell's other scripts are left out so the run measures this one: with them all,
+    /// a page holding a 100,000-deep tree had not finished in 28 minutes (2026-10-19).
+    public static func withHoverScript(frame: CGRect) -> EntryWebView {
+        let configuration = WKWebViewConfiguration()
+        EntryPane.install([EntryScripts.wordClicksCore, EntryScripts.hoverWord], into: configuration.userContentController)
+        return EntryWebView(frame: frame, configuration: configuration)
+    }
+
     /// **The word at `viewPoint`** — in this view's points, y down from its top — asked of the entry's own script in the
     /// shell's world (`EntryPane.world`), so no page script can answer for it; at most `maxUTF16` units of text. The view's
     /// zoom is taken out, as the page measures in CSS pixels. Nil off a word, with no document, or for any reply out of
