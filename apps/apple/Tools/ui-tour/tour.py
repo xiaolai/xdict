@@ -33,7 +33,7 @@ import aim  # noqa: E402
 from axcheck import checks, dictionaries_table  # noqa: E402
 import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
-from routes import NOT_DRIVEN_WHY, ROUTES  # noqa: E402
+from routes import NOT_DRIVEN_WHY, ROUTES, defaults_commands, prefs  # noqa: E402
 
 home, out = sys.argv[1:3]
 options = dict(zip([a for a in sys.argv[3:] if a != "--reader"][0::2], [a for a in sys.argv[3:] if a != "--reader"][1::2]))
@@ -127,7 +127,7 @@ def pseudo_app():
 class Session:
     """One launch of the app over its own library; asked through `<work>/commands` (LookupWindow.swift)."""
 
-    def __init__(self, variant, library):
+    def __init__(self, variant, library, preferences=()):
         self.variant, self.library = variant, library
         self.appearance, self.lang = variant.split("-")
         self.app = PSEUDO_APP if self.lang == "pseudo" else app
@@ -140,6 +140,9 @@ class Session:
             source = os.path.join(self.work, "nothing")
             os.makedirs(source)
         run("defaults", "delete", DOMAIN, check=False)
+        # The route's own preferences (`("pref", key, value)`, routes.prefs), stored as a reader's choice would be.
+        for argv in defaults_commands(DOMAIN, preferences):
+            run(*argv)
         args = ["-ApplePersistenceIgnoreState", "YES", "--lookup-window", self.work, "--fixtures", source]
         # `-AppleInterfaceStyle` does not reach AppKit for one app on macOS 27, and the Mac's own appearance is never
         # changed for a tour: the instrument sets XDict's (`--appearance`, XDictUI's InstrumentAppearance).
@@ -339,7 +342,7 @@ def walk(variant, name, library, route, steps, folder):
     """One route over a launch of its own, captured; the app quit after, whatever happened."""
     record = {"variant": name, "route": route}
     try:
-        session = Session(variant, library)
+        session = Session(variant, library, prefs(steps))
         session.steps = steps
     except Failed as why:
         record["failure"] = f"launch: {why}"
@@ -348,7 +351,7 @@ def walk(variant, name, library, route, steps, folder):
     try:
         try:
             for step in steps:
-                if step[0] != "after":
+                if step[0] not in ("after", "pref"):
                     session.step(step)
             record["shots"], record["findings"] = capture(session, route, folder)
             # What the route leaves open is closed after its capture, before the app quits (the print panel's Cancel).

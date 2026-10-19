@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import XDictAnywhere
 import XDictCapture
+import XDictTokens
 
 /// **Hover, in Settings ▸ General** (plan-capture WI-3; ADR-0012 d.1: General holds how a lookup starts, beside the
 /// lookup shortcut): the switch, the key and the gesture, the writing systems hover looks up — derived from the enabled
@@ -20,8 +21,9 @@ public struct HoverSettings: View {
 
     public var body: some View {
         Group {
-            // Read back from the watcher: a start that failed says off, which is what is true.
-            Toggle(isOn: Binding(get: { hover.isWatching }, set: { hover.setEnabled($0) })) {
+            // The reader's setting, not whether this run watches (a driven run never does); a start that failed says
+            // off, which is what is true (`HoverControl.isOn`).
+            Toggle(isOn: Binding(get: { hover.isOn }, set: { hover.setEnabled($0) })) {
                 Text("Look up the word under the pointer")
                 Text("Rest the pointer on a word while you use the key. Never in the apps below.")
             }
@@ -83,6 +85,7 @@ public struct HoverSettings: View {
             Text("Screen Recording")
             Text(HoverSentences.screenRecording(hover.screenRecording))
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hover.screenRecording")
         .task { await hover.refreshScreenRecording() }
     }
@@ -128,8 +131,12 @@ public struct HoverSettings: View {
         }
         LabeledContent {
             HStack {
+                // Bordered and of one width: a form draws a bare field as a line of text, its prompt then reading as a
+                // listed site, and a field that takes the row squeezes the sentence beside it (UI tour, 2026-10-19).
                 TextField(text: $typedSite, prompt: Text(verbatim: "example.com")) { Text("Site") }
                     .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: Tokens.Control.siteField)
                     .onSubmit(addSite)
                     .accessibilityIdentifier("hover.site.field")
                 Button { addSite() } label: { Text("Add Site") }  // placement: form-row
@@ -141,6 +148,8 @@ public struct HoverSettings: View {
             Text(siteAnswer.flatMap(HoverSentences.excludedSite)
                  ?? LocalizedStringResource("Hover reads nothing on these sites, nor on a page whose address cannot be read while any site is listed."))
         }
+        // The row's identifier on the row alone: without `.contain` its field and button took it over (UI tour).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hover.excludedSites")
     }
 

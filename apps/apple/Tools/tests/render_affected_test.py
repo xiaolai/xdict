@@ -305,8 +305,13 @@ sys.path.pop(0)
 undriven = {r[0] for r in ROUTES if r[4] is None}
 check("route_ids leaves out every undriven route", undriven and not undriven & set(route_ids), sorted(undriven & set(route_ids)))
 hover_rows = set(sel(["apps/apple/Sources/XDictUI/HoverSentences.swift"]).routes)
-check("hover's sentences select the driven Screen Recording route and none of the undriven states",
-      "settings.general.screenRecording" in hover_rows and not hover_rows & undriven, sorted(hover_rows))
+check("hover's sentences select the General pane, which shows the Screen Recording row, and none of the undriven states",
+      "settings.general" in hover_rows and not hover_rows & undriven, sorted(hover_rows))
+# The control's setting and pause decide what the menu-bar pause group and the General pane's switch show (isOn).
+control_rows = set(sel(["apps/apple/Sources/XDictAnywhere/HoverControl.swift"]).routes)
+check("hover's control selects the pause group's routes and the General pane",
+      {"menubar.hoverPause", "menubar.hoverPaused", "menubar.hoverOff", "settings.general"} <= control_rows,
+      sorted(control_rows))
 apple = set(sel(["apps/apple/Sources/XDictUI/AppleImportSheet.swift"]).routes)
 check("the Apple import selects its driven route, not the undriven updated and removed ones",
       "settings.dictionaries.appleImport" in apple and not apple & undriven, sorted(apple))

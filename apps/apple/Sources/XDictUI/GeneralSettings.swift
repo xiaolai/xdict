@@ -84,18 +84,16 @@ public struct GeneralSettings: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("panel-shade")
-                LabeledContent {
-                    Slider(value: $solidity, in: 0...1) {
-                        Text("Background")
-                    } minimumValueLabel: {
-                        Text("Glass")
-                    } maximumValueLabel: {
-                        Text("Solid")
-                    }
-                    .accessibilityIdentifier("panel-solidity")
-                } label: {
+                // The slider's own label is the row's, as a picker's is: wrapped in a LabeledContent naming it again, the
+                // form drew "Background" twice, the second after Solid (UI tour, 2026-10-19).
+                Slider(value: $solidity, in: 0...1) {
                     Text("Background")
+                } minimumValueLabel: {
+                    Text("Glass")
+                } maximumValueLabel: {
+                    Text("Solid")
                 }
+                .accessibilityIdentifier("panel-solidity")
             }
             Section {
                 LabeledContent {

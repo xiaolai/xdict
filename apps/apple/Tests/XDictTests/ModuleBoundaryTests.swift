@@ -66,7 +66,8 @@ struct ModuleBoundaryTests {
         // geometry (`CoreGraphics`), the shortcut's state the Settings field observes, its log. The selection reader and
         // the front app moved down to `XDictCaptureMac` (plan-capture WI-2), and `AppKit` with them.
         "XDictAnywhere": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "os"],
-        "XDictAnywhereTests": ["Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
+        // `Observation`: the tests watch hover's setting redraw the menu and the switch (HoverControl.isOn).
+        "XDictAnywhereTests": ["Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "Testing"],
         // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
         // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
         "XDictCapture": captureMayBind,
