@@ -50,11 +50,24 @@ final class CountedScreen: @unchecked Sendable {
 @MainActor
 private func control(
     _ defaults: UserDefaults? = nil, screen: CountedScreen = CountedScreen(),
-    scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
+    scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
+    start: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart
 ) throws -> HoverControl {
     let suite = try defaults ?? #require(UserDefaults(suiteName: "ai.xdict.tests.hover.\(UUID().uuidString)"))
     return HoverControl(defaults: suite, requests: CaptureRequests(), screen: screen.access, source: SilentPointerWords(),
-                        scripts: scripts)
+                        scripts: scripts, startWatcher: start)
+}
+
+/// Watcher starts answered in order (the last answer repeating), counted; the system's monitors never touched.
+@MainActor
+final class ScriptedStarts {
+    private var answers: [Bool]
+    private(set) var calls = 0
+    init(_ answers: [Bool]) { self.answers = answers }
+    func start(_ watcher: HoverWatcher) -> Bool {
+        calls += 1
+        return answers.count > 1 ? answers.removeFirst() : answers.first ?? false
+    }
 }
 
 /// **The pause reaches the gate from the menu it is offered in** (XiaolaiDict's `HoverPauseWiringTests`, moved by name in
@@ -225,6 +238,43 @@ struct HoverControlTests {
         #expect(!hover.isOn && !hover.watcher.isWatching)
         hover.setEnabled(true)
         #expect(hover.isOn && hover.watcher.isWatching)
+    }
+
+    /// **A start that failed says off**, in the switch (`isOn`) and in the menu, though the setting stays on: a hover that
+    /// is not running is not shown as running. Red if `isOn` reads the setting alone, or the failure is not remembered.
+    @Test func aFailedStartShowsOffInTheSwitchAndTheMenu() throws {
+        let starts = ScriptedStarts([false])
+        let hover = try control(start: starts.start)
+        hover.startAtLaunch(.reader)
+        #expect(starts.calls == 1)
+        #expect(hover.isEnabled, "a failed start changed the reader's setting")
+        #expect(!hover.isOn, "a hover whose start failed was shown on")
+        #expect(HoverPauseMenu.entries(for: hover, now: .now) == [.hoverIsOff])
+    }
+
+    /// **Turning the switch on again tries again**, and a start that succeeds clears the failure.
+    @Test func turningTheSwitchOnRetriesAFailedStart() throws {
+        let starts = ScriptedStarts([false, false, true])
+        let hover = try control(start: starts.start)
+        hover.startAtLaunch(.reader)
+        hover.setEnabled(true)
+        #expect(starts.calls == 2, "the switch did not try again")
+        #expect(!hover.isOn)
+        hover.setEnabled(true)
+        #expect(starts.calls == 3)
+        #expect(hover.isOn, "a start that succeeded left hover shown off")
+        #expect(HoverPauseMenu.entries(for: hover, now: .now) == [.pause])
+    }
+
+    /// **A driven run never asks the watcher to start**, at launch or from the switch.
+    @Test func aDrivenRunNeverAsksTheWatcherToStart() throws {
+        let starts = ScriptedStarts([true])
+        let hover = try control(start: starts.start)
+        hover.startAtLaunch(.instrument)
+        hover.setEnabled(false)
+        hover.setEnabled(true)
+        #expect(starts.calls == 0, "a driven run asked the watcher to start")
+        #expect(hover.isOn)
     }
 
     /// **The setting is observed**, so the menu and the switch redraw when it changes, in a run that watches nothing.
