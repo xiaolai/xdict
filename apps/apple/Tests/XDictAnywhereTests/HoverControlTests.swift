@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import Observation
 import Testing
 import XDictAnywhere
 import XDictCapture
@@ -181,6 +182,66 @@ struct HoverControlTests {
         hover.startAtLaunch(.instrument)
         #expect(!hover.isWatching, "a driven run started hover")
         #expect(!hover.watcher.isWatching)
+    }
+
+    /// **The menu and the switch show the reader's setting, not whether this run watches** (UI tour, 2026-10-19: in a
+    /// driven run the menu said "Hover Is Off in Settings" with hover on in Settings, and Pause Hover could not be
+    /// reached). The pause group follows the setting and the control's one pause. Red if either reads the watcher.
+    @Test func aDrivenRunShowsTheReadersSettingNotTheWatcher() throws {
+        let hover = try control()
+        let now = Date.now
+        hover.startAtLaunch(.instrument)
+        #expect(!hover.watcher.isWatching)
+        #expect(hover.isOn, "a driven run said hover is off with the reader's setting on")
+        #expect(HoverPauseMenu.entries(for: hover, now: now) == [.pause])
+        hover.pause(for: .seconds(900))
+        let paused = HoverPauseMenu.entries(for: hover, now: now)
+        #expect(paused.count == 2 && paused.last == .resume, "the menu offered \(paused)")
+        hover.resume()
+        hover.setEnabled(false)
+        #expect(!hover.isOn)
+        #expect(HoverPauseMenu.entries(for: hover, now: now) == [.hoverIsOff])
+    }
+
+    /// **Turning hover on in a driven run starts nothing either**: the switch stores the setting, and only a reader's
+    /// launch starts the watcher. Red if `setEnabled` starts it whatever the launch.
+    @Test func turningHoverOnInADrivenRunStartsNoWatcher() throws {
+        let hover = try control()
+        defer { hover.watcher.stop() }
+        hover.startAtLaunch(.instrument)
+        hover.setEnabled(false)
+        hover.setEnabled(true)
+        #expect(hover.isEnabled && hover.isOn)
+        #expect(!hover.watcher.isWatching, "a driven run's switch started hover")
+    }
+
+    /// **A reader's launch still starts it, and the switch still stops it**: what the setting says is what runs.
+    @Test func aReadersLaunchWatchesWhatTheSettingSays() throws {
+        let hover = try control()
+        defer { hover.watcher.stop() }
+        hover.startAtLaunch(.reader)
+        #expect(hover.isOn && hover.watcher.isWatching)
+        hover.setEnabled(false)
+        #expect(!hover.isOn && !hover.watcher.isWatching)
+        hover.setEnabled(true)
+        #expect(hover.isOn && hover.watcher.isWatching)
+    }
+
+    /// **The setting is observed**, so the menu and the switch redraw when it changes, in a run that watches nothing.
+    @Test func turningHoverOffIsObserved() throws {
+        let hover = try control()
+        hover.startAtLaunch(.instrument)
+        /// `@unchecked`: its one value is read and written under `lock`.
+        final class Fired: @unchecked Sendable {
+            private let lock = NSLock()
+            private var fired = false
+            var value: Bool { lock.withLock { fired } }
+            func fire() { lock.withLock { fired = true } }
+        }
+        let fired = Fired()
+        withObservationTracking { _ = hover.isOn } onChange: { fired.fire() }
+        hover.setEnabled(false)
+        #expect(fired.value, "turning hover off was not observed")
     }
 
     /// **The capture targets get the tokens' distances**, valid by construction (ADR-0014 d.11).

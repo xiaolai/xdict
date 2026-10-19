@@ -75,6 +75,12 @@ public final class HoverControl {
     public private(set) var screenRecording = ScreenRecordingRow.notSetUp
     /// A hover needed the pixels and Screen Recording was not there for it, in this run.
     public private(set) var neededScreenRecording = false
+    /// The reader's setting, as stored (`isEnabled`).
+    private var enabled: Bool
+    /// A reader's launch asked the watcher to start and it did not (`HoverWatcher.start` could not install its monitors).
+    private var startFailed = false
+    /// Which launch this is, once `startAtLaunch` said: until then, and in a driven run, nothing starts the watcher.
+    @ObservationIgnored private var launch: HoverLaunch?
     /// The presented request's context, and nothing else of it: memory only, cleared when presentation closes.
     @ObservationIgnored public let contextSession = CaptureContextSession()
 
@@ -101,6 +107,7 @@ public final class HoverControl {
         let store = HoverPolicyStore(defaults: defaults)
         self.store = store
         policy = store.load()
+        enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
     }
 
     private func makeWatcher() -> HoverWatcher {
@@ -163,11 +170,19 @@ public final class HoverControl {
     }
 
     /// Whether the reader has hover on: on for a reader who never chose, remembered for one who did, **through the
-    /// injected suite**, never `.standard`.
+    /// injected suite**, never `.standard`. Held here as well as stored, so a view reading it redraws when it changes.
     public var isEnabled: Bool {
-        get { defaults.object(forKey: Self.enabledKey) as? Bool ?? true }
-        set { defaults.set(newValue, forKey: Self.enabledKey) }
+        get { enabled }
+        set {
+            enabled = newValue
+            defaults.set(newValue, forKey: Self.enabledKey)
+        }
     }
+
+    /// **What Settings' switch and the menu-bar pause group show**: the reader's setting, not whether this run watches —
+    /// a driven run never does (`startAtLaunch`), and its menu said "Hover Is Off in Settings" with hover on (UI tour,
+    /// 2026-10-19). Except **a start that failed says off**, which is what is true; the switch then asks again.
+    public var isOn: Bool { isEnabled && !startFailed }
 
     public var isPaused: Bool { pauseSwitch.isPaused(at: .now) }
 
@@ -229,17 +244,29 @@ public final class HoverControl {
     /// instrument run.
     /// **The one way hover starts at launch**: never in a driven run, never when the reader turned it off.
     public func startAtLaunch(_ launch: HoverLaunch) {
+        self.launch = launch
         guard launch == .reader, isEnabled else { return }
-        watcher.start()
-        isWatching = watcher.isWatching
+        start()
     }
 
     /// **Takes the value asked for**, rather than inverting what is stored: asked for on against a failed start, it
-    /// tries again.
+    /// tries again. **Only a reader's launch starts the watcher**: in a driven run the switch stores the setting and
+    /// nothing more, so a key the instrument holds never opens a lookup.
     public func setEnabled(_ on: Bool) {
         isEnabled = on
-        if on { watcher.start() } else { watcher.stop() }
+        guard on else {
+            watcher.stop()
+            isWatching = false
+            startFailed = false
+            return
+        }
+        if launch == .reader { start() }
+    }
+
+    private func start() {
+        watcher.start()
         isWatching = watcher.isWatching
+        startFailed = !isWatching
     }
 }
 
@@ -285,5 +312,11 @@ public enum HoverPauseMenu {
         guard hoverIsOn else { return [.hoverIsOff] }
         guard let pausedUntil, now < pausedUntil else { return [.pause] }
         return [.resumesAt(pausedUntil), .resume]
+    }
+
+    /// The menu's entries from the control: the reader's setting (`isOn`, not whether this run watches) and its one pause.
+    @MainActor
+    public static func entries(for hover: HoverControl, now: Date) -> [Entry] {
+        entries(hoverIsOn: hover.isOn, pausedUntil: hover.pauseSwitch.until, now: now)
     }
 }

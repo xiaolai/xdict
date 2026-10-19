@@ -20,8 +20,9 @@ public struct HoverSettings: View {
 
     public var body: some View {
         Group {
-            // Read back from the watcher: a start that failed says off, which is what is true.
-            Toggle(isOn: Binding(get: { hover.isWatching }, set: { hover.setEnabled($0) })) {
+            // The reader's setting, not whether this run watches (a driven run never does); a start that failed says
+            // off, which is what is true (`HoverControl.isOn`).
+            Toggle(isOn: Binding(get: { hover.isOn }, set: { hover.setEnabled($0) })) {
                 Text("Look up the word under the pointer")
                 Text("Rest the pointer on a word while you use the key. Never in the apps below.")
             }

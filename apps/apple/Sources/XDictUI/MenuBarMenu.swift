@@ -47,10 +47,11 @@ public struct MenuBarMenu: View {
         Button("Quit XDict") { NSApplication.shared.terminate(nil) }  // placement: menu-bar-extra
     }
 
-    /// The pause group's lines, from the control's one pause; with hover off, said rather than left out.
+    /// The pause group's lines, from the reader's setting and the control's one pause; with hover off, said rather than
+    /// left out.
     @ViewBuilder private var pauseGroup: some View {
         let now = Date.now
-        let entries = HoverPauseMenu.entries(hoverIsOn: hover.isWatching, pausedUntil: hover.pauseSwitch.until, now: now)
+        let entries = HoverPauseMenu.entries(for: hover, now: now)
         ForEach(Array(entries.enumerated()), id: \.offset) { _, entry in
             switch entry {
             case .pause:
