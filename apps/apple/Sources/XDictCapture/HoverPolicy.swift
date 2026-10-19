@@ -234,6 +234,9 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     private var parsedHosts: Set<String>
     /// How the reader asks for a capture. `.hold` is what shipped and stays the default.
     public var gesture: HoverGesture
+    /// **Where hover reads the text** (owner, 2026-10-19): Accessibility first and the screen where it finds no word, or
+    /// the screen only. `.automatic` is what shipped and stays the default.
+    public var readingMode: ReadingMode = .automatic
     /// How long the pointer must be still. Debouncing is non-negotiable.
     public var settleMilliseconds: Int
     /// **The scripts a captured word may be written in, handed in by the consumer** — nil or empty filters nothing.
@@ -268,6 +271,16 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     }
 
     public static let settleChoices: [Settle] = Settle.allCases
+
+    /// **Where hover reads the text.** No name here, as for `Settle`: `HoverSentences` words each case.
+    public enum ReadingMode: String, Sendable, Equatable, Codable, CaseIterable, Identifiable {
+        /// Accessibility first — the text the app shares — and the screen where it finds no word.
+        case automatic
+        /// The screen only (Vision): Accessibility is never asked, for any app or for XDict's own windows.
+        case screenOnly
+
+        public var id: String { rawValue }
+    }
 
     /// **Safety, not taste.** Capture always takes the sentence a word sits in, and in a password
     /// manager the whole surface is secrets, which is what makes this a rule and not a preference —
@@ -333,6 +346,10 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         // blob written before a field existed, and `HoverPolicyStore.load` turns a throw into
         // `.shipped` — silently discarding every exclusion the reader had set.
         gesture = try values.decodeIfPresent(HoverGesture.self, forKey: .gesture) ?? .hold
+        // **Any value this version cannot read is Automatic, and the rest stands**: a mode a later version writes, or a
+        // value of another type, must not make the whole blob fail and reset the reader's exclusions.
+        let storedMode = (try? values.decodeIfPresent(String.self, forKey: .readingMode)) ?? nil
+        readingMode = storedMode.flatMap(ReadingMode.init(rawValue:)) ?? .automatic
     }
 
     /// The order is deliberate: the cheapest and commonest refusal first, so the ordinary case —
@@ -474,7 +491,7 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
 
     /// The stored fields, and not the parsed hosts, which are derived from them.
     enum CodingKeys: String, CodingKey {
-        case modifier, excludedApps, excludedHosts, settleMilliseconds, allowedScripts, gesture
+        case modifier, excludedApps, excludedHosts, settleMilliseconds, allowedScripts, gesture, readingMode
     }
 }
 

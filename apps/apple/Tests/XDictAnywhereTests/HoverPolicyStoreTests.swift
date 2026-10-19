@@ -30,6 +30,36 @@ struct HoverPolicyStoreTests {
         #expect(reopened.settleMilliseconds == 300)
     }
 
+    /// **Read text with: Automatic unless the reader chose Screen Only**, which survives a launch.
+    @Test func theReadingModeIsAutomaticUntilChosenAndSurvivesALaunch() throws {
+        let (store, defaults) = try store()
+        #expect(store.load().readingMode == .automatic)
+        var chosen = HoverPolicy.shipped
+        chosen.readingMode = .screenOnly
+        store.save(chosen)
+        #expect(HoverPolicyStore(defaults: defaults).load().readingMode == .screenOnly)
+    }
+
+    /// **A stored reading mode no version wrote is Automatic, and the rest of the policy stands**: a mode a later version
+    /// adds, read by this one, must not reset the reader's exclusions (the whole blob would otherwise fail to decode).
+    /// And a policy stored before the mode existed reads as Automatic, its exclusions kept.
+    @Test func anUnknownOrMissingReadingModeIsAutomaticAndKeepsThePolicy() throws {
+        let (store, defaults) = try store()
+        var chosen = HoverPolicy.shipped
+        chosen.excludedApps.insert("com.example.kept")
+        chosen.readingMode = .screenOnly
+        store.save(chosen)
+        let saved = try #require(defaults.data(forKey: HoverPolicyStore.defaultsKey))
+        var object = try #require(try JSONSerialization.jsonObject(with: saved) as? [String: Any])
+        for stored: Any? in ["pixelsAndSound", 7, nil] {
+            object["readingMode"] = stored
+            defaults.set(try JSONSerialization.data(withJSONObject: object), forKey: HoverPolicyStore.defaultsKey)
+            let loaded = HoverPolicyStore(defaults: defaults).load()
+            #expect(loaded.readingMode == .automatic, "stored \(String(describing: stored))")
+            #expect(loaded.excludedApps.contains("com.example.kept"), "an odd reading mode reset the exclusions")
+        }
+    }
+
     /// **Unreadable is the default, never a failure and never an empty policy.**
     @Test func anUnreadableValueFallsBackToShipped() throws {
         let (store, defaults) = try store()
