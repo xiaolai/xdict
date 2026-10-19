@@ -469,6 +469,45 @@ struct HoverWatcherSequenceTests {
         await rig.drain()
         #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
     }
+
+    /// **A hover that stands and found nothing says so** (owner's report, 2026-10-19: "nothing visible happens on a
+    /// miss"): the kind alone, no word and no sentence, told once; nothing is presented and its request ends. Red while a
+    /// miss ended in silence.
+    @Test func aHoverThatFoundNothingIsToldSo() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.reader.answer(.nothing(.miss(.noText(app: "TextEdit", role: "AXGroup"))))
+        await HoverFixtures.settle { !notices.isEmpty }
+        #expect(notices == [.nothingUnderPointer])
+        #expect(rig.sink.all.isEmpty)
+        #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
+    }
+
+    /// A capture that did not answer in time is not "nothing here": it is told as the stuck capture it is.
+    @Test func aCaptureThatTimedOutIsToldAsStuck() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.reader.answer(.nothing(.captureTimedOut))
+        await HoverFixtures.settle { !notices.isEmpty }
+        #expect(notices == [.captureStuck])
+    }
+
+    /// The control: a miss for a hover the reader already left is not told.
+    @Test func aMissForAHoverThatNoLongerStandsIsNotTold() async {
+        let rig = Rig()
+        var notices: [CaptureNotice] = []
+        rig.watcher.onNotice = { notices.append($0) }
+        await rig.rest()
+        rig.pointer.at = UpPoint(x: 600, y: 100)
+        rig.events.emit(.pointerMoved)
+        rig.reader.answer(.nothing(.miss(.noText(app: "TextEdit", role: nil))))
+        await rig.drain()
+        #expect(notices.isEmpty)
+    }
 }
 
 /// What only the watcher decides (XiaolaiDict's `HoverWatcherTests`, moved by name): read the modifiers, decide the

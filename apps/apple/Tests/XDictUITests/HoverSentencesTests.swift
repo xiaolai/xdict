@@ -46,6 +46,15 @@ struct HoverSentencesTests {
         #expect(String(localized: HoverSentences.notice(.captureStuck)).contains("selection"))
     }
 
+    /// **Each brief notice by the pointer is its own short line** (owner's report, 2026-10-19), a line a glance can take,
+    /// and the miss says nothing was found rather than blaming the app.
+    @Test func eachBriefNoticeIsItsOwnShortLine() {
+        let texts = CaptureNotice.allCases.map { String(localized: HoverSentences.brief($0)) }
+        #expect(Set(texts).count == CaptureNotice.allCases.count, "\(texts)")
+        #expect(texts.allSatisfy { $0.count <= 60 }, "\(texts)")
+        #expect(String(localized: HoverSentences.brief(.nothingUnderPointer)) == "No word found here")
+    }
+
     /// **Each rest the picker offers is named by its length, in the system's words**, every one its own: the choices are
     /// capture's (`HoverPolicy.settleChoices`), never a list of the view's.
     @Test func eachRestIsNamedByItsLength() {

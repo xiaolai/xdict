@@ -79,6 +79,8 @@ final class LookupAnywhere {
     @ObservationIgnored private var escape: EscapeStack.Entry?
     @ObservationIgnored private var clickMonitors: [Any] = []
     @ObservationIgnored private var reading: Task<Void, Never>?
+    /// The brief line by the pointer for a hover that read nothing.
+    @ObservationIgnored private let briefNotice = HoverNoticeHUD()
     @ObservationIgnored private let log = Logger(subsystem: XDictIdentity.app, category: "anywhere")
     /// Opens a main window: set by the scene, which alone holds SwiftUI's `openWindow`.
     @ObservationIgnored var openMainWindow: (() -> Void)?
@@ -133,6 +135,10 @@ final class LookupAnywhere {
         }
         state = made
         hover.watcher.sink = self
+        // A hover that read nothing, or needed a grant, says so by the pointer (owner's report, 2026-10-19).
+        hover.showBriefNotice = { [weak self] notice in
+            self?.briefNotice.show(String(localized: HoverSentences.brief(notice)), near: NSEvent.mouseLocation)
+        }
         hover.startAtLaunch(Self.launch)
     }
 

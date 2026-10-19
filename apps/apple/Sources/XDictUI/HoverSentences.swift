@@ -70,6 +70,24 @@ public enum HoverSentences {
             LocalizedStringResource("An app has stopped answering, so hover cannot read words until it does. Looking up a selection with the shortcut still works.")
         case .screenRecordingNeeded:
             LocalizedStringResource("Hover needs Screen Recording to read words in apps that do not share their text. Allow it in the Screen Recording row.")
+        case .nothingUnderPointer:
+            LocalizedStringResource("Hover found no word to read under the pointer.")
+        }
+    }
+
+    /// **The brief line shown by the pointer** when a hover the reader asked for ends without a word (owner's report,
+    /// 2026-10-19): short enough to take at a glance, and never the word or the sentence.
+    public static func brief(_ notice: CaptureNotice) -> LocalizedStringResource {
+        switch notice {
+        case .nothingUnderPointer:
+            LocalizedStringResource("No word found here", comment: "Shown briefly by the pointer when hover read no word")
+        case .screenRecordingNeeded:
+            LocalizedStringResource(
+                "Hover needs Screen Recording here",
+                comment: "Shown briefly by the pointer; the Screen Recording row is in Settings > General")
+        case .captureStuck:
+            LocalizedStringResource(
+                "The screen is not answering yet", comment: "Shown briefly by the pointer when a screen capture is stuck")
         }
     }
 
