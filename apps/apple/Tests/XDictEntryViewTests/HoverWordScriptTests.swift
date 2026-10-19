@@ -87,6 +87,11 @@ struct HoverWordScriptTests {
                  + "for (var i = 0; i < 3000; i++) { var s = document.createElement('span'); e.appendChild(s); e = s; }"
                  + "e.textContent = ' DEEPTEXT'; document.getElementById('b').appendChild(head);</script>",
              target: "t"),
+        // `content-visibility: hidden` lays its box out and skips its contents: they are as hidden as under display none.
+        Page(name: "content-visibility-hidden",
+             body: "<p id=t>Shown words <span style='display:inline-block;content-visibility:hidden'>CVHIDDEN</span>"
+                 + " after</p>",
+             target: "t"),
         Page(name: "visibility-hidden-word",
              body: "<p><span id=t style='visibility:hidden'>Concealed</span> words here visible</p>", target: "t"),
         Page(name: "opacity-zero-word",
@@ -254,6 +259,7 @@ struct HoverWordScriptTests {
     @Test func hiddenTextIsNoPartOfTheSentence() throws {
         #expect(answer("hidden-in-block") == text("Visible  word here. Aria", 0))
         #expect(answer("unshown-made-visible") == text("Before  after", 0), "a script, a style or a field made visible")
+        #expect(answer("content-visibility-hidden") == text("Shown words  after", 0), "content-visibility: hidden")
         // The walk runs out of steps climbing back from the deep text, so the end may be cut.
         #expect(answer("deep-beside") == text("Near words", 0, cut: (false, true)), "text deeper than the script reads")
     }
