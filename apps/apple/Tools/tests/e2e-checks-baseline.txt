@@ -207,7 +207,7 @@ hover.ax.textedit
 hover.ax.safari
 hover.ax.boxMeasured
 hover.ax.sentence
-hover.ax.ownProcessUnread
+hover.ax.ownWindowRead
 hover.screenRecording.access
 hover.ocr.word
 hover.ocr.boxMeasured

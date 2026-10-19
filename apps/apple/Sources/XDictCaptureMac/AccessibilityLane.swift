@@ -56,8 +56,8 @@ public struct LaneBounds: Sendable, Equatable {
     public static let shipped = LaneBounds(checked: .milliseconds(1_500), .milliseconds(250), .seconds(1))
 }
 
-/// **Every out-of-process Accessibility read, one at a time** — the selection shortcut's, the Service's and hover's
-/// alike (XDict ADR-0014 decision 6; ported from XiaolaiDict's `AccessibilityLane`, ADR-0046 there, and given the rules
+/// **Every out-of-process Accessibility read, and hover's of XDict's own windows, one at a time** — the selection
+/// shortcut's, the Service's and hover's alike (XDict ADR-0014 decision 6; ported from XiaolaiDict's `AccessibilityLane`, ADR-0046 there, and given the rules
 /// a plain FIFO lacked).
 ///
 /// One lane because the messaging timeout is process-wide — set on the system-wide element it binds every element this
@@ -74,8 +74,11 @@ public struct LaneBounds: Sendable, Equatable {
 /// - **a blocked read is reported**: past its budget and the overrun its caller is answered `stuck`, the lane says so,
 ///   and it stays as the barrier — a call inside the framework cannot be cancelled, only waited for.
 ///
-/// An Accessibility request about *this* process is not IPC and never comes through here: it is serviced on the calling
-/// thread, which must be the main actor (XiaolaiDict ADR-0042; `SelectionReader.read(from:)`, `PointerWordReader`).
+/// An Accessibility request about *this* process is not IPC: it is serviced on the calling thread, which must be the
+/// main actor (XiaolaiDict ADR-0042). Hover's reads of XDict's own windows come through here all the same, run on the
+/// main actor (`submitOnMainActor`), because the process-wide timeout is the only one that bounds them. The selection
+/// shortcut's own-process read does not yet (`SelectionReader.read(from:)`): its requests answered in 0–9 ms over XDict's
+/// own web view, measured 2026-10-19; only a hit test by position waits on WebKit.
 public final class AccessibilityLane: Sendable {
     public static let system = AccessibilityLane { AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), $0) }
 
@@ -95,6 +98,50 @@ public final class AccessibilityLane: Sendable {
     public func submit<T: Sendable>(
         _ kind: LaneWork, timeout: Float, budget: Duration, _ work: @escaping @Sendable () -> T
     ) async -> Result<T, LaneRefusal> {
+        let setTimeout = setTimeout
+        return await admit(kind, budget: budget) { finish in
+            Task.detached(priority: .userInitiated) {
+                setTimeout(timeout)
+                finish(work())
+            }
+        }
+    }
+
+    /// **A read of XDict's own windows: a lane job like any other, run on the main actor** (verifier, 2026-10-19). An
+    /// Accessibility request about this process is serviced on the calling thread, so it must be the main actor
+    /// (XiaolaiDict ADR-0042); and the only messaging timeout that bounds such a request is the process-wide one — set on
+    /// an application element it did not shorten the wait (1,513 ms measured; on the system-wide element, 0.25 s gave
+    /// 280 ms). So the lane, the one owner of that timeout, admits the read in its turn, sets `timeout` before it, holds
+    /// every other read off while it runs, and bounds and reports it like any other. The caller awaits, so the main actor
+    /// is free while the read waits for its turn.
+    public func submitOnMainActor<T: Sendable>(
+        _ kind: LaneWork, timeout: Float, budget: Duration, _ work: @escaping @MainActor @Sendable () -> T
+    ) async -> Result<T, LaneRefusal> {
+        let setTimeout = setTimeout
+        return await admit(kind, budget: budget) { finish in
+            Task { @MainActor in
+                setTimeout(timeout)
+                finish(work())
+            }
+        }
+    }
+
+    /// `submitOnMainActor`, answering a refusal with `refused(…)`.
+    public func runOnMainActor<T: Sendable>(
+        _ kind: LaneWork, timeout: Float, budget: Duration, _ work: @escaping @MainActor @Sendable () -> T,
+        refused: @escaping @Sendable (LaneRefusal) -> T
+    ) async -> T {
+        switch await submitOnMainActor(kind, timeout: timeout, budget: budget, work) {
+        case .success(let value): value
+        case .failure(let refusal): refused(refusal)
+        }
+    }
+
+    /// Queues one read, started by `start` in its turn, which hands its value to `finish`.
+    private func admit<T: Sendable>(
+        _ kind: LaneWork, budget: Duration,
+        start: @escaping @Sendable (_ finish: @escaping @Sendable (T) -> Void) -> Task<Void, Never>
+    ) async -> Result<T, LaneRefusal> {
         // A caller cancelled already does no work, even on an idle lane.
         if Task.isCancelled { return .failure(.cancelled) }
         let id = state.withLock { state -> UInt64 in
@@ -103,13 +150,10 @@ public final class AccessibilityLane: Sendable {
             return state.nextID
         }
         let reply = Reply<T>()
-        let setTimeout = setTimeout
         let item = Item(
             id: id, kind: kind, enqueued: .now, budget: budget,
             start: { [self] in
-                Task.detached(priority: .userInitiated) {
-                    setTimeout(timeout)
-                    let value = work()
+                start { value in
                     self.finished(id)
                     reply.give(.success(value))
                 }

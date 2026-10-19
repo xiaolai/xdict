@@ -159,8 +159,11 @@ public struct HoverSettings: View {
         if case .added = answer { typedSite = "" }
     }
 
-    private var readersOwn: [String] {
-        hover.policy.excludedApps.subtracting(HoverPolicy.defaultExcludedApps).sorted()
+    private var readersOwn: [String] { Self.readersOwn(in: hover.policy) }
+
+    /// The apps the reader added, each its own removable row — XDict itself among them where the reader added it.
+    static func readersOwn(in policy: HoverPolicy) -> [String] {
+        policy.excludedApps.subtracting(HoverPolicy.defaultExcludedApps).sorted()
     }
 
     private func policy<Value>(_ field: WritableKeyPath<HoverPolicy, Value>) -> Binding<Value> {
@@ -184,20 +187,36 @@ public struct HoverSettings: View {
         panel.allowedContentTypes = [.application]
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: "/Applications")
-        guard panel.runModal() == .OK, let url = panel.url, let identifier = Bundle(url: url)?.bundleIdentifier else { return }
-        var changed = hover.policy
-        changed.excludedApps.insert(identifier)
+        guard panel.runModal() == .OK, let url = panel.url, let changed = Self.excluding(appAt: url, from: hover.policy)
+        else { return }
         hover.setPolicy(changed)
+    }
+
+    /// `policy` with the picked app excluded, by the identifier its bundle declares — **any app, XDict itself included**
+    /// (owner, 2026-10-19: excluding XDict is how a reader turns hover off in XDict's own windows); nil where the pick
+    /// declares none.
+    static func excluding(appAt url: URL, from policy: HoverPolicy) -> HoverPolicy? {
+        guard let identifier = Bundle(url: url)?.bundleIdentifier else { return nil }
+        var changed = policy
+        changed.excludedApps.insert(identifier)
+        return changed
     }
 }
 
 /// An app as a reader knows it, by its name; **the identifier only when that is all there is** (not installed).
-private struct AppName: View {
+struct AppName: View {
     let bundleID: String
 
+    /// The name the reader knows the app by, where it can be found (XDict's own included), or nil.
+    static func name(of bundleID: String,
+                     locate: (String) -> URL? = { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) })
+        -> String? {
+        locate(bundleID).map { FileManager.default.displayName(atPath: $0.path) }
+    }
+
     var body: some View {
-        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
-            Text(verbatim: FileManager.default.displayName(atPath: url.path))
+        if let name = Self.name(of: bundleID) {
+            Text(verbatim: name)
                 .help(bundleID)
         } else {
             Text(verbatim: bundleID)

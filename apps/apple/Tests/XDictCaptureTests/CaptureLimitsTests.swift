@@ -78,7 +78,7 @@ struct CaptureLimitsTests {
 /// **Notices are typed; the consumer words them** (ADR-0014 decision 4).
 struct CaptureNoticeTests {
     @Test func theNoticesAreKindsNotSentences() {
-        #expect(Set(CaptureNotice.allCases) == [.screenRecordingNeeded, .captureStuck])
+        #expect(Set(CaptureNotice.allCases) == [.screenRecordingNeeded, .captureStuck, .nothingUnderPointer])
         #expect(CaptureNotice.captureStuck.rawValue == "captureStuck")
     }
 }
