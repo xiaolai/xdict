@@ -97,6 +97,10 @@ public final class HoverControl {
     /// Starts the watcher and says whether it holds its monitors: the system's (`systemStart`), or a test's, which can
     /// fail where the system's monitors never do.
     @ObservationIgnored private let startWatcher: @MainActor (HoverWatcher) -> Bool
+    /// Warms the recogniser in the background (`ScreenTextRecogniser.warmUp`), or a test's count.
+    @ObservationIgnored private let warmUpRecognition: @MainActor () -> Void
+    /// Whether this launch has warmed it: once per launch, however often the watcher restarts.
+    @ObservationIgnored private var warmed = false
 
     static let enabledKey = "hoverLookupEnabled"
 
@@ -113,9 +117,11 @@ public final class HoverControl {
         defaults: UserDefaults, requests: CaptureRequests, screen: ScreenRecordingAccess = .system,
         source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
         startWatcher: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart,
-        now: @escaping @MainActor () -> ContinuousClock.Instant = { .now }
+        now: @escaping @MainActor () -> ContinuousClock.Instant = { .now },
+        warmUpRecognition: @escaping @MainActor () -> Void = { ScreenTextRecogniser.warmUp() }
     ) {
         self.startWatcher = startWatcher
+        self.warmUpRecognition = warmUpRecognition
         self.now = now
         self.defaults = defaults
         self.requests = requests
@@ -290,6 +296,13 @@ public final class HoverControl {
     private func start() {
         isWatching = startWatcher(watcher)
         startFailed = !isWatching
+        // **The recogniser warmed once, once hover watches in a reader's launch** — never in a driven run (only a
+        // reader's launch reaches here: `startAtLaunch`, `setEnabled`), never with hover off or a start that failed.
+        // Fire-and-forget: hover's start does not wait.
+        if isWatching, !warmed {
+            warmed = true
+            warmUpRecognition()
+        }
     }
 }
 
