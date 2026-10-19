@@ -36,30 +36,105 @@ struct LoginItemLaunchTests {
             """
         let scene = ".task { MainAppLoginItem().register() }\n"
         let settings = """
+            @Bindable private var login: LaunchAtLogin
             Toggle(isOn: Binding(get: { login.isOn }, set: { login.set($0) })) { Text("Open") }
             .onAppear { login.set(false) }
             """
         let service = "try SMAppService.mainApp.unregister()\n"
         #expect(Self.problems([("XDictApp.swift", launch)]) == ["XDictApp.swift:2"])
+        // Made and registered on one line: one finding a line.
         #expect(Self.problems([("XDictApp.swift", scene)]) == ["XDictApp.swift:1"])
-        #expect(Self.problems([("GeneralSettings.swift", settings)]) == ["GeneralSettings.swift:2"])
+        #expect(Self.problems([("GeneralSettings.swift", settings)]) == ["GeneralSettings.swift:3"])
         #expect(Self.problems([("Other.swift", service)]) == ["Other.swift:1"])
         #expect(Self.problems([("SetupReport.swift", "login.set(true)\nlogin.set(false)\n")]) == [])
         #expect(Self.problems([("XDictApp.swift", "// XDictApp.loginItem.set(true)\n")]) == [], "a comment is not code")
     }
 
-    /// Each line, outside the allowed files, that registers or unregisters, unless it is the switch's `set:` closure.
+    /// **Independent of names** (verifier round 2, R17, R17b, R17c): the login item is made in exactly one place — the
+    /// app's one static — and a registration on any value of its type is named whatever the value is called: a local
+    /// made inside the static's initialiser, the same renamed, a local holding the static, a property of the type under
+    /// another name. The app's own static line and the switch on a renamed property are not.
+    @Test func aRegistrationIsNamedWhateverItsValueIsCalled() {
+        for local in ["item", "made"] {
+            let inside = """
+                static let loginItem: LaunchAtLogin = {
+                    let \(local) = LaunchAtLogin(service: MainAppLoginItem())
+                    \(local).set(true)
+                    return \(local)
+                }()
+                """
+            #expect(Self.problems([("XDictApp.swift", inside)]) == ["XDictApp.swift:2", "XDictApp.swift:3"], "\(local)")
+        }
+        let held = "let held = XDictApp.loginItem\nheld.set(true)\n"
+        #expect(Self.problems([("XDictApp.swift", held)]) == ["XDictApp.swift:2"])
+        let theStatic = "@MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())\n"
+        #expect(Self.problems([("XDictApp.swift", theStatic)]) == [])
+        #expect(Self.problems([("Other.swift", theStatic)]) == ["Other.swift:1"], "the static is the app's alone")
+        let renamed = """
+            @Bindable private var startup: LaunchAtLogin
+            Toggle(isOn: Binding(get: { startup.isOn }, set: { startup.set($0) })) { Text("Open") }
+            .task { startup.set(true) }
+            """
+        #expect(Self.problems([("GeneralSettings.swift", renamed)]) == ["GeneralSettings.swift:3"])
+        #expect(Self.problems([("Other.swift", renamed)]) == ["Other.swift:2", "Other.swift:3"],
+                "the switch is Settings' alone")
+        #expect(Self.problems([("Other.swift", "let service = MainAppLoginItem()\n")]) == ["Other.swift:1"])
+        #expect(Self.problems([("Other.swift", "_ = SMAppService.mainApp.status\n")]) == ["Other.swift:1"])
+    }
+
+    /// The one place the app makes its login item: `XDictApp`'s static, on one line, exactly so.
+    static var theStatic: Regex<Substring> {
+        /^\s*(?:@MainActor\s+)?static\s+let\s+loginItem\s*=\s*LaunchAtLogin\(service:\s*MainAppLoginItem\(\)\)\s*$/
+    }
+
+    /// Each line, outside the allowed files, that makes the login item anywhere but the app's static, touches
+    /// `SMAppService`, or registers or unregisters — `.register()`, `.unregister()`, or `.set(` on any value of the
+    /// login item's type, whatever it is called — unless it is Settings' switch, `set: { <value>.set($0) }`.
+    ///
+    /// **The values of the type, by what they are bound to, never by name**: a name declared `: LaunchAtLogin`, a local
+    /// bound to `LaunchAtLogin(…)` or to the static (`loginItem`), and a local bound to any of those, to a fixed point;
+    /// the static itself, however it is reached. Classes, not `\b`: under Unicode's word boundary `XDictApp.loginItem`
+    /// is one word.
     static func problems(_ files: [(name: String, text: String)]) -> [String] {
         files.filter { allowed[$0.name] == nil }.flatMap { name, text in
-            SourceScan.codeOnly(text).split(separator: "\n", omittingEmptySubsequences: false).enumerated()
+            let code = SourceScan.codeOnly(text)
+            let values = valuesOfTheType(in: code)
+            let names = values.sorted().map { NSRegularExpression.escapedPattern(for: $0) }.joined(separator: "|")
+            let onAValue = try? Regex<Substring>("(?:^|[^A-Za-z0-9_.])(?:\(names))\\.set\\(")
+            let switchOnAValue = try? Regex<Substring>("set:\\s*\\{\\s*(?:\(names))\\.set\\(\\$0\\)\\s*\\}")
+            return code.split(separator: "\n", omittingEmptySubsequences: false).enumerated()
                 .compactMap { index, line -> String? in
-                    let registers = line.contains(/\.(?:un)?register\(\)/)
-                        // Classes, not `\b`: under Unicode's word boundary `XDictApp.loginItem` is one word.
-                        || line.contains(/(?:^|[^A-Za-z0-9_])(?:login|loginItem|LaunchAtLogin\([^)]*\))\.set\(/)
-                    guard registers else { return nil }
-                    let theSwitch = line.contains(/set:\s*\{\s*login\.set\(\$0\)\s*\}/)
-                    return theSwitch ? nil : "\(name):\(index + 1)"
+                    let isTheStatic = name == "XDictApp.swift" && line.contains(theStatic)
+                    // Made, or the system's service reached; a type named in a declaration is neither.
+                    let makes = !isTheStatic
+                        && line.contains(/(?:^|[^A-Za-z0-9_])(?:LaunchAtLogin\s*\(|MainAppLoginItem\s*\(|SMAppService(?![A-Za-z0-9_]))/)
+                    var registers = line.contains(/\.(?:un)?register\(\)/)
+                        || line.contains(/(?:^|[^A-Za-z0-9_])loginItem\.set\(/)
+                    if let onAValue, !values.isEmpty, line.contains(onAValue) {
+                        let theSwitch = name == "GeneralSettings.swift" && switchOnAValue.map { line.contains($0) } == true
+                        registers = registers || !theSwitch
+                    }
+                    return makes || registers ? "\(name):\(index + 1)" : nil
                 }
         }
+    }
+
+    /// The names that hold the login item's type in `code` (see `problems`).
+    static func valuesOfTheType(in code: String) -> Set<String> {
+        var values = Set(code.matches(of: /([A-Za-z_][A-Za-z0-9_]*)\s*:\s*LaunchAtLogin(?![A-Za-z0-9_])/).map { String($0.output.1) })
+        let bindings = code.matches(of: /(?:^|[^A-Za-z0-9_])(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)[^=\n]*=([^\n]*)/)
+            .map { (name: String($0.output.1), value: String($0.output.2)) }
+        var grew = true
+        while grew {
+            grew = false
+            for (bound, value) in bindings where !values.contains(bound) {
+                let words = Set(value.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) })
+                if value.contains(/LaunchAtLogin\(|(?:^|[^A-Za-z0-9_])loginItem(?![A-Za-z0-9_])/) || !words.isDisjoint(with: values) {
+                    values.insert(bound)
+                    grew = true
+                }
+            }
+        }
+        return values
     }
 }
