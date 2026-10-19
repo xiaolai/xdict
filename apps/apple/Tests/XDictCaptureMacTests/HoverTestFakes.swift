@@ -161,7 +161,10 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     private(set) var laneTargets = 0
     private(set) var reads = 0
     private(set) var textReads = 0
-    /// Main-actor work: XDict's own hit tests and reads, each checked to run on the main thread.
+    /// What is under the point in XDict's own window, by view geometry (`ownView`): its controls, by default.
+    var ownView: OwnView = .controls
+    /// XDict's own work: the view checks (on the main thread, checked), and the Accessibility hit tests and reads.
+    private(set) var ownViewChecks = 0
     private(set) var ownTargets = 0
     private(set) var ownReads = 0
     private(set) var ownWorkOffTheMainThread = 0
@@ -191,17 +194,22 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
         return .read(readOutcome)
     }
 
-    func ownTarget(at point: CGPoint) -> PointerWordReader.OwnTargetOutcome {
-        ownTargets += 1
+    func ownView(at point: CGPoint) -> OwnView {
+        ownViewChecks += 1
         if !Thread.isMainThread { ownWorkOffTheMainThread += 1 }
+        return ownView
+    }
+
+    func ownTarget(at point: CGPoint) async -> PointerWordReader.OwnTargetOutcome {
+        ownTargets += 1
         return ownTargetOutcome
     }
 
     func readOwnUnlessRefused(
-        at point: CGPoint, in target: PointerWordReader.Target, refuses: (HostReading) -> Bool, budget: Duration
-    ) -> PointerWordReader.GatedOutcome {
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
+        budget: Duration
+    ) async -> PointerWordReader.GatedOutcome {
         ownReads += 1
-        if !Thread.isMainThread { ownWorkOffTheMainThread += 1 }
         if refuses(hostReading) { return .refused(hostReading) }
         textReads += 1
         return .read(readOutcome)

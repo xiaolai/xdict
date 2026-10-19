@@ -47,8 +47,10 @@ final class LookupAnywhere {
     static var launch: HoverLaunch = .reader
 
     /// Hover's settings, pause and watcher, and **the app's one book of capture requests**, every trigger's.
+    /// XDict's own entry views are read by their own script, never through Accessibility (`EntryWebView.hoverText`).
     @ObservationIgnored private(set) lazy var hover = HoverControl(
         defaults: .standard, requests: CaptureRequests(),
+        source: SystemPointerWords(metrics: CaptureTolerances.metrics, readsOwnView: Self.readsOwnEntry),
         scripts: { HoverScripts.allowed(searchLanguages: XDictApp.library.entries.filter(\.enabled).map(\.languages.pair.search)) })
     private var requests: CaptureRequests { hover.requests }
     /// The presented request's context, and nothing else of it: memory only, cleared when the panel closes. Capture's own

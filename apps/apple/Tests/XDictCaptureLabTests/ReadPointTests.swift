@@ -128,10 +128,12 @@ final class LabScreen: PointerWordSource, Sendable {
     ) async -> PointerWordReader.GatedOutcome {
         .read(readOutcome)
     }
-    func ownTarget(at point: CGPoint) -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
+    func ownView(at point: CGPoint) -> OwnView { .controls }
+    func ownTarget(at point: CGPoint) async -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
     func readOwnUnlessRefused(
-        at point: CGPoint, in target: PointerWordReader.Target, refuses: (HostReading) -> Bool, budget: Duration
-    ) -> PointerWordReader.GatedOutcome {
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
+        budget: Duration
+    ) async -> PointerWordReader.GatedOutcome {
         .read(readOutcome)
     }
     func laneState() -> LaneState { .idle }
