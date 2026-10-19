@@ -35,8 +35,11 @@ public struct PendingContextHandle: Sendable, Hashable {
 }
 public enum ContextUnavailable: String, Sendable, Equatable {
     case appExposedNone, disagreesWithServiceText, notCaptured
+    /// The app or the site is one capture never reads (`HoverPolicy.excludes(app:)`, `refuses`): nothing around the
+    /// term was read.
+    case excluded
 }
-public enum ContextOutcome: Sendable, Equatable {
+public enum ContextOutcome: Sendable, Hashable {
     case available(sentence: String, term: NSRange, cut: CutEnds, gap: InternalGap?)
     case pending(PendingContextHandle)
     case unavailable(ContextUnavailable)

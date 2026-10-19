@@ -194,6 +194,8 @@ final class LookupAnywhere {
     private func read(_ front: FrontApp, request: CaptureRequest, pressedAt: ContinuousClock.Instant) {
         reading?.cancel()
         let source = Source(request.trigger)
+        // The reader's exclusions as they are at the key: they decide whether the sentence around the selection is read.
+        let exclusions = hover.policy
         reading = Task { [weak self] in
             // The panel shows that it is reading if the read outlasts the grace; the answer replaces that.
             let waiting = Task { @MainActor [weak self] in
@@ -201,7 +203,7 @@ final class LookupAnywhere {
                 guard !Task.isCancelled else { return }
                 self?.show(.reading, query: nil, near: nil, source: source)
             }
-            let outcome = await SelectionReader.read(from: front)
+            let outcome = await SelectionReader.read(from: front, excluding: exclusions)
             waiting.cancel()
             guard let self else { return }
             guard !Task.isCancelled else {
@@ -271,7 +273,7 @@ final class LookupAnywhere {
                 let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
                 var outcome: SelectionOutcome?
                 if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg)
+                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy)
                     self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
                 }
                 // **The Service's text is the query**, whatever the selection now says; the read supplies the box only

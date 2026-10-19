@@ -1,6 +1,7 @@
 import ApplicationServices
 import Foundation
 import Testing
+import XDictCapture
 import XDictCaptureMac
 
 /// **The selection, read as VoiceOver reads it** (plan-macos-v1 WI-8, I2): which element, which dialect, the term less
@@ -13,9 +14,11 @@ struct SelectionReaderTests {
     private let app = FrontApp(pid: 1, name: "Reader", bundleID: "com.example.reader")
     /// What lookup admits today (`LookupText.maximumLength`): handed in, never capture's own.
     static let admission = TermAdmission(maximumCharacters: 200)
+    /// The shipped hover policy: the password managers excluded, no site — handed in, never defaulted.
+    static let exclusions = HoverPolicy.shipped
 
     private func read(_ tree: FakeAccessibility) -> SelectionOutcome {
-        SelectionReader.read(application: tree.application, of: app, with: tree, admitting: Self.admission)
+        SelectionReader.read(application: tree.application, of: app, with: tree, admitting: Self.admission, excluding: Self.exclusions)
     }
 
     /// A Cocoa text view: the selected text, its range and its box.
@@ -130,7 +133,7 @@ struct SelectionReaderTests {
         #expect(read(tree) == .nothing(.searchLimitReached(app: "Reader", limit: SelectionReader.webAreaSearchLimit)),
                 "without the click, as in the E2E run")
         let outcome = SelectionReader.read(application: tree.application, of: app, with: tree, under: paragraph,
-                                           admitting: Self.admission)
+                                           admitting: Self.admission, excluding: Self.exclusions)
         guard case .selected(let selection, let bounds) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(selection.text == "crème brûlée 煎饼")
         #expect(bounds == SelectionBox(rect: CGRect(x: 429, y: 140, width: 166, height: 23), quality: .exact))
@@ -517,8 +520,8 @@ final class FakeAccessibility: AccessibilityReading {
         }
     }
 
-    func fail(_ element: AXUIElement, _ name: String, with error: CaptureError) {
-        failures[Key(element: element, name: name, argument: nil)] = error
+    func fail(_ element: AXUIElement, _ name: String, argument: CFTypeRef? = nil, with error: CaptureError) {
+        failures[Key(element: element, name: name, argument: argument.map(Self.describe))] = error
     }
 
     /// The marker dialect for one selection inside one sentence, as WebKit answers it.
@@ -574,14 +577,22 @@ final class FakeAccessibility: AccessibilityReading {
             Self.rectValue(box))
     }
 
+    /// Every request asked, in order: its name, and for a parameterized one its argument as `describe` reads it.
+    private(set) var asked: [String] = []
+
     func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
+        asked.append(name)
         let key = Key(element: element, name: name, argument: nil)
         if let failure = failures[key] { throw failure }
         return try next(key)
     }
 
     func parameterized(_ element: AXUIElement, _ name: String, _ argument: CFTypeRef) throws(CaptureError) -> CFTypeRef? {
-        try next(Key(element: element, name: name, argument: Self.describe(argument)))
+        let described = Self.describe(argument)
+        asked.append("\(name) \(described)")
+        let key = Key(element: element, name: name, argument: described)
+        if let failure = failures[key] { throw failure }
+        return try next(key)
     }
 
     private func marker(_ byte: UInt8) -> AXTextMarker { AXTextMarkerCreate(nil, [byte], 1) }
