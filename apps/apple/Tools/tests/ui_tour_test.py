@@ -33,6 +33,35 @@ assert kinds(window({"role": "AXStaticText", "value": "a", "frame": [10, 10, 60,
                     {"role": "AXStaticText", "value": "b", "frame": [20, 12, 60, 20]})) == ["overlap"]
 # The window's own buttons carry no title by design.
 assert kinds(window({"role": "AXButton", "subrole": "AXCloseButton", "frame": [4, 4, 12, 12]})) == []
+# A row that says its label twice (Settings ▸ General's Background row, 2026-10-19: the slider's own label drawn after
+# 'Glass ◯── Solid' as well as the row's). Its nodes as the tour captured them (light-en settings.general.ax.json), the
+# repeat nested once more under itself, as AX gave it; red on it, quiet with the slider's label hidden.
+background = [{"role": "AXStaticText", "value": "Background", "frame": [30, 1008.25, 72.5, 16]},
+              {"role": "AXButton", "title": "Glass", "frame": [273, 1011.375, 26.5, 13]},
+              {"role": "AXSlider", "identifier": "panel-solidity", "value": "0", "frame": [303.5, 1009.875, 160.5, 16]},
+              {"role": "AXButton", "title": "Solid", "frame": [468, 1011.375, 24.5, 13]}]
+again = {"role": "AXStaticText", "value": "Background", "frame": [497.5, 1009.306884765625, 72.5, 16],
+         "children": [{"role": "AXStaticText", "value": "Background", "frame": [497.5, 1009.306884765625, 72.5, 16]}]}
+row_window = {"windows": [{"role": "AXWindow", "frame": [0, 0, 600, 1106], "children": [
+    {"role": "AXGroup", "frame": [20, 990, 560, 50], "children": background + [again]}]}]}
+assert kinds(row_window) == ["repeated-label"], kinds(row_window)
+row_window["windows"][0]["children"][0]["children"] = background
+assert kinds(row_window) == [], kinds(row_window)
+# The same words in two rows, one under the other (a list of names), are not a repeat.
+assert kinds(window({"role": "AXStaticText", "value": "Alpha", "frame": [10, 10, 60, 20]},
+                    {"role": "AXStaticText", "value": "Alpha", "frame": [10, 40, 60, 20]})) == []
+# An identifier on a row's container is taken by every control in it (Settings ▸ General's site field and Add Site,
+# both `hover.excludedSites`, 2026-10-19): the tour then cannot find the field by its own. Repeated menu items are the
+# menu's own (`menuAction:`), not XDict's.
+assert kinds(window({"role": "AXTextField", "identifier": "hover.excludedSites", "description": "Site",
+                     "frame": [100, 10, 150, 16]},
+                    {"role": "AXButton", "identifier": "hover.excludedSites", "title": "Add Site",
+                     "frame": [260, 6, 75, 24]})) == ["repeated-identifier"]
+assert kinds(window({"role": "AXGroup", "identifier": "hover.excludedSites", "frame": [20, 0, 360, 40], "children": [
+    {"role": "AXTextField", "identifier": "hover.site.field", "description": "Site", "frame": [100, 10, 150, 16]},
+    {"role": "AXButton", "identifier": "hover.addSite", "title": "Add Site", "frame": [260, 6, 75, 24]}]})) == []
+assert kinds(window({"role": "AXMenuItem", "identifier": "menuAction:", "title": "Open", "frame": [0, 0, 90, 20]},
+                    {"role": "AXMenuItem", "identifier": "menuAction:", "title": "Quit", "frame": [0, 20, 90, 20]})) == []
 
 # Parity P39: Settings ▸ Dictionaries is Apple's table: described "Dictionaries", a checkbox in every row, 20 pt rows.
 def row(height=20, box=True):
