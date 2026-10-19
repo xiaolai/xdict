@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// **The main window's toolbar** (P3): Back/Forward | title | space | Smaller/Bigger Text | speaker (P48) | search. At
-/// the 400 pt minimum the two pairs go to the overflow before the search field does (P8). Its own type, so a test lays
+/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | Smaller/Bigger Text | search. At
+/// the 400 pt minimum the toolbar's items go to the overflow before the search field does (P8). Its own type, so a test lays
 /// out these very items in a window (`ToolbarFitTests`).
 struct SearchToolbar<Field: View>: ToolbarContent {
     let canGoBack: Bool
@@ -30,6 +30,15 @@ struct SearchToolbar<Field: View>: ToolbarContent {
             .controlGroupStyle(.navigation)
         }
         .visibilityPriority(.low)
+        // The speaker in the leading cluster, after Back/Forward (owner, 2026-10-19): the toolbar gives up its trailing
+        // items first, and beside the text-size pair the speaker was the one a jump to a narrow window hid.
+        ToolbarItem(placement: .navigation) {
+            Button(action: pronounce) { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
+                .disabled(!canPronounce)
+                .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
+                .accessibilityIdentifier("toolbar.pronounce")
+        }
+        .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {
             ControlGroup {
                 Button(action: smaller) { Label("Smaller Text", systemImage: "textformat.size.smaller") }
@@ -42,13 +51,6 @@ struct SearchToolbar<Field: View>: ToolbarContent {
             // One two-segment control, as Apple's (P3), not two round buttons (owner, 2026-10-18): the same style
             // that joins Back and Forward.
             .controlGroupStyle(.navigation)
-        }
-        .visibilityPriority(.low)
-        ToolbarItem(placement: .primaryAction) {
-            Button(action: pronounce) { Label("Pronounce", systemImage: "speaker.wave.2") }  // placement: P48
-                .disabled(!canPronounce)
-                .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
-                .accessibilityIdentifier("toolbar.pronounce")
         }
         .visibilityPriority(.low)
         ToolbarItem(placement: .primaryAction) {

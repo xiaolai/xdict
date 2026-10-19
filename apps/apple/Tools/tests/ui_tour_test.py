@@ -384,8 +384,9 @@ cases = {
     # Stretched to 1400 pt: the field at its most, the speaker beside it; red, the stretched window of 2026-10-19, the
     # speaker over the field's start and the field past the window's edge.
     "window.wide": ({"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
+        button("Back", 100, "Show the previous result"), button("Forward", 136, "Show the next result"),
+        button("Pronounce", 180, "Read the selection aloud"),
         button("Smaller Text", 860, "Decrease font size"), button("Bigger Text", 896, "Increase font size"),
-        button("Pronounce", 932, "Read the selection aloud"),
         node("AXTextField", (972, 7, 420, 38), [scope_menu("All Dictionaries")], subrole="AXSearchField")])],
         subrole="AXStandardWindow", title="XDict")]},
                     {"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
@@ -437,6 +438,14 @@ def wide(speaker_x, field_x, field_width):
 assert parity.toolbar_fits(wide(932, 972, 420)) is None, "window.wide red on a toolbar that fits"
 assert "lies over" in (parity.toolbar_fits(wide(950, 960, 420)) or ""), "the speaker over the field is not red"
 assert "runs out" in (parity.toolbar_fits(wide(900, 990, 420)) or ""), "the field past the window's edge is not red"
+# The speaker's place (P48): after Back/Forward, before the text-size pair; red beside the text-size pair, as it was.
+leading = cases["window.wide"][0]
+assert parity.speaker_after_navigation(leading) is None, "the speaker after Back/Forward is red"
+beside = {"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
+    button("Back", 100, "Show the previous result"), button("Forward", 136, "Show the next result"),
+    button("Smaller Text", 860, "Decrease font size"), button("Bigger Text", 896, "Increase font size"),
+    button("Pronounce", 932, "Read the selection aloud")])], subrole="AXStandardWindow")]}
+assert "not between" in (parity.speaker_after_navigation(beside) or ""), "the speaker beside the text-size pair is not red"
 # P45: a Share item anywhere in the menus is not Apple's, nor an app menu without Services.
 shared = {"menubar": apple_menus["menubar"] + [{"title": "Edit", "items": [{"title": "Share…", "items": []}]}]}
 assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "P45 never red"
