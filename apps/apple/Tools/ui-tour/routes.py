@@ -5,7 +5,8 @@ over: "reader" (a real first launch, `tour.py --reader`), "full" (the lookup fix
 dictionary). Every route starts from the main window alone, the search field holding the keyboard. Steps:
 
     ("key", combo)                 one key with modifiers, held to the app (`keys press`)
-    ("type", text)                 the search field selected and the text typed (`keys type`)
+    ("type", text)                 the text field holding the keyboard (the search field, unless a click moved it)
+                                   selected and the text typed (`keys type`)
     ("menu", index, title...)      a menu-bar item by position (0 Apple, 1 XDict, 2 File, ...) and an item path; a title
                                    is translated for the Chinese UI from the bundle's strings; "#n" is the n-th item
     ("menuopen", index)            that menu left open for the capture
