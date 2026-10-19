@@ -9,8 +9,10 @@ import Foundation
 // value and can be cancelled), or unavailable with its reason. Captured text is untrusted data for every consumer.
 
 public enum CaptureTrigger: String, Sendable, Equatable, CaseIterable { case selection, service, pointerGesture, menu }
+/// `ownView`: read from one of XDict's own views by the view itself — the entry's own script — never through
+/// Accessibility (hover in XDict's own windows, 2026-10-19).
 public enum CaptureAcquisition: String, Sendable, Equatable, CaseIterable {
-    case textRange, textMarkers, boundsScan, recognition, serviceText
+    case textRange, textMarkers, boundsScan, recognition, serviceText, ownView
 }
 public struct SourceApp: Sendable, Equatable {
     public let bundleID: String?

@@ -39,7 +39,9 @@ public enum CaptureHealth: Sendable, Equatable {
 ///
 /// - `HoverPolicy` decides whether to look at all, **first**, so a reader who is simply reading never pays for anything.
 /// - **Accessibility first**: the text is read only through `PointerWordSource.readUnlessRefused` (WI-2), the site check
-///   and the read one job — or, for XDict's own windows, the same job on the main actor (`readOwnUnlessRefused`). **The recogniser only where that found no word** — and never where it refused the site, nor,
+///   and the read one job — or, for XDict's own controls, the same job run on the main actor (`readOwnUnlessRefused`).
+///   **XDict's own web views are never asked through Accessibility**: their own reading answers (`readOwnView`), and an
+///   entry is XDict's page, not a site, so no site rule applies to it. **The recogniser only where that found no word** — and never where it refused the site, nor,
 ///   with no element to name a page, while the reader excludes any site (the same `HoverPolicy.refuses` rule: an unnamed
 ///   page is unreadable). The window's owner is checked before a pixel and the word's after.
 /// - **One capture at a time** (`CaptureGuard`), bounded by `captureDeadline`, and the guard released by the capture's own
@@ -62,6 +64,8 @@ public final class HoverReader: HoverReading {
     private let passesClicksThrough: @MainActor (UInt32) -> Bool
     /// XDict's own bundle identifier, which the reader may exclude like any app's.
     private let ownBundleID: String?
+    /// What one of XDict's own web views may answer, at most (`contextUTF16`).
+    private let limits: CaptureLimits
     var onCaptureHealth: (@MainActor (CaptureHealth) -> Void)?
     var onCaptureReleased: (@MainActor () -> Void)?
     /// The lane's wedge, and the capture's, as last reported.
@@ -82,8 +86,9 @@ public final class HoverReader: HoverReading {
         passesClicksThrough: @escaping @MainActor (UInt32) -> Bool = {
             HoverReader.passesClicksThrough($0, among: NSApp?.windows ?? [])
         },
-        ownBundleID: String? = Bundle.main.bundleIdentifier
+        ownBundleID: String? = Bundle.main.bundleIdentifier, limits: CaptureLimits = .shipped
     ) {
+        self.limits = limits
         self.passesClicksThrough = passesClicksThrough
         self.ownBundleID = ownBundleID
         self.policy = policy
@@ -149,8 +154,12 @@ public final class HoverReader: HoverReading {
         let ours = getpid()
         let windows = PointerWindow.withoutClickThrough(source.listedWindows(), ours: ours,
                                                         passesClicksThrough: passesClicksThrough)
-        guard let (targeted, inOwnWindow) = await resolve(at: point, windows: windows, policy: policy) else {
-            return .quiet(.excludedApp)
+        let targeted: PointerWordReader.OwnTargetOutcome
+        let inOwnWindow: Bool
+        switch await resolve(at: point, windows: windows, policy: policy) {
+        case nil: return .quiet(.excludedApp)
+        case .ownView(let reading)?: return await readOwnView(reading, at: point, request: request, policy: policy)
+        case .target(let found, let own)?: (targeted, inOwnWindow) = (found, own)
         }
         switch targeted {
         case .none(let why):
@@ -165,14 +174,15 @@ public final class HoverReader: HoverReading {
             if let refusal = CaptureAuthorization.refusal(bundleID: found.bundleID, policy: policy) { return .quiet(refusal) }
             guard !Task.isCancelled else { return .quiet(.cancelled) }
             // **An element of this process is read on the main actor, by its pid** (`AXUIElementGetPid`), whichever hit
-            // test found it: never a lane job, which would be serviced on the lane's thread while the main actor waits.
+            // test found it: a lane job run there, never on the lane's own thread, where it would be serviced off it.
             let gated: PointerWordReader.GatedOutcome
             if found.pid == ours {
-                gated = source.readOwnUnlessRefused(at: point, in: found, refuses: { policy.refuses($0) }, budget: budget)
+                gated = await source.readOwnUnlessRefused(at: point, in: found, refuses: { policy.refuses($0) },
+                                                          budget: budget)
             } else {
                 gated = await source.readUnlessRefused(at: point, in: found, refuses: { policy.refuses($0) }, budget: budget)
-                noteLane()
             }
+            noteLane()
             switch gated {
             case .refused:
                 return .quiet(.excludedSite)
@@ -189,20 +199,26 @@ public final class HoverReader: HoverReading {
         }
     }
 
+    /// Who owns the point, as `resolve` found it: an Accessibility target (true where it is XDict's own window), or one
+    /// of XDict's own web views, which Accessibility is never asked about.
+    private enum Resolved {
+        case target(PointerWordReader.OwnTargetOutcome, own: Bool)
+        case ownView(OwnViewReading?)
+    }
+
     /// **Where the hit test is made** (owner, 2026-10-19: hover reads XDict's own windows): a window of XDict's in front
-    /// at the point is asked **on the main actor**, through XDict's own application (`ownTarget`); every other window
-    /// through the lane, an excluded app known before its hit test asked nothing; and a window of XDict's the lane's hit
-    /// test found after the list was taken is asked again here, on the main actor, rather than read off it. True where
-    /// the target is XDict's own window.
+    /// at the point is looked at first by view geometry on the main actor (`ownView`) — a web view of XDict's is read by
+    /// its own means, never through Accessibility — and its controls are asked through XDict's own application, a lane
+    /// job run on the main actor (`ownTarget`); every other window through the lane, an excluded app known before its hit
+    /// test asked nothing; and a window of XDict's the lane's hit test found after the list was taken is looked at again
+    /// here the same way, rather than read off it.
     ///
     /// **Nil where the reader excluded XDict itself** (Never look up in ▸ Add an App…; the shipped list never holds it):
-    /// refused by the same bundle-identifier rule as any app, before any element of XDict's is asked for.
-    private func resolve(
-        at point: CGPoint, windows: [ListedWindow], policy: HoverPolicy
-    ) async -> (PointerWordReader.OwnTargetOutcome, Bool)? {
+    /// refused by the same bundle-identifier rule as any app, before any view or element of XDict's is looked at.
+    private func resolve(at point: CGPoint, windows: [ListedWindow], policy: HoverPolicy) async -> Resolved? {
         if PointerWindow.ownership(at: point, in: windows, ours: getpid()) == .ours {
             log.debug("hover: one of XDict's own windows; read on the main actor")
-            return ownWindowTarget(at: point, policy: policy).map { ($0, true) }
+            return await ownWindowTarget(at: point, policy: policy)
         }
         let refusesOwner: @Sendable (pid_t) -> Bool = { pid in
             CaptureAuthorization.refusal(bundleID: NSRunningApplication(processIdentifier: pid)?.bundleIdentifier,
@@ -211,19 +227,72 @@ public final class HoverReader: HoverReading {
         let targeted = await source.target(at: point, windows: { windows }, refusesOwner: refusesOwner)
         noteLane()
         switch targeted {
-        case .found(let target): return (.found(target), false)
-        case .none(let why): return (.none(why), false)
+        case .found(let target): return .target(.found(target), own: false)
+        case .none(let why): return .target(.none(why), own: false)
         case .ownWindow:
-            guard !Task.isCancelled else { return (.none(.failed(.cancelled)), true) }
+            guard !Task.isCancelled else { return .target(.none(.failed(.cancelled)), own: true) }
             log.debug("hover: one of XDict's own windows, found by the lane; read on the main actor")
-            return ownWindowTarget(at: point, policy: policy).map { ($0, true) }
+            return await ownWindowTarget(at: point, policy: policy)
         }
     }
 
-    /// XDict's own hit test, on the main actor — unless the reader excluded XDict, which is refused first.
-    private func ownWindowTarget(at point: CGPoint, policy: HoverPolicy) -> PointerWordReader.OwnTargetOutcome? {
+    /// XDict's own window — unless the reader excluded XDict, which is refused first: the view under the point, and only
+    /// where that is no web view, the hit test of XDict's own application.
+    private func ownWindowTarget(at point: CGPoint, policy: HoverPolicy) async -> Resolved? {
         guard CaptureAuthorization.refusal(bundleID: ownBundleID, policy: policy) == nil else { return nil }
-        return source.ownTarget(at: point)
+        switch source.ownView(at: point) {
+        case .webView(let reading):
+            log.debug("hover: one of XDict's own web views; asked by its own means")
+            return .ownView(reading)
+        case .controls:
+            let targeted = await source.ownTarget(at: point)
+            noteLane()
+            return .target(targeted, own: true)
+        }
+    }
+
+    /// What came first: the view's answer, the budget, or the caller giving up.
+    private enum ViewRead: Sendable {
+        case read(OwnViewText?)
+        case timedOut
+        case cancelled
+    }
+
+    /// **One of XDict's own web views, read by its own means**, under the hover budget and asked for at most
+    /// `limits.contextUTF16` units; its answer was checked before it arrived (`OwnViewText`). A view nothing reads is
+    /// asked nothing; a view that does not answer within the budget is given up, as past the deadline. Neither goes on to
+    /// Accessibility or the pixels: Accessibility over the view would wait on WebKit, and the pixels hold no word the
+    /// view itself could not find.
+    private func readOwnView(
+        _ reading: OwnViewReading?, at point: CGPoint, request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        let app = NSRunningApplication.current.localizedName ?? ProcessInfo.processInfo.processName
+        guard let reading else { return .nothing(.miss(.noText(app: app, role: nil))) }
+        let answer = Answer<ViewRead>()
+        let most = limits.contextUTF16
+        let asking = Task { @MainActor in answer.give(.read(await reading(most))) }
+        let timer = Task {
+            try? await Task.sleep(for: budget)
+            answer.give(.timedOut)
+        }
+        let first = await withTaskCancellationHandler {
+            await answer.value()
+        } onCancel: {
+            answer.give(.cancelled)
+        }
+        timer.cancel()
+        asking.cancel()
+        switch first {
+        case .cancelled:
+            return .quiet(.cancelled)
+        case .timedOut:
+            return .nothing(.miss(.failed(.deadlineExceeded, app: app)))
+        case .read(let text):
+            guard let word = text?.word else { return .nothing(.miss(.noText(app: app, role: nil))) }
+            let hit = PointerWordReader.Hit(word: word, acquisition: .ownView, appName: app, bundleID: ownBundleID,
+                                            bounds: nil)
+            return accept(hit, request: request, policy: policy, point: point)
+        }
     }
 
     /// **The capture path, once Accessibility had no word.** The window read is the one the app Accessibility named, where

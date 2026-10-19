@@ -66,44 +66,44 @@ final class OwnWindowTree: AccessibilityReading, @unchecked Sendable {
 /// view, Settings and the popover; the hold key or the double tap is what asks, so the popover cannot re-trigger itself).
 /// The hazard XiaolaiDict ADR-0042 named is an Accessibility request about this process made off the main thread: it is
 /// serviced in-process on the calling thread. So the real source asks XDict's own application on the main actor, under the
-/// same budget and limits, and **never through the lane** — whose thread the main actor would otherwise wait on.
+/// same budget and limits — **as a lane job run there** (verifier, 2026-10-19: the process-wide messaging timeout is the
+/// one that bounds an own request, and the lane is its one owner; `OwnReadBoundTests`).
 @MainActor
 struct OwnWindowReadTests {
     private static let granted = AccessibilityAccess(probe: { .granted })
     private static let cat = CGPoint(x: 325, y: 210)
 
-    /// **The real source: the hit test and the combined read of XDict's own window run on the main thread, and the lane is
-    /// never entered** (it sets the messaging timeout on entry, so a lane job would be seen). The hit test is asked of
-    /// XDict's own application, not the system-wide element; no Chromium wake is asked of XDict itself. Red if either half
-    /// goes through the lane or off the main thread.
-    @Test func theRealSourceReadsOurOwnWindowOnTheMainThreadAndNeverEntersTheLane() throws {
+    /// **The real source: the hit test and the combined read of XDict's own window run on the main thread, each a lane job
+    /// under the hover timeout.** The hit test is asked of XDict's own application, not the system-wide element; no
+    /// Chromium wake is asked of XDict itself. Red if either half runs off the main thread or without the lane's timeout.
+    @Test func theRealSourceReadsOurOwnWindowOnTheMainThreadAsALaneJob() async throws {
         let timeouts = Mutex<[Float]>([])
         let lane = AccessibilityLane { timeout in timeouts.withLock { $0.append(timeout) } }
         let tree = OwnWindowTree()
         let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: Self.granted, client: { _ in tree })
-        guard case .found(let target) = source.ownTarget(at: Self.cat) else {
+        guard case .found(let target) = await source.ownTarget(at: Self.cat) else {
             Issue.record("XDict's own window named no target")
             return
         }
         #expect(target.pid == getpid())
         #expect(tree.roots == [getpid()], "the own hit test was not asked of XDict's own application")
-        let gated = source.readOwnUnlessRefused(at: Self.cat, in: target, refuses: { HoverPolicy.shipped.refuses($0) },
-                                                budget: PointerWordReader.budget)
+        let gated = await source.readOwnUnlessRefused(at: Self.cat, in: target,
+                                                      refuses: { HoverPolicy.shipped.refuses($0) },
+                                                      budget: PointerWordReader.budget)
         guard case .read(.hit(let hit)) = gated else {
             Issue.record("got \(gated)")
             return
         }
         #expect(hit.word.word == "cat")
         #expect(tree.requests > 0 && tree.offMain == 0, "\(tree.offMain) of \(tree.requests) requests ran off the main thread")
-        #expect(timeouts.withLock { $0 }.isEmpty, "XDict's own read went through the lane")
+        #expect(timeouts.withLock { $0 } == [PointerWordReader.messagingTimeout, PointerWordReader.messagingTimeout])
         #expect(tree.woken == 0, "XDict asked itself to build its tree for an assistive client")
     }
 
-    /// **The main actor never waits on the lane for XDict's own window**: with the lane held by a stalled read, a hover over
-    /// XDict's own window still reads its word, sooner than a hover may wait in the lane at all (a hover queued behind the
-    /// stall would be answered `overstayed` at its residence bound, with no word). Red if any part of the own read is a
-    /// lane job.
-    @Test func ourOwnWindowIsReadWhileTheLaneIsStalled() async {
+    /// **Behind a stalled read the main actor is not held**: XDict's own read waits in the lane like any hover, the main
+    /// actor free meanwhile, and is answered at the hover's residence bound, having asked nothing. Red where the own read
+    /// blocks the main actor waiting for its turn, or runs beside the stalled read.
+    @Test func behindAStalledReadTheMainActorIsFree() async {
         let lane = AccessibilityLane { _ in }
         let gate = DispatchSemaphore(value: 0)
         let stalled = Task.detached {
@@ -114,38 +114,37 @@ struct OwnWindowReadTests {
         }
         await HoverFixtures.settle { lane.current() == .running(.explicit) }
         let tree = OwnWindowTree()
-        let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), windowID: 3)
-        let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: Self.granted, windows: { [ours] },
-                                        client: { _ in tree })
-        let reader = HoverReader(policy: { .shipped }, source: source, contexts: PendingContexts())
-        let started = ContinuousClock.now
-        let outcome = await reader.read(at: Self.cat, modifiersHeld: [.option], tappedTwice: false,
-                                        pointerStillFor: .seconds(1),
-                                        begin: { CaptureRequest(number: 3, trigger: .pointerGesture) })
-        let took = ContinuousClock.now - started
-        #expect(lane.current() == .running(.explicit), "the stall ended before the own read was checked")
+        let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: Self.granted, client: { _ in tree })
+        let ticks = Mutex(0)
+        let ticker = Task { @MainActor in
+            while !Task.isCancelled {
+                ticks.withLock { $0 += 1 }
+                try? await Task.sleep(for: .milliseconds(5))
+            }
+        }
+        let outcome = await source.ownTarget(at: Self.cat)
+        ticker.cancel()
         gate.signal()
         _ = await stalled.value
-        guard case .word(let hit, _, _) = outcome else {
+        guard case .none(.failed(.deadlineExceeded)) = outcome else {
             Issue.record("got \(outcome)")
             return
         }
-        #expect(hit.word.word == "cat")
-        #expect(took < LaneBounds.shipped.hoverResidence, "the own read took \(took), as long as a wait in the lane")
-        #expect(tree.offMain == 0)
+        #expect(tree.requests == 0, "the own read ran beside the stalled one")
+        #expect(ticks.withLock { $0 } > 0, "the main actor was held while the own read waited")
     }
 
     /// **A miss in XDict's own window asks XDict nothing more**: the Chromium wake-up and escalation an app that answered
     /// nothing gets are never asked of this process. Red without the guard in either.
-    @Test func aMissInOurOwnWindowAsksNoWakeUp() {
+    @Test func aMissInOurOwnWindowAsksNoWakeUp() async {
         let tree = OwnWindowTree()
         let source = SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane { _ in }, access: Self.granted,
                                         client: { _ in tree })
-        guard case .found(let target) = source.ownTarget(at: Self.cat) else {
+        guard case .found(let target) = await source.ownTarget(at: Self.cat) else {
             Issue.record("no target")
             return
         }
-        let gated = source.readOwnUnlessRefused(at: CGPoint(x: 900, y: 600), in: target,
+        let gated = await source.readOwnUnlessRefused(at: CGPoint(x: 900, y: 600), in: target,
                                                 refuses: { HoverPolicy.shipped.refuses($0) },
                                                 budget: PointerWordReader.budget)
         guard case .read(.miss) = gated else {
