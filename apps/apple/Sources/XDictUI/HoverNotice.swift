@@ -4,8 +4,8 @@ import XDictTokens
 
 /// **Where the brief hover notice sits** (owner's report, 2026-10-19: a hover that read nothing showed nothing). Screen
 /// points, y up. Above and to the right of the pointer, clear of it by `Tokens.Inset.hoverNoticeOffset`; on the other side
-/// of the pointer, on either axis, where that would leave the visible frame. **Never over the pointer**: a window of
-/// XDict's in front at the pointer refuses the next hover there (`PointerWindow.ownership`).
+/// of the pointer, on either axis, where that would leave the visible frame. **Never over the pointer**, where it would
+/// hide the word being read; hover looks through it either way, as it takes no click (`HoverReader.passesClicksThrough`).
 enum HoverNoticePlacement {
     /// How far clear of the pointer, on both axes.
     static let offset = Tokens.Inset.hoverNoticeOffset
@@ -26,7 +26,7 @@ enum HoverNoticePlacement {
 public final class HoverNoticeHUD {
     /// How long a line stays: a duration, not a design value.
     static let shownFor: Duration = .milliseconds(1_600)
-    private var panel: NSPanel?
+    private(set) var panel: NSPanel?
     private var hiding: Task<Void, Never>?
 
     public init() {}
@@ -50,9 +50,11 @@ public final class HoverNoticeHUD {
         }
     }
 
-    private static func makePanel() -> NSPanel {
-        let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
-                            defer: true)
+    /// Click-through (`ignoresMouseEvents`: hover looks through a window of XDict's that takes no click), non-activating,
+    /// never key or main (`HoverNoticePanelTests`).
+    static func makePanel() -> NSPanel {
+        let panel = HoverNoticePanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered,
+                                     defer: true)
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -63,6 +65,24 @@ public final class HoverNoticeHUD {
         panel.collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle]
         panel.setAccessibilityIdentifier("hover.briefNotice")
         return panel
+    }
+}
+
+/// The notice's panel: it can be neither key nor main, whatever it is asked — and counts being asked, so a test sees a
+/// `makeKeyAndOrderFront` that macOS would quietly refuse.
+final class HoverNoticePanel: NSPanel {
+    private(set) var askedToBecomeKey = 0
+    override var canBecomeKey: Bool { false }
+    override var canBecomeMain: Bool { false }
+
+    override func makeKeyAndOrderFront(_ sender: Any?) {
+        askedToBecomeKey += 1
+        super.makeKeyAndOrderFront(sender)
+    }
+
+    override func makeKey() {
+        askedToBecomeKey += 1
+        super.makeKey()
     }
 }
 
