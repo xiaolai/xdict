@@ -20,11 +20,18 @@ struct HoverWordScriptTests {
         let target: String
         var offset: Int? = 1
         var max = 240
+        /// "entry" for every script an entry installs (`EntryWebView.withEntryScripts`); the hover script alone otherwise.
+        var scripts = "hover"
+        /// A function body the lab runs on the loaded page, outside the shell's world; its string answer is reported.
+        var probe: String?
     }
 
     struct Outcome: Sendable {
         let answer: EntryHoverText?
         let milliseconds: Int
+        /// From the page's load to its end, the shell's scripts' own work at load included.
+        let loaded: Int
+        let probe: String?
     }
 
     struct LabFailed: Error, CustomStringConvertible {
@@ -63,6 +70,23 @@ struct HoverWordScriptTests {
             + "for (var i = 0; i < \(depth); i++) { var s = document.createElement('span'); e.appendChild(s); e = s; }"
             + "e.id = 't'; e.textContent = 'Deep word here'; document.getElementById('root').appendChild(head);</script>"
     }
+
+    /// The deepest element's depth below the root, and the reading frame's mark on the page's list (`lists()`), or
+    /// "none" where the frame's passes did not run.
+    static let listed = """
+        var most = 0, all = document.getElementsByTagName('*');
+        for (var i = 0; i < all.length; i++) { var d = 0; for (var a = all[i]; a; a = a.parentElement) d++; if (d > most) most = d; }
+        return most + ' ' + (document.querySelector('ul').getAttribute('data-xdict-list') || 'none');
+        """
+
+    /// A click, and the milliseconds until the frame's reruns after it (50 and 400 ms later) are done.
+    static let rerun = """
+        var t = performance.now();
+        document.dispatchEvent(new MouseEvent('click'));
+        await new Promise(function (r) { setTimeout(r, 450); });
+        await new Promise(function (r) { setTimeout(r, 0); });
+        return String(Math.round(performance.now() - t));
+        """
 
     static let pages: [Page] = [
         Page(name: "plain", body: "<p id=t>Quokka hover probe. Second sentence here.</p>", target: "t"),
@@ -119,6 +143,19 @@ struct HoverWordScriptTests {
              target: "t", max: 1_000),
         Page(name: "deep-40", body: deep(40), target: "t"),
         Page(name: "deep-100000", body: deep(100_000), target: "t"),
+        // Every script an entry installs, on a tree a page script nests 10,000 deep, and on one the parser nests.
+        Page(name: "entry-deep-10000", body: "<ul><li>Listed</li></ul>" + deep(10_000), target: "t", scripts: "entry",
+             probe: listed),
+        // The same, each element marked as a sense, as the core marks roles: the frame's rerun after a click (`later()`)
+        // spaces every role-marked block, asking each one's ancestors.
+        Page(name: "entry-deep-roles-10000",
+             body: "<div id=root></div><script>var head = document.createElement('span'), e = head;"
+                 + "for (var i = 0; i < 10000; i++) { var s = document.createElement('div');"
+                 + "s.setAttribute('data-xdict-role', 'sense'); e.appendChild(s); e = s; }"
+                 + "e.id = 't'; e.textContent = 'Deep word here'; document.getElementById('root').appendChild(head);</script>",
+             target: "t", scripts: "entry", probe: rerun),
+        Page(name: "entry-parsed-600", body: "<ul><li>Listed</li></ul>" + String(repeating: "<span>", count: 600)
+                 + "<b id=t>Parsed deep words</b>", target: "t", scripts: "entry", probe: listed),
         Page(name: "empty-flood",
              body: "<p id=b></p><script>var p = document.getElementById('b');"
                  + "var f = document.createDocumentFragment();"
@@ -211,10 +248,12 @@ struct HoverWordScriptTests {
             let report = try JSONSerialization.jsonObject(with: Data(contentsOf: out)) as? [String: Any]
             var found: [String: Outcome] = [:]
             for item in report?["cases"] as? [[String: Any]] ?? [] {
-                guard let name = item["name"] as? String, let milliseconds = item["milliseconds"] as? Int else { continue }
+                guard let name = item["name"] as? String, let milliseconds = item["milliseconds"] as? Int,
+                      let loaded = item["loaded"] as? Int else { continue }
                 // Checked again as the shell checks it: JSON keeps a boolean a boolean.
                 let answer = (item["answer"] as? [String: Any]).flatMap { EntryHoverText.validated($0, maxUTF16: 4_096) }
-                found[name] = Outcome(answer: answer, milliseconds: milliseconds)
+                found[name] = Outcome(answer: answer, milliseconds: milliseconds, loaded: loaded,
+                                      probe: item["probe"] as? String)
             }
             return .success(found)
         } catch {
@@ -310,6 +349,24 @@ struct HoverWordScriptTests {
     /// 100,000 empty elements before the word: the walk stops at its own bound and says the start may be cut.
     @Test func aFloodOfEmptyElementsStopsTheWalk() throws {
         #expect(answer("empty-flood") == text("Last words", 0, cut: (true, false)))
+    }
+
+    // MARK: - The entry's own scripts on a deep page
+
+    /// **No pass of the reading frame reads a tree nested past what the HTML parser builds** (2026-10-19: with every
+    /// script an entry installs, a page script's 100,000-deep tree had not loaded in 28 minutes; the frame's `spacing()`
+    /// asks each element's ancestors, so its cost grew with the square of the depth: 7.0 s at 10,000). A page the
+    /// parser builds is nested at most 512 deep, and its frame still runs.
+    @Test func theReadingFrameSkipsATreeNoParserBuilds() throws {
+        let deep = try outcome("entry-deep-10000")
+        #expect(deep.loaded < 2_000, "\(deep.loaded) ms")
+        #expect(deep.probe == "10004 none")
+        let roles = try outcome("entry-deep-roles-10000")
+        #expect(roles.loaded < 2_000, "\(roles.loaded) ms")
+        let rerun = try #require(roles.probe.flatMap { Int($0) }, "no rerun time")
+        #expect(rerun < 1_000, "the frame's rerun after a click: \(rerun) ms")
+        let parsed = try outcome("entry-parsed-600")
+        #expect(parsed.probe == "512 marked")
     }
 
     // MARK: - Out of reach

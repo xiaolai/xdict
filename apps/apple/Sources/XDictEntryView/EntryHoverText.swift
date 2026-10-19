@@ -63,11 +63,18 @@ extension EntryWebView {
     /// An entry web view with the hover script and the word core it uses installed as every entry installs the shell's
     /// scripts (`EntryPane.install`: the shell's world, document start, main frame only), and no entry: for the
     /// development lab's hover-script run (`XDictEntryLab --hover-script`), which loads synthetic pages in it and asks
-    /// them through `hoverText`. The shell's other scripts are left out so the run measures this one: with them all,
-    /// a page holding a 100,000-deep tree had not finished in 28 minutes (2026-10-19).
+    /// them through `hoverText`. The shell's other scripts are left out so the run measures this one.
     public static func withHoverScript(frame: CGRect) -> EntryWebView {
         let configuration = WKWebViewConfiguration()
         EntryPane.install([EntryScripts.wordClicksCore, EntryScripts.hoverWord], into: configuration.userContentController)
+        return EntryWebView(frame: frame, configuration: configuration)
+    }
+
+    /// An entry web view with every script an entry installs (light, the whole reading frame, no display options), and
+    /// no entry: for the same lab run's pages that measure what the shell's scripts cost a hostile page to load.
+    public static func withEntryScripts(frame: CGRect) -> EntryWebView {
+        let configuration = WKWebViewConfiguration()
+        EntryPane.install(EntryScripts.installed(.light, frame: .all), into: configuration.userContentController)
         return EntryWebView(frame: frame, configuration: configuration)
     }
 

@@ -8,7 +8,8 @@ import XDictTokens
 /// `HoverWordScriptTests`, which writes the pages and holds the answers. A web view in no window, with the hover script
 /// installed as every entry installs the shell's scripts (`EntryWebView.withHoverScript`), each page loaded with no base
 /// URL and asked through the shell's own call (`hoverText`). The test cannot host the web view itself: in `swift test`'s runner a web
-/// view never starts loading (measured 2026-10-19: progress 0.1 after ten seconds).
+/// view never starts loading (measured 2026-10-19: progress 0.1 after ten seconds). A page may ask for every script an
+/// entry installs instead (`EntryWebView.withEntryScripts`), so the run also times what they cost a hostile page to load.
 @MainActor
 enum HoverScriptRun {
     struct Case: Decodable {
@@ -19,6 +20,10 @@ enum HoverScriptRun {
         let target: String
         let offset: Int?
         let max: Int
+        /// "entry" for every script an entry installs; the hover script alone otherwise.
+        let scripts: String?
+        /// A function body run on the loaded page, outside the shell's world, whose string answer is reported.
+        let probe: String?
     }
 
     /// Whether the page in flight loaded: answered once, whether its end comes before or after the wait.
@@ -54,11 +59,15 @@ enum HoverScriptRun {
     static func run(cases file: URL) async throws -> [String: Any] {
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: file))
         // The lab's entry window's size, as an entry is laid out there.
-        let view = EntryWebView.withHoverScript(frame: CGRect(origin: .zero, size: Tokens.InstrumentFrame.labWindow.size))
+        let size = CGRect(origin: .zero, size: Tokens.InstrumentFrame.labWindow.size)
+        let hoverView = EntryWebView.withHoverScript(frame: size)
+        let entryView = EntryWebView.withEntryScripts(frame: size)
         let loads = Loads()
-        view.navigationDelegate = loads
+        hoverView.navigationDelegate = loads
+        entryView.navigationDelegate = loads
         var results: [[String: Any]] = []
         for item in cases {
+            let view = item.scripts == "entry" ? entryView : hoverView
             // Which page is in flight, so a page that hangs the run is named by whoever ends it.
             FileHandle.standardError.write(Data("hover-script: \(item.name)\n".utf8))
             let loading = ContinuousClock.now
@@ -70,6 +79,12 @@ enum HoverScriptRun {
             view.loadHTMLString("<!doctype html><html><head><meta charset=utf-8></head>"
                                 + "<body style='margin:0;font:24px Helvetica'>" + item.body + "</body></html>", baseURL: nil)
             guard await loads.wait() else { throw LabFailure(description: "\(item.name): the page did not load") }
+            let loaded = Int((ContinuousClock.now - loading) / .milliseconds(1))
+            var probed: Any = NSNull()
+            if let probe = item.probe {
+                probed = try await view.callAsyncJavaScript(probe, arguments: [:], in: nil, contentWorld: aiming) as? String
+                    ?? NSNull()
+            }
             // Aiming lays the page out, as an entry on screen is laid out before any hover.
             let aimed = try await view.callAsyncJavaScript("""
                 var e = document.getElementById(id); if (!e) return null;
@@ -94,6 +109,8 @@ enum HoverScriptRun {
             results.append([
                 "name": item.name,
                 "milliseconds": Int(took / .milliseconds(1)),
+                "loaded": loaded,
+                "probe": probed,
                 "answer": answer.map { ["text": $0.text, "offset": $0.offset, "cutStart": $0.cutStart, "cutEnd": $0.cutEnd] }
                     ?? NSNull(),
             ])
