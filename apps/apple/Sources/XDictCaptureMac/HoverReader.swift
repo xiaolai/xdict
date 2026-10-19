@@ -137,7 +137,7 @@ public final class HoverReader: HoverReading {
         // **Our own window first, from the compositor**, before Accessibility is asked anything. The same list serves
         // the pixel path.
         let windows = source.listedWindows()
-        if PointerWindow.ours(at: point, in: windows, ours: getpid()) { return .quiet(.samePlace) }
+        if PointerWindow.ownership(at: point, in: windows, ours: getpid()) == .ours { return .quiet(.samePlace) }
         switch await source.target(at: point, windows: { windows }) {
         case .none(let why):
             noteLane()

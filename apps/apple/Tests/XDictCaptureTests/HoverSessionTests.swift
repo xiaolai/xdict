@@ -445,13 +445,14 @@ struct SiteHostRoundTwoTests {
 }
 
 struct PointerWindowRoundTwoTests {
-    /// **Any window of ours at the point counts**, under another app's too — a click-through overlay
-    /// can sit above our panel while Accessibility's hit test goes through to it.
-    @Test func ourPanelUnderAnotherAppsWindowIsStillOurs() {
+    /// **Our panel under another app's window is still named**, so the system-wide hit test is not used there — a
+    /// click-through overlay can sit above our panel while that hit test goes through to it. The overlay's app is the one
+    /// asked instead (`PointerWordReader.target`); with no window of ours under it, nothing changes.
+    @Test func ourPanelUnderAnotherAppsWindowIsStillNamed() {
         let point = CGPoint(x: 10, y: 10)
         let overlay = ListedWindow(pid: 50, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), layer: 20)
         let panel = ListedWindow(pid: 99, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), layer: 3)
-        #expect(PointerWindow.ours(at: point, in: [overlay, panel], ours: 99))
-        #expect(!PointerWindow.ours(at: point, in: [overlay], ours: 99))
+        #expect(PointerWindow.ownership(at: point, in: [overlay, panel], ours: 99) == .coveringOurs(owner: 50))
+        #expect(PointerWindow.ownership(at: point, in: [overlay], ours: 99) == .notOurs)
     }
 }

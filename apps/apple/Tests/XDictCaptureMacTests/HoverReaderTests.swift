@@ -89,6 +89,21 @@ struct HoverReaderSourceTests {
         #expect(screen.reads == 0)
     }
 
+    /// **Another app's window in front of ours is read** (owner's report, 2026-10-19): XDict's window listed beneath
+    /// System Settings no longer silences the hover there. Red under the old any-depth rule.
+    @Test func anotherAppsWindowInFrontOfOursIsRead() async {
+        let screen = ScriptedPointerWords()
+        screen.windows = [ListedWindow(pid: getpid() + 1, bounds: CGRect(x: 0, y: 0, width: 100, height: 100)),
+                          ListedWindow(pid: getpid(), bounds: CGRect(x: 0, y: 0, width: 100, height: 100))]
+        screen.targetOutcome = .found(HoverFixtures.target())
+        screen.readOutcome = .hit(HoverFixtures.hit("tide"))
+        guard case .word(let hit, _, _) = await read(reader(screen)) else {
+            Issue.record("the window in front of XDict's was not read")
+            return
+        }
+        #expect(hit.word.word == "tide")
+    }
+
     /// **The gate is handed the keys actually held** (WI-3 verification, G1): under the hold gesture with nothing held,
     /// the read is refused at the gate and nothing is asked of the screen. Red if the reader tells the gate the key is
     /// always down.

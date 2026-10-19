@@ -34,14 +34,38 @@ public struct ListedWindow: Sendable, Equatable {
 /// in that body traps — measured, crash report 2026-09-25: `EXC_BREAKPOINT` in `dispatch_assert_queue`
 /// under a SwiftUI body of XiaolaiDict's, reached from its hover reader on a cooperative-pool thread. Nothing in the reply can prevent it; only not asking can.
 public enum PointerWindow {
-    /// **Whether any window of ours is at the point, at any depth.** The topmost window is not proof
-    /// that Accessibility's hit test will land on it: a click-through overlay from another app, opaque
-    /// in the list, can sit above our window while the hit test goes straight through to it — in
-    /// process, off the main actor. Refusing every hover over any window of ours is the safe answer;
-    /// the cost is a hover over another app's window that happens to sit above one of ours.
-    public static func ours(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> Bool {
-        windows.contains { $0.pid == ours && $0.bounds.contains(point) }
+    /// **Whose window is in front at the point, as far as the system-wide hit test's safety goes.** The
+    /// topmost window is not proof that the system-wide hit test will land on it: a click-through overlay
+    /// from another app, opaque in the list, can sit above our window while that hit test goes straight
+    /// through to it — in process, off the main actor. So a window of ours anywhere under the point is
+    /// always named: in front, it is ours and nothing is asked; under another app's, that app is the one
+    /// asked (`coveringOurs`), and the system-wide element never is.
+    ///
+    /// Refusing every hover over any window of ours at any depth, the rule before this one, made hover
+    /// silent wherever XDict had a window behind the reader's app (owner's report, 2026-10-19: in System
+    /// Settings, only the one word of its title outside XDict's two windows behind it was read).
+    public static func ownership(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> PointerOwnership {
+        let here = windows.filter { $0.bounds.contains(point) }
+        guard here.contains(where: { $0.pid == ours }) else { return .notOurs }
+        // Front to back: ours counts even while invisible (one fading in is still serviced in-process); another app's
+        // window counts only where it can be seen, as no pixel of an invisible one is under the pointer.
+        guard let front = here.first(where: { $0.pid == ours || $0.alpha > 0 }), front.pid != ours else { return .ours }
+        return .coveringOurs(owner: front.pid)
     }
+}
+
+/// Whose window the pointer is over, for hover's hit test (`PointerWindow.ownership`).
+public enum PointerOwnership: Sendable, Equatable {
+    /// No window of ours is at the point: the system-wide hit test cannot land in this process.
+    case notOurs
+    /// A window of ours is in front at the point: nothing is asked of Accessibility.
+    case ours
+    /// Another app's window is in front, with one of ours beneath it: **that app alone is asked**, so the hit test
+    /// cannot go through to ours.
+    case coveringOurs(owner: Int32)
+}
+
+extension PointerWindow {
 
     /// `CGWindowListCopyWindowInfo`'s dictionaries as the two facts above, in the order given.
     ///
