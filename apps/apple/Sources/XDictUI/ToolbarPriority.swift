@@ -8,8 +8,7 @@ import AppKit
 enum ToolbarPriority {
     static func priority(holdsSearch: Bool) -> NSToolbarItem.VisibilityPriority { holdsSearch ? .user : .low }
 
-    static func apply(_ field: NSView) {
-        guard let toolbar = field.window?.toolbar else { return }
+    static func apply(_ field: NSView, in toolbar: NSToolbar) {
         let holding = toolbar.items.map { item in item.view.map { field.isDescendant(of: $0) } ?? false }
         // No item found holding the field: change nothing rather than demote the field with the rest.
         guard holding.contains(true) else { return }

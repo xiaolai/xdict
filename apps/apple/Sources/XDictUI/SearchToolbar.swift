@@ -23,6 +23,9 @@ struct SearchToolbar<Field: View>: ToolbarContent {
                 Button(action: forward) { Label("Forward", systemImage: "chevron.forward") }
                     .disabled(!canGoForward)
                     .help(Text("Show the next result"))
+            } label: {
+                // The item's name, for VoiceOver and the overflow menu (verifier, 2026-10-19: it had none).
+                Label("Back/Forward", systemImage: "chevron.backward")
             }
             .controlGroupStyle(.navigation)
         }
@@ -33,6 +36,8 @@ struct SearchToolbar<Field: View>: ToolbarContent {
                     .help(Text("Decrease font size"))
                 Button(action: bigger) { Label("Bigger Text", systemImage: "textformat.size.larger") }
                     .help(Text("Increase font size"))
+            } label: {
+                Label("Text Size", systemImage: "textformat.size")
             }
             // One two-segment control, as Apple's (P3), not two round buttons (owner, 2026-10-18): the same style
             // that joins Back and Forward.

@@ -1758,6 +1758,22 @@
         }
       }
     },
+    "Back/Forward" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back/Forward"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "后退/前进"
+          }
+        }
+      }
+    },
     "Background" : {
       "localizations" : {
         "en" : {
@@ -5838,6 +5854,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "青色"
+          }
+        }
+      }
+    },
+    "Text Size" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Text Size"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文字大小"
           }
         }
       }
