@@ -27,6 +27,9 @@ struct EntryHoverTextTests {
         let refused: [Any?] = [
             nil, "Quokka", [Self.reply()], extra, missing,
             Self.reply(42), Self.reply(""), Self.reply(String(repeating: "a", count: 241)),
+            // A pair cut in half, at either end.
+            Self.reply(NSString(characters: [0xDC9C, 0x20, 0x61], length: 3)),
+            Self.reply(NSString(characters: [0x61, 0x20, 0xD835], length: 3)),
             Self.reply(offset: "0"), Self.reply(offset: NSNumber(value: 1.5)), Self.reply(offset: NSNumber(value: -1)),
             Self.reply(offset: NSNumber(value: 19)), Self.reply(offset: kCFBooleanTrue as Any),
             Self.reply(cutStart: NSNumber(value: 1)), Self.reply(cutEnd: "true"),
