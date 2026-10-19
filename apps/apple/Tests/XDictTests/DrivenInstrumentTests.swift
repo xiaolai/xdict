@@ -47,6 +47,29 @@ struct DrivenInstrumentTests {
         #expect(Self.startProblems("// hover.startAtLaunch(Self.launch)\n") == ["no start with the launch"])
     }
 
+    /// **The menu-bar pause group and Settings' switch show the reader's setting** (`HoverControl.isOn`), never whether
+    /// the watcher runs: in a driven run it never does, and the menu said "Hover Is Off in Settings" with hover on, while
+    /// the switch read off and a click on it turned hover on (UI tour, 2026-10-19).
+    @Test func theMenuAndTheSwitchShowTheSettingNotTheWatcher() throws {
+        for file in ["Sources/XDictUI/MenuBarMenu.swift", "Sources/XDictUI/HoverSettings.swift"] {
+            let text = try String(contentsOf: Manifest.package.appending(path: file), encoding: .utf8)
+            #expect(Self.watcherReads(text) == [], "\(file)")
+        }
+    }
+
+    @Test func aViewReadingTheWatcherIsNamed() {
+        #expect(Self.watcherReads("Toggle(isOn: Binding(get: { hover.isOn }, set: { hover.setEnabled($0) }))\n") == [])
+        #expect(Self.watcherReads("Toggle(isOn: Binding(get: { hover.isWatching }, set: { _ in }))\n") == ["isWatching"])
+        #expect(Self.watcherReads("entries(hoverIsOn: hover.watcher.isWatching, pausedUntil: nil, now: now)\n")
+                == ["isWatching"])
+        #expect(Self.watcherReads("// hover.isWatching, said in a comment\n") == [])
+    }
+
+    static func watcherReads(_ text: String) -> [String] {
+        let reads = SourceScan.codeOnly(text).components(separatedBy: "isWatching").count - 1
+        return Array(repeating: "isWatching", count: reads)
+    }
+
     static func prepared(_ text: String) -> [String] {
         SourceScan.codeOnly(text).matches(of: /\b([A-Z][A-Za-z0-9]*)\.prepare\(/).map { String($0.output.1) }
     }
