@@ -16,7 +16,7 @@ enum Measured {
     static let strip = StripMetrics(initialHeight: 300, growthStep: 150, maximumHeight: 600)
     static let tiling = TilingMetrics(edgeSlack: 4, holeSlack: 16)
     static let metrics = CaptureMetrics(hit: hit, restTolerance: 2, strip: strip, tiling: tiling, frameDrift: 1)
-    /// The label slack the tokens hand in (verifier's oracle, 2026-10-19): 12 pt off centre, 2 pt smaller.
+    /// The label slack the tokens hand in: 12 pt off centre, 2 pt smaller — a chosen margin, not a measurement.
     static let label = LabelSlack(shift: 12, smaller: 2)
 }
 

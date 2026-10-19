@@ -107,6 +107,52 @@ struct TitleOracleTests {
         #expect(tally.wrong == 0, "\(tally.wrong) wrong of \(tally.answered): \(tally.examples)")
     }
 
+    /// **Every size between the smallest and the one that fills the frame agrees, not only the sizes the rule checks**:
+    /// wherever the rule answers, 401 sizes sampled evenly between its ends, each at its two furthest placements, put the
+    /// pointer inside that same word. The rule checks the two ends only: the middle size where the off-centre limit meets
+    /// the frame's edge was shown unneeded (`ElementTitle.word`; verifier's mutant T03 survived this test, 2026-10-20),
+    /// so this holds the argument, not that size.
+    @Test func everySizeBetweenTheEndsAgrees() {
+        let slack = Measured.label
+        var answered = 0, broken = 0
+        var examples: [String] = []
+        for text in Self.texts {
+            let ranges = TextSegmenter.wordRanges(in: text)
+            for style in [ElementTitle.Style.menuBar, .menu, .control] {
+                guard let font = style.font, let layout = ElementTitle.Layout(text, font: font) else { continue }
+                let spans = ranges.map { layout.span(of: $0, in: text) }
+                let smallest = ElementTitle.smallestScale(of: font, slack: slack)
+                for pad in stride(from: CGFloat(4), through: 60, by: 2) {
+                    let frame = CGRect(x: 100, y: 50, width: (layout.width + pad).rounded(.up), height: 22)
+                    let largest = frame.width / layout.width
+                    for x in stride(from: frame.minX, through: frame.maxX, by: 0.5) {
+                        guard let got = ElementTitle.word(
+                            in: text, frame: frame, style: style, at: CGPoint(x: x, y: frame.midY),
+                            tolerance: Self.tolerance, slack: slack, limits: .shipped)
+                        else { continue }
+                        answered += 1
+                        for step in 0...400 {
+                            let scale = smallest + (largest - smallest) * CGFloat(step) / 400
+                            let width = layout.width * scale
+                            let centred = frame.minX + (frame.width - width) / 2
+                            for origin in [min(frame.minX, centred - slack.shift), max(frame.maxX - width, centred + slack.shift)] {
+                                let along = (x - origin) / scale
+                                let inWord = zip(ranges, spans).contains { String(text[$0.0]) == got.word && $0.1.contains(along) }
+                                if !inWord {
+                                    broken += 1
+                                    if examples.count < 4 { examples.append("'\(got.word)' of '\(text)' pad \(pad) x+\(x - frame.minX) scale \(scale)") }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        print("TITLE SIZES: \(answered) answers, \(broken) sampled sizes disagreeing")
+        #expect(answered > 0)
+        #expect(broken == 0, "\(examples)")
+    }
+
     /// The control: the rule still answers somewhere — a short word centred in a tight frame, at its middle.
     @Test func answeredSomewhere() throws {
         let font = try #require(ElementTitle.Style.menuBar.font)

@@ -420,10 +420,25 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     public func refusesUnnamedPage(in bundleID: String?) -> Bool {
         guard refuses(.unreadable) else { return false }
         guard let bundleID else { return true }
-        return Self.knownBrowsers.contains(bundleID)
+        return Self.isBrowser(bundleID)
     }
 
+    /// **A known browser, or one of its web apps**: a listed identifier, a listed browser's `.app.` family (Chrome's,
+    /// Edge's, Brave's web apps and any Chromium browser's), or Safari's web apps (`com.apple.Safari.WebApp.`). A name
+    /// that only begins like a browser's (`com.google.Chromecast`) is not one.
+    public static func isBrowser(_ bundleID: String) -> Bool {
+        if knownBrowsers.contains(bundleID) { return true }
+        if knownBrowserPrefixes.contains(where: { bundleID.hasPrefix($0) }) { return true }
+        return knownBrowsers.contains { bundleID.hasPrefix($0 + ".app.") }
+    }
+
+    /// Web-app families whose prefix is not a listed browser's `.app.` one.
+    public static let knownBrowserPrefixes: [String] = ["com.apple.Safari.WebApp."]
+
     /// The web browsers Screen Only refuses while a site is listed, by bundle identifier: each release channel its own.
+    /// **Not every identifier was read from an installed bundle** (2026-10-20: only Safari, Chrome and Firefox are installed
+    /// where this was written); a browser named wrongly or not at all is read as any app's pixels — fail-open, and the
+    /// Settings caption names browsers, not this list.
     public static let knownBrowsers: Set<String> = [
         "com.apple.Safari", "com.apple.SafariTechnologyPreview",
         "com.google.Chrome", "com.google.Chrome.beta", "com.google.Chrome.dev", "com.google.Chrome.canary",
@@ -434,7 +449,10 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         "company.thebrowser.Browser", "company.thebrowser.dia",
         "com.operasoftware.Opera", "com.operasoftware.OperaGX", "com.vivaldi.Vivaldi",
         "com.kagi.kagimacOS", "com.duckduckgo.macos.browser", "app.zen-browser.zen",
-        "org.torproject.torbrowser", "net.waterfox.waterfox", "org.mozilla.librewolf", "com.sigmaos.sigmaos.macos",
+        "org.torproject.torbrowser", "net.waterfox.waterfox", "org.mozilla.librewolf", "io.gitlab.librewolf-community",
+        "com.sigmaos.sigmaos.macos", "ai.perplexity.comet", "com.openai.atlas", "com.naver.Whale",
+        "ru.yandex.desktop.yandex-browser", "one.ablaze.floorp", "org.chromium.Thorium", "io.wavebox.wavebox",
+        "com.pushplaylabs.sidekick", "net.mullvad.mullvadbrowser", "com.electron.min",
     ]
 
     /// The host a reader means by what they typed — **a name, or a pasted address reduced to its

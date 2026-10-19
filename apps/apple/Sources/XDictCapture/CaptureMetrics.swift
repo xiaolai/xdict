@@ -33,9 +33,10 @@ public struct CaptureMetrics: Sendable, Equatable {
     }
 }
 
-/// **How far a control's label may sit from where its font and frame put it**, in screen points (verifier, 2026-10-19):
-/// beside an icon, a radio circle or a chevron the label is drawn off centre, and in a font smaller than the system's
-/// size for its kind. A title's word is taken only where every placement and size within these agrees.
+/// **How far a control's label is assumed it may sit from where its font and frame put it**, in screen points: beside an
+/// icon, a radio circle or a chevron a label may be drawn off centre, and in a font smaller than the system's size for its
+/// kind. **A chosen safety margin, not a measurement** (2026-10-19: no real control's offset was measured; the oracle tests
+/// assume this model). A title's word is taken only where every placement and size within these agrees.
 public struct LabelSlack: Sendable, Equatable {
     /// How far from the frame's centre the label may be drawn, either way.
     public let shift: CGFloat
