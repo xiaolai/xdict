@@ -75,6 +75,8 @@ def page():
                 inner = [f"<figcaption>{html.escape(caption)}</figcaption>"]
                 if r is None:
                     inner.append("<div class='none'>not run</div>")
+                elif r.get("notCaptured"):
+                    inner.append(f"<div class='none'>not captured: {html.escape(r['notCaptured'])}</div>")
                 else:
                     for shot in r.get("shots", []):
                         src = html.escape(f"{variant}/{shot}")
@@ -106,6 +108,8 @@ def figure(variant, record, route, caption):
     inner = [f"<figcaption>{html.escape(caption)}</figcaption>"]
     if record is None:
         inner.append("<div class='none'>not captured</div>")
+    elif record.get("notCaptured"):
+        inner.append(f"<div class='none'>not captured: {html.escape(record['notCaptured'])}</div>")
     else:
         for shot in record.get("shots", []):
             src = html.escape(f"{variant}/{shot}")
