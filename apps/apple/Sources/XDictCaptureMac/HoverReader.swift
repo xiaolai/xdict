@@ -137,7 +137,7 @@ public final class HoverReader: HoverReading {
         // **Our own window first, from the compositor**, before Accessibility is asked anything. The same list serves
         // the pixel path.
         let windows = source.listedWindows()
-        if PointerWindow.ownership(at: point, in: windows, ours: getpid()) == .ours { return .quiet(.samePlace) }
+        if PointerWindow.ownership(at: point, in: windows, ours: getpid()) == .ours { return ownWindow() }
         switch await source.target(at: point, windows: { windows }) {
         case .none(let why):
             noteLane()
@@ -148,7 +148,7 @@ public final class HoverReader: HoverReading {
             return await readThePixels(at: point, owner: nil, windows: windows, request: request, policy: policy,
                                        otherwise: .noTarget(why))
         case .ourOwnWindow:
-            return .quiet(.samePlace)
+            return ownWindow()
         case .found(let found):
             if let refusal = CaptureAuthorization.refusal(bundleID: found.bundleID, policy: policy) { return .quiet(refusal) }
             guard !Task.isCancelled else { return .quiet(.cancelled) }
@@ -163,11 +163,18 @@ public final class HoverReader: HoverReading {
                 return .quiet(.cancelled)
             case .read(.miss(let miss)):
                 // **The site was decided in the same job and not refused**: the pixels of the app Accessibility named.
-                log.debug("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
+                log.info("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
                 return await readThePixels(at: point, owner: found.pid, windows: windows, request: request, policy: policy,
                                            otherwise: .miss(miss))
             }
         }
+    }
+
+    /// XDict's own window in front at the pointer: quiet by design (ADR-0014 decision 6), and said in the log, as this
+    /// was invisible when every window of XDict's at any depth silenced hover (owner's report, 2026-10-19).
+    private func ownWindow() -> Outcome {
+        log.info("hover: the pointer is over one of XDict's own windows; nothing is read there")
+        return .quiet(.samePlace)
     }
 
     /// **The capture path, once Accessibility had no word.** The window read is the one the app Accessibility named, where
