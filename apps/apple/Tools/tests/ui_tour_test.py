@@ -96,13 +96,66 @@ undriven = {r[0] for r in ROUTES if r[4] is None}
 assert undriven == set(NOT_DRIVEN_WHY), undriven ^ set(NOT_DRIVEN_WHY)
 # Hover's routes (plan-capture WI-5): the General rows and the Screen Recording row as this Mac's grant leaves them,
 # driven; the row's other states and the hover popover, which need a grant changed or another app's text, not.
-hover_driven = {"settings.general.hover", "settings.general.screenRecording", "menubar.hoverPause",
-                "menubar.hoverPaused", "menubar.hoverOff"}
+hover_driven = {"settings.general", "settings.general.hover", "menubar.hoverPause", "menubar.hoverPaused",
+                "menubar.hoverOff"}
 hover_undriven = {"settings.general.screenRecordingNotSetUp", "settings.general.screenRecordingNotAllowed",
                   "settings.general.screenRecordingAllowed", "settings.general.screenRecordingCouldNotTell",
                   "hover.popover"}
 assert hover_driven <= set(ids) - undriven, hover_driven - (set(ids) - undriven)
 assert hover_undriven <= undriven, hover_undriven - undriven
+# **No two driven routes walk the same way** (2026-10-19: settings.general, .hover, .screenRecording and settings.lookup
+# differed only by a wait, and captured the same picture byte for byte). Waits are not a difference.
+import routes  # noqa: E402
+
+
+def walked(route):
+    return (route[1], tuple(s for s in route[4] if s[0] != "wait"))
+
+
+seen = {}
+for route in ROUTES:
+    if route[4] is not None:
+        assert walked(route) not in seen, f"{route[0]} walks as {seen.get(walked(route))} does"
+        seen[walked(route)] = route[0]
+same = [("a", "full", "", "", [("key", "cmd+,"), ("wait", 1)]), ("b", "full", "", "", [("key", "cmd+,"), ("wait", 2)])]
+assert walked(same[0]) == walked(same[1]), "control: two routes differing by a wait read as different"
+# **A setting a route needs is stored before its launch** (`("pref", key, value)`, applied by tour.py's Session after the
+# preferences are deleted), never reached by clicking a switch whose state the route cannot know: menubar.hoverOff
+# clicked hover's switch and turned hover on in three variants of four (2026-10-19).
+by_id = {r[0]: r for r in ROUTES}
+assert routes.prefs(by_id["menubar.hoverOff"][4]) == [("hoverLookupEnabled", False)], by_id["menubar.hoverOff"][4]
+assert not any(s[0] == "click" for s in by_id["menubar.hoverOff"][4]), "menubar.hoverOff clicks to set its state"
+for route in ROUTES:
+    routes.prefs(route[4] or [])
+for bad in ([("pref", "hoverLookupEnabled", "NO")], [("pref", "somethingElse", False)]):
+    try:
+        routes.prefs(bad)
+        raise AssertionError(f"routes.prefs took {bad}")
+    except ValueError:
+        pass
+# Each key is the one the app reads: HoverControl's `enabledKey`.
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "Sources", "XDictAnywhere",
+                       "HoverControl.swift"), encoding="utf-8") as f:
+    control_source = f.read()
+for key in routes.PREFS:
+    assert f'"{key}"' in control_source, f"no preference {key} in HoverControl.swift"
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "tour.py"), encoding="utf-8") as f:
+    tour_source = f.read()
+assert "routes.prefs(" in tour_source or "prefs(steps)" in tour_source, "tour.py applies no route's preferences"
+# The site field is the hover route's own state (P53): reached by its identifier, which the row no longer takes over.
+assert ("click", "hover.site.field") in by_id["settings.general.hover"][4], by_id["settings.general.hover"][4]
+# The menu-bar item's menu is not one of the app's windows: a press on Pause Hover finds it only if press and click
+# also look in the open menu-bar extra (`ax.swift`'s `roots`).
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "ax.swift"), encoding="utf-8") as f:
+    ax_source = f.read()
+press_case = ax_source.split('case "press", "click":', 1)[1].split("case ", 1)[0]
+assert "roots(app)" in press_case and "windows(app)" not in press_case, press_case
+roots_func = ax_source.split("func roots(", 1)[1].split("\n}\n", 1)[0] if "func roots(" in ax_source else ""
+assert "AXExtrasMenuBar" in roots_func, "press and click do not look in the menu-bar extra"
+# The pause lengths are said by the system in the reader's language ("For %@" is the catalog's key, not the title), so
+# the route names the Chinese title too.
+assert any(s[0] == "press" and "For 15 minutes" in s and any("分钟" in n for n in s[1:])
+           for s in by_id["menubar.hoverPaused"][4]), by_id["menubar.hoverPaused"][4]
 # The pseudo language: longer, accented, every format directive kept exactly; on the real catalog, every value of every
 # form (plural forms and substitutions included) keeps its source's directives, so the copy formats as the app does.
 assert pseudo.pseudo("Look Up").startswith("⟦Ļööķ Ûþ"), pseudo.pseudo("Look Up")
