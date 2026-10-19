@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import WebKit
 import XDictEntryView
+import XDictTokens
 
 /// **`--hover-script`: the entry's hover script against synthetic pages** (verifier, 2026-10-19), for
 /// `HoverWordScriptTests`, which writes the pages and holds the answers. A web view in no window, with the hover script
@@ -52,7 +53,8 @@ enum HoverScriptRun {
 
     static func run(cases file: URL) async throws -> [String: Any] {
         let cases = try JSONDecoder().decode([Case].self, from: Data(contentsOf: file))
-        let view = EntryWebView.withHoverScript(frame: CGRect(x: 0, y: 0, width: 900, height: 700))
+        // The lab's entry window's size, as an entry is laid out there.
+        let view = EntryWebView.withHoverScript(frame: CGRect(origin: .zero, size: Tokens.InstrumentFrame.labWindow.size))
         let loads = Loads()
         view.navigationDelegate = loads
         var results: [[String: Any]] = []
