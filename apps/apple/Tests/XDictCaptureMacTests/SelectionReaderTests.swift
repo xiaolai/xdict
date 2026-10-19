@@ -537,6 +537,11 @@ final class FakeAccessibility: AccessibilityReading {
         set(page, "AXStringForTextMarkerRange", argument: sentenceRange, sentence as CFString)
     }
 
+    /// The scripted selection's sentence (`scriptMarkers`) read through its markers as `text` instead.
+    func scriptSentence(on page: AXUIElement, _ text: CFString) {
+        set(page, "AXStringForTextMarkerRange", argument: AXTextMarkerRangeCreate(nil, marker(4), marker(5)), text)
+    }
+
     /// WebKit's index dialect for a term inside the scripted selection: the selection's first index, a marker for each
     /// of the term's two ends, the range they make, the text that range reads back as, and its box.
     func scriptTermMarkers(on page: AXUIElement, selectionIndex: Int, at offset: Int, length: Int, text: String,

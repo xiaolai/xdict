@@ -126,7 +126,10 @@ The selection path now reads the sentence around the selected text, in the read'
 New in XDict, test-first (red against the stub): `SelectionContextReadTests` (9): an excluded app and an excluded site
 read nothing around the selection, an unreadable site is refused once any site is excluded, the bounded window, the whole
 value only when it fits, the cut to the limit, a cancellation still cancels, the sentence in every trigger's term, no
-description holding the sentence. `XDictTests/SelectionExclusionWiringTests` holds the app handing over the reader's own
+description holding the sentence; after the verifier's round (2026-10-19), XDict's own windows read nothing around a
+selection, and an answer longer than was asked for (a window), or than `markerSentenceCeilingFactor` times
+`contextUTF16` (a sentence), is refused before it is searched — each red against its mutation.
+`XDictTests/SelectionExclusionWiringTests` holds the app handing over the reader's own
 policy (positive controls planted).
 - XiaolaiDict's `ScriptFilterWiringTests.everyRecordedLookupCarriesTheScriptItWasWrittenIn` and
   `theDrawerFiltersByTheScriptsTheReaderStudies` test the study ledger's rows and the history drawer, which XDict does not

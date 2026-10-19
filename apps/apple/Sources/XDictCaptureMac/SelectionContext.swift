@@ -19,6 +19,8 @@ extension SelectionReader {
         of capture: Capture, term: SelectedTerm, app: FrontApp, exclusions: HoverPolicy, limits: CaptureLimits,
         _ ax: some AccessibilityReading
     ) throws(CaptureError) -> ContextOutcome {
+        // XDict's own windows are never read around a selection, as hover's hit test refuses them (ADR-0014 d.6).
+        if app.pid == getpid() { return .unavailable(.excluded) }
         if let bundleID = app.bundleID, exclusions.excludes(app: bundleID) { return .unavailable(.excluded) }
         // With no site excluded nothing can be refused, so the walk is not paid for.
         if !exclusions.excludedHosts.isEmpty {
@@ -29,7 +31,8 @@ extension SelectionReader {
         let sentence: SentenceContext?
         do throws(CaptureError) {
             if let markers = capture.markers {
-                sentence = try sentenceCovering(markers, selected: capture.text, in: capture.host, ax)
+                sentence = try sentenceCovering(markers, selected: capture.text, in: capture.host,
+                                                ceiling: limits.contextUTF16 * markerSentenceCeilingFactor, ax)
             } else if let range = capture.range {
                 sentence = try sentenceAround(range, selected: capture.text, in: capture.host, radius: limits.readRadiusUTF16, ax)
             } else {
@@ -55,7 +58,9 @@ extension SelectionReader {
         guard let window = SelectionWindow(selection: range, documentLength: count, radius: radius) else { return nil }
         if let request = AccessibilitySession.rangeValue(window.cfRange),
            let text = try ax.string(host, kAXStringForRangeParameterizedAttribute, request) {
-            guard window.holds(selected, in: text) else { return nil }
+            // **An answer longer than was asked for is refused before it is searched** — its length read without
+            // walking it (`NSString.length`), so a 50 MB answer costs no segmentation (verifier, 2026-10-19).
+            guard (text as NSString).length <= window.length, window.holds(selected, in: text) else { return nil }
             return TextSegmenter.sentence(in: text, around: window.selection,
                                           clipped: window.clipping(returnedLength: text.utf16.count))
         }
@@ -70,8 +75,12 @@ extension SelectionReader {
     /// The sentences covering the whole selection, through WebKit's markers: from the one holding its first character to
     /// the one holding its last. The end marker sits after the last character, and at a sentence boundary it belongs to
     /// the next sentence — so the marker before it is asked for (moved from XiaolaiDict's `sentenceCovering`).
+    /// How many times `contextUTF16` a sentence WebKit names may be before it is refused unsearched: a sentence is not
+    /// asked for by length, so its answer is bounded here, before any search of it.
+    static let markerSentenceCeilingFactor = 8
+
     private static func sentenceCovering(
-        _ selection: AXTextMarkerRange, selected: String, in host: AXUIElement, _ ax: some AccessibilityReading
+        _ selection: AXTextMarkerRange, selected: String, in host: AXUIElement, ceiling: Int, _ ax: some AccessibilityReading
     ) throws(CaptureError) -> SentenceContext? {
         let start = AXTextMarkerRangeCopyStartMarker(selection)
         let end = AXTextMarkerRangeCopyEndMarker(selection)
@@ -81,7 +90,8 @@ extension SelectionReader {
         else { return nil }
         let sentenceStart = AXTextMarkerRangeCopyStartMarker(first)
         let covering = AXTextMarkerRangeCreate(nil, sentenceStart, AXTextMarkerRangeCopyEndMarker(final))
-        guard let raw = try ax.string(host, "AXStringForTextMarkerRange", covering) else { return nil }
+        guard let raw = try ax.string(host, "AXStringForTextMarkerRange", covering), (raw as NSString).length <= ceiling
+        else { return nil }
         // Where the selection starts in the sentence, from the markers' indices when the app gives them; checked against
         // the text either way. Indices from another process: both non-negative, so the difference cannot overflow.
         var offset: Int?

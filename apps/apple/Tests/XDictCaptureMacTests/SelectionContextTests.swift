@@ -369,6 +369,43 @@ struct SelectionContextReadTests {
         #expect(term.term == "rare")
     }
 
+    /// **XDict's own windows read nothing around the selection** (ADR-0014 d.6, as hover's hit test refuses them): the
+    /// term is looked up, the context is excluded and nothing around it is asked. Red while the own process is read.
+    @Test func ourOwnWindowsReadNothingAroundTheSelection() throws {
+        let tree = FakeAccessibility()
+        scriptDocument(tree, document: "An ephemeral beauty.", selected: "ephemeral", at: NSRange(location: 3, length: 9))
+        let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
+        let outcome = SelectionReader.read(application: tree.application, of: ours, with: tree,
+                                           admitting: SelectionReaderTests.admission, excluding: .shipped)
+        guard case .selected(let selected, _) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(selected.text == "ephemeral")
+        #expect(selected.context == .unavailable(.excluded))
+        #expect(!tree.asked.contains { asked in Self.contextRequests.contains { asked.hasPrefix($0) } }, "\(tree.asked)")
+    }
+
+    /// **An answer far longer than was asked for is refused before it is searched** (verifier, 2026-10-19): a hostile or
+    /// broken app answering 50 MB for a window, or for a sentence, costs no segmentation of it. Red while the whole answer
+    /// is handed to the segmenter.
+    @Test func anAnswerFarLongerThanAskedIsRefusedUnsearched() throws {
+        // About 50 MB each, holding the selection where it was asked for, so only the length can refuse it.
+        let filler = String(repeating: "x", count: 50_000_000)
+        let range = FakeAccessibility()
+        let field = scriptDocument(range, document: "An ephemeral beauty.", selected: "ephemeral",
+                                   at: NSRange(location: 3, length: 9))
+        range.set(field, kAXStringForRangeParameterizedAttribute, argument: FakeAccessibility.rangeValue(0, 20),
+                  ("An ephemeral beauty. " + filler) as CFString)
+        let markers = FakeAccessibility()
+        page(markers, url: nil)
+        markers.scriptSentence(on: markers.element(1), ("A " + filler + " word here.") as CFString)
+        let clock = ContinuousClock()
+        for tree in [range, markers] {
+            var outcome: SelectionOutcome?
+            let spent = clock.measure { outcome = read(tree) }
+            #expect(outcome.flatMap(context) == .unavailable(.appExposedNone))
+            #expect(spent < .seconds(1), "\(spent): the answer was searched")
+        }
+    }
+
     /// **The reader moving on still ends the read**, while the context is read.
     @Test func aCancellationWhileTheContextIsReadCancels() {
         let tree = FakeAccessibility()
