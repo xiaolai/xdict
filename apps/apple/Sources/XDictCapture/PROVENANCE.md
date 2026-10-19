@@ -1,0 +1,97 @@
+# XDictCapture — migration manifest
+
+Capture's pure target, ported from XiaolaiDict (`../xiaolaidict`, read at commit 044dac6) under XDict ADR-0014
+decision 10, plan-capture WI-1. One row per file: where it came from, the tests that moved with it (by their
+XiaolaiDict names, now in `Tests/XDictCaptureTests/`) and the ADR behind it. "ADR-00nn" without a prefix is
+XiaolaiDict's; XDict's are written "XDict ADR-00nn".
+
+**Provenance check (2026-10-18, by reading).** Every origin file below and its tests were read in full while porting.
+`git log` over the ported source and test paths names one author, the owner: 23 commits (an earlier count of 24 took in
+`Sources/CaptureModel`, which is not ported); no file carries a licence header, a copyright line or
+text from another project, and none of them is, or was translated from, third-party code. XiaolaiDict has no licence
+file, so this is a recorded check, not a given (XDict ADR-0014 Context).
+
+## Ported files
+
+| XDict file | XiaolaiDict origin | Tests moved by name | ADR |
+|---|---|---|---|
+| `BandTiling.swift` | `Sources/Capture/BandTiling.swift` | `BandTilingTests` | 0016 (tiling addendum) |
+| `ContextStrip.swift` (`ContextStrip`, `ColumnLayout`, `ParagraphFinder`, `ListMarker`) | `Sources/Capture/ContextStrip.swift` | `ContextStripTests` | 0016 |
+| `RecognisedText.swift` (`RecognisedTextPicker`, `LineJoiner`, `TextBlock`, `CaptureEdge`) | `Sources/Capture/RecognisedText.swift` | `LineJoinerSplitLineTests`, `DegenerateRegionTests`, the recogniser cases of `ScreenReadingTests` | 0016, 0042 |
+| `HoverPolicy.swift` (`HoverGesture`, `TapCounter`, `GestureRecogniser`, `HoverModifier`, `HoverRefusal`, `HoverPolicy`, `HoverPause`) | `Sources/Capture/HoverPolicy.swift` | `HoverPolicyTests` | 0015 |
+| `HoverSession.swift` | `Sources/Capture/HoverSession.swift` | `HoverSessionTests` (with `RequestSequence`'s cases) | 0045 |
+| `RequestSequence.swift` | `Sources/Capture/RequestSequence.swift` | the `RequestSequence` cases of `HoverSessionTests` | 0045 |
+| `PointerWindow.swift` (`ListedWindow`, `PointerWindow`, `PointerTarget`, `CaptureAuthorization`) | `Sources/Capture/PointerWindow.swift`. Changed 2026-10-19: `ownership` names which hit test is safe rather than refusing — `ours` (a window of XDict's in front: the main actor asks XDict's own application), `coveringOurs(owner:)` (another app's window over one of ours: that app alone is asked, never the system-wide element), `notOurs`; XiaolaiDict refused a hover over any window of its own. New `withoutClickThrough`: XDict's own windows that take no click (the hover notice, the popover's anchor) are dropped from the list, told by the window, never by owner (owner, 2026-10-19: hover works in XDict's own windows) | `PointerWindowTests` (with `anotherAppsWindowInFrontOfOursOwnsThePoint` and `ourClickThroughWindowsAreDroppedAndNothingElse`, new), `PointerTargetTests` | 0016, 0042; XDict ADR-0014 d.6, ADR-0018 |
+| `ScreenGeometry.swift` (`HitTolerance`, `CaptureGeometry`) | `Sources/Capture/ScreenGeometry.swift` | `HitToleranceTests` and the geometry cases of `ScreenReadingTests` | 0016 |
+| `ScreenSpace.swift` (`UpPoint`, `DownPoint`, `UpRect`) | `Sources/Capture/ScreenSpace.swift` | `ScreenSpaceTests` | 0016 |
+| `WordBounds.swift` (`DownRect`, `WordBounds`, `ReadBounds`) | `Sources/Capture/WordBounds.swift` | `WordBoundsTests` | 0016 |
+| `TextSegmenter.swift` (`SentenceContext`, `WordAtPoint`, `TextSegmenter`) | `Sources/DictionaryModel/TextSegmenter.swift` | `SelectionContextTests`, the segmenter cases of `ScreenReadingTests` | 0016 |
+| `CaptureScript.swift` | `ProbeScript.dominant(in:)` and `letterScript(of:)` of `Sources/DictionaryModel/DictionaryLanguage.swift` | `CaptureScriptTests` (from `DictionaryLanguageTests`: `theFirstScalarClassifierIsNotEnoughForCapturedText` (its `dominant` half), `punctuationDigitsAndSpacesDoNotVote`, `anyKanaMakesItJapaneseHoweverManyHanThereAre`, `latinReachesPastAscii`, `punctuationInsideAScriptsBlockDoesNotVote`, `theScriptsAreRecognisedWhereverUnicodePutsThem`, `composedAndDecomposedTextAgree`, `aBlockNamedForOneScriptCanHoldAnother`, `presentationFormsFoldToTheLettersTheyAre`, `kanaBeyondTheOriginalBlocksIsStillKana`, `amongLettersTheMajorityScriptWins`) | 0015 |
+| `CaptureExclusions.swift` | the password-manager list of `Sources/Capture/PlacePolicy.swift` (the list only) | `HoverPolicyTests` (`itShipsExcludingPasswordManagers`) | 0015 |
+| `PendingContext.swift` (`PendingContextEnd`, `PendingContext`, `PendingContexts`; plan-capture WI-4) | `Sources/MacCapture/PendingContext.swift`, moved to the pure target and rebuilt: a handle in the term (`.pending`) and a book that finds it, exactly one ending (settled, cancelled, overdue with the first reading standing) heard once by every listener, the cancel ending it at once, the work waited for apart from the ending (`finished`, what the capture guard waits on), the book bounded, descriptions metadata only | new `PendingContextTests` (6) and `PendingContextsTests` (3), each seen failing (a missing type, then a mutated `cancel`); XiaolaiDict's `HoverPendingContextTests` moved by name to `XDictCaptureMacTests` with the reader | 0016; XDict ADR-0014 d.2, d.8, d.9 |
+
+## New in XDict (no XiaolaiDict origin; written test-first, each test seen failing against a stub)
+
+| XDict file | Tests | ADR |
+|---|---|---|
+| `CapturedTerm.swift` (trigger, acquisition, source app, pointer, word box, context outcome, validating constructor) | `CapturedTermTests` (14) | XDict ADR-0014 d.2, d.3 |
+| `CaptureSink.swift` (`CaptureRequests`, deliveries, generations, one terminal acknowledgement; one numbering with presentation claims since WI-3) | `CaptureSinkTests` (9), `RequestNumberingTests` (5, WI-3) | XDict ADR-0014 d.4; 0045 |
+| `CaptureLimits.swift` (acquisition limits with units, the context window) | `CaptureLimitsTests` (5) | XDict ADR-0014 d.3 |
+| `CaptureNotice.swift` (`screenRecordingNeeded`, `captureStuck`, `nothingUnderPointer`) | `CaptureNoticeTests` (1) | XDict ADR-0014 d.4, d.6, d.7 |
+| `CaptureMetrics.swift` (`StripMetrics`, `TilingMetrics`; the injected configuration; `frameDrift` since WI-4) | through the ported tests (`MeasuredMetrics.swift`); the app's held to the tokens by `ScreenRecordingRowTests.theRecognitionMetricsAreTheTokens` | XDict ADR-0014 d.5, d.11 |
+| `CaptureContextSession.swift` (the one ephemeral session the presented request's context lives in; added in plan-capture WI-3; since WI-4 it holds the book of pending contexts, settles a held one to what its reading answers, and cancels it when its presentation is replaced, ends or closes) | `CaptureContextSessionTests` (3; 7 since WI-4), seen failing against a missing type, then against a session that only dropped the handle | XDict ADR-0014 d.8, d.9 |
+| `CaptureDescriptions.swift` (metadata-only descriptions and empty mirrors of `SentenceContext`, `ContextOutcome`, `CapturedTerm`; added in plan-capture WI-2) | `PointerWordReaderTests.noDescriptionOfAResultCarriesItsSentence` (in `XDictCaptureMacTests`), seen failing against leaking descriptions | XDict ADR-0014 d.9 |
+
+## What changed on the way (re-checked against XDict, ADR-0014)
+
+- **No literal tolerance or capture dimension.** `HitTolerance` (3 pt, 2 pt), `HoverSession.restTolerance` (2 pt),
+  `ContextStrip`'s 300/150/600 pt and `BandTiling`'s 4/16 px slacks arrive through `CaptureMetrics` (decision 11);
+  the tests hand in XiaolaiDict's measured values (`MeasuredMetrics.swift`). Dimensionless ratios are `Double`.
+- **No lookup bound.** `ContextStrip.maximumCharacters` was `LookupRequest.maximumSentenceLength`; the context limit is
+  now capture's own acquisition limit (`CaptureLimits.contextUTF16`, UTF-16 units), applied before assembly (decision 3).
+- **No sentences below the consumer.** `HoverRefusal.reason` and `HoverPause.name(of:)` were display text; the
+  consumer words them (decision 4). Their two tests now assert the kinds and the lengths.
+- **Capture's own lists.** The excluded apps are `CaptureExclusions`, not the study ledger's `PlacePolicy`; the script
+  filter is `CaptureScript`, not the dictionary probe (decision 10).
+- `XiaolaiDictBase` (`Duration.seconds`, the log subsystem) is replaced inline; the log carries metadata only.
+
+- **The script filter is capture's own, not the study setting.** XiaolaiDict's `HoverPolicy.scripts`, `studies(_:)`,
+  `.scriptNotStudied` and the Latin default were the reader's study choice; ADR-0014 decision 10 does not move it. It
+  became `allowedScripts` (handed in, nil or empty filters nothing, no default, no stored key `scripts`), `allows(_:)`
+  and `.scriptNotAllowed`. No ported test covered the old setting; `HoverScriptFilterTests` is new.
+- **Dimensionless constants are named as fractions.** Inside this target a floating constant is either handed in or
+  named with a `Ratio`, `Fraction` or `Overlap` suffix (`tokens.py` enforces it): `sameRowGapRatio`,
+  `paragraphPitchRatio`, `paragraphGapRatio`, `marginToleranceRatio`, `edgeContactRatio`, `minimumGutterRatio` and
+  `CaptureEdge`'s `edgeFraction` were renamed on the way.
+
+## Tests of the origin not moved
+
+From `DictionaryLanguageTests`, 11 tests stay with the dictionary side, as dictionary-language or probe-word logic, not
+capture: `theEnglishHalfOfABilingualIsWhatAChineseReaderWants`, `aReadersOwnTagMatchesTheBundlesShorterOne`,
+`noADIndexesEnglishAndExplainsInIt`, `theChineseHalfIsNotTheOneForStudyingEnglish`,
+`traditionalIsNotOfferedToASimplifiedReader`, `regionDoesNotSeparateAReaderFromTheirDictionary`,
+`aDictionaryDeclaringNothingTeachesNobodyByMetadata` (a dictionary's declared languages); `everyProbeWordHasAScript`,
+`theProbeWordsCoverTheScriptsThatSeparateTheLanguages` (the probe words); `bothClassifiersAgreeAboutWhatAScalarIs`
+(compares with `ProbeScript.of`, not moved); and the `ProbeScript.of` half of
+`theFirstScalarClassifierIsNotEnoughForCapturedText` (its `dominant` half moved by name).
+
+## Open, by work item (TODO)
+
+- ~~WI-2: the Service-text-wins rule~~ — done in plan-capture WI-2: `SelectionReader.serviceTerm` in `XDictCaptureMac`,
+  with `SelectionCaptureTests` (the selection disagrees, the app has exited, the pointer moved into the submenu).
+- ~~WI-4: the pending context handle's cancel~~ — done in plan-capture WI-4: `PendingContext.cancel`, with
+  `cancellingEndsItOnceAndStopsTheWork` and the session's `replacingEndingOrClosingCancelsThePendingContext`.
+- ~~WI-4: the recogniser using `CaptureLimits.observations` and the tile limits~~ — done in plan-capture WI-4:
+  `ScreenTextRecogniser.recognise`, with `RecognitionLimitTests` (`theTilesAreTheLimitsHandedIn`,
+  `noMoreObservationsThanTheLimitAreTaken`, `aSpentLimitReadsNoFurtherTile`) in `XDictCaptureMacTests`.
+- ~~WI-3: `RequestSequence` and `CaptureRequests` joined into one numbering~~ — done in plan-capture WI-3:
+  `CaptureRequests` holds the `RequestSequence` (`begin`, `beginPresenting`, `present`, `close`), with
+  `RequestNumberingTests` across shortcut, Service, menu and hover.
+
+## Not moved (decision 10, and the WI-1 brief)
+
+`ReadingPlace` (document URLs, titles, ledger fields), `CaptureQuality` and `MisreadSigns` (study-ledger quality),
+`PlacePolicy`'s place stripping, `HoverPolicyStore` (settings storage: moved in WI-3 to `XDictAnywhere`, the
+composition layer; its row is in `XDictCaptureMac/PROVENANCE.md`), `DrawerGeometry`, `SentenceExcerpt`,
+`RevealSequence` (panel and developer code), `ProcessResolver` and `SystemOverlaySurface` (the Mac adapter's and the E2E
+panel stage's), and every `MacCapture` file (WI-2).

@@ -278,5 +278,49 @@ check("... not the style files nor their generated Swift, which keys hold apart"
       not any(p.startswith(STYLE) for p in lab) and "apps/apple/Sources/XDictEntryView/EntryStyleFiles.swift" not in lab)
 check("... not the app's windows", not any(p.startswith("apps/apple/Sources/XDictUI/") for p in lab))
 
+# Hover's routes (plan-capture WI-5 verification). The pause group's file selects every menu-bar route, not only the
+# menu itself; a revert to `route:menubar.extra` is red (its control below).
+MENUBAR = "apps/apple/Sources/XDictUI/MenuBarMenu.swift"
+PAUSE_ROUTES = {"menubar.extra", "menubar.hoverPause", "menubar.hoverPaused", "menubar.hoverOff"}
+
+
+def menubar_routes(a_map):
+    return set(ra.select([MENUBAR], a_map, keys, ledger, route_ids, {}, profiles_text).routes)
+
+
+check("the menu-bar menu selects the pause group's routes", PAUSE_ROUTES <= menubar_routes(m), sorted(menubar_routes(m)))
+with tempfile.TemporaryDirectory() as tmp:
+    reverted = os.path.join(tmp, "reverted.map")
+    text = open(ra.MAP, encoding="utf-8").read()
+    with open(reverted, "w", encoding="utf-8") as f:
+        f.write(text.replace(MENUBAR + "                route:menubar.*", MENUBAR + "                route:menubar.extra"))
+    check("control: the revert's edit applied", "route:menubar.extra" in open(reverted, encoding="utf-8").read())
+    check("control: a menu-bar rule reverted to route:menubar.extra misses the pause routes",
+          not PAUSE_ROUTES <= menubar_routes(ra.read_map(reverted)), sorted(menubar_routes(ra.read_map(reverted))))
+
+# A route the tour does not drive (no steps) is never selected: nothing would ever render it, so it would stay pending.
+sys.path.insert(0, os.path.join(HERE, "..", "ui-tour"))
+from routes import ROUTES  # noqa: E402
+sys.path.pop(0)
+undriven = {r[0] for r in ROUTES if r[4] is None}
+check("route_ids leaves out every undriven route", undriven and not undriven & set(route_ids), sorted(undriven & set(route_ids)))
+hover_rows = set(sel(["apps/apple/Sources/XDictUI/HoverSentences.swift"]).routes)
+check("hover's sentences select the General pane, which shows the Screen Recording row, and none of the undriven states",
+      "settings.general" in hover_rows and not hover_rows & undriven, sorted(hover_rows))
+# The control's setting and pause decide what the menu-bar pause group and the General pane's switch show (isOn).
+control_rows = set(sel(["apps/apple/Sources/XDictAnywhere/HoverControl.swift"]).routes)
+check("hover's control selects the pause group's routes and the General pane",
+      {"menubar.hoverPause", "menubar.hoverPaused", "menubar.hoverOff", "settings.general"} <= control_rows,
+      sorted(control_rows))
+apple = set(sel(["apps/apple/Sources/XDictUI/AppleImportSheet.swift"]).routes)
+check("the Apple import selects its driven route, not the undriven updated and removed ones",
+      "settings.dictionaries.appleImport" in apple and not apple & undriven, sorted(apple))
+# Its control: every route id, the undriven ones included, selects them.
+every = [r[0] for r in ROUTES]
+with_undriven = set(ra.select(["apps/apple/Sources/XDictUI/HoverSentences.swift"], m, keys, ledger, every, {},
+                              profiles_text).routes)
+check("control: with the undriven routes listed, hover's sentences select them", with_undriven & undriven,
+      sorted(with_undriven))
+
 print(f"render-affected: {failures} failure(s)")
 sys.exit(1 if failures else 0)

@@ -80,7 +80,7 @@ struct XDictApp: App {
         // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
         // `openWindow` is handed to the panel, which expands into a main window.
         MenuBarExtra {
-            MenuBarMenu(registrar: LookupAnywhere.shared.registrar,
+            MenuBarMenu(registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
                         showDictionaries: { MenuBarActions.showDictionaries() })
@@ -100,7 +100,8 @@ struct XDictApp: App {
             ReadingSettings()
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
-                            registrar: LookupAnywhere.shared.registrar, openSetup: { MenuBarActions.openSetup() })
+                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
+                            openSetup: { MenuBarActions.openSetup() })
         }
     }
 
@@ -239,6 +240,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             LookupAnywhere.shared.start()
             Task { await LibraryLaunch.once() }
         }
+    }
+
+    /// **The reader's Settings ▸ General switch**: on (the default), XDict stays in the menu bar with every window closed;
+    /// off, it quits with its last window. The menu-bar item is inserted either way (`MenuBarResidence`).
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        MenuBarResidence(defaults: .standard).terminatesAfterLastWindowClosed
     }
 }
 

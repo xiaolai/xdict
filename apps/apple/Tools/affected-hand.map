@@ -16,6 +16,11 @@ launches hostile.faults     XDictEntryLab
 launches hostile.binding    XDictEntryLab
 launches reader             XDictEntryLab
 launches entries.lab        XDictEntryLab
+# The capture lab (`--read-point`, plan-capture WI-5): hover's lab sub-stages; hover.permission and hover.popover drive
+# the app.
+launches hover.accessibility XDictCaptureLab
+launches hover.ocr           XDictCaptureLab
+launches hover.exclusions    XDictCaptureLab
 launches *                  XDict XDictService
 
 # Tools/build-fixtures.sh and Tools/build-lab.sh run xdict-conformance's fixture writers; e2e.sh's sample is

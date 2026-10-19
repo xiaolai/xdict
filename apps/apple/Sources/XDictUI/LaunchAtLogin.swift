@@ -18,6 +18,8 @@ public protocol LoginItemService: AnyObject {
     var status: LoginItemStatus { get }
     func register() throws
     func unregister() throws
+    /// System Settings ▸ General ▸ Login Items, where a pending approval is given.
+    func openSystemSettings()
 }
 
 /// The app itself as its login item.
@@ -36,6 +38,7 @@ public final class MainAppLoginItem: LoginItemService {
 
     public func register() throws { try SMAppService.mainApp.register() }
     public func unregister() throws { try SMAppService.mainApp.unregister() }
+    public func openSystemSettings() { SMAppService.openSystemSettingsLoginItems() }
 }
 
 /// **Launch at login, in Settings** (plan-macos-v1 WI-9): the switch asks the system, then shows what the system says
@@ -69,6 +72,12 @@ public final class LaunchAtLogin {
 
     /// Read the system again: an approval given in System Settings changes it with XDict open.
     public func refresh() { status = service.status }
+
+    /// Registered and waiting for the reader in Login Items: the row offers the way there.
+    public var needsApproval: Bool { status == .requiresApproval }
+
+    /// The reader's button: Login Items in System Settings, where the approval is given.
+    public func openLoginItems() { service.openSystemSettings() }
 
     public static func sentence(_ status: LoginItemStatus) -> LocalizedStringResource {
         switch status {

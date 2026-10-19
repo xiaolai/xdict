@@ -31,6 +31,7 @@ placeholder = { kind = "length", swift = "Placeholder", doc = "The picture a blo
 instrumentFrame = { kind = "rect", swift = "InstrumentFrame", doc = "Window frames of development instruments (the lab, the E2E instruments): never in front of a reader." }
 instrumentSize = { kind = "size", swift = "InstrumentSize", doc = "Pane sizes the instruments picture an entry at." }
 instrumentLength = { kind = "length", swift = "InstrumentLength", doc = "Strides, bounds and margins of the instruments' windows and captures." }
+capture = { kind = "length", swift = "Capture", doc = "Capture's distances, in screen points: how far from a word a resting pointer may be, and how far it may drift and still rest (ADR-0014 decision 11). Handed into the capture targets, which may not import the tokens." }
 css = { kind = "css", doc = "The reading style's tokens, as `--xdict-<name>` on :root (dev-docs/reading-style.md section 1)." }
 palette = { kind = "css-palette", doc = "The reading style's palette, light then dark, as `--xdict-<name>` per theme (reading-style.md section 1.3)." }
 accent = { kind = "css-accent", doc = "The accent hues the reader chooses in Settings > Reading, light then dark; `--xdict-accent` per hue." }
@@ -65,6 +66,7 @@ panelScreenMargin = { value = 8, why = "The lookup panel keeps clear of the scre
 clickedWordRise = { value = 11.2, why = "A Control-clicked word with no box: its point taken as the middle of one reading line (16 pt base x 1.4 leading, css.base and css.leading), so the popover arrow lands on the line's edge, the middle of the white space between two lines." }
 settingsSheetMargin = { value = 12, why = "The Details sheet's margin above and below inside the Settings window, so it never hangs past it." }
 settingsScreenMargin = { value = 40, why = "The Settings window's margin kept above and below it on the screen (ADR-0012 d.6)." }
+hoverNoticeOffset = { value = 16, why = "The brief hover notice keeps this far clear of the pointer on both axes: over the pointer it would hide the word being read, and the cursor's own arrow is about this size." }
 
 [row]
 sidebar = { value = 28, source = "P9" }
@@ -79,6 +81,7 @@ clickedWord = { value = 22.4, why = "The line a Control-clicked word with no box
 toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measured: 300 pt of content made a 352 pt window." }
 shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06)." }
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
+siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
@@ -351,3 +354,16 @@ space-image = { main = "0.75em", why = "Around an illustration, about half a lin
 [fill]
 bp-narrow = { value = "480px", why = "A pane at most this wide (a column under about 30em) turns a float into an illustration (R16)." }
 bp-wide = { value = "481px", why = "The first width past bp-narrow: a float beside text gets its space above (R16)." }
+
+[capture]
+hitAcross = { value = 3, why = "How far left or right of a word's box a resting pointer may be and still mean it: one rule for every capture path, as XiaolaiDict measured word boxes from text layout, web layout and OCR disagreeing at their edges (screen-word spike, finding 7)." }
+hitDown = { value = 2, why = "How far above or below a word's box a resting pointer may be and still mean it: tighter than across, since a line above or below is another word (screen-word spike, finding 7)." }
+restDrift = { value = 2, why = "How far a resting pointer may drift and still be resting: a hand held on a word twitches by a point or two, and counting that as movement restarted the dwell every time (XiaolaiDict ADR-0045)." }
+stripStart = { value = 300, why = "The height of the first strip the recogniser reads around the pointer's row: XiaolaiDict measured 140 reading three of five rows of a paragraph and 300 the whole of it (ADR-0016 there, 2026-10-11)." }
+stripStep = { value = 150, why = "How far a strip grows on a side where its sentence ran into the edge, per read: XiaolaiDict's measured step, a taller strip costing little more than the one before (ADR-0016 there)." }
+stripMost = { value = 600, why = "The tallest strip the recogniser reads, so growing stays inside the capture deadline (XiaolaiDict ADR-0016, 2026-10-11)." }
+tileEdgeSlack = { value = 4, why = "In band pixels: how close to a tile's inner edge a recognised box may end and still be called cut by it, so a word on a tile boundary is read from the tile that saw it whole (XiaolaiDict ADR-0016 tiling addendum)." }
+tileHoleSlack = { value = 16, why = "In band pixels: how much ink a dropped run may have seen that no kept run covers before the merged reading is called missing text (XiaolaiDict ADR-0016 tiling addendum)." }
+frameDrift = { value = 1, why = "How far two readings of one window's frame, the compositor's and ScreenCaptureKit's, may disagree and still be the same frame: the two round independently (XiaolaiDict ScreenTextRecogniser)." }
+labelShift = { value = 12, why = "How far from its frame's centre a control's label is assumed it may be drawn, pushed aside by an icon, a radio circle or a chevron: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume labels up to this far aside, and no control was measured), so a title's word is taken only where every placement up to this far aside agrees." }
+labelSmaller = { value = 2, why = "How much smaller than the system's size for its kind a control's label is assumed it may be drawn: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume it); larger fonts are bounded by the frame the text must fit." }

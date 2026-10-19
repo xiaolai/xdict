@@ -31,13 +31,40 @@ struct TestInventoryTests {
         "XDictSpeechTests": 31,
         // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
         // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
-        "XDictAnywhereTests": 64,
+        // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
+        // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
+        // 37 → 66 (plan-capture WI-3): 38 were present (the floor above counted one short); the composition layer for
+        // capture — HoverPolicyStoreTests (8) and HoverPauseWiringTests (5) and CaptureHealthWiringTests (1) moved by name
+        // from XiaolaiDict, fourteen added (the control's scripts, its default and tolerances, hover off starting nothing,
+        // the derived scripts, the popover's acknowledgements, the anchor): 38 + 14 + 14 = 66. 66 → 69: a driven launch
+        // starts no hover, and which launch it is, both ways (HoverLaunchTests). 69 → 76 (plan-capture WI-4): the Screen
+        // Recording row asks nothing before it is used, at launch either, asks once when used, shows a standing grant, its
+        // notice, the session's book shared with the reader, the recogniser's distances from the tokens. 76 → 80 (UI tour
+        // of the capture work, 2026-10-19): the menu and the switch show the setting in a driven run, its switch starts
+        // nothing there, a reader's launch watches what the setting says, and the setting is observed. 80 → 83: a failed
+        // start shows off, the switch retries it, and a driven run never asks.
+        "XDictAnywhereTests": 83,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
-        "XDictUITests": 29,
+        // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
+        // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
+        "XDictUITests": 34,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,
-        "XDictTests": 37,
+        // 37 → 39 (plan-capture WI-1, 2026-10-18): capture's transitive boundary and its controls; 39 → 40 (WI-2): the
+        // macOS capture target's controls.
+        // 40 → 42 (WI-3): the captured context's data-flow rule and its control; 42 → 44: every driven instrument turns
+        // hover off, and its control; 44 → 46: the app starts hover only with its launch, and its control. 46 → 48
+        // (plan-capture WI-4): no shipped target holds a development instrument's flag, and its control. 48 → 51: the
+        // capture lab's sentence exemption held to its folder, and no log line inside capture interpolating the text read,
+        // with its control. 51 → 53: a context read inside a string interpolation, and a log call across lines or through
+        // a local, each named by its control. 53 → 55 by transfer (manifest §7): XiaolaiDict's
+        // ScriptFilterWiringTests.theSelectionShortcutIsNotFilteredByScript and theAppReadsOnlyTheDefaultsSuiteItWasGiven.
+        // 55 → 59 (UI tour of the capture work, 2026-10-19): the menu and Settings' switch never read the watcher, and
+        // no row of the view layer says its label twice, each with its control. 59 → 61: the hover rows contain their
+        // controls and the site field is bordered, with its control. 61 → 64 (UI tour, 2026-10-19): no catalog value
+        // spaced after a full-width mark or twice, with its control, and the Chinese start prompt Apple's.
+        "XDictTests": 64,
         // Added with the Apple dictionary converter (ADR-0011, plan WI-3); the service's raised by its acceptance through the
         // core, the harness's by its boundary (2026-10-18). Raised with the conversion in the service (plan WI-4,
         // 2026-10-18): the converter's checkpoint, the app group, contract 6 and the service's conversions.
@@ -46,6 +73,45 @@ struct TestInventoryTests {
         "XDictTokensTests": 6,
         // Added with the Apple import (plan WI-5, 2026-10-18): installed bundles found, copied, swept and hashed.
         "XDictAppleSourceTests": 16,
+        // Added with capture's pure target (plan-capture WI-1, 2026-10-18): XiaolaiDict's capture tests moved by name;
+        // 261 → 269 (WI-3): one numbering across the four triggers (5) and the ephemeral context session (3).
+        // 269 → 282 (WI-4): the pending context, its one ending and its cancel (6), the book of them (3), and the
+        // session settling, cancelling and refusing an unknown handle (4).
+        // 282 → 285 (plan-capture WI-4 verification): nothing of a settled sentence outlives its request, a context cancelled
+        // by its holder leaves the book, and an older generation's settlement changes nothing.
+        // 285 → 288: a sentence over the context ceiling refused, a cut that never splits a combining sequence, and a limit over
+        // the ceiling refused.
+        "XDictCaptureTests": 288,
+        // Added with capture's macOS target (plan-capture WI-2, 2026-10-18): the probe, the session and the one lane (22);
+        // 22 → 68 by transfer of the 28 above from XDictAnywhereTests, ProcessResolverTests' five from XiaolaiDict, and
+        // thirteen added (the hit test inside the read, the lane and the main actor, the Service text, the admission);
+        // 68 → 91: the pointer word reader, ScreenWordBoundsTests (6), the budget tests (6) and ChromiumEscalationTests
+        // (2) moved by name from XiaolaiDict, nine added (the marker dialect, the target's order, metadata-only text).
+        // 113 → 153 (WI-3): the hover watcher and reader, XiaolaiDict's HoverWatcherSequenceTests (18, with
+        // stoppingEndsTheHover), HoverWatcherTests (13), HoverReaderSourceTests (2) and HoverSiteTests (1) moved by name,
+        // six added (an excluded app, the own window, an unreadable site, the stuck lane, a request that found nothing);
+        // 153 → 156: a hover supersedes a shortcut still reading, the compositor's own window, the key up at the gate.
+        // 156 → 205 (WI-4): the recogniser, XiaolaiDict's RecognitionScopeTests (8), ScreenTextRecogniserRunTests (8),
+        // StripReadingTests (8), ScreenTextRecogniserBandTests (5) and two ScreenRecordingAccessTests moved by name;
+        // twenty-three added (the acquisition limits, the term handed over, the setup row's gate, where ScreenCaptureKit
+        // is named, the recorded recognitions). 205 → 226: the hover reader's pixel path, XiaolaiDict's
+        // HoverCaptureTargetTests (2), HoverCaptureReleaseTests (1), CaptureWedgeTests (1), HoverPendingContextTests (3),
+        // withoutAnElementThePixelsAreNotReadWhileSitesAreExcluded, aRefusedCaptureAsksTheReaderNotTheSystem,
+        // thecaptureGuardIsHeldUntilReleased and four watcher cases (aNoticeForAnAbandonedReadIsNotShown,
+        // aNoticeForAHoverThatNoLongerStandsIsNotShown, aBlockedReadIsAskedAgainWhenTheCaptureFinishes, aReAskKeepsItsNumber)
+        // moved by name; seven added (Accessibility first, a site refused through Accessibility, an excluded app's
+        // recognition, an overdue context, a notice told and its request ended, a recognised word presented pending, and
+        // one not presented cancelling its context). 226 → 230: an excluded app and an unattributable window refused before
+        // any capture call, an allowed one captured, and a word refused after the read cancelling its context. 230 → 232:
+        // a recognised word refused the presentation, or refused as a term, cancels its context and empties the book.
+        // 232 → 233: one recognised line longer than the context limit is cut around the word. 233 → 239 by transfer
+        // (manifest §7): XiaolaiDict's HoverAuditTests for wholeWordRange (3) and sameGeometry (1), and two of its
+        // ScriptFilterWiringTests (theSuppressionKeyTellsTwoAppsApart, releasingTheModifierClearsTheSuppressedWord).
+        "XDictCaptureMacTests": 239,
+        // Added with the capture lab (plan-capture WI-4): `--read-point`'s command line and its report's box, moved by name
+        // from XiaolaiDict (ReadPointArgumentTests, PointReportBoundsTests); the report as capture hands the term over, a
+        // read through hover's reader at one point, and the process's lines and exits.
+        "XDictCaptureLabTests": 13,
     ]
 
     @Test func everyTargetStillRunsTheTestsItHad() throws {

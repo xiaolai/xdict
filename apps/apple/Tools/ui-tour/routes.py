@@ -5,7 +5,8 @@ over: "reader" (a real first launch, `tour.py --reader`), "full" (the lookup fix
 dictionary). Every route starts from the main window alone, the search field holding the keyboard. Steps:
 
     ("key", combo)                 one key with modifiers, held to the app (`keys press`)
-    ("type", text)                 the search field selected and the text typed (`keys type`)
+    ("type", text)                 the text field holding the keyboard (the search field, unless a click moved it)
+                                   selected and the text typed (`keys type`)
     ("menu", index, title...)      a menu-bar item by position (0 Apple, 1 XDict, 2 File, ...) and an item path; a title
                                    is translated for the Chinese UI from the bundle's strings; "#n" is the n-th item
     ("menuopen", index)            that menu left open for the capture
@@ -16,8 +17,12 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("drop", fixture)              a file of fixtures/library dragged from a source window onto the window in front (Settings ▸ Dictionaries)
     ("wait", seconds)
     ("after", step...)            a step run after the capture (the print panel cancelled before the app quits)
+    ("pref", key, value)           one of XDict's preferences (`PREFS`) stored before the launch, after the tour deleted
+                                   them: a state the route needs, never reached by clicking a switch whose state it
+                                   cannot know (menubar.hoverOff, 2026-10-19)
 
-Each route runs over a launch of its own, so nothing a route leaves behind reaches the next.
+Each route runs over a launch of its own, so nothing a route leaves behind reaches the next. No two driven routes walk the
+same way (waits aside): one that only waits longer captures the same picture (ui_tour_test).
 
 Routes with `steps=None` are not driven: their `how` says why, and the index lists them as not captured. The main
 window's routes are also held to Apple's Dictionary by `parity.py` (the parity ledger's ids), on English variants.
@@ -32,6 +37,47 @@ DICTIONARIES = [SETTINGS, ("wait", 1), ("click", "Dictionaries"), ("wait", 1)]
 
 def look_up(word):
     return [SEARCH, ("type", word), ("key", "return"), ("wait", 1.5)]
+
+
+# The preferences a route may store before its launch, with their type: the keys the app reads (HoverControl.enabledKey).
+PREFS = {"hoverLookupEnabled": bool}
+
+
+def prefs(steps):
+    """A route's `("pref", key, value)` steps as (key, value), each checked against `PREFS`; ValueError otherwise."""
+    found = []
+    for step in steps:
+        if step[0] != "pref":
+            continue
+        if len(step) != 3 or step[1] not in PREFS or type(step[2]) is not PREFS[step[1]]:
+            raise ValueError(f"no such preference step {step}: one of {sorted(PREFS)}, typed as PREFS says")
+        found.append((step[1], step[2]))
+    return found
+
+
+def defaults_commands(domain, preferences):
+    """The `defaults write` commands storing `preferences` ((key, value) as `prefs` gives them) in `domain`, a defaults
+    domain or a plist's path: what tour.py's Session runs before a launch, and ui_tour_test runs against a scratch
+    plist."""
+    return [["defaults", "write", domain, key, "-bool", "YES" if value else "NO"] for key, value in preferences]
+
+
+# **Menus opened from the menu bar draw in the menu bar's appearance, which is the Mac's** (2026-10-19). The tour's
+# `--appearance` sets NSApp.appearance, which reaches XDict's windows but not these menus on macOS 27: every dark capture
+# of a menu (the menu-bar item's and the main menu's alike, menu.view and menu.window among them) was byte for byte, or
+# by eye, the light one, with dark text. A reader's XDict has no appearance of its own (only the lookup panel's shade),
+# so its menus always match the Mac. A dark capture of them would claim a look XDict never draws.
+MENU_BAR_APPEARANCE = ("drawn in the menu bar's appearance, the Mac's, which the tour's --appearance (NSApp.appearance) "
+                       "does not reach on macOS 27; a dark capture would show the light menu")
+NOT_IN_APPEARANCE = {("menu.", "dark"): MENU_BAR_APPEARANCE, ("menubar.", "dark"): MENU_BAR_APPEARANCE}
+
+
+def not_in_appearance(route, appearance):
+    """Why `route` is not captured in `appearance` ("light" or "dark"), or None when it is."""
+    for (prefix, excluded), why in NOT_IN_APPEARANCE.items():
+        if appearance == excluded and route.startswith(prefix):
+            return why
+    return None
 
 
 ROUTES = [
@@ -50,6 +96,10 @@ ROUTES = [
     ("main.narrow", "full", "Look up 'apple' at the 400 pt minimum (P8)", "The search field and its scope menu still "
      "there; Back / Forward and the text size in the toolbar's overflow",
      [NARROW] + [("key", "cmd+opt+f"), ("type", "apple"), ("key", "return"), ("wait", 1.5)]),
+    ("window.wide", "full", "Look up 'apple' at 700 pt, then stretch the window to 1400 pt (P5, P48)", "The search "
+     "field grown to its most (420 pt) at the toolbar's trailing edge, inside the window; the text-size pair beside it, "
+     "the speaker after Back / Forward (P48), none over the field (2026-10-19: the speaker slid over the field and the field ran past the window)",
+     [("size", 700, 500)] + look_up("apple") + [("size", 1400, 700), ("wait", 1)]),
     ("main.noDictionaries", "empty", "Launch XDict with an empty library", "'No Dictionaries' with its sentence and an "
      "'Open Dictionary Settings' button", []),
     ("search.result", "full", "Type 'apple', Return", "As Apple's (P2, P9, P43): 'N found' under the title; the "
@@ -168,9 +218,6 @@ ROUTES = [
      DICTIONARIES + [("click", "damaged", "Damaged"), ("wait", 1.2)]),
     ("settings.dictionaries.gone", "full", "⌘, ▸ Dictionaries, click 'gone'", "Beneath the table, the file is "
      "missing, said in a sentence, with Locate…", DICTIONARIES + [("click", "gone", "Gone"), ("wait", 1.2)]),
-    ("settings.dictionaries.locked", "full", "⌘, ▸ Dictionaries over the fixtures, which hold a registration-code "
-     "file", "No 'locked' row: such a file is refused at import (ADR-0005 decision 4, 5b19fbd), with a notice in "
-     "the strip naming why", DICTIONARIES + [("wait", 0.5)]),
     ("settings.dictionaries.records", "full", "⌘, ▸ Dictionaries, click 'records', Details…", "A large dictionary's "
      "details and health", DICTIONARIES + [("click", "records", "Records"), ("wait", 0.8),
                             ("click", "settings.details"), ("wait", 1.5)]),
@@ -193,17 +240,47 @@ ROUTES = [
      "notice in the strip", DICTIONARIES + [("drop", "refused/regcode/regcode.mdx"), ("wait", 3)]),
     ("settings.dictionaries.dropImported", "empty", "Drag a good .mdx onto the empty table", "The new dictionary "
      "imported, listed and selected", DICTIONARIES + [("drop", "file/single.mdx"), ("wait", 4)]),
-    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Language, the lookup shortcut, Show "
-     "Setup…", [SETTINGS, ("wait", 1), ("click", "General")]),
+    # Settings ▸ General holds every row on screen at once (the window is as tall as its form), so a route scrolled to
+    # a section would capture the same picture: one route shows the pane, and only a route that changes a row's state
+    # is another (2026-10-19: settings.general.screenRecording and settings.lookup were dropped, both the same walk as
+    # this one; the Screen Recording row shows here, in the state macOS holds for XDict.app on the touring Mac).
+    ("settings.general", "full", "⌘, ▸ General", "Open XDict when you log in, Keep XDict in the menu bar, Language; "
+     "Look up the selection: the shortcut recorder, its sentence; hover's rows: 'Look up the word under the pointer' "
+     "on (the tour's launch deletes XDict's preferences), Hover key (Option ⌥), Gesture (Hold | Press Twice), Rest "
+     "time, Looks up (the writing systems of the enabled dictionaries, shown and not chosen), Password managers: "
+     "Always, Never look up in with Add an App…, Never look up on with its bordered field (example.com) and Add Site, "
+     "its sentence two lines at most (P53), then Screen Recording in the state macOS holds for XDict.app on this Mac: "
+     "not set up with Allow…, allowed, not allowed with where System Settings keeps the switch and Check Again, or "
+     "could not tell with Check Again; showing it asks for nothing, so no system prompt (P50, P52; ADR-0014 decision "
+     "7); Lookup popup; Background with Glass and Solid, said once; Show Setup…",
+     [SETTINGS, ("wait", 1), ("click", "General")]),
     ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table with every dictionary in order, + and − "
-     "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice", DICTIONARIES),
+     "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice: no 'locked' row, as "
+     "the fixtures' registration-code file is refused at import, the notice naming why (ADR-0005 decision 4, "
+     "5b19fbd; this was settings.dictionaries.locked, the same walk, dropped 2026-10-19)", DICTIONARIES),
     ("settings.readingSpeech", "full", "⌘, ▸ Reading & Speech", "Accent colour with its sentence; English accent, "
      "Voice, Open Read & Speak Settings, Use the dictionary's recordings",
      [SETTINGS, ("wait", 1), ("click", "Reading & Speech")]),
-    ("settings.lookup", "full", "⌘, ▸ General", "Look up the selection: the shortcut recorder, its sentence",
-     [SETTINGS, ("wait", 1), ("click", "General")]),
     ("settings.recording", "full", "⌘, ▸ General, click the recorder", "'Type the new shortcut'",
      [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.6), ("click", "shortcut.recorder"), ("wait", 0.6)]),
+    # Hover (plan-capture WI-3, WI-4; defined by WI-5): its rows in Settings ▸ General (settings.general) and the
+    # menu-bar pause group. The tour's launch deletes XDict's preferences, so hover is on, with the Option key and Hold.
+    # The menu shows the reader's setting, not whether the driven run watches (it never does: HoverControl.isOn).
+    ("settings.general.hover", "full", "⌘, ▸ General, click Never look up on's field, type a site", "The field in use: "
+     "its border and focus ring, 'example.org' in it, Add Site enabled; the sentence beside it two lines at most (P53)",
+     [SETTINGS, ("wait", 1), ("click", "General"), ("wait", 0.8), ("click", "hover.site.field"), ("wait", 0.4),
+      ("type", "example.org")]),
+    ("menubar.hoverPause", "full", "Click XDict's menu-bar item, then Pause Hover", "Pause Hover's lengths: For 15 "
+     "minutes, For 1 hour, For 8 hours, between Dictionaries… and Settings… (P51)",
+     [("extra",), ("press", "Pause Hover"), ("wait", 0.6)]),
+    # A pause length's title is the system's words for its length ("For %@" in English, the length alone in Chinese).
+    ("menubar.hoverPaused", "full", "Pause Hover ▸ For 15 minutes, then XDict's menu-bar item again", "'Hover resumes "
+     "in 15 minutes' or 14 (disabled) and Resume Hover where Pause Hover was (P51)",
+     [("extra",), ("press", "Pause Hover"), ("wait", 0.6), ("press", "For 15 minutes", "15分钟"), ("wait", 0.6),
+      ("extra",)]),
+    ("menubar.hoverOff", "full", "Hover turned off in Settings (stored before the launch), then XDict's menu-bar item",
+     "'Hover Is Off in Settings', disabled, where Pause Hover was (P51)",
+     [("pref", "hoverLookupEnabled", False), ("extra",)]),
     # Not driven
     ("settings.dictionaries.appleUpdated", "full", "An imported Apple dictionary whose bundle Apple updated", "Beneath "
      "the table, 'Apple updated <name>.' with Convert Again; after it, 'Kept as the same dictionary…' with Undo "
@@ -219,6 +296,18 @@ ROUTES = [
     ("anywhere.noAccess", "full", "⌃⌥D with Accessibility not granted", "'Nothing to Look Up' and 'Open "
      "Accessibility Settings'", None),
     ("sound.recording", "full", "A sound:// link in an entry", "The recording plays, or a notice says why not", None),
+    ("settings.general.screenRecordingNotSetUp", "full", "The Screen Recording row before XDict ever asked",
+     "'Lets hover read words in apps that do not share their text, such as terminals and images. macOS asks once.' "
+     "and Allow… (P52)", None),
+    ("settings.general.screenRecordingAllowed", "full", "The Screen Recording row with the grant given", "'Hover reads "
+     "words from the screen where an app does not share its text.' and 'Allowed', no button (P52)", None),
+    ("settings.general.screenRecordingNotAllowed", "full", "The Screen Recording row with the grant refused", "'Not "
+     "allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check "
+     "again.' and Check Again (P52)", None),
+    ("settings.general.screenRecordingCouldNotTell", "full", "The Screen Recording row when macOS gave no answer",
+     "'Could not tell whether Screen Recording is allowed. Check again in a moment.' and Check Again (P52)", None),
+    ("hover.popover", "full", "Hold Option with the pointer resting on a word in another app (TextEdit)", "XDict's "
+     "lookup popover beside the word (P41, P50); released and moved away, it stays until dismissed", None),
 ]
 
 NOT_DRIVEN_WHY = {
@@ -234,4 +323,12 @@ NOT_DRIVEN_WHY = {
                                           "E2E library.apple stage converts a synthetic one and changes it",
     "settings.dictionaries.appleRemoved": "needs an imported Apple dictionary whose installed bundle then goes; the "
                                           "E2E library.apple stage removes its synthetic one",
+    "settings.general.screenRecordingNotSetUp": "only the state macOS holds for XDict.app on this Mac is shown "
+                                                "(settings.general), and grants are never changed by "
+                                                "script",
+    "settings.general.screenRecordingAllowed": "as settings.general.screenRecordingNotSetUp",
+    "settings.general.screenRecordingNotAllowed": "as settings.general.screenRecordingNotSetUp",
+    "settings.general.screenRecordingCouldNotTell": "macOS answers on this Mac; there is no way to make it not answer",
+    "hover.popover": "needs the hover key held over another app's text; the tour drives XDict alone, whose own windows "
+                     "hover never reads (ADR-0014 decision 6); the E2E hover.popover sub-stage does it",
 }

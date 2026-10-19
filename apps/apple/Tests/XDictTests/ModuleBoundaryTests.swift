@@ -22,6 +22,17 @@ struct ModuleBoundaryTests {
     /// entry view are held to the rule above like every other target.
     static let developmentHostsReachingTheCore: Set<String> = ["XDictEntryLab"]
 
+    /// **The development instruments that never ship, and the flag each answers to** (plan-capture WI-4; ADR-0014
+    /// decision 8, after XiaolaiDict ADR-0016): `XDictCaptureLab`'s `--read-point` reads the word under any screen point
+    /// with whatever grants its process holds, so it is a deputy, and the shipped executables hold none of it — not behind
+    /// a flag, not compiled in and switched off, but in a target neither reaches. A leaf like the entry lab
+    /// (`leafProblems`); its flag in no source of a target that ships (`noShippedTargetHoldsAnInstrumentFlag`); and
+    /// `Tools/build-bundle.sh` refuses an XDict.app that carries the lab or an app binary that holds the flag.
+    static let developmentInstruments: [String: String] = ["XDictCaptureLab": "--read-point"]
+
+    /// What a reader gets: these executables and every target they reach.
+    static let shippedExecutables: Set<String> = ["XDict", "XDictService"]
+
     /// **Who may reach the Apple dictionary converter** (ADR-0011 decision 3): the converter, the dictionary service that
     /// runs it, and their tests. An Apple bundle is untrusted binary input, parsed in the service and never in the app
     /// (ADR-0001), so nothing else that ships may link it, the development lab included.
@@ -51,11 +62,24 @@ struct ModuleBoundaryTests {
         // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
         "XDictSpeech": ["AVFAudio", "Foundation", "os"],
         "XDictSpeechTests": ["AVFAudio", "Foundation", "Testing"],
-        // Lookup from anywhere (WI-8): Carbon's hot keys, the Accessibility API, the front app and the window list
-        // (`AppKit`, `CoreGraphics`), the shortcut's state the Settings field observes, its log.
-        "XDictAnywhere": ["AppKit", "ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation",
-                          "os"],
-        "XDictAnywhereTests": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Testing"],
+        // Lookup from anywhere (WI-8): Carbon's hot keys, the Accessibility gate (`ApplicationServices`), the panel's
+        // geometry (`CoreGraphics`), the shortcut's state the Settings field observes, its log. The selection reader and
+        // the front app moved down to `XDictCaptureMac` (plan-capture WI-2), and `AppKit` with them.
+        "XDictAnywhere": ["ApplicationServices", "Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "os"],
+        // `Observation`: the tests watch hover's setting redraw the menu and the switch (HoverControl.isOn).
+        "XDictAnywhereTests": ["Carbon.HIToolbox", "CoreGraphics", "Foundation", "Observation", "Testing"],
+        // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
+        // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
+        "XDictCapture": captureMayBind,
+        "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
+        // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
+        // lane, the readers, the never-prompting probe; since WI-4 the recogniser, ScreenCaptureKit's capture and
+        // Vision's reading, behind the Screen Recording setup row (`ScreenCaptureUseTests` holds where ScreenCaptureKit
+        // is named). Nothing that draws. What it binds today, inside `captureMacMayBind`, the ceiling
+        // `captureReachesNothingOfThisPackage` holds.
+        "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit", "Synchronization", "Vision",
+                            "os"],
+        "XDictCaptureMacTests": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
         // `AppKit`: the library's drag-and-drop instrument shows its window by hand (`LibraryDropReport`). `WebKit`: the
@@ -65,6 +89,9 @@ struct ModuleBoundaryTests {
         "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
+        // The capture lab (plan-capture WI-4): hover's reader at one point, its report as JSON. Nothing that draws.
+        "XDictCaptureLab": ["CoreGraphics", "Foundation"],
+        "XDictCaptureLabTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // Its signature and an Apple snapshot's hash come from `XDictAppleSource` (`SigningTeam`, `Manifest`).
         "XDictService": ["Foundation", "Synchronization", "os"],
         // `Security` reads the process's own signing team, which names the app-group container (`SigningTeam`);
@@ -140,6 +167,14 @@ struct ModuleBoundaryTests {
         let app = Manifest.Target(name: "XDict", type: "executable", dependencies: ["XDictEntryLab"], path: "",
                                   swiftSettings: [])
         #expect(Self.leafProblems(["XDictEntryLab": lab, "XDict": app]) == ["XDict depends on XDictEntryLab"])
+        let captureLab = Manifest.Target(name: "XDictCaptureLab", type: "executable", dependencies: ["XDictCaptureMac"],
+                                         path: "", swiftSettings: [])
+        let anywhere = Manifest.Target(name: "XDictAnywhere", type: "regular", dependencies: ["XDictCaptureLab"], path: "",
+                                       swiftSettings: [])
+        let labTests = Manifest.Target(name: "XDictCaptureLabTests", type: "test", dependencies: ["XDictCaptureLab"],
+                                       path: "", swiftSettings: [])
+        #expect(Self.leafProblems(["XDictCaptureLab": captureLab, "XDictAnywhere": anywhere, "XDictCaptureLabTests": labTests])
+                == ["XDictAnywhere depends on XDictCaptureLab"])
         #expect(Self.graphProblems(reaching: ["XDictService", "XDictEntryLab", "XDictEntryView"])
                 == ["XDictEntryView reaches the core"])
         let scratch = try TemporaryDirectory(named: "xdict-planted-entry-core-import")
@@ -203,6 +238,67 @@ struct ModuleBoundaryTests {
         files.sorted(by: { $0.key < $1.key }).flatMap { target, files in
             mayReachTheAppleImport.contains(target) ? [] : files.flatMap { file, modules in
                 modules.filter { $0 == appleImportModule }.map { "\(target)/\(file) imports \($0)" }
+            }
+        }
+    }
+
+    // MARK: - The development instruments
+
+    /// **An instrument is an executable nothing depends on, and nothing that ships holds its flag.** The scan reads every
+    /// file of every target the shipped executables reach, comments included: a flag named anywhere there is one a
+    /// later edit can wire. The premises: the scan reached the capture targets, and the lab itself holds its flag.
+    @Test func noShippedTargetHoldsAnInstrumentFlag() throws {
+        let targets = try Manifest.dump().targets
+        #expect(Self.leafProblems(targets) == [])
+        let shipped = Self.shipped(targets)
+        #expect(shipped.isSuperset(of: ["XDict", "XDictService", "XDictCaptureMac", "XDictAnywhere"]), "\(shipped.sorted())")
+        var files: [String: [(file: String, text: String)]] = [:]
+        for name in shipped.union(Self.developmentInstruments.keys) {
+            let target = try #require(targets[name], "\(name) is not declared")
+            guard target.type != "binary" else { continue }
+            files[name] = try SourceScan.files(under: Manifest.package.appending(path: target.path))
+                .map { ($0.file.lastPathComponent, $0.text) }
+        }
+        #expect(Self.instrumentFlagProblems(files, shipped: shipped) == [])
+        for (lab, flag) in Self.developmentInstruments {
+            #expect(targets[lab]?.type == "executable", "\(lab) is not an executable target")
+            #expect(!shipped.contains(lab), "\(lab) ships")
+            #expect(files[lab]?.contains { $0.text.contains(flag) } == true, "\(lab) holds no \(flag): the scan sees nothing")
+        }
+    }
+
+    /// **The controls**: the flag planted in a shipped target, in code or in a comment, is named; in the lab it is not;
+    /// and a target reached only through another ships.
+    @Test func anInstrumentFlagInAShippedTargetIsNamed() {
+        let code = "let flag = \"--read-point\"\n", comment = "// answers --read-point\n", clean = "let x = 1\n"
+        #expect(Self.instrumentFlagProblems(["XDictCaptureMac": [("Planted.swift", code), ("Clean.swift", clean)],
+                                             "XDict": [("Note.swift", comment)],
+                                             "XDictCaptureLab": [("Lab.swift", code)]],
+                                            shipped: ["XDict", "XDictCaptureMac"])
+                == ["XDict/Note.swift holds --read-point", "XDictCaptureMac/Planted.swift holds --read-point"])
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        #expect(Self.shipped(["XDict": target("XDict", ["XDictUI"]), "XDictUI": target("XDictUI", ["XDictTokens"]),
+                              "XDictTokens": target("XDictTokens", []), "XDictCaptureLab": target("XDictCaptureLab", ["XDictUI"])])
+                == ["XDict", "XDictUI", "XDictTokens"])
+    }
+
+    /// The shipped executables and every target they reach, by declared dependencies.
+    static func shipped(_ targets: [String: Manifest.Target]) -> Set<String> {
+        var reached: Set<String> = []
+        var next = Array(shippedExecutables.filter { targets[$0] != nil })
+        while let name = next.popLast() {
+            guard reached.insert(name).inserted, let target = targets[name] else { continue }
+            next.append(contentsOf: target.dependencies.filter { targets[$0] != nil })
+        }
+        return reached
+    }
+
+    static func instrumentFlagProblems(_ files: [String: [(file: String, text: String)]], shipped: Set<String>) -> [String] {
+        files.filter { shipped.contains($0.key) }.sorted(by: { $0.key < $1.key }).flatMap { target, files in
+            files.flatMap { file in
+                developmentInstruments.values.sorted().filter { file.text.contains($0) }.map { "\(target)/\(file.file) holds \($0)" }
             }
         }
     }
@@ -301,6 +397,104 @@ struct ModuleBoundaryTests {
         #expect(Self.contractProblems(dependencies: [], files: [("Clean.swift", ["Foundation"])]) == [])
     }
 
+    // MARK: - Capture
+
+    /// **Capture's targets** (ADR-0014 decision 5): each reaches only the targets of this package named for it, directly
+    /// or through another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any
+    /// view can arrive by a dependency — and binds nothing beyond its own set. The pure target reaches nothing; the macOS
+    /// target reaches the pure one and the identities, and binds AppKit, Accessibility, and since the recogniser
+    /// (plan-capture WI-4) ScreenCaptureKit and Vision — never SwiftUI, WebKit or a view.
+    static let captureRules: [String: (reach: Set<String>, bind: Set<String>)] = [
+        "XDictCapture": (reach: [], bind: captureMayBind),
+        "XDictCaptureMac": (reach: ["XDictBase", "XDictCapture"], bind: captureMacMayBind),
+    ]
+    static var captureTargets: Set<String> { Set(captureRules.keys) }
+    static let captureMayBind: Set<String> = ["CoreGraphics", "Foundation", "NaturalLanguage", "Synchronization", "os"]
+    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit",
+                                                 "Synchronization", "Vision", "os"]
+
+    @Test func captureReachesNothingOfThisPackage() throws {
+        let targets = try Manifest.dump().targets
+        let files = try Self.importsByTarget()
+        #expect(Self.captureProblems(targets: targets, files: files) == [])
+        // The premise: the target exists and its walk read files. A rule about a target nobody declared holds nothing.
+        for name in Self.captureTargets {
+            #expect(targets[name] != nil, "\(name) is not declared")
+            #expect(files[name]?.isEmpty == false, "the walk read nothing of \(name)")
+        }
+    }
+
+    /// **The controls**: a planted import no edge declares, a planted framework, a direct dependency on a UI target and
+    /// one that arrives only through another target are each named; the clean target is not.
+    @Test func captureReachingFurtherIsNamed() throws {
+        let scratch = try TemporaryDirectory(named: "xdict-planted-capture-import")
+        try "import Foundation\nimport XDictSearch\nimport AppKit\n"
+            .write(to: scratch.appending("Planted.swift"), atomically: true, encoding: .utf8)
+        let planted = try SourceScan.files(under: scratch.url).map { ($0.file.lastPathComponent, SourceScan.imports(in: $0.text)) }
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        let ui = target("XDictUI", ["XDictTokens"]), tokens = target("XDictTokens", [])
+        let middle = target("XDictHelper", ["XDictUI"])
+        // A planted undeclared import, with no edge at all.
+        #expect(Self.captureProblems(targets: ["XDictCapture": target("XDictCapture", []), "XDictSearch": target("XDictSearch", [])],
+                                     files: ["XDictCapture": planted])
+                == ["XDictCapture/Planted.swift imports XDictSearch", "XDictCapture/Planted.swift imports AppKit"])
+        // A dependency on a UI target, direct and transitive.
+        let direct = ["XDictCapture": target("XDictCapture", ["XDictUI"]), "XDictUI": ui, "XDictTokens": tokens]
+        #expect(Self.captureProblems(targets: direct, files: ["XDictCapture": [("Clean.swift", ["Foundation"])]])
+                == ["XDictCapture reaches XDictTokens", "XDictCapture reaches XDictUI"])
+        let through = ["XDictCapture": target("XDictCapture", ["XDictHelper"]), "XDictHelper": middle, "XDictUI": ui,
+                       "XDictTokens": tokens]
+        #expect(Self.captureProblems(targets: through, files: ["XDictCapture": [("Clean.swift", ["Foundation"])]])
+                == ["XDictCapture reaches XDictHelper", "XDictCapture reaches XDictTokens", "XDictCapture reaches XDictUI"])
+        #expect(Self.captureProblems(targets: ["XDictCapture": target("XDictCapture", [])],
+                                     files: ["XDictCapture": [("Clean.swift", ["Foundation", "NaturalLanguage"])]]) == [])
+    }
+
+    /// **The macOS target's controls**: the pure target, the identities, ScreenCaptureKit and Vision are allowed and named
+    /// nowhere; a planted SwiftUI, WebKit or search import is named, and so is a dependency on the composition layer, with
+    /// what it drags in (the tokens and their UI frameworks).
+    @Test func captureMacReachingFurtherIsNamed() {
+        func target(_ name: String, _ dependencies: Set<String>) -> Manifest.Target {
+            Manifest.Target(name: name, type: "regular", dependencies: dependencies, path: "", swiftSettings: [])
+        }
+        let base = target("XDictBase", []), pure = target("XDictCapture", [])
+        let clean = ["XDictCaptureMac": target("XDictCaptureMac", ["XDictBase", "XDictCapture"]), "XDictBase": base,
+                     "XDictCapture": pure]
+        let cleanFiles = ["XDictCaptureMac": [(file: "Lane.swift", modules: ["ApplicationServices", "XDictCapture", "XDictBase"]),
+                                              (file: "Recogniser.swift", modules: ["ScreenCaptureKit", "Vision", "XDictCapture"])]]
+        #expect(Self.captureProblems(targets: clean, files: cleanFiles) == [])
+        let planted = ["XDictCaptureMac": [(file: "Planted.swift",
+                                            modules: ["SwiftUI", "WebKit", "XDictSearch", "XDictCapture"])]]
+        #expect(Self.captureProblems(targets: clean, files: planted)
+                == ["XDictCaptureMac/Planted.swift imports SwiftUI", "XDictCaptureMac/Planted.swift imports WebKit",
+                    "XDictCaptureMac/Planted.swift imports XDictSearch"])
+        var through = clean
+        through["XDictCaptureMac"] = target("XDictCaptureMac", ["XDictBase", "XDictCapture", "XDictAnywhere"])
+        through["XDictAnywhere"] = target("XDictAnywhere", ["XDictTokens"])
+        through["XDictTokens"] = target("XDictTokens", [])
+        #expect(Self.captureProblems(targets: through, files: cleanFiles)
+                == ["XDictCaptureMac reaches XDictAnywhere", "XDictCaptureMac reaches XDictTokens"])
+    }
+
+    static func captureProblems(
+        targets: [String: Manifest.Target], files: [String: [(file: String, modules: [String])]]
+    ) -> [String] {
+        captureRules.sorted(by: { $0.key < $1.key }).flatMap { name, rule -> [String] in
+            var reached: Set<String> = [], pending = Array(targets[name]?.dependencies ?? [])
+            while let next = pending.popLast() {
+                guard reached.insert(next).inserted else { continue }
+                pending += targets[next]?.dependencies ?? []
+            }
+            let graph = reached.subtracting(rule.reach).sorted().map { "\(name) reaches \($0)" }
+            let imports = (files[name] ?? []).flatMap { file, modules in
+                modules.filter { !rule.bind.contains($0) && !rule.reach.contains($0) }.map { "\(name)/\(file) imports \($0)" }
+            }
+            return graph + imports
+        }
+    }
+
     // MARK: - Every target's edges and frameworks
 
     /// **An import with no declared edge, and a declared edge nothing imports**, in every target, tests included. The
@@ -382,9 +576,11 @@ struct ModuleBoundaryTests {
     }
 
     /// Every target that depends on a development host, directly or through another.
+    /// Who depends on a development host or instrument. Its own tests may: a test target never ships.
     static func leafProblems(_ targets: [String: Manifest.Target]) -> [String] {
-        developmentHostsReachingTheCore.sorted().flatMap { host in
-            Manifest.reaching(host, in: targets).sorted().map { "\($0) depends on \(host)" }
+        developmentHostsReachingTheCore.union(developmentInstruments.keys).sorted().flatMap { host in
+            Manifest.reaching(host, in: targets).filter { targets[$0]?.type != "test" }.sorted()
+                .map { "\($0) depends on \(host)" }
         }
     }
 

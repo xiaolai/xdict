@@ -11,7 +11,7 @@ import XDictEntryView
 /// instrument alone; XDict.app has no such flag (`Tools/build-bundle.sh` refuses a bundle whose app carries the text).
 struct LabOptions {
     enum Mode: Equatable {
-        case hostile, faultSwitch(String), binding, reader, corpus, gallery, page
+        case hostile, faultSwitch(String), binding, reader, corpus, gallery, page, hoverScript
     }
 
     var mode: Mode?
@@ -50,6 +50,7 @@ struct LabOptions {
           XDictEntryLab --gallery <dir> --sample <sample.json> --out <report.json> [--only dict,…] [--keys <earlier report.json>] [--spread n]
                         [--style-dir <dir>]
           XDictEntryLab --page <dir of dictionary folders> --out <report.json> [--only word,…]
+          XDictEntryLab --hover-script --cases <pages.json> --out <report.json>
         layers: csp, rules, nav, popups, link-preconnect, peer-connection, strip (the core's, not the view's)
         """
 
@@ -76,6 +77,7 @@ struct LabOptions {
             case "--corpus": options.mode = .corpus; options.fixture = try path()
             case "--gallery": options.mode = .gallery; options.fixture = try path()
             case "--page": options.mode = .page; options.fixture = try path()
+            case "--hover-script": options.mode = .hoverScript
             case "--cases": options.cases = try path()
             case "--out": options.out = try path()
             case "--commands": options.commands = try path()

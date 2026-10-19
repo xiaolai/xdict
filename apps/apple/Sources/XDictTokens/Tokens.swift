@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "699fdcfa03c24f0fb5a9c265534481dd3cdfe1d34b09e4e9bf8b008074a89232"
+    public static let sourceDigest = "c0bfbf5a3b558be58de6f2d7368051aa1fee4f8f5dd87c6291c2ca5cfe636157"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -66,6 +66,8 @@ public enum Tokens {
         public static let settingsSheetMargin: CGFloat = 12
         /// The Settings window's margin kept above and below it on the screen (ADR-0012 d.6).
         public static let settingsScreenMargin: CGFloat = 40
+        /// The brief hover notice keeps this far clear of the pointer on both axes: over the pointer it would hide the word being read, and the cursor's own arrow is about this size.
+        public static let hoverNoticeOffset: CGFloat = 16
     }
 
     /// Row and line heights of lists, tables and the panel.
@@ -94,6 +96,8 @@ public enum Tokens {
         public static let shortcutFieldMin: CGFloat = 140
         /// What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt.
         public static let popoverChrome: CGFloat = 26
+        /// The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53).
+        public static let siteField: CGFloat = 140
     }
 
     /// Widths and heights of windows, panes, columns and sheets.
@@ -370,6 +374,32 @@ public enum Tokens {
         public static let appHostileStrideY: CGFloat = 340
         /// Around a transcription the gallery captures, so its edge glyphs are whole.
         public static let captureMargin: CGFloat = 6
+    }
+
+    /// Capture's distances, in screen points: how far from a word a resting pointer may be, and how far it may drift and still rest (ADR-0014 decision 11). Handed into the capture targets, which may not import the tokens.
+    public enum Capture {
+        /// How far left or right of a word's box a resting pointer may be and still mean it: one rule for every capture path, as XiaolaiDict measured word boxes from text layout, web layout and OCR disagreeing at their edges (screen-word spike, finding 7).
+        public static let hitAcross: CGFloat = 3
+        /// How far above or below a word's box a resting pointer may be and still mean it: tighter than across, since a line above or below is another word (screen-word spike, finding 7).
+        public static let hitDown: CGFloat = 2
+        /// How far a resting pointer may drift and still be resting: a hand held on a word twitches by a point or two, and counting that as movement restarted the dwell every time (XiaolaiDict ADR-0045).
+        public static let restDrift: CGFloat = 2
+        /// The height of the first strip the recogniser reads around the pointer's row: XiaolaiDict measured 140 reading three of five rows of a paragraph and 300 the whole of it (ADR-0016 there, 2026-10-11).
+        public static let stripStart: CGFloat = 300
+        /// How far a strip grows on a side where its sentence ran into the edge, per read: XiaolaiDict's measured step, a taller strip costing little more than the one before (ADR-0016 there).
+        public static let stripStep: CGFloat = 150
+        /// The tallest strip the recogniser reads, so growing stays inside the capture deadline (XiaolaiDict ADR-0016, 2026-10-11).
+        public static let stripMost: CGFloat = 600
+        /// In band pixels: how close to a tile's inner edge a recognised box may end and still be called cut by it, so a word on a tile boundary is read from the tile that saw it whole (XiaolaiDict ADR-0016 tiling addendum).
+        public static let tileEdgeSlack: CGFloat = 4
+        /// In band pixels: how much ink a dropped run may have seen that no kept run covers before the merged reading is called missing text (XiaolaiDict ADR-0016 tiling addendum).
+        public static let tileHoleSlack: CGFloat = 16
+        /// How far two readings of one window's frame, the compositor's and ScreenCaptureKit's, may disagree and still be the same frame: the two round independently (XiaolaiDict ScreenTextRecogniser).
+        public static let frameDrift: CGFloat = 1
+        /// How far from its frame's centre a control's label is assumed it may be drawn, pushed aside by an icon, a radio circle or a chevron: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume labels up to this far aside, and no control was measured), so a title's word is taken only where every placement up to this far aside agrees.
+        public static let labelShift: CGFloat = 12
+        /// How much smaller than the system's size for its kind a control's label is assumed it may be drawn: a chosen safety margin, not a measurement of real controls (2026-10-19; the oracle tests assume it); larger fonts are bounded by the frame the text must fit.
+        public static let labelSmaller: CGFloat = 2
     }
 
     /// The reading style's tokens as data (the CSS is `tokens.css`, `palette.css` and `density.css`).
