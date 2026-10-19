@@ -459,7 +459,14 @@ protocol ScreenCapturing: Sendable {
 struct SystemScreenCapturer: ScreenCapturing {
     /// How far two readings of a window's frame may disagree (`CaptureMetrics.frameDrift`, from the tokens).
     let frameDrift: CGFloat
+    /// The screenshot gate this capturer takes: the process's one (`screenshots`), a test's own in its tests.
+    let gate: ScreenshotGate
     private let cache = ShareableContentCache()
+
+    init(frameDrift: CGFloat, gate: ScreenshotGate = SystemScreenCapturer.screenshots) {
+        self.frameDrift = frameDrift
+        self.gate = gate
+    }
 
     func target(at point: CGPoint, window listed: ListedWindow, stripHeight: CGFloat) async throws -> CaptureTarget {
         guard let live = Self.liveBounds(of: listed.windowID) else { throw RecognitionError.windowNotCapturable }
@@ -480,11 +487,12 @@ struct SystemScreenCapturer: ScreenCapturing {
     }
 
     func capture(_ target: CaptureTarget, of window: ListedWindow) async throws -> CGImage {
+        // **One screenshot at a time, refused rather than started beside another** (`ScreenshotGate`): the gate first,
+        // before anything else, so its use is observable without a screen.
+        guard gate.enter() else { throw RecognitionError.screenBusy }
+        defer { gate.done() }
         // Only this capturer makes targets with a real filter; any other is refused, never captured.
         guard let filter = target.filter as? SCContentFilter else { throw RecognitionError.windowNotCapturable }
-        // **One screenshot at a time, refused rather than started beside another** (`ScreenshotGate`).
-        guard Self.screenshots.enter() else { throw RecognitionError.screenBusy }
-        defer { Self.screenshots.done() }
         let config = SCStreamConfiguration()
         config.sourceRect = target.sourceRect
         config.width = Int((target.region.width * CGFloat(filter.pointPixelScale)).rounded())
