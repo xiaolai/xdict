@@ -1,5 +1,5 @@
+import AppKit
 import ApplicationServices
-import CoreText
 import Foundation
 import Testing
 import XDictCapture
