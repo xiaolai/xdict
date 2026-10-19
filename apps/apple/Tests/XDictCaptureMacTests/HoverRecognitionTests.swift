@@ -180,6 +180,20 @@ struct HoverRecognitionTests {
         #expect(request.number == 1)
     }
 
+    /// **A screenshot refused because another is still running is a busy capture, not "no word"**: the hover stays quiet
+    /// and is asked again when the capture ends, rather than telling the reader there is nothing here. Red if `screenBusy`
+    /// falls to the generic miss.
+    @Test func aBusyScreenIsACaptureInFlightNotAMiss() async {
+        let screen = RecognitionFixtures.screen()
+        screen.recognition = .failure(.screenBusy)
+        let outcome = await RecognitionFixtures.read(RecognitionFixtures.reader(screen))
+        guard case .quiet(.captureInFlight) = outcome else {
+            Issue.record("a busy screen answered \(outcome)")
+            return
+        }
+        #expect(screen.recognitions == 1)
+    }
+
     /// **A finished capture is reported** (moved by name from `HoverCaptureReleaseTests`), so a hover refused for the busy
     /// capture is asked again. Red if the release is not told.
     @Test func aFinishedCaptureIsReported() async {
