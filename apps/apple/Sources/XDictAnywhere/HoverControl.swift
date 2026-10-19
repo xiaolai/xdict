@@ -118,6 +118,7 @@ public final class HoverControl {
     /// The policy the gate decides with: the reader's, with the scripts the enabled dictionaries allow now.
     public var effectivePolicy: HoverPolicy {
         var effective = policy
+        effective.settleMilliseconds = settle.milliseconds
         effective.allowedScripts = scripts()
         return effective
     }
@@ -183,6 +184,9 @@ public final class HoverControl {
 
     // MARK: - Excluded sites and the rest time (Settings ▸ General)
 
+    /// The most sites the reader may list: a list typed by hand, bounded so a decision over it stays cheap.
+    public static let excludedSiteLimit = 500
+
     /// The sites the reader excluded, as stored hosts, in one order.
     public var excludedSites: [String] { policy.excludedHosts.sorted() }
 
@@ -190,9 +194,12 @@ public final class HoverControl {
     /// the one stored policy, which the gate reads at once. What is not a site is refused and nothing is stored.
     public func addExcludedSite(_ typed: String) -> ExcludedSiteAnswer {
         guard let host = HoverPolicy.siteHost(fromTyped: typed) else { return .notASite }
+        // **One label is too broad**: `com` would cover every site under it. An IPv6 literal is an address, not a label.
+        guard host.contains(".") || host.contains(":") else { return .tooBroad }
         // A list saved before hosts were reduced may hold a whole address: compared as the host it names.
         let stored = Set(policy.excludedHosts.map { HoverPolicy.siteHost(fromTyped: $0) ?? HoverPolicy.normalisedHost($0) })
         guard !stored.contains(host) else { return .alreadyExcluded(host) }
+        guard policy.excludedHosts.count < Self.excludedSiteLimit else { return .listFull }
         var changed = policy
         changed.excludedHosts.insert(host)
         setPolicy(changed)
@@ -205,12 +212,11 @@ public final class HoverControl {
         setPolicy(changed)
     }
 
-    /// The rest the picker shows: the stored one, or the choice nearest it when it is none of them.
+    /// The rest the picker shows: the stored one when it is exactly one of the choices, else the shipped rest — the one
+    /// the gate decides with too (`HoverPolicyStore.load`, `effectivePolicy`), so the picker and the watcher agree.
+    /// Never the nearest choice: arithmetic on a stored value trapped on `Int.min` (verifier, 2026-10-19).
     public var settle: HoverPolicy.Settle {
-        let stored = policy.settleMilliseconds
-        return HoverPolicy.Settle(rawValue: stored)
-            ?? HoverPolicy.settleChoices.min { abs($0.milliseconds - stored) < abs($1.milliseconds - stored) }
-            ?? HoverPolicy.Settle.standard
+        HoverPolicy.Settle(rawValue: policy.settleMilliseconds) ?? HoverPolicy.Settle.standard
     }
 
     public func setSettle(_ settle: HoverPolicy.Settle) {
@@ -243,6 +249,10 @@ public enum ExcludedSiteAnswer: Sendable, Equatable {
     case alreadyExcluded(String)
     /// Neither a host name nor an address holding one.
     case notASite
+    /// One label, such as `com`: it would cover every site under it.
+    case tooBroad
+    /// The list already holds `HoverControl.excludedSiteLimit` sites.
+    case listFull
 }
 
 /// **Which launch this is** (plan-capture WI-3): the reader's, or one a development instrument drives, in which hover is

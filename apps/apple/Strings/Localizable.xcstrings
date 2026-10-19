@@ -66,6 +66,7 @@
       }
     },
     "%@ is already excluded." : {
+      "comment" : "The placeholder is a site's host, such as 'example.com'",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -1309,6 +1310,22 @@
         }
       }
     },
+    "A single name such as com would cover every site under it. Type a site such as example.com." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A single name such as com would cover every site under it. Type a site such as example.com."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "像 com 这样的单个名称会涵盖其下的所有网站。请输入 example.com 这样的网站。"
+          }
+        }
+      }
+    },
     "About" : {
       "localizations" : {
         "en" : {
@@ -1469,22 +1486,6 @@
         }
       }
     },
-    "Add an App…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Add an App…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "添加应用…"
-          }
-        }
-      }
-    },
     "Add Site" : {
       "localizations" : {
         "en" : {
@@ -1497,6 +1498,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加网站"
+          }
+        }
+      }
+    },
+    "Add an App…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add an App…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加应用…"
           }
         }
       }
@@ -2054,6 +2071,7 @@
       }
     },
     "Chinese characters" : {
+      "comment" : "A writing system hover looks up: Chinese characters and Japanese kanji",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2134,6 +2152,7 @@
       }
     },
     "Command %@" : {
+      "comment" : "The Command key, in the hover key picker",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2198,6 +2217,7 @@
       }
     },
     "Control %@" : {
+      "comment" : "The Control key, in the hover key picker",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -2902,6 +2922,7 @@
       }
     },
     "For %@" : {
+      "comment" : "A Pause Hover length; the placeholder is a length such as '15 minutes'",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3096,6 +3117,7 @@
       }
     },
     "Hold" : {
+      "comment" : "Hover gesture: hold the key while the pointer rests",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3112,6 +3134,7 @@
       }
     },
     "Hover Is Off in Settings" : {
+      "comment" : "Menu bar line, disabled: why Pause Hover is not offered",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3208,6 +3231,7 @@
       }
     },
     "Hover resumes %@" : {
+      "comment" : "Menu bar status line; the placeholder is a relative time such as 'in 14 minutes'",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3416,6 +3440,7 @@
       }
     },
     "Japanese kana" : {
+      "comment" : "A writing system hover looks up: hiragana and katakana",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3544,6 +3569,7 @@
       }
     },
     "Korean" : {
+      "comment" : "A writing system hover looks up: Hangul",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3608,6 +3634,7 @@
       }
     },
     "Latin" : {
+      "comment" : "A writing system hover looks up: English and most European languages",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4590,6 +4617,7 @@
       }
     },
     "Option %@" : {
+      "comment" : "The Option key, in the hover key picker",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4670,6 +4698,7 @@
       }
     },
     "Pause Hover" : {
+      "comment" : "Menu bar item, parent of the pause lengths",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4783,6 +4812,7 @@
       }
     },
     "Press Twice" : {
+      "comment" : "Hover gesture: press the key twice quickly",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5151,6 +5181,7 @@
       }
     },
     "Resume Hover" : {
+      "comment" : "Menu bar item",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5487,6 +5518,7 @@
       }
     },
     "Shift %@" : {
+      "comment" : "The Shift key, in the hover key picker",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6028,6 +6060,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这部词典的文件已改变。它仍是同一部词典吗？"
+          }
+        }
+      }
+    },
+    "The list is full. Remove a site to add another." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The list is full. Remove a site to add another."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表已满。请先移除一个网站再添加。"
           }
         }
       }
@@ -7019,6 +7067,7 @@
       }
     },
     "Words in any writing system" : {
+      "comment" : "Hover's scripts, when the dictionaries could hold any",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7035,6 +7084,7 @@
       }
     },
     "Words written in %@" : {
+      "comment" : "Hover's scripts; the placeholder is a list such as 'Latin and Chinese characters'",
       "localizations" : {
         "en" : {
           "stringUnit" : {

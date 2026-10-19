@@ -61,6 +61,9 @@ struct HoverSentencesTests {
         let refused = HoverSentences.excludedSite(.notASite).map { String(localized: $0) }
         let twice = HoverSentences.excludedSite(.alreadyExcluded("example.com")).map { String(localized: $0) }
         #expect(refused != nil && twice != nil && refused != twice)
+        let answers: [ExcludedSiteAnswer] = [.notASite, .alreadyExcluded("example.com"), .tooBroad, .listFull]
+        let sentences = answers.compactMap { HoverSentences.excludedSite($0).map { String(localized: $0) } }
+        #expect(Set(sentences).count == answers.count, "\(sentences)")
         #expect(twice?.contains("example.com") == true, "\(String(describing: twice))")
     }
 
