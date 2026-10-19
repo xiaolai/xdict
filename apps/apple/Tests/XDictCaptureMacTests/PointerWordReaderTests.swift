@@ -144,6 +144,90 @@ struct PointerWordReaderTests {
         #expect(target.pid == 4_300_002)
     }
 
+    /// A synthetic SwiftUI-shaped window, the shape System Settings answers in (measured 2026-10-19, rebuilt here with
+    /// made-up elements): asked through its application, the hit test names only the window's hosting group; the text
+    /// under the pointer is found by descending, the smallest child holding the point at each level — a table's column
+    /// spans every row, so the row inside it is the one taken. The system-wide hit test names the text directly.
+    final class HostedWindow: AccessibilityReading, @unchecked Sendable {
+        static let owner: pid_t = 4_300_010
+        let group = AXUIElementCreateApplication(4_400_001)
+        let column = AXUIElementCreateApplication(4_400_002)
+        let row = AXUIElementCreateApplication(4_400_003)
+        let text = AXUIElementCreateApplication(4_400_004)
+        let heading = AXUIElementCreateApplication(4_400_005)
+        /// The process each hit test was asked of: 0 for the system-wide element.
+        private(set) var askedOf: [pid_t] = []
+
+        private func frame(of element: AXUIElement) -> CGRect? {
+            switch element {
+            case group: CGRect(x: 0, y: 0, width: 740, height: 625)
+            case column: CGRect(x: 200, y: 100, width: 500, height: 400)
+            case row: CGRect(x: 200, y: 280, width: 500, height: 40)
+            case text: CGRect(x: 250, y: 290, width: 100, height: 20)
+            case heading: CGRect(x: 250, y: 40, width: 200, height: 20)
+            default: nil
+            }
+        }
+
+        func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
+            switch name {
+            case kAXChildrenAttribute:
+                switch element {
+                case group: return [heading, column, row] as CFArray
+                case row: return [text] as CFArray
+                default: return [] as CFArray
+                }
+            case kAXPositionAttribute:
+                guard var origin = frame(of: element)?.origin else { return nil }
+                return AXValueCreate(.cgPoint, &origin)
+            case kAXSizeAttribute:
+                guard var size = frame(of: element)?.size else { return nil }
+                return AXValueCreate(.cgSize, &size)
+            default:
+                return nil
+            }
+        }
+
+        func parameterized(_ element: AXUIElement, _ name: String, _ argument: CFTypeRef) throws(CaptureError) -> CFTypeRef? {
+            nil
+        }
+
+        func hitTest(_ root: AXUIElement, at point: CGPoint) throws(CaptureError) -> AXUIElement? {
+            var pid: pid_t = 0
+            if root != AXUIElementCreateSystemWide() { AXUIElementGetPid(root, &pid) }
+            askedOf.append(pid)
+            return pid == Self.owner ? group : text
+        }
+    }
+
+    /// **Another app's window in front of one of ours is read through that app alone** (owner's report, 2026-10-19:
+    /// with XDict's main and Settings windows behind System Settings, hover read only the one word of its title outside
+    /// them, and was silent everywhere else). The system-wide hit test is never asked — it could go through a click-through
+    /// window to ours, in this process — and the element named is the text under the point, not the window's group. Red
+    /// under the old rule (any window of ours at any depth refused the hover).
+    @Test func anotherAppsWindowInFrontOfOursIsReadThroughThatAppAlone() {
+        let tree = HostedWindow()
+        let theirs = ListedWindow(pid: HostedWindow.owner, bounds: CGRect(x: 0, y: 0, width: 740, height: 625))
+        let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 100, y: 100, width: 1_000, height: 700))
+        let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [theirs, ours] },
+                                               ownProcess: getpid(), with: tree)
+        guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(target.element == tree.text)
+        #expect(tree.askedOf == [HostedWindow.owner], "the system-wide hit test was asked with a window of ours beneath")
+    }
+
+    /// The control: with no window of ours at the point the system-wide hit test is asked, once, and its element taken as
+    /// it is — nothing is descended.
+    @Test func withNoWindowOfOursTheSystemWideHitTestIsAsked() {
+        let tree = HostedWindow()
+        let theirs = ListedWindow(pid: HostedWindow.owner, bounds: CGRect(x: 0, y: 0, width: 740, height: 625))
+        let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [theirs] },
+                                               ownProcess: getpid(), with: tree)
+        guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(target.element == tree.text)
+        #expect(tree.askedOf == [0])
+    }
+
     /// **A stalled pointer hit test ends at the read's deadline** (decision 6): the hit test is a request of the session,
     /// so one that blocked past the budget is not believed.
     @Test func aStalledPointerHitTestEndsAtItsDeadline() {

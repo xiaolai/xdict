@@ -96,6 +96,19 @@ extension AccessibilityReading {
         return AXValueGetValue(value, .cgRect, &rect) ? rect : nil
     }
 
+    /// An element's frame on screen (y down), from its position and size: nil where either is missing or of another type.
+    func frame(_ element: AXUIElement) throws(CaptureError) -> CGRect? {
+        guard let position = cast(try attribute(element, kAXPositionAttribute, ofApplication: false), AXValueGetTypeID(),
+                                  as: AXValue.self),
+              let size = cast(try attribute(element, kAXSizeAttribute, ofApplication: false), AXValueGetTypeID(),
+                              as: AXValue.self)
+        else { return nil }
+        var origin = CGPoint.zero
+        var extent = CGSize.zero
+        guard AXValueGetValue(position, .cgPoint, &origin), AXValueGetValue(size, .cgSize, &extent) else { return nil }
+        return CGRect(origin: origin, size: extent)
+    }
+
     /// A range out of whatever came back: an `AXValue` of the range type, or nothing.
     private func decodedRange(_ value: CFTypeRef?) -> CFRange? {
         guard let value = cast(value, AXValueGetTypeID(), as: AXValue.self) else { return nil }

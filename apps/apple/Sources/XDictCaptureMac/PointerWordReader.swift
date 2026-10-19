@@ -110,20 +110,31 @@ public enum PointerWordReader {
     public static let maximumScannedWords = 120
 
     /// **Who owns the pixel, asked in this order**: the grant (never prompting, decision 7), then **the compositor's
-    /// window list, before Accessibility is asked anything** — where the window under the pointer is one of XDict's own,
-    /// at any level (its panel floats), the hit test itself would be serviced in-process on this thread, off the main
-    /// actor (XiaolaiDict ADR-0042) — then the system-wide hit test, a request of `ax` and so inside its budget, and the
-    /// owner's process checked once more, for a window that arrived since the list was taken.
+    /// window list, before Accessibility is asked anything** — where the window in front at the pointer is one of XDict's
+    /// own, at any level (its panel floats), the hit test itself would be serviced in-process on this thread, off the main
+    /// actor (XiaolaiDict ADR-0042) — then the hit test, a request of `ax` and so inside its budget, and the owner's
+    /// process checked once more, for a window that arrived since the list was taken.
+    ///
+    /// **The hit test is the system-wide one only where no window of ours is under the point.** Where another app's
+    /// window is in front of one of ours, that app alone is asked — the system-wide hit test could go through a
+    /// click-through window to ours — and its answer descended to the element under the point (`descend`), as an app's
+    /// own hit test names only a coarse group in SwiftUI apps (System Settings, measured 2026-10-19).
     public static func target(
         at point: CGPoint, access: AccessibilityAccess, windows: () -> [ListedWindow], ownProcess: pid_t,
         with ax: some AccessibilityReading
     ) -> TargetOutcome {
         guard access.granted() else { return .none(.accessibilityOff) }
-        if PointerWindow.ours(at: point, in: windows(), ours: ownProcess) { return .ourOwnWindow }
+        let root: AXUIElement
+        let throughItsApp: Bool
+        switch PointerWindow.ownership(at: point, in: windows(), ours: ownProcess) {
+        case .ours: return .ourOwnWindow
+        case .notOurs: (root, throughItsApp) = (AXUIElementCreateSystemWide(), false)
+        case .coveringOurs(let owner): (root, throughItsApp) = (AXUIElementCreateApplication(owner), true)
+        }
         let element: AXUIElement
         do throws(CaptureError) {
-            guard let found = try ax.hitTest(AXUIElementCreateSystemWide(), at: point) else { return .none(.nothingAtPointer) }
-            element = found
+            guard let found = try ax.hitTest(root, at: point) else { return .none(.nothingAtPointer) }
+            element = throughItsApp ? try descend(from: found, to: point, with: ax) : found
         } catch {
             return .none(.failed(error))
         }
@@ -133,6 +144,34 @@ public enum PointerWordReader {
         let running = NSRunningApplication(processIdentifier: pid)
         return .found(Target(element: element, appName: running?.localizedName ?? "pid \(pid)",
                              bundleID: running?.bundleIdentifier))
+    }
+
+    /// Levels descended from an app's own hit test, and the children weighed at one level: past either, the element
+    /// reached is the answer (a coarser one, which then reads as a miss and goes to the pixels).
+    public static let descentDepthLimit = 24
+    public static let descentChildLimit = 128
+
+    /// **From an app's own hit-test answer down to the element under the point**: at each level, the smallest child whose
+    /// frame holds the point — a table's column spans every row, so the row (then its cell, then its text) is taken.
+    /// Measured on System Settings (2026-10-19): this reached the element the system-wide hit test names at all twelve
+    /// points tried. Every element asked belongs to the app asked, never to this process.
+    static func descend(
+        from start: AXUIElement, to point: CGPoint, with ax: some AccessibilityReading
+    ) throws(CaptureError) -> AXUIElement {
+        var current = start
+        for _ in 0..<descentDepthLimit {
+            let children = try ax.elements(current, kAXChildrenAttribute)
+            guard !children.isEmpty, children.count <= descentChildLimit else { break }
+            var smallest: (element: AXUIElement, area: CGFloat)?
+            for child in children {
+                guard let frame = try ax.frame(child), frame.contains(point) else { continue }
+                let area = frame.width * frame.height
+                if smallest.map({ area < $0.area }) ?? true { smallest = (child, area) }
+            }
+            guard let smallest else { break }
+            current = smallest.element
+        }
+        return current
     }
 
     /// The three dialects in order, against any Accessibility client — the real one or a test's. `point` is global with

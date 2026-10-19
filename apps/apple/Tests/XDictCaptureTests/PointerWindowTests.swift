@@ -10,35 +10,53 @@ struct PointerWindowTests {
         ListedWindow(pid: pid, bounds: rect)
     }
 
-    /// **Any window of ours at the point, at any depth, refuses the hover** — the rule `owner`'s
-    /// topmost-window answer was replaced by, because the topmost window is not proof of where
-    /// Accessibility's hit test lands.
-    @Test func ourWindowAnywhereUnderThePointCounts() {
+    /// **Another app's window in front of ours owns the point** (owner's report, 2026-10-19: hover read only the one word of
+    /// System Settings' title that lay outside XDict's main and Settings windows behind it). Ours beneath is still named,
+    /// so the hit test asks that app alone and never the system-wide element, which could land in this process.
+    @Test func anotherAppsWindowInFrontOfOursOwnsThePoint() {
         let point = CGPoint(x: 500, y: 400)
         let windows = [
             window(22, CGRect(x: 0, y: 0, width: 1_400, height: 900)),
             window(99, CGRect(x: 400, y: 300, width: 300, height: 300)),
         ]
-        #expect(PointerWindow.ours(at: point, in: windows, ours: 99))
+        #expect(PointerWindow.ownership(at: point, in: windows, ours: 99) == .coveringOurs(owner: 22))
     }
 
-    /// Ours elsewhere on the screen does not count: the control for the test above.
+    /// Ours in front is ours, whatever lies beneath it.
+    @Test func ourWindowInFrontIsOurs() {
+        let point = CGPoint(x: 500, y: 400)
+        let windows = [
+            window(99, CGRect(x: 400, y: 300, width: 300, height: 300)),
+            window(22, CGRect(x: 0, y: 0, width: 1_400, height: 900)),
+        ]
+        #expect(PointerWindow.ownership(at: point, in: windows, ours: 99) == .ours)
+    }
+
+    /// Ours elsewhere on the screen does not count: the control for the tests above.
     @Test func ourWindowElsewhereDoesNotCount() {
         let windows = [
             window(99, CGRect(x: 400, y: 300, width: 300, height: 300)),
             window(22, CGRect(x: 0, y: 0, width: 100, height: 100)),
         ]
-        #expect(!PointerWindow.ours(at: CGPoint(x: 50, y: 50), in: windows, ours: 99))
+        #expect(PointerWindow.ownership(at: CGPoint(x: 50, y: 50), in: windows, ours: 99) == .notOurs)
     }
 
     /// Our own window counts even while invisible — one fading in is still serviced in-process.
     @Test func ourInvisibleWindowStillCounts() {
         let fading = ListedWindow(pid: 99, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), alpha: 0)
-        #expect(PointerWindow.ours(at: CGPoint(x: 10, y: 10), in: [fading], ours: 99))
+        let behind = window(22, CGRect(x: 0, y: 0, width: 100, height: 100))
+        #expect(PointerWindow.ownership(at: CGPoint(x: 10, y: 10), in: [fading, behind], ours: 99) == .ours)
+    }
+
+    /// Another app's invisible window covers nothing: no pixel of it is under the pointer, so ours beneath is in front.
+    @Test func anotherAppsInvisibleWindowCoversNothing() {
+        let invisible = ListedWindow(pid: 22, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), alpha: 0)
+        let ours = window(99, CGRect(x: 0, y: 0, width: 100, height: 100))
+        #expect(PointerWindow.ownership(at: CGPoint(x: 10, y: 10), in: [invisible, ours], ours: 99) == .ours)
     }
 
     @Test func anEmptyListHasNothingOfOurs() {
-        #expect(!PointerWindow.ours(at: .zero, in: [], ours: 99))
+        #expect(PointerWindow.ownership(at: .zero, in: [], ours: 99) == .notOurs)
     }
 
     /// **The panel is at `.floating`, so a level filter would miss exactly the window this is for.**
