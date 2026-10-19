@@ -12,18 +12,21 @@ import XDictCapture
 /// **Nothing but Vision**: the image is drawn here, never captured, so ScreenCaptureKit is not reached and nothing can
 /// prompt; Vision asks for no permission. The answer is discarded and nothing about it is logged.
 extension ScreenTextRecogniser {
-    /// One recognition of `warmUpImage()`, detached at background priority: off the main actor and off the lane,
-    /// fire-and-forget. It holds nothing anyone waits on — hover's start, the capture guard, quitting — and is bounded by
-    /// being one call on a 160 × 32 pixel image. The task is returned only for a test to wait on.
-    @discardableResult
-    public static func warmUp() -> Task<Void, Never> {
+    /// One recognition of `warmUpImage()` on a background dispatch queue: off the main actor, off the lane and **off Swift
+    /// concurrency's pool** (verifier, 2026-10-19), whose few threads every task of the app shares — a 25-second call
+    /// there holds one of them. Fire-and-forget: it holds nothing anyone waits on — hover's start, the capture guard,
+    /// quitting — and is bounded by being one call on a 160 × 32 pixel image.
+    public static func warmUp() {
         warmUp(recognise: { try recogniseWhole($0) })
     }
 
-    static func warmUp(recognise: @escaping @Sendable (CGImage) throws -> [RecognisedLine]) -> Task<Void, Never> {
-        Task.detached(priority: .background) {
-            guard let image = warmUpImage() else { return }
-            _ = try? recognise(image)
+    /// `done` is a test's, called once the recognition has returned.
+    static func warmUp(
+        recognise: @escaping @Sendable (CGImage) throws -> [RecognisedLine], done: (@Sendable () -> Void)? = nil
+    ) {
+        DispatchQueue.global(qos: .background).async {
+            if let image = warmUpImage() { _ = try? recognise(image) }
+            done?()
         }
     }
 
