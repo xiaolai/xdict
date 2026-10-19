@@ -242,8 +242,8 @@ public enum PointerWordReader {
     /// `contextUTF16` around the word; the bounds scan refuses a value longer than the read window
     /// (`2 × readRadiusUTF16`) before tokenising it.
     static func read(
-        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
-        with ax: some AccessibilityReading
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, labels: LabelSlack = .exact,
+        limits: CaptureLimits = .shipped, with ax: some AccessibilityReading
     ) -> Outcome {
         let element = target.element
         func hit(_ found: Located, _ acquisition: CaptureAcquisition) -> Outcome {
@@ -259,7 +259,7 @@ public enum PointerWordReader {
             if let found = try textRange(element, at: point, tolerance, limits, ax) { return hit(found, .textRange) }
             if let found = try textMarkers(element, at: point, tolerance, limits, ax) { return hit(found, .textMarkers) }
             if let found = try boundsScan(element, at: point, tolerance, limits, ax) { return hit(found, .boundsScan) }
-            if let word = try title(element, at: point, tolerance, limits, ax) {
+            if let word = try title(element, at: point, tolerance, labels, limits, ax) {
                 return .hit(Hit(word: word, acquisition: .elementTitle, appName: target.appName,
                                 bundleID: target.bundleID, bounds: nil, placedByPointer: true))
             }
@@ -353,12 +353,12 @@ public enum PointerWordReader {
     /// a check and a read made as two jobs. `refuses` is the consumer's policy (`HoverPolicy.refuses`): asked of every
     /// enclosing host and of the overall answer, and the text is read only when it does not refuse.
     public static func readUnlessRefused(
-        at point: CGPoint, in target: Target, tolerance: HitTolerance, limits: CaptureLimits = .shipped,
-        refuses: (HostReading) -> Bool, with ax: some AccessibilityReading
+        at point: CGPoint, in target: Target, tolerance: HitTolerance, labels: LabelSlack,
+        limits: CaptureLimits = .shipped, refuses: (HostReading) -> Bool, with ax: some AccessibilityReading
     ) -> GatedOutcome {
         let site = host(of: target, isExcluded: { refuses(.known($0)) }, with: ax)
         if refuses(site) { return .refused(site) }
-        let first = read(at: point, in: target, tolerance: tolerance, limits: limits, with: ax)
+        let first = read(at: point, in: target, tolerance: tolerance, labels: labels, limits: limits, with: ax)
         // **A container's miss is descended once** (the owner's log, 2026-10-19: `AXToolbar`, `AXMenuBar`, `AXWindow`):
         // to the child under the point, and where that is still the container, through its window. The element reached
         // is checked and read as a target of its own — its site again, since a window can hold a page the container
@@ -374,7 +374,7 @@ public enum PointerWordReader {
         let found = Target(element: inner, appName: target.appName, bundleID: target.bundleID)
         let innerSite = host(of: found, isExcluded: { refuses(.known($0)) }, with: ax)
         if refuses(innerSite) { return .refused(innerSite) }
-        let second = read(at: point, in: found, tolerance: tolerance, limits: limits, with: ax)
+        let second = read(at: point, in: found, tolerance: tolerance, labels: labels, limits: limits, with: ax)
         // The container's own miss stands where the element inside it had nothing either: it names where the hit landed.
         if case .miss(.noText) = second { return .read(first) }
         return .read(second)
@@ -572,16 +572,16 @@ public enum PointerWordReader {
     /// **The label of a control that exposes its text only as a string** (`ElementTitle`): its role says which attribute
     /// holds the drawn text; its frame and its font place the word under the pointer, or nothing.
     private static func title(
-        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ limits: CaptureLimits,
-        _ ax: some AccessibilityReading
+        _ element: AXUIElement, at point: CGPoint, _ tolerance: HitTolerance, _ labels: LabelSlack,
+        _ limits: CaptureLimits, _ ax: some AccessibilityReading
     ) throws(CaptureError) -> WordAtPoint? {
         guard let source = ElementTitle.source(role: try ax.string(element, kAXRoleAttribute),
                                                subrole: try ax.string(element, kAXSubroleAttribute)),
               let frame = try ax.frame(element),
               let text = try ax.string(element, source.attribute)
         else { return nil }
-        return ElementTitle.word(in: text, frame: frame, alignment: source.alignment, style: source.style, at: point,
-                                 tolerance: tolerance, limits: limits)
+        return ElementTitle.word(in: text, frame: frame, style: source.style, at: point, tolerance: tolerance,
+                                 slack: labels, limits: limits)
     }
 
     // MARK: - bounds scan
