@@ -56,6 +56,10 @@ public enum HoverSentences {
             LocalizedStringResource("\(host) is already excluded.", comment: "The placeholder is a site's host, such as 'example.com'")
         case .notASite:
             LocalizedStringResource("That is not a site. Type a name such as example.com, or paste an address.")
+        case .tooBroad:
+            LocalizedStringResource("A single name such as com would cover every site under it. Type a site such as example.com.")
+        case .listFull:
+            LocalizedStringResource("The list is full. Remove a site to add another.")
         }
     }
 

@@ -78,14 +78,64 @@ struct SettleChoiceTests {
         #expect(try hover(suite).settle == .patient)
     }
 
-    /// **A stored rest that is no choice is shown as the nearest choice**, and left as stored until the reader picks one.
-    @Test func aStoredRestThatIsNoChoiceShowsTheNearest() throws {
+    /// **A stored rest that is not exactly one of the choices is the shipped rest**, on load and in the picker alike, so
+    /// the picker and the gate agree — never the nearest choice, and never a trap: `Int.min` once trapped in the
+    /// nearest-choice arithmetic (verifier, 2026-10-19). A valid choice is kept.
+    @Test(arguments: [Int.min, Int.max, -180, -1, 0, 179, 1_000_000])
+    func aStoredRestThatIsNoChoiceIsTheShippedRest(stored: Int) throws {
         let suite = try #require(UserDefaults(suiteName: "ai.xdict.tests.settle.\(UUID().uuidString)"))
         var odd = HoverPolicy.shipped
-        odd.settleMilliseconds = HoverPolicy.Settle.relaxed.milliseconds - 1
+        odd.settleMilliseconds = stored
         HoverPolicyStore(defaults: suite).save(odd)
         let control = try hover(suite)
-        #expect(control.settle == .relaxed)
-        #expect(control.policy.settleMilliseconds == odd.settleMilliseconds)
+        #expect(control.settle == .standard)
+        #expect(control.policy.settleMilliseconds == HoverPolicy.shipped.settleMilliseconds)
+        #expect(control.effectivePolicy.settleMilliseconds == HoverPolicy.shipped.settleMilliseconds)
+    }
+
+    @Test func aStoredValidChoiceIsKept() throws {
+        let suite = try #require(UserDefaults(suiteName: "ai.xdict.tests.settle.\(UUID().uuidString)"))
+        var chosen = HoverPolicy.shipped
+        chosen.settleMilliseconds = HoverPolicy.Settle.relaxed.milliseconds
+        HoverPolicyStore(defaults: suite).save(chosen)
+        #expect(try hover(suite).settle == .relaxed)
+        #expect(try hover(suite).policy.settleMilliseconds == HoverPolicy.Settle.relaxed.milliseconds)
+    }
+}
+
+/// **What a typed site may be** (verifier, 2026-10-19): a host name within DNS's limits — 253 characters, 63 a label —
+/// and never a single label such as `com`, which would cover every site under it; and a list of bounded length.
+@MainActor
+struct ExcludedSiteLimitTests {
+    @Test func aNameOverTheDNSLimitsIsNotASite() throws {
+        let control = try hover()
+        let label63 = String(repeating: "a", count: 63)
+        #expect(control.addExcludedSite("\(label63).example.com") == .added("\(label63).example.com"))
+        #expect(control.addExcludedSite(String(repeating: "a", count: 64) + ".example.com") == .notASite)
+        // 4 labels of 63 and the dots: 255 characters, over the 253 a name may have.
+        let long = Array(repeating: label63, count: 4).joined(separator: ".")
+        #expect(control.addExcludedSite(long) == .notASite)
+        #expect(control.excludedSites == ["\(label63).example.com"])
+    }
+
+    /// **A single label covers too much**: `com` would exclude every `.com` site; said, and nothing stored. An address
+    /// family literal is not a label and stays allowed.
+    @Test func aSingleLabelIsTooBroad() throws {
+        let control = try hover()
+        for typed in ["com", "COM.", "https://com/", "localhost"] {
+            #expect(control.addExcludedSite(typed) == .tooBroad, "\(typed)")
+        }
+        #expect(control.excludedSites.isEmpty)
+        #expect(control.addExcludedSite("[::1]") == .added("::1"))
+    }
+
+    /// **The list is bounded**: past `HoverControl.excludedSiteLimit` a site is refused with its sentence.
+    @Test func theListIsBounded() throws {
+        let control = try hover()
+        for index in 0..<HoverControl.excludedSiteLimit {
+            #expect(control.addExcludedSite("site\(index).example.com") == .added("site\(index).example.com"))
+        }
+        #expect(control.addExcludedSite("one-more.example.com") == .listFull)
+        #expect(control.excludedSites.count == HoverControl.excludedSiteLimit)
     }
 }
