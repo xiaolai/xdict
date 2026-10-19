@@ -357,10 +357,30 @@ public final class HoverWatcher {
     }
 }
 
+/// **The system's event monitors, global and local** — the seam a test replaces to see which are installed and to hand
+/// an event to a local one.
+@MainActor
+struct HoverMonitors {
+    var addGlobal: (NSEvent.EventTypeMask, @escaping (NSEvent) -> Void) -> Any?
+    var addLocal: (NSEvent.EventTypeMask, @escaping (NSEvent) -> NSEvent?) -> Any?
+    var remove: (Any) -> Void
+
+    static var system: HoverMonitors {
+        HoverMonitors(addGlobal: { NSEvent.addGlobalMonitorForEvents(matching: $0, handler: $1) },
+                      addLocal: { NSEvent.addLocalMonitorForEvents(matching: $0, handler: $1) },
+                      remove: { NSEvent.removeMonitor($0) })
+    }
+}
+
 /// The `NSEvent` monitors hover listens through.
 @MainActor
 final class SystemHoverEvents: HoverEventSource {
     private var monitors: [Any] = []
+    private let system: HoverMonitors
+
+    init(monitors: HoverMonitors = .system) {
+        system = monitors
+    }
 
     /// Movement and modifiers both: watching movement alone would never fire for a reader who parks the pointer on a
     /// word and *then* presses the key. The rest are watched only to cancel a pending tap; none of them starts a lookup.
@@ -371,7 +391,7 @@ final class SystemHoverEvents: HoverEventSource {
     func start(_ handler: @escaping @MainActor (HoverEvent) -> Void) -> Bool {
         guard monitors.isEmpty else { return true }
         for mask in Self.watched {
-            guard let monitor = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { event in
+            guard let global = system.addGlobal(mask, { event in
                 // A global monitor's event has no window, so its location is already on screen.
                 let mapped = Self.event(type: event.type, flags: event.modifierFlags, timestamp: event.timestamp,
                                         location: UpPoint(event.locationInWindow))
@@ -381,13 +401,29 @@ final class SystemHoverEvents: HoverEventSource {
                 stop()
                 return false
             }
-            monitors.append(monitor)
+            monitors.append(global)
+            // **And XDict's own events** (owner, 2026-10-19: hover works in XDict's own windows): a global monitor never
+            // sees an event sent to this app, so with XDict in front only a local one hears the key and the pointer.
+            guard let local = system.addLocal(mask, { event in
+                // A local event's point is its window's: taken to the screen, where a global one already is.
+                let location = event.window.map { $0.convertPoint(toScreen: event.locationInWindow) }
+                    ?? event.locationInWindow
+                let mapped = Self.event(type: event.type, flags: event.modifierFlags, timestamp: event.timestamp,
+                                        location: UpPoint(location))
+                MainActor.assumeIsolated { if let mapped { handler(mapped) } }
+                // Handed back, never swallowed: the window it was sent to still gets it.
+                return event
+            }) else {
+                stop()
+                return false
+            }
+            monitors.append(local)
         }
         return true
     }
 
     func stop() {
-        for monitor in monitors { NSEvent.removeMonitor(monitor) }
+        for monitor in monitors { system.remove(monitor) }
         monitors.removeAll()
     }
 

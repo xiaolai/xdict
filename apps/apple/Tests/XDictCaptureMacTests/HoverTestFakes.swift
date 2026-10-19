@@ -1,3 +1,4 @@
+import AppKit
 import ApplicationServices
 import Foundation
 import Synchronization
@@ -33,6 +34,30 @@ final class ScriptedHoverEvents: HoverEventSource {
         emit(.modifiers([modifier], at: instant, location: nil))
         emit(.modifiers([], at: instant + 0.08, location: nil))
         emit(.modifiers([modifier], at: instant + 0.2, location: nil))
+    }
+}
+
+/// The system's event monitors, recorded: which kinds were installed globally and locally, the local handlers (to hand an
+/// event to), and how many were removed. `refuseLocal` makes every local install fail.
+@MainActor
+final class RecordingMonitors {
+    private(set) var global: [UInt64] = []
+    private(set) var local: [(mask: UInt64, handler: (NSEvent) -> NSEvent?)] = []
+    private(set) var removed = 0
+    var refuseLocal = false
+
+    var monitors: HoverMonitors {
+        HoverMonitors(
+            addGlobal: { [self] mask, _ in
+                global.append(mask.rawValue)
+                return mask.rawValue
+            },
+            addLocal: { [self] mask, handler in
+                guard !refuseLocal else { return nil }
+                local.append((mask.rawValue, handler))
+                return mask.rawValue
+            },
+            remove: { [self] _ in removed += 1 })
     }
 }
 
@@ -126,12 +151,20 @@ final class RecordingSink: CaptureSink {
 final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     /// Read only after the test has set it up, from the one read in flight.
     var targetOutcome: PointerWordReader.TargetOutcome = .none(.nothingAtPointer)
+    /// What the main actor's hit test of XDict's own application answers (`ownTarget`).
+    var ownTargetOutcome: PointerWordReader.OwnTargetOutcome = .none(.nothingAtPointer)
     var readOutcome: PointerWordReader.Outcome = .miss(.noText(app: "TextEdit", role: nil))
     var hostReading: HostReading = .notWebContent
     var windows: [ListedWindow] = []
     var lane: LaneState = .idle
+    /// Lane jobs: the hit tests and the reads asked through the one lane.
+    private(set) var laneTargets = 0
     private(set) var reads = 0
     private(set) var textReads = 0
+    /// Main-actor work: XDict's own hit tests and reads, each checked to run on the main thread.
+    private(set) var ownTargets = 0
+    private(set) var ownReads = 0
+    private(set) var ownWorkOffTheMainThread = 0
     /// What the recogniser answers (plan-capture WI-4), and whether it hangs until `finishCapture`.
     var recognition: Result<Recognition, RecognitionError> = .failure(.nothingUnderPointer)
     var hangs = false
@@ -141,8 +174,11 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
 
     func listedWindows() -> [ListedWindow] { windows }
 
-    func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome {
-        targetOutcome
+    func target(
+        at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow], refusesOwner: @escaping @Sendable (pid_t) -> Bool
+    ) async -> PointerWordReader.TargetOutcome {
+        laneTargets += 1
+        return targetOutcome
     }
 
     func readUnlessRefused(
@@ -150,6 +186,22 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome {
         reads += 1
+        if refuses(hostReading) { return .refused(hostReading) }
+        textReads += 1
+        return .read(readOutcome)
+    }
+
+    func ownTarget(at point: CGPoint) -> PointerWordReader.OwnTargetOutcome {
+        ownTargets += 1
+        if !Thread.isMainThread { ownWorkOffTheMainThread += 1 }
+        return ownTargetOutcome
+    }
+
+    func readOwnUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: (HostReading) -> Bool, budget: Duration
+    ) -> PointerWordReader.GatedOutcome {
+        ownReads += 1
+        if !Thread.isMainThread { ownWorkOffTheMainThread += 1 }
         if refuses(hostReading) { return .refused(hostReading) }
         textReads += 1
         return .read(readOutcome)
@@ -184,6 +236,11 @@ enum HoverFixtures {
     /// answers instead.
     static func target(bundleID: String = "com.apple.TextEdit") -> PointerWordReader.Target {
         PointerWordReader.Target(element: AXUIElementCreateApplication(getpid() + 1), appName: "TextEdit", bundleID: bundleID)
+    }
+
+    /// An Accessibility target in **this** process — XDict's own window, as `AXUIElementGetPid` names it.
+    static func ownTarget(bundleID: String = "ai.xdict.app") -> PointerWordReader.Target {
+        PointerWordReader.Target(element: AXUIElementCreateApplication(getpid()), appName: "XDict", bundleID: bundleID)
     }
 
     /// Lets already-started work run, for an assertion that something did **not** happen. It cannot prove an absence,

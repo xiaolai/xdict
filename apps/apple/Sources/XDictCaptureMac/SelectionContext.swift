@@ -19,7 +19,8 @@ extension SelectionReader {
         of capture: Capture, term: SelectedTerm, app: FrontApp, exclusions: HoverPolicy, limits: CaptureLimits,
         _ ax: some AccessibilityReading
     ) throws(CaptureError) -> ContextOutcome {
-        // XDict's own windows are never read around a selection, as hover's hit test refuses them (ADR-0014 d.6).
+        // XDict's own windows are never read around a selection (verifier's round, 2026-10-19). Hover has read them since
+        // the owner's ruling of 2026-10-19; whether the selection's sentence follows is not decided here.
         if app.pid == getpid() { return .unavailable(.excluded) }
         if let bundleID = app.bundleID, exclusions.excludes(app: bundleID) { return .unavailable(.excluded) }
         // With no site excluded nothing can be refused, so the walk is not paid for.
