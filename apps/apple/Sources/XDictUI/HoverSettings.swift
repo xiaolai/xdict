@@ -3,6 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 import XDictAnywhere
 import XDictCapture
+import XDictTokens
 
 /// **Hover, in Settings ▸ General** (plan-capture WI-3; ADR-0012 d.1: General holds how a lookup starts, beside the
 /// lookup shortcut): the switch, the key and the gesture, the writing systems hover looks up — derived from the enabled
@@ -129,8 +130,12 @@ public struct HoverSettings: View {
         }
         LabeledContent {
             HStack {
+                // Bordered and of one width: a form draws a bare field as a line of text, its prompt then reading as a
+                // listed site, and a field that takes the row squeezes the sentence beside it (UI tour, 2026-10-19).
                 TextField(text: $typedSite, prompt: Text(verbatim: "example.com")) { Text("Site") }
                     .labelsHidden()
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: Tokens.Control.siteField)
                     .onSubmit(addSite)
                     .accessibilityIdentifier("hover.site.field")
                 Button { addSite() } label: { Text("Add Site") }  // placement: form-row
