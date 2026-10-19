@@ -38,7 +38,7 @@ struct SearchToolbar<Field: View>: ToolbarContent {
                 .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
                 .accessibilityIdentifier("toolbar.pronounce")
         }
-        .visibilityPriority(.low)
+        .visibilityPriority(.high)
         ToolbarItem(placement: .primaryAction) {
             ControlGroup {
                 Button(action: smaller) { Label("Smaller Text", systemImage: "textformat.size.smaller") }
