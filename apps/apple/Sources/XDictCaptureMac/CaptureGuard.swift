@@ -11,6 +11,13 @@ import Synchronization
 /// ADR-0016, 6 trials of 6); that rule is kept where the screenshot is taken (`ScreenshotGate`), so a capture set aside
 /// while blocked in ScreenCaptureKit makes the next one's screenshot refuse rather than start a second.
 ///
+/// **This rule is not the cure for the model-load stall, and probably does not help during one** (verifier, 2026-10-19;
+/// not measured either way): a capture set aside while Vision loads its model leaves the model still loading, and the
+/// next capture's recognition most likely waits on that same load — so the next hover is let start, but not answered
+/// sooner. It is kept for stalls the next capture does not share (ScreenCaptureKit's window list never answering one
+/// request); a screenshot set aside still holds the screenshot gate, so it does not help there either. **The real fix is
+/// keeping Vision warm** while hover watches (`RecognitionKeepWarm`), so the load does not happen under a hover at all.
+///
 /// It records when each was claimed, so a capture held past its deadline can say so — once per wedge, and its recovery
 /// once.
 public final class CaptureGuard: Sendable {
