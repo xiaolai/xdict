@@ -89,16 +89,27 @@ public final class HoverControl {
     @ObservationIgnored private let source: any PointerWordSource
     @ObservationIgnored private let screen: ScreenRecordingAccess
     @ObservationIgnored private let scripts: @MainActor () -> Set<CaptureScript>?
+    /// Starts the watcher and says whether it holds its monitors: the system's (`systemStart`), or a test's, which can
+    /// fail where the system's monitors never do.
+    @ObservationIgnored private let startWatcher: @MainActor (HoverWatcher) -> Bool
 
     static let enabledKey = "hoverLookupEnabled"
+
+    /// **The watcher started on the system's events**, read back from it: what the app runs.
+    public static func systemStart(_ watcher: HoverWatcher) -> Bool {
+        watcher.start()
+        return watcher.isWatching
+    }
 
     /// `scripts` derives the allowed scripts from the enabled dictionaries (`HoverScripts`), at decision time; `screen` is
     /// the one owner of the Screen Recording grant; `source` is the real screen through the one lane and that grant (nil),
     /// or a test's.
     public init(
         defaults: UserDefaults, requests: CaptureRequests, screen: ScreenRecordingAccess = .system,
-        source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil }
+        source: (any PointerWordSource)? = nil, scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
+        startWatcher: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart
     ) {
+        self.startWatcher = startWatcher
         self.defaults = defaults
         self.requests = requests
         self.screen = screen
@@ -264,8 +275,7 @@ public final class HoverControl {
     }
 
     private func start() {
-        watcher.start()
-        isWatching = watcher.isWatching
+        isWatching = startWatcher(watcher)
         startFailed = !isWatching
     }
 }

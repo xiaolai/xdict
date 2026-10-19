@@ -41,8 +41,9 @@ struct TestInventoryTests {
         // Recording row asks nothing before it is used, at launch either, asks once when used, shows a standing grant, its
         // notice, the session's book shared with the reader, the recogniser's distances from the tokens. 76 → 80 (UI tour
         // of the capture work, 2026-10-19): the menu and the switch show the setting in a driven run, its switch starts
-        // nothing there, a reader's launch watches what the setting says, and the setting is observed.
-        "XDictAnywhereTests": 80,
+        // nothing there, a reader's launch watches what the setting says, and the setting is observed. 80 → 83: a failed
+        // start shows off, the switch retries it, and a driven run never asks.
+        "XDictAnywhereTests": 83,
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
