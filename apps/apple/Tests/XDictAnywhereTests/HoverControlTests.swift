@@ -12,13 +12,22 @@ final class SilentPointerWords: PointerWordSource, @unchecked Sendable {
     var lane: LaneState = .idle
     private(set) var reads = 0
     func listedWindows() -> [ListedWindow] { [] }
-    func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome {
+    func target(
+        at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow], refusesOwner: @escaping @Sendable (pid_t) -> Bool
+    ) async -> PointerWordReader.TargetOutcome {
         .none(.nothingAtPointer)
     }
     func readUnlessRefused(
         at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome {
+        reads += 1
+        return .read(.miss(.noText(app: "", role: nil)))
+    }
+    func ownTarget(at point: CGPoint) -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
+    func readOwnUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: (HostReading) -> Bool, budget: Duration
+    ) -> PointerWordReader.GatedOutcome {
         reads += 1
         return .read(.miss(.noText(app: "", role: nil)))
     }

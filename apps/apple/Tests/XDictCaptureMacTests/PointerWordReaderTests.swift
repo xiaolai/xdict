@@ -120,26 +120,26 @@ struct PointerWordReaderTests {
     private static let granted = AccessibilityAccess(probe: { .granted })
     private let point = CGPoint(x: 300, y: 300)
 
-    /// **One of XDict's own floating windows under the pointer is refused before the hit test** (XiaolaiDict ADR-0042):
-    /// the hit test itself would be serviced in this process, on this thread, off the main actor. Every window level
-    /// counts — the panel floats. Red if the compositor's list is asked after Accessibility, or only at level 0.
-    @Test func anOwnProcessFloatingWindowIsRefusedBeforeTheHitTest() {
+    /// **One of XDict's own floating windows under the pointer is left to the main actor before the hit test** (XiaolaiDict
+    /// ADR-0042): off the main actor the hit test itself would be serviced in this process, on this thread. Every window
+    /// level counts — the popover floats. Red if the compositor's list is asked after Accessibility, or only at level 0.
+    @Test func anOwnFloatingWindowIsLeftToTheMainActorBeforeTheHitTest() {
         let client = HitTests(finding: 4_300_001)
         let panel = ListedWindow(pid: getpid(), bounds: CGRect(x: 250, y: 250, width: 200, height: 200), layer: 3)
         let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [panel] },
-                                               ownProcess: getpid(), with: client)
-        guard case .ourOwnWindow = outcome else { Issue.record("got \(outcome)"); return }
-        #expect(client.asked.withLock { $0 } == 0, "Accessibility was asked about XDict's own window")
+                                               ownProcess: getpid(), refusesOwner: { _ in false }, with: client)
+        guard case .ownWindow = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(client.asked.withLock { $0 } == 0, "Accessibility was asked about XDict's own window off the main actor")
     }
 
-    /// **And a window of ours that arrived after the list was taken is still refused**, by the owner of what the hit test
-    /// found — late, but caught. The control: another app's window is found.
-    @Test func anOwnWindowMissingFromTheListIsRefusedByItsOwner() {
+    /// **And a window of ours that arrived after the list was taken is handed back too**, by the owner of what the hit
+    /// test found — late, but no element of XDict's is read off the main actor. The control: another app's window is found.
+    @Test func anOwnWindowMissingFromTheListIsHandedBackByItsOwner() {
         let ours = PointerWordReader.target(at: point, access: Self.granted, windows: { [] }, ownProcess: getpid(),
-                                            with: HitTests(finding: getpid()))
-        guard case .ourOwnWindow = ours else { Issue.record("got \(ours)"); return }
+                                            refusesOwner: { _ in false }, with: HitTests(finding: getpid()))
+        guard case .ownWindow = ours else { Issue.record("got \(ours)"); return }
         let theirs = PointerWordReader.target(at: point, access: Self.granted, windows: { [] }, ownProcess: getpid(),
-                                              with: HitTests(finding: 4_300_002))
+                                              refusesOwner: { _ in false }, with: HitTests(finding: 4_300_002))
         guard case .found(let target) = theirs else { Issue.record("got \(theirs)"); return }
         #expect(target.pid == 4_300_002)
     }
@@ -150,6 +150,9 @@ struct PointerWordReaderTests {
     /// spans every row, so the row inside it is the one taken. The system-wide hit test names the text directly.
     final class HostedWindow: AccessibilityReading, @unchecked Sendable {
         static let owner: pid_t = 4_300_010
+        /// The process whose own hit test names the group: another app's, or this one's for XDict's own window.
+        let owner: pid_t
+        init(owner: pid_t = HostedWindow.owner) { self.owner = owner }
         let group = AXUIElementCreateApplication(4_400_001)
         let column = AXUIElementCreateApplication(4_400_002)
         let row = AXUIElementCreateApplication(4_400_003)
@@ -169,7 +172,11 @@ struct PointerWordReaderTests {
             }
         }
 
+        /// Every attribute asked of any element.
+        private(set) var attributesAsked = 0
+
         func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
+            attributesAsked += 1
             switch name {
             case kAXChildrenAttribute:
                 switch element {
@@ -196,8 +203,29 @@ struct PointerWordReaderTests {
             var pid: pid_t = 0
             if root != AXUIElementCreateSystemWide() { AXUIElementGetPid(root, &pid) }
             askedOf.append(pid)
-            return pid == Self.owner ? group : text
+            return pid == owner ? group : text
         }
+    }
+
+    /// **XDict's own window is hit-tested through XDict's own application, never the system-wide element**, and its
+    /// answer descended by the same bounded rule as another app's: the element is the text under the point, not the
+    /// window's group. Red if the own hit test asks the system-wide element (which can land in another app, synchronous
+    /// IPC on the main thread) or takes the group as it is.
+    @Test func ourOwnWindowIsHitTestedThroughOurOwnApplicationAndDescended() {
+        let tree = HostedWindow(owner: getpid())
+        let outcome = PointerWordReader.ownTarget(at: point, access: Self.granted, ownProcess: getpid(), with: tree)
+        guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(target.element == tree.text)
+        #expect(tree.askedOf == [getpid()], "XDict's own hit test was not asked of XDict's own application alone")
+    }
+
+    /// Without the grant the main actor asks nothing either.
+    @Test func ourOwnTargetWithoutTheGrantAsksNothing() {
+        let client = HitTests(finding: getpid())
+        let outcome = PointerWordReader.ownTarget(at: point, access: AccessibilityAccess(probe: { .declined }),
+                                                  ownProcess: getpid(), with: client)
+        guard case .none(.accessibilityOff) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(client.asked.withLock { $0 } == 0)
     }
 
     /// **Another app's window in front of one of ours is read through that app alone** (owner's report, 2026-10-19:
@@ -210,10 +238,26 @@ struct PointerWordReaderTests {
         let theirs = ListedWindow(pid: HostedWindow.owner, bounds: CGRect(x: 0, y: 0, width: 740, height: 625))
         let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 100, y: 100, width: 1_000, height: 700))
         let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [theirs, ours] },
-                                               ownProcess: getpid(), with: tree)
+                                               ownProcess: getpid(), refusesOwner: { _ in false }, with: tree)
         guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(target.element == tree.text)
         #expect(tree.askedOf == [HostedWindow.owner], "the system-wide hit test was asked with a window of ours beneath")
+    }
+
+    /// **An excluded app's window in front of ours is asked nothing** (verifier, 2026-10-19: the descent read an excluded
+    /// app's children and frames before the bundle refusal): the owner is known from the compositor before the hit test,
+    /// so its application element comes back unread, for the caller to refuse by its bundle identifier. Red if the
+    /// refusal moves after the hit test or the descent.
+    @Test func anExcludedAppsWindowInFrontOfOursIsAskedNothing() {
+        let tree = HostedWindow()
+        let theirs = ListedWindow(pid: HostedWindow.owner, bounds: CGRect(x: 0, y: 0, width: 740, height: 625))
+        let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 100, y: 100, width: 1_000, height: 700))
+        let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [theirs, ours] },
+                                               ownProcess: getpid(), refusesOwner: { $0 == HostedWindow.owner }, with: tree)
+        guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(target.pid == HostedWindow.owner)
+        #expect(tree.askedOf.isEmpty, "the excluded app was hit-tested")
+        #expect(tree.attributesAsked == 0, "the excluded app's tree was read: \(tree.attributesAsked) requests")
     }
 
     /// The control: with no window of ours at the point the system-wide hit test is asked, once, and its element taken as
@@ -222,7 +266,7 @@ struct PointerWordReaderTests {
         let tree = HostedWindow()
         let theirs = ListedWindow(pid: HostedWindow.owner, bounds: CGRect(x: 0, y: 0, width: 740, height: 625))
         let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [theirs] },
-                                               ownProcess: getpid(), with: tree)
+                                               ownProcess: getpid(), refusesOwner: { _ in false }, with: tree)
         guard case .found(let target) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(target.element == tree.text)
         #expect(tree.askedOf == [0])
@@ -238,7 +282,7 @@ struct PointerWordReaderTests {
                 return (.success, AXUIElementCreateApplication(4_300_003))
             }))
         let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [] }, ownProcess: getpid(),
-                                               with: session)
+                                               refusesOwner: { _ in false }, with: session)
         guard case .none(.failed(.deadlineExceeded)) = outcome else { Issue.record("got \(outcome)"); return }
     }
 
@@ -249,7 +293,8 @@ struct PointerWordReaderTests {
             let listed = Mutex(0)
             let outcome = PointerWordReader.target(
                 at: point, access: AccessibilityAccess(probe: { probe }),
-                windows: { listed.withLock { $0 += 1 }; return [] }, ownProcess: getpid(), with: client)
+                windows: { listed.withLock { $0 += 1 }; return [] }, ownProcess: getpid(), refusesOwner: { _ in false },
+                with: client)
             guard case .none(.accessibilityOff) = outcome else { Issue.record("got \(outcome)"); continue }
             #expect(client.asked.withLock { $0 } == 0 && listed.withLock { $0 } == 0)
         }
@@ -260,7 +305,7 @@ struct PointerWordReaderTests {
         let timeouts = Mutex<[Float]>([])
         let lane = AccessibilityLane { timeout in timeouts.withLock { $0.append(timeout) } }
         let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: AccessibilityAccess(probe: { .declined }))
-        let outcome = await source.target(at: point, windows: { [] })
+        let outcome = await source.target(at: point, windows: { [] }, refusesOwner: { _ in false })
         guard case .none(.accessibilityOff) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(timeouts.withLock { $0 } == [PointerWordReader.messagingTimeout])
     }

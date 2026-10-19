@@ -22,6 +22,20 @@ struct PointerWindowTests {
         #expect(PointerWindow.ownership(at: point, in: windows, ours: 99) == .coveringOurs(owner: 22))
     }
 
+    /// **A click-through window of ours is no window at all to hover** — the hover notice, the popover's anchor: dropped
+    /// from the list by its window number, so the window under it owns the point. Only ours: another app's window with
+    /// the same number is kept, and so is every ordinary window of ours (the main window, Settings, the popover).
+    @Test func ourClickThroughWindowsAreDroppedAndNothingElse() {
+        let point = CGPoint(x: 50, y: 50)
+        let notice = ListedWindow(pid: 99, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), windowID: 7, layer: 3)
+        let popover = ListedWindow(pid: 99, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), windowID: 8, layer: 3)
+        let theirs = ListedWindow(pid: 22, bounds: CGRect(x: 0, y: 0, width: 900, height: 900), windowID: 7)
+        let kept = PointerWindow.withoutClickThrough([notice, popover, theirs], ours: 99, passesClicksThrough: { $0 == 7 })
+        #expect(kept == [popover, theirs])
+        #expect(PointerWindow.ownership(at: point, in: PointerWindow.withoutClickThrough(
+            [notice, theirs], ours: 99, passesClicksThrough: { $0 == 7 }), ours: 99) == .notOurs)
+    }
+
     /// Ours in front is ours, whatever lies beneath it.
     @Test func ourWindowInFrontIsOurs() {
         let point = CGPoint(x: 500, y: 400)

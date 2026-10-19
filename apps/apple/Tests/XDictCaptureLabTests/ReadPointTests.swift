@@ -117,13 +117,21 @@ final class LabScreen: PointerWordSource, Sendable {
 
     var recognitions: Int { recognised.withLock { $0 } }
     func listedWindows() -> [ListedWindow] { [LabFixtures.window] }
-    func target(at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow]) async -> PointerWordReader.TargetOutcome {
+    func target(
+        at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow], refusesOwner: @escaping @Sendable (pid_t) -> Bool
+    ) async -> PointerWordReader.TargetOutcome {
         targetOutcome
     }
     func readUnlessRefused(
         at point: CGPoint, in target: PointerWordReader.Target, refuses: @escaping @Sendable (HostReading) -> Bool,
         budget: Duration
     ) async -> PointerWordReader.GatedOutcome {
+        .read(readOutcome)
+    }
+    func ownTarget(at point: CGPoint) -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
+    func readOwnUnlessRefused(
+        at point: CGPoint, in target: PointerWordReader.Target, refuses: (HostReading) -> Bool, budget: Duration
+    ) -> PointerWordReader.GatedOutcome {
         .read(readOutcome)
     }
     func laneState() -> LaneState { .idle }

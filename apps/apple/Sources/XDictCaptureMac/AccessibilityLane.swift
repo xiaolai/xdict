@@ -75,7 +75,8 @@ public struct LaneBounds: Sendable, Equatable {
 ///   and it stays as the barrier — a call inside the framework cannot be cancelled, only waited for.
 ///
 /// An Accessibility request about *this* process is not IPC and never comes through here: it is serviced on the calling
-/// thread, which must be the main actor (XiaolaiDict ADR-0042; `SelectionReader.read(from:)`, `PointerWordReader`).
+/// thread, which must be the main actor (XiaolaiDict ADR-0042; `SelectionReader.read(from:)`, and hover's
+/// `SystemPointerWords.ownTarget` and `readOwnUnlessRefused`).
 public final class AccessibilityLane: Sendable {
     public static let system = AccessibilityLane { AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), $0) }
 
