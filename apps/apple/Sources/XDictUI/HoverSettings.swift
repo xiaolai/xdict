@@ -85,6 +85,7 @@ public struct HoverSettings: View {
             Text("Screen Recording")
             Text(HoverSentences.screenRecording(hover.screenRecording))
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hover.screenRecording")
         .task { await hover.refreshScreenRecording() }
     }
@@ -147,6 +148,8 @@ public struct HoverSettings: View {
             Text(siteAnswer.flatMap(HoverSentences.excludedSite)
                  ?? LocalizedStringResource("Hover reads nothing on these sites, nor on a page whose address cannot be read while any site is listed."))
         }
+        // The row's identifier on the row alone: without `.contain` its field and button took it over (UI tour).
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("hover.excludedSites")
     }
 
