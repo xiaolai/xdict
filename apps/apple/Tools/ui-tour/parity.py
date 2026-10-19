@@ -285,6 +285,27 @@ def narrow(tree):
     return scope_menu(tree)
 
 
+# The toolbar's own controls, by their labels (P3, P48): the scope menu's button lives inside the field and is not one.
+TOOLBAR_BUTTONS = ("Back", "Forward", "Smaller Text", "Bigger Text", "Pronounce")
+
+
+def toolbar_fits(tree):
+    """No toolbar control over the search field, and the field inside the window (2026-10-19: a stretched window slid the
+    speaker over the field and ran the field past the window's right edge)."""
+    field, window = search_field(tree), main_window(tree).get("frame")
+    if field is None:
+        return "no search field"
+    f = field["frame"]
+    if window and (f[0] < window[0] - 2 or f[0] + f[2] > window[0] + window[2] + 2):
+        return f"the search field {f} runs out of the window {window}"
+    for name in TOOLBAR_BUTTONS:
+        for b in (n for n in find(tree, "AXButton") if n.get("description") == name or n.get("title") == name):
+            r = b["frame"]
+            if min(r[0] + r[2], f[0] + f[2]) - max(r[0], f[0]) > 2 and min(r[1] + r[3], f[1] + f[3]) - max(r[1], f[1]) > 2:
+                return f"{name!r} {r} lies over the search field {f}"
+    return None
+
+
 def find_bar(tree):
     fields = [n for n in find(tree, "AXTextField") if n.get("subrole") == "AXSearchField"]
     return None if len(fields) >= 2 else "no find bar's field beside the search field"
@@ -425,6 +446,7 @@ TREE_RULES = {
     "search.none": [("P12", no_entries_line), ("P2", title_no_count)],
     "window.min": [("P1", minimum_size)],
     "main.narrow": [("P8", narrow)],
+    "window.wide": [("P5", toolbar_fits), ("P48", toolbar_fits)],
     "scope.one": [("P7", scope_selected(1))],
     "scope.click": [("P6", scope_selected(1)), ("P6", scope_menu)],
     "entry.find": [("P30", find_bar)],

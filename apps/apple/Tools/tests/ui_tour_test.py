@@ -381,6 +381,19 @@ cases = {
     "window.min": ({"windows": [node("AXWindow", (0, 0, 400, 300), subrole="AXStandardWindow")]},
                    {"windows": [node("AXWindow", (0, 0, 640, 420), subrole="AXStandardWindow")]}),
     "main.narrow": (apple_window("XDict"), old_window("apple")),
+    # Stretched to 1400 pt: the field at its most, the speaker beside it; red, the stretched window of 2026-10-19, the
+    # speaker over the field's start and the field past the window's edge.
+    "window.wide": ({"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
+        button("Smaller Text", 860, "Decrease font size"), button("Bigger Text", 896, "Increase font size"),
+        button("Pronounce", 932, "Read the selection aloud"),
+        node("AXTextField", (972, 7, 420, 38), [scope_menu("All Dictionaries")], subrole="AXSearchField")])],
+        subrole="AXStandardWindow", title="XDict")]},
+                    {"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
+                        button("Smaller Text", 860, "Decrease font size"),
+                        button("Bigger Text", 896, "Increase font size"),
+                        button("Pronounce", 940, "Read the selection aloud"),
+                        node("AXTextField", (944, 7, 470, 38), subrole="AXSearchField")])],
+                        subrole="AXStandardWindow", title="XDict")]}),
     "scope.one": (apple_window("XDict", chosen="Beta"), apple_window("XDict")),
     "scope.click": (apple_window("XDict", chosen="Beta"), apple_window("XDict", scope_bar)),
     "entry.find": (apple_window("XDict", node("AXTextField", (200, 95, 500, 22), subrole="AXSearchField")),
