@@ -27,7 +27,7 @@ public struct EntryHoverText: Sendable, Equatable {
 
     /// No surrogate alone: a window cut inside a pair is not text (it fails to become UTF-8, measured 2026-10-19).
     /// Read from the reply's own string: a Swift `String` would already show a lone surrogate as U+FFFD.
-    private static func paired(_ text: NSString) -> Bool {
+    static func paired(_ text: NSString) -> Bool {
         var awaitingTrail = false
         for index in 0..<text.length {
             let unit = text.character(at: index)
@@ -89,5 +89,53 @@ extension EntryWebView {
             EntryScripts.askHoverWord, arguments: ["x": viewPoint.x / scale, "y": viewPoint.y / scale, "m": maxUTF16],
             in: nil, contentWorld: EntryPane.world)
         return EntryHoverText.validated(reply, maxUTF16: maxUTF16)
+    }
+}
+
+/// **The entry's selection, as the entry's own script answers it** (`hover-word.js`'s `__xdictSelectionText`, in the
+/// shell's world; owner, 2026-10-20: the shortcut, the menu and the Service capture the sentence in XDict's own windows
+/// too): the shown selected text and, where asked for, the shown text of its block around it — or that the selection is
+/// longer than it was asked to read. Asked instead of Accessibility, whose requests about this web view wait on WebKit
+/// while WebKit waits on the main thread (ADR-0014 d.6).
+public enum EntrySelectionText: Sendable, Equatable {
+    /// The selection as shown, and the text around it with the selection at its offset, or nil where none was asked
+    /// for or the selection crosses blocks.
+    case selected(String, around: EntryHoverText?)
+    /// More than the bound asked for, or more than the script's own walk reaches: said, never cut.
+    case tooLong
+
+    /// **A reply is data from a page**, whatever world ran the script: taken only as exactly `{over: true}`, or exactly
+    /// `selected` (1…`maxUTF16` UTF-16 units, no lone surrogate) and `around` (null, or a hover reply's shape within the
+    /// bound, holding `selected` exactly at its offset).
+    static func validated(_ reply: Any?, maxUTF16: Int) -> EntrySelectionText? {
+        guard maxUTF16 > 0, let reply = reply as? [String: Any] else { return nil }
+        if Set(reply.keys) == ["over"] {
+            guard let over = reply["over"] as? NSNumber, CFGetTypeID(over) == CFBooleanGetTypeID(), over.boolValue
+            else { return nil }
+            return .tooLong
+        }
+        guard Set(reply.keys) == ["selected", "around"], let raw = reply["selected"] as? NSString,
+              EntryHoverText.paired(raw), (1...maxUTF16).contains(raw.length), let selected = reply["selected"] as? String
+        else { return nil }
+        if reply["around"] is NSNull { return .selected(selected, around: nil) }
+        guard let around = EntryHoverText.validated(reply["around"], maxUTF16: maxUTF16) else { return nil }
+        let text = around.text as NSString
+        guard around.offset <= text.length - raw.length,
+              text.substring(with: NSRange(location: around.offset, length: raw.length)) == selected
+        else { return nil }
+        return .selected(selected, around: around)
+    }
+}
+
+extension EntryWebView {
+    /// **The entry's selection**, asked of the entry's own script in the shell's world (`EntryPane.world`), so no page
+    /// script can answer for it; with the text around it only where `sentence`; at most `maxUTF16` units of either. Nil
+    /// where nothing shown is selected, with no document, or for any reply out of shape. It reads, never writes: no
+    /// event, no request, nothing logged, the selection left as it is.
+    public func selectionText(sentence: Bool, maxUTF16: Int) async -> EntrySelectionText? {
+        guard maxUTF16 > 0 else { return nil }
+        let reply = try? await callAsyncJavaScript(
+            EntryScripts.askSelectionText, arguments: ["s": sentence, "m": maxUTF16], in: nil, contentWorld: EntryPane.world)
+        return EntrySelectionText.validated(reply, maxUTF16: maxUTF16)
     }
 }

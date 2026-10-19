@@ -97,9 +97,10 @@ final class LookupAnywhere {
     /// The last app other than XDict to be frontmost: where a Service request came from, when it brought XDict forward.
     @ObservationIgnored private var lastOtherApp: NSRunningApplication?
     @ObservationIgnored private var activationObserver: (any NSObjectProtocol)?
-    /// Where the reader last right-clicked or Control-clicked, and when: where a Service request's selection is, when
-    /// its app cannot say. A global mouse monitor, which needs no permission.
-    @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date)?
+    /// Where the reader last right-clicked or Control-clicked, when, and whether in one of XDict's own windows (the local
+    /// monitor's) or another app's (the global one's): where a Service request's selection is, when its app cannot say,
+    /// and whose it is. A global mouse monitor, which needs no permission.
+    @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date, ours: Bool)?
     @ObservationIgnored private var secondaryClickMonitor: Any?
     @ObservationIgnored private var ownClickMonitor: Any?
 
@@ -109,14 +110,16 @@ final class LookupAnywhere {
         // A global monitor is not sent the app's own events, so a right-click in XDict's own windows needs the local one
         // too; without it the Service from an entry found no click and anchored at the pointer, in the Services submenu
         // (owner's screenshot, 2026-10-18: the popover's arrow pointed well away from the word).
-        let remember: (NSEvent) -> Void = { [weak self] event in
+        let remember: (NSEvent, Bool) -> Void = { [weak self] event, ours in
             guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return }
             let point = NSEvent.mouseLocation
-            MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date()) }
+            MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date(), ours) }
         }
-        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: remember)
+        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
+            remember(event, false)
+        }
         ownClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
-            remember(event)
+            remember(event, true)
             return event
         }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -211,7 +214,7 @@ final class LookupAnywhere {
                 guard !Task.isCancelled else { return }
                 self?.show(.reading, query: nil, near: nil, source: source)
             }
-            let outcome = await SelectionReader.read(from: front, excluding: exclusions)
+            let outcome = await SelectionReader.read(from: front, excluding: exclusions, ownHolder: Self.ownSelectionHolder)
             waiting.cancel()
             guard let self else { return }
             guard !Task.isCancelled else {
@@ -255,7 +258,10 @@ final class LookupAnywhere {
     /// it is the text handed over, else where the reader Control-clicked it (the pointer itself has moved on, into the
     /// Services submenu). Measured on the E2E Mac (2026-10-15): macOS brings the provider forward a moment after the
     /// request, so the reader's app — the last other app in front — is put back in front, and the panel's dismissal
-    /// leaves it there with its next key.
+    /// leaves it there with its next key. **A Service asked from one of XDict's own windows reads XDict's own
+    /// selection** (owner, 2026-10-20), its sentence too, and puts no other app in front: it is XDict's when the reader's
+    /// last Control-click was in XDict's own window, or, with none, when XDict is the active app (the Services menu of
+    /// XDict's own menu bar).
     func service(_ raw: String?) {
         // **Numbered now, as macOS hands the text over**, before the selection is read for its place.
         let request = requests.beginPresenting(.service)
@@ -264,7 +270,12 @@ final class LookupAnywhere {
         case .term(let text):
             let previous = lastOtherApp
             observe?("serviceFront", ["xdictWasActive": NSApp.isActive, "previous": previous?.bundleIdentifier ?? NSNull()])
-            let clicked = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0.point : nil }
+            let click = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0 : nil }
+            let clicked = click?.point
+            if click?.ours ?? NSApp.isActive {
+                serviceFromOurWindow(text, request: request, clicked: clicked)
+                return
+            }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // Back to the reader's app first, and only then its selection read: an app that is not frontmost
@@ -304,6 +315,30 @@ final class LookupAnywhere {
         case .tooLong(let characters):
             requests.cancel(request)
             show(.refused(.tooLong(app: "", characters: characters)), query: nil, near: nil, source: .service)
+        }
+    }
+
+    /// The Service asked from one of XDict's own windows: XDict's own selection read for the box and the sentence — its
+    /// entries by their own script, never Accessibility — and XDict left in front.
+    private func serviceFromOurWindow(_ text: String, request: CaptureRequest, clicked: CGPoint?) {
+        let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
+        let ours = FrontApp(pid: getpid(), name: NSRunningApplication.current.localizedName ?? ProcessInfo.processInfo.processName,
+                            bundleID: Bundle.main.bundleIdentifier)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var outcome: SelectionOutcome?
+            if AXIsProcessTrusted() {
+                outcome = await SelectionReader.read(from: ours, excluding: self.hover.policy, ownHolder: Self.ownSelectionHolder)
+                self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
+            }
+            do {
+                let term = try SelectionReader.serviceTerm(text, read: outcome, source: SourceApp(bundleID: ours.bundleID),
+                                                           clicked: under)
+                _ = self.requests.present(term, for: request, to: self)
+            } catch {
+                self.requests.cancel(request)
+                self.show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
+            }
         }
     }
 
