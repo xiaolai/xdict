@@ -2,6 +2,7 @@ import Carbon.HIToolbox
 import Foundation
 import Testing
 import XDictAnywhere
+import XDictCaptureMac
 import XDictUI
 
 /// **What lookup from anywhere tells the reader** (plan-macos-v1 WI-8): why a selection could not be looked up, each
@@ -14,6 +15,7 @@ struct AnywhereSentencesTests {
             .tooLong(app: "Notes", characters: 300), .failed(.notResponding, app: "Notes"),
             .failed(.accessibilityRefused, app: "Notes"), .failed(.deadlineExceeded, app: "Notes"),
             .failed(.accessibilityDisabled, app: "Notes"), .failed(.appUnavailable, app: "Notes"), .notTrusted, .noApp,
+            .tooLongToRead(app: "Notes"),
         ]
         let texts = refusals.map { String(localized: AnywhereSentences.refusal($0)) }
         #expect(Set(texts).count == refusals.count, "\(texts)")

@@ -160,12 +160,14 @@ def read_map(path):
 
 
 def route_ids():
+    """The tour's driven routes. One with no steps is never rendered, so selecting it would leave it pending forever
+    (plan-capture WI-5 verification: the Screen Recording row's states, the Apple import's updated and removed rows)."""
     sys.path.insert(0, os.path.join(TOOLS, "ui-tour"))
     try:
         from routes import ROUTES
     finally:
         sys.path.pop(0)
-    return [r[0] for r in ROUTES]
+    return [r[0] for r in ROUTES if r[4] is not None]
 
 
 def expand_routes(globs, ids):

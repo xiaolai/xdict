@@ -3,7 +3,8 @@ import XDictAnywhere
 import XDictTokens
 
 /// **General, in Settings** (⌘,; plan-macos-v1 WI-9, ADR-0012 d.1): launch at login, with what the system says of it, the
-/// language of XDict's own words, the lookup shortcut (`ShortcutSettings`, once the Lookup pane) and Show Setup…. The
+/// language of XDict's own words, the lookup shortcut (`ShortcutSettings`, once the Lookup pane), hover (`HoverSettings`,
+/// plan-capture WI-3) and Show Setup…. The
 /// accent and speech are under Reading & Speech, the dictionaries' order and languages under Dictionaries.
 public struct GeneralSettings: View {
     @Bindable private var login: LaunchAtLogin
@@ -12,13 +13,17 @@ public struct GeneralSettings: View {
     @State private var language: InterfaceLanguage
     @AppStorage(PanelAppearance.shadeKey) private var shade: PanelAppearance.Shade = .system
     @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
+    /// The app delegate reads the same key of the same suite (`MenuBarResidence`); on for a reader who never chose.
+    @AppStorage(MenuBarResidence.key) private var keepsRunning = true
     private let registrar: ShortcutRegistrar
+    private let hover: HoverControl
     private let openSetup: () -> Void
 
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, registrar: ShortcutRegistrar,
-                openSetup: @escaping () -> Void) {
+                hover: HoverControl, openSetup: @escaping () -> Void) {
         self.login = login
         self.registrar = registrar
+        self.hover = hover
         self.defaults = defaults
         self.domain = domain
         self.openSetup = openSetup
@@ -33,6 +38,19 @@ public struct GeneralSettings: View {
             }
             .accessibilityLabel(Text("Open XDict when you log in"))
             .accessibilityIdentifier("launch-at-login")
+            if login.needsApproval {
+                LabeledContent {
+                    Button { login.openLoginItems() } label: { Text("Open Login Items Settings…") }  // placement: form-row
+                        .accessibilityIdentifier("launch-at-login.approve")
+                } label: {
+                    Text("Allow XDict in Login Items")
+                }
+            }
+            Toggle(isOn: $keepsRunning) {
+                Text("Keep XDict in the menu bar")
+                Text("With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window.")
+            }
+            .accessibilityIdentifier("keep-in-menu-bar")
             if let failure = login.failure {
                 // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
                 VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
@@ -54,6 +72,7 @@ public struct GeneralSettings: View {
             .accessibilityIdentifier("interface-language")
             .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
             Section { ShortcutSettings(registrar: registrar) }
+            Section { HoverSettings(hover: hover) }
             Section {
                 Picker(selection: $shade) {
                     Text("Follow System").tag(PanelAppearance.Shade.system)
@@ -65,18 +84,16 @@ public struct GeneralSettings: View {
                 }
                 .pickerStyle(.segmented)
                 .accessibilityIdentifier("panel-shade")
-                LabeledContent {
-                    Slider(value: $solidity, in: 0...1) {
-                        Text("Background")
-                    } minimumValueLabel: {
-                        Text("Glass")
-                    } maximumValueLabel: {
-                        Text("Solid")
-                    }
-                    .accessibilityIdentifier("panel-solidity")
-                } label: {
+                // The slider's own label is the row's, as a picker's is: wrapped in a LabeledContent naming it again, the
+                // form drew "Background" twice, the second after Solid (UI tour, 2026-10-19).
+                Slider(value: $solidity, in: 0...1) {
                     Text("Background")
+                } minimumValueLabel: {
+                    Text("Glass")
+                } maximumValueLabel: {
+                    Text("Solid")
                 }
+                .accessibilityIdentifier("panel-solidity")
             }
             Section {
                 LabeledContent {
@@ -89,5 +106,9 @@ public struct GeneralSettings: View {
         }
         .settingsPane()
         .onAppear { login.refresh() }
+        // The reader may have been to Login Items and back.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            login.refresh()
+        }
     }
 }

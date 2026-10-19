@@ -1,0 +1,174 @@
+import CoreGraphics
+import Foundation
+
+/// A window as the compositor lists it, reduced to the two facts that answer "whose pixel is this":
+/// who owns it, and where it is.
+public struct ListedWindow: Sendable, Equatable {
+    public let pid: Int32
+    /// Global screen points with a top-left origin — `kCGWindowBounds`' own space, which is also the
+    /// space a hover point arrives in.
+    public let bounds: CGRect
+    /// The compositor's number for it — what a capture of *this* window, and no other, is asked by.
+    public let windowID: UInt32
+    /// 0 for an ordinary app window; a floating window, a menu or an overlay sits above.
+    public let layer: Int
+    /// 0 is a window nothing can see, which no pixel under the pointer belongs to.
+    public let alpha: Double
+
+    public init(pid: Int32, bounds: CGRect, windowID: UInt32 = 0, layer: Int = 0, alpha: Double = 1) {
+        self.pid = pid
+        self.bounds = bounds
+        self.windowID = windowID
+        self.layer = layer
+        self.alpha = alpha
+    }
+}
+
+/// Which process owns the pixel under the pointer — **asked of the compositor, before Accessibility**, so the hit test is
+/// made on the right thread.
+///
+/// `AXUIElementCopyElementAtPosition` cannot be used to find this out, and a `pid` check on what it
+/// returns is a check made one call too late. Where the window at that point belongs to *this*
+/// process, Accessibility services the request **in-process, on the calling thread**:
+/// `-[NSApplication accessibilityHitTest:]` runs, `NSHostingView` answers it, and SwiftUI evaluates
+/// our own view's body wherever the call was made from. Off the main actor the first `@MainActor` call
+/// in that body traps — measured, crash report 2026-09-25: `EXC_BREAKPOINT` in `dispatch_assert_queue`
+/// under a SwiftUI body of XiaolaiDict's, reached from its hover reader on a cooperative-pool thread. Nothing in the
+/// reply can prevent it; only asking from the main actor can. **Hover reads XDict's own windows** (owner, 2026-10-19):
+/// where one is in front, the hit test and the read are made on the main actor, never through the lane.
+public enum PointerWindow {
+    /// **Whose window is in front at the point, as far as the system-wide hit test's safety goes.** The
+    /// topmost window is not proof that the system-wide hit test will land on it: a click-through overlay
+    /// from another app, opaque in the list, can sit above our window while that hit test goes straight
+    /// through to it — in process, off the main actor. So a window of ours anywhere under the point is
+    /// always named: in front, it is ours and the main actor asks our own application; under another
+    /// app's, that app is the one asked (`coveringOurs`), and the system-wide element never is.
+    ///
+    /// Refusing every hover over any window of ours at any depth, the rule before this one, made hover
+    /// silent wherever XDict had a window behind the reader's app (owner's report, 2026-10-19: in System
+    /// Settings, only the one word of its title outside XDict's two windows behind it was read).
+    public static func ownership(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> PointerOwnership {
+        let here = windows.filter { $0.bounds.contains(point) }
+        guard here.contains(where: { $0.pid == ours }) else { return .notOurs }
+        // Front to back: ours counts even while invisible (one fading in is still serviced in-process); another app's
+        // window counts only where it can be seen, as no pixel of an invisible one is under the pointer.
+        guard let front = here.first(where: { $0.pid == ours || $0.alpha > 0 }), front.pid != ours else { return .ours }
+        return .coveringOurs(owner: front.pid)
+    }
+}
+
+/// Whose window the pointer is over, for hover's hit test (`PointerWindow.ownership`).
+public enum PointerOwnership: Sendable, Equatable {
+    /// No window of ours is at the point: the system-wide hit test cannot land in this process.
+    case notOurs
+    /// A window of ours is in front at the point: **only the main actor asks**, and only our own application.
+    case ours
+    /// Another app's window is in front, with one of ours beneath it: **that app alone is asked**, so the hit test
+    /// cannot go through to ours.
+    case coveringOurs(owner: Int32)
+}
+
+extension PointerWindow {
+    /// **The list without our own click-through windows** — the hover notice, the popover's anchor: windows of ours that
+    /// take no click and carry no reader text, so the window under one owns the point, for Accessibility and the pixels
+    /// alike. Told by the window itself (`passesClicksThrough`, by window number), never by its owner: every other window
+    /// of ours — the main window and its entry, Settings, the popover — stays, and hover reads it (owner, 2026-10-19).
+    public static func withoutClickThrough(
+        _ windows: [ListedWindow], ours: Int32, passesClicksThrough: (UInt32) -> Bool
+    ) -> [ListedWindow] {
+        windows.filter { !($0.pid == ours && passesClicksThrough($0.windowID)) }
+    }
+
+    /// `CGWindowListCopyWindowInfo`'s dictionaries as the two facts above, in the order given.
+    ///
+    /// **Every level survives, and that is the load-bearing part.** The recogniser's own window search
+    /// keeps `kCGWindowLayer == 0`, because it is looking for the ordinary window of the app the reader
+    /// is reading. The same filter here would skip our own floating windows
+    /// — the one window this exists to find. A window missing either fact is dropped rather than
+    /// guessed at: an unplaced window cannot contain a point.
+    public static func listed(_ info: [[String: Any]]) -> [ListedWindow] {
+        info.compactMap { window in
+            guard let pid = window[kCGWindowOwnerPID as String] as? Int32,
+                  let bounds = (window[kCGWindowBounds as String] as? NSDictionary).flatMap({
+                      CGRect(dictionaryRepresentation: $0 as CFDictionary)
+                  })
+            else { return nil }
+            return ListedWindow(
+                pid: pid, bounds: bounds,
+                windowID: window[kCGWindowNumber as String] as? UInt32 ?? 0,
+                layer: window[kCGWindowLayer as String] as? Int ?? 0,
+                alpha: window[kCGWindowAlpha as String] as? Double ?? 1)
+        }
+    }
+}
+
+/// **What hover may read, resolved once per hover** and handed to both paths — the compositor's
+/// window list at the moment of asking, and which process Accessibility said owns the pointer.
+///
+/// The two paths used to choose separately: Accessibility named an element's app, and the capture
+/// took the first ordinary window at the point. Where the app Accessibility named had a panel or a
+/// sheet there, or exposed nothing while another app's window sat under it, the capture read a
+/// different app from the one that was vetted.
+public struct PointerTarget: Sendable, Equatable {
+    public let point: CGPoint
+    /// Front to back, every level.
+    public let windows: [ListedWindow]
+    /// The process Accessibility found an element for, if it found one.
+    public let accessibilityOwner: Int32?
+
+    public init(point: CGPoint, windows: [ListedWindow], accessibilityOwner: Int32?) {
+        self.point = point
+        self.windows = windows
+        self.accessibilityOwner = accessibilityOwner
+    }
+
+    /// Which window a capture may read.
+    public enum Capture: Sendable, Equatable {
+        /// This one. `obscuredBy` is the window the compositor shows on top at the point when it is
+        /// a different one — logged and counted, **not refused**: a click-through overlay from
+        /// another app looks exactly like this in the list, and refusing would end hover for every
+        /// reader who runs one.
+        case window(ListedWindow, obscuredBy: ListedWindow?)
+        /// Accessibility named this process and it has no window at the point. Nothing is read: the
+        /// window under the pointer belongs to an app that was not the one vetted.
+        case ownerHasNoWindow(Int32)
+        /// No window at the point that a capture can be attributed to.
+        case noWindow
+    }
+
+    /// **The capture reads the app Accessibility named**, at any level — its sheet, its panel —
+    /// and only where it found nothing does the old rule stand: the frontmost ordinary window that
+    /// is not this process's own.
+    public func captureWindow(excludingProcess ours: Int32) -> Capture {
+        let visible = windows.filter { $0.alpha > 0 && $0.bounds.contains(point) }
+        let topmost = visible.first
+        let chosen: ListedWindow
+        if let owner = accessibilityOwner {
+            guard let owned = visible.first(where: { $0.pid == owner }) else { return .ownerHasNoWindow(owner) }
+            chosen = owned
+        } else {
+            guard let ordinary = visible.first(where: { $0.layer == 0 && $0.pid != ours }) else { return .noWindow }
+            chosen = ordinary
+        }
+        return .window(chosen, obscuredBy: topmost == chosen ? nil : topmost)
+    }
+}
+
+/// **The one rule for whether hover may read an app**, asked at each of the three places that
+/// check: the Accessibility target before reading, the captured window before a pixel is taken,
+/// and the word after it is read. Three copies of `excludedApps.contains` could drift; one rule
+/// cannot.
+public enum CaptureAuthorization {
+    /// A refusal, or nil where reading is allowed. An owner that cannot be named is not refused
+    /// here: the capture path refuses an unattributable region on its own, and Accessibility always
+    /// names one.
+    public static func refusal(bundleID: String?, policy: HoverPolicy) -> HoverRefusal? {
+        guard let bundleID else { return nil }
+        return policy.excludes(app: bundleID) ? .excludedApp : nil
+    }
+
+    /// The site rule, asked once the page under the pointer has been named — or found unnameable.
+    public static func refusal(host: HostReading, policy: HoverPolicy) -> HoverRefusal? {
+        policy.refuses(host) ? .excludedSite : nil
+    }
+}

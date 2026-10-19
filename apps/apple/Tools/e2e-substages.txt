@@ -152,6 +152,30 @@
 @ shortcut.rebind default kit,fixtures group=anywhere
     shortcut.rebindPersists shortcut.clashRestores
 
+# Hover (plan-capture WI-5; ADR-0014): one launch, `substage_hover`. The first three run the capture lab
+# (`kit/XDictCaptureLab.app --read-point X Y`, Tools/build-lab.sh) at known points of fixture windows the run opens: text
+# Accessibility shares (TextEdit, Safari), text only the pixels hold (an image of words), a default-excluded app
+# (Passwords). The last two run XDict.app itself, over the lookup fixtures, with the hover key held over another app's
+# word. **Needs grants given by hand on the E2E Mac, never by script or the privacy database**: Accessibility and Screen
+# Recording for XDictCaptureLab.app (its own identity, `ai.xdict.lab.capture`), and Accessibility for XDict.app. A
+# missing grant fails its `*.access` check by name and the checks after it as not reached, never a skip: the lab's own
+# sentence (`ReadPoint.screenRecordingNeeded`) is that failure's text. `hover.permission` reads the Screen Recording row
+# in whatever state macOS holds for XDict.app and never changes it. Extra until the driver lands (defined 2026-10-19,
+# never run): a run that names them fails loudly on the missing `substage_hover`, and no release requires them meanwhile.
+@ hover.accessibility extra kit group=hover
+    hover.access hover.ax.textedit hover.ax.safari hover.ax.boxMeasured hover.ax.sentence hover.ax.ownWindowRead
+@ hover.ocr extra kit group=hover
+    hover.screenRecording.access hover.ocr.word hover.ocr.boxMeasured hover.ocr.firstThenSettled
+    hover.ocr.axPreferred
+@ hover.exclusions extra kit group=hover
+    hover.exclusions.passwords hover.exclusions.noPixels
+@ hover.permission extra kit,fixtures group=hover
+    hover.permission.access hover.permission.rowMatchesGrant hover.permission.noPromptBeforeRow
+    hover.permission.noticeNamesRow
+@ hover.popover extra kit,fixtures group=hover
+    hover.popover.opens hover.popover.acknowledged hover.popover.keyReleasedQuiet hover.popover.pauseSilences
+    hover.popover.resumeReads hover.popover.offInSettings
+
 # The WI-10 measurement (plan-macos-v1 WI-10, "Measurement protocol"): one launch of the real app over the 24
 # (`XDict --measure`), driven by `Tools/measure/drive.py`: typed lookup warm (10 + 200) and cold (20), Return to WebKit's
 # first paint, overhead subtracted; selection key to panel (20, TextEdit; needs XDict.app's Accessibility, so the

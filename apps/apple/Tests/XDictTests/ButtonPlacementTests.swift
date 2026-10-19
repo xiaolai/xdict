@@ -33,7 +33,7 @@ struct ButtonPlacementTests {
     /// name, with its parity row (`Tools/parity/apple-dictionary.tsv`) where Apple's measured layout is the reason.
     /// One no marker names fails (`everyExclusionIsUsedAndKnown`), so the list never outlives its sites.
     static let exclusions: [String: String] = [
-        "P3": "the toolbar: Back/Forward and Smaller/Bigger Text, Apple's segmented pairs (SearchWindow.toolbar)",
+        "P3": "the toolbar: Back/Forward and Smaller/Bigger Text, Apple's segmented pairs (SearchToolbar)",
         "P48": "the toolbar's speaker and Edit ▸ Pronounce, XDict's own addition to Apple's toolbar and Edit menu",
         "P30": "the find bar's chevron pair and Done (EntryFindBar)",
         "P31": "the app menu: Set Up XDict…, Acknowledgments",

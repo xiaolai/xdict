@@ -91,7 +91,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "4e2e07ae9030f764acd31726e0338908560ede6a",
+  "apps/apple/Package.swift": "cdb68f8819d7b1657ef194375135a7bccbbfc0b0",
   "core/Cargo.toml": "8e96898c7e4a1b21f920104e9b25a0b82a2bca64",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
@@ -111,6 +111,8 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
+    "XDictCaptureMac",
     "XDictClient",
     "XDictContract",
     "XDictEntryView",
@@ -127,6 +129,8 @@
   "XDictAnywhere": {
    "deps": [
     "XDictBase",
+    "XDictCapture",
+    "XDictCaptureMac",
     "XDictTokens"
    ],
    "dir": "apps/apple/Sources/XDictAnywhere/",
@@ -134,7 +138,10 @@
   },
   "XDictAnywhereTests": {
    "deps": [
-    "XDictAnywhere"
+    "XDictAnywhere",
+    "XDictCapture",
+    "XDictCaptureMac",
+    "XDictTokens"
    ],
    "dir": "apps/apple/Tests/XDictAnywhereTests/",
    "type": "test"
@@ -178,6 +185,52 @@
     "XDictBase"
    ],
    "dir": "apps/apple/Tests/XDictBaseTests/",
+   "type": "test"
+  },
+  "XDictCapture": {
+   "deps": [],
+   "dir": "apps/apple/Sources/XDictCapture/",
+   "type": "regular"
+  },
+  "XDictCaptureLab": {
+   "deps": [
+    "XDictAnywhere",
+    "XDictCapture",
+    "XDictCaptureMac"
+   ],
+   "dir": "apps/apple/Sources/XDictCaptureLab/",
+   "type": "executable"
+  },
+  "XDictCaptureLabTests": {
+   "deps": [
+    "XDictCapture",
+    "XDictCaptureLab",
+    "XDictCaptureMac"
+   ],
+   "dir": "apps/apple/Tests/XDictCaptureLabTests/",
+   "type": "test"
+  },
+  "XDictCaptureMac": {
+   "deps": [
+    "XDictBase",
+    "XDictCapture"
+   ],
+   "dir": "apps/apple/Sources/XDictCaptureMac/",
+   "type": "regular"
+  },
+  "XDictCaptureMacTests": {
+   "deps": [
+    "XDictCapture",
+    "XDictCaptureMac"
+   ],
+   "dir": "apps/apple/Tests/XDictCaptureMacTests/",
+   "type": "test"
+  },
+  "XDictCaptureTests": {
+   "deps": [
+    "XDictCapture"
+   ],
+   "dir": "apps/apple/Tests/XDictCaptureTests/",
    "type": "test"
   },
   "XDictClient": {
@@ -361,6 +414,8 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
+    "XDictCaptureMac",
     "XDictContract",
     "XDictEntryView",
     "XDictLibrary",
@@ -376,6 +431,8 @@
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
+    "XDictCapture",
+    "XDictCaptureMac",
     "XDictContract",
     "XDictLibrary",
     "XDictSearch",

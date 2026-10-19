@@ -59,11 +59,14 @@
 #   make release-bootstrap BUILD_NUMBER=<n>
 #                     the same, requiring evidence of the `launch` stage only (the skeleton's; plan-macos-v1 WI-2)
 #   make clean        remove the bundle and its stage (not SwiftPM's or cargo's caches)
+#   make clean-dev [APPLY=1] [ARGS="--air|--build-host --into <branch> --min-age-hours <n>"]
+#                     what agents left on this Mac (merged git worktrees) and on BUILD_HOST (~/xdict-build copies):
+#                     a dry run with a table of what and why; APPLY=1 removes it (Tools/clean-dev.sh)
 
 .NOTPARALLEL:
 .DEFAULT_GOAL := app
 .PHONY: app remote-build test test-swift test-tools icons core lint strings e2e e2e-quick e2e-affected e2e-pending land render-pending render-affected affected-graph affected-graph-update e2e-status e2e-evidence \
-	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean
+	e2e-evidence-bootstrap e2e-ledger release-plan release release-bootstrap clean clean-dev
 
 APPLE := $(abspath $(dir $(lastword $(MAKEFILE_LIST))))
 REPO := $(abspath $(APPLE)/../..)
@@ -164,6 +167,7 @@ e2e:
 	@[ -n "$(E2E_HOST)" ] || { echo "E2E_HOST_MACOS is not set: put the E2E Mac's SSH name in $(REPO)/local.mk" >&2; exit 1; }
 	@stages=$$(Tools/e2e-run.sh select) || exit 1; stages=$$(echo $$stages); \
 	if [ -z "$$stages" ]; then echo "e2e: every sub-stage is unchanged since its last pass; nothing to run (FULL=1 runs them all)"; exit 0; fi; \
+	Tools/e2e.sh --drivers $$stages || exit 1; \
 	tree=$$(Tools/source-tree.sh) && \
 	if [ -d .build/XDict.app ] && [ "$$(cat .build/XDict.app.source-tree 2>/dev/null)" = "$$tree" ]; then \
 	  echo "e2e: .build/XDict.app is built of this tree already; not building it again"; \
@@ -219,12 +223,15 @@ test-tools:
 	@Tools/tests/affected-graph-test.sh
 	@Tools/tests/remote-build-test.sh
 	@Tools/tests/lab-test.sh
+	@Tools/tests/development-lab-test.sh
 	@Tools/tests/core-on-host-test.sh
 	@Tools/tests/gate-cache-test.sh
 	@Tools/tests/e2e-ledger-test.sh
 	@python3 -I Tools/tests/e2e_deps_test.py
+	@Tools/tests/e2e-drivers-test.sh
 	@Tools/tests/e2e-run-test.sh
 	@Tools/tests/land-test.sh
+	@Tools/tests/clean-dev-test.sh
 	@Tools/tests/on-demand-test.sh
 	@python3 -I Tools/tests/hostile_test.py
 	@python3 -I Tools/tests/anywhere_test.py
@@ -278,3 +285,9 @@ release-bootstrap: e2e-evidence-bootstrap $(RELEASE_BUILD)
 
 clean:
 	@Tools/build-bundle.sh clean
+
+# A dry run unless APPLY=1. Runs on this Mac (it builds nothing) and reaches BUILD_HOST over one ssh.
+APPLY ?=
+ARGS ?=
+clean-dev:
+	@Tools/clean-dev.sh $(if $(APPLY),--apply) $(ARGS)

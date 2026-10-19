@@ -21,6 +21,39 @@ struct LaunchAtLoginTests {
             calls.append("unregister")
             status = .notRegistered
         }
+
+        func openSystemSettings() {
+            calls.append("openSystemSettings")
+        }
+    }
+
+    /// **Only the reader's switch registers** (XiaolaiDict's Startup section, ported): making the row and reading the
+    /// system again, in every state, change nothing — no launch and no Settings visit makes XDict a login item.
+    @Test func nothingRegistersButTheSwitch() {
+        for status: LoginItemStatus in [.enabled, .notRegistered, .requiresApproval, .notFound] {
+            let service = FakeService()
+            service.status = status
+            let item = LaunchAtLogin(service: service)
+            item.refresh()
+            #expect(service.calls.isEmpty, "\(status): \(service.calls)")
+            #expect(item.status == status)
+        }
+    }
+
+    /// **A pending approval offers the way to it**: Login Items in System Settings, opened by the reader's button, and
+    /// only in that state. Red while the row has no way to the approval it is waiting for.
+    @Test func aPendingApprovalOffersLoginItemsSettings() {
+        let service = FakeService()
+        service.status = .requiresApproval
+        let item = LaunchAtLogin(service: service)
+        #expect(item.needsApproval)
+        item.openLoginItems()
+        #expect(service.calls == ["openSystemSettings"])
+        for status: LoginItemStatus in [.enabled, .notRegistered, .notFound] {
+            service.status = status
+            item.refresh()
+            #expect(!item.needsApproval, "\(status)")
+        }
     }
 
     @Test func turningItOnRegistersAndShowsTheStatus() {

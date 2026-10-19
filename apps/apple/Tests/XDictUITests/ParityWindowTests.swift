@@ -29,9 +29,10 @@ struct ParityWindowTests {
         // Apple's sidebar is 183 pt at an 859 pt window (P9).
         #expect(ToolbarLayout.sidebar.ideal == 183)
         // P8: at the 400 pt minimum the title yields to the search field; at Apple's 859 pt it shows.
-        // P8: the search field's toolbar item outlasts every other.
-        #expect(ToolbarPriority.priority(holdsSearch: true) == .user)
-        #expect(ToolbarPriority.priority(holdsSearch: false) == .low)
+        // P8: the search field's toolbar item outlasts every other; P48: the speaker outlasts both pairs.
+        #expect(ToolbarPriority.priority(.searchField) == .user)
+        #expect(ToolbarPriority.priority(.speaker) == .high)
+        #expect(ToolbarPriority.priority(.pair) == .low)
         #expect(ToolbarLayout.titleYields(width: 400) && !ToolbarLayout.titleYields(width: 859))
     }
 
