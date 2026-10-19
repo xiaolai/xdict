@@ -168,6 +168,69 @@ struct CaptureContextFlowTests {
         #expect(Self.logFindings([("Planted.swift", planted)]).problems == ["Planted.swift:2", "Planted.swift:9"])
     }
 
+    /// **A tuple binding is followed too** (verifier, 2026-10-19, M01 and M01c): the selection's sentence arrives as
+    /// `guard let (text, range, cut) = cutToLimit(sentence, …)`, so `text` is the sentence, and so is a local taken from
+    /// it. Red while only `let name =` is read.
+    @Test func aLogOfATupleBoundSentenceIsNamed() {
+        let planted = """
+            func a(_ sentence: SentenceContext) -> ContextOutcome {
+                guard let (text, range, cut) = cutToLimit(sentence, term: term) else { return .none }
+                print(text)
+                return .available(sentence: text, term: range, cut: cut, gap: nil)
+            }
+            func b(_ sentence: SentenceContext) -> ContextOutcome {
+                if let (text, range, _) = cutToLimit(sentence, term: term) {
+                    let shown = text
+                    Self.log.notice("\\(shown, privacy: .private)")
+                }
+            }
+            func c() {
+                let (count, total) = (1, 2)
+                print(count, total)
+            }
+            """
+        #expect(Self.logFindings([("Planted.swift", planted)]).problems == ["Planted.swift:3", "Planted.swift:9"])
+    }
+
+    // MARK: - Inside capture: nothing it read is persisted
+
+    /// **No capture code writes what it read anywhere that outlives the process** (decision 9: "no persistence written
+    /// by the application"): every `UserDefaults`, `FileManager`, `write(to:`, `NSPasteboard`, `SecItem…` and Keychain
+    /// call in the capture targets is read like a log call, and none may be handed a sentence, a context, a `.text` or a
+    /// `.word`, or a local taken from one. The premise: the scan reads the targets' files.
+    @Test func noCaptureCodePersistsTheText() throws {
+        var files: [(name: String, text: String)] = []
+        for folder in Self.captureSources {
+            files += try SourceScan.files(under: Manifest.package.appending(path: folder))
+                .map { (folder + $0.file.lastPathComponent, $0.text) }
+        }
+        #expect(files.count >= 20, "the scan read \(files.count) files")
+        #expect(Self.findings(files, calls: Self.persistCall).problems == [])
+    }
+
+    /// The control (M02): each way of keeping it is named; a count kept, or a sentence only said in a string, is not.
+    @Test func persistingTheTextIsNamed() {
+        let planted = """
+            func a(_ term: CapturedTerm) {
+                UserDefaults.standard.set(term.context, forKey: "last")
+                try? hit.word.sentence.text.write(to: url, atomically: true, encoding: .utf8)
+                let kept = term.context
+                FileManager.default.createFile(atPath: path, contents: Data("\\(kept)".utf8))
+                NSPasteboard.general.setString(read.word, forType: .string)
+                SecItemAdd([kSecValueData: Data(sentence.utf8)] as CFDictionary, nil)
+                UserDefaults.standard.set(lines.count, forKey: "observations")
+                print("the sentence is never written")
+            }
+            """
+        #expect(Self.findings([("Planted.swift", planted)], calls: Self.persistCall).problems
+                == ["Planted.swift:2", "Planted.swift:3", "Planted.swift:5", "Planted.swift:6", "Planted.swift:7"])
+    }
+
+    /// Spelled with classes, not `\b`: Swift's word boundary is Unicode's, under which `UserDefaults.standard` is one word.
+    static var persistCall: Regex<Substring> {
+        /(?:^|[^A-Za-z0-9_])(?:UserDefaults|FileManager|NSPasteboard|SecItem|Keychain)[A-Za-z0-9_.]*\(|\.write\(to:/
+    }
+
     static var logCall: Regex<Substring> {
         /\b(?:log|logger|Self\.log)\.(?:debug|info|notice|error|fault|warning|trace|critical)\(|\bprint\(|\bos_log\(|\bNSLog\(/
     }
@@ -176,13 +239,22 @@ struct CaptureContextFlowTests {
     static var readName: Regex<Substring> {
         /(?:^|[^A-Za-z0-9_])(?:sentence|context)(?![A-Za-z0-9_])|\.(?:text|word)(?![A-Za-z0-9_])/
     }
-    /// A one-line `let` or `var` assignment: the name, and what it is assigned.
+    /// A one-line `let` or `var` assignment: the name — or a tuple of names, `let (text, range, cut) =` — and what it is
+    /// assigned.
     static var assignment: Regex<(Substring, Substring, Substring)> {
-        /(?:^|[^A-Za-z0-9_])(?:let|var)\s+([A-Za-z_][A-Za-z0-9_]*)[^=\n]*=([^\n]*)/
+        /(?:^|[^A-Za-z0-9_])(?:let|var)\s+(\([^)=\n]*\)|[A-Za-z_][A-Za-z0-9_]*)[^=\n]*=([^\n]*)/
     }
 
     /// Every log call in `files`, counted, and those handed what was read, by file and the call's first line.
     static func logFindings(_ files: [(name: String, text: String)]) -> (calls: Int, problems: [String]) {
+        findings(files, calls: logCall, readsReceiver: false)
+    }
+
+    /// Every call matching `callPattern` in `files`, counted, and those handed what was read — in their arguments, or, for
+    /// a call made on what was read (`text.write(to:`), on the statement's line before the call — by file and the
+    /// call's first line.
+    static func findings(_ files: [(name: String, text: String)], calls callPattern: Regex<Substring>,
+                         readsReceiver: Bool = true) -> (calls: Int, problems: [String]) {
         var calls = 0
         var problems: [String] = []
         for (name, text) in files {
@@ -192,9 +264,12 @@ struct CaptureContextFlowTests {
             for (from, to) in zip(bounds, bounds.dropFirst()) {
                 let function = code[from..<to]
                 let tainted = taintedLocals(in: function)
-                for call in function.matches(of: logCall) {
+                for call in function.matches(of: callPattern) {
                     calls += 1
-                    let arguments = balanced(code, from: call.range.upperBound)
+                    let lineStart = code[..<call.range.lowerBound].lastIndex(of: "\n").map { code.index(after: $0) }
+                        ?? code.startIndex
+                    let receiver = readsReceiver ? String(code[lineStart..<call.range.lowerBound]) : ""
+                    let arguments = receiver + balanced(code, from: call.range.upperBound)
                     let names = Set(arguments.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) })
                     guard arguments.contains(readName) || !names.isDisjoint(with: tainted) else { continue }
                     let line = code[code.startIndex..<call.range.lowerBound].filter { $0 == "\n" }.count + 1
@@ -207,19 +282,22 @@ struct CaptureContextFlowTests {
 
     /// The locals of `function` assigned from what was read, or from such a local, to a fixed point.
     static func taintedLocals(in function: Substring) -> Set<String> {
-        let assigned = function.matches(of: assignment).map { (name: String($0.output.1), value: $0.output.2) }
+        let assigned = function.matches(of: assignment).map { match in
+            (names: Set(match.output.1.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) }), value: match.output.2)
+        }
         var tainted: Set<String> = []
         var grew = true
         while grew {
             grew = false
-            for (name, value) in assigned where !tainted.contains(name) {
+            for (bound, value) in assigned where !bound.isSubset(of: tainted) {
                 let names = Set(value.matches(of: /[A-Za-z_][A-Za-z0-9_]*/).map { String($0.output) })
                 if value.contains(readName) || !names.isDisjoint(with: tainted) {
-                    tainted.insert(name)
+                    tainted.formUnion(bound)
                     grew = true
                 }
             }
         }
+        tainted.remove("_")
         return tainted
     }
 
