@@ -222,6 +222,55 @@ struct StringCatalogTests {
         }
     }
 
+    /// **The catalog is as `make strings` leaves it** (verifier, 2026-10-19): its keys in `xcstringstool`'s order (by
+    /// Unicode scalar), and each translator's note the source writes beside a key the catalog's note for it. A catalog
+    /// edited by hand, or a note changed without `make strings`, drifts from what the source says and a translator is
+    /// given the old note. **Its limit**: notes beside an interpolated key are not read (the literal scan stops at an
+    /// interpolation); `make strings` syncs those, and this checks the order and every plain key's note.
+    @Test func theCatalogIsAsMakeStringsLeavesIt() throws {
+        let text = try String(contentsOf: Manifest.package.appending(path: Self.catalogPath), encoding: .utf8)
+        #expect(Self.outOfOrder(text) == [])
+        let strings = try Self.strings(Self.catalog())
+        var notes: [(file: String, key: String, comment: String)] = []
+        for directory in Self.viewLayer + Self.app {
+            for (file, source) in try SourceScan.files(under: Manifest.package.appending(path: directory)) {
+                notes += Self.notes(in: source).map { (file.lastPathComponent, $0.key, $0.comment) }
+            }
+        }
+        #expect(notes.count >= 5, "the scan read \(notes.count) notes")
+        let stale = notes.filter { (strings[$0.key] as? [String: Any])?["comment"] as? String != $0.comment }
+        #expect(stale.isEmpty, "run `make strings`: \(stale.map { "\($0.file): \($0.key)" })")
+    }
+
+    /// The controls: keys out of order and a note the catalog does not carry are each named.
+    @Test func aCatalogOutOfSyncIsNamed() {
+        let ordered = "{\n  \"strings\" : {\n    \"Add Site\" : {\n    },\n    \"Add an App…\" : {\n    }\n  }\n}\n"
+        #expect(Self.outOfOrder(ordered) == [])
+        let swapped = "{\n  \"strings\" : {\n    \"Add an App…\" : {\n    },\n    \"Add Site\" : {\n    }\n  }\n}\n"
+        #expect(Self.outOfOrder(swapped) == ["Add Site"])
+        let source = "Text(LocalizedStringResource(\"Hold\", comment: \"Hover gesture\"))\nText(\"Plain\")\n"
+        #expect(Self.notes(in: source).map(\.key) == ["Hold"])
+        #expect(Self.notes(in: source).map(\.comment) == ["Hover gesture"])
+    }
+
+    /// Each top-level key that sorts before the key above it, in the file's own order.
+    static func outOfOrder(_ text: String) -> [String] {
+        let keys = text.matches(of: /(?m)^    "((?:[^"\\]|\\.)*)" : \{$/).map { String($0.output.1) }
+        return zip(keys, keys.dropFirst()).compactMap { previous, key in
+            key.unicodeScalars.lexicographicallyPrecedes(previous.unicodeScalars) ? key : nil
+        }
+    }
+
+    /// The plain keys a source writes with a translator's note beside them, and the note.
+    static func notes(in source: String) -> [(key: String, comment: String)] {
+        let found = literals(in: source)
+        return zip(found, found.dropFirst()).compactMap { key, note in
+            guard note.prefix.hasSuffix("comment: \""), note.line == key.line, !key.text.contains("\\("),
+                  !key.prefix.hasSuffix("comment: \"") else { return nil }
+            return (key.text, note.text)
+        }
+    }
+
     // MARK: - The scan's own controls
 
     /// **The scan reaches what it claims to.** Every rule is a filter, and a filter that has quietly stopped matching

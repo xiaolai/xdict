@@ -24,6 +24,11 @@ public struct HoverPolicyStore {
         else { return .shipped }
         stored.excludedApps.formUnion(HoverPolicy.defaultExcludedApps)
         stored.allowedScripts = nil
+        // A rest that is not exactly one of the choices is the shipped rest: what the picker shows, and what the gate
+        // waits (`HoverControl.settle`). Never the nearest: arithmetic on a stored value can trap.
+        if HoverPolicy.Settle(rawValue: stored.settleMilliseconds) == nil {
+            stored.settleMilliseconds = HoverPolicy.shipped.settleMilliseconds
+        }
         return stored
     }
 

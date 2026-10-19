@@ -11,6 +11,8 @@ import XDictCapture
 /// pane's form.
 public struct HoverSettings: View {
     let hover: HoverControl
+    @State private var typedSite = ""
+    @State private var siteAnswer: ExcludedSiteAnswer?
 
     public init(hover: HoverControl) {
         self.hover = hover
@@ -37,6 +39,14 @@ public struct HoverSettings: View {
             }
             .pickerStyle(.segmented)
             .accessibilityIdentifier("hover.gesture")
+            // Capture's own choices (`HoverPolicy.settleChoices`), named by their length; no number of the view's.
+            Picker(selection: Binding(get: { hover.settle }, set: { hover.setSettle($0) })) {
+                ForEach(HoverPolicy.settleChoices) { Text(verbatim: HoverSentences.settle($0)).tag($0) }
+            } label: {
+                Text("Rest time")
+                Text("How long the pointer rests on a word before hover looks it up.")
+            }
+            .accessibilityIdentifier("hover.settle")
             LabeledContent {
                 Text(HoverSentences.scripts(hover.allowedScripts))
             } label: {
@@ -45,6 +55,7 @@ public struct HoverSettings: View {
             }
             .accessibilityIdentifier("hover.scripts")
             excludedApps
+            excludedSites
             screenRecording
             if let notice = hover.notice {
                 Text(HoverSentences.notice(notice))
@@ -102,6 +113,41 @@ public struct HoverSettings: View {
             Text("Never look up in")
             Text("Hover reads nothing in these apps. Looking up a selection works in any app.")
         }
+    }
+
+    /// **The sites hover never reads**, each removable, and a field to add one: a name or a pasted address, kept as its
+    /// host, refused with a sentence when it is not a site. With any site here, a page whose address cannot be read is
+    /// not read either (`HoverPolicy.refuses`), and neither is the sentence around a selection on one.
+    @ViewBuilder private var excludedSites: some View {
+        ForEach(hover.excludedSites, id: \.self) { site in
+            LabeledContent {
+                Button { hover.removeExcludedSite(site) } label: { Text("Remove") }  // placement: form-row
+            } label: {
+                Text(verbatim: site)
+            }
+        }
+        LabeledContent {
+            HStack {
+                TextField(text: $typedSite, prompt: Text(verbatim: "example.com")) { Text("Site") }
+                    .labelsHidden()
+                    .onSubmit(addSite)
+                    .accessibilityIdentifier("hover.site.field")
+                Button { addSite() } label: { Text("Add Site") }  // placement: form-row
+                    .disabled(typedSite.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityIdentifier("hover.addSite")
+            }
+        } label: {
+            Text("Never look up on")
+            Text(siteAnswer.flatMap(HoverSentences.excludedSite)
+                 ?? LocalizedStringResource("Hover reads nothing on these sites, nor on a page whose address cannot be read while any site is listed."))
+        }
+        .accessibilityIdentifier("hover.excludedSites")
+    }
+
+    private func addSite() {
+        let answer = hover.addExcludedSite(typedSite)
+        siteAnswer = answer
+        if case .added = answer { typedSite = "" }
     }
 
     private var readersOwn: [String] {

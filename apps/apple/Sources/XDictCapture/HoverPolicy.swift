@@ -225,8 +225,13 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     /// Apps capture never reads (A3). Ships non-empty, and for the same reason the place
     /// exclusions do: a popup in a password field or a terminal is worse than no popup.
     public var excludedApps: Set<String>
-    /// Sites capture never reads (A3), by host.
-    public var excludedHosts: Set<String>
+    /// Sites capture never reads (A3), by host — as stored: a typed name, or an address saved before hosts were reduced.
+    public var excludedHosts: Set<String> {
+        didSet { parsedHosts = Self.parsed(excludedHosts) }
+    }
+    /// **`excludedHosts` read as hosts, once**, when the list is set or decoded — never per decision: `refuses` runs on
+    /// every hover and every selection read (verifier, 2026-10-19). Derived, never stored (`CodingKeys`).
+    private var parsedHosts: Set<String>
     /// How the reader asks for a capture. `.hold` is what shipped and stays the default.
     public var gesture: HoverGesture
     /// How long the pointer must be still. Debouncing is non-negotiable.
@@ -305,6 +310,7 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         self.modifier = modifier
         self.excludedApps = excludedApps
         self.excludedHosts = excludedHosts
+        parsedHosts = Self.parsed(excludedHosts)
         self.settleMilliseconds = settleMilliseconds
         self.allowedScripts = allowedScripts
         self.gesture = gesture
@@ -320,6 +326,7 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         modifier = try values.decode(HoverModifier.self, forKey: .modifier)
         excludedApps = try values.decode(Set<String>.self, forKey: .excludedApps)
         excludedHosts = try values.decode(Set<String>.self, forKey: .excludedHosts)
+        parsedHosts = Self.parsed(excludedHosts)
         settleMilliseconds = try values.decode(Int.self, forKey: .settleMilliseconds)
         allowedScripts = try values.decodeIfPresent(Set<CaptureScript>.self, forKey: .allowedScripts)
         // Added after readers already had a stored policy. The synthesised decoder throws on a
@@ -382,7 +389,7 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     /// reader who excluded nothing pays nothing for this.
     public func refuses(_ host: HostReading) -> Bool {
         switch host {
-        case .known(let name): Self.isExcluded(name, by: excludedHosts)
+        case .known(let name): Self.matches(name, parsedHosts)
         case .notWebContent: false
         case .unreadable: !excludedHosts.isEmpty
         }
@@ -409,9 +416,20 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
         if host.contains(":") {
             var address = in6_addr()
             guard inet_pton(AF_INET6, host, &address) == 1 else { return nil }
+            return host
         }
+        // **Within DNS's limits**: a name of at most 253 characters, each label at most 63 (RFC 1035) — a longer one is
+        // no host any page reports, and an exclusion of it covers nothing.
+        guard host.utf8.count <= maximumHostLength,
+              host.split(separator: ".").allSatisfy({ $0.utf8.count <= maximumLabelLength })
+        else { return nil }
         return host
     }
+
+    /// The longest host name, in characters (RFC 1035, its dotted form).
+    public static let maximumHostLength = 253
+    /// The longest label of a host name, in characters (RFC 1035).
+    public static let maximumLabelLength = 63
 
     /// Host names are case-insensitive and may carry a trailing root dot, so `EXAMPLE.COM.` and
     /// `example.com` are the same site. Compared without normalising, an exclusion the reader set
@@ -432,15 +450,31 @@ public struct HoverPolicy: Sendable, Equatable, Codable {
     /// Whether `host` is excluded by `excluded`, matching the name itself or any subdomain of it.
     /// Both sides are normalised, so it does not matter how either was typed.
     static func isExcluded(_ host: String, by excluded: Set<String>) -> Bool {
+        matches(host, parsed(excluded))
+    }
+
+    /// The stored entries as hosts. **What was stored is read as an address too**: lists saved before `siteHost`
+    /// existed can hold whole URLs, and compared as text they matched nothing.
+    private static func parsed(_ stored: Set<String>) -> Set<String> {
+        Set(stored.map { siteHost(fromTyped: $0) ?? normalisedHost($0) }.filter { !$0.isEmpty })
+    }
+
+    /// Whether `host`, or a domain it is under, is one of `hosts` — a set lookup per label, whatever the list's length.
+    private static func matches(_ host: String, _ hosts: Set<String>) -> Bool {
         let host = normalisedHost(host)
-        guard !host.isEmpty else { return false }
-        return excluded.contains { stored in
-            // **What was stored is read as an address too**: lists saved before `siteHost` existed
-            // can hold whole URLs, and compared as text they matched nothing.
-            let name = siteHost(fromTyped: stored) ?? normalisedHost(stored)
-            guard !name.isEmpty else { return false }
-            return host == name || host.hasSuffix(".\(name)")
+        guard !host.isEmpty, !hosts.isEmpty else { return false }
+        if hosts.contains(host) { return true }
+        var rest = Substring(host)
+        while let dot = rest.firstIndex(of: ".") {
+            rest = rest[rest.index(after: dot)...]
+            if hosts.contains(String(rest)) { return true }
         }
+        return false
+    }
+
+    /// The stored fields, and not the parsed hosts, which are derived from them.
+    enum CodingKeys: String, CodingKey {
+        case modifier, excludedApps, excludedHosts, settleMilliseconds, allowedScripts, gesture
     }
 }
 

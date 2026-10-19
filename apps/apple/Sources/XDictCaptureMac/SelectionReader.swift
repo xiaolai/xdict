@@ -35,11 +35,17 @@ public struct SelectedText: Hashable, Sendable {
     public let app: FrontApp
     /// The dialect that read it: the text range or the text markers.
     public let acquisition: CaptureAcquisition
+    /// **The sentence around the term** (owner, 2026-10-19: the sentence is always captured, the selection path too),
+    /// its range the term's — or why there is none. It travels only into the captured term and from there into the one
+    /// ephemeral session (ADR-0014 decision 9); every description of it is metadata (`CaptureDescriptions`).
+    public let context: ContextOutcome
 
-    public init(text: String, app: FrontApp, acquisition: CaptureAcquisition) {
+    public init(text: String, app: FrontApp, acquisition: CaptureAcquisition,
+                context: ContextOutcome = .unavailable(.notCaptured)) {
         self.text = text
         self.app = app
         self.acquisition = acquisition
+        self.context = context
     }
 }
 
@@ -67,14 +73,14 @@ public enum SelectionOutcome: Hashable, Sendable {
     case nothing(SelectionRefusal)
 
     /// **The selection as capture hands it over** (XDict ADR-0014 decision 2): the term, `trigger` (the shortcut and the
-    /// menu read the selection alike), the dialect that read it, the app, the measured box or none, and no context — the
-    /// selection path reads none. Nil for a refusal; a term the validating constructor refuses throws.
+    /// menu read the selection alike), the dialect that read it, the app, the measured box or none, and the sentence
+    /// around it as read, or why there is none. Nil for a refusal; a term the validating constructor refuses throws.
     public func capturedTerm(trigger: CaptureTrigger) throws(CaptureValueError) -> CapturedTerm? {
         guard case .selected(let selected, let box) = self else { return nil }
         return try CapturedTerm.make(
             term: selected.text, trigger: trigger, acquisition: selected.acquisition, confidence: 1,
             source: SourceApp(bundleID: selected.app.bundleID), pointer: nil, box: box?.measured ?? .absent,
-            context: .unavailable(.notCaptured))
+            context: selected.context)
     }
 }
 
@@ -106,18 +112,21 @@ public enum SelectionReader {
     /// thread, and SwiftUI must be asked from the main one (XiaolaiDict ADR-0042). `clicked` is where the reader
     /// Control-clicked the selection (Accessibility's coordinates, y down), for the Service: the element there is read
     /// when the focused one has nothing. `access` is asked first and never prompts; `client` makes the read's requests
-    /// (the real session, or a test's tree).
+    /// (the real session, or a test's tree). `exclusions` is the reader's hover policy, **with no default**: its excluded
+    /// apps and sites decide whether the sentence around the selection is read (`contextOutcome`), in this same lane job.
     public static func read(
-        from app: FrontApp, clicked: CGPoint? = nil, admitting admission: TermAdmission, access: AccessibilityAccess = .system,
+        from app: FrontApp, clicked: CGPoint? = nil, admitting admission: TermAdmission, excluding exclusions: HoverPolicy,
+        limits: CaptureLimits = .shipped, access: AccessibilityAccess = .system,
         lane: AccessibilityLane = .system, budget: Duration = budget,
         client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) }
     ) async -> SelectionOutcome {
         guard access.granted() else { return .nothing(.notTrusted) }
+        let rules = Rules(admission: admission, exclusions: exclusions, limits: limits)
         if app.pid == getpid() {
-            return await MainActor.run { readNow(app, clicked: clicked, admission, client(budget)) }
+            return await MainActor.run { readNow(app, clicked: clicked, rules, client(budget)) }
         }
         return await lane.run(.explicit, timeout: AccessibilitySession.messagingTimeout, budget: budget, {
-            readNow(app, clicked: clicked, admission, client(budget))
+            readNow(app, clicked: clicked, rules, client(budget))
         }, refused: { refusal in
             log.notice("selection read not run: \(String(describing: refusal), privacy: .public)")
             return .nothing(.failed(failure(for: refusal), app: app.name))
@@ -135,29 +144,40 @@ public enum SelectionReader {
         }
     }
 
+    /// What one read admits and refuses: the consumer's admission, the reader's exclusions, capture's limits.
+    struct Rules: Sendable {
+        let admission: TermAdmission
+        let exclusions: HoverPolicy
+        let limits: CaptureLimits
+    }
+
     private static func readNow(
-        _ app: FrontApp, clicked: CGPoint?, _ admission: TermAdmission, _ ax: some AccessibilityReading
+        _ app: FrontApp, clicked: CGPoint?, _ rules: Rules, _ ax: some AccessibilityReading
     ) -> SelectionOutcome {
-        read(application: AXUIElementCreateApplication(app.pid), of: app, with: ax, clicked: clicked, admitting: admission)
+        read(application: AXUIElementCreateApplication(app.pid), of: app, with: ax, clicked: clicked,
+             admitting: rules.admission, excluding: rules.exclusions, limits: rules.limits)
     }
 
     /// The read with the clicked position hit-tested **inside it**: one request of the read's own client, so the time
     /// it takes is the read's, and a hung or stalled hit test ends the read as any request does.
     public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
-                            clicked: CGPoint?, admitting admission: TermAdmission) -> SelectionOutcome {
+                            clicked: CGPoint?, admitting admission: TermAdmission, excluding exclusions: HoverPolicy,
+                            limits: CaptureLimits = .shipped) -> SelectionOutcome {
         let under: AXUIElement?
         do throws(CaptureError) {
             under = try clicked.flatMap { (point) throws(CaptureError) in try ax.hitTest(application, at: point) }
         } catch {
             return .nothing(.failed(error, app: app.name))
         }
-        return read(application: application, of: app, with: ax, under: under, admitting: admission)
+        return read(application: application, of: app, with: ax, under: under, admitting: admission,
+                    excluding: exclusions, limits: limits)
     }
 
     /// The whole read, against any Accessibility client — the real one, or a test's. `under` is the element under the
     /// reader's Control-click, where there was one.
     public static func read(application: AXUIElement, of app: FrontApp, with ax: some AccessibilityReading,
-                            under: AXUIElement? = nil, admitting admission: TermAdmission) -> SelectionOutcome {
+                            under: AXUIElement? = nil, admitting admission: TermAdmission,
+                            excluding exclusions: HoverPolicy, limits: CaptureLimits = .shipped) -> SelectionOutcome {
         do {
             try ax.wake(application)
             switch try find(in: application, under: under, ax) {
@@ -172,7 +192,10 @@ public enum SelectionReader {
                 // Where it is: worth having, not worth the selection — but a cancellation is the reader moving on.
                 let box = try orNone { () throws(CaptureError) in try bounds(of: capture, term: term, ax) }
                 let acquisition: CaptureAcquisition = capture.markers == nil ? .textRange : .textMarkers
-                return .selected(SelectedText(text: term.text, app: app, acquisition: acquisition), box: box)
+                let context = try contextOutcome(of: capture, term: term, app: app, exclusions: exclusions,
+                                                 limits: limits, ax)
+                return .selected(SelectedText(text: term.text, app: app, acquisition: acquisition, context: context),
+                                 box: box)
             case .nothing:
                 return .nothing(.nothingSelected(app: app.name))
             case .searchLimitReached:
@@ -188,7 +211,8 @@ public enum SelectionReader {
     /// app that may have changed it, quit, or lost it to the Services submenu the pointer moved into. So the term is
     /// always `serviceText`, the acquisition always `.serviceText`, and the read supplies **geometry only where it
     /// agrees**: a selection that reads back as other text supplies neither context nor a box, and the placement falls
-    /// back to where the reader Control-clicked (`clicked`), valid only now. No context is read on this path.
+    /// back to where the reader Control-clicked (`clicked`), valid only now. One that agrees lends its box and the
+    /// sentence read around it (owner, 2026-10-19: the sentence is always captured, the Service too).
     public static func serviceTerm(
         _ serviceText: String, read outcome: SelectionOutcome?, source: SourceApp, clicked: DownPoint?
     ) throws(CaptureValueError) -> CapturedTerm {
@@ -198,7 +222,7 @@ public enum SelectionReader {
         switch outcome {
         case .selected(let selected, let measured)? where selected.text == serviceText:
             box = measured?.measured ?? fallback
-            context = .unavailable(.notCaptured)
+            context = selected.context
         case .selected?:
             box = fallback
             context = .unavailable(.disagreesWithServiceText)
