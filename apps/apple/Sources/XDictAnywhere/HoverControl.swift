@@ -24,7 +24,8 @@ public enum CaptureTolerances {
         strip: StripMetrics(initialHeight: Tokens.Capture.stripStart, growthStep: Tokens.Capture.stripStep,
                             maximumHeight: Tokens.Capture.stripMost),
         tiling: TilingMetrics(edgeSlack: Tokens.Capture.tileEdgeSlack, holeSlack: Tokens.Capture.tileHoleSlack),
-        frameDrift: Tokens.Capture.frameDrift)
+        frameDrift: Tokens.Capture.frameDrift,
+        label: LabelSlack(shift: Tokens.Capture.labelShift, smaller: Tokens.Capture.labelSmaller))
 }
 
 /// **The Screen Recording row's state, as kinds** (plan-capture WI-4; the view layer words them).

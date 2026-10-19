@@ -17,14 +17,39 @@ public struct CaptureMetrics: Sendable, Equatable {
     /// How far two readings of one window's frame may disagree and still be the same frame, in screen points: the
     /// compositor and ScreenCaptureKit round independently (plan-capture WI-4).
     public let frameDrift: CGFloat
+    /// How far a control's label may sit from where its font and frame put it (`LabelSlack`).
+    public let label: LabelSlack
 
-    public init(hit: HitTolerance, restTolerance: CGFloat, strip: StripMetrics, tiling: TilingMetrics, frameDrift: CGFloat) {
+    public init(
+        hit: HitTolerance, restTolerance: CGFloat, strip: StripMetrics, tiling: TilingMetrics, frameDrift: CGFloat,
+        label: LabelSlack = .exact
+    ) {
         self.hit = hit
         self.restTolerance = restTolerance
         self.strip = strip
         self.tiling = tiling
         self.frameDrift = frameDrift
+        self.label = label
     }
+}
+
+/// **How far a control's label may sit from where its font and frame put it**, in screen points (verifier, 2026-10-19):
+/// beside an icon, a radio circle or a chevron the label is drawn off centre, and in a font smaller than the system's
+/// size for its kind. A title's word is taken only where every placement and size within these agrees.
+public struct LabelSlack: Sendable, Equatable {
+    /// How far from the frame's centre the label may be drawn, either way.
+    public let shift: CGFloat
+    /// How much smaller than the system's size for its kind the label's font may be. Larger is bounded by the frame,
+    /// which the text must fit.
+    public let smaller: CGFloat
+
+    public init(shift: CGFloat, smaller: CGFloat) {
+        self.shift = shift
+        self.smaller = smaller
+    }
+
+    /// No slack: the label exactly where its nominal font, centred or at either edge, puts it.
+    public static let exact = LabelSlack(shift: 0, smaller: 0)
 }
 
 /// **The strip the pixel path reads, and how it grows**, in screen points (`ContextStrip`).

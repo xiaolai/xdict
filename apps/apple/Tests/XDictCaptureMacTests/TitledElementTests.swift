@@ -23,6 +23,8 @@ final class TitledTree: AccessibilityReading, @unchecked Sendable {
         var window: AXUIElement?
         var parent: AXUIElement?
         var protected = false
+        /// A web area's address.
+        var url: String?
     }
 
     private(set) var nodes: [AXUIElement: Node] = [:]
@@ -62,6 +64,7 @@ final class TitledTree: AccessibilityReading, @unchecked Sendable {
             default: return nil
             }
         case "AXContainsProtectedContent": return node.protected ? kCFBooleanTrue : nil
+        case kAXURLAttribute: return node.url as CFString?
         case kAXChildrenAttribute: return node.children as CFArray
         case kAXWindowAttribute: return node.window
         case kAXParentAttribute: return node.parent
@@ -81,25 +84,22 @@ final class TitledTree: AccessibilityReading, @unchecked Sendable {
     }
 }
 
+/// **Where a title answers, and where it is left to the pixels.** The geometry each test answers in is the rule's own
+/// (`ElementTitle`: every placement and size must agree), measured by sweeping these frames on 2026-10-19 and listed
+/// beside each test; `TitleOracleTests` holds the rule to the truth, these hold the reader's wiring and its refusals.
 struct TitledElementTests {
     private let target = { (element: AXUIElement) in
         PointerWordReader.Target(element: element, appName: "Sample", bundleID: "com.example.sample")
     }
 
-    private func read(_ tree: TitledTree, _ element: AXUIElement, at point: CGPoint) -> PointerWordReader.Outcome {
+    private func read(
+        _ tree: TitledTree, _ element: AXUIElement, at point: CGPoint, refuses: (HostReading) -> Bool = { _ in false }
+    ) -> PointerWordReader.Outcome {
         switch PointerWordReader.readUnlessRefused(at: point, in: target(element), tolerance: Measured.hit,
-                                                   refuses: { _ in false }, with: tree) {
+                                                   labels: Measured.label, refuses: refuses, with: tree) {
         case .read(let outcome): outcome
         case .refused(let host): .miss(.noText(app: "refused \(host)", role: nil))
         }
-    }
-
-    /// The x where `word` of `text` starts and ends when `text` is laid out in `style`'s font from x = 0.
-    private func span(of word: String, in text: String, style: ElementTitle.Style) throws -> ClosedRange<CGFloat> {
-        let font = try #require(style.font)
-        let layout = try #require(ElementTitle.Layout(text, font: font))
-        let range = try #require(text.range(of: word))
-        return layout.span(of: range, in: text)
     }
 
     private func width(of text: String, style: ElementTitle.Style) throws -> CGFloat {
@@ -107,94 +107,139 @@ struct TitledElementTests {
         return try #require(ElementTitle.Layout(text, font: font)).width
     }
 
+    /// A frame `pad` wider than `text` in `style`'s font, its width rounded up as a view's is.
+    private func frame(
+        _ text: String, _ style: ElementTitle.Style, pad: CGFloat, x: CGFloat, y: CGFloat, height: CGFloat
+    ) throws -> CGRect {
+        CGRect(x: x, y: y, width: (try width(of: text, style: style) + pad).rounded(.up), height: height)
+    }
+
     private func word(_ outcome: PointerWordReader.Outcome) -> String? {
         guard case .hit(let hit) = outcome else { return nil }
         return hit.word.word
     }
 
-    // MARK: - Menus
-
-    /// **A menu bar item's title is read** (owner's report, 2026-10-19: "File" in the menu bar was "No word found here";
-    /// the item answered `AXTitle` only). The sentence is the title, the acquisition says it came from a title, and the
-    /// box is the pointer's placement — no box was measured.
-    @Test func aMenuBarItemsTitleIsRead() throws {
-        let tree = TitledTree()
-        let item = tree.add(.init(role: "AXMenuBarItem", title: "File", frame: CGRect(x: 99, y: 0, width: 42, height: 33)))
-        let outcome = read(tree, item, at: CGPoint(x: 120, y: 15))
-        guard case .hit(let hit) = outcome else { Issue.record("got \(outcome)"); return }
-        #expect(hit.word.word == "File")
-        #expect(hit.word.sentence.text == "File")
-        #expect(hit.acquisition == .elementTitle)
-        #expect(hit.bounds == nil)
-        let term = try hit.capturedTerm(pointer: PointerSample(point: DownPoint(x: 120, y: 15), at: nil))
-        #expect(term.box == .clickPlacement(DownPoint(x: 120, y: 15)))
+    /// Every half point across `frame` and 4 pt beyond, at its middle: the words answered.
+    private func answers(_ tree: TitledTree, _ element: AXUIElement, across frame: CGRect) -> Set<String> {
+        Set(stride(from: frame.minX - 4, through: frame.maxX + 4, by: 0.5).compactMap {
+            word(read(tree, element, at: CGPoint(x: $0, y: frame.midY)))
+        })
     }
 
-    /// **A title of several words: the word under the pointer, each in turn** — a centred menu bar title placed by its
-    /// font's own metrics.
-    @Test func eachWordOfACentredTitleIsReadWhereItIs() throws {
-        let text = "Bambu Studio Extras"
+    // MARK: - Menus
+
+    /// **A menu bar item's title is read** (owner's report, 2026-10-19: titles in the menu bar were "No word found
+    /// here"; the item answered `AXTitle` only). The sentence is the title, the acquisition says it came from a title,
+    /// and the box is the pointer's placement — no box was measured. Above the line's height, nothing. (W+8: "Bookmarks"
+    /// answers over 22…54.)
+    @Test func aMenuBarItemsTitleIsRead() throws {
         let tree = TitledTree()
-        let frame = CGRect(x: 43, y: 0, width: try width(of: text, style: .menuBar) + 20, height: 33)
-        let item = tree.add(.init(role: "AXMenuBarItem", title: text, frame: frame))
-        let origin = frame.minX + 10
-        for expected in ["Bambu", "Studio", "Extras"] {
-            let span = try span(of: expected, in: text, style: .menuBar)
-            let x = origin + (span.lowerBound + span.upperBound) / 2
-            #expect(word(read(tree, item, at: CGPoint(x: x, y: 15))) == expected, "at \(expected)")
+        let box = try frame("Bookmarks", .menuBar, pad: 8, x: 99, y: 0, height: 33)
+        let item = tree.add(.init(role: "AXMenuBarItem", title: "Bookmarks", frame: box))
+        let point = CGPoint(x: box.minX + 38, y: box.midY)
+        let outcome = read(tree, item, at: point)
+        guard case .hit(let hit) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(hit.word.word == "Bookmarks")
+        #expect(hit.word.sentence.text == "Bookmarks")
+        #expect(hit.acquisition == .elementTitle)
+        #expect(hit.bounds == nil)
+        let down = DownPoint(x: Double(point.x), y: Double(point.y))
+        let term = try hit.capturedTerm(pointer: PointerSample(point: down, at: nil))
+        #expect(term.box == .clickPlacement(down))
+        // Inside the frame, above the line.
+        #expect(word(read(tree, item, at: CGPoint(x: point.x, y: box.minY + 2))) == nil)
+    }
+
+    /// **A title shorter than the placements can move it is left to the pixels** (a gap, not a guess): "File" is 21 pt
+    /// wide, and a label pushed 12 pt either way moves further than that — so no point of it answers.
+    @Test func aShortTitleIsLeftToThePixels() {
+        let tree = TitledTree()
+        let box = CGRect(x: 99, y: 0, width: 42, height: 33)
+        let item = tree.add(.init(role: "AXMenuBarItem", title: "File", frame: box))
+        #expect(answers(tree, item, across: box).isEmpty)
+    }
+
+    /// **The Apple menu is a logo, not a word**: refused by name, however its frame is measured.
+    @Test func theAppleMenuIsNeverAWord() throws {
+        let tree = TitledTree()
+        for pad: CGFloat in [-1, 8, 40] {
+            let box = try frame("Apple", .menuBar, pad: pad, x: 0, y: 0, height: 33)
+            let apple = tree.add(.init(role: "AXMenuBarItem", title: "Apple", frame: box))
+            #expect(answers(tree, apple, across: box).isEmpty, "pad \(pad)")
         }
     }
 
-    /// Outside the drawn text — in the padding of a wide button, beyond the tolerance — no word: never the nearest.
+    /// **A title of several words: a word only where every placement puts the pointer in it** (W+8: "Bambu" answers
+    /// over 28.5…33, "Studio" over 67.5…71.5, "Extras" nowhere, its placements disagreeing). 20 pt wider, nothing.
+    @Test func wordsOfATitleAreReadOnlyWhereEveryPlacementAgrees() throws {
+        let text = "Bambu Studio Extras"
+        let tree = TitledTree()
+        let box = try frame(text, .menuBar, pad: 8, x: 43, y: 0, height: 33)
+        let item = tree.add(.init(role: "AXMenuBarItem", title: text, frame: box))
+        #expect(word(read(tree, item, at: CGPoint(x: box.minX + 30.5, y: box.midY))) == "Bambu")
+        #expect(word(read(tree, item, at: CGPoint(x: box.minX + 69.5, y: box.midY))) == "Studio")
+        #expect(answers(tree, item, across: box) == ["Bambu", "Studio"])
+        let roomy = try frame(text, .menuBar, pad: 20, x: 43, y: 40, height: 33)
+        let wide = tree.add(.init(role: "AXMenuBarItem", title: text, frame: roomy))
+        #expect(answers(tree, wide, across: roomy).isEmpty)
+    }
+
+    /// Outside the drawn text, nothing — never the nearest word; and in a button far wider than its label, where the
+    /// padding decides the place, nothing anywhere. (W+8: "Dictionaries" answers over 22…58.)
     @Test func aPointerBesideTheTextReadsNothing() throws {
         let tree = TitledTree()
-        let text = "Done"
-        let frame = CGRect(x: 100, y: 100, width: try width(of: text, style: .control) + 80, height: 24)
-        let button = tree.add(.init(role: "AXButton", title: text, frame: frame))
-        #expect(word(read(tree, button, at: CGPoint(x: frame.minX + 5, y: 112))) == nil)
-        #expect(word(read(tree, button, at: CGPoint(x: frame.midX, y: 112))) == "Done")
-        // Outside the frame altogether.
-        #expect(word(read(tree, button, at: CGPoint(x: frame.midX, y: 140))) == nil)
+        let box = try frame("Dictionaries", .control, pad: 8, x: 100, y: 100, height: 24)
+        let button = tree.add(.init(role: "AXButton", title: "Dictionaries", frame: box))
+        #expect(word(read(tree, button, at: CGPoint(x: box.minX + 40, y: box.midY))) == "Dictionaries")
+        #expect(word(read(tree, button, at: CGPoint(x: box.minX + 2, y: box.midY))) == nil)
+        #expect(word(read(tree, button, at: CGPoint(x: box.midX, y: box.maxY + 20))) == nil)
+        let roomy = try frame("Done", .control, pad: 80, x: 100, y: 200, height: 24)
+        let done = tree.add(.init(role: "AXButton", title: "Done", frame: roomy))
+        #expect(answers(tree, done, across: roomy).isEmpty)
     }
 
-    /// **A label wider than its frame is not drawn there as one line** (truncated, wrapped, or not in this font): nothing
-    /// is read from it, rather than a word placed where the text is not.
-    @Test func aLabelWiderThanItsFrameReadsNothing() throws {
+    /// **A label not narrower than its frame by the tolerance is not known to be drawn there as one line** (truncated,
+    /// wrapped, or not in this font): nothing is read from it, rather than a word placed where the text is not.
+    @Test func aLabelNotNarrowerThanItsFrameReadsNothing() throws {
         let tree = TitledTree()
         let text = "Extraordinarily long label"
-        let frame = CGRect(x: 100, y: 100, width: try width(of: text, style: .control) / 2, height: 24)
-        let button = tree.add(.init(role: "AXButton", title: text, frame: frame))
-        #expect(word(read(tree, button, at: CGPoint(x: frame.minX + 4, y: 112))) == nil)
+        let half = CGRect(x: 100, y: 100, width: try width(of: text, style: .control) / 2, height: 24)
+        let button = tree.add(.init(role: "AXButton", title: text, frame: half))
+        #expect(answers(tree, button, across: half).isEmpty)
+        let exact = try frame("Collins", .control, pad: 0, x: 10, y: 10, height: 22)
+        let popUp = tree.add(.init(role: "AXPopUpButton", value: "Collins", frame: exact))
+        #expect(answers(tree, popUp, across: exact).isEmpty)
     }
 
-    /// **A menu item: leading, after an inset nobody reports.** Where every inset the frame allows puts the same word
-    /// under the pointer, it is read; where the frame is so much wider than the title that the inset decides, nothing is
-    /// read here (the pixels answer it), never a guess.
+    /// **A menu item: wherever its inset puts it.** In a tight frame "Recent" answers over 53…64.5; in a frame 40 pt
+    /// wider than its title, where the inset nobody reports decides, nothing is read here (the pixels answer it).
     @Test func aMenuItemIsReadOnlyWhereEveryInsetAgrees() throws {
         let text = "Open Recent"
         let tree = TitledTree()
-        let tight = CGRect(x: 200, y: 50, width: try width(of: text, style: .menu) + 4, height: 22)
+        let tight = try frame(text, .menu, pad: 8, x: 200, y: 50, height: 22)
         let fitted = tree.add(.init(role: "AXMenuItem", title: text, frame: tight))
-        let open = try span(of: "Open", in: text, style: .menu)
-        #expect(word(read(tree, fitted, at: CGPoint(x: tight.minX + 4 + open.upperBound / 2, y: 60))) == "Open")
-        let wide = tree.add(.init(role: "AXMenuItem", title: text,
-                                  frame: CGRect(x: 200, y: 80, width: tight.width + 180, height: 22)))
-        #expect(word(read(tree, wide, at: CGPoint(x: 230, y: 90))) == nil)
+        #expect(word(read(tree, fitted, at: CGPoint(x: tight.minX + 58, y: tight.midY))) == "Recent")
+        let roomy = try frame(text, .menu, pad: 40, x: 200, y: 80, height: 22)
+        let wide = tree.add(.init(role: "AXMenuItem", title: text, frame: roomy))
+        #expect(answers(tree, wide, across: roomy).isEmpty)
     }
 
     // MARK: - Controls
 
-    /// **A pop-up button shows its value** (a SwiftUI picker: `AXValue`, no title), and a radio button (a tab, a
-    /// segment) its title.
+    /// **A pop-up button shows its value** (a SwiftUI picker: `AXValue`, no title; a chevron beside it, W+24: answers
+    /// over 31…34), and a radio button (a tab, a segment) its title in a tight frame; a tab much wider than its title
+    /// reads nothing.
     @Test func aPopUpButtonsValueAndATabsTitleAreRead() throws {
         let tree = TitledTree()
-        let value = "Collins"
-        let popUp = tree.add(.init(role: "AXPopUpButton", value: value,
-                                   frame: CGRect(x: 10, y: 10, width: try width(of: value, style: .control), height: 22)))
-        #expect(word(read(tree, popUp, at: CGPoint(x: 12, y: 20))) == "Collins")
-        let tab = tree.add(.init(role: "AXRadioButton", subrole: "AXTabButton", title: "General",
-                                 frame: CGRect(x: 300, y: 10, width: 90, height: 28)))
-        #expect(word(read(tree, tab, at: CGPoint(x: 345, y: 24))) == "General")
+        let picker = try frame("Collins", .control, pad: 24, x: 10, y: 10, height: 22)
+        let popUp = tree.add(.init(role: "AXPopUpButton", value: "Collins", frame: picker))
+        #expect(word(read(tree, popUp, at: CGPoint(x: picker.minX + 32.5, y: picker.midY))) == "Collins")
+        let tabFrame = try frame("General", .control, pad: 10, x: 300, y: 10, height: 28)
+        let tab = tree.add(.init(role: "AXRadioButton", subrole: "AXTabButton", title: "General", frame: tabFrame))
+        #expect(word(read(tree, tab, at: CGPoint(x: tabFrame.midX, y: tabFrame.midY))) == "General")
+        let roomy = try frame("General", .control, pad: 40, x: 300, y: 50, height: 28)
+        let wideTab = tree.add(.init(role: "AXRadioButton", subrole: "AXTabButton", title: "General", frame: roomy))
+        #expect(answers(tree, wideTab, across: roomy).isEmpty)
     }
 
     /// **An icon's spoken label is not text on screen**: a toolbar button with only `AXDescription` ("Back", as XDict's
@@ -211,12 +256,15 @@ struct TitledElementTests {
 
     /// **A hit on a container is descended to the child under the pointer** (the owner's log: `AXMenuBar`, `AXToolbar`):
     /// a menu bar's item.
-    @Test func aMenuBarHitIsDescendedToItsItem() {
+    @Test func aMenuBarHitIsDescendedToItsItem() throws {
         let tree = TitledTree()
-        let file = tree.add(.init(role: "AXMenuBarItem", title: "File", frame: CGRect(x: 99, y: 0, width: 42, height: 33)))
-        let edit = tree.add(.init(role: "AXMenuBarItem", title: "Edit", frame: CGRect(x: 140, y: 0, width: 44, height: 33)))
-        let bar = tree.add(.init(role: "AXMenuBar", frame: CGRect(x: 0, y: 0, width: 1728, height: 33), children: [file, edit]))
-        #expect(word(read(tree, bar, at: CGPoint(x: 162, y: 15))) == "Edit")
+        let first = try frame("Bookmarks", .menuBar, pad: 8, x: 99, y: 0, height: 33)
+        let second = try frame("History", .menuBar, pad: 8, x: first.maxX, y: 0, height: 33)
+        let bookmarks = tree.add(.init(role: "AXMenuBarItem", title: "Bookmarks", frame: first))
+        let history = tree.add(.init(role: "AXMenuBarItem", title: "History", frame: second))
+        let bar = tree.add(.init(role: "AXMenuBar", frame: CGRect(x: 0, y: 0, width: 1728, height: 33),
+                                 children: [bookmarks, history]))
+        #expect(word(read(tree, bar, at: CGPoint(x: second.midX, y: second.midY))) == "History")
     }
 
     /// **A toolbar hit whose text is the window's title beside it**: the toolbar has no child there, so the window is
@@ -224,7 +272,7 @@ struct TitledElementTests {
     @Test func aToolbarHitIsReadThroughItsWindow() throws {
         let tree = TitledTree()
         let text = "Lexicon"
-        let titleFrame = CGRect(x: 667, y: 426, width: try width(of: text, style: .control), height: 19)
+        let titleFrame = try frame(text, .control, pad: 8, x: 667, y: 426, height: 19)
         let title = tree.add(.init(role: "AXStaticText", value: text, frame: titleFrame))
         let back = tree.add(.init(role: "AXButton", description: "Back", frame: CGRect(x: 590, y: 418, width: 36, height: 36)))
         let toolbar = tree.add(.init(role: "AXToolbar", frame: CGRect(x: 494, y: 410, width: 810, height: 52),
@@ -232,38 +280,61 @@ struct TitledElementTests {
         let window = tree.add(.init(role: "AXWindow", frame: CGRect(x: 494, y: 410, width: 810, height: 545),
                                     children: [toolbar, title]))
         tree.update(toolbar) { $0.window = window }
-        #expect(word(read(tree, toolbar, at: CGPoint(x: titleFrame.minX + 3, y: 436))) == "Lexicon")
+        #expect(word(read(tree, toolbar, at: CGPoint(x: titleFrame.midX, y: titleFrame.midY))) == "Lexicon")
         // The miss names the role the read ended on, so the next log tells where it stopped.
         let empty = read(tree, toolbar, at: CGPoint(x: 1290, y: 436))
         #expect(empty == .miss(.noText(app: "Sample", role: "AXToolbar")))
+    }
+
+    /// **The element a container is descended to is checked for its site again** — a window holding an excluded page:
+    /// the window itself is no web content, its page is. The page's text is refused, and never asked.
+    @Test func anElementReachedByDescentIsCheckedForItsSite() throws {
+        let tree = TitledTree()
+        let text = "Lexicon"
+        let textFrame = try frame(text, .control, pad: 8, x: 40, y: 140, height: 19)
+        let app = tree.add(.init(role: kAXApplicationRole))
+        let window = tree.add(.init(role: "AXWindow", frame: CGRect(x: 0, y: 0, width: 800, height: 600), parent: app))
+        let page = tree.add(.init(role: "AXWebArea", frame: CGRect(x: 0, y: 100, width: 800, height: 500), parent: window,
+                                  url: "https://blocked.example/entry"))
+        let label = tree.add(.init(role: "AXStaticText", value: text, frame: textFrame, parent: page))
+        tree.update(window) { $0.children = [page] }
+        tree.update(page) { $0.children = [label] }
+        let blocked = { (site: HostReading) in site == .known("blocked.example") }
+        let outcome = PointerWordReader.readUnlessRefused(
+            at: CGPoint(x: textFrame.midX, y: textFrame.midY), in: target(window), tolerance: Measured.hit,
+            labels: Measured.label, refuses: blocked, with: tree)
+        #expect(outcome == .refused(.known("blocked.example")))
+        #expect(tree.textAsked(of: label).isEmpty, "asked \(tree.textAsked(of: label))")
+        // The control: the same tree with nothing excluded reads the label.
+        #expect(word(read(tree, window, at: CGPoint(x: textFrame.midX, y: textFrame.midY))) == text)
     }
 
     /// A list row whose text is its cell's: the row is descended to the text inside it.
     @Test func aListRowIsReadThroughItsCell() throws {
         let tree = TitledTree()
         let text = "Thesaurus"
-        let label = tree.add(.init(role: "AXStaticText", value: text,
-                                   frame: CGRect(x: 20, y: 102, width: try width(of: text, style: .control), height: 16)))
+        let labelFrame = try frame(text, .control, pad: 8, x: 20, y: 102, height: 16)
+        let label = tree.add(.init(role: "AXStaticText", value: text, frame: labelFrame))
         let cell = tree.add(.init(role: "AXCell", frame: CGRect(x: 10, y: 100, width: 200, height: 20), children: [label]))
         let row = tree.add(.init(role: "AXRow", frame: CGRect(x: 0, y: 100, width: 220, height: 20), children: [cell]))
-        #expect(word(read(tree, row, at: CGPoint(x: 30, y: 110))) == "Thesaurus")
+        #expect(word(read(tree, row, at: CGPoint(x: labelFrame.midX, y: labelFrame.midY))) == "Thesaurus")
     }
 
     // MARK: - Scripts
 
-    /// Right-to-left and CJK titles: the word under the pointer in either direction.
-    @Test func rightToLeftAndCJKTitlesAreRead() throws {
+    /// A right-to-left title: the word under the pointer, laid out right to left (W+8: "قاموس" answers over 45.5…51.5).
+    /// A CJK title's words are narrower than the placements can move, so it is left to the pixels — a gap, not a guess.
+    @Test func rightToLeftTitlesAreReadAndCJKOnesLeftToThePixels() throws {
         let tree = TitledTree()
         let arabic = "قاموس عربي"
-        let rtl = tree.add(.init(role: "AXMenuBarItem", title: arabic,
-                                 frame: CGRect(x: 0, y: 0, width: try width(of: arabic, style: .menuBar) + 20, height: 33)))
-        let first = try span(of: "قاموس", in: arabic, style: .menuBar)
-        #expect(word(read(tree, rtl, at: CGPoint(x: 10 + (first.lowerBound + first.upperBound) / 2, y: 15))) == "قاموس")
+        let rtlFrame = try frame(arabic, .menuBar, pad: 8, x: 0, y: 0, height: 33)
+        let rtl = tree.add(.init(role: "AXMenuBarItem", title: arabic, frame: rtlFrame))
+        #expect(word(read(tree, rtl, at: CGPoint(x: rtlFrame.minX + 48.5, y: rtlFrame.midY))) == "قاموس")
+        #expect(answers(tree, rtl, across: rtlFrame) == ["قاموس"])
         let chinese = "牛津词典"
-        let cjk = tree.add(.init(role: "AXMenuBarItem", title: chinese,
-                                 frame: CGRect(x: 0, y: 40, width: try width(of: chinese, style: .menuBar) + 20, height: 33)))
-        let hit = word(read(tree, cjk, at: CGPoint(x: 12, y: 55)))
-        #expect(hit.map { chinese.hasPrefix($0) } == true, "got \(String(describing: hit))")
+        let cjkFrame = try frame(chinese, .menuBar, pad: 8, x: 0, y: 40, height: 33)
+        let cjk = tree.add(.init(role: "AXMenuBarItem", title: chinese, frame: cjkFrame))
+        #expect(answers(tree, cjk, across: cjkFrame).isEmpty)
     }
 
     // MARK: - Secure fields
