@@ -120,13 +120,14 @@ public enum SelectionReader {
     /// for the Service: the element there is read when the focused one has nothing. `access` is asked first and never
     /// prompts; `client` makes the read's requests (the real session, or a test's tree). `exclusions` is the reader's
     /// hover policy, **with no default**: its excluded apps and sites decide whether the sentence around the selection
-    /// is read (`contextOutcome`), in this same lane job — XDict's own included, when the reader lists XDict.
+    /// is read (`contextOutcome`), in this same lane job — XDict's own included, when the reader lists XDict. `ownHolder`
+    /// has no default either: forgetting it is a compile error, not XDict's entries read as nothing selected.
     public static func read(
         from app: FrontApp, clicked: CGPoint? = nil, admitting admission: TermAdmission, excluding exclusions: HoverPolicy,
         limits: CaptureLimits = .shipped, access: AccessibilityAccess = .system,
         lane: AccessibilityLane = .system, budget: Duration = budget,
         client: @escaping @Sendable (Duration) -> any AccessibilityReading = { AccessibilitySession(budget: $0) },
-        ownHolder: @escaping @MainActor @Sendable () -> OwnSelectionHolder = { OwnSelections.keyWindowHolder { _ in nil } }
+        ownHolder: @escaping @MainActor @Sendable () -> OwnSelectionHolder
     ) async -> SelectionOutcome {
         guard access.granted() else { return .nothing(.notTrusted) }
         let rules = Rules(admission: admission, exclusions: exclusions, limits: limits)

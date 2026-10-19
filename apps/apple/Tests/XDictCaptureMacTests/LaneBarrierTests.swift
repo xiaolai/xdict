@@ -100,7 +100,7 @@ struct LaneBarrierTests {
                 tree.set(view, kAXSelectedTextAttribute, "ephemeral" as CFString)
                 tree.hit(clicked, view)
                 return tree
-            })
+            }, ownHolder: { .controls })
         guard case .selected(let selected, _) = outcome else { Issue.record("got \(outcome)"); return }
         #expect(selected.text == "ephemeral")
     }

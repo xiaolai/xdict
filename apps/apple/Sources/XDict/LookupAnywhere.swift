@@ -97,10 +97,9 @@ final class LookupAnywhere {
     /// The last app other than XDict to be frontmost: where a Service request came from, when it brought XDict forward.
     @ObservationIgnored private var lastOtherApp: NSRunningApplication?
     @ObservationIgnored private var activationObserver: (any NSObjectProtocol)?
-    /// Where the reader last right-clicked or Control-clicked, when, and whether in one of XDict's own windows (the local
-    /// monitor's) or another app's (the global one's): where a Service request's selection is, when its app cannot say,
-    /// and whose it is. A global mouse monitor, which needs no permission.
-    @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date, ours: Bool)?
+    /// Where the reader last right-clicked or Control-clicked, and when: where a Service request's selection is, when
+    /// its app cannot say. A global mouse monitor, which needs no permission.
+    @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date)?
     @ObservationIgnored private var secondaryClickMonitor: Any?
     @ObservationIgnored private var ownClickMonitor: Any?
 
@@ -110,16 +109,14 @@ final class LookupAnywhere {
         // A global monitor is not sent the app's own events, so a right-click in XDict's own windows needs the local one
         // too; without it the Service from an entry found no click and anchored at the pointer, in the Services submenu
         // (owner's screenshot, 2026-10-18: the popover's arrow pointed well away from the word).
-        let remember: (NSEvent, Bool) -> Void = { [weak self] event, ours in
+        let remember: (NSEvent) -> Void = { [weak self] event in
             guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return }
             let point = NSEvent.mouseLocation
-            MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date(), ours) }
+            MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date()) }
         }
-        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
-            remember(event, false)
-        }
+        secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: remember)
         ownClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
-            remember(event, true)
+            remember(event)
             return event
         }
         activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -259,9 +256,8 @@ final class LookupAnywhere {
     /// Services submenu). Measured on the E2E Mac (2026-10-15): macOS brings the provider forward a moment after the
     /// request, so the reader's app — the last other app in front — is put back in front, and the panel's dismissal
     /// leaves it there with its next key. **A Service asked from one of XDict's own windows reads XDict's own
-    /// selection** (owner, 2026-10-20), its sentence too, and puts no other app in front: it is XDict's when the reader's
-    /// last Control-click was in XDict's own window, or, with none, when XDict is the active app (the Services menu of
-    /// XDict's own menu bar).
+    /// selection** (owner, 2026-10-20), its sentence too, and puts no other app in front: whose request it is is decided
+    /// now, as macOS hands the text over, by XDict's own state (`ServiceOrigin`), never by a click.
     func service(_ raw: String?) {
         // **Numbered now, as macOS hands the text over**, before the selection is read for its place.
         let request = requests.beginPresenting(.service)
@@ -270,9 +266,8 @@ final class LookupAnywhere {
         case .term(let text):
             let previous = lastOtherApp
             observe?("serviceFront", ["xdictWasActive": NSApp.isActive, "previous": previous?.bundleIdentifier ?? NSNull()])
-            let click = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0 : nil }
-            let clicked = click?.point
-            if click?.ours ?? NSApp.isActive {
+            let clicked = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0.point : nil }
+            if ServiceOrigin.at(xdictActive: NSApp.isActive, xdictHasKeyWindow: NSApp.keyWindow != nil) == .ours {
                 serviceFromOurWindow(text, request: request, clicked: clicked)
                 return
             }
@@ -292,7 +287,8 @@ final class LookupAnywhere {
                 let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
                 var outcome: SelectionOutcome?
                 if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy)
+                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy,
+                                                         ownHolder: Self.ownSelectionHolder)
                     self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
                 }
                 // **The Service's text is the query**, whatever the selection now says; the read supplies the box only
