@@ -406,6 +406,30 @@ struct SelectionContextReadTests {
         }
     }
 
+    /// **The marker sentence's ceiling is inclusive** (verifier round 2, B3): a sentence WebKit names of exactly
+    /// `contextUTF16 * markerSentenceCeilingFactor` UTF-16 units is read, and cut around the term; one unit more is
+    /// refused. Red if the bound is `<` rather than `<=`.
+    @Test func theMarkerSentenceCeilingHoldsItsOwnLength() throws {
+        let ceiling = CaptureLimits.shipped.contextUTF16 * SelectionReader.markerSentenceCeilingFactor
+        var words = "A word"
+        while (words as NSString).length < ceiling { words += " more" }
+        let atCeiling = String(words.utf16.prefix(ceiling - 1)).map { $0 + "." }
+        let exact = try #require(atCeiling)
+        let over = try #require(String(words.utf16.prefix(ceiling - 1)).map { $0 + "s." })
+        #expect((exact as NSString).length == ceiling && (over as NSString).length == ceiling + 1)
+
+        let held = FakeAccessibility()
+        page(held, url: nil)
+        held.scriptSentence(on: held.element(1), exact as CFString)
+        let found = try #require(placed(read(held)), "a sentence of exactly the ceiling was refused")
+        #expect(found.term == "word")
+
+        let refused = FakeAccessibility()
+        page(refused, url: nil)
+        refused.scriptSentence(on: refused.element(1), over as CFString)
+        #expect(context(read(refused)) == .unavailable(.appExposedNone))
+    }
+
     /// **The reader moving on still ends the read**, while the context is read.
     @Test func aCancellationWhileTheContextIsReadCancels() {
         let tree = FakeAccessibility()
