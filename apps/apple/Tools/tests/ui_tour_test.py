@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """The UI tour's tree checks (Tools/ui-tour/axcheck.py) and its route table (routes.py): each check red on a tree that
 has the fault and quiet on one that has not; every route id unique, every undriven route saying why."""
+import html
 import os
 import sys
 
@@ -194,6 +195,60 @@ assert not routes.not_in_appearance("menus.x", "dark") and not routes.not_in_app
 # tour.py walks a route only in the appearances it is captured in, and records why it skipped one.
 assert "not_in_appearance(route, appearance)" in tour_source, \
     "tour.py does not ask routes.not_in_appearance before walking a route"
+
+
+def simulated_tour(variants):
+    """tour.py's own `tour()`, its walk stubbed (no app, no window), over `variants`: what it walked and what it recorded
+    as not captured, as {(variant, route)} and {(variant, route): reason}."""
+    kit = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour")
+    assert tour_source.rstrip().endswith("main()"), "tour.py no longer ends with main(); the simulation cuts it off"
+    with tempfile.TemporaryDirectory() as scratch:
+        saved = sys.argv
+        sys.argv = [os.path.join(kit, "tour.py"), os.path.join(scratch, "home"), os.path.join(scratch, "out"),
+                    "--variants", ",".join(variants)]
+        try:
+            ns = {"__name__": "tour_simulated", "__file__": os.path.join(kit, "tour.py")}
+            exec(compile(tour_source.rstrip()[:-len("main()")], "tour.py", "exec"), ns)
+            walked = set()
+            ns["walk"] = lambda variant, name, library, route, steps, folder: (
+                walked.add((name, route)) or {"variant": name, "route": route, "shots": ["x.png"]})
+            results = ns["tour"]()
+        finally:
+            sys.argv = saved
+    skipped = {(r["variant"], r["route"]): r["notCaptured"] for r in results if r.get("notCaptured")}
+    return walked, skipped
+
+
+walked, skipped = simulated_tour(["light-en", "dark-en", "light-zh", "dark-zh"])
+toured = {r[0] for r in ROUTES if r[4] is not None and r[1] in ("full", "empty")}
+assert toured >= set(menu_routes) and len(toured) > len(menu_routes), toured
+for variant in ("light-en", "light-zh"):
+    assert {r for v, r in walked if v == variant} == toured, variant
+    assert not any(v == variant for v, _ in skipped), variant
+for variant in ("dark-en", "dark-zh"):
+    assert {r for v, r in walked if v == variant} == toured - set(menu_routes), variant
+    assert {r for v, r in skipped if v == variant} == set(menu_routes), variant
+    assert all(skipped[(variant, r)] == routes.MENU_BAR_APPEARANCE for r in menu_routes), variant
+print(f"ui_tour_test: tour walks {len(toured)} routes in light, {len(toured) - len(menu_routes)} in dark")
+# The review page says why a route was not captured, and shows no picture for it (index.py's page and its before |
+# after page), from a results.json holding one record of each kind.
+with tempfile.TemporaryDirectory() as out:
+    index = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "ui-tour", "index.py")
+    results = [{"variant": "light-en", "route": "menu.view", "shots": ["menu.view.png"]},
+               {"variant": "dark-en", "route": "menu.view", "notCaptured": routes.MENU_BAR_APPEARANCE},
+               {"variant": "light-en-fixed", "route": "menu.go", "shots": ["menu.go.png"]},
+               {"variant": "dark-en-fixed", "route": "menu.go", "notCaptured": routes.MENU_BAR_APPEARANCE}]
+    with open(os.path.join(out, "results.json"), "w") as f:
+        json.dump(results, f)
+    reason = f"not captured: {html.escape(routes.MENU_BAR_APPEARANCE)}"
+    for argv in ([], ["--before", os.path.join(out, "results.json"), "--label", "fixed"]):
+        subprocess.run([sys.executable, "-I", index, out] + argv, check=True, capture_output=True)
+        with open(os.path.join(out, "index.html"), encoding="utf-8") as f:
+            page_html = f.read()
+        assert reason in page_html, (argv, "the page does not say why a route was not captured")
+        assert "light-en/menu.view.png" in page_html, (argv, "control: the light capture is not on the page")
+        assert "dark-en/" not in page_html and "dark-en-fixed/" not in page_html, (argv, "a skipped route has a picture")
+print("ui_tour_test: index says why a route was not captured")
 # The pseudo language: longer, accented, every format directive kept exactly; on the real catalog, every value of every
 # form (plural forms and substitutions included) keeps its source's directives, so the copy formats as the app does.
 assert pseudo.pseudo("Look Up").startswith("⟦Ļööķ Ûþ"), pseudo.pseudo("Look Up")
