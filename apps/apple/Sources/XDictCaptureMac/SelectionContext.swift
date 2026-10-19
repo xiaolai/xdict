@@ -5,9 +5,12 @@ extension SelectionReader {
     /// **The sentence around a selection already read** (owner, 2026-10-19: the sentence is always captured, the
     /// shortcut, the menu and the Service too), in the read's own lane job and budget, as an outcome:
     ///
-    /// - **an excluded app or site reads nothing** — the app by its bundle identifier before any request; the site by
-    ///   the hover path's fail-closed walk (`PointerWordReader.host`), asked only when a site is excluded, so a page whose
-    ///   address cannot be read is refused whenever any exclusion exists (`HoverPolicy.refuses`);
+    /// - **an excluded app or site reads nothing** — the app by its bundle identifier before any request, XDict itself
+    ///   when the reader lists it (owner, 2026-10-20: XDict's own windows are read like any app's); the site by the
+    ///   hover path's fail-closed walk (`PointerWordReader.host`), asked only when a site is excluded, so a page whose
+    ///   address cannot be read is refused whenever any exclusion exists (`HoverPolicy.refuses`). XDict's own windows
+    ///   hold no site — their pages are XDict's entries, read by their own script (`ownContextOutcome`), as hover reads
+    ///   them — so they are not walked;
     /// - **bounded**: the text-range dialect asks for a window of `CaptureLimits.readRadiusUTF16` each side, and reads a
     ///   view's whole value only when its reported length fits that window; WebKit is asked for the sentence's markers;
     ///   the sentence is then cut to `contextUTF16` around the term, on whole characters, its cut ends said;
@@ -19,12 +22,9 @@ extension SelectionReader {
         of capture: Capture, term: SelectedTerm, app: FrontApp, exclusions: HoverPolicy, limits: CaptureLimits,
         _ ax: some AccessibilityReading
     ) throws(CaptureError) -> ContextOutcome {
-        // XDict's own windows are never read around a selection (verifier's round, 2026-10-19). Hover has read them since
-        // the owner's ruling of 2026-10-19; whether the selection's sentence follows is not decided here.
-        if app.pid == getpid() { return .unavailable(.excluded) }
         if let bundleID = app.bundleID, exclusions.excludes(app: bundleID) { return .unavailable(.excluded) }
         // With no site excluded nothing can be refused, so the walk is not paid for.
-        if !exclusions.excludedHosts.isEmpty {
+        if !exclusions.excludedHosts.isEmpty, app.pid != getpid() {
             let target = PointerWordReader.Target(element: capture.host, appName: app.name, bundleID: app.bundleID)
             let site = PointerWordReader.host(of: target, isExcluded: { exclusions.refuses(.known($0)) }, with: ax)
             if exclusions.refuses(site) { return .unavailable(.excluded) }
@@ -44,6 +44,22 @@ extension SelectionReader {
             return .unavailable(.appExposedNone)
         }
         guard let sentence, let selection = sentence.selection,
+              let (text, range, cut) = cutToLimit(sentence, term: term, at: selection, limits: limits)
+        else { return .unavailable(.appExposedNone) }
+        return .available(sentence: text, term: range, cut: cut, gap: nil)
+    }
+
+    /// **The sentence around a selection one of XDict's own web views read itself** (`OwnSelectionText`): the view's
+    /// text around the selection, segmented as every dialect's is and cut to `contextUTF16` around the term. None where
+    /// the view gave no text around it (a selection across blocks).
+    static func ownContextOutcome(
+        around: OwnViewText?, selected: String, term: SelectedTerm, limits: CaptureLimits
+    ) -> ContextOutcome {
+        guard let around,
+              let sentence = TextSegmenter.sentence(in: around.text,
+                                                    around: NSRange(location: around.offset, length: selected.utf16.count),
+                                                    clipped: around.cut),
+              let selection = sentence.selection,
               let (text, range, cut) = cutToLimit(sentence, term: term, at: selection, limits: limits)
         else { return .unavailable(.appExposedNone) }
         return .available(sentence: text, term: range, cut: cut, gap: nil)

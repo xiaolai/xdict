@@ -211,7 +211,7 @@ final class LookupAnywhere {
                 guard !Task.isCancelled else { return }
                 self?.show(.reading, query: nil, near: nil, source: source)
             }
-            let outcome = await SelectionReader.read(from: front, excluding: exclusions)
+            let outcome = await SelectionReader.read(from: front, excluding: exclusions, ownHolder: Self.ownSelectionHolder)
             waiting.cancel()
             guard let self else { return }
             guard !Task.isCancelled else {
@@ -255,7 +255,9 @@ final class LookupAnywhere {
     /// it is the text handed over, else where the reader Control-clicked it (the pointer itself has moved on, into the
     /// Services submenu). Measured on the E2E Mac (2026-10-15): macOS brings the provider forward a moment after the
     /// request, so the reader's app — the last other app in front — is put back in front, and the panel's dismissal
-    /// leaves it there with its next key.
+    /// leaves it there with its next key. **A Service asked from one of XDict's own windows reads XDict's own
+    /// selection** (owner, 2026-10-20), its sentence too, and puts no other app in front: whose request it is is decided
+    /// now, as macOS hands the text over, by XDict's own state (`ServiceOrigin`), never by a click.
     func service(_ raw: String?) {
         // **Numbered now, as macOS hands the text over**, before the selection is read for its place.
         let request = requests.beginPresenting(.service)
@@ -265,6 +267,10 @@ final class LookupAnywhere {
             let previous = lastOtherApp
             observe?("serviceFront", ["xdictWasActive": NSApp.isActive, "previous": previous?.bundleIdentifier ?? NSNull()])
             let clicked = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0.point : nil }
+            if ServiceOrigin.at(xdictActive: NSApp.isActive, xdictHasKeyWindow: NSApp.keyWindow != nil) == .ours {
+                serviceFromOurWindow(text, request: request, clicked: clicked)
+                return
+            }
             Task { @MainActor [weak self] in
                 guard let self else { return }
                 // Back to the reader's app first, and only then its selection read: an app that is not frontmost
@@ -281,7 +287,8 @@ final class LookupAnywhere {
                 let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
                 var outcome: SelectionOutcome?
                 if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy)
+                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy,
+                                                         ownHolder: Self.ownSelectionHolder)
                     self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
                 }
                 // **The Service's text is the query**, whatever the selection now says; the read supplies the box only
@@ -304,6 +311,30 @@ final class LookupAnywhere {
         case .tooLong(let characters):
             requests.cancel(request)
             show(.refused(.tooLong(app: "", characters: characters)), query: nil, near: nil, source: .service)
+        }
+    }
+
+    /// The Service asked from one of XDict's own windows: XDict's own selection read for the box and the sentence — its
+    /// entries by their own script, never Accessibility — and XDict left in front.
+    private func serviceFromOurWindow(_ text: String, request: CaptureRequest, clicked: CGPoint?) {
+        let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
+        let ours = FrontApp(pid: getpid(), name: NSRunningApplication.current.localizedName ?? ProcessInfo.processInfo.processName,
+                            bundleID: Bundle.main.bundleIdentifier)
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var outcome: SelectionOutcome?
+            if AXIsProcessTrusted() {
+                outcome = await SelectionReader.read(from: ours, excluding: self.hover.policy, ownHolder: Self.ownSelectionHolder)
+                self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
+            }
+            do {
+                let term = try SelectionReader.serviceTerm(text, read: outcome, source: SourceApp(bundleID: ours.bundleID),
+                                                           clicked: under)
+                _ = self.requests.present(term, for: request, to: self)
+            } catch {
+                self.requests.cancel(request)
+                self.show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
+            }
         }
     }
 

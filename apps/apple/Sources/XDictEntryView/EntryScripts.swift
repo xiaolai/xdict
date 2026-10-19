@@ -87,6 +87,10 @@ enum EntryScripts {
     /// Asks it, in the shell's world, at CSS pixel (`x`, `y`) for at most `m` UTF-16 units.
     static let askHoverWord = "return window.__xdictHoverWord ? window.__xdictHoverWord(x, y, m) : null"
 
+    /// **The entry's selection, for the lookup shortcut, the menu and the Service in XDict's own window**
+    /// (`EntryWebView.selectionText`), in the shell's world: the text around it too where `s`, at most `m` UTF-16 units.
+    static let askSelectionText = "return window.__xdictSelectionText ? window.__xdictSelectionText(s, m) : null"
+
     /// **A dictionary's display options** (ADR-0013 d.3): the root given `values`, the default included, and the core's
     /// CSS installed with them, from the shell's world. The values and the CSS travel as one JSON literal, never as
     /// script text; nil when the edition declares nothing.

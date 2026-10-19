@@ -33,6 +33,8 @@ public enum AnywhereSentences {
             LocalizedStringResource("To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do.")
         case .noApp:
             LocalizedStringResource("No app is in front, so there is no selection to look up.")
+        case .tooLongToRead(let app):
+            LocalizedStringResource("The selection in \(app) is too long to read at once. Select a word or a phrase.")
         }
     }
 

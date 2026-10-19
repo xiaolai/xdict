@@ -6315,6 +6315,22 @@
         }
       }
     },
+    "The selection in %@ is too long to read at once. Select a word or a phrase." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The selection in %@ is too long to read at once. Select a word or a phrase."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ 中的选中内容太长，无法一次读取。请选中一个词或短语。"
+          }
+        }
+      }
+    },
     "The shortcut is in use by another app. Choose another one." : {
       "localizations" : {
         "en" : {
