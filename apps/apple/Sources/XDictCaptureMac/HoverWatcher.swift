@@ -246,9 +246,21 @@ public final class HoverWatcher {
             // **Told only for a hover that still stands**: the session decides, as it does for a word.
             found[intent.serial] = .notice(.screenRecordingNeeded, request: request)
             end = .word
+        case .nothing(let why):
+            // **A miss is told, as a notice, for a hover that still stands** (owner's report, 2026-10-19: nothing visible
+            // happened). A capture past its deadline is the stuck capture, not "nothing here".
+            // Metadata only: the kind of miss, the app's name and the element's role (ADR-0014 decision 9).
+            log.info("hover: nothing read (\(String(describing: why), privacy: .public))")
+            if let asked = origins[intent.origin] {
+                found[intent.serial] = .notice(why == .captureTimedOut ? .captureStuck : .nothingUnderPointer,
+                                               request: asked.request)
+                end = .word
+            } else {
+                end = .nothing
+            }
         case .quiet(.captureInFlight):
             end = .captureBusy
-        case .quiet, .nothing:
+        case .quiet:
             end = .nothing
         }
         let (at, held) = pointer()

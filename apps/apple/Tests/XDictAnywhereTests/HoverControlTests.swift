@@ -356,6 +356,27 @@ struct ScreenRecordingRowTests {
         #expect(hover.notice == nil, "the notice stayed after the grant")
     }
 
+    /// **A notice the watcher tells is shown by the pointer, at most once a while for each kind** (owner's report,
+    /// 2026-10-19: a miss showed nothing). A reader double-tapping blank space is told once, not at every tap; another
+    /// kind is told at once; the same kind again after the interval. Red while nothing reached the consumer.
+    @Test func aBriefNoticeIsShownAtMostOnceAWhile() throws {
+        final class Clock { var now = ContinuousClock.now }
+        let clock = Clock()
+        let suite = try #require(UserDefaults(suiteName: "ai.xdict.tests.hover.\(UUID().uuidString)"))
+        let hover = HoverControl(defaults: suite, requests: CaptureRequests(), screen: CountedScreen().access,
+                                 source: SilentPointerWords(), now: { clock.now })
+        var shown: [CaptureNotice] = []
+        hover.showBriefNotice = { shown.append($0) }
+        hover.watcher.onNotice?(.nothingUnderPointer)
+        hover.watcher.onNotice?(.nothingUnderPointer)
+        hover.watcher.onNotice?(.screenRecordingNeeded)
+        #expect(shown == [.nothingUnderPointer, .screenRecordingNeeded])
+        clock.now += HoverNoticeThrottle.interval
+        hover.watcher.onNotice?(.nothingUnderPointer)
+        #expect(shown == [.nothingUnderPointer, .screenRecordingNeeded, .nothingUnderPointer])
+        #expect(hover.notice == .screenRecordingNeeded, "the Settings notice stopped following the watcher")
+    }
+
     /// **The reader starts its pending contexts in the session's book**, so the consumer finds a presented term's handle.
     @Test func theReaderStartsContextsInTheSessionsBook() throws {
         let hover = try control()

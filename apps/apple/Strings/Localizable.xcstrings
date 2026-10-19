@@ -3150,6 +3150,22 @@
         }
       }
     },
+    "Hover found no word to read under the pointer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover found no word to read under the pointer."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停查词在指针下没有找到可读取的词语。"
+          }
+        }
+      }
+    },
     "Hover key" : {
       "localizations" : {
         "en" : {
@@ -3162,6 +3178,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "悬停按键"
+          }
+        }
+      }
+    },
+    "Hover needs Screen Recording here" : {
+      "comment" : "Shown briefly by the pointer; the Screen Recording row is in Settings > General",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover needs Screen Recording here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此处悬停查词需要“录屏”权限"
           }
         }
       }
@@ -4206,6 +4239,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这种语言没有安装语音。"
+          }
+        }
+      }
+    },
+    "No word found here" : {
+      "comment" : "Shown briefly by the pointer when hover read no word",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No word found here"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此处未找到词语"
           }
         }
       }
@@ -6092,6 +6142,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 中的查询已被更新的查询取代。"
+          }
+        }
+      }
+    },
+    "The screen is not answering yet" : {
+      "comment" : "Shown briefly by the pointer when a screen capture is stuck",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The screen is not answering yet"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏幕暂时没有响应"
           }
         }
       }
