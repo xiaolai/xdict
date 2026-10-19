@@ -426,6 +426,17 @@ for route in parity.MENU_RULES:
     assert all(not c["ok"] for c in parity.checks(route, cases[route][1], old_menus)
                if c["id"] in ("P7", "P32", "P33", "P36", "P37", "P38")), route
     assert not any(c["ok"] for c in parity.checks(route, cases[route][0], None) if c["id"] == "P32"), "no menu bar read"
+# window.wide's rule, one defect at a time: the speaker over the field with the field inside the window, and the field
+# past the window's edge with nothing over it. Each is red alone, so dropping either clause of the rule fails here.
+def wide(speaker_x, field_x, field_width):
+    return {"windows": [node("AXWindow", (0, 0, 1400, 700), [node("AXToolbar", (0, 0, 1400, 52), [
+        button("Pronounce", speaker_x, "Read the selection aloud"),
+        node("AXTextField", (field_x, 7, field_width, 38), subrole="AXSearchField")])], subrole="AXStandardWindow")]}
+
+
+assert parity.toolbar_fits(wide(932, 972, 420)) is None, "window.wide red on a toolbar that fits"
+assert "lies over" in (parity.toolbar_fits(wide(950, 960, 420)) or ""), "the speaker over the field is not red"
+assert "runs out" in (parity.toolbar_fits(wide(900, 990, 420)) or ""), "the field past the window's edge is not red"
 # P45: a Share item anywhere in the menus is not Apple's, nor an app menu without Services.
 shared = {"menubar": apple_menus["menubar"] + [{"title": "Edit", "items": [{"title": "Share…", "items": []}]}]}
 assert parity.menus_share(apple_menus) is None and parity.menus_share(shared), "P45 never red"
