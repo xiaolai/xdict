@@ -1,3 +1,4 @@
+import ApplicationServices
 import Foundation
 import Synchronization
 import Testing
@@ -95,5 +96,26 @@ struct CaptureAbandonTests {
         #expect(!gate.enter(), "a second screenshot was started beside the first")
         gate.done()
         #expect(gate.enter())
+    }
+
+    /// **The real capturer takes the gate before anything else**: with the gate held, a capture is refused as busy
+    /// before its target is even looked at; with it free, the capture (of a stand-in, refused as not capturable) leaves
+    /// the gate free again. No screenshot is taken either way.
+    @Test func theSystemCapturerTakesTheGateAndGivesItBack() async {
+        let gate = ScreenshotGate()
+        let capturer = SystemScreenCapturer(frameDrift: 1, gate: gate)
+        let target = CaptureTarget(
+            filter: RecognitionAuthorisationTests.StandInFilter(), region: CGRect(x: 0, y: 0, width: 10, height: 10),
+            sourceRect: CGRect(x: 0, y: 0, width: 10, height: 10), appName: "Stand-in", bundleID: nil,
+            frame: CGRect(x: 0, y: 0, width: 500, height: 500))
+        #expect(gate.enter())
+        await #expect(throws: RecognitionError.screenBusy) {
+            _ = try await capturer.capture(target, of: RecognitionAuthorisationTests.window)
+        }
+        gate.done()
+        await #expect(throws: RecognitionError.windowNotCapturable) {
+            _ = try await capturer.capture(target, of: RecognitionAuthorisationTests.window)
+        }
+        #expect(gate.enter(), "the capture kept the gate after it returned")
     }
 }
