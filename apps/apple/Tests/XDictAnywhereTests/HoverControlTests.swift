@@ -60,11 +60,62 @@ final class CountedScreen: @unchecked Sendable {
 private func control(
     _ defaults: UserDefaults? = nil, screen: CountedScreen = CountedScreen(),
     scripts: @escaping @MainActor () -> Set<CaptureScript>? = { nil },
-    start: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart
+    start: @escaping @MainActor (HoverWatcher) -> Bool = HoverControl.systemStart,
+    warmUp: @escaping @MainActor () -> Void = {}
 ) throws -> HoverControl {
     let suite = try defaults ?? #require(UserDefaults(suiteName: "ai.xdict.tests.hover.\(UUID().uuidString)"))
     return HoverControl(defaults: suite, requests: CaptureRequests(), screen: screen.access, source: SilentPointerWords(),
-                        scripts: scripts, startWatcher: start)
+                        scripts: scripts, startWatcher: start, warmUpRecognition: warmUp)
+}
+
+/// **The recogniser is warmed once, when hover starts in a reader's launch** (Vision's first recognition after idle took
+/// 25 s on the build Mac, 2026-10-19, system-wide; later first calls 78–80 ms): never in a driven run, never with hover
+/// off, never for a start that failed, never twice in one launch — and it asks nothing of Screen Recording.
+@MainActor
+struct RecognitionWarmUpTests {
+    @MainActor
+    final class Count {
+        var value = 0
+        func warm() { value += 1 }
+    }
+
+    @Test func aReadersLaunchWarmsOnceAndAsksNothingOfTheScreen() throws {
+        let warmed = Count(), screen = CountedScreen()
+        let hover = try control(screen: screen, start: ScriptedStarts([true]).start, warmUp: warmed.warm)
+        hover.startAtLaunch(.reader)
+        #expect(warmed.value == 1)
+        #expect(screen.probes == 0 && screen.requests == 0, "the warm-up touched Screen Recording")
+        // Off and on again in the same launch: the watcher restarts, the recogniser is not warmed again.
+        hover.setEnabled(false)
+        hover.setEnabled(true)
+        #expect(warmed.value == 1, "warmed \(warmed.value) times in one launch")
+    }
+
+    @Test func aDrivenRunNeverWarms() throws {
+        let warmed = Count()
+        let hover = try control(start: ScriptedStarts([true]).start, warmUp: warmed.warm)
+        hover.startAtLaunch(.instrument)
+        hover.setEnabled(false)
+        hover.setEnabled(true)
+        #expect(warmed.value == 0)
+    }
+
+    @Test func hoverOffWarmsOnlyOnceTurnedOn() throws {
+        let warmed = Count()
+        let hover = try control(start: ScriptedStarts([true]).start, warmUp: warmed.warm)
+        hover.isEnabled = false
+        hover.startAtLaunch(.reader)
+        #expect(warmed.value == 0, "warmed with hover off")
+        hover.setEnabled(true)
+        #expect(warmed.value == 1)
+    }
+
+    @Test func aFailedStartDoesNotWarm() throws {
+        let warmed = Count()
+        let hover = try control(start: ScriptedStarts([false]).start, warmUp: warmed.warm)
+        hover.startAtLaunch(.reader)
+        #expect(warmed.value == 0)
+    }
 }
 
 /// Watcher starts answered in order (the last answer repeating), counted; the system's monitors never touched.
