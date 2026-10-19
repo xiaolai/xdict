@@ -106,20 +106,11 @@ final class KeyboardSearchField: NSSearchField {
         currentEditor()?.selectAll(nil)
     }
 
-
-    private var resizeObserver: (any NSObjectProtocol)?
-
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
-        resizeObserver = nil
-        if let window {
-            DispatchQueue.main.async { [weak self] in self.map(ToolbarPriority.apply) }
-            resizeObserver = NotificationCenter.default.addObserver(forName: NSWindow.didResizeNotification,
-                                                                    object: window, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self.map(ToolbarPriority.apply) }
-            }
-        }
+        // The toolbar item holding the field: last to go to the overflow (P8), as wide as the window asks (P5), named.
+        // Its window's watcher follows every resize from then on, and the field coming back from the overflow lands here.
+        if window != nil { DispatchQueue.main.async { [weak self] in self.map(ToolbarFieldWidth.attach) } }
         guard wantsKeyboard, window != nil else { return }
         wantsKeyboard = false
         DispatchQueue.main.async { [weak self] in self?.takeKeyboard() }
