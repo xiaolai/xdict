@@ -42,8 +42,10 @@ struct LaneBarrierTests {
         #expect(order.withLock { $0 } == ["explicit", "hover"])
     }
 
-    /// **A blocked read whose caller cancelled stays the barrier**, and that caller is answered at once: the next read
-    /// does not run beside it. Red if cancelling clears the running read, or waits for it.
+    /// **A blocked read whose caller cancelled stays the barrier**, and that caller is answered at once: while the read
+    /// is held the lane still runs it, and the next read waits in the queue, not started. Red if cancelling clears the
+    /// running read (the next is started at once; checked by the lane's state, since a lane's reads share one serial
+    /// thread and so could never overlap anyway — verifier, 2026-10-20), or if the caller waits for its read.
     @Test func aCancelledBlockedReadStaysTheBarrierAndItsCallerIsLetGo() async {
         let lane = AccessibilityLane.patient { _ in }
         let held = Held()
@@ -52,14 +54,16 @@ struct LaneBarrierTests {
         blocked.cancel()
         #expect(await Wait.value(of: blocked) == .failure(.cancelled), "the cancelled caller waited for its read")
         let next = Task { await lane.submit(.explicit, timeout: 1, budget: .seconds(60)) { held.enter(); held.leave(); return 1 } }
-        await Wait.drain()
+        #expect(await Wait.until { lane.queued().explicit == 1 }, "the next read was not left waiting behind the blocked one")
+        #expect(lane.current() == .running(.explicit), "the lane let go of the blocked read: \(lane.current())")
         held.release.withLock { $0 = true }
         #expect(await next.value == .success(1))
         #expect(held.inside.withLock { $0.most } == 1, "a read ran beside the blocked one")
     }
 
-    /// **A blocked hover superseded by an explicit request stays the barrier**: the explicit read waits for the hover's
-    /// request in flight to return. Red if superseding clears the running read.
+    /// **A blocked hover superseded by an explicit request stays the barrier**: while the hover's request is held the
+    /// lane still runs the hover, and the explicit read waits in the queue, not started. Red if superseding clears the
+    /// running read (checked by the lane's state, as above).
     @Test func aSupersededBlockedHoverStaysTheBarrier() async {
         let lane = AccessibilityLane.patient { _ in }
         let held = Held()
@@ -67,7 +71,8 @@ struct LaneBarrierTests {
         #expect(await Wait.until { held.started.withLock { $0 } })
         let explicit = Task { await lane.submit(.explicit, timeout: 1, budget: .seconds(60)) { held.enter(); held.leave(); return 1 } }
         #expect(await Wait.value(of: hover) == .failure(.superseded))
-        await Wait.drain()
+        #expect(lane.queued().explicit == 1, "the explicit read was not left waiting behind the blocked hover")
+        #expect(lane.current() == .running(.hover), "the lane let go of the blocked hover: \(lane.current())")
         held.release.withLock { $0 = true }
         #expect(await explicit.value == .success(1))
         #expect(held.inside.withLock { $0.most } == 1, "the explicit read ran beside the blocked hover")
