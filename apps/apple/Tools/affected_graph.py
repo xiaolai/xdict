@@ -608,7 +608,7 @@ def main():
             base, args = args[1], args[2:]
         paths = args or changed_paths(repo, base)
         label = f"{len(paths)} path(s) given" if args else f"the working tree against {base}"
-        out = os.path.join(repo, "dev-docs", "artifacts", "affected", "index.html")
+        out = os.path.join(os.path.dirname(repo), "dev-docs", "artifacts", "affected", "index.html")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "w", encoding="utf-8") as page:
             page.write(picture(Graph(), paths, label))

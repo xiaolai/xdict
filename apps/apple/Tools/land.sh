@@ -38,6 +38,8 @@ command_of() {
         apple-test) echo "rm -rf .git && git init -q && git add -A && git -c core.hooksPath=/dev/null -c user.name=land -c user.email=land@localhost commit -qm snapshot && cd apps/apple && XDICT_KNOWN_COMMITS=\$PWD/../../.known-commits make test" ;;
         entries) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-core --test entries_corpus -- --nocapture" ;;
         lookup-corpus) echo "cd core && XDICT_MDX_CORPUS=$corpus cargo test --release -p xdict-lookup --test corpus -- --nocapture" ;;
+        # Run in the host's copy, which is flat: dev-docs/ sits at the copy's root, whatever the Air's workspace looks
+        # like (the fixtures are rsynced there below).
         mdx-v3) echo "cd core && XDICT_MDX_MDXBUILDER_V3=\$PWD/../dev-docs/fixtures/mdxbuilder-4.0-v3/synthetic-v3.mdx cargo test -p xdict-mdx --test mdxbuilder" ;;
         # run1 <log name> <command>: the binding toolchain's PATH and JAVA_HOME; its log is ~/logs/<name>.log there.
         bindings) echo "export TAILN=30; ~/bin/run1 land-swift core/xdict-ffi/test-swift.sh && ~/bin/run1 land-kotlin core/xdict-ffi/test-kotlin.sh && ~/bin/run1 land-worker core/xdict-wasm/test-worker.sh" ;;
@@ -59,7 +61,7 @@ readonly CORPUS_NAME=the24
 # The tests name others (Tools/tests/land-test.sh).
 readonly AIR_CORPUS=${XDICT_LAND_CORPUS:-$HOME/xdict-corpus/$CORPUS_NAME}
 readonly LOCAL_MK=${XDICT_LAND_LOCAL_MK:-$REPO/local.mk}
-MAIN=$(cd "$(git -C "$REPO" rev-parse --path-format=absolute --git-common-dir)/.." && pwd) || fail "no main checkout"
+MAIN=$(Tools/main-checkout.sh "$REPO") || fail "no main checkout"
 NAME=$(basename "$REPO")
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "the checkout's folder name is not a plain name: $NAME"
 readonly REMOTE=xdict-build/$NAME-land
@@ -201,14 +203,14 @@ host_job() {
     fi
     for g in "$@"; do
         # The format-3.0 test's file is an .mdx, which the copy leaves out: sent alone (it is MDXBuilder's, not content).
-        # dev-docs/ is untracked, so a worktree has none: the main checkout's.
+        # dev-docs/ is a sibling of the main checkout (the workspace root), so a worktree has none of its own.
         # The snapshot has no history: the ledger's commits are checked against the Air's list (ledger.py check).
         if [ "$g" = apple-test ]; then
             git -C "$REPO" rev-list --all >"$OUT/known-commits.$lane" &&
                 rsync -a "$OUT/known-commits.$lane" "$host:$remote/.known-commits" >>"$rlog" 2>&1
         fi
         if [ "$g" = mdx-v3 ]; then
-            rsync -a "$MAIN/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$remote/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$rlog" 2>&1
+            rsync -a "$(dirname "$MAIN")/dev-docs/fixtures/mdxbuilder-4.0-v3/" "$host:$remote/dev-docs/fixtures/mdxbuilder-4.0-v3/" >>"$rlog" 2>&1
         fi
         t0=$(date +%s)
         # The toolchain pinned only where the default is another: a pinned name can be a second install without the

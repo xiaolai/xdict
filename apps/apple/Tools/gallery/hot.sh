@@ -20,14 +20,12 @@ set -u
 started=$(date +%s)
 apple=$(cd "$(dirname "$0")/../.." && pwd)
 repo=$(cd "$apple/../.." && pwd)
-# The main checkout, where local.mk and dev-docs/ live: this one, or the first folder above it holding local.mk (a
-# worktree is kept inside its main checkout, under .claude/worktrees/).
-main=$repo
-while [ ! -f "$main/local.mk" ] && [ "$main" != / ]; do main=$(dirname "$main"); done
+# The main checkout, where local.mk lives; dev-docs/ is its sibling (Tools/main-checkout.sh).
+main=$("$apple/Tools/main-checkout.sh" "$repo") || exit 2
 mk=$main/local.mk
 host=${E2E_HOST:-$(awk -F'=' '{ n = $1; gsub(/[ \t]/, "", n) } n == "E2E_HOST_MACOS" { sub(/^[^=]*=[ \t]*/, ""); print; exit }' "$mk" 2>/dev/null)}
 [ -n "$host" ] || { echo "hot: no E2E_HOST and no E2E_HOST_MACOS in local.mk" >&2; exit 2; }
-out=${HOT_OUT:-$main/dev-docs/artifacts/reading-frame/hot}
+out=${HOT_OUT:-$(dirname "$main")/dev-docs/artifacts/reading-frame/hot}
 remote=XDictE2E/hot
 lab=XDictE2E/gallery-run-lab/XDictEntryLab.app
 

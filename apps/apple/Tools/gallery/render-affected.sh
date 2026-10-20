@@ -17,8 +17,8 @@ plan=$(/usr/bin/python3 -I "$tool" plan "$@") || exit 1
 [ -n "$plan" ] || { echo "render-affected: nothing pending"; exit 0; }
 
 if grep -q '^views' <<<"$plan"; then
-    main=$(cd "$apple/../.." && pwd)
-    while [ ! -f "$main/local.mk" ] && [ "$main" != / ]; do main=$(dirname "$main"); done
+    # The main checkout, where local.mk lives (Tools/main-checkout.sh).
+    main=$("$apple/Tools/main-checkout.sh" "$apple") || exit 2
     host=${E2E_HOST:-$(awk -F'=' '{ n = $1; gsub(/[ \t]/, "", n) } n == "E2E_HOST_MACOS" { sub(/^[^=]*=[ \t]*/, ""); print; exit }' "$main/local.mk" 2>/dev/null)}
     [ -n "$host" ] || { echo "render-affected: no E2E_HOST and no E2E_HOST_MACOS in local.mk" >&2; exit 2; }
     want=$(/usr/bin/python3 -I "$tool" lab-id) || exit 1
