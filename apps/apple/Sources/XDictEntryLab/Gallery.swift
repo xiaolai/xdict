@@ -137,6 +137,8 @@ enum GalleryRun {
                                                    ("dotSquare", 0.0, "a marker dot with square corners"),
                                                    ("pronOff", 0.0, "a speaker off its transcription's line"),
                                                    ("labelGapOver", 0.0, "a label too far from the next text"),
+                                                   ("labelPair", 0.0, "two labels not sharing one gap"),
+                                                   ("entryInset", 0.0, "the entry's text off the page's edge"),
                                                    ("foldGapOver", 0.0, "fold heads too far apart"),
                                                    ("spacePunct", 0.0, "a space before punctuation after a label"),
                                                    ("labelTight", 0.0, "a label or tag against the next text"),
@@ -423,6 +425,81 @@ enum GalleryRun {
             if (labelGaps.length < 3) labelGaps.push([Math.round(nr.left - lr.right), trim(lb.parentElement), trim(lb.nextElementSibling), probeBox(lb), probeBox(lb.parentElement), probeBox(n.parentElement), n.nodeValue.slice(0, 20)]);
           }
         });
+        // Two labels in a row share one gap (D20: OALD's OPAL W and OPAL S stood 11 px apart): the first label's end
+        // margin (computed in its own em, since the token is a size), the second's start margin zeroed, wrappers or
+        // not (marks.css). Measured box edge to box edge (a text rect leaves out the trailing letter-spacing), and
+        // only within one inline run: a boundary that is a block (a table cell, a div) is layout, not a pair.
+        var labelPair = 0, labelPairs = [], labelPairSeen = 0;
+        (function () {
+          var sel = '[data-xdict-role=label]:is([data-xdict-label=level],[data-xdict-label=wordlist],[data-xdict-label=frequency],[data-xdict-label=new])';
+          function inlineBox(el) { var d = getComputedStyle(el).display; return d === 'contents' || d === 'inline-block' || d === 'inline-flex' || d === 'inline-grid' || d === 'inline-table' || /^inline$/.test(d); }
+          function sameRun(a, b) {
+            var up = [];
+            for (var p = a.parentElement; p; p = p.parentElement) up.push(p);
+            var q = null;
+            for (var x = b; x && !q; x = x.parentElement) if (up.indexOf(x) >= 0) q = x;
+            if (!q) return false;
+            for (var m = a.parentElement; m && m !== q; m = m.parentElement) if (!inlineBox(m)) return false;
+            for (var n = b.parentElement; n && n !== q; n = n.parentElement) if (!inlineBox(n)) return false;
+            return true;
+          }
+          var labels = Array.prototype.filter.call(document.querySelectorAll(sel), function (el) { return seen(el); });
+          labels.forEach(function (lb, i) {
+            if (i > 2048) return;
+            var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+            w.currentNode = lb;
+            var n;
+            while ((n = w.nextNode())) {
+              if (lb.contains(n)) continue;
+              if (n.nodeType === 3) { if (/\S/.test(n.nodeValue || '')) return; continue; }
+              if (n.nodeType !== 1 || !seen(n)) continue;
+              if (n.closest('[data-xdict-control],img,svg')) return;
+              if (!n.matches(sel)) continue;
+              if (!sameRun(lb, n)) return;
+              // The labels' own boxes: a text rect leaves out the trailing letter-spacing the label's box keeps.
+              var la = lb.getBoundingClientRect(), fb = n.getBoundingClientRect();
+              if (Math.min(la.bottom, fb.bottom) - Math.max(la.top, fb.top) < 0.5 * Math.min(la.height, fb.height)) return;
+              // One gap means: the first label's end margin (in its own em) and nothing of the second's.
+              var want = parseFloat(getComputedStyle(lb).marginInlineEnd) || 0;
+              var d = fb.left - la.right;
+              labelPairSeen += 1;
+              if (Math.abs(d - want) > 1) {
+                labelPair += 1;
+                if (labelPairs.length < 3) labelPairs.push([Math.round(d * 10) / 10, Math.round(want * 10) / 10, trim(lb), trim(n)]);
+              }
+              return;
+            }
+          });
+        })();
+        // D37: an entry's top-level container sits at the page's text edge, not right of it (OALD's
+        // `.entry{margin-left:22px}`) and not left of it (the negative margin that cancelled the first for a row of
+        // its own, `.top-container`). Both halves are measured on the page's top-level content — each dictionary has
+        // its own view — and the frame zeroes the pair (`frame.js entryInset`).
+        var entryInset = 0, insets = [], insetSeen = 0;
+        (function () {
+          var body = getComputedStyle(document.body);
+          var base = document.body.getBoundingClientRect().left + (parseFloat(body.paddingLeft) || 0);
+          function head(e) { return e.querySelector('[data-xdict-role=headword],[data-xdict-lead]'); }
+          function content(e, i) {
+            return i <= 16 && !/^(SCRIPT|STYLE|LINK|TEMPLATE)$/.test(e.tagName) && !/^xdict-/.test(e.id || '') && seen(e);
+          }
+          function measure(e) {
+            var cs = getComputedStyle(e), m = parseFloat(cs.marginInlineStart !== '' && cs.marginInlineStart !== 'auto' ? cs.marginInlineStart : cs.marginLeft) || 0;
+            insetSeen += 1;
+            var r = document.createRange(); r.selectNodeContents(e);
+            var rs = r.getClientRects();
+            var left = rs.length ? Math.min.apply(null, Array.prototype.map.call(rs, function (x) { return x.left; })) : null;
+            if (m > 0.5 || (left !== null && left < base - 1)) {
+              entryInset += 1;
+              if (insets.length < 3) insets.push([Math.round(m), left === null ? null : Math.round(left), Math.round(base), trim(e).slice(0, 120)]);
+            }
+          }
+          Array.prototype.forEach.call(document.body.children, function (c, i) {
+            if (!content(c, i)) return;
+            if (head(c)) measure(c);
+            Array.prototype.forEach.call(c.children, function (k, j) { if (content(k, j) && head(k)) measure(k); });
+          });
+        })();
         // Punctuation the source set against the text before it, drawn more than 0.2em away from it.
         (function () {
           var w = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT), prev = null, k = 0, n;
@@ -587,14 +664,17 @@ enum GalleryRun {
             || cs.backgroundImage !== 'none';
           if (line) { hrDrawn += 1; if (hrs.length < 3) hrs.push([trim(el), cs.borderTop, cs.backgroundColor, cs.height]); }
         });
-        // A dictionary's own fold sign inside a fold head XDict draws a chevron for: drawn boxes holding no word.
+        // A dictionary's own fold sign inside a fold head XDict draws a chevron for: drawn boxes holding no word, or a
+        // fold glyph written as text in an element of its own (LDOCE's `span.arrow` holding `►`, D36).
         var foldSign = 0, signs = [];
         document.querySelectorAll('[data-xdict-control=disclosure] *').forEach(function (el) {
-          if (!seen(el) || /\S/.test(el.textContent) || el.closest('[data-xdict-control=speaker],[data-xdict-role=label]') || el.matches('img,svg,[data-xdict-icon]')) return;
+          if (!seen(el) || el.closest('[data-xdict-control=speaker],[data-xdict-role=label]') || el.matches('img,svg,[data-xdict-icon]')) return;
+          var glyph = /^[\s]*[▶►▸▹▷▾▼▲△◀◁◂◄][\s]*$/.test(el.textContent);
+          if (/\S/.test(el.textContent) && !glyph) return;
           var r = el.getBoundingClientRect();
           if (r.width < 2 && r.height < 2) return;
           var cs = getComputedStyle(el);
-          var drawn = !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
+          var drawn = glyph || !/rgba\(0, 0, 0, 0\)|transparent/.test(cs.backgroundColor) || cs.backgroundImage !== 'none'
             || ['Top', 'Right', 'Bottom', 'Left'].some(function (s) { return parseFloat(cs['border' + s + 'Width']) > 0 && cs['border' + s + 'Style'] !== 'none'; });
           if (drawn) { foldSign += 1; if (signs.length < 3) signs.push(trim(el).slice(0, 150)); }
         });
@@ -613,7 +693,7 @@ enum GalleryRun {
         });
         return { dotWorst: Math.round(dotWorst * 1000) / 1000, dots: dots, dotSquare: dotSquare, squares: squares,
                  heads: Array.prototype.map.call(document.querySelectorAll("[data-xdict-control=disclosure]"), function (h) { return trim(h).slice(0, 600); }).slice(0, 2), pronOff: pronOff, pronTotal: pronTotal, pron: pron,
-                 labelGapOver: labelGapOver, labelGaps: labelGaps, foldGapOver: foldGapOver, folds: folds,
+                 labelGapOver: labelGapOver, labelGaps: labelGaps, labelPair: labelPair, labelPairs: labelPairs, labelPairSeen: labelPairSeen, entryInset: entryInset, insets: insets, insetSeen: insetSeen, foldGapOver: foldGapOver, folds: folds,
                  foldHeads: heads.length, spacePunct: spacePunct, punct: punct,
                  labelTight: labelTight, tight: tight, speakerTight: speakerTight, spTight: spTight, markerOff: mk[0], markers: mk[1], markerTotal: mk[2],
                  chevronOff: ch[0], chevrons: ch[1], chevronTotal: ch[2], levelPill: levelPill, pills: pills, pillLabels: pillLabels, phonFonts: Array.from(new Set(Array.prototype.map.call(document.querySelectorAll("[data-xdict-phon]"), function (e) { return getComputedStyle(e).fontFamily; }))).slice(0, 3), hrDrawn: hrDrawn, hrs: hrs, foldSign: foldSign, signs: signs };

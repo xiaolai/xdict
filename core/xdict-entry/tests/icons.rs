@@ -295,6 +295,29 @@ fn a_fold_heads_own_sign_goes_where_xdicts_chevron_is_drawn() {
     assert!(!o.contains("data-xdict-labelled"), "{o}");
 }
 
+/// D36 (style ledger): LDOCE writes its collocation fold sign as a text glyph in an element of its own
+/// (`<span class="arrow">►</span>`). It goes where XDict's chevron is drawn, as a drawn sign does: one sign on the
+/// head. A glyph of another shape, an element holding a glyph and words, and a glyph outside a fold head are the
+/// dictionary's text and stay.
+#[test]
+fn a_fold_sign_drawn_as_a_text_glyph_goes_where_xdicts_chevron_is_drawn() {
+    let head = r#"<span class="expandable" onclick="toggle(this)"><span class="arrow">►</span>&nbsp;<span class="colloc">made ... abundantly clear</span></span>"#;
+    let o = out(head, "");
+    assert!(o.contains(r#"data-xdict-control="disclosure""#), "{o}");
+    assert!(o.contains(r#"<span class="arrow"></span>"#), "{o}");
+    assert!(!o.contains('►'), "{o}");
+    assert!(o.contains("made ... abundantly clear"), "{o}");
+    // The same glyph where no chevron is drawn is the dictionary's text.
+    let o = out(r#"<p><span class="arrow">►</span> a note</p>"#, "");
+    assert!(o.contains('►'), "{o}");
+    // An element holding a glyph and words is text, not a sign.
+    let o = out(r#"<span class="expandable" onclick="toggle(this)"><span class="inside">► more</span></span>"#, "");
+    assert!(o.contains('►'), "{o}");
+    // Another shape (a bullet) is text too.
+    let o = out(r#"<span class="expandable" onclick="toggle(this)"><span class="dot">•</span> words</span>"#, "");
+    assert!(o.contains('•'), "{o}");
+}
+
 #[test]
 fn a_box_holding_only_speakers_is_marked_to_join_its_transcriptions_line() {
     // CEPD's shape, written here: the speakers in a block of their own before the transcription.

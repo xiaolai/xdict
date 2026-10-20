@@ -1305,6 +1305,43 @@ var XDictFrameCore = (function () {
       hangMeasure(n, b);
     });
   }
+  // D37 (2026-10-20): the entry's top-level container takes no start margin: the page's padding is the text's edge,
+  // as Apple draws it. A child's own negative start margin that cancelled it for a row of its own (OALD's
+  // `.top-container` over `.entry{margin-left:22px}`) goes with it, or that row hangs outside the page. Reading
+  // style only: Original style keeps the dictionary's own layout.
+  function entryInset() {
+    if (!SPACE_CAP || !document.body) return;
+    function start(el) {
+      var cs = getComputedStyle(el), v = cs.marginInlineStart;
+      return parseFloat(v !== '' && v !== 'auto' ? v : cs.marginLeft) || 0;
+    }
+    function zero(el) {
+      if (el.getAttribute('data-xdict-inset') === 'zero') return;
+      el.style.setProperty('margin-inline-start', '0px', 'important');
+      el.setAttribute('data-xdict-inset', 'zero');
+    }
+    // The containers that hold the entry's headword: the page's top-level content and its own direct children (one
+    // entry per view — each dictionary has its own). Not the frame's own nodes (`#xdict-…`), the head's links, or a
+    // box beside the entry's text. The core's entry root is a guess that two headwords defeat (D37, `concept`), so
+    // the headword itself is what names the container.
+    function head(e) { return e.querySelector('[data-xdict-role=headword],[data-xdict-lead]'); }
+    function content(e, i) {
+      return i <= 16 && !/^(SCRIPT|STYLE|LINK|TEMPLATE)$/.test(e.tagName) && !/^xdict-/.test(e.id || '');
+    }
+    Array.prototype.forEach.call(document.body.children, function (c, i) {
+      if (!content(c, i)) return;
+      var holders = head(c) ? [c] : [];
+      Array.prototype.forEach.call(c.children, function (k, j) { if (content(k, j) && head(k)) holders.push(k); });
+      holders.forEach(function (h) {
+        var m = start(h);
+        if (m <= 0.5) return;
+        zero(h);
+        Array.prototype.forEach.call(h.children, function (k, j) {
+          if (j <= 16 && Math.abs(start(k) + m) <= 1) zero(k);
+        });
+      });
+    });
+  }
   // Parity P24 (2026-10-18): Apple's thin rule under a section label, drawn under the label's own line
   // (`XDictFrameCore.ruleOn`): on a heading the core names that is a block, or on its block when the heading is all
   // that block shows. Parity P25: an etymology section that holds only its label (NOAD's "Origin:", ODE's) is marked
@@ -1336,7 +1373,7 @@ var XDictFrameCore = (function () {
     setTimeout(function () {
       pending = false;
       if (tooDeep()) return;
-      overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
+      entryInset(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
     }, 16);
   }
   // **No pass reads a tree nested deeper than the HTML parser builds** (2026-10-19). The passes ask each element's
@@ -1359,7 +1396,7 @@ var XDictFrameCore = (function () {
   function start() {
     install(); name(document);
     if (tooDeep()) return;
-    bullets(); loneBullets(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
+    bullets(); loneBullets(); entryInset(); spacing(); lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();
   }
   // A resize is spaced again once it settles too: the pane's first resize event can come before its media queries apply.
   window.addEventListener('resize', function () { later(); setTimeout(later, 200); });
@@ -1719,11 +1756,27 @@ min-height:0 !important;float:none !important;position:static !important}
 [data-xdict-role=label]{margin-inline-end:var(--xdict-label-gap) !important}
 [data-xdict-role=label]+[data-xdict-role=label]{margin-inline-start:0 !important}
 /* Two labels each in a wrapper of its own share it too (OALD's OPAL links, `a{margin-right:4px}`): the wrapper */
-/* adds no inline space, and the second label none before it. */
+/* adds no inline space, and the second label none before it. The pair also crosses a wrapper that carries a role — */
+/* OALD's OPAL links are sections, which the rule above skips — so the second label, its wrapper and the first */
+/* wrapper's end margin go too (D20: B2 then OPAL W stood 3 px too far apart, measured 2026-10-20). */
 :is(a,span):has(> [data-xdict-role=label]:first-child):not([data-xdict-role]){margin-inline:0 !important;
 padding-inline:0 !important}
 :is(a,span):has(> [data-xdict-role=label]:first-child)+:is(a,span):has(> [data-xdict-role=label]:first-child)
 >[data-xdict-role=label]{margin-inline-start:0 !important}
+[data-xdict-role=label]+:is(a,span):has(> [data-xdict-role=label]:first-child),
+:is(a,span):has(> [data-xdict-role=label]:first-child)+:is(a,span):has(> [data-xdict-role=label]:first-child)
+{margin-inline:0 !important}
+[data-xdict-role=label]+:is(a,span)>[data-xdict-role=label]:first-child,
+:is(a,span):has(> [data-xdict-role=label]:first-child)+[data-xdict-role=label]
+{margin-inline-start:0 !important}
+:is(a,span):has(> [data-xdict-role=label]:first-child):has(+ [data-xdict-role=label])
+{margin-inline-end:0 !important}
+/* The graphic the core hid between two labels (OALD's `ox3ksym_b2` after B2) has no width but breaks `+`: a label */
+/* after a hidden sibling the label before it hid is the same pair. */
+[data-xdict-role=label]+[hidden]+[data-xdict-role=label]{margin-inline-start:0 !important}
+[data-xdict-role=label]+[hidden]+:is(a,span):has(> [data-xdict-role=label]:first-child){margin-inline:0 !important}
+[data-xdict-role=label]+[hidden]+:is(a,span)>[data-xdict-role=label]:first-child
+{margin-inline-start:0 !important}
 /* 7. Punctuation the source set against an element stays against it: its inline end spacing goes. */
 /* A speaker's tag is drawn first (order -1), never last; a label that replaced the hugging element's last */
 /* child is its last drawn text. */
