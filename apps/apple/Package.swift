@@ -200,7 +200,8 @@ let package = Package(
         // lives here and never ships (ADR-0011 decision 3).
         .testTarget(name: "XDictAppleImportTests", dependencies: ["XDictAppleImport", "XDictTestSupport"]),
         // The harness's own rules, read off the tree: module boundaries, test floors, the string catalog, the floor.
-        .testTarget(name: "XDictTests", dependencies: ["XDictTestSupport"]),
+        .testTarget(name: "XDictTests", dependencies: ["XDict", "XDictAnywhere", "XDictCapture", "XDictCaptureMac",
+                                                    "XDictTestSupport"]),
     ],
     swiftLanguageModes: [.v6]
 )

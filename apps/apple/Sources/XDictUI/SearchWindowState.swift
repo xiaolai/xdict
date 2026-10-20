@@ -27,6 +27,19 @@ public final class SearchWindowState {
     public private(set) var resultsFocus = 0
     /// The dictionary whose entry the pane shows: its links are looked up there.
     public private(set) var presented: UUID?
+    /// **Which lookup the entry view was last handed**, so a document's finish is acknowledged only for the lookup shown
+    /// now (plan-capture WI-4 rule 3): a stale document finishing in the gap before a newer lookup's entry request
+    /// acknowledged the newer term `shown`.
+    @ObservationIgnored private var presentedEntry = PresentedEntry()
+
+    /// Whether the entry view was asked to show the lookup the model shows now — the identity a finished document's
+    /// acknowledgement rests on (both the lookup and its shown entry: while a newer lookup awaits its first result the
+    /// shown entry is still the older lookup's). False before the first ask, and while a newer lookup is still on its way.
+    public var showsPresentedLookup: Bool {
+        guard let shown = model.shown else { return false }
+        return presentedEntry.isCurrent(serial: shown.serial, lookup: shown.lookup)
+            && shown.lookup == model.lookup?.serial
+    }
 
     /// Settings ▸ Dictionaries, at one dictionary or none (ADR-0012 d.4: `SettingsRoute.show`).
     @ObservationIgnored public var showDictionaries: (@MainActor (UUID?) -> Void)?
@@ -138,6 +151,7 @@ public final class SearchWindowState {
         }
         let reference = EntryReference(key: shown.result.entry.key, occurrence: shown.result.entry.occurrence)
         let done = await entry.show(reference, from: content, landing: landing)
+        if done { presentedEntry.asked(serial: shown.serial, lookup: shown.lookup) }
         onPresented?(shown, done)
     }
 
@@ -169,6 +183,7 @@ public final class SearchWindowState {
         presented = shown.result.dictionary
         let landing: EntryLanding = if case .offset(let y) = shown.landing { .offset(y) } else { .top }
         let done = await entry.showPage(pageItems(results), primary: shown.result.dictionary, landing: landing)
+        if done { presentedEntry.asked(serial: shown.serial, lookup: shown.lookup) }
         onPresented?(shown, done)
     }
 

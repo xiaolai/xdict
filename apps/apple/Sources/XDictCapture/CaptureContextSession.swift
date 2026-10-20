@@ -13,6 +13,8 @@ public final class CaptureContextSession: Sendable {
     private struct Held: Sendable {
         let request: Int
         let generation: Int
+        /// The word the context's range must hold, kept so a **settled** context is validated as the constructor's was.
+        let term: String
         let context: ContextOutcome
     }
 
@@ -27,11 +29,13 @@ public final class CaptureContextSession: Sendable {
         self.pending = pending
     }
 
-    /// Holds `context` for `request`'s delivery of `generation`, dropping whatever was held before — and cancelling the
-    /// reading a dropped pending context was waiting for. A pending handle the book does not hold is held as no context
+    /// Holds `term`'s context for `request`'s delivery of `generation`, dropping whatever was held before — and
+    /// cancelling the reading a dropped pending context was waiting for. The context passes the constructor's boundary
+    /// here too (a value the term's own `make` already checked; checked again so no path reaches this session unvalidated),
+    /// with a refusal held as no context (fail-closed). A pending handle the book does not hold is no context either
     /// (fail-closed: never a context waiting forever).
-    public func hold(_ context: ContextOutcome, request: Int, generation: Int) {
-        var context = context
+    public func hold(_ term: CapturedTerm, request: Int, generation: Int) {
+        var context = (try? CapturedTerm.checkedContext(term.context, term: term.term)) ?? .unavailable(.notCaptured)
         var waiting: PendingContext?
         if case .pending(let handle) = context {
             waiting = pending.context(handle)
@@ -39,7 +43,9 @@ public final class CaptureContextSession: Sendable {
         }
         let held = context
         let dropped = self.held.withLock { current -> PendingContextHandle? in
-            defer { current = Held(request: request, generation: generation, context: held) }
+            defer {
+                current = Held(request: request, generation: generation, term: term.term, context: held)
+            }
             return current.flatMap { Self.handle(of: $0.context) }
         }
         if let dropped, dropped != Self.handle(of: held) { pending.cancel(dropped) }
@@ -49,15 +55,30 @@ public final class CaptureContextSession: Sendable {
     /// The reading behind a held pending context ended: what it settled to replaces it, if it is still the one held —
     /// **and the book forgets it**, so the sentence lives here alone and goes with its request (`end`, `clear`).
     private func settle(request: Int, generation: Int, _ end: PendingContextEnd) {
+        // The term is read under the lock, the validation runs outside it, and the store re-checks that this request's
+        // pending context is still the one held — a newer hold in between wins.
+        guard let (pendingHandle, term) = held.withLock({ held -> (PendingContextHandle, String)? in
+            guard let current = held, current.request == request, current.generation == generation,
+                  case .pending(let handle) = current.context else { return nil }
+            return (handle, current.term)
+        }) else { return }
         let outcome: ContextOutcome
         switch end {
-        case .settled(let settled), .overdue(let settled): outcome = settled
+        case .settled(let settled), .overdue(let settled):
+            // **A settled context passes the boundary the constructor holds**: an over-ceiling sentence, a range outside
+            // its sentence or one holding another term is refused as no context (fail-closed), never installed as read.
+            // A settlement that is itself pending is no settlement: a reader's handle is not a sentence.
+            if case .pending = settled {
+                outcome = .unavailable(.notCaptured)
+            } else {
+                outcome = (try? CapturedTerm.checkedContext(settled, term: term)) ?? .unavailable(.notCaptured)
+            }
         case .cancelled: outcome = .unavailable(.notCaptured)
         }
         let taken = held.withLock { held -> PendingContextHandle? in
             guard let current = held, current.request == request, current.generation == generation,
-                  case .pending(let handle) = current.context else { return nil }
-            held = Held(request: request, generation: generation, context: outcome)
+                  case .pending(let handle) = current.context, handle == pendingHandle else { return nil }
+            held = Held(request: request, generation: generation, term: term, context: outcome)
             return handle
         }
         if let taken { pending.forget(taken) }

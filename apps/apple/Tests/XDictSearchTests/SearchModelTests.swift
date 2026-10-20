@@ -145,10 +145,53 @@ struct SearchModelTests {
         let sources = Sources([Fixture.source(1, "A"), Fixture.source(2, "B")])
         let model = Self.model(Self.apples(), sources)
         model.setScope(.one(Fixture.id(2)))
+        model.submit("apple")
+        await model.idle()
+        await model.answersSettled()
         #expect(model.scope == .one(Fixture.id(2)))
         sources.list[1] = Fixture.source(2, "B", enabled: false)
         model.sourcesDidChange()
         #expect(model.scope == .all)
+        // The fallback is the scope's own transition: the lookup that is being shown moved with it (audit-fix round 2,
+        // finding 3 — assigning the scope alone left this lookup asking the removed dictionary).
+        #expect(model.lookup?.scope == .all, "the active lookup kept asking the dictionary the fallback removed")
+        await model.answersSettled()
+    }
+
+    /// **A dictionary reopened under a new handle in the same update is asked through the new one** (audit-fix round 2,
+    /// verify of finding 3): the scope fallback asks; invalidating stale handles after it would ask the old handle.
+    @Test func theScopeFallbackAsksAReopenedDictionaryThroughItsNewHandle() async {
+        let backend = Self.apples()
+        let sources = Sources([Fixture.source(1, "A"), Fixture.source(2, "B")])
+        let model = Self.model(backend, sources)
+        model.setScope(.one(Fixture.id(2)))
+        model.submit("apple")
+        await model.idle()
+        await model.answersSettled()
+        sources.list[0] = Fixture.source(1, "A-reopened")
+        sources.list[1] = Fixture.source(2, "B", enabled: false)
+        model.sourcesDidChange()
+        await model.answersSettled()
+        #expect(model.scope == .all)
+        let dicts = await backend.lookups.map(\.dicts)
+        #expect(!dicts.contains([Fixture.handle("A")]), "asked the reopened dictionary through its old handle: \(dicts)")
+        #expect(dicts.contains([Fixture.handle("A-reopened")]), "the reopened dictionary was never asked: \(dicts)")
+    }
+
+    /// **The shown dictionary going away shows another** (round 3, finding 2): the selection used to stay on a dictionary
+    /// the library no longer has, and `autoSelectIfDue` chose nothing because a selection was already there.
+    @Test func disablingTheShownDictionaryShowsAnotherOne() async {
+        let sources = Sources([Fixture.source(1, "A"), Fixture.source(2, "B")])
+        let model = Self.model(Self.apples(), sources)
+        model.submit("apple")
+        await model.idle()
+        await model.answersSettled()
+        #expect(model.shown?.result.dictionary == Fixture.id(1))
+        sources.list[0] = Fixture.source(1, "A", enabled: false)
+        model.sourcesDidChange()
+        await model.answersSettled()
+        #expect(model.selection?.dictionary == Fixture.id(2), "the disabled dictionary's entry stayed selected")
+        #expect(model.shown?.result.dictionary == Fixture.id(2))
     }
 
     // MARK: - Every record (Q10)

@@ -125,6 +125,19 @@ struct CaptureSinkTests {
         #expect(requests.terminal(of: delivered)?.outcome == .cancelled)
     }
 
+    /// **An accepted request that is never acknowledged ends when the consumer goes** — the completion obligation the
+    /// contract states: a consumer acknowledges, cancels, or disappears, and nothing stays open forever.
+    @Test func anAcceptedRequestEndsWhenTheConsumerGoes() throws {
+        let requests = CaptureRequests(), consumer = Consumer()
+        let request = requests.begin(.pointerGesture)
+        #expect(requests.deliver(try term(), for: request, to: consumer) == .accepted)
+        #expect(requests.terminal(of: request) == nil, "a delivery ended the request by itself")
+        let ended = requests.consumerGone()
+        #expect(ended.map(\.request) == [request.number])
+        #expect(ended.map(\.outcome) == [.cancelled])
+        #expect(requests.terminal(of: request)?.outcome == .cancelled)
+    }
+
     /// **A stale generation never ends an open request**: delivered twice, the first delivery's acknowledgement is
     /// refused and the request stays open for the second's.
     @Test func aStaleGenerationLeavesTheRequestOpen() throws {

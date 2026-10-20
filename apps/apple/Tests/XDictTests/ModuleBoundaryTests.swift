@@ -71,7 +71,7 @@ struct ModuleBoundaryTests {
         // Capture's pure target (ADR-0014 decision 5): values, CoreGraphics' value types, the sentence tokenizer, its log
         // (metadata only, decision 9) and the sink's lock. Nothing that draws, and no target of this package.
         "XDictCapture": captureMayBind,
-        "XDictCaptureTests": ["CoreGraphics", "Foundation", "Synchronization", "Testing"],
+        "XDictCaptureTests": ["CoreGraphics", "CryptoKit", "Foundation", "Synchronization", "Testing"],
         // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
         // lane, the readers, the never-prompting probe; since WI-4 the recogniser, ScreenCaptureKit's capture and
         // Vision's reading, behind the Screen Recording setup row (`ScreenCaptureUseTests` holds where ScreenCaptureKit
@@ -122,7 +122,7 @@ struct ModuleBoundaryTests {
         "XDictServiceTests": ["Foundation", "Synchronization", "Testing"],
         "XDictClientTests": ["Foundation", "Synchronization", "Testing"],
         // `AppKit`: the menu-bar glyph drawn through CoreSVG and measured (`BundleFactsTests`).
-        "XDictTests": ["AppKit", "Foundation", "Testing"],
+        "XDictTests": ["AppKit", "Foundation", "Synchronization", "Testing"],
     ]
 
     /// **The contract binds Foundation and nothing else, and depends on no target of this package.** Both processes

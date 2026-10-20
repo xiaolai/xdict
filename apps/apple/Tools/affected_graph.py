@@ -73,8 +73,11 @@ GATES = {
     "entries": ([], ["tests:xdict-core"]),
     "lookup-corpus": ([], ["tests:xdict-lookup"]),
     "mdx-v3": ([], ["tests:xdict-mdx"]),
-    "bindings": (["conformance/", "core/binding-env.sh"], ["crate:xdict-ffi", "crate:xdict-wasm",
-                                                          "crate:xdict-conformance"]),
+    # The binding scripts read `conformance/fixtures/` only (tiny and matrix, by their `expected.json`);
+    # `conformance/capture/` is the shells' capture contract, run by each shell's own tests (the macOS runner lives in
+    # `apps/apple/Tests/XDictCaptureTests`, so `apple-test` reaches it).
+    "bindings": (["conformance/fixtures/", "core/binding-env.sh"], ["crate:xdict-ffi", "crate:xdict-wasm",
+                                                                   "crate:xdict-conformance"]),
     "memory": (["core/binding-env.sh"], ["crate:xdict-ffi", "crate:xdict-wasm"]),
 }
 WORKSPACE_MANIFESTS = ("core/Cargo.toml", "core/Cargo.lock")
@@ -247,7 +250,10 @@ def read_map(path):
         words = raw.split()
         if not words or words[0].startswith("#"):
             continue
-        if words[0] == "control" and len(words) == 3:
+        if words[0] == "control":
+            # The same validation `read_hand` applies: a malformed control is an error, never an ordinary rule.
+            if len(words) != 3:
+                die(f"the map {path}: malformed `{raw.strip()}`")
             controls.setdefault(words[1], []).append(words[2])
         elif len(words) >= 2:
             rules.append((words[0], words[1], words[2:]))
@@ -490,6 +496,40 @@ class Graph:
 
 # --- the picture --------------------------------------------------------------------------------------------------------
 
+def manifests_of():
+    """The graph file's own manifest map, or a loud failure — the CLI's freshness check never falls back to trust."""
+    try:
+        return json.load(open(GRAPH, encoding="utf-8"))["manifests"]
+    except (OSError, ValueError, KeyError) as error:
+        die(f"no readable manifests in {GRAPH} ({error}): `make affected-graph-update` on a build Mac writes it")
+
+
+def cli_graph(repo, manifests):
+    """The graph `select` and `html` work from: **discovery as `Graph()` always did it** — git's own inventory, which the
+    harness dependency scan reads — and the manifest check a listing would make, applied afterwards. A partial listing
+    here starved the harness scan (audit-fix 2026-10-20 round 2 verify); a stale graph prints why and widens."""
+    graph = Graph()
+    reason = graph.staleness(manifest_listing(repo, manifests), repo)
+    if reason:
+        graph.stale = reason
+        print(f"affected-graph: {reason}: the graph is stale, so every path reaches everything "
+              "(`make affected-graph-update` on a build Mac)", file=sys.stderr)
+    return graph
+
+
+def manifest_listing(repo, manifests):
+    """The graph's own manifests as the tree has them now, for `staleness` where no file walk is at hand (the CLI's
+    `select` and `html`): a manifest whose blob moved, or that the tree no longer has, makes the graph stale, and a stale
+    graph widens selection rather than narrowing it silently (round-2 finding 4). The manifests come from the graph
+    already loaded — a second read that failed would say "trust the graph" (round 3, finding 7)."""
+    listing = {}
+    for path in manifests:
+        blob = blob_of(repo, path)
+        if blob is not None:
+            listing[path] = f"file:{blob}"
+    return listing
+
+
 def changed_paths(repo, base):
     merge = subprocess.run(["git", "-C", repo, "merge-base", base, "HEAD"], check=True, capture_output=True,
                            text=True).stdout.strip()
@@ -598,7 +638,7 @@ def main():
             args = args[1:]
         if not args:
             die("select: name the paths")
-        for sub in Graph().select_paths(args, verbose):
+        for sub in cli_graph(repo, manifests_of()).select_paths(args, verbose):
             print(sub)
     elif command == "html":
         base = "macos-v1"
@@ -611,7 +651,7 @@ def main():
         out = os.path.join(os.path.dirname(repo), "dev-docs", "artifacts", "affected", "index.html")
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "w", encoding="utf-8") as page:
-            page.write(picture(Graph(), paths, label))
+            page.write(picture(cli_graph(repo, manifests_of()), paths, label))
         print(out)
     else:
         die(f"no command {command}")
