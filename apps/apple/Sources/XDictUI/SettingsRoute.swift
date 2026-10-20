@@ -49,6 +49,13 @@ public final class SettingsRoute {
         open?()
     }
 
+    /// **Settings ▸ Setup** (ADR-0012, amended 2026-10-20): the setup board is a pane of Settings now, so the first launch,
+    /// the app menu and General's row all land here rather than in a window of its own.
+    public func showSetup() {
+        pane = .setup
+        open?()
+    }
+
     /// Settings ▸ Dictionaries with the open panel up (File ▸ Add Dictionaries…, the setup board, the main window).
     public func requestImport() {
         pane = .dictionaries

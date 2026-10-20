@@ -60,16 +60,6 @@ struct XDictApp: App {
         .defaultSize(width: 640, height: 560)
         .commandsRemoved()
 
-        // The setup board (WI-9): opened by itself once, on a fresh account, and from the app menu or Settings after.
-        Window("Set Up XDict", id: Self.setupWindow) {
-            SetupView(library: Self.library, registrar: LookupAnywhere.shared.registrar,
-                      trusted: { AccessibilityGate.system(false) },
-                      showDictionaries: { MenuBarActions.showDictionaries() })
-                .task { await LibraryLaunch.once() }
-        }
-        .windowResizability(.contentSize)
-        .commandsRemoved()
-
         Settings {
             // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
             // dictionary list (parity P39). The other two are XDict's own, at Apple's width. The pane in front is
@@ -100,13 +90,16 @@ struct XDictApp: App {
             ReadingSettings()
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
-                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
-                            openSetup: { MenuBarActions.openSetup() })
+                            registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
+        case .setup:
+            SetupView(library: library, registrar: LookupAnywhere.shared.registrar,
+                      trusted: { AccessibilityGate.system(false) },
+                      showDictionaries: { MenuBarActions.showDictionaries() })
+                .task { await LibraryLaunch.once() }
         }
     }
 
     static let mainWindow = "main"
-    static let setupWindow = "setup"
     static let acknowledgmentsWindow = "acknowledgments"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
     @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
@@ -308,9 +301,11 @@ enum MenuBarActions {
         }
     }
 
+    /// **Set Up XDict… opens Settings ▸ Setup** (ADR-0012, amended 2026-10-20): the board is a pane now, and the setup
+    /// window is gone, so every way in is one window.
     static func openSetup() {
         NSApp.activate()
-        open?(XDictApp.setupWindow)
+        SettingsRoute.shared.showSetup()
     }
 
     /// Settings ▸ Dictionaries, at `dictionary` when given (ADR-0012 d.4, d.5).
@@ -319,20 +314,41 @@ enum MenuBarActions {
     }
 }
 
-/// **Settings' panes, the one in front chosen by `SettingsRoute`** (ADR-0012 d.1, d.4).
+/// **Settings' panes at the left, the chosen one at the right** (ADR-0012 d.1, d.4; amended 2026-10-20 to a sidebar):
+/// Apple's own apps have listed their settings down one side for years, and a reader who is looking for the setup board
+/// finds it in the same window as everything else. The detail keeps Apple's 600 pt width (P39); the sidebar is one more
+/// way to choose a pane, not another place.
 struct SettingsContent: View {
     @Bindable var route: SettingsRoute
 
+    /// The list's one selection, over the route's pane: a click (or the arrow keys) moves the whole window.
+    private var selection: Binding<SettingsTab?> {
+        Binding(get: { route.pane }, set: { if let pane = $0 { route.pane = pane } })
+    }
+
     var body: some View {
-        TabView(selection: $route.pane) {
-            ForEach(SettingsTab.allCases, id: \.self) { pane in
-                Tab(value: pane) {
-                    XDictApp.settings(pane)
-                } label: {
-                    Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
-                }
+        NavigationSplitView {
+            List(SettingsTab.allCases, id: \.self, selection: selection) { pane in
+                Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
+                    .tag(pane)
+            }
+            .listStyle(.sidebar)
+            .toolbar(removing: .sidebarToggle)
+            .navigationSplitViewColumnWidth(min: Tokens.Window.settingsSidebar, ideal: Tokens.Window.settingsSidebar,
+                                            max: Tokens.Window.settingsSidebar)
+        } detail: {
+            // The chosen pane at the top of the detail, scrolling inside it when it is taller than the window: a pane
+            // never stretches its controls to fill, and switching panes never resizes the window.
+            ScrollView {
+                XDictApp.settings(route.pane)
+                    .frame(maxWidth: .infinity, alignment: .top)
             }
         }
+        // **A fixed sidebar with no toggle**: the panes are the window's whole navigation, and hiding it would leave no
+        // way to switch (Apple's Settings has no such button). One window size for every pane (ADR-0012 d.6).
+        .toolbar(removing: .sidebarToggle)
+        .frame(width: SettingsDictionaries.paneWidth + Tokens.Window.settingsSidebar,
+               height: Tokens.Window.settingsHeight)
     }
 }
 
@@ -345,7 +361,7 @@ enum SetupLaunch {
     static func openOnAFreshAccount(defaults: UserDefaults = .standard) {
         guard XDictApp.setup.isReader, !defaults.bool(forKey: shownKey), XDictApp.library.entries.isEmpty else { return }
         defaults.set(true, forKey: shownKey)
-        MenuBarActions.openSetup()
+        SettingsRoute.shared.showSetup()
     }
 }
 

@@ -435,7 +435,7 @@ class ReaderSession(Session):
 
 
 def reader():
-    """One real first launch, captured as it comes up: the setup board opening by itself, the first window."""
+    """One real first launch, captured as it comes up: Settings opening on Setup by itself, the first window."""
     library = os.path.expanduser(f"~/Library/Application Support/{DOMAIN}")
     aside = library + ".ui-tour-aside"
     if os.path.exists(aside):

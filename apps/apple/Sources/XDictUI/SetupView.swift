@@ -4,9 +4,10 @@ import XDictAnywhere
 import XDictLibrary
 import XDictTokens
 
-/// **The setup window** (plan-macos-v1 WI-9): one row per `SetupBoard` step, each showing its live state and the one
-/// action that completes it. Accessibility is read again every half second while the window is open, because macOS
-/// posts nothing when it is granted: the row completes by itself, no relaunch.
+/// **The setup board, as a Settings pane** (plan-macos-v1 WI-9; a window of its own until 2026-10-20, ADR-0012 amended):
+/// one row per `SetupBoard` step, each showing its live state and the one action that completes it. Accessibility is read
+/// again every half second while the pane is up, because macOS posts nothing when it is granted: the row completes by
+/// itself, no relaunch.
 public struct SetupView: View {
     @Bindable private var library: Library
     private let registrar: ShortcutRegistrar
@@ -37,9 +38,8 @@ public struct SetupView: View {
                     .font(.callout)
             }
         }
-        // As tall as its rows (UI review U-01).
-        .settingsPane(width: 560)
-        .navigationTitle(Text("Set Up XDict"))
+        // As tall as its rows, at the one width every pane shares (UI review U-01; ADR-0012 d.6).
+        .settingsPane()
         .task {
             while !Task.isCancelled {
                 isTrusted = trusted()

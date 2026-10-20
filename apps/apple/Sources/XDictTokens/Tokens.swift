@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "c0bfbf5a3b558be58de6f2d7368051aa1fee4f8f5dd87c6291c2ca5cfe636157"
+    public static let sourceDigest = "6b166ada478a1be4a6e9f5db9a216b9a6eef7d9fd007794041b25d570ff21509"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -160,6 +160,10 @@ public enum Tokens {
         public static let initialColumn: CGFloat = 1000
         /// Apple-measured (P5, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let searchFieldAtWindow: CGFloat = 859
+        /// The Settings sidebar's width: 'Reading & Speech' with its icon and the list's margin, at Apple's sidebar proportions.
+        public static let settingsSidebar: CGFloat = 200
+        /// The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do.
+        public static let settingsHeight: CGFloat = 560
     }
 
     /// Corner radii.
