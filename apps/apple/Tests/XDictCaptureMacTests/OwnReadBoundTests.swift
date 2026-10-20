@@ -52,7 +52,7 @@ struct OwnReadBoundTests {
             let held = min(takes, limit)
             longest.withLock { $0 = max($0, held) }
             count.withLock { $0 += 1 }
-            Thread.sleep(forTimeInterval: held / .seconds(1))
+            Blocking.for(held)
             return takes <= limit
         }
 
@@ -85,7 +85,7 @@ struct OwnReadBoundTests {
 
     private func source(_ stall: Stall) -> SystemPointerWords {
         let requests = stall.requests
-        return SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane { stall.set($0) }, access: Self.granted,
+        return SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane.patient { stall.set($0) }, access: Self.granted,
                                   client: { AccessibilitySession(budget: $0, requests: requests) })
     }
 
@@ -143,7 +143,7 @@ struct OwnReadBoundTests {
     /// where the own read runs beside the lane.
     @Test func nothingRunsBesideAnOwnRead() async {
         let order = Mutex<[String]>([])
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         // Off the main thread, which the own read holds: submitted once the own read is in its request.
         let other = Task.detached {
             while !order.withLock({ $0.contains("own starts") }) { try? await Task.sleep(for: .milliseconds(1)) }
@@ -155,7 +155,7 @@ struct OwnReadBoundTests {
         _ = await lane.submitOnMainActor(.hover, timeout: 0.25, budget: .seconds(2)) { () -> Int in
             order.withLock { $0.append("own starts") }
             // A request in flight, long enough for the other read to be submitted beside it.
-            Thread.sleep(forTimeInterval: 0.3)
+            Blocking.for(.milliseconds(300))
             order.withLock { $0.append("own ends") }
             return 1
         }

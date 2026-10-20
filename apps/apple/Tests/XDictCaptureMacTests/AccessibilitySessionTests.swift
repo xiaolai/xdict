@@ -41,7 +41,7 @@ struct AccessibilitySessionTests {
             attribute: { _, _ in asked.withLock { $0 += 1 }; return (.noValue, nil) },
             parameterized: { _, _, _ in asked.withLock { $0 += 1 }; return (.noValue, nil) },
             elementAt: { root, _ in
-                Thread.sleep(forTimeInterval: 0.08)  // blocked in the framework past the budget
+                Blocking.for(.milliseconds(80))  // blocked in the framework past the budget
                 return (.success, root)
             })
         let session = AccessibilitySession(budget: .milliseconds(20), requests: requests)

@@ -78,7 +78,7 @@ struct OwnWindowReadTests {
     /// Chromium wake is asked of XDict itself. Red if either half runs off the main thread or without the lane's timeout.
     @Test func theRealSourceReadsOurOwnWindowOnTheMainThreadAsALaneJob() async throws {
         let timeouts = Mutex<[Float]>([])
-        let lane = AccessibilityLane { timeout in timeouts.withLock { $0.append(timeout) } }
+        let lane = AccessibilityLane.patient { timeout in timeouts.withLock { $0.append(timeout) } }
         let tree = OwnWindowTree()
         let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: Self.granted, client: { _ in tree })
         guard case .found(let target) = await source.ownTarget(at: Self.cat) else {
@@ -102,13 +102,17 @@ struct OwnWindowReadTests {
 
     /// **Behind a stalled read the main actor is not held**: XDict's own read waits in the lane like any hover, the main
     /// actor free meanwhile, and is answered at the hover's residence bound, having asked nothing. Red where the own read
-    /// blocks the main actor waiting for its turn, or runs beside the stalled read.
-    @Test func behindAStalledReadTheMainActorIsFree() async {
-        let lane = AccessibilityLane { _ in }
-        let gate = DispatchSemaphore(value: 0)
+    /// blocks the main actor waiting for its turn, or runs beside the stalled read. The stalled read's budget and the
+    /// overrun are out of reach, so the answer is the residence's however slowly the run goes (2026-10-20: past the 31 s
+    /// they were, under load, it was the stuck lane's).
+    @Test func behindAStalledReadTheMainActorIsFree() async throws {
+        let bounds = try #require(LaneBounds(explicitResidence: .seconds(3_600),
+                                             hoverResidence: LaneBounds.shipped.hoverResidence, overrun: .seconds(3_600)))
+        let lane = AccessibilityLane(bounds: bounds) { _ in }
+        let released = Mutex(false)
         let stalled = Task.detached {
-            await lane.submit(.explicit, timeout: 1, budget: .seconds(30)) { () -> Int in
-                gate.wait()
+            await lane.submit(.explicit, timeout: 1, budget: .seconds(3_600)) { () -> Int in
+                Blocking.until { released.withLock { $0 } }
                 return 0
             }
         }
@@ -124,7 +128,7 @@ struct OwnWindowReadTests {
         }
         let outcome = await source.ownTarget(at: Self.cat)
         ticker.cancel()
-        gate.signal()
+        released.withLock { $0 = true }
         _ = await stalled.value
         guard case .none(.failed(.deadlineExceeded)) = outcome else {
             Issue.record("got \(outcome)")
@@ -138,7 +142,7 @@ struct OwnWindowReadTests {
     /// nothing gets are never asked of this process. Red without the guard in either.
     @Test func aMissInOurOwnWindowAsksNoWakeUp() async {
         let tree = OwnWindowTree()
-        let source = SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane { _ in }, access: Self.granted,
+        let source = SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane.patient { _ in }, access: Self.granted,
                                         client: { _ in tree })
         guard case .found(let target) = await source.ownTarget(at: Self.cat) else {
             Issue.record("no target")
@@ -159,7 +163,7 @@ struct OwnWindowReadTests {
     @Test func anExcludedXDictIsAskedNothing() async {
         let tree = OwnWindowTree()
         let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 0, y: 0, width: 1_000, height: 1_000), windowID: 3)
-        let source = SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane { _ in }, access: Self.granted,
+        let source = SystemPointerWords(metrics: Measured.metrics, lane: AccessibilityLane.patient { _ in }, access: Self.granted,
                                         windows: { [ours] }, client: { _ in tree })
         var policy = HoverPolicy.shipped
         policy.excludedApps.insert("ai.xdict.app")

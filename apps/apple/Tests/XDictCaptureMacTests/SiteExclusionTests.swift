@@ -200,7 +200,7 @@ struct SiteExclusionTests {
     /// **The check and the read are one lane job**: one entry into the lane, so nothing can run between them.
     @Test func theCheckAndTheReadAreOneLaneJob() async {
         let entries = Mutex(0)
-        let lane = AccessibilityLane { _ in entries.withLock { $0 += 1 } }
+        let lane = AccessibilityLane.patient { _ in entries.withLock { $0 += 1 } }
         let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: AccessibilityAccess(probe: { .granted }),
                                         client: { _ in
                                             let tree = SiteTree()

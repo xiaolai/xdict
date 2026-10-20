@@ -21,3 +21,18 @@ only_rules:
   - unhandled_throwing_task
   - unowned_variable_capture
   - weak_delegate
+  - custom_rules
+
+custom_rules:
+  # The capture suite stood still for 110 s under load (2026-10-20): fakes blocked threads of Swift's cooperative pool
+  # waiting for the test that would release them, and ordering tests ran under the shipped residence bounds, which fire
+  # before a slow scheduler has queued what the test meant to queue. Tests/XDictCaptureMacTests/Waiting.swift holds the
+  # only sanctioned ways (Blocking, Wait, Silence, AccessibilityLane.patient); `LaneThreadTests` holds the lane's half.
+  capture_tests_block_only_through_waiting:
+    name: "Capture tests block and build lanes only through Waiting.swift"
+    included: "Tests/XDictCaptureMacTests/.*\\.swift$"
+    excluded: "Tests/XDictCaptureMacTests/Waiting\\.swift$"
+    regex: "Thread\\.sleep|DispatchSemaphore|DispatchGroup|\\busleep\\(|AccessibilityLane\\s*\\{|AccessibilityLane\\(setTimeout"
+    excluded_match_kinds: [comment, comment.mark, comment.url, doccomment, doccomment.field, string]
+    message: "Block through Blocking.until (a lane's thread only) or Blocking.for, wait through Wait, and build a lane with AccessibilityLane.patient or named bounds (Waiting.swift)."
+    severity: error

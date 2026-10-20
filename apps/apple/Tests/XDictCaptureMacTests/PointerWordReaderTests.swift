@@ -278,7 +278,7 @@ struct PointerWordReaderTests {
         let session = AccessibilitySession(budget: .milliseconds(20), requests: AccessibilityRequests(
             attribute: { _, _ in (.noValue, nil) }, parameterized: { _, _, _ in (.noValue, nil) },
             elementAt: { _, _ in
-                Thread.sleep(forTimeInterval: 0.08)
+                Blocking.for(.milliseconds(80))
                 return (.success, AXUIElementCreateApplication(4_300_003))
             }))
         let outcome = PointerWordReader.target(at: point, access: Self.granted, windows: { [] }, ownProcess: getpid(),
@@ -303,7 +303,7 @@ struct PointerWordReaderTests {
     /// **A hover's target is asked through the lane as hover work**, under the hover messaging timeout.
     @Test func aHoverTargetGoesThroughTheLaneUnderTheHoverTimeout() async {
         let timeouts = Mutex<[Float]>([])
-        let lane = AccessibilityLane { timeout in timeouts.withLock { $0.append(timeout) } }
+        let lane = AccessibilityLane.patient { timeout in timeouts.withLock { $0.append(timeout) } }
         let source = SystemPointerWords(metrics: Measured.metrics, lane: lane, access: AccessibilityAccess(probe: { .declined }))
         let outcome = await source.target(at: point, windows: { [] }, refusesOwner: { _ in false })
         guard case .none(.accessibilityOff) = outcome else { Issue.record("got \(outcome)"); return }
