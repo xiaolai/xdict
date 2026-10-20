@@ -152,14 +152,17 @@ struct OwnReadBoundTests {
                 return 2
             }
         }
+        let otherQueued = Mutex(false)
         _ = await lane.submitOnMainActor(.hover, timeout: 0.25, budget: .seconds(2)) { () -> Int in
             order.withLock { $0.append("own starts") }
-            // A request in flight, long enough for the other read to be submitted beside it.
-            Blocking.for(.milliseconds(300))
+            // A request in flight until the other read is in the queue beside it: a signal, not a span of time.
+            let queued = Blocking.until({ lane.queued().explicit == 1 }, within: Wait.patience)
+            otherQueued.withLock { $0 = queued }
             order.withLock { $0.append("own ends") }
             return 1
         }
         _ = await other.value
+        #expect(otherQueued.withLock { $0 }, "the other read was never queued while the own read was in its request")
         #expect(order.withLock { $0 } == ["own starts", "own ends", "other runs"])
     }
 }

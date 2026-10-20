@@ -62,6 +62,17 @@ enum Blocking {
         while !released() { Thread.sleep(forTimeInterval: 0.001) }
     }
 
+    /// A request held until `released` holds or the patience runs out, whichever is first: bounded, so it may run on any
+    /// thread, the main one included. False where the patience ran out, which the test reports.
+    static func until(_ released: () -> Bool, within patience: Duration) -> Bool {
+        let end = ContinuousClock.now + patience
+        while !released() {
+            guard ContinuousClock.now < end else { return false }
+            Thread.sleep(forTimeInterval: 0.001)
+        }
+        return true
+    }
+
     /// A request that takes `duration`, and then answers: bounded, so it may run on any thread.
     static func `for`(_ duration: Duration) {
         Thread.sleep(forTimeInterval: duration / .seconds(1))
