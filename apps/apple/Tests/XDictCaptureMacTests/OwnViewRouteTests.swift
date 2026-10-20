@@ -69,22 +69,22 @@ struct OwnViewRouteTests {
     }
 
     /// **A view that does not answer is given up at the hover budget**, as past its deadline. Red where the own view's
-    /// reading is awaited without a bound.
+    /// reading is awaited without a bound. The view answers only once the outcome is in, so no clock decides it
+    /// (2026-10-20: a 4 s bound against a 5 s view was the scheduler's under load, not the reader's).
     @Test func aViewThatDoesNotAnswerIsGivenUpAtTheBudget() async {
         let screen = ScriptedPointerWords()
+        let silence = Silence()
         screen.ownView = .webView({ _ in
-            try? await Task.sleep(for: .seconds(5))
+            await silence.wait()
             return nil
         })
-        let started = ContinuousClock.now
-        let outcome = await hover(reader(screen, budget: .milliseconds(100)))
-        let took = ContinuousClock.now - started
-        guard case .nothing(.miss(.failed(.deadlineExceeded, _))) = outcome else {
-            Issue.record("got \(outcome)")
+        let silent = reader(screen, budget: .milliseconds(100))
+        let outcome = await Wait.value(of: Task { await hover(silent) })
+        silence.open()
+        guard case .nothing(.miss(.failed(.deadlineExceeded, _)))? = outcome else {
+            Issue.record("a view that does not answer gave \(String(describing: outcome))")
             return
         }
-        // Well short of the five seconds the view would hold it, with room for other tests holding the main actor.
-        #expect(took < .seconds(4), "an own view's reading was awaited \(took)")
     }
 
     /// **Off a word, the view answers nothing and nothing is read**. Red where an empty answer goes on to Accessibility.

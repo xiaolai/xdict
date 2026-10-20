@@ -85,22 +85,23 @@ public final class AccessibilityLane: Sendable {
     private let setTimeout: @Sendable (Float) -> Void
     private let bounds: LaneBounds
     private let state = Mutex(State())
+    private let thread = LaneThread()
 
     public init(bounds: LaneBounds = .shipped, setTimeout: @escaping @Sendable (Float) -> Void) {
         self.bounds = bounds
         self.setTimeout = setTimeout
     }
 
-    /// Runs `work` detached, after the read in flight and every explicit request ahead of it, under `timeout`, or answers
-    /// why not. `budget` is the read's own (its session's), against which the lane decides it is stuck. Cancellation of
-    /// the caller is passed on to the work, which sees it between requests; **the caller is answered at once**, not
-    /// after the read finishes its request in flight.
+    /// Runs `work` detached on the lane's own thread, after the read in flight and every explicit request ahead of it,
+    /// under `timeout`, or answers why not. `budget` is the read's own (its session's), against which the lane decides it
+    /// is stuck. Cancellation of the caller is passed on to the work, which sees it between requests; **the caller is
+    /// answered at once**, not after the read finishes its request in flight.
     public func submit<T: Sendable>(
         _ kind: LaneWork, timeout: Float, budget: Duration, _ work: @escaping @Sendable () -> T
     ) async -> Result<T, LaneRefusal> {
-        let setTimeout = setTimeout
+        let setTimeout = setTimeout, thread = thread
         return await admit(kind, budget: budget) { finish in
-            Task.detached(priority: .userInitiated) {
+            Task.detached(executorPreference: thread, priority: .userInitiated) {
                 setTimeout(timeout)
                 finish(work())
             }
@@ -341,6 +342,28 @@ public final class AccessibilityLane: Sendable {
             return (item.refuse, .overstayed(waited: ContinuousClock.now - item.enqueued))
         }
         if case let (refuse, why)? = refusal { refuse(why) }
+    }
+}
+
+/// **The thread a lane's out-of-process reads run on: its own, never one of Swift's cooperative pool** (2026-10-20). A
+/// read blocks its thread in the framework for as long as the other app takes, and nothing can cancel it; the pool is as
+/// wide as the Mac has cores and must never be blocked, so a read held there takes a thread the rest of XDict needs. A
+/// serial queue of the lane's own is given a thread of its own by Dispatch, and runs one read at a time, as the lane does.
+/// The work still runs as a task: its caller's cancellation still reaches it between requests (`Task.isCancelled`).
+final class LaneThread: TaskExecutor {
+    private static let key = DispatchSpecificKey<Bool>()
+    private let queue = DispatchQueue(label: "ai.xdict.app.accessibility-lane", qos: .userInitiated)
+
+    init() {
+        queue.setSpecific(key: Self.key, value: true)
+    }
+
+    /// Whether the caller runs on a lane's own thread: what a request blocked in the framework may hold.
+    static var isCurrent: Bool { DispatchQueue.getSpecific(key: key) == true }
+
+    func enqueue(_ job: consuming ExecutorJob) {
+        let job = UnownedJob(job)
+        queue.async { job.runSynchronously(on: self.asUnownedTaskExecutor()) }
     }
 }
 

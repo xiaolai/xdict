@@ -101,21 +101,19 @@ struct OwnSelectionRouteTests {
     }
 
     /// **An entry that does not answer is given up at the selection's budget**, as past its deadline. Red where the
-    /// reading is awaited without a bound.
+    /// reading is awaited without a bound. The entry answers only once the outcome is in, so no clock decides it
+    /// (2026-10-20: a 4 s bound against a 5 s entry was the scheduler's under load, not the reader's; hover's twin is
+    /// `OwnViewRouteTests.aViewThatDoesNotAnswerIsGivenUpAtTheBudget`).
     @Test func aSilentEntryIsGivenUpAtTheBudget() async {
         let asked = Asked()
+        let silence = Silence()
         let silent: OwnSelectionReading = { _, _ in
-            try? await Task.sleep(for: .seconds(5))
+            await silence.wait()
             return nil
         }
-        let started = ContinuousClock.now
-        let outcome = await read(.webView(silent), asked, budget: .milliseconds(100))
+        let outcome = await Wait.value(of: Task { await read(.webView(silent), asked, budget: .milliseconds(100)) })
+        silence.open()
         #expect(outcome == .nothing(.failed(.deadlineExceeded, app: "XDict")))
-        // Well short of the five seconds the view would hold it, with room for other tests holding the main actor: the
-        // read is the main actor's, and its deadline resumes there (1.03 s seen in a run of 367 tests; hover's twin,
-        // `OwnViewRouteTests.aViewThatDoesNotAnswerIsGivenUpAtTheBudget`, keeps the same room).
-        let took = ContinuousClock.now - started
-        #expect(took < .seconds(4), "an own view's reading was awaited \(took)")
     }
 
     /// **A selection longer than the entry reads is refused with its own sentence**, never cut and never "nothing
