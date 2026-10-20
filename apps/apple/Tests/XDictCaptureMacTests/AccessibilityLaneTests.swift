@@ -10,14 +10,14 @@ import XDictCaptureMac
 struct AccessibilityLaneTests {
     /// Reads started together never overlap. Red if the lane stops waiting for the read in flight.
     @Test func readsNeverOverlap() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let running = Mutex((now: 0, most: 0))
         await withTaskGroup(of: Int.self) { group in
             for index in 0..<5 {
                 group.addTask {
                     await lane.run(timeout: 1, {
                         running.withLock { $0.now += 1; $0.most = max($0.most, $0.now) }
-                        Thread.sleep(forTimeInterval: 0.02)  // a request nothing can interrupt
+                        Blocking.for(.milliseconds(20))  // a request nothing can interrupt
                         running.withLock { $0.now -= 1 }
                         return index
                     }, refused: { _ in -1 })
@@ -32,12 +32,12 @@ struct AccessibilityLaneTests {
     /// neither changes the other's mid-read.
     @Test func eachReadSeesItsOwnTimeout() async {
         let current = Mutex<Float>(0)
-        let lane = AccessibilityLane { value in current.withLock { $0 = value } }
+        let lane = AccessibilityLane.patient { value in current.withLock { $0 = value } }
         let seen = await withTaskGroup(of: (Float, Float).self) { group in
             for timeout: Float in [0.25, 1.0, 0.25, 1.0] {
                 group.addTask {
                     await lane.run(timeout: timeout, {
-                        Thread.sleep(forTimeInterval: 0.01)
+                        Blocking.for(.milliseconds(10))
                         return (timeout, current.withLock { $0 })
                     }, refused: { _ in (timeout, -1) })
                 }
@@ -50,13 +50,13 @@ struct AccessibilityLaneTests {
 
     /// A read whose caller gave up before its turn does no work.
     @Test func aReadCancelledBeforeItsTurnDoesNoWork() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let worked = Mutex(0)
         let started = Mutex(false)
         let blocker = Task {
             await lane.run(timeout: 1, {
                 started.withLock { $0 = true }
-                Thread.sleep(forTimeInterval: 0.05)
+                Blocking.for(.milliseconds(50))
                 return 0
             }, refused: { _ in -1 })
         }
@@ -72,13 +72,13 @@ struct AccessibilityLaneTests {
     /// **A cancelled caller is let go at once**, not after the read ahead of it. Bounded, so a regression fails rather
     /// than hangs: the read ahead is released only after this.
     @Test func aCancelledWaiterIsAnsweredBeforeTheReadAheadEnds() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let started = Mutex(false)
         let release = Mutex(false)
         let blocker = Task {
             await lane.run(timeout: 1, {
                 started.withLock { $0 = true }
-                while !release.withLock({ $0 }) { Thread.sleep(forTimeInterval: 0.001) }
+                Blocking.until { release.withLock { $0 } }
                 return 0
             }, refused: { _ in -1 })
         }
@@ -93,7 +93,7 @@ struct AccessibilityLaneTests {
 
     /// **A caller cancelled before it asks does no work**, even on an idle lane.
     @Test func aCallerCancelledBeforeAskingDoesNoWork() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let worked = Mutex(0)
         let task = Task {
             withUnsafeCurrentTask { $0?.cancel() }
@@ -113,19 +113,20 @@ struct AccessibilityLaneRuleTests {
         let release = Mutex(false)
         func work() -> Int {
             started.withLock { $0 = true }
-            while !release.withLock({ $0 }) { Thread.sleep(forTimeInterval: 0.001) }
+            Blocking.until { release.withLock { $0 } }
             return 0
         }
     }
 
     /// **A hover flood, then the shortcut: the shortcut waits only for the read in flight, and no stale hover runs after
     /// it.** Fifty hovers queue behind a read; each replaces the last, and the explicit read that follows makes the one
-    /// left stale. Once the read in flight is released the shortcut's read starts within the specified bound — a FIFO lane
-    /// made it wait for every hover ahead, a quarter second each against a hung app — and not one hover executes, then or
-    /// later. Red without coalescing (fifty answered late or run), without priority (the hover runs first) or without the
-    /// staleness rule (the last hover runs after the shortcut).
+    /// left stale. Once the read in flight is released the shortcut's read is the next to run — a FIFO lane made it wait
+    /// for every hover ahead, a quarter second each against a hung app — and not one hover executes, then or later.
+    /// Counted, not clocked (2026-10-20: a bound of 500 ms past the release was the scheduler's under load, not the
+    /// lane's). Red without coalescing (fifty answered late or run), without priority (the hover runs first) or without
+    /// the staleness rule (the last hover runs after the shortcut).
     @Test func aHoverFloodThenAShortcutReadWaitsOnlyForTheReadInFlight() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let blocker = Blocker()
         let hoversRun = Mutex(0)
         let holding = Task { await lane.run(timeout: 1, { blocker.work() }, refused: { _ in -1 }) }
@@ -141,35 +142,31 @@ struct AccessibilityLaneRuleTests {
                 return outcome
             }
         }
-        let asked = Mutex<ContinuousClock.Instant?>(nil)
-        let started = Mutex<ContinuousClock.Instant?>(nil)
+        let hoversBeforeShortcut = Mutex<Int?>(nil)
         // Every hover is queued before the shortcut, as the pointer's flood precedes the press: forty-nine replaced,
         // one waiting.
         #expect(await Wait.until { answered.withLock { $0 } == 49 && lane.queued().hover == 1 })
         let shortcut = Task {
-            asked.withLock { $0 = .now }
-            return await lane.submit(.explicit, timeout: 1, budget: .seconds(2)) { started.withLock { $0 = .now }; return 7 }
+            await lane.submit(.explicit, timeout: 1, budget: .seconds(2)) {
+                hoversBeforeShortcut.withLock { $0 = hoversRun.withLock { $0 } }
+                return 7
+            }
         }
-        #expect(await Wait.until { asked.withLock { $0 } != nil })
+        // The shortcut is in the queue, the hover left there stale, before the read in flight is released.
+        #expect(await Wait.until { lane.queued() == (explicit: 1, hover: 0) })
         blocker.release.withLock { $0 = true }
         #expect(await shortcut.value == .success(7))
         _ = await holding.value
+        #expect(hoversBeforeShortcut.withLock { $0 } == 0, "the shortcut waited behind hover work")
         for hover in hovers { #expect(await hover.value == .failure(.superseded)) }
         await Wait.drain()
         #expect(hoversRun.withLock { $0 } == 0, "a stale hover executed")
-        if let asked = asked.withLock({ $0 }), let started = started.withLock({ $0 }) {
-            #expect(started - asked < Self.maximumShortcutWait, "the shortcut waited \(started - asked) behind hover work")
-        }
     }
-
-    /// The shortcut's wait behind the read in flight, past that read's release: scheduling only. A lane that ran one
-    /// queued hover first adds that hover's work; one that ran all fifty adds fifty.
-    static let maximumShortcutWait: Duration = .milliseconds(500)
 
     /// **A newer hover replaces the one waiting**: the older is answered `superseded` at once and never run; the newer
     /// runs. Red if hover work queues in order.
     @Test func aNewerHoverReplacesTheOneWaiting() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let blocker = Blocker()
         let ran = Mutex<[Int]>([])
         let holding = Task { await lane.run(timeout: 1, { blocker.work() }, refused: { _ in -1 }) }
@@ -191,14 +188,14 @@ struct AccessibilityLaneRuleTests {
     /// **An explicit request stops the hover in flight between its requests**, and the hover's caller is answered at once:
     /// the running hover is stale. Red if an explicit request waits for a hover to run to its budget.
     @Test func anExplicitRequestStopsTheHoverInFlight() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let started = Mutex(false)
         let sawCancellation = Mutex(false)
         let hover = Task {
             await lane.submit(.hover, timeout: 0.25, budget: .seconds(60)) {
                 started.withLock { $0 = true }
                 // A hover's bounds scan: one request after another, each checking the reader still wants it.
-                while !Task.isCancelled { Thread.sleep(forTimeInterval: 0.001) }
+                Blocking.until { Task.isCancelled }
                 sawCancellation.withLock { $0 = true }
                 return 0
             }
@@ -252,7 +249,7 @@ struct AccessibilityLaneRuleTests {
             await lane.submit(.explicit, timeout: 1, budget: .milliseconds(30)) {
                 inside.withLock { $0 += 1 }
                 // A request that does not return: no budget check between requests can reach it.
-                while !release.withLock({ $0 }) { Thread.sleep(forTimeInterval: 0.001) }
+                Blocking.until { release.withLock { $0 } }
                 inside.withLock { $0 -= 1 }
                 return 0
             }
@@ -285,36 +282,5 @@ struct AccessibilityLaneRuleTests {
     @Test func boundsThatDropEverythingAreRefused() {
         #expect(LaneBounds(explicitResidence: .zero, hoverResidence: .seconds(1), overrun: .seconds(1)) == nil)
         #expect(LaneBounds(explicitResidence: .seconds(1), hoverResidence: .seconds(1), overrun: .seconds(-1)) == nil)
-    }
-}
-
-/// Waiting in tests: for started work, never for a fixed time that asserts a speed.
-enum Wait {
-    /// Long enough to stop a failure hanging; nothing asserts that anything took this long.
-    static let patience: Duration = .seconds(10)
-
-    /// Polls `condition` a millisecond a turn until it holds or patience runs out.
-    static func until(_ condition: @Sendable () -> Bool) async -> Bool {
-        let end = ContinuousClock.now + patience
-        while ContinuousClock.now < end {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(1))
-        }
-        return condition()
-    }
-
-    /// The task's value, or nil if patience runs out first — so a regression fails rather than hangs.
-    static func value<T: Sendable>(of task: Task<T, Never>) async -> T? {
-        let box = Mutex<T?>(nil)
-        let watcher = Task { let value = await task.value; box.withLock { $0 = value } }
-        _ = await until { box.withLock { $0 } != nil }
-        watcher.cancel()
-        return box.withLock { $0 }
-    }
-
-    /// Lets already-started work run, for an assertion that something did **not** happen. It cannot prove an absence,
-    /// only give the absence a fair chance to be broken: a slow machine can make it miss a defect, never invent one.
-    static func drain() async {
-        try? await Task.sleep(for: .milliseconds(50))
     }
 }

@@ -53,7 +53,7 @@ struct SelectionCaptureTests {
             attribute: { _, _ in asked.withLock { $0 += 1 }; return (.noValue, nil) },
             parameterized: { _, _, _ in asked.withLock { $0 += 1 }; return (.noValue, nil) },
             elementAt: { root, _ in
-                Thread.sleep(forTimeInterval: 0.08)
+                Blocking.for(.milliseconds(80))
                 return (.success, root)
             }))
         let outcome = SelectionReader.read(application: AXUIElementCreateApplication(91_100), of: app, with: session,
@@ -91,7 +91,7 @@ struct SelectionCaptureTests {
     /// detached.
     @Test func theReadersOwnWindowsAreReadOnTheMainActorAndNeverThroughTheLane() async {
         let recorder = Recorder()
-        let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
+        let lane = AccessibilityLane.patient { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         let ours = FrontApp(pid: getpid(), name: "XDict", bundleID: "ai.xdict.app")
         let outcome = await SelectionReader.read(
             from: ours, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
@@ -106,7 +106,7 @@ struct SelectionCaptureTests {
     /// main thread. The control for the test above.
     @Test func anotherAppsSelectionIsReadThroughTheLaneOffTheMainThread() async {
         let recorder = Recorder()
-        let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
+        let lane = AccessibilityLane.patient { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         let outcome = await SelectionReader.read(
             from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: Self.granted, lane: lane,
             client: { _ in ThreadNoting(recorder) }, ownHolder: { .controls })
@@ -118,7 +118,7 @@ struct SelectionCaptureTests {
     /// **Without the grant nothing is asked**, of the lane or of the app, and nothing prompts (decision 7).
     @Test func aReadWithoutTheGrantAsksNothing() async {
         let recorder = Recorder()
-        let lane = AccessibilityLane { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
+        let lane = AccessibilityLane.patient { timeout in recorder.timeouts.withLock { $0.append(timeout) } }
         for probe: PermissionProbe in [.declined, .couldNotTell] {
             let outcome = await SelectionReader.read(
                 from: app, admitting: SelectionReaderTests.admission, excluding: SelectionReaderTests.exclusions, access: AccessibilityAccess(probe: { probe }),
@@ -133,7 +133,7 @@ struct SelectionCaptureTests {
     final class Blocked: AccessibilityReading, Sendable {
         let release = Mutex(false)
         func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
-            while !release.withLock({ $0 }) { Thread.sleep(forTimeInterval: 0.001) }
+            Blocking.until { release.withLock { $0 } }
             return nil
         }
         func parameterized(_ element: AXUIElement, _ name: String, _ argument: CFTypeRef) throws(CaptureError) -> CFTypeRef? {

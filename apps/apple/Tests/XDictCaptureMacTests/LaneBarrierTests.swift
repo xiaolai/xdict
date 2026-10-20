@@ -16,7 +16,7 @@ struct LaneBarrierTests {
         func work() -> Int {
             enter()
             started.withLock { $0 = true }
-            while !release.withLock({ $0 }) { Thread.sleep(forTimeInterval: 0.001) }
+            Blocking.until { release.withLock { $0 } }
             leave()
             return 0
         }
@@ -26,7 +26,7 @@ struct LaneBarrierTests {
 
     /// **An explicit request queued before a hover runs before it.** Red if the queue starts the hover first.
     @Test func anExplicitRequestQueuedBeforeAHoverRunsFirst() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let held = Held()
         let order = Mutex<[String]>([])
         let holding = Task { await lane.run(timeout: 1, { held.work() }, refused: { _ in -1 }) }
@@ -45,7 +45,7 @@ struct LaneBarrierTests {
     /// **A blocked read whose caller cancelled stays the barrier**, and that caller is answered at once: the next read
     /// does not run beside it. Red if cancelling clears the running read, or waits for it.
     @Test func aCancelledBlockedReadStaysTheBarrierAndItsCallerIsLetGo() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let held = Held()
         let blocked = Task { await lane.submit(.explicit, timeout: 1, budget: .seconds(60)) { held.work() } }
         #expect(await Wait.until { held.started.withLock { $0 } })
@@ -61,7 +61,7 @@ struct LaneBarrierTests {
     /// **A blocked hover superseded by an explicit request stays the barrier**: the explicit read waits for the hover's
     /// request in flight to return. Red if superseding clears the running read.
     @Test func aSupersededBlockedHoverStaysTheBarrier() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         let held = Held()
         let hover = Task { await lane.submit(.hover, timeout: 0.25, budget: .seconds(60)) { held.work() } }
         #expect(await Wait.until { held.started.withLock { $0 } })
@@ -87,7 +87,7 @@ struct LaneBarrierTests {
     /// **The clicked position reaches the read made on the lane**: the element under it holds the selection. Red if the
     /// read is made without it.
     @Test func theClickedPositionReachesTheReadOnTheLane() async {
-        let lane = AccessibilityLane { _ in }
+        let lane = AccessibilityLane.patient { _ in }
         // The fake's application element is process 90000's, so the read must be of that process.
         let app = FrontApp(pid: 90_000, name: "Reader", bundleID: "com.example.reader")
         let clicked = CGPoint(x: 440, y: 150)
