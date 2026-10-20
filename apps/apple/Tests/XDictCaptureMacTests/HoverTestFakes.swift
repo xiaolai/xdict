@@ -263,7 +263,7 @@ enum HoverFixtures {
     /// Lets started work run until `condition` holds, a millisecond a turn, bounded so a failure ends rather than hangs.
     @MainActor
     static func settle(until condition: @MainActor () -> Bool) async {
-        let end = ContinuousClock.now + .seconds(10)
+        let end = ContinuousClock.now + Wait.patience
         while ContinuousClock.now < end {
             if condition() { return }
             try? await Task.sleep(for: .milliseconds(1))
