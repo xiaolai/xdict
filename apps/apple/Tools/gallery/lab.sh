@@ -27,8 +27,8 @@ readonly TREE_CMD=${XDICT_SOURCE_TREE_CMD:-Tools/source-tree.sh}
 readonly PRODUCTS=$LOCAL/.build/lab-products
 readonly LAB=XDictEntryLab
 repo=$(cd ../.. && pwd)
-main=$repo
-while [ ! -f "$main/local.mk" ] && [ "$main" != / ]; do main=$(dirname "$main"); done
+# The main checkout, where local.mk lives (Tools/main-checkout.sh).
+main=$(Tools/main-checkout.sh "$repo") || exit 2
 setting() { awk -v k="$1" -F'=' '{ n = $1; gsub(/[ \t]/, "", n) } n == k { sub(/^[^=]*=[ \t]*/, ""); print; exit }' \
     "$main/local.mk" 2>/dev/null; }
 host=${XDICT_LAB_HOST:-$(setting BUILD_HOSTS_XCODE | awk '{print $1}')}

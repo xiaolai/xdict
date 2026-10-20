@@ -472,7 +472,7 @@ def gallery_keys(m):
         common = subprocess.run(["git", "-C", REPO, "rev-parse", "--path-format=absolute", "--git-common-dir"],
                                 capture_output=True, text=True).stdout.strip()
         main = os.path.dirname(common) if common else REPO
-        path = os.path.join(main, "dev-docs/artifacts/reading-frame/report-core.json")
+        path = os.path.join(os.path.dirname(main), "dev-docs/artifacts/reading-frame/report-core.json")
     try:
         report = json.load(open(path, encoding="utf-8"))
     except (OSError, ValueError) as error:

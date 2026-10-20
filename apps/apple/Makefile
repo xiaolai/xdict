@@ -230,6 +230,7 @@ test-tools:
 	@python3 -I Tools/tests/e2e_deps_test.py
 	@Tools/tests/e2e-drivers-test.sh
 	@Tools/tests/e2e-run-test.sh
+	@Tools/tests/main-checkout-test.sh
 	@Tools/tests/land-test.sh
 	@Tools/tests/clean-dev-test.sh
 	@Tools/tests/on-demand-test.sh

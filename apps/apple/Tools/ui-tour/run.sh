@@ -16,7 +16,7 @@
 set -euo pipefail
 . "$(dirname "$0")/../render-requested.sh"
 cd "$(dirname "$0")/../.."
-common=$(cd "$(git rev-parse --git-common-dir)/.." && pwd)
+common=$(Tools/main-checkout.sh "$PWD") || exit 2
 host=$(sed -n 's/^E2E_HOST_MACOS *= *//p' "$common/local.mk" 2>/dev/null | head -1)
 [ -n "$host" ] || { echo "run.sh: E2E_HOST_MACOS is not set in $common/local.mk" >&2; exit 1; }
 # The host's run lock (Tools/host-lock.sh): E2E, the gates, the gallery and the lab take it too, and since 2026-10-17
@@ -24,7 +24,7 @@ host=$(sed -n 's/^E2E_HOST_MACOS *= *//p' "$common/local.mk" 2>/dev/null | head 
 . Tools/host-lock.sh
 host_lock "$host" ui-tour || exit 3
 trap 'host_unlock "$host"' EXIT
-out="$common/dev-docs/artifacts/ui-tour"
+out="$(dirname "$common")/dev-docs/artifacts/ui-tour"
 mkdir -p "$out"
 
 tree=$(Tools/source-tree.sh)
