@@ -325,7 +325,7 @@ pub(super) fn decide(
     let disclosure = disclosures(nodes, t, facts, &mut count, decided);
     speaker_rows(nodes, t, &mut count, decided);
     drawn(nodes, t.buf, &disclosure, &mut count, decided);
-    text(nodes, roles, written, &disclosure, &mut count, decided);
+    text(nodes, t, roles, written, &disclosure, &mut count, decided);
     empty_links(nodes, t, &done, &mut count, decided);
     for (k, v) in count {
         *decided.icons.entry(k).or_default() += v;
@@ -673,6 +673,32 @@ fn signs(nodes: &[Node], t: &Tree<'_>, marked: &[bool], count: &mut BTreeMap<Str
     }
 }
 
+/// Whether a glyph written as text is the whole of its element, and that element sits inside a fold head (LDOCE's
+/// `span.arrow` holding `►`, D36): the head's sign, which the frame's chevron replaces. The head's own leading glyph
+/// is `disclosure` itself, and the caller takes it first; an element holding a glyph and words is text, not a sign.
+fn glyph_sign(nodes: &[Node], t: &Tree<'_>, i: usize, disclosure: &[bool]) -> bool {
+    if disclosure.get(i).copied().unwrap_or(false) {
+        return false;
+    }
+    let Some(short) = t.f(i).short.as_deref() else { return false };
+    let mut chars = short.chars().filter(|c| !c.is_whitespace());
+    let Some(ch) = chars.next() else { return false };
+    if chars.next().is_some() || !"▶►▸▹▷▾▼▲△◀◁◂◄".contains(ch) {
+        return false;
+    }
+    let mut at = nodes.get(i).map_or(0, |n| n.parent as usize);
+    for _ in 0..SIGN_DEPTH {
+        if at == 0 {
+            break;
+        }
+        if disclosure.get(at).copied().unwrap_or(false) {
+            return true;
+        }
+        at = nodes.get(at).map_or(0, |n| n.parent as usize);
+    }
+    false
+}
+
 /// Whether an empty element sits inside a word: in its parent, text right before it and right after it (one inline
 /// run, no element or block boundary between), ending and starting with a letter or digit.
 fn within_word(nodes: &[Node], i: usize, buf: &str) -> bool {
@@ -750,6 +776,7 @@ fn drawn(nodes: &[Node], buf: &str, disclosure: &[bool], count: &mut BTreeMap<St
 /// fold head's triangle go (XDict's controls draw them); every other symbol stays.
 fn text(
     nodes: &[Node],
+    t: &Tree<'_>,
     roles: &[Option<Role>],
     written: &[Written],
     disclosure: &[bool],
@@ -767,7 +794,7 @@ fn text(
             }
         } else if node.inherit.in_speaker && (symbols::private_use(w.ch) || symbols::SPEAKERS.contains(w.ch)) {
             (String::new(), "speaker-glyph")
-        } else if w.lead && disclosure.get(i).copied().unwrap_or(false) {
+        } else if w.lead && (disclosure.get(i).copied().unwrap_or(false) || glyph_sign(nodes, t, i, disclosure)) {
             (String::new(), "disclosure-glyph")
         } else {
             continue;

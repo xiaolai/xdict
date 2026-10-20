@@ -292,7 +292,7 @@ struct ReadingFrameTests {
     /// block whose whole shown text is bullet glyphs.
     @Test func aLoneTextBulletIsHiddenInTheReadingStyle() throws {
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("    install(); name(document);\n    if (tooDeep()) return;\n    bullets(); loneBullets(); spacing(); "
+        #expect(reading.contains("    install(); name(document);\n    if (tooDeep()) return;\n    bullets(); loneBullets(); entryInset(); spacing(); "
             + "lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();\n"))
         // G14 (owner, 2026-10-17): frame.js reads which list levels show a marker; the flush ones start flush.
         #expect(reading.contains("all[i].setAttribute('data-xdict-list', v)"))
@@ -663,7 +663,7 @@ struct ReadingFrameTests {
             + "text-indent:0 !important}"))
         #expect(column.contains("[data-xdict-hung]{margin-left:calc(-1 * var(--xdict-hang, 1em)) !important}"))
         let reading = EntryScripts.appearance(.light, frame: .all)
-        #expect(reading.contains("    install(); name(document);\n    if (tooDeep()) return;\n    bullets(); loneBullets(); spacing(); "
+        #expect(reading.contains("    install(); name(document);\n    if (tooDeep()) return;\n    bullets(); loneBullets(); entryInset(); spacing(); "
             + "lists(); overflows(); hang(); rules(); pictures(); images(); roleSpace(); markerDrops();\n"))
     }
 
