@@ -1,8 +1,12 @@
 # conformance
 
-Language-neutral fixtures that prove every platform agrees. Owned by the core; every platform runs them
-through its own binding (ADR-0003 decision 5). No dictionary content from anywhere else ever enters this
-folder.
+Language-neutral fixtures that prove every platform agrees. No dictionary content from anywhere else ever enters this
+folder. **Two kinds of fixture, two owners:**
+
+- `fixtures/` (below) — the **core's**: owned by the core, run by every platform through its own binding
+  (ADR-0003 decision 5).
+- `capture/` — the **shells'**: the capture contract and its fixtures (`capture/README.md`), run by each shell's own
+  capture runner and never by a core binding (ADR-0014 d.1). Colocation creates no dependency: no core target reads it.
 
 ## Fixtures
 
@@ -95,6 +99,18 @@ Written by the same writer, run by a shell's end-to-end suite rather than by eve
 CI runs all four, with the core's gate, on every push (`.github/workflows/conformance.yml`): Swift on macOS,
 the others on Linux. The three binding scripts share `core/binding-env.sh`, and find their build output where Cargo
 put it (`CARGO_TARGET_DIR` or a configured `build.target-dir` included).
+
+## The shells' capture contract (`capture/`)
+
+Not a binding suite, and never run through one: each shell runs `capture/vectors.jsonl` through its own **production**
+capture constructor and `capture/lifecycle.md` with its own native tests (`capture/README.md`; `CONTRACT.md` §8).
+
+| Shell | Runner | Runs on |
+|---|---|---|
+| macOS | `cd apps/apple && swift test --filter CaptureContractTests` (the value suite; lifecycle tests are named in `capture/lifecycle.md`) | the build host, in `make test` |
+
+A change under `conformance/capture/` reaches `apple-test` only (`Tools/affected_graph.py`'s `GATES`), so it reruns the
+capture runner and leaves the core-binding gates' passes intact.
 
 Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json` and
 `XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json` (a relative path is read from where

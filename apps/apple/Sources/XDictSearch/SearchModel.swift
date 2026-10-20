@@ -48,7 +48,9 @@ public final class SearchModel {
         public let query: String
         public let mode: MatchMode
         public let scope: SearchScope
-        let serial: Int
+        /// **This lookup's identity**, fresh for every ask: what tells the lookup shown now from the one a finished
+        /// document belongs to (`PresentedEntry`, plan-capture WI-4 rule 3).
+        public let serial: Int
     }
 
     /// Where to land in an entry when it is shown.
@@ -65,6 +67,9 @@ public final class SearchModel {
         public let result: ResultID
         public let landing: Landing
         public let serial: Int
+        /// **The lookup this entry belongs to**, carried with the value (its serial): an ask records which lookup it was
+        /// for from here, never by sampling the model after an await (`PresentedEntry`; audit-fix 2026-10-20 finding 1).
+        public let lookup: Int?
     }
 
     /// One dictionary's part of the current lookup, under the handle it was asked through.
@@ -379,9 +384,18 @@ public final class SearchModel {
         let now = sources()
         guard now != known else { return }
         known = now
-        if case .one(let id) = scope, !now.contains(where: { $0.id == id && $0.enabled }) { scope = .all }
+        // **Stale handles go first, then the fallback through the scope's own transition** (audit-fix 2026-10-20 round 2,
+        // finding 3): assigning `scope` alone left the active lookup asking the removed dictionary; asking before the
+        // invalidation could ask a reopened dictionary through the handle it no longer has.
         for (id, answer) in asked where now.first(where: { $0.id == id })?.handle != answer.handle {
             asked[id] = nil
+        }
+        if case .one(let id) = scope, !now.contains(where: { $0.id == id && $0.enabled }) { setScope(.all) }
+        // **The shown entry's dictionary may be the one that went** (round 3, finding 2): a selection outside the library or
+        // the scope is cleared, so the model can show a dictionary that is still there instead of holding a dead one.
+        if let selection, !inScope(lookup?.scope ?? scope).contains(where: { $0.id == selection.dictionary }) {
+            self.selection = nil
+            autoSelect = .top
         }
         ask(superseding: false)
         autoSelectIfDue()
@@ -636,6 +650,6 @@ public final class SearchModel {
 
     private func show(_ id: ResultID, landing: Landing) {
         shownSerial += 1
-        shown = Shown(result: id, landing: landing, serial: shownSerial)
+        shown = Shown(result: id, landing: landing, serial: shownSerial, lookup: lookup?.serial)
     }
 }

@@ -89,18 +89,24 @@ public struct CapturedTerm: Sendable, Equatable {
         case .clickPlacement(let point):
             guard finite(point.cg) else { throw .geometry }
         }
-        let checked: ContextOutcome
+        let checked = try checkedContext(context, term: term)
+        return CapturedTerm(term: term, trigger: trigger, acquisition: acquisition, confidence: confidence,
+                            source: source, pointer: pointer, box: box, context: checked)
+    }
+
+    /// **The context a term may carry**, by the same rules `make` applies: an available sentence over the ceiling is
+    /// `.contextTooLong` **before** cleaning; a range not a whole-character span holding exactly `term` is `.range`;
+    /// otherwise the sentence is cleaned (breaks to spaces, other controls removed) and the range moved with it.
+    /// Public so that a context replaced after `make` — a pending read's settlement — passes the same boundary.
+    public static func checkedContext(_ context: ContextOutcome, term: String) throws(CaptureValueError) -> ContextOutcome {
         if case .available(let sentence, _, _, _) = context, sentence.utf16.count > CaptureLimits.contextCeilingUTF16 {
             throw .contextTooLong
         }
         if case .available(let sentence, let range, let cut, let gap) = context {
             let (text, moved) = try cleaned(sentence, keeping: range, term: term)
-            checked = .available(sentence: text, term: moved, cut: cut, gap: gap)
-        } else {
-            checked = context
+            return .available(sentence: text, term: moved, cut: cut, gap: gap)
         }
-        return CapturedTerm(term: term, trigger: trigger, acquisition: acquisition, confidence: confidence,
-                            source: source, pointer: pointer, box: box, context: checked)
+        return context
     }
 
     private static func isControl(_ scalar: Unicode.Scalar) -> Bool { scalar.properties.generalCategory == .control }

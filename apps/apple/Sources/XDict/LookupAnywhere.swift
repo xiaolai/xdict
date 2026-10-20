@@ -81,6 +81,22 @@ final class LookupAnywhere {
     @ObservationIgnored private var escape: EscapeStack.Entry?
     @ObservationIgnored private var clickMonitors: [Any] = []
     @ObservationIgnored private var reading: Task<Void, Never>?
+    /// **The Service in flight, held like a read** (ADR-0014 d.4): a shortcut, Escape or a newer Service cancels it.
+    @ObservationIgnored private var serviceTask: Task<Void, Never>?
+    /// The Service's origin rule, a seam for the tests; production reads XDict's own state (`ServiceOrigin.at`).
+    @ObservationIgnored var serviceOrigin: @MainActor () -> ServiceOrigin = {
+        ServiceOrigin.at(xdictActive: NSApplication.shared.isActive, xdictHasKeyWindow: NSApplication.shared.keyWindow != nil)
+    }
+    /// The selection read, shared by the shortcut and the Service's two paths, a seam for the tests; production reads
+    /// through Accessibility (`SelectionReader`). A nil reader is no read.
+    @ObservationIgnored var selectionRead: @MainActor @Sendable (FrontApp?, CGPoint?, HoverPolicy) async -> SelectionOutcome? = {
+        reader, clicked, excluding in
+        guard let reader else { return nil }
+        return await SelectionReader.read(from: reader, clicked: clicked, excluding: excluding,
+                                          ownHolder: LookupAnywhere.ownSelectionHolder)
+    }
+    /// Whether Accessibility is granted, a seam for the tests.
+    @ObservationIgnored var isTrusted: @MainActor () -> Bool = { AXIsProcessTrusted() }
     /// The brief line by the pointer for a hover that read nothing.
     @ObservationIgnored private let briefNotice = HoverNoticeHUD()
     @ObservationIgnored private let log = Logger(subsystem: XDictIdentity.app, category: "anywhere")
@@ -95,11 +111,22 @@ final class LookupAnywhere {
 
     /// Registers the shortcut, offers the Service, and readies the panel. Once, at launch.
     /// The last app other than XDict to be frontmost: where a Service request came from, when it brought XDict forward.
-    @ObservationIgnored private var lastOtherApp: NSRunningApplication?
+    @ObservationIgnored var lastOtherApp: NSRunningApplication?
     @ObservationIgnored private var activationObserver: (any NSObjectProtocol)?
     /// Where the reader last right-clicked or Control-clicked, and when: where a Service request's selection is, when
     /// its app cannot say. A global mouse monitor, which needs no permission.
-    @ObservationIgnored private var lastSecondaryClick: (point: CGPoint, at: Date)?
+    /// Where and when a secondary click happened, and in which app: a Service reads its place only from a click in its
+    /// own app. A value rather than a tuple of three, which SwiftLint refuses.
+    struct SecondaryClick: Sendable {
+        let point: CGPoint
+        let at: Date
+        let app: pid_t
+    }
+
+    @ObservationIgnored private var lastSecondaryClick: SecondaryClick?
+    /// How recent a secondary click must be to anchor a Service: longer than the round trip through the Services menu, far
+    /// shorter than a reader would take to forget clicking (a duration; audit-fix 2026-10-20 round 2, finding 8).
+    static let serviceClickFreshness: TimeInterval = 15
     @ObservationIgnored private var secondaryClickMonitor: Any?
     @ObservationIgnored private var ownClickMonitor: Any?
 
@@ -112,7 +139,11 @@ final class LookupAnywhere {
         let remember: (NSEvent) -> Void = { [weak self] event in
             guard event.type == .rightMouseDown || event.modifierFlags.contains(.control) else { return }
             let point = NSEvent.mouseLocation
-            MainActor.assumeIsolated { self?.lastSecondaryClick = (point, Date()) }
+            MainActor.assumeIsolated {
+                self?.lastSecondaryClick = SecondaryClick(
+                    point: point, at: Date(),
+                    app: NSWorkspace.shared.frontmostApplication?.processIdentifier ?? getpid())
+            }
         }
         secondaryClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown], handler: remember)
         ownClickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .leftMouseDown]) { event in
@@ -126,7 +157,7 @@ final class LookupAnywhere {
                 if let app, app.processIdentifier != getpid() { self?.lastOtherApp = app }
             }
         }
-        NSApp.servicesProvider = ServicesProvider.shared
+        NSApplication.shared.servicesProvider = ServicesProvider.shared
         NSUpdateDynamicServices()
         registrar.registerSaved()
         let made = XDictApp.windowState(panel: true)
@@ -149,16 +180,26 @@ final class LookupAnywhere {
     /// The shortcut: the selection of the app in front, or — with the panel showing that very lookup — expansion, the
     /// panel's keyboard route (it takes no keys of its own).
     func pressed() {
+        // A new explicit trigger supersedes a Service still reading, and a read still reading (ADR-0014 d.4).
+        serviceTask?.cancel()
+        reading?.cancel()
+        forgetGrantWaiter()
+        // Escape cancels a read in flight, not only a shown panel (ADR-0014 d.4; CONTRACT.md §5.5).
+        bindEscape()
         // **Numbered now, at the key**, before anything is read (ADR-0014 decision 4).
         pressed(as: requests.beginPresenting(.selection))
     }
 
     /// The shortcut or the menu, for `request`.
     private func pressed(as request: CaptureRequest) {
+        // **A request superseded while it waited does nothing** (audit-fix 2026-10-20 finding 4): the menu waits 150 ms
+        // after numbering, and its late side effects — cancelling the reads, painting a refusal — would land on the
+        // request that superseded it.
+        guard requests.isCurrent(request) else { return }
         let pressedAt = ContinuousClock.now
         let source = Source(request.trigger)
         observe?("pressed", ["request": request.number])
-        guard let front = FrontApp.frontmost(), front.pid != getpid() || !isShown else {
+        guard let front = frontmostApp(), front.pid != getpid() || !isShown else {
             requests.cancel(request)
             if isShown { expand() } else { show(.refused(.noApp), query: nil, near: nil, source: source) }
             return
@@ -177,17 +218,58 @@ final class LookupAnywhere {
         read(front, request: request, pressedAt: pressedAt)
     }
 
-    @ObservationIgnored let gate = AccessibilityGate(check: AccessibilityGate.system)
+    /// The app in front, a seam so a test can drive the shortcut and menu paths without a window server's answer.
+    @ObservationIgnored var frontmostApp: @MainActor () -> FrontApp? = { FrontApp.frontmost() }
+
+    /// **Escape, claimed while a read or the panel is in flight** — a seam, because the tests must never take the
+    /// reader's Escape key: `escapeBind(true)` claims it for `close(why: "escape")`, `escapeBind(false)` gives it back.
+    @ObservationIgnored var escapeBind: (@MainActor (Bool) -> Void)?
+    @ObservationIgnored private var escapeIsHeld = false
+    /// **Which presentation is current**: `show` starts one, `close` ends one — a continuation after an await acts only
+    /// for the presentation it began in (audit-fix 2026-10-20 round 2, finding 2).
+    @ObservationIgnored private var presentation = 0
+
+    /// Claims Escape once for work in flight; the panel's showing and a later read share the one claim.
+    private func bindEscape() {
+        guard !escapeIsHeld else { return }
+        escapeIsHeld = true
+        if let escapeBind { escapeBind(true); return }
+        escape = HotkeyCenter.shared.escape.push { [weak self] in self?.close(why: "escape") }
+    }
+
+    /// Gives Escape back, whether or not anything was shown.
+    private func releaseEscape() {
+        guard escapeIsHeld else { return }
+        escapeIsHeld = false
+        if let escapeBind { escapeBind(false); return }
+        if let escape { HotkeyCenter.shared.escape.pop(escape) }
+        escape = nil
+    }
+
+    /// **A newer request supersedes a pending grant** (round 3, finding 3): what would be resumed is the request that
+    /// asked for it, which is no longer current. A request that is itself asking sets its own waiter afterwards.
+    private func forgetGrantWaiter() {
+        gate.onGranted = nil
+        polling?.cancel()
+        polling = nil
+    }
+
+    @ObservationIgnored var gate = AccessibilityGate(check: AccessibilityGate.system)
     @ObservationIgnored private var polling: Task<Void, Never>?
 
+    @ObservationIgnored private var poller = 0
     private func startPolling() {
         guard polling == nil else { return }
+        poller += 1
+        let mine = poller
         polling = Task { @MainActor [weak self] in
             while let gate = self?.gate, gate.isWaiting, !Task.isCancelled {
                 try? await Task.sleep(for: AccessibilityGate.interval)
+                guard !Task.isCancelled else { break }
                 gate.poll()
             }
-            self?.polling = nil
+            // **Its own handle only** (round-2 verify): a cancelled poller's exit must not erase the one that replaced it.
+            if let self, self.poller == mine { self.polling = nil }
         }
     }
 
@@ -201,17 +283,21 @@ final class LookupAnywhere {
 
     private func read(_ front: FrontApp, request: CaptureRequest, pressedAt: ContinuousClock.Instant) {
         reading?.cancel()
+        serviceTask?.cancel()
+        bindEscape()
         let source = Source(request.trigger)
         // The reader's exclusions as they are at the key: they decide whether the sentence around the selection is read.
         let exclusions = hover.policy
+        let selectionRead = selectionRead
         reading = Task { [weak self] in
-            // The panel shows that it is reading if the read outlasts the grace; the answer replaces that.
+            // The panel shows that it is reading if the read outlasts the grace; the answer replaces that. A request that
+            // a newer one superseded never paints it (audit-fix 2026-10-20 finding 5): the waiting task outlives its read.
             let waiting = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: Self.readGrace)
-                guard !Task.isCancelled else { return }
-                self?.show(.reading, query: nil, near: nil, source: source)
+                guard let self, !Task.isCancelled, self.requests.isCurrent(request) else { return }
+                self.show(.reading, query: nil, near: nil, source: source)
             }
-            let outcome = await SelectionReader.read(from: front, excluding: exclusions, ownHolder: Self.ownSelectionHolder)
+            let outcome = await selectionRead(front, nil, exclusions) ?? .nothing(.notTrusted)
             waiting.cancel()
             guard let self else { return }
             guard !Task.isCancelled else {
@@ -223,6 +309,9 @@ final class LookupAnywhere {
     }
 
     private func answer(_ outcome: SelectionOutcome, request: CaptureRequest, pressedAt: ContinuousClock.Instant) {
+        // **A request that ended while it read paints nothing** (audit-fix 2026-10-20 finding 5): a newer request's
+        // panel stands, and this read's refusal or failure is not shown over it.
+        guard requests.terminal(of: request) == nil else { return }
         let source = Source(request.trigger)
         switch outcome {
         case .selected(let selected, _):
@@ -261,47 +350,34 @@ final class LookupAnywhere {
     func service(_ raw: String?) {
         // **Numbered now, as macOS hands the text over**, before the selection is read for its place.
         let request = requests.beginPresenting(.service)
+        // A newer Service supersedes one in flight, as a shortcut or Escape does — and a shortcut's read with it, whose
+        // late refusal would paint over this Service's panel (audit-fix 2026-10-20 finding 5).
+        serviceTask?.cancel()
+        reading?.cancel()
+        // A grant still owed to an older request resumes nothing (round 3, finding 3).
+        forgetGrantWaiter()
+        // Escape cancels the Service while it reads, with no panel to dismiss yet (finding 2; CONTRACT.md §5.5).
+        bindEscape()
         observe?("service", ["text": raw ?? NSNull(), "request": request.number])
         switch LookupText.term(raw) {
         case .term(let text):
             let previous = lastOtherApp
-            observe?("serviceFront", ["xdictWasActive": NSApp.isActive, "previous": previous?.bundleIdentifier ?? NSNull()])
-            let clicked = lastSecondaryClick.flatMap { Date().timeIntervalSince($0.at) < 15 ? $0.point : nil }
-            if ServiceOrigin.at(xdictActive: NSApp.isActive, xdictHasKeyWindow: NSApp.keyWindow != nil) == .ours {
+            observe?("serviceFront", ["xdictWasActive": NSApplication.shared.isActive, "previous": previous?.bundleIdentifier ?? NSNull()])
+            let origin = serviceOrigin()
+            // The click anchors a Service only where it was that Service's: a click in another app seconds ago is not this
+            // request's place (finding 8).
+            let wanted = origin == .ours ? getpid() : previous?.processIdentifier
+            let clicked = lastSecondaryClick.flatMap {
+                Date().timeIntervalSince($0.at) < Self.serviceClickFreshness && $0.app == wanted ? $0.point : nil
+            }
+            if origin == .ours {
                 serviceFromOurWindow(text, request: request, clicked: clicked)
                 return
             }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                // Back to the reader's app first, and only then its selection read: an app that is not frontmost
-                // answers for no focused element (TextEdit, Notes), and a host waits for the Service's answer
-                // before it answers anything else.
-                for _ in 0..<12 {
-                    try? await Task.sleep(for: .milliseconds(50))
-                    let front = NSWorkspace.shared.frontmostApplication
-                    if front?.processIdentifier == getpid() { previous?.activate() }
-                    if let previous, front == previous { break }
-                }
-                // The click in Accessibility's coordinates (y down): the element there holds the selection where the
-                // reader's app, back in front after the Services menu, names no focused one (Notes, TextEdit).
-                let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
-                var outcome: SelectionOutcome?
-                if AXIsProcessTrusted(), let reader = previous.flatMap(FrontApp.resolving), reader.pid != getpid() {
-                    outcome = await SelectionReader.read(from: reader, clicked: under?.cg, excluding: self.hover.policy,
-                                                         ownHolder: Self.ownSelectionHolder)
-                    self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
-                }
-                // **The Service's text is the query**, whatever the selection now says; the read supplies the box only
-                // where it agrees, else where the reader Control-clicked, as a word of no width (Chrome gives no box).
-                do {
-                    let term = try SelectionReader.serviceTerm(
-                        text, read: outcome, source: SourceApp(bundleID: previous?.bundleIdentifier), clicked: under)
-                    _ = self.requests.present(term, for: request, to: self)
-                } catch {
-                    self.requests.cancel(request)
-                    self.show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
-                }
-            }
+            // The click in Accessibility's coordinates (y down): the element there holds the selection where the
+            // reader's app, back in front after the Services menu, names no focused one (Notes, TextEdit).
+            let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
+            serviceFromReadersApp(text, previous: previous, under: under, request: request)
         case .empty:
             requests.cancel(request)
             show(.refused(.nothingSelected(app: "")), query: nil, near: nil, source: .service)
@@ -314,27 +390,92 @@ final class LookupAnywhere {
         }
     }
 
+    /// The Service asked from another app: back to that app, its selection read, delivered — **the cancellable
+    /// acquisition in one place** (audit-fix 2026-10-20 findings 6 and 7). **Held like a read** (ADR-0014 d.4): cancelled
+    /// by a shortcut, Escape or a newer Service, and the task checks before every side effect.
+    private func serviceFromReadersApp(_ text: String, previous: NSRunningApplication?, under: DownPoint?,
+                                       request: CaptureRequest) {
+        serviceTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            // Back to the reader's app first, and only then its selection read: an app that is not frontmost answers
+            // for no focused element (TextEdit, Notes), and a host waits for the Service's answer before it answers
+            // anything else.
+            guard await self.bringForward(previous) else { self.requests.cancel(request); return }
+            let read: SelectionOutcome?
+            switch await self.serviceRead(previous.flatMap(FrontApp.resolving), under: under?.cg) {
+            case .cancelled: self.requests.cancel(request); return
+            case .read(let outcome): read = outcome
+            }
+            self.serviceDeliver(text, read: read, under: under, request: request,
+                                source: SourceApp(bundleID: previous?.bundleIdentifier))
+        }
+    }
+
     /// The Service asked from one of XDict's own windows: XDict's own selection read for the box and the sentence — its
     /// entries by their own script, never Accessibility — and XDict left in front.
     private func serviceFromOurWindow(_ text: String, request: CaptureRequest, clicked: CGPoint?) {
         let under = clicked.map { UpPoint($0).flipped(aboutPrimaryHeight: Self.primaryHeight) }
         let ours = FrontApp(pid: getpid(), name: NSRunningApplication.current.localizedName ?? ProcessInfo.processInfo.processName,
                             bundleID: Bundle.main.bundleIdentifier)
-        Task { @MainActor [weak self] in
+        serviceTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            var outcome: SelectionOutcome?
-            if AXIsProcessTrusted() {
-                outcome = await SelectionReader.read(from: ours, excluding: self.hover.policy, ownHolder: Self.ownSelectionHolder)
-                self.observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
+            let read: SelectionOutcome?
+            switch await self.serviceRead(ours, under: nil) {
+            case .cancelled: self.requests.cancel(request); return
+            case .read(let outcome): read = outcome
             }
-            do {
-                let term = try SelectionReader.serviceTerm(text, read: outcome, source: SourceApp(bundleID: ours.bundleID),
-                                                           clicked: under)
-                _ = self.requests.present(term, for: request, to: self)
-            } catch {
-                self.requests.cancel(request)
-                self.show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
-            }
+            self.serviceDeliver(text, read: read, under: under, request: request,
+                                source: SourceApp(bundleID: ours.bundleID))
+        }
+    }
+
+    /// What reading a Service's selection for the box came to: the outcome (nil where XDict may not read at all), or
+    /// cancellation — a read that answers after its request was cancelled changes nothing.
+    private enum ServiceRead { case read(SelectionOutcome?), cancelled }
+
+    /// **The selection read both Service origins share** — the trusted check, the read, its cancellation check and its
+    /// observation (audit-fix 2026-10-20 finding 6). The Service's text is the query either way.
+    private func serviceRead(_ app: FrontApp?, under: CGPoint?) async -> ServiceRead {
+        // Cancelled before the task started (or between its steps): nothing is read, and nothing is delivered
+        // (audit-fix 2026-10-20 verify: the untrusted branch returned before this check).
+        guard !Task.isCancelled else { return .cancelled }
+        guard isTrusted() else { return .read(nil) }
+        let outcome = await selectionRead(app, under, hover.policy)
+        guard !Task.isCancelled else { return .cancelled }
+        observe?("serviceSelection", ["outcome": String(describing: outcome).prefix(300).description])
+        return .read(outcome)
+    }
+
+    /// macOS brings the Service's provider forward a moment after the request: put the reader's app back in front before
+    /// its selection is read (measured on the E2E Mac 2026-10-15). **False when cancelled**, checked after every sleep —
+    /// a sleep interrupted by cancellation returns at once, so a check only at the loop's top would let a cancelled
+    /// Service activate the reader's app (audit-fix 2026-10-20 finding 3).
+    private func bringForward(_ previous: NSRunningApplication?) async -> Bool {
+        for _ in 0..<12 {
+            guard !Task.isCancelled else { return false }
+            try? await Task.sleep(for: .milliseconds(50))
+            guard !Task.isCancelled else { return false }
+            let front = NSWorkspace.shared.frontmostApplication
+            if front?.processIdentifier == getpid() { previous?.activate() }
+            if let previous, front == previous { break }
+        }
+        return !Task.isCancelled
+    }
+
+    /// **The Service's text is the query**, whatever the selection now says; the read supplies the box only where it
+    /// agrees, else where the reader Control-clicked, as a word of no width (Chrome gives no box). One copy for both
+    /// origins (audit-fix 2026-10-20 finding 6); a request ended meanwhile is refused by `present` itself.
+    private func serviceDeliver(_ text: String, read: SelectionOutcome?, under: DownPoint?, request: CaptureRequest,
+                                source: SourceApp) {
+        do {
+            let term = try SelectionReader.serviceTerm(text, read: read, source: source, clicked: under)
+            _ = requests.present(term, for: request, to: self)
+        } catch {
+            // **A request that already ended paints nothing** — its Service was dismissed or superseded, and the reason
+            // its text could not become a term is not a panel over what replaced it (audit-fix 2026-10-20 verify).
+            guard requests.terminal(of: request) == nil else { return }
+            requests.cancel(request)
+            show(.refused(.noWord(app: "")), query: nil, near: nil, source: .service)
         }
     }
 
@@ -342,6 +483,8 @@ final class LookupAnywhere {
     /// reader's app is in front again.
     func lookUpFromMenu() {
         let request = requests.beginPresenting(.menu)
+        forgetGrantWaiter()
+        bindEscape()
         observe?("menu", ["request": request.number])
         Task { @MainActor in
             try? await Task.sleep(for: .milliseconds(150))
@@ -355,7 +498,7 @@ final class LookupAnywhere {
     private func accept(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
         guard state != nil else { return .refused }
         let term = delivery.term
-        contextSession.hold(term.context, request: delivery.request.number, generation: delivery.generation)
+        contextSession.hold(term, request: delivery.request.number, generation: delivery.generation)
         acks.delivered(delivery.request, generation: delivery.generation, term: term.term)
         if drawnQuery != term.term { drawnQuery = nil }
         show(.none, query: term.term, near: PanelAnchor.rect(for: term.box, primaryHeight: Self.primaryHeight),
@@ -393,6 +536,10 @@ final class LookupAnywhere {
 
     private func show(_ notice: PanelNotice, query: String?, near word: CGRect?, source: Source) {
         guard let state else { return }
+        presentation += 1
+        // **Every presentation that is not a delivery drops the previous sentence** (CONTRACT.md §6): a refusal or the
+        // "reading" panel replaces what was presented, and the session holds one context at a time (finding 5).
+        if notice != .none { contextSession.clear() }
         self.notice = notice
         if let query { state.model.submit(query) }
         let panel = self.panel ?? makePanel(state)
@@ -406,9 +553,7 @@ final class LookupAnywhere {
             panel.show(content, size: size, word: word, pointer: pointer, visible: visible)
         }
         let frame = panel.frame ?? .zero
-        if escape == nil {
-            escape = HotkeyCenter.shared.escape.push { [weak self] in self?.close(why: "escape") }
-        }
+        bindEscape()
         watchForClicksAway()
         observe?("shown", ["source": source.rawValue, "query": query ?? NSNull(), "frame": Self.describe(frame),
                            "word": word.map(Self.describe) ?? NSNull(), "notice": String(describing: notice)])
@@ -445,8 +590,10 @@ final class LookupAnywhere {
     /// oscillates (Codex §3). Polled from here rather than a ResizeObserver in the page: the entry page's scripts are
     /// the confinement's, and the settling an observer would catch happens within those passes.
     private func entryFinished() {
-        // A document finished in the popover: the presented term's, if the panel's query is still its own.
-        drew(query: state?.model.lookup?.query)
+        // A document finished in the popover: the presented term's only where it is the document the window asked to
+        // show for the lookup shown now (plan-capture WI-4 rule 3) — a stale document's finish in the gap before a newer
+        // lookup's entry request is not a draw of the newer term.
+        if state?.showsPresentedLookup == true { drew(query: state?.model.lookup?.query) }
         shownEntry += 1
         fit.began(entry: shownEntry)
         let entry = shownEntry
@@ -474,16 +621,25 @@ final class LookupAnywhere {
 
     func close(why: String) {
         reading?.cancel()
+        serviceTask?.cancel()
+        // **A grant arriving after the dismissal must not resurrect it** (finding 1): nothing waits to be resumed, and
+        // the poller stops instead of calling a dismissed lookup back.
+        polling?.cancel()
+        polling = nil
+        gate.onGranted = nil
+        presentation += 1
         // **Closing supersedes every request so far** (ADR-0014 decision 4): each still open ends cancelled, a late result
         // is not presented over the dismissal, and the presented request's context goes with the panel (decision 9).
         requests.close()
         contextSession.clear()
         acks.closed()
         drawnQuery = nil
-        guard let panel, panel.isShown || escape != nil else { return }
-        panel.close()
-        if let escape { HotkeyCenter.shared.escape.pop(escape) }
-        escape = nil
+        // A read in flight holds Escape with no panel to close (audit-fix 2026-10-20 finding 2): the claim is given back
+        // whether or not anything was shown, and a close with neither still returns without an event.
+        let shown = panel?.isShown == true
+        guard shown || escapeIsHeld else { return }
+        panel?.close()
+        releaseEscape()
         for monitor in clickMonitors { NSEvent.removeMonitor(monitor) }
         clickMonitors = []
         observe?("closed", ["why": why])
@@ -521,8 +677,13 @@ final class LookupAnywhere {
     /// the main window's model as its next place; then XDict comes forward, as the reader asked.
     func expand() {
         guard let state else { return }
-        Task { @MainActor in
-            guard let place = await state.model.currentPlace() else {
+        let mine = presentation
+        Task { @MainActor [weak self] in
+            let place = await state.model.currentPlace()
+            // **Dismissed or replaced while the place was read** (finding 2): the continuation closes nothing and
+            // activates nothing — the reader's Escape stands.
+            guard let self, self.presentation == mine, self.isShown else { return }
+            guard let place else {
                 if let query = state.model.lookup?.query { MainWindows.hand(Visit(query: query, mode: .reader, scope: .all,
                                                                                   isOrigin: true)) }
                 self.finishExpanding(nil)
@@ -535,7 +696,7 @@ final class LookupAnywhere {
 
     private func finishExpanding(_ place: Visit?) {
         close(why: "expanded")
-        NSApp.activate()
+        NSApplication.shared.activate()
         if !MainWindows.deliver() { openMainWindow?() }
         observe?("expanded", ["query": place?.query ?? NSNull(),
                               "dictionary": place?.result?.dictionary.uuidString ?? NSNull(),
@@ -565,6 +726,9 @@ private struct PanelRoot: View {
                             MenuBarActions.showDictionaries()
                         })
             .onChange(of: state.placeholder) { _, placeholder in anywhere.placeholderChanged(placeholder) }
+            // **The lookup itself, not only its placeholder** (round 3, finding 4): an empty library's "No dictionaries."
+            // is the same value for every query, so a delivered request settled to it never fired the observer above.
+            .onChange(of: state.model.lookup) { _, _ in anywhere.placeholderChanged(state.placeholder) }
     }
 }
 
@@ -613,7 +777,7 @@ enum MainWindows {
         pending = nil
         state.model.adopt(place)
         state.focusSearch()
-        NSApp.windows.first { $0.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true && $0.isVisible }?
+        NSApplication.shared.windows.first { $0.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true && $0.isVisible }?
             .makeKeyAndOrderFront(nil)
         return true
     }
