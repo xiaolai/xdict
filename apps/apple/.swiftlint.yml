@@ -32,7 +32,9 @@ custom_rules:
     name: "Capture tests block and build lanes only through Waiting.swift"
     included: "Tests/XDictCaptureMacTests/.*\\.swift$"
     excluded: "Tests/XDictCaptureMacTests/Waiting\\.swift$"
-    regex: "Thread\\.sleep|DispatchSemaphore|DispatchGroup|\\busleep\\(|AccessibilityLane\\s*\\{|AccessibilityLane\\(setTimeout"
+    # Any sleep but the async ones (labelled for:, until:, nanoseconds:), any primitive that waits for another thread,
+    # and a lane built without named bounds — the initialiser's trailing closure or setTimeout: argument, on any line.
+    regex: '\bsleep\s*\((?!\s*(?:for|until|nanoseconds)\s*:)|\b(?:usleep|nanosleep)\s*\(|DispatchSemaphore|DispatchGroup|NSCondition|pthread_cond|\.sync\s*[({]|\.asyncAndWait\b|RunLoop[\w.]*\.run\b|CFRunLoopRun|AccessibilityLane(?:\s*\.\s*init)?\s*(?:\{|\(\s*(?:setTimeout\b|\)))'
     excluded_match_kinds: [comment, comment.mark, comment.url, doccomment, doccomment.field, string]
     message: "Block through Blocking.until (a lane's thread only) or Blocking.for, wait through Wait, and build a lane with AccessibilityLane.patient or named bounds (Waiting.swift)."
     severity: error
