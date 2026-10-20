@@ -185,9 +185,9 @@ ROUTES = [
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
      [("menu", 1, "Acknowledgments")]),
-    ("setup.board", "full", "XDict ▸ Set Up XDict…", "Each setup row with its live state and action",
+    ("setup.board", "full", "XDict ▸ Set Up XDict… (Settings ▸ Setup)", "Each setup row with its live state and action",
      [("menu", 1, "Set Up XDict…")]),
-    ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library", "The Dictionaries row not done, "
+    ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library (Settings ▸ Setup)", "The Dictionaries row not done, "
      "'Add Dictionaries…'", [("menu", 1, "Set Up XDict…")]),
     # The panel
     ("panel.selection", "full", "Select 'apple' in the search field, ⌃⌥D", "The lookup panel: the query, the "

@@ -4,8 +4,8 @@ import XDictTokens
 
 /// **General, in Settings** (⌘,; plan-macos-v1 WI-9, ADR-0012 d.1): launch at login, with what the system says of it, the
 /// language of XDict's own words, the lookup shortcut (`ShortcutSettings`, once the Lookup pane), hover (`HoverSettings`,
-/// plan-capture WI-3) and Show Setup…. The
-/// accent and speech are under Reading & Speech, the dictionaries' order and languages under Dictionaries.
+/// plan-capture WI-3). The setup board is the sidebar's own pane (ADR-0012, amended 2026-10-20), so no row here points
+/// at it; the accent and speech are under Reading & Speech, the dictionaries' order and languages under Dictionaries.
 public struct GeneralSettings: View {
     @Bindable private var login: LaunchAtLogin
     private let defaults: UserDefaults
@@ -17,16 +17,15 @@ public struct GeneralSettings: View {
     @AppStorage(MenuBarResidence.key) private var keepsRunning = true
     private let registrar: ShortcutRegistrar
     private let hover: HoverControl
-    private let openSetup: () -> Void
+
 
     public init(login: LaunchAtLogin, defaults: UserDefaults, domain: String, registrar: ShortcutRegistrar,
-                hover: HoverControl, openSetup: @escaping () -> Void) {
+                hover: HoverControl) {
         self.login = login
         self.registrar = registrar
         self.hover = hover
         self.defaults = defaults
         self.domain = domain
-        self.openSetup = openSetup
         _language = State(initialValue: InterfaceLanguage.current(in: defaults, domain: domain))
     }
 
@@ -94,14 +93,6 @@ public struct GeneralSettings: View {
                     Text("Solid")
                 }
                 .accessibilityIdentifier("panel-solidity")
-            }
-            Section {
-                LabeledContent {
-                    Button { openSetup() } label: { Text("Show Setup…") }  // placement: form-row
-                        .accessibilityIdentifier("show-setup")
-                } label: {
-                    Text("Setup")
-                }
             }
         }
         .settingsPane()

@@ -113,6 +113,8 @@ noticesPopoverMaxHeight = { value = 320, why = "The library notices' popover's t
 fallbackScreenHeight = { value = 800, why = "The visible screen height assumed when AppKit names no main screen (none attached yet), so Settings still bounds its height." }
 initialColumn = { value = 1000, why = "The content column's width before the first layout measures it: wide, so the title shows until then (P8)." }
 searchFieldAtWindow = { value = 859, source = "P5" }
+settingsSidebar = { value = 200, why = "The Settings sidebar's width: 'Reading & Speech' with its icon and the list's margin, at Apple's sidebar proportions." }
+settingsHeight = { value = 560, why = "The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do." }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }

@@ -59,6 +59,17 @@ struct SettingsRouteTests {
         #expect(route.resolveSelection(among: []) == .unchanged)
     }
 
+    /// **Set Up XDict… from anywhere opens Settings ▸ Setup** (ADR-0012, amended 2026-10-20): the board has no window of
+    /// its own, so this is the one way in, cold or from another pane.
+    @Test func theSetupBoardIsAPaneOfSettings() {
+        var opened = 0
+        let route = SettingsRoute(open: { opened += 1 })
+        route.pane = .general
+        route.showSetup()
+        #expect(opened == 1)
+        #expect(route.pane == .setup)
+    }
+
     /// Add Dictionaries… from anywhere: Settings on Dictionaries with the file importer up.
     @Test func anImportRequestOpensTheImporter() {
         var opened = 0
