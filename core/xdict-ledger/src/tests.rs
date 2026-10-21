@@ -377,3 +377,183 @@ fn the_file_store_refuses_a_second_writer() {
     drop(first);
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// MARK: - Study (plan-history-and-learning §5)
+
+fn target(occurrence: u32) -> StudyTarget {
+    StudyTarget {
+        lineage: "lineage-a".into(),
+        entry_key: "hold".into(),
+        occurrence,
+        kind: TargetKind::Entry,
+        edition: "mdx-sha256-v1:aa".into(),
+        definition_hash: definition_hash("to keep; to have"),
+    }
+}
+
+fn note(text: &str, at: f64, occurrence: u32) -> Note {
+    Note { target: target(occurrence), text: text.into(), at, device: "test".into() }
+}
+
+fn state(phase: StudyPhase, due: Option<f64>, last: Option<f64>) -> CardState {
+    CardState { stability: last.map(|_| 1.5), difficulty: last.map(|_| 5.0), phase, last_review: last, due }
+}
+
+fn grade(revision: &str, before: CardState, after: CardState, at: f64, occurrence: u32) -> GradeRecord {
+    GradeRecord {
+        target: target(occurrence),
+        revision: revision.into(),
+        grade: StudyGrade::Good,
+        before,
+        after,
+        configuration: ScheduleConfiguration {
+            version: "fsrs6-py9446cb0-one10m-no-fuzz-v1".into(),
+            retention: 0.9,
+            maximum_days: 36_500,
+            weights: vec![0.212, 1.2931],
+        },
+        at,
+        device: "test".into(),
+    }
+}
+
+#[test]
+fn a_note_enrols_a_card_and_a_revision_names_the_note_it_revises() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    assert_eq!(ledger.save_note(note("my first note", at, 0), "note-1"), Ok(RecordOutcome::Recorded));
+    let first = ledger.entries.last().unwrap().id.clone();
+    assert_eq!(ledger.save_note(note("my better note", at + 60.0, 0), "note-2"), Ok(RecordOutcome::Recorded));
+    let revised = ledger.entries.last().unwrap();
+    assert_eq!(revised.stored.parent.as_deref(), Some(first.as_str()), "a revision names its parent");
+    let notes = ledger.notes();
+    assert_eq!(notes.len(), 1, "one note per target");
+    assert_eq!(notes[0].text, "my better note");
+    let card = ledger.card(&target(0).key()).expect("the note enrols a card");
+    assert!(card.state.is_new());
+    assert_eq!(card.note_head, revised.id);
+    assert_eq!(ledger.queue(at, 10).len(), 1, "a new card is due at once");
+}
+
+#[test]
+fn a_grade_schedules_the_card_and_an_undo_reverts_it() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("mine", at, 0), "note").unwrap();
+    let after = state(StudyPhase::Learning, Some(at + 600.0), Some(at));
+    assert_eq!(
+        ledger.record_grade(grade("", CardState::new(), after, at, 0), "grade-1", true),
+        Ok(RecordOutcome::Recorded)
+    );
+    let graded = ledger.card(&target(0).key()).unwrap();
+    assert_eq!(graded.state, after);
+    assert_eq!(graded.grades, 1);
+    assert_eq!(ledger.queue(at, 10).len(), 0, "scheduled, not due yet");
+    assert_eq!(ledger.queue(at + 600.0, 10).len(), 1, "due at its instant");
+    assert_eq!(ledger.queue(at + 599.0, 10).len(), 0, "not due before it");
+    let head = graded.head.clone();
+
+    let undo = UndoRecord { target: target(0), grade_event: head, at: at + 60.0, device: "test".into() };
+    assert_eq!(ledger.record_undo(undo, "undo-1", true), Ok(RecordOutcome::Recorded));
+    let reverted = ledger.card(&target(0).key()).unwrap();
+    assert!(reverted.state.is_new(), "the grade is voided and the card is new again");
+    assert_eq!(reverted.head, "");
+    assert_eq!(reverted.grades, 0);
+    let grades = ledger.export().iter().filter(|event| matches!(event, Event::Graded(_))).count();
+    assert_eq!(grades, 1, "the voided grade is still in the log: an undo is an event, not a rewrite");
+}
+
+#[test]
+fn an_ineligible_grade_writes_nothing_and_a_retry_of_a_commit_is_a_duplicate() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("mine", at, 0), "note").unwrap();
+    let after = state(StudyPhase::Learning, Some(at + 600.0), Some(at));
+    assert_eq!(
+        ledger.record_grade(grade("", CardState::new(), after, at, 0), "g", false),
+        Ok(RecordOutcome::Ineligible)
+    );
+    assert_eq!(ledger.event_count(), 1, "nothing was written");
+
+    assert_eq!(ledger.record_grade(grade("", CardState::new(), after, at, 0), "g", true), Ok(RecordOutcome::Recorded));
+    let head = ledger.card(&target(0).key()).unwrap().head;
+    let retry = grade(&head, after, after, at + 60.0, 0);
+    assert_eq!(ledger.record_grade(retry, "g", false), Ok(RecordOutcome::Duplicate));
+    assert_eq!(ledger.event_count(), 2, "one note, one grade");
+}
+
+#[test]
+fn erase_clears_notes_and_grades_and_the_receipt_names_them() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("mine", at, 0), "note").unwrap();
+    let after = state(StudyPhase::Learning, Some(at + 600.0), Some(at));
+    ledger.record_grade(grade("", CardState::new(), after, at, 0), "grade", true).unwrap();
+    let report = ledger.erase("erase", at + 60.0, "test").unwrap();
+    assert_eq!(report.cleared_notes, 1);
+    assert_eq!(report.cleared_grades, 1);
+    assert_eq!(report.recoverable, Recoverability::FreeBlocks);
+    assert!(ledger.notes().is_empty() && ledger.cards().is_empty());
+    let exported = ledger.export();
+    match exported.last() {
+        Some(Event::Erased(receipt)) => {
+            assert_eq!(receipt.cleared_notes, 1);
+            assert_eq!(receipt.cleared_grades, 1);
+        }
+        other => panic!("expected an erase receipt, found {other:?}"),
+    }
+    assert!(!String::from_utf8_lossy(&ledger.store.load().unwrap()).contains("mine"));
+}
+
+#[test]
+fn a_reanchor_moves_the_evidence_and_keeps_the_identity() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("mine", at, 0), "note").unwrap();
+    let old = target(0);
+    let moved = ReanchorRecord {
+        target: old.clone(),
+        to_edition: "mdx-sha256-v1:bb".into(),
+        definition_hash: definition_hash("to keep; to have"),
+        at: at + 60.0,
+        device: "test".into(),
+    };
+    assert_eq!(ledger.record_reanchor(moved, "reanchor"), Ok(RecordOutcome::Recorded));
+    let notes = ledger.notes();
+    assert_eq!(notes[0].target.edition, "mdx-sha256-v1:bb");
+    assert_eq!(notes[0].target.key(), old.key(), "the identity did not move");
+    assert_eq!(ledger.card(&old.key()).unwrap().target.edition, "mdx-sha256-v1:bb");
+}
+
+#[test]
+fn the_queue_and_summary_follow_the_due_instants() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("one", at, 0), "note-1").unwrap();
+    let after = state(StudyPhase::Review, Some(at + 3.0 * 86_400.0), Some(at));
+    ledger.record_grade(grade("", CardState::new(), after, at, 0), "grade", true).unwrap();
+    let summary = ledger.summary(at + 60.0);
+    assert_eq!(summary.due, 0);
+    assert_eq!(summary.next_due, Some((at + 3.0 * 86_400.0) as u64));
+    assert!(ledger.queue(at + 60.0, 10).is_empty());
+
+    ledger.save_note(note("two", at + 60.0, 1), "note-2").unwrap();
+    assert_eq!(ledger.queue(at + 60.0, 10).len(), 1, "the new card is due");
+    assert_eq!(ledger.summary(at + 60.0).due, 1);
+    assert_eq!(ledger.summary(at + 60.0).next_due, None);
+    assert_eq!(ledger.queue(at + 3.0 * 86_400.0, 10).len(), 2, "the scheduled card falls due beside the still-new one");
+}
+
+#[test]
+fn a_note_keeps_a_definition_hash_and_never_the_definition() {
+    let definition = "a synthetic definition the ledger must never hold";
+    let hash = definition_hash(definition);
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    let mut held = note("my own words", at, 0);
+    held.target.definition_hash = hash.clone();
+    ledger.save_note(held, "note").unwrap();
+    let exported = serde_json::to_string(&ledger.export()).unwrap();
+    assert!(exported.contains(&hash), "the evidence is the hash");
+    assert!(!exported.contains(definition), "the definition itself never enters the log");
+}
