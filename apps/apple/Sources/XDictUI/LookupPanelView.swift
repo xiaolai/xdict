@@ -120,7 +120,7 @@ public struct LookupPanelView: View {
         .padding(.bottom, PanelLook.bottomInset)
     }
 
-    /// System Settings › Privacy & Security › Accessibility.
+    /// System Settings › Privacy & Security › Device Control and Data Access (macOS 27's name; `PrivacySettings`).
     static let accessibilityPane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
         ?? URL(fileURLWithPath: "/System/Applications/System Settings.app")
 
