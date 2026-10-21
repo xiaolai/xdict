@@ -950,6 +950,17 @@ fn srcset(value: &str, base: &str, dir: &str, out: &mut Out<'_>) -> Option<Strin
 /// §13.2.5.72–80): numeric ones with or without `;`, every named one of the standard's table, the longest that
 /// matches, and a name without `;` only where history allows it. What is no reference stays as written.
 fn unescape(value: &str) -> String {
+    unescape_with(value, true)
+}
+
+/// **A text node's character references**, decoded as the tokeniser's content rule decodes them: as [`unescape`],
+/// except that a legacy name without `;` is read even before a letter or a digit (in content, `&notit;` is `¬it;`).
+/// For the entry-to-text projection (`text.rs`).
+pub(crate) fn unescape_text(value: &str) -> String {
+    unescape_with(value, false)
+}
+
+fn unescape_with(value: &str, in_attribute: bool) -> String {
     if !value.contains('&') {
         return value.to_owned();
     }
@@ -959,7 +970,7 @@ fn unescape(value: &str) -> String {
         crate::work::scanned(at + 1);
         out.push_str(rest.get(..at).unwrap_or(""));
         let after = rest.get(at + 1..).unwrap_or("");
-        match reference(after, &mut out) {
+        match reference(after, &mut out, in_attribute) {
             Some(len) => rest = after.get(len..).unwrap_or(""),
             None => {
                 out.push('&');
@@ -973,7 +984,7 @@ fn unescape(value: &str) -> String {
 
 /// The reference `after` (what follows an `&`) starts with, written to `out`, and how many bytes of `after` it
 /// takes; `None`, and nothing written, if it starts none. A name is searched for no further than the longest.
-fn reference(after: &str, out: &mut String) -> Option<usize> {
+fn reference(after: &str, out: &mut String, in_attribute: bool) -> Option<usize> {
     use crate::entities::{LONGEST, LONGEST_LEGACY, c1, named};
     let bytes = after.as_bytes();
     if bytes.first() == Some(&b'#') {
@@ -1006,7 +1017,7 @@ fn reference(after: &str, out: &mut String) -> Option<usize> {
     }
     // A name a browser still reads without `;`, the longest; in an attribute not before `=`, a letter or a digit.
     let len = (1..=run.min(LONGEST_LEGACY)).rev().find(|&n| after.get(..n).and_then(named).is_some())?;
-    if bytes.get(len).is_some_and(|&b| b == b'=' || b.is_ascii_alphanumeric()) {
+    if in_attribute && bytes.get(len).is_some_and(|&b| b == b'=' || b.is_ascii_alphanumeric()) {
         return None;
     }
     out.push_str(named(after.get(..len)?)?);

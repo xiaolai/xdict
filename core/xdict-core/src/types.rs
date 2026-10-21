@@ -141,6 +141,49 @@ record! {
         /// Bytes the text decoder could not read and replaced.
         pub lossy_bytes: u64,
     }
+
+    /// What [`crate::Core::entry_text`] is asked: the entry view's ceiling for the HTML it renders, and the text's own
+    /// budget in UTF-8 bytes (ADR-0021 d.5).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct TextView {
+        /// Every URL the core writes is under it, as [`View::base_url`].
+        pub base_url: String,
+        /// The shell's ceiling on one body, as [`View::max_body_bytes`].
+        pub max_body_bytes: u64,
+        /// The text's budget: the most UTF-8 bytes of plain text to return.
+        pub max_text_bytes: u64,
+        /// The reader's "Original style", as [`View::original_style`].
+        #[cfg_attr(feature = "serde", serde(default))]
+        pub original_style: bool,
+    }
+
+    /// One run of an entry's text: its offsets in UTF-8 bytes of [`EntryText::text`], and the nearest roles written
+    /// around it — none for text the rules did not classify.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct TextSpan {
+        pub start: u64,
+        pub len: u64,
+        pub role: Option<String>,
+        pub label: Option<String>,
+        pub section: Option<String>,
+    }
+
+    /// **An entry as plain text, whole, for a consumer that reads it** (ADR-0021 d.5): the text, where each run came
+    /// from, and what the budget left out. A cut is data — `complete: false` — never an error.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct EntryText {
+        pub entry: EntryRef,
+        pub text: String,
+        pub spans: Vec<TextSpan>,
+        /// False whenever any part of the entry is missing from `text`.
+        pub complete: bool,
+        /// UTF-8 bytes the budget left out.
+        pub omitted_bytes: u64,
+        /// Where the cut fell: the byte offset in the whole entry's text (the length of `text`).
+        pub cut_at: u64,
+        /// Runs (and so their roles) the budget left out.
+        pub spans_dropped: u64,
+    }
 }
 
 message! {

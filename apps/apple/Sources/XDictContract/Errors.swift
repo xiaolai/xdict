@@ -105,6 +105,8 @@ public enum Refusal: Error, Codable, Hashable, Sendable {
     case invalidPackage(PackageProblem)
     /// A render context asking for a body ceiling of 0 or above the contract's.
     case renderLimitOutOfRange(requested: UInt64, ceiling: UInt64)
+    /// An `entryText` asking for a text budget of 0 or above the contract's (`Limits.maxTextBytes`).
+    case textLimitOutOfRange(requested: UInt64, ceiling: UInt64)
     /// Two tokens for one file.
     case duplicateToken(file: UUID)
     /// An operation the contract reserves and this service does not implement yet (`joinLineage`, `splitLineage`,

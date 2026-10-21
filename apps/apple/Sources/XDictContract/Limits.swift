@@ -12,6 +12,11 @@ public enum Limits {
     /// cost ~1 GB of WebContent to render and a 62 MB one 3.3 GB (spike 2), so the reader's views ask for no more.
     public static let maxBodyBytes: UInt64 = 16 << 20
 
+    /// **1 MiB per `entryText` reply's text** (contract 8): the most plain text one call may return, kept under the
+    /// envelope ceiling with room for the spans and the entry's reference. The AI pane's own budget is smaller still
+    /// (`MeaningBudget`).
+    public static let maxTextBytes: UInt64 = 1 << 20
+
     /// **4 MiB per JSON envelope** (request, reply, event), refused before it is decoded (Codex objection 2): payloads
     /// travel beside the JSON, so only references and keys are in it. The largest legitimate one is a page of 1,000 hits
     /// whose redirect chains are at the core's hop limit (8 hops) through 100-character keys, about 2.3 MB
@@ -60,7 +65,7 @@ public enum Limits {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted, .displayOptions: return nil
+             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText: return nil
         }
     }
 
@@ -171,7 +176,8 @@ public enum Deadlines {
         case .openPackage, .lookup, .suggest, .link, .joinLineage, .splitLineage, .lineageOf: .seconds(5)
         // One record block read, inflated and rewritten: a 62 MB entry replied in 154 ms on the E2E Mac, 2–4× that on
         // the loaded build Mac (spike 2); the rest is room for a slow disk and one bulk call ahead in the service.
-        case .entry: .seconds(10)
+        // `entryText` is that render plus a pass over its text: the same budget, the projection is linear in the body.
+        case .entry, .entryText: .seconds(10)
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.
         case .resource: .seconds(15)

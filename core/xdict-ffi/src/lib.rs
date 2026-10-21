@@ -12,10 +12,10 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Config, CoreError, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, Feature,
-    FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem, How,
-    ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened, Page,
-    Problem, ReadingStyle, Resource, SkipReason, SkippedSheet, StyleChanges, Versions, View,
+    BaseSource, BlockReason, Config, CoreError, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText,
+    Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem,
+    How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened,
+    Page, Problem, ReadingStyle, Resource, SkipReason, SkippedSheet, StyleChanges, TextSpan, TextView, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -68,6 +68,35 @@ pub struct EntryRef {
     pub edition: String,
     pub key: String,
     pub occurrence: u32,
+}
+
+#[uniffi::remote(Record)]
+pub struct TextView {
+    pub base_url: String,
+    pub max_body_bytes: u64,
+    pub max_text_bytes: u64,
+    #[uniffi(default = false)]
+    pub original_style: bool,
+}
+
+#[uniffi::remote(Record)]
+pub struct TextSpan {
+    pub start: u64,
+    pub len: u64,
+    pub role: Option<String>,
+    pub label: Option<String>,
+    pub section: Option<String>,
+}
+
+#[uniffi::remote(Record)]
+pub struct EntryText {
+    pub entry: EntryRef,
+    pub text: String,
+    pub spans: Vec<TextSpan>,
+    pub complete: bool,
+    pub omitted_bytes: u64,
+    pub cut_at: u64,
+    pub spans_dropped: u64,
 }
 
 #[uniffi::remote(Record)]
@@ -474,6 +503,11 @@ impl Core {
 
     pub fn entry(&self, dict: String, entry: EntryRef, view: View) -> Result<Entry, CoreError> {
         self.0.entry(dict, entry, view)
+    }
+
+    /// **The whole entry as plain text** (ADR-0021 d.5): spans, completeness and the budget's cut.
+    pub fn entry_text(&self, dict: String, entry: EntryRef, view: TextView) -> Result<EntryText, CoreError> {
+        self.0.entry_text(dict, entry, view)
     }
 
     pub fn link(&self, dict: String, url: String, origin: LinkOrigin, view: View) -> Result<Link, CoreError> {

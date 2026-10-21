@@ -216,7 +216,7 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         if let credit { credits.withLock { $0.release(credit) } }
         let envelope: Data
         do {
-            envelope = try response.encoded()
+            envelope = try response.boundedEncoded()
         } catch {
             context.log.fault("a response could not be encoded: \(String(describing: error), privacy: .public)")
             envelope = Data()

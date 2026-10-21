@@ -475,7 +475,50 @@ impl Core {
     /// One entry's HTML for the entry view.
     pub fn entry(&self, dict: String, entry: EntryRef, view: View) -> Result<Entry, CoreError> {
         guard(|| {
-            let opened = self.dict(&dict)?;
+            let (entry, html, lossy) = self.render(&dict, entry, &view)?;
+            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: lossy })
+        })
+    }
+
+    /// **One entry as plain text, whole, under a budget** (ADR-0021 d.5): the same render [`Core::entry`] gives, then the
+    /// roles it wrote projected to text with spans and completeness. A budget that cuts reports the cut; only a body over
+    /// the view's own ceiling is an error.
+    pub fn entry_text(&self, dict: String, entry: EntryRef, view: TextView) -> Result<EntryText, CoreError> {
+        guard(|| {
+            let render_view = View {
+                base_url: view.base_url,
+                max_body_bytes: view.max_body_bytes,
+                original_style: view.original_style,
+            };
+            let (entry, html, _lossy) = self.render(&dict, entry, &render_view)?;
+            let max = usize::try_from(view.max_text_bytes).unwrap_or(usize::MAX);
+            let projection = xdict_entry::entry_text_from_html(&html, max);
+            Ok(EntryText {
+                entry,
+                text: projection.text,
+                spans: projection
+                    .runs
+                    .into_iter()
+                    .map(|run| TextSpan {
+                        start: run.start as u64,
+                        len: run.len as u64,
+                        role: run.role,
+                        label: run.label,
+                        section: run.section,
+                    })
+                    .collect(),
+                complete: projection.complete,
+                omitted_bytes: projection.omitted_bytes,
+                cut_at: projection.cut_at,
+                spans_dropped: projection.runs_dropped,
+            })
+        })
+    }
+
+    /// One entry's HTML, from the record to what the view draws: what both [`Core::entry`] and [`Core::entry_text`] read.
+    fn render(&self, dict: &str, entry: EntryRef, view: &View) -> Result<(EntryRef, String, u64), CoreError> {
+        {
+            let opened = self.dict(dict)?;
             if opened.edition != entry.edition {
                 return Err(CoreError::EditionMismatch {
                     detail: format!("{} is not the edition open as {dict}", entry.edition),
@@ -536,8 +579,8 @@ impl Core {
                 .map_err(too_large)?;
             // Q6 (ADR-0010, the owner's answers): every entry renders in standards mode.
             let html = with_doctype(html, max).map_err(too_large)?;
-            Ok(Entry { entry, html, csp: csp(&view.base_url), lossy_bytes: lossy })
-        })
+            Ok((entry, html, lossy))
+        }
     }
 
     /// What a URL an entry or its script produced means. Takes the URL raw, `.tts` and all.

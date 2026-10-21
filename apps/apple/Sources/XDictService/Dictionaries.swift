@@ -91,6 +91,10 @@ final class Dictionaries: Sendable {
                 let (answer, payload) = Answer.of(try core.entry(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                                  view: XDictCore.View(render)))
                 return (.answer(answer), payload)
+            case .entryText(let dict, let entry, let text):
+                let projected = try core.entryText(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
+                                                   view: XDictCore.TextView(text))
+                return (.answer(.entryText(XDictContract.EntryText(projected))), nil)
             case .link(let dict, let url, let origin, let render):
                 let link = try core.link(dict: dict.rawValue, url: url, origin: XDictCore.LinkOrigin(origin),
                                          view: XDictCore.View(render))

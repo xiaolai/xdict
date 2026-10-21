@@ -253,6 +253,25 @@ extension XDictCore.View {
     }
 }
 
+extension XDictCore.TextView {
+    /// The core's text view for a text render context: the same base and ceiling as `entry`, plus the text budget.
+    init(_ text: TextRenderContext) {
+        self.init(baseUrl: TextRenderContext.baseURL, maxBodyBytes: text.maxBodyBytes, maxTextBytes: text.maxTextBytes,
+                  originalStyle: text.originalStyle)
+    }
+}
+
+extension XDictContract.EntryText {
+    /// The core's projection in the contract's record: the same fields, one for one.
+    init(_ projected: XDictCore.EntryText) {
+        self.init(entry: XDictContract.EntryRef(projected.entry), text: projected.text,
+                  spans: projected.spans.map { XDictContract.TextSpan(start: $0.start, len: $0.len, role: $0.role,
+                                                                     label: $0.label, section: $0.section) },
+                  complete: projected.complete, omittedBytes: projected.omittedBytes, cutAt: projected.cutAt,
+                  spansDropped: projected.spansDropped)
+    }
+}
+
 extension XDictCore.FileIdentity {
     init(_ identity: XDictContract.FileIdentity) {
         self.init(device: identity.device, inode: identity.inode, size: identity.size, mtimeNs: identity.mtimeNs,
