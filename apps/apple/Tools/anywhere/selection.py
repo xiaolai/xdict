@@ -5,9 +5,10 @@ fails as "could not select", never by handing the wrong text on to XDict and bla
 
 
 def refused(needle, answer):
-    """None when the host selected exactly `needle`; else the sentence saying what it selected instead, and how."""
+    """None when the host selected `needle` (its own case of it counts: a host may capitalise at a sentence start);
+    else the sentence saying what it selected instead, and how."""
     selected = answer.get("selected")
-    if selected == needle:
+    if selected == needle or (selected or "").lower() == needle.lower():
         return None
     said = f"selected {selected!r} ({answer.get('dialect')}), not {needle!r}"
     # Each way `hands select` tried and what it left, so a failure says which path ran and why it fell through.

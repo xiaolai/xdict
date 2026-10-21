@@ -202,6 +202,12 @@ def open_hosts():
         time.sleep(1.0)
         run(keys, "type", TEXT.replace("\n", " "), timeout=120)
         time.sleep(0.5)
+        # **Read back, and the phrase typed again if the host dropped it**: a long synthetic type into Notes kept its
+        # first two lines and lost the third on every E2E run (2026-10-21), and the Services check then had no phrase to
+        # select. What the note holds decides, not what was typed at it.
+        if "brûlée" not in (tool("value", HOSTS["notes"]).get("value") or ""):
+            run(keys, "type", " crème brûlée 煎饼", timeout=60)
+            time.sleep(0.5)
         opened["notes"] = True
     facts["hostsOpened"] = opened
     return opened
@@ -289,7 +295,10 @@ def services_menu():
         shown = wait_for(lambda: (lambda p, m, _: p.get("shown") and m.get("query") and (p, m))(*panel_state()), 5)
         text = service[0].get("text") if service else None
         query = shown[1].get("query") if shown else None
-        delivered = query == phrase
+        # **Verbatim against what the host selected**: Notes capitalises a sentence's start, so the phrase it holds is
+        # the phrase to hold XDict to — anything else would test our spelling, not the delivery.
+        asked = selected.get("selected") or phrase
+        delivered = query == asked
         delivered_all = delivered_all and delivered
         by_click, where = near(box, shown[0].get("frame") if shown else None)
         check(name, placed != "absent" and delivered and by_click,
@@ -357,16 +366,35 @@ def next_key_lands(name, dismiss):
         return
     dismiss(selected)
     gone = wait_for(lambda: not panel_state()[0].get("shown"), 3)
+    # **The panel's own flag is not the host's readiness**: after the click that dismissed it, TextEdit re-makes the field
+    # editor that will receive the key, and a key posted inside that interval is lost — the focused element is TextEdit's
+    # text view, its value unchanged, while the same key on the same view lands as soon as the host has settled
+    # (2026-10-21; Escape never sees this, a hot key does not wait for a window). A reader cannot type faster than this.
+    time.sleep(1.5)
     front = tool("front")
-    before = tool("value", HOSTS["textedit"]).get("value") or ""
+    # **What TextEdit's focused element is, and both readings**: a key that "did not land" is either a key that went
+    # elsewhere or a reading taken from an element that never held the text (2026-10-21: this check's only detail was
+    # the boolean, and the two causes are indistinguishable in it).
+    clicked = tool("selected", HOSTS["textedit"])
+    beforeState = tool("value", HOSTS["textedit"])
+    before = beforeState.get("value") or ""
+    shownBeforeKey = panel_state()[0].get("shown")
     tool("press", "q")
     time.sleep(0.4)
-    after = tool("value", HOSTS["textedit"]).get("value") or ""
+    afterState = tool("value", HOSTS["textedit"])
+    after = afterState.get("value") or ""
+    # Read again once more, later: AX serves a value it was told about, and a value that arrives late is not a key that
+    # did not land (2026-10-21: the click-away check's boolean could not tell the two apart).
+    time.sleep(0.6)
+    later = (tool("value", HOSTS["textedit"]).get("value") or "")
     landed = after != before and "q" in after
     tool("press", "cmd+z")
     time.sleep(0.3)
     check(name, bool(gone) and front.get("bundle") == HOSTS["textedit"] and landed,
-          f"panel gone {bool(gone)}; front {front.get('bundle')}; the next key reached TextEdit: {landed}")
+          f"panel gone {bool(gone)}; front {front.get('bundle')}; the next key reached TextEdit: {landed} "
+          f"(focused {beforeState.get('role')}; {len(before)} → {len(after)} chars; "
+          f"selected after the click {clicked.get('selected')!r} ({clicked.get('role')}); "
+          f"later read {len(later)} chars; panel shown at the key {shownBeforeKey}; clicked {selected.get('box')})")
 
 
 def deadline():
@@ -401,16 +429,41 @@ def deadline():
 
 
 def menubar():
+    # **The item is the app's own** (XiaolaiDict's design): a primary click shows the reading history and there is no
+    # menu at rest, so a press is checked against the drawer, and the menu — which exists only for the length of a
+    # secondary click — is opened by a real right click at the item's live frame and read from outside.
+    def drawer():
+        return tool("element", pid, "history.drawer").get("frame")
+
     item = tool("menubar", pid)
-    items = item.get("items", [])
-    check("menubar.present", item.get("item") and any(t.startswith("Look Up Selection") for t in items)
-          and "Open XDict" in items and "Quit XDict" in items, f"{item}")
+    box = item.get("frame") or {}
+    pressed = tool("menubar", pid, "press")
+    opened = wait_for(drawer, 5)
+    tool("press", "escape")
+    closed = wait_for(lambda: not drawer(), 3)
+    check("menubar.present", bool(item.get("item")) and item.get("label") == "XDict" and bool(box.get("width"))
+          and pressed.get("pressed") and bool(opened) and bool(closed),
+          f"{item}; press {pressed.get('pressed')}; drawer {opened}; closed {bool(closed)}")
     selected, raw = select("textedit", "abbé")
+    if not selected:
+        check("menubar.looksUp", False, f"could not select: {raw}")
+        return
+    tool("click", box["x"] + box["width"] / 2, box["y"] + box["height"] / 2, "right")
+
+    def menu_if_open():
+        m = tool("menubar", pid)
+        return m if (m.get("items") or None) else None
+
+    menu = wait_for(menu_if_open, 5) or {}
+    titles = menu.get("items") or []
     before = len(events())
     chosen = tool("menubar", pid, "Look Up Selection")
     shown = wait_for(lambda: (lambda p, m, _: p.get("shown") and m.get("query") == "abbé" and m)(*panel_state()), 5)
-    check("menubar.looksUp", chosen.get("chosen") and bool(shown),
-          f"chosen {chosen.get('chosen')}; events {[e.get('event') for e in events()[before:]]}; panel {panel_state()[1]}")
+    check("menubar.looksUp",
+          any(t.startswith("Look Up Selection") for t in titles) and "Open XDict" in titles and "Quit XDict" in titles
+          and chosen.get("chosen") and bool(shown),
+          f"menu {titles}; chosen {chosen.get('chosen')}; events {[e.get('event') for e in events()[before:]]}; "
+          f"panel {panel_state()[1]}")
     close_panel()
 
 
@@ -479,9 +532,26 @@ def main():
             expansion("panel.expand.keyboard", "hop3", "keyboard")
         if "panel.dismiss" in asked:
             next_key_lands("panel.escape.nextKeyLands", lambda s: tool("press", "escape"))
-            next_key_lands("panel.clickAway.nextKeyLands",
-                           lambda s: tool("click", s["box"]["x"] + s["box"]["width"] / 2,
-                                          s["box"]["y"] + s["box"]["height"] / 2))
+            # **A click into the host's own window, away from the panel**: the popover points its arrow at the selection,
+            # so a click on the word itself lands in the popover's window (2026-10-21: the word ended at y 122 and the
+            # panel began at 122), and a guessed offset was outside the window and activated the app behind it. The
+            # host's front window is asked for, and the click goes below the panel, inside it.
+            def click_away(s):
+                frame = tool("window", HOSTS["textedit"]).get("frame") or {}
+                panel = panel_state()[0].get("frame") or {}
+                if not frame:
+                    return tool("click", s["box"]["x"], s["box"]["y"])
+                # The window's bottom edge, at the first of several places the panel is not: a point inside the panel is
+                # the panel's business, and the click would test nothing.
+                y = frame["y"] + frame["height"] - 40
+                for fx in (0.5, 0.15, 0.85, 0.05, 0.95):
+                    x = frame["x"] + frame["width"] * fx
+                    inside = (panel and panel["x"] <= x <= panel["x"] + panel["width"]
+                              and panel["y"] <= y <= panel["y"] + panel["height"])
+                    if not inside:
+                        return tool("click", x, y)
+                return tool("click", s["box"]["x"], s["box"]["y"])
+            next_key_lands("panel.clickAway.nextKeyLands", click_away)
         if "panel.deadline" in asked:
             deadline()
         if "menubar.item" in asked:
