@@ -56,8 +56,8 @@ target/
 .env
 .env.*
 
-# The machine-local build settings (E2E host and the like).
-/local.mk
+# The machine-local build settings (E2E host and the like), wherever a checkout keeps one.
+local.mk
 
 # >>> cc-suite >>>
 # cc-suite-schema: 8
