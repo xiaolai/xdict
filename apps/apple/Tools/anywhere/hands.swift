@@ -181,15 +181,18 @@ func press(_ text: String) {
 }
 func click(_ point: CGPoint, right: Bool = false) {
     let kinds: [CGEventType] = right ? [.rightMouseDown, .rightMouseUp] : [.leftMouseDown, .leftMouseUp]
+    // **The pointer rests on the point before the press** (2026-10-21): Notes' editor builds its context menu only for a
+    // pointer it has seen over the text, and a hover of a few milliseconds is not seen. A reader's pointer is there well
+    // before they click.
     if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
         move.post(tap: .cghidEventTap)
-        usleep(60_000)
+        usleep(250_000)
     }
     for kind in kinds {
         let event = CGEvent(mouseEventSource: nil, mouseType: kind, mouseCursorPosition: point,
                             mouseButton: right ? .right : .left)
         event?.post(tap: .cghidEventTap)
-        usleep(50_000)
+        usleep(80_000)
     }
 }
 /// A left-button drag from `start` to `end` in ten steps, as a reader selects with the mouse.
@@ -277,6 +280,18 @@ case "scroll":
     }
     emit(["scrolled": lines])
 
+case "window":
+    let app = application(argument(1))
+    let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute))
+    let box: Any = window.flatMap { frame($0).map { describe($0) } } ?? NSNull()
+    emit(["frame": box])
+
+case "selected":
+    let app = application(argument(1))
+    let focused = element(attribute(app, kAXFocusedUIElementAttribute))
+    emit(["selected": json(focused.flatMap { string($0, kAXSelectedTextAttribute) }),
+          "role": json(focused.flatMap { string($0, kAXRoleAttribute) })])
+
 case "value":
     let app = application(argument(1))
     let focused = element(attribute(app, kAXFocusedUIElementAttribute))
@@ -287,19 +302,34 @@ case "select":
     let bundle = argument(1), needle = argument(2)
     guard activate(bundle) else { die("\(bundle) would not come to the front (\(frontInfo()))") }
     let app = application(bundle)
-    // A text view: the focused element's value holds the needle; its range is set.
-    if let focused = element(attribute(app, kAXFocusedUIElementAttribute)), let value = string(focused, kAXValueAttribute),
-       string(focused, kAXRoleAttribute) != "AXWebArea", value.contains(needle) {
-        let found = (value as NSString).range(of: needle)
-        guard found.location != NSNotFound else { die("the focused text in \(bundle) has no '\(needle)'") }
+    // A text view whose value holds the needle: its range is set. **The focused element first, then any text view in
+    // the front window** — Notes' editor loses focus to its note list when the app is reactivated between the reader's
+    // first selection and the next, and a reader clicks back into the note. Focusing through AX is that click.
+    func selectIn(_ target: AXUIElement) -> [String: Any]? {
+        guard let value = string(target, kAXValueAttribute) else { return nil }
+        // **Case-insensitive**: a host may capitalise what the reader typed (Notes does at a sentence start), and
+        // the text it holds is what a reader selects — the check then holds XDict to that text, not to our spelling.
+        let found = (value as NSString).range(of: needle, options: .caseInsensitive)
+        guard found.location != NSNotFound else { return nil }
         var range = CFRange(location: found.location, length: found.length)
-        guard let wanted = AXValueCreate(.cfRange, &range) else { die("no range value") }
-        let status = AXUIElementSetAttributeValue(focused, kAXSelectedTextRangeAttribute as CFString, wanted)
-        guard status == .success else { die("setting the selection failed: AXError \(status.rawValue)") }
+        guard let wanted = AXValueCreate(.cfRange, &range) else { return nil }
+        _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+        guard AXUIElementSetAttributeValue(target, kAXSelectedTextRangeAttribute as CFString, wanted) == .success
+        else { return nil }
         usleep(200_000)
-        let box = rect(parameterized(focused, kAXBoundsForRangeParameterizedAttribute, wanted))
-        emit(["dialect": "range", "selected": json(string(focused, kAXSelectedTextAttribute)),
-              "box": json(box.map(describe))])
+        let box = rect(parameterized(target, kAXBoundsForRangeParameterizedAttribute, wanted))
+        return ["dialect": "range", "selected": json(string(target, kAXSelectedTextAttribute)),
+                "box": json(box.map(describe))]
+    }
+    if let focused = element(attribute(app, kAXFocusedUIElementAttribute)),
+       string(focused, kAXRoleAttribute) != "AXWebArea", let answer = selectIn(focused) {
+        emit(answer)
+    }
+    if let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute)),
+       let text = find(window, { ["AXTextArea", "AXTextView"].contains(string($0, kAXRoleAttribute))
+           && ((string($0, kAXValueAttribute) ?? "") as NSString).range(of: needle, options: .caseInsensitive)
+               .location != NSNotFound }), let answer = selectIn(text) {
+        emit(answer)
     }
     // A page: the front window's web area; the needle found in its whole text, selected by markers.
     // Chromium builds its tree a moment after it is asked to (`AXManualAccessibility`): looked for a few seconds.
@@ -314,9 +344,25 @@ case "select":
     }
     // The front window named, so a host's own window in the way (Chrome's profile picker) is told from XDict failing.
     guard let page = found else {
+        // What was there, named: a host condition is only told from XDict failing when the message says what the window
+        // held — a text view whose value lacks the needle reads very differently from none at all (2026-10-21).
         let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute))
         let title = window.flatMap { string($0, kAXTitleAttribute) } ?? ""
-        die("\(bundle) shows no text view and no page; its front window is \"\(title)\"")
+        var textViews = 0, longest = 0, seen = 0
+        if let window {
+            var queue = children(window)
+            while seen < queue.count && seen < 4_000 {
+                let e = queue[seen]; seen += 1
+                let role = string(e, kAXRoleAttribute)
+                if role == "AXTextArea" || role == "AXTextView" {
+                    textViews += 1
+                    longest = max(longest, (string(e, kAXValueAttribute) ?? "").count)
+                }
+                queue.append(contentsOf: children(e))
+            }
+        }
+        die("\(bundle) shows no text view and no page; its front window is \"\(title)\""
+            + " (\(textViews) text view(s), longest value \(longest) chars, needle \(needle.count))")
     }
     var located: (NSRange, CFTypeRef)?
     for _ in 0..<50 {
@@ -386,18 +432,31 @@ case "context":
     guard let x = Double(argument(2)), let y = Double(argument(3)) else { die("usage: context <bundle> <x> <y> <title>", 2) }
     let choose = arguments.count > 5 && arguments[5] == "choose"
     let app = application(bundle)
+    // **A mouse move to the point first** (2026-10-21): Notes' editor builds its context menu only for a pointer it has
+    // seen over the text; a right click posted at a point the pointer never visited opened none, and the check read
+    // "no context menu" on a host whose Services menu held Look Up in XDict all along.
+    if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved,
+                          mouseCursorPosition: CGPoint(x: x, y: y), mouseButton: .left) {
+        move.post(tap: .cghidEventTap)
+        usleep(200_000)
+    }
     click(CGPoint(x: x, y: y), right: true)
     func menu() -> AXUIElement? {
+        // **A menu with items, never an empty one**: a closed menu-bar menu is an `AXMenu` with no children, and the
+        // first such menu answered "menu: []" for a host whose context menu was open all along (2026-10-21).
+        func offered(_ node: AXUIElement) -> Bool {
+            string(node, kAXRoleAttribute) == kAXMenuRole as String && !children(node).isEmpty
+        }
         // An open context menu is a child of the element it was opened on — TextEdit's text area (measured on the E2E
-        // Mac, 2026-10-15) — so it is looked for in the windows, never the menu bar, as a menu not under a menu item.
-        for window in ((attribute(app, kAXWindowsAttribute) as? [CFTypeRef]) ?? []).compactMap(element) {
-            if let menu = find(window, limit: 4_000, { node in
-                string(node, kAXRoleAttribute) == kAXMenuRole as String
-                    && element(attribute(node, kAXParentAttribute)).flatMap { string($0, kAXRoleAttribute) }
-                        != kAXMenuItemRole as String
+        // Mac, 2026-10-15) — and on some hosts its window is not among `AXWindows`: every subtree of the application is
+        // walked instead, the menu bar's excepted, as a menu with items and not a submenu under a menu item.
+        for child in children(app) where string(child, kAXRoleAttribute) != "AXMenuBar" {
+            if let menu = find(child, limit: 8_000, { node in
+                offered(node) && element(attribute(node, kAXParentAttribute))
+                    .flatMap { string($0, kAXRoleAttribute) } != kAXMenuItemRole as String
             }) { return menu }
         }
-        return children(app).first { string($0, kAXRoleAttribute) == kAXMenuRole as String }
+        return nil
     }
     var open: AXUIElement?
     for _ in 0..<40 {
@@ -452,31 +511,40 @@ case "element":
     emit(["frame": NSNull()])
 
 case "menubar":
-    guard let owner = Int32(argument(1)) else { die("usage: menubar <pid> [title]", 2) }
+    // **The item is the app's own** (XiaolaiDict's design, kept): a primary press shows the reading history — there is no
+    // menu attached at rest — and the menu exists only for the length of a secondary click. So this tool reads; a press
+    // through it opens the history (the driver checks that), and the menu is read after a real right click at the frame
+    // it reports.
+    guard let owner = Int32(argument(1)) else { die("usage: menubar <pid> [press|<title>]", 2) }
     let app = AXUIElementCreateApplication(owner)
     AXUIElementSetMessagingTimeout(app, 5)
     guard let extras = element(attribute(app, "AXExtrasMenuBar")), let item = children(extras).first else {
         emit(["item": false])
     }
     let label = string(item, kAXDescriptionAttribute) ?? string(item, kAXTitleAttribute) ?? ""
-    AXUIElementPerformAction(item, kAXPressAction as CFString)
+    let box: Any = frame(item).map { describe($0) } ?? NSNull()
+    let asked = arguments.count > 2 ? arguments[2] : ""
     var titles: [String] = []
     var menuItems: [AXUIElement] = []
-    for _ in 0..<30 {
-        if let menu = children(item).first(where: { string($0, kAXRoleAttribute) == kAXMenuRole as String }) {
-            menuItems = children(menu)
-            titles = menuItems.map { string($0, kAXTitleAttribute) ?? "" }
-            if !titles.isEmpty { break }
-        }
-        usleep(100_000)
-    }
+    var pressed = false
     var chosen = false
-    if arguments.count > 2, let target = menuItems.first(where: { (string($0, kAXTitleAttribute) ?? "").hasPrefix(arguments[2]) }) {
-        chosen = AXUIElementPerformAction(target, kAXPressAction as CFString) == .success
+    if asked == "press" {
+        pressed = AXUIElementPerformAction(item, kAXPressAction as CFString) == .success
     } else {
-        press("escape")
+        for _ in 0..<30 {
+            if let menu = children(item).first(where: { string($0, kAXRoleAttribute) == kAXMenuRole as String }) {
+                menuItems = children(menu)
+                titles = menuItems.map { string($0, kAXTitleAttribute) ?? "" }
+                if !titles.isEmpty { break }
+            }
+            usleep(100_000)
+        }
+        if !asked.isEmpty,
+           let target = menuItems.first(where: { (string($0, kAXTitleAttribute) ?? "").hasPrefix(asked) }) {
+            chosen = AXUIElementPerformAction(target, kAXPressAction as CFString) == .success
+        }
     }
-    emit(["item": true, "label": label, "items": titles, "chosen": chosen])
+    emit(["item": true, "label": label, "frame": box, "items": titles, "pressed": pressed, "chosen": chosen])
 
 case "hold":
     let (code, flags) = combo(argument(1))
