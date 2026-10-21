@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "ee3a5369cf860d74ae1a3578a288844b3984025dc7f43303626ee533d7ef3aa8"
+    public static let sourceDigest = "733d565cb65e9b67616797c2b4985c43886f4bd138119b75b0bc696a5ed76f11"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -114,8 +114,8 @@ public enum Tokens {
         public static let drawerCloseDamping: Double = 0.95
         /// How long a removed history card's Undo stays offered: long enough to notice the mistake, short enough not to sit there.
         public static let removalUndoSeconds: Double = 8
-        /// How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes.
-        public static let drawerSettleMilliseconds: Double = 320
+        /// How long the drawer's state change fades under Reduce Motion: a fade, not a cut, which reads as a glitch (XiaolaiDict's value, kept).
+        public static let reducedFade: Double = 0.15
     }
 
     /// Alpha values a surface is drawn at: a card's tint and its shadow.

@@ -88,7 +88,9 @@ public final class HistoryDrawerController {
     private var monitors: [Any] = []
     private var escape: Any?
     private var screens: NSObjectProtocol?
-    private var hiding: Task<Void, Never>?
+    /// The reader asked for the drawer and nothing has hidden it since: true from `show()` until `hide()`, across the one
+    /// runloop turn the open's animation waits for, so a click in that turn still finds a drawer to close.
+    private var showing = false
 
     public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil) {
         self.model = model
@@ -96,17 +98,16 @@ public final class HistoryDrawerController {
         self.onReview = onReview
     }
 
-    public var isOpen: Bool { panel?.isVisible == true && presentation.revealed }
+    public var isOpen: Bool { showing || (panel?.isVisible == true && presentation.revealed) }
 
     /// **The reader asked for the history** (a left click on the menu-bar icon): show it, never toggle it — a repeated
     /// click keeps it open (XiaolaiDict's decision, kept).
     public func show() {
         // Shown, not toggled: a repeated click on the icon keeps the drawer open, so the second is a no-op.
-        guard !presentation.revealed else { return }
-        hiding?.cancel()
-        hiding = nil
+        guard !showing, !presentation.revealed else { return }
         let screen = Self.screen(for: statusItemFrame?()) ?? NSScreen.main
         guard let screen else { return }
+        showing = true
         let geometry = HistoryDrawerGeometry.make(
             width: Tokens.Window.historyDrawerWidth, visible: screen.visibleFrame, screen: screen.frame,
             cornerRadius: Tokens.Window.drawerCornerRadius, shadowMargin: Tokens.Window.drawerShadowMargin)
@@ -115,24 +116,43 @@ public final class HistoryDrawerController {
         panel.setFrame(geometry.window, display: true)
         presentation.place(geometry)
         panel.orderFrontRegardless()
-        withAnimation(Motion.drawerOpen) { presentation.revealed = true }
         onVisibilityChange?(true)
         observeClicks()
         observeEscape()
         observeScreens()
+        // **One runloop turn, so the parked frame is on screen before the spring starts** (XiaolaiDict's lesson, kept):
+        // a state change made in the turn the window first lays out animates from no rendered frame, and the first open
+        // snapped while every later one slid. A turn, not a duration — no interval a slow machine can invalidate.
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.showing, !self.presentation.revealed else { return }
+                withAnimation(Motion.drawerOpen) { self.presentation.revealed = true }
+            }
+        }
         Task { @MainActor [weak self] in await self?.model.refresh() }
     }
 
     public func hide() {
-        guard panel != nil, presentation.revealed || isVisiblePanel else { return }
-        withAnimation(Motion.drawerClose) { presentation.revealed = false }
+        guard panel != nil, showing || presentation.revealed || isVisiblePanel else { return }
+        let wasOpening = showing
+        showing = false
         onVisibilityChange?(false)
         stopObserving()
-        hiding?.cancel()
-        hiding = Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .milliseconds(Int(Tokens.Motion.drawerSettleMilliseconds)))
-            guard !Task.isCancelled, let self, !self.presentation.revealed else { return }
-            self.panel?.orderOut(nil)
+        guard presentation.revealed else {
+            // Still waiting for its first rendered frame: there is nothing to animate, so the window just goes. A close
+            // already under way is left to its own completion, which sees `showing` false and orders out once.
+            if wasOpening { panel?.orderOut(nil) }
+            return
+        }
+        // **The window is ordered out by the animation's own completion, never after a duration chosen to match it**
+        // (XiaolaiDict's lesson after its own shudder fix): a fixed 320 ms sat beside a spring it stayed in step with by
+        // hand, and on a loaded machine it cut the close mid-flight — so the next open began wherever that cut left the
+        // content, and the drawer's motion differed from click to click.
+        withAnimation(Motion.drawerClose) { presentation.revealed = false } completion: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, !self.showing else { return }
+                self.panel?.orderOut(nil)
+            }
         }
     }
 
@@ -159,6 +179,10 @@ public final class HistoryDrawerController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        // **The window is never animated; the content inside it is** (XiaolaiDict's docked drawer): AppKit's own ordering
+        // animation would stack a system fade on top of the drawer's spring — and only on the way in, since the content
+        // is already transparent when it leaves — so the open would read fainter and slower than the close.
+        panel.animationBehavior = .none
         panel.level = .floating
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
@@ -251,10 +275,20 @@ final class HistoryDrawerPanel: NSPanel {
 /// The drawer's one motion: two springs, arriving with a little give and leaving without one, and a cross-fade with no
 /// travel under Reduce Motion.
 enum Motion {
-    static var drawerOpen: Animation { .spring(response: Tokens.Motion.drawerOpenResponse,
-                                               dampingFraction: Tokens.Motion.drawerOpenDamping) }
-    static var drawerClose: Animation { .spring(response: Tokens.Motion.drawerCloseResponse,
-                                                dampingFraction: Tokens.Motion.drawerCloseDamping) }
+    static var drawerOpen: Animation { travels ? openSpring : reducedFade }
+    static var drawerClose: Animation { travels ? closeSpring : reducedFade }
+
+    private static var openSpring: Animation {
+        .spring(response: Tokens.Motion.drawerOpenResponse, dampingFraction: Tokens.Motion.drawerOpenDamping)
+    }
+
+    private static var closeSpring: Animation {
+        .spring(response: Tokens.Motion.drawerCloseResponse, dampingFraction: Tokens.Motion.drawerCloseDamping)
+    }
+
+    /// **A fade, not a cut** (XiaolaiDict's rule, kept): a state change with no transition at all reads as a glitch, and
+    /// Reduce Motion asks for less movement, never for none.
+    private static var reducedFade: Animation { .easeOut(duration: Tokens.Motion.reducedFade) }
 
     /// With Reduce Motion the drawer does not travel: it is already in place, and only its opacity changes.
     static var travels: Bool { !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion }

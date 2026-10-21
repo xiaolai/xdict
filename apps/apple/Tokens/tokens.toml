@@ -137,7 +137,7 @@ drawerOpenDamping = { value = 0.86, why = "XiaolaiDict's drawer spring, kept: en
 drawerCloseResponse = { value = 0.26, why = "XiaolaiDict's drawer spring, kept: it leaves faster than it arrives, and without a bounce." }
 drawerCloseDamping = { value = 0.95, why = "XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back." }
 removalUndoSeconds = { value = 8, why = "How long a removed history card's Undo stays offered: long enough to notice the mistake, short enough not to sit there." }
-drawerSettleMilliseconds = { value = 320, why = "How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes." }
+reducedFade = { value = 0.15, why = "How long the drawer's state change fades under Reduce Motion: a fade, not a cut, which reads as a glitch (XiaolaiDict's value, kept)." }
 
 [opacity]
 cardBorder = { value = 0.38, why = "A history card's tinted border: visible as a tint, never as a rule." }
