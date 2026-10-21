@@ -25,14 +25,18 @@ public struct LookupPanelView: View {
     let shortcut: String?
     let expand: () -> Void
     let showDictionaries: () -> Void
+    /// **"Meaning here"** (ADR-0021 d.1): the panel is too small for an answer, so it hands the sentence to the window it
+    /// expands into, which asks there. A capture with no sentence offers no ask.
+    let askMeaning: () -> Void
 
     public init(state: SearchWindowState, notice: PanelNotice, shortcut: String?, expand: @escaping () -> Void,
-                showDictionaries: @escaping () -> Void = {}) {
+                showDictionaries: @escaping () -> Void = {}, askMeaning: @escaping () -> Void = {}) {
         self.state = state
         self.notice = notice
         self.shortcut = shortcut
         self.expand = expand
         self.showDictionaries = showDictionaries
+        self.askMeaning = askMeaning
     }
 
     public var body: some View {
@@ -60,6 +64,7 @@ public struct LookupPanelView: View {
         .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
+        .onChange(of: state.model.lookup) { state.lookupDidChange() }
     }
 
     /// Everything around the entry, in points: the title row under its space and over its gap, and the two footer rows,
@@ -86,6 +91,13 @@ public struct LookupPanelView: View {
                 .layoutPriority(1)
                 .accessibilityIdentifier("panel.query")
             Spacer(minLength: 0)
+            if state.meaning.canAsk {
+                MeaningAskButton(enabled: true, action: askMeaning)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .frame(width: PanelLook.titleRow, height: PanelLook.titleRow)
+                    .accessibilityIdentifier("panel.meaning")
+            }
         }
         .frame(height: PanelLook.titleRow)
         .padding(.top, PanelLook.topSpace)

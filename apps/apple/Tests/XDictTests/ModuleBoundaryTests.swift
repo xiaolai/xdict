@@ -20,7 +20,7 @@ struct ModuleBoundaryTests {
     /// a leaf — nothing in this package depends on it (`theDevelopmentHostIsALeaf`) — and `Tools/build-bundle.sh`
     /// refuses an XDict.app that carries it, or an app binary that carries its `--disable-layer` flag. The app and the
     /// entry view are held to the rule above like every other target.
-    static let developmentHostsReachingTheCore: Set<String> = ["XDictEntryLab"]
+    static let developmentHostsReachingTheCore: Set<String> = ["XDictEntryLab", "XDictAIMeasure"]
 
     /// **The development instruments that never ship, and the flag each answers to** (plan-capture WI-4; ADR-0014
     /// decision 8, after XiaolaiDict ADR-0016): `XDictCaptureLab`'s `--read-point` reads the word under any screen point
@@ -45,6 +45,13 @@ struct ModuleBoundaryTests {
     static let systemModules: [String: Set<String>] = [
         // No UI and no domain: the identities, the core's versions and the launch window's sentences, plain Swift.
         "XDictBase": [],
+        // The AI contract's values and providers (ADR-0021): `Foundation` for the answer's JSON, `FoundationModels`
+        // for Apple's on-device model, `Darwin` for the CLI child's process group, and sayso's `CodexAuth` for the
+        // Codex sign-in states.
+        "XDictAI": ["CodexAuth", "Darwin", "Foundation", "FoundationModels", "Synchronization"],
+        // The vectors, read and hashed: the digest is the suite revision (`CryptoKit`); `CodexAuth` for the state enum
+        // the Codex tests inject.
+        "XDictAITests": ["CodexAuth", "CryptoKit", "Foundation", "Synchronization", "Testing"],
         // The design tokens: lengths as CGFloat, text roles and colours for both AppKit and SwiftUI call sites.
         "XDictTokens": ["AppKit", "SwiftUI"],
         // `CryptoKit`: the source's digest, compared with the one the generated file carries.
@@ -53,8 +60,9 @@ struct ModuleBoundaryTests {
         "XDictContract": contractMayBind,
         // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers; `AppKit` is the main window's
         // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6);
-        // `ServiceManagement` launch at login and `os` the log of its refusal (WI-9).
-        "XDictUI": ["AppKit", "Foundation", "Observation", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "os"],
+        // `ServiceManagement` launch at login and `os` the log of its refusal (WI-9); `Security` the cloud endpoint's
+        // key in the Keychain (ADR-0021 d.3, `KeychainKeyStore`), the only secret the app stores.
+        "XDictUI": ["AppKit", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         // `Observation`: the tests watch the model's `found` for a needless change (the title's count, P2).
@@ -89,6 +97,9 @@ struct ModuleBoundaryTests {
         "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
+        // The AI prompt harness (plan-ai-meaning WI-0): `FoundationModels` counts the on-device model's tokens and asks
+        // it; Foundation writes the report. A leaf, never in the bundle, printing sizes and timings only.
+        "XDictAIMeasure": ["Foundation", "FoundationModels"],
         // The capture lab (plan-capture WI-4): hover's reader at one point, its report as JSON. Nothing that draws.
         "XDictCaptureLab": ["CoreGraphics", "Foundation"],
         "XDictCaptureLabTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],

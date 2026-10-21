@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "6b166ada478a1be4a6e9f5db9a216b9a6eef7d9fd007794041b25d570ff21509"
+    public static let sourceDigest = "6cc495feedf20e9aefb45ac8f676881829b9dd8ffd716ac924a4c11d9d4d9423"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -98,6 +98,8 @@ public enum Tokens {
         public static let popoverChrome: CGFloat = 26
         /// The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53).
         public static let siteField: CGFloat = 140
+        /// The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form.
+        public static let promptEditor: CGFloat = 140
     }
 
     /// Widths and heights of windows, panes, columns and sheets.
@@ -164,6 +166,12 @@ public enum Tokens {
         public static let settingsSidebar: CGFloat = 200
         /// The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do.
         public static let settingsHeight: CGFloat = 560
+        /// The answer pane's narrowest: the shortest sense quote wraps to about four lines; below it the entry column keeps its room.
+        public static let meaningPaneMin: CGFloat = 260
+        /// The answer pane's width when it opens: the quote, its explanation and a two-button row read without wrapping the outcome line.
+        public static let meaningPaneIdeal: CGFloat = 340
+        /// The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence.
+        public static let meaningPaneMax: CGFloat = 460
     }
 
     /// Corner radii.
