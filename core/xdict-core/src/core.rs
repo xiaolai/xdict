@@ -12,11 +12,14 @@ use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use xdict_entry::{Style, StyleSheet};
 #[cfg(not(target_family = "wasm"))]
 use xdict_ledger::FileStore;
+/// **A sync pass is a native shell's** (plan §2.6): the Web has no folder to merge through, so the type is unused there.
+#[cfg(not(target_family = "wasm"))]
+use xdict_ledger::SyncReport;
 use xdict_ledger::{
-    CardState, Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, GradeRecord, History, Ledger,
-    MemoryStore, Note, Reading, ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult, RecordOutcome,
-    Removal, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp, Store, StudyCard, StudyGrade,
-    StudyPhase, StudyTarget, TargetKind, UndoRecord,
+    CardConflict, CardState, Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, GradeRecord,
+    History, Ledger, MemoryStore, Note, Reading, ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult,
+    RecordOutcome, Removal, ResolutionRecord, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp,
+    Store, StudyCard, StudyGrade, StudyPhase, StudyTarget, TargetKind, UndoRecord,
 };
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain};
@@ -51,6 +54,11 @@ pub use xdict_identity::EDITION_SCHEME;
 
 /// The largest resource the core serves: one block of the reader's, the most an MDD record can be.
 pub const MAX_RESOURCE_BYTES: u64 = xdict_mdx::limits::BLOCK_BYTES;
+
+/// **A peer log over this size is refused, not read** (plan §2.6): a year of readings on a device that checks a hundred
+/// words a day is far under it, and a stray file in the reader's sync folder must not exhaust the service.
+#[cfg(not(target_family = "wasm"))]
+pub const MAX_SYNC_BYTES: u64 = 256 * 1_024 * 1_024;
 
 /// Candidates one lookup may read, redirect targets included. Larger than the reader's own
 /// [`xdict_mdx::limits::LOOKUP_RECORDS`], which bounds records it returns: the core reads each candidate only
@@ -1271,7 +1279,9 @@ impl Core {
                     detail: format!("no study card for {target_key}"),
                 })?;
                 let due = card.state.is_new() || card.state.due.is_some_and(|due| due <= stamp.at);
-                let eligible = card.head == revision && due;
+                // **A conflicted card waits for the reader's choice** (ADR-0027): a grade on it would be a third branch.
+                let conflicted = ledger.conflict(&target_key).is_some();
+                let eligible = card.head == revision && due && !conflicted;
                 (card, eligible)
             };
             let after = scheduler
@@ -1322,6 +1332,94 @@ impl Core {
             let mut held = self.ledger()?;
             let ledger = self.opened(&mut held)?;
             let outcome = ledger.record_undo(undo, &operation_id, eligible).map_err(ledger_error)?;
+            let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
+            Ok(ReviewOutcome { outcome, card })
+        })
+    }
+
+    /// **One sync pass** (plan §2.6): every peer log in `input` merges into this one, then this device's whole log is
+    /// written to `output` for the others. The two folders are the app group's (the service's sandbox cannot read the
+    /// reader's storage): the app copies the reader's folder in, and this device's log back out. What travels is the log —
+    /// readings, notes and evidence hashes — never a dictionary's text.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn ledger_sync(&self, input: String, output: String, device: String) -> Result<SyncReport, CoreError> {
+        guard(|| {
+            if device.is_empty() || !device.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
+                return Err(CoreError::Malformed { detail: format!("a device name for a file: {device:?}") });
+            }
+            let source = std::path::PathBuf::from(&input);
+            let sink = std::path::PathBuf::from(&output);
+            std::fs::create_dir_all(&sink)
+                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", sink.display()) })?;
+            let ours = sink.join(format!("xdict-{device}.xdlog"));
+            let mut report = SyncReport { exported: 0, peers: 0, added: 0, skipped: 0 };
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            let listing = std::fs::read_dir(&source)
+                .map_err(|error| CoreError::Malformed { detail: format!("the sync folder: {error}") })?;
+            for entry in listing {
+                let path =
+                    entry.map_err(|error| CoreError::Malformed { detail: format!("the sync folder: {error}") })?.path();
+                let named =
+                    path.file_name().and_then(|name| name.to_str()).is_some_and(|name| name.ends_with(".xdlog"));
+                if path == ours || !named {
+                    continue;
+                }
+                let length = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+                if length > MAX_SYNC_BYTES {
+                    return Err(CoreError::Malformed {
+                        detail: format!("{} is {length} bytes, over the sync bound", path.display()),
+                    });
+                }
+                let bytes = std::fs::read(&path)
+                    .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", path.display()) })?;
+                let merged = ledger.merge(&bytes).map_err(ledger_error)?;
+                report.peers += 1;
+                report.added += merged.added;
+                report.skipped += merged.skipped;
+            }
+            let bytes = ledger.log_bytes().map_err(ledger_error)?;
+            let temporary = ours.with_extension("xdlog.tmp");
+            std::fs::write(&temporary, &bytes)
+                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", temporary.display()) })?;
+            std::fs::rename(&temporary, &ours)
+                .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", ours.display()) })?;
+            report.exported = bytes.len() as u64;
+            Ok(report)
+        })
+    }
+
+    /// **The cards two devices' answers left in two states** (ADR-0027): the reader chooses a branch, and nothing is
+    /// retracted before they do. They are not in the queue.
+    pub fn review_conflicts(&self) -> Result<Vec<CardConflict>, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.conflicts())
+    }
+
+    /// **Keeps one branch of a conflict** (ADR-0027): `keep` names one of the card's candidates; replay voids the others
+    /// and everything that descended from them. A keep that is not a candidate is answered `Ineligible`.
+    pub fn review_resolve(
+        &self,
+        target_key: String,
+        keep: String,
+        stamp: Stamp,
+        operation_id: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        guard(|| {
+            let (target, eligible) = {
+                let mut held = self.ledger()?;
+                let ledger = self.opened(&mut held)?;
+                let conflict = ledger.conflict(&target_key).ok_or_else(|| CoreError::NotFound {
+                    what: Missing::Entry,
+                    detail: format!("no conflict on {target_key}"),
+                })?;
+                let eligible = conflict.candidates.iter().any(|candidate| candidate.id == keep);
+                (conflict.target.clone(), eligible)
+            };
+            let resolution = ResolutionRecord { target, keep, at: stamp.at, device: stamp.device };
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            let outcome = ledger.resolve(resolution, &operation_id, eligible).map_err(ledger_error)?;
             let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
             Ok(ReviewOutcome { outcome, card })
         })

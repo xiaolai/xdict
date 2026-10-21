@@ -71,6 +71,12 @@ export type ReviewOutcome = { outcome: RecordOutcome; card: StudyCard };
 export type ReanchorResult = 'reanchored' | 'reordered' | 'changed' | 'missing';
 export type ReanchorOutcome = { target: StudyTarget; result: ReanchorResult };
 export type ReanchorReport = { outcomes: ReanchorOutcome[] };
+/** A grade a device made from a revision another device also graded (ADR-0027). */
+export type ConflictCandidate = { id: string; grade: StudyGrade; at: number; device: string; after: CardState };
+/** A card two devices left in two states: the reader keeps one candidate. */
+export type CardConflict = { target: StudyTarget; note: StudyNote; candidates: ConflictCandidate[] };
+/** What one sync pass did with the reader's folder; sync itself is a native shell's (plan §2.6). */
+export type SyncReport = { exported: number; peers: number; added: number; skipped: number };
 export type Recoverability = 'freeBlocks';
 export type EraseReport = { clearedReadings: number; clearedNotes: number; clearedGrades: number; recoverable: Recoverability };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
@@ -164,6 +170,8 @@ interface GlueCore {
   review_grade(targetKey: string, revision: string, grade: number, policy: string, stamp: string, operation: string): string;
   review_undo(targetKey: string, gradeEvent: string, stamp: string, operation: string): string;
   review_summary(now: number): string;
+  review_conflicts(): string;
+  review_resolve(targetKey: string, keep: string, stamp: string, operation: string): string;
   definition_hash_of(dict: string, entry: string): string;
   study_reanchor(oldEdition: string, newEdition: string, stamp: string, operationPrefix: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
@@ -395,6 +403,16 @@ export class XDictCore {
   /** Re-anchors notes of one edition to another under the same lineage (plan §5.1). */
   studyReanchor(oldEdition: string, newEdition: string, stamp: Stamp, operationPrefix: string): ReanchorReport {
     return this.call(() => this.inner.study_reanchor(oldEdition, newEdition, JSON.stringify(stamp), operationPrefix));
+  }
+
+  /** **The cards two devices left conflicted** (ADR-0027): the reader chooses a branch. */
+  reviewConflicts(): CardConflict[] {
+    return this.call(() => this.inner.review_conflicts());
+  }
+
+  /** Keeps one branch of a conflict; the others are voided with what descended from them. */
+  reviewResolve(target: string, keep: string, stamp: Stamp, operation: string): ReviewOutcome {
+    return this.call(() => this.inner.review_resolve(target, keep, JSON.stringify(stamp), operation));
   }
 
   link(dict: string, url: string, origin: LinkOrigin, view: View): Link {
