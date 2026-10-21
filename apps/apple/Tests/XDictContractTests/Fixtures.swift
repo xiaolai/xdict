@@ -50,6 +50,7 @@ enum Fixtures {
         .lookup(query: "run", dicts: [dict], options: LookupOptions(limit: 1_000, offset: 1_000, mode: .link, generation: 77)),
         .suggest(prefix: "ab", dicts: [dict], limit: 20),
         .entry(dict: dict, entry: entryRef, render: .reader),
+        .entryText(dict: dict, entry: entryRef, text: TextRenderContext(maxBodyBytes: 1 << 20, maxTextBytes: 64 << 10)),
         .link(dict: dict, url: "entry://hold#sense2", origin: .entry(entry: entryRef), render: .reader),
         .link(dict: dict, url: "../fonts/a.woff2", origin: .resource(path: "styles/main.css"),
               render: RenderContext(maxBodyBytes: 1 << 20)),
@@ -67,7 +68,7 @@ enum Fixtures {
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 18
+    static let operationCases = 19
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -78,16 +79,17 @@ enum Fixtures {
         case .lookup: 5
         case .suggest: 6
         case .entry: 7
-        case .link: 8
-        case .resource: 9
-        case .joinLineage: 10
-        case .splitLineage: 11
-        case .lineageOf: 12
-        case .health: 13
-        case .readingStyle: 14
-        case .convertApple: 15
-        case .cancelConversion: 16
-        case .displayOptions: 17
+        case .entryText: 8
+        case .link: 9
+        case .resource: 10
+        case .joinLineage: 11
+        case .splitLineage: 12
+        case .lineageOf: 13
+        case .health: 14
+        case .readingStyle: 15
+        case .convertApple: 16
+        case .cancelConversion: 17
+        case .displayOptions: 18
         }
     }
 
@@ -121,6 +123,10 @@ enum Fixtures {
         .page(page),
         .suggestions(["abandon", "abbé", "a priori"]),
         .entry(Entry(entry: entryRef, csp: "default-src 'none'; img-src xdict://d/ data:", lossyBytes: 2)),
+        .entryText(EntryText(entry: entryRef, text: "hold\n  to keep\n  an opinion", spans: [
+            TextSpan(start: 0, len: 4, role: "headword", label: nil, section: nil),
+            TextSpan(start: 6, len: 29, role: "definition", label: "1", section: "verb"),
+        ], complete: false, omittedBytes: 12, cutAt: 35, spansDropped: 1)),
         .link(.lookup(query: "hold", anchor: "sense2")),
         .link(.lookup(query: "hold", anchor: nil)),
         .link(.resource(path: "images/a%20b.png")),
@@ -168,7 +174,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 15
+    static let answerCases = 16
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -179,13 +185,14 @@ enum Fixtures {
         case .page: 5
         case .suggestions: 6
         case .entry: 7
-        case .link: 8
-        case .resource: 9
-        case .lineage: 10
-        case .health: 11
-        case .readingStyle: 12
-        case .converted: 13
-        case .displayOptions: 14
+        case .entryText: 8
+        case .link: 9
+        case .resource: 10
+        case .lineage: 11
+        case .health: 12
+        case .readingStyle: 13
+        case .converted: 14
+        case .displayOptions: 15
         }
     }
 
@@ -246,13 +253,14 @@ enum Fixtures {
         .invalidPackage(.duplicateFile(mdxID)), .invalidPackage(.notNamedByID(file: volumeID)),
         .invalidPackage(.sidecarNotAPackagePath(file: sidecarID)), .invalidPackage(.orderNotContiguous(role: .mdd)),
         .invalidPackage(.tooManyFiles(found: 65, limit: 64)),
-        .renderLimitOutOfRange(requested: 64 << 20, ceiling: 16 << 20), .duplicateToken(file: mdxID),
+        .renderLimitOutOfRange(requested: 64 << 20, ceiling: 16 << 20),
+        .textLimitOutOfRange(requested: 2 << 20, ceiling: 1 << 20), .duplicateToken(file: mdxID),
         .unsupportedOperation, .missingToken(file: volumeID), .handleIsNotThePathsFile(file: mdxID),
         .notARegularReadOnlyFile(file: sidecarID), .envelopeTooLarge(bytes: 5 << 20, limit: 4 << 20),
         .suggestLimitOutOfRange(requested: 101, ceiling: 100),
     ]
 
-    static let refusalCases = 14
+    static let refusalCases = 15
     static func index(_ refusal: Refusal) -> Int {
         switch refusal {
         case .tooManyInFlight: 0
@@ -262,13 +270,14 @@ enum Fixtures {
         case .unexpectedHandles: 4
         case .invalidPackage: 5
         case .renderLimitOutOfRange: 6
-        case .duplicateToken: 7
-        case .unsupportedOperation: 8
-        case .missingToken: 9
-        case .handleIsNotThePathsFile: 10
-        case .notARegularReadOnlyFile: 11
-        case .envelopeTooLarge: 12
-        case .suggestLimitOutOfRange: 13
+        case .textLimitOutOfRange: 7
+        case .duplicateToken: 8
+        case .unsupportedOperation: 9
+        case .missingToken: 10
+        case .handleIsNotThePathsFile: 11
+        case .notARegularReadOnlyFile: 12
+        case .envelopeTooLarge: 13
+        case .suggestLimitOutOfRange: 14
         }
     }
 

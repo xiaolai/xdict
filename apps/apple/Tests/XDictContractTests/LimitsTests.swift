@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import XDictContract
+@testable import XDictContract
 
 /// The numbers the contract fixes, each held to the measurement or the core constant it was taken from.
 struct LimitsTests {
@@ -16,11 +16,13 @@ struct LimitsTests {
         #expect(Limits.maxBodyBytes < Limits.maxResourceBytes)
     }
 
-    @Test func entriesAndResourcesAreTheBulkCallsAndTwoMayRun() {
+    @Test func entriesResourcesAndAnEntryTextAreTheBulkCallsAndTwoMayRun() {
         #expect(Limits.bulkCallsInFlight == 2)
         let bulk = Fixtures.operations.filter(\.isBulk).map(Fixtures.index)
         #expect(Set(bulk) == [Fixtures.index(.entry(dict: Fixtures.dict, entry: Fixtures.entryRef, render: .reader)),
-                              Fixtures.index(.resource(dict: Fixtures.dict, path: "a", render: .reader))])
+                              Fixtures.index(.resource(dict: Fixtures.dict, path: "a", render: .reader)),
+                              Fixtures.index(.entryText(dict: Fixtures.dict, entry: Fixtures.entryRef,
+                                                        text: TextRenderContext(maxBodyBytes: 1, maxTextBytes: 1)))])
     }
 
     /// Only an answer that carries a payload has a ceiling: an entry's is the view's, a resource's by its type.
@@ -167,5 +169,23 @@ struct LimitsTests {
         #expect(Deadlines.deadline(for: report, onFreshConnection: false) == .seconds(15))
         #expect(!report.reportsProgress && report.creditClass == nil && !report.isBulk && report.packageSpec == nil)
         #expect(report.render == nil)
+    }
+
+    /// **A reply over the envelope ceiling leaves as a typed refusal** (verification finding, 2026-10-20): the service
+    /// measures the bytes it is about to send, so an echoed key the input can grow never reaches a client that would
+    /// refuse it unread.
+    @Test func aReplyOverTheEnvelopeCeilingLeavesAsATypedRefusal() throws {
+        let entry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "ab", count: 32)),
+                             key: "hold", occurrence: 0)
+        let huge = EntryText(entry: entry, text: String(repeating: "x", count: 5 << 20), spans: [], complete: true,
+                             omittedBytes: 0, cutAt: 0, spansDropped: 0)
+        let data = try Response(id: 7, outcome: .answer(.entryText(huge))).boundedEncoded()
+        #expect(Limits.envelopeRefusal(data) == nil, "the substitute is itself within the ceiling")
+        let response = try Wire.decode(Response.self, from: data)
+        guard case .failure(.refused(.envelopeTooLarge(bytes: _, limit: _))) = response.outcome else {
+            Issue.record("not a typed refusal: \(response.outcome)")
+            return
+        }
+        #expect(response.id == 7)
     }
 }

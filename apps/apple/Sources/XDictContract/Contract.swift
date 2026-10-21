@@ -45,7 +45,9 @@ public enum Contract {
     /// `appleImport`: an Apple dictionary snapshot converted in the service (ADR-0011, plan WI-4).
     /// 7 (2026-10-18): the operation `displayOptions` and its answer, the display options an open dictionary's edition
     /// declares, with its defaults and the core's CSS (ADR-0013 decisions 2, 4 and 6), for Settings and the entry view.
-    public static let version: UInt32 = 7
+    /// 8 (2026-10-20): the operation `entryText` and its answer, an entry as whole plain text with spans and a cut
+    /// report, for the AI pane (ADR-0021 d.5, plan-ai-meaning WI-1/WI-5).
+    public static let version: UInt32 = 8
 }
 
 // MARK: - The request
@@ -97,6 +99,14 @@ public struct Request: Codable, Hashable, Sendable {
         }
         if let render = operation.render, !(1...Limits.maxBodyBytes).contains(render.maxBodyBytes) {
             return .renderLimitOutOfRange(requested: render.maxBodyBytes, ceiling: Limits.maxBodyBytes)
+        }
+        if let text = operation.textRender {
+            if !(1...Limits.maxBodyBytes).contains(text.maxBodyBytes) {
+                return .renderLimitOutOfRange(requested: text.maxBodyBytes, ceiling: Limits.maxBodyBytes)
+            }
+            if !(1...Limits.maxTextBytes).contains(text.maxTextBytes) {
+                return .textLimitOutOfRange(requested: text.maxTextBytes, ceiling: Limits.maxTextBytes)
+            }
         }
         if case .suggest(_, _, let limit) = operation, limit > Limits.maxSuggestions {
             return .suggestLimitOutOfRange(requested: limit, ceiling: Limits.maxSuggestions)
@@ -211,13 +221,17 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// The display options an open dictionary's edition declares (ADR-0013): which apply, their values and defaults,
     /// and the CSS that keys on them. Read by the core from the edition's markup, in the service; a short call.
     case displayOptions(dict: DictId)
+    /// **An entry as whole plain text** for a consumer that reads it (ADR-0021 d.5): the text, each run's span and
+    /// roles, and the cut report when the text budget trimmed it. The core projects it from the same render an `entry`
+    /// call gets (same guards, same roles); a cut is data, never an error. A bulk call, like `entry`.
+    case entryText(dict: DictId, entry: EntryRef, text: TextRenderContext)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText: nil
         }
     }
 
@@ -226,14 +240,23 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText: nil
         }
     }
 
-    /// An entry or a resource: the calls whose reply carries a payload, of which `Limits.bulkCallsInFlight` run at once.
+    /// The text context of `entryText`: its body ceiling and its text budget.
+    public var textRender: TextRenderContext? {
+        switch self {
+        case .entryText(_, _, let text): text
+        default: nil
+        }
+    }
+
+    /// An entry, a resource or an entry's text: the calls whose reply is the heaviest, of which
+    /// `Limits.bulkCallsInFlight` run at once.
     public var isBulk: Bool {
         switch self {
-        case .entry, .resource: true
+        case .entry, .resource, .entryText: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: false
         }
@@ -243,7 +266,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// lookup for the calls that search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource: .bulk
+        case .entry, .resource, .entryText: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
@@ -256,7 +279,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
         case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
-             .readingStyle(let dict), .displayOptions(let dict):
+             .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion: []
@@ -280,6 +303,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .readingStyle: .readingStyle
         case .convertApple: .converted
         case .displayOptions: .displayOptions
+        case .entryText: .entryText
         }
     }
 
@@ -289,7 +313,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage, .health, .convertApple: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions: false
+             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText: false
         }
     }
 }
@@ -314,6 +338,15 @@ public struct Response: Codable, Hashable, Sendable {
     /// service sends an empty envelope, which `read` reports as `undecodable`.
     public func encoded() throws -> Data {
         try Wire.encode(self)
+    }
+
+    /// **The reply, held to the envelope ceiling on the way out as the client holds it on the way in** (verification
+    /// finding, 2026-10-20): a field the input can grow — an entry's key is echoed whole — must not make a reply the
+    /// receiver refuses. Over the ceiling, the reply becomes a typed `envelopeTooLarge` refusal, which is small.
+    public func boundedEncoded() throws -> Data {
+        let data = try encoded()
+        guard let refusal = Limits.envelopeRefusal(data) else { return data }
+        return try Response(contract: contract, id: id, outcome: .failure(.refused(refusal))).encoded()
     }
 
     /// **The client's reading of a reply to `request`**: its size first (`Limits.maxEnvelopeBytes`), then the header
@@ -411,13 +444,15 @@ public enum Answer: Codable, Hashable, Sendable {
     case converted(Converted)
     /// The display options the dictionary's edition declares (contract 7).
     case displayOptions(DisplayOptions)
+    /// An entry as plain text, its spans and its cut report (contract 8).
+    case entryText(EntryText)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted, .displayOptions: false
+             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText: false
         }
     }
 
@@ -447,6 +482,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .readingStyle: .readingStyle
         case .converted: .converted
         case .displayOptions: .displayOptions
+        case .entryText: .entryText
         }
     }
 }
@@ -464,7 +500,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
-    case readingStyle, converted, displayOptions
+    case readingStyle, converted, displayOptions, entryText
 }
 
 // MARK: - Events

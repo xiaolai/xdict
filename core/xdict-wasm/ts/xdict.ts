@@ -37,6 +37,9 @@ export type Page = { hits: Hit[]; total: number; generation: number; problems: H
 /** `originalStyle`: the reader's "Original style" for the dictionary (ADR-0010 Q3); absent is false. */
 export type View = { baseUrl: string; maxBodyBytes: number; originalStyle?: boolean };
 export type Entry = { entry: EntryRef; html: string; csp: string; lossyBytes: number };
+export type TextView = { baseUrl: string; maxBodyBytes: number; maxTextBytes: number; originalStyle?: boolean };
+export type TextSpan = { start: number; len: number; role: string | null; label: string | null; section: string | null };
+export type EntryText = { entry: EntryRef; text: string; spans: TextSpan[]; complete: boolean; omittedBytes: number; cutAt: number; spansDropped: number };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
 export type BlockReason = { type: 'remote'; url: string } | { type: 'script' } | { type: 'unknownScheme'; scheme: string };
 export type Link =
@@ -116,6 +119,7 @@ interface GlueCore {
   lookup(query: string, dicts: string, options: string): string;
   suggest(prefix: string, dicts: string, limit: number): string;
   entry(dict: string, entry: string, view: string): string;
+  entry_text(dict: string, entry: string, view: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
   displayOptions(dict: string): string;
@@ -276,6 +280,10 @@ export class XDictCore {
 
   entry(dict: string, entry: EntryRef, view: View): Entry {
     return this.call(() => this.inner.entry(dict, JSON.stringify(entry), JSON.stringify(view)));
+  }
+
+  entryText(dict: string, entry: EntryRef, view: TextView): EntryText {
+    return this.call(() => this.inner.entry_text(dict, JSON.stringify(entry), JSON.stringify(view)));
   }
 
   link(dict: string, url: string, origin: LinkOrigin, view: View): Link {

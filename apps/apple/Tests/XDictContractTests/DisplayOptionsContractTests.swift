@@ -7,8 +7,8 @@ import XDictContract
 /// markup. A short call naming one open dictionary, holding no credit and no handle; the answer is the core's catalogue
 /// entry for that edition and its CSS, carried in the JSON, never as a payload.
 struct DisplayOptionsContractTests {
-    @Test func theContractIsVersion7() {
-        #expect(Contract.version == 7)
+    @Test func theContractIsVersion8() {
+        #expect(Contract.version == 8)
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

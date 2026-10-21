@@ -209,6 +209,69 @@ public struct RenderContext: Codable, Hashable, Sendable {
     }
 }
 
+/// The text context of `entryText` (contract 8): the render context it shares with `entry`, plus the budget on the
+/// plain text it returns, between 1 byte and `Limits.maxTextBytes`.
+public struct TextRenderContext: Codable, Hashable, Sendable {
+    public static let baseURL = RenderContext.baseURL
+
+    /// See `RenderContext.maxBodyBytes`: the entry is rendered under this ceiling before it is projected.
+    public let maxBodyBytes: UInt64
+    /// The most UTF-8 bytes of plain text to return.
+    public let maxTextBytes: UInt64
+    /// See `RenderContext.originalStyle`.
+    public let originalStyle: Bool
+
+    public init(maxBodyBytes: UInt64, maxTextBytes: UInt64, originalStyle: Bool = false) {
+        self.maxBodyBytes = maxBodyBytes
+        self.maxTextBytes = maxTextBytes
+        self.originalStyle = originalStyle
+    }
+}
+
+/// One run of an entry's text: its offsets in UTF-8 bytes of `EntryText.text`, and the roles written around it
+/// (ADR-0021 d.5). Unclassified text is kept, with none.
+public struct TextSpan: Codable, Hashable, Sendable {
+    public let start: UInt64
+    public let len: UInt64
+    public let role: String?
+    public let label: String?
+    public let section: String?
+
+    public init(start: UInt64, len: UInt64, role: String?, label: String?, section: String?) {
+        self.start = start
+        self.len = len
+        self.role = role
+        self.label = label
+        self.section = section
+    }
+}
+
+/// An entry as whole plain text, for a consumer that reads it: the text, its spans, and what the budget left out.
+/// A cut is data — `complete: false` — never an error (contract 8).
+public struct EntryText: Codable, Hashable, Sendable {
+    public let entry: EntryRef
+    public let text: String
+    public let spans: [TextSpan]
+    public let complete: Bool
+    /// UTF-8 bytes the budget left out.
+    public let omittedBytes: UInt64
+    /// Where the cut fell, as a byte offset in the whole entry's text (the length of `text`).
+    public let cutAt: UInt64
+    /// Runs (and so their roles) the budget left out.
+    public let spansDropped: UInt64
+
+    public init(entry: EntryRef, text: String, spans: [TextSpan], complete: Bool, omittedBytes: UInt64, cutAt: UInt64,
+                spansDropped: UInt64) {
+        self.entry = entry
+        self.text = text
+        self.spans = spans
+        self.complete = complete
+        self.omittedBytes = omittedBytes
+        self.cutAt = cutAt
+        self.spansDropped = spansDropped
+    }
+}
+
 /// An entry for the entry view, **less its HTML, which is the reply's payload** (UTF-8).
 public struct Entry: Codable, Hashable, Sendable {
     public let entry: EntryRef

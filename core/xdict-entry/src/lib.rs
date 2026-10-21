@@ -18,6 +18,7 @@ mod sheet;
 mod strip;
 mod symbols;
 mod tables;
+mod text;
 mod url;
 mod work;
 
@@ -38,6 +39,7 @@ pub use sheet::StyleSheet;
 pub use strip::script_purpose;
 #[doc(hidden)]
 pub use symbols::census_treatment;
+pub use text::{Projection, TextRun, entry_text_from_html};
 
 /// How many repairs the render makes in one run of an entry's text (`repair.rs`): what the health check counts as
 /// `text.repaired`. `at_start` says the run begins the record.

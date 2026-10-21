@@ -485,6 +485,12 @@ impl Core {
         watched_reply(|| self.0.entry(dict.into(), entry, view))
     }
 
+    /// The whole entry as plain text (ADR-0021 d.5): spans, completeness and the budget's cut.
+    pub fn entry_text(&self, dict: &str, entry: &str, view: &str) -> Reply {
+        let (entry, view) = (from_json(entry)?, from_json(view)?);
+        watched_reply(|| self.0.entry_text(dict.into(), entry, view))
+    }
+
     pub fn link(&self, dict: &str, url: &str, origin: &str, view: &str) -> Reply {
         reply(self.0.link(dict.into(), url.into(), from_json(origin)?, from_json(view)?))
     }
