@@ -7,10 +7,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::frame::next_frame;
-use crate::{Card, Day, DayLabel, Event, Frontier, History, LedgerError, MAX_CARDS, MAX_DAYS, Reading};
+use crate::{
+    Card, Day, DayLabel, Event, Frontier, GradeRecord, History, LedgerError, MAX_CARDS, MAX_DAYS, Note, Reading,
+    ReviewSummary, StudyCard, StudyTarget,
+};
 
 /// The projection's own version: a change to what is projected discards every snapshot built before it.
-pub(crate) const PROJECTION_VERSION: u32 = 1;
+pub(crate) const PROJECTION_VERSION: u32 = 2;
 const SECONDS_PER_DAY: f64 = 86_400.0;
 
 /// One event as the log stores it. The operation id is the caller's retry key; `parent` is the event this one saw, which
@@ -46,6 +49,34 @@ pub(crate) struct Projection {
     pub readings: Vec<IdentifiedReading>,
     pub associations: BTreeMap<String, String>,
     pub removed: HashSet<String>,
+    pub study: StudyProjection,
+}
+
+/// **The study projection** (plan-history-and-learning §5): the latest note per target, the grade chain in causal
+/// order with its voids, and the evidence a re-anchor moved.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StudyProjection {
+    pub notes: BTreeMap<String, NoteEntry>,
+    pub grades: BTreeMap<String, Vec<GradeEntry>>,
+    /// Each target's current evidence: what a re-anchor moved, else the note's own target.
+    pub evidence: BTreeMap<String, StudyTarget>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct NoteEntry {
+    pub note: Note,
+    /// The note event's id: a revision's parent and the card's `noteHead`.
+    pub head: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct GradeEntry {
+    pub id: String,
+    pub record: GradeRecord,
+    pub voided: bool,
 }
 
 /// A snapshot: the projection, and the log's frontier it was built from (ADR-0024). A snapshot whose frontier is not
@@ -59,6 +90,7 @@ pub(crate) struct Snapshot {
     pub readings: Vec<IdentifiedReading>,
     pub associations: BTreeMap<String, String>,
     pub removed: Vec<String>,
+    pub study: StudyProjection,
 }
 
 /// The log's frontier: how many events it holds, the last one, and a digest of the whole set — so a snapshot cannot
@@ -158,10 +190,112 @@ pub(crate) fn project(entries: &[Entry]) -> Projection {
                 }
             }
             Event::Erased(_) => {}
+            Event::NoteSaved(note) | Event::NoteRevised(note) => {
+                let key = note.target.key();
+                projection.study.evidence.entry(key.clone()).or_insert_with(|| note.target.clone());
+                projection.study.notes.insert(key, NoteEntry { note: note.clone(), head: entry.id.clone() });
+            }
+            Event::Graded(record) => {
+                let key = record.target.key();
+                projection.study.evidence.entry(key.clone()).or_insert_with(|| record.target.clone());
+                projection.study.grades.entry(key).or_default().push(GradeEntry {
+                    id: entry.id.clone(),
+                    record: record.clone(),
+                    voided: false,
+                });
+            }
+            Event::Undone(undo) => {
+                let key = undo.target.key();
+                if let Some(list) = projection.study.grades.get_mut(&key)
+                    && let Some(grade) = list.iter_mut().find(|grade| grade.id == undo.grade_event)
+                {
+                    grade.voided = true;
+                }
+            }
+            Event::Reanchored(moved) => {
+                let key = moved.target.key();
+                let mut target = moved.target.clone();
+                target.edition = moved.to_edition.clone();
+                target.definition_hash = moved.definition_hash.clone();
+                projection.study.evidence.insert(key, target);
+            }
         }
     }
     projection.readings.retain(|reading| !projection.removed.contains(&reading.id));
     projection
+}
+
+impl Projection {
+    /// The live note for an identity key, its target carrying the current evidence.
+    pub(crate) fn note(&self, key: &str) -> Option<Note> {
+        let entry = self.study.notes.get(key)?;
+        let mut note = entry.note.clone();
+        if let Some(target) = self.study.evidence.get(key) {
+            note.target = target.clone();
+        }
+        Some(note)
+    }
+
+    /// The card a target's note enrols, with the state the latest non-void grade left.
+    pub(crate) fn card(&self, key: &str) -> Option<StudyCard> {
+        let entry = self.study.notes.get(key)?;
+        let mut target = entry.note.target.clone();
+        if let Some(evidence) = self.study.evidence.get(key) {
+            target = evidence.clone();
+        }
+        let mut note = entry.note.clone();
+        note.target = target.clone();
+        let grades = self.study.grades.get(key);
+        let last = grades.and_then(|list| list.iter().rev().find(|grade| !grade.voided));
+        Some(StudyCard {
+            target,
+            note,
+            state: last.map(|grade| grade.record.after).unwrap_or_default(),
+            head: last.map(|grade| grade.id.clone()).unwrap_or_default(),
+            note_head: entry.head.clone(),
+            grades: grades.map_or(0, |list| list.iter().filter(|grade| !grade.voided).count() as u64),
+        })
+    }
+
+    pub(crate) fn cards(&self) -> Vec<StudyCard> {
+        self.study.notes.keys().filter_map(|key| self.card(key)).collect()
+    }
+
+    /// The cards due now — a new card is due at once — soonest first, new cards before scheduled ones.
+    pub(crate) fn queue(&self, now: f64, limit: usize) -> Vec<StudyCard> {
+        let mut due: Vec<StudyCard> = self.cards().into_iter().filter(|card| is_due(card, now)).collect();
+        due.sort_by(|left, right| {
+            let when = |card: &StudyCard| card.state.due.unwrap_or(f64::NEG_INFINITY);
+            when(left)
+                .partial_cmp(&when(right))
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(left.target.key().cmp(&right.target.key()))
+        });
+        due.truncate(limit);
+        due
+    }
+
+    /// How many cards are due, and the earliest future due instant when none is.
+    pub(crate) fn summary(&self, now: f64) -> ReviewSummary {
+        let cards = self.cards();
+        let due = cards.iter().filter(|card| is_due(card, now)).count() as u64;
+        let next_due = if due > 0 {
+            None
+        } else {
+            cards
+                .iter()
+                .filter_map(|card| card.state.due)
+                .filter(|when| when.is_finite() && *when > now)
+                .min_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|when| when as u64)
+        };
+        ReviewSummary { due, next_due }
+    }
+}
+
+/// A new card is due at once; a scheduled one at its due instant.
+pub(crate) fn is_due(card: &StudyCard, now: f64) -> bool {
+    card.state.is_new() || card.state.due.is_some_and(|when| when <= now)
 }
 
 /// **The days the drawer shows.** Newest card first within a day; days newest first, at most [`MAX_DAYS`] back and
@@ -259,6 +393,7 @@ pub(crate) fn snapshot_bytes(projection: &Projection, frontier: &Frontier) -> Re
         readings: projection.readings.clone(),
         associations: projection.associations.clone(),
         removed: projection.removed.iter().cloned().collect(),
+        study: projection.study.clone(),
     };
     let payload = serde_json::to_vec(&snapshot).map_err(|error| LedgerError::Corrupt(error.to_string()))?;
     Ok(crate::frame::frame(&payload))
@@ -278,6 +413,7 @@ pub(crate) fn snapshot_projection(bytes: &[u8], frontier: &Frontier) -> Option<P
         readings: snapshot.readings,
         associations: snapshot.associations,
         removed: snapshot.removed.into_iter().collect(),
+        study: snapshot.study,
     })
 }
 
