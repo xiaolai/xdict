@@ -191,7 +191,7 @@ public enum Deadlines {
         // ADR-0024: a record is one appended frame and its fsync — milliseconds on an idle disk; 5 s leaves room for a
         // busy one. A history replays the log once (bounded: 14 days, 400 cards) and groups it in memory.
         case .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary: .seconds(5)
+             .reviewSummary, .ledgerRemove, .ledgerRestore: .seconds(5)
         // A note reads the entry's body to hash it, as `entryText` does; a re-anchor reads one entry per note.
         case .studyNote, .studyNoteAt, .definitionHash: .seconds(10)
         case .studyReanchor: .seconds(15)

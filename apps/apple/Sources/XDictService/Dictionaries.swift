@@ -142,6 +142,12 @@ final class Dictionaries: Sendable {
             case .eraseData(let stamp, let operation):
                 let report = try core.ledgerErase(operation: operation, at: stamp.at, device: stamp.device)
                 return (.answer(.erased(XDictContract.StudyEraseReport(report))), nil)
+            case .ledgerRemove(let removal, let operation):
+                let outcome = try core.ledgerRemove(removal: XDictCore.Removal(removal), operation: operation)
+                return (.answer(.ledgerRecord(XDictContract.LedgerRecordOutcome(outcome))), nil)
+            case .ledgerRestore(let removal, let operation):
+                let outcome = try core.ledgerRestore(restore: XDictCore.Removal(removal), operation: operation)
+                return (.answer(.ledgerRecord(XDictContract.LedgerRecordOutcome(outcome))), nil)
             case .studyConflicts:
                 let conflicts = try core.reviewConflicts()
                 return (.answer(.conflicts(conflicts.map(XDictContract.CardConflict.init))), nil)

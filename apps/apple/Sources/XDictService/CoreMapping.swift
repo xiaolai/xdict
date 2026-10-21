@@ -530,6 +530,12 @@ extension XDictContract.Recoverability {
     }
 }
 
+extension XDictCore.Removal {
+    init(_ removal: XDictContract.Removal) {
+        self.init(eventIds: removal.eventIds, at: removal.at, device: removal.device)
+    }
+}
+
 extension XDictContract.StudyEraseReport {
     init(_ report: XDictCore.EraseReport) {
         self.init(clearedReadings: report.clearedReadings, clearedNotes: report.clearedNotes,

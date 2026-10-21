@@ -89,6 +89,9 @@ actor FakeHistoryService: HistoryService {
         switch operation {
         case .ledgerHistory:
             return .success(Delivered(answer: .ledgerHistory(history), payload: nil))
+        case .ledgerRemove, .ledgerRestore:
+            return .success(Delivered(answer: .ledgerRecord(outcomes.isEmpty ? .recorded : outcomes.removeFirst()),
+                                      payload: nil))
         case .ledgerRecord:
             let outcome = outcomes.isEmpty ? .recorded : outcomes.removeFirst()
             return .success(Delivered(answer: .ledgerRecord(outcome), payload: nil))
@@ -189,6 +192,61 @@ struct HistoryModelTests {
         #expect(model.days.first?.cards.map(\.reading.surface) == ["词"])
         // The stored history is untouched: the filter is a view of it.
         #expect(model.state == .loaded(history))
+    }
+}
+
+/// **A history card can be removed, and the removal undone** (owner, 2026-10-21: a misread word must be removable;
+/// XiaolaiDict's E4: undo, not a confirmation dialog). The tombstone names the card's own event ids and carries nothing
+/// of the sentence.
+@MainActor
+struct HistoryRemovalTests {
+    @Test func removingACardNamesItsEventsAndUndoGivesThemBack() async throws {
+        let name = "xdict-removal-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let card = LedgerCard(reading: HistoryModelTests.reading("hold"), times: 2, events: ["e1", "e2"])
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: LearningPreferences(defaults: defaults),
+                                 now: { Date(timeIntervalSince1970: 1_790_641_800) }, device: { "d" })
+        #expect(await model.remove(card) == .recorded)
+        let removal = try #require(model.lastRemoval)
+        #expect(removal.eventIds == ["e1", "e2"], "the tombstone names the card's own events")
+        #expect(removal.at == 1_790_641_800 && removal.device == "d")
+        let sent = await service.operations
+        // The last call is the refresh the removal asks for, so the remove is the last call of its own kind.
+        let removeCall = sent.last { if case .ledgerRemove = $0 { return true } else { return false } }
+        guard case .ledgerRemove(let asked, let operation) = try #require(removeCall) else {
+            Issue.record("not a remove call")
+            return
+        }
+        #expect(asked == removal)
+        #expect(!operation.isEmpty)
+
+        #expect(await model.restoreLast() == .recorded)
+        #expect(model.lastRemoval == nil, "the undo is spent")
+        let after = await service.operations
+        let restoreCall = after.last { if case .ledgerRestore = $0 { return true } else { return false } }
+        guard case .ledgerRestore(let restore, _) = try #require(restoreCall) else {
+            Issue.record("not a restore call")
+            return
+        }
+        #expect(restore == removal)
+    }
+}
+
+/// **A history card's tint** (owner, 2026-10-21): chosen from the card's own identity, so a lookup keeps its colour across
+/// launches while the drawer is not one colour.
+struct HistoryCardTintTests {
+    @Test func theColourIsTheCardsOwnAndDoesNotMoveBetweenLaunches() {
+        let one = HistoryCardTint.colour(for: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"]).nsColor
+        #expect(one == HistoryCardTint.colour(for: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"]).nsColor)
+        #expect(HistoryCardTint.colour(for: []).nsColor == HistoryCardTint.palette[0].nsColor)
+    }
+
+    @Test func manyCardsUseMostOfThePalette() {
+        let cards = (0..<200).map { "event-\($0)" }
+        let used = Set(cards.map { HistoryCardTint.colour(for: [$0]).nsColor })
+        #expect(used.count >= HistoryCardTint.palette.count - 1, "\(used.count) of \(HistoryCardTint.palette.count) tints")
     }
 }
 

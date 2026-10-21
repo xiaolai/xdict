@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "4db883db9b89c60914823a19684ceacd61f982c4fa347a632caf3dbb232f3bc1"
+    public static let sourceDigest = "ee3a5369cf860d74ae1a3578a288844b3984025dc7f43303626ee533d7ef3aa8"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -102,7 +102,7 @@ public enum Tokens {
         public static let promptEditor: CGFloat = 140
     }
 
-    /// Animations the shell runs itself: the drawer's springs.
+    /// Timings the shell runs itself: the drawer's springs and how long an undo stays offered.
     public enum Motion {
         /// XiaolaiDict's drawer spring, kept: it arrives with a little give.
         public static let drawerOpenResponse: Double = 0.34
@@ -112,8 +112,50 @@ public enum Tokens {
         public static let drawerCloseResponse: Double = 0.26
         /// XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back.
         public static let drawerCloseDamping: Double = 0.95
+        /// How long a removed history card's Undo stays offered: long enough to notice the mistake, short enough not to sit there.
+        public static let removalUndoSeconds: Double = 8
         /// How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes.
         public static let drawerSettleMilliseconds: Double = 320
+    }
+
+    /// Alpha values a surface is drawn at: a card's tint and its shadow.
+    public enum Opacity {
+        /// A history card's tinted border: visible as a tint, never as a rule.
+        public static let cardBorder: Double = 0.38
+        /// A history card's shadow: enough to lift the card off the glass, never a drop shadow.
+        public static let cardShadow: Double = 0.12
+    }
+
+    /// A history card's own lengths: the shadow that lifts it off the glass.
+    public enum Card {
+        /// A history card's shadow spread: the card's own softness, under the glass.
+        public static let shadowRadius: CGFloat = 5
+        /// A history card's shadow sits a point below it: light from above, as every other surface here.
+        public static let shadowOffsetY: CGFloat = 1
+    }
+
+    /// The tints a history card's border takes, chosen from its own identity: the system's colours, each a tint, never a fill.
+    public enum Tint {
+        /// The system's own: `systemRed`.
+        public static var red: TokenColour { TokenColour(.systemRed) }
+        /// The system's own: `systemOrange`.
+        public static var orange: TokenColour { TokenColour(.systemOrange) }
+        /// The system's own: `systemYellow`.
+        public static var yellow: TokenColour { TokenColour(.systemYellow) }
+        /// The system's own: `systemGreen`.
+        public static var green: TokenColour { TokenColour(.systemGreen) }
+        /// The system's own: `systemBlue`.
+        public static var blue: TokenColour { TokenColour(.systemBlue) }
+        /// The system's own: `systemPurple`.
+        public static var purple: TokenColour { TokenColour(.systemPurple) }
+        /// The system's own: `systemPink`.
+        public static var pink: TokenColour { TokenColour(.systemPink) }
+        /// The system's own: `systemTeal`.
+        public static var teal: TokenColour { TokenColour(.systemTeal) }
+        /// The system's own: `systemIndigo`.
+        public static var indigo: TokenColour { TokenColour(.systemIndigo) }
+        /// The system's own: `systemBrown`.
+        public static var brown: TokenColour { TokenColour(.systemBrown) }
     }
 
     /// Widths and heights of windows, panes, columns and sheets.
@@ -206,6 +248,8 @@ public enum Tokens {
     public enum Radius {
         /// Apple-measured (P43, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let sidebarSelection: CGFloat = 8
+        /// A history card's corner: its own rounded rect, inside the drawer's 8 pt selection corner.
+        public static let cardShadow: CGFloat = 4
         /// The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's.
         public static let banner: CGFloat = 16
     }
@@ -262,6 +306,8 @@ public enum Tokens {
 
     /// Colours: the system's semantic colours first; a literal only where Apple's page was measured.
     public enum Colour {
+        /// The system's own: `shadowColor`.
+        public static var shadow: TokenColour { TokenColour(.shadowColor) }
         /// The system's own: `labelColor`.
         public static var label: TokenColour { TokenColour(.labelColor) }
         /// The system's own: `secondaryLabelColor`.

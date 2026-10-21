@@ -52,6 +52,38 @@ struct LedgerServiceTests {
         #expect(day.cards.first?.reading == hold, "the card carries the reading whole, the sentence included")
     }
 
+    /// **A removed reading leaves the history and the restore brings it back** (owner, 2026-10-21; ADR-0024): the
+    /// tombstone names the card's own events and carries no content, so a misread word can be repaired.
+    @Test func aRemovedReadingLeavesTheHistoryAndTheRestoreBringsItBack() async throws {
+        let harness = try ServiceHarness()
+        let client = harness.client()
+        let hold = Self.reading(surface: "hold", sentence: "They hold that view.", language: "en", at: Self.day + 1_800)
+        #expect(Self.outcome(await client.call(.ledgerRecord(reading: hold, operation: "op-remove-1",
+                                                             targetLanguages: []))) == .recorded)
+        let listed = await client.call(.ledgerHistory(now: Self.now, utcOffsetSeconds: 0))
+        guard case .success(let delivered) = listed, case .ledgerHistory(let history) = delivered.answer,
+              let events = history.days.first?.cards.first?.events else {
+            Issue.record("no history: \(listed)")
+            return
+        }
+        let removal = Removal(eventIds: events, at: Self.day + 3_600, device: "test")
+        #expect(Self.outcome(await client.call(.ledgerRemove(removal: removal, operation: "op-remove-2"))) == .recorded)
+        let afterRemoval = await client.call(.ledgerHistory(now: Self.now, utcOffsetSeconds: 0))
+        guard case .success(let removed) = afterRemoval, case .ledgerHistory(let emptied) = removed.answer else {
+            Issue.record("no history: \(afterRemoval)")
+            return
+        }
+        #expect(emptied.days.isEmpty, "the removed reading is not drawn")
+
+        #expect(Self.outcome(await client.call(.ledgerRestore(removal: removal, operation: "op-remove-3"))) == .recorded)
+        let afterRestore = await client.call(.ledgerHistory(now: Self.now, utcOffsetSeconds: 0))
+        guard case .success(let restored) = afterRestore, case .ledgerHistory(let back) = restored.answer else {
+            Issue.record("no history: \(afterRestore)")
+            return
+        }
+        #expect(back.days.first?.cards.first?.reading.surface == "hold", "the undo shows the reading again")
+    }
+
     @Test func aRetriedOperationIsOneEvent() async throws {
         let harness = try ServiceHarness()
         let client = harness.client()
