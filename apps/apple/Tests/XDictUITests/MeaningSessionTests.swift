@@ -53,6 +53,19 @@ import XDictUI
         return predicate()
     }
 
+    /// **Waits on what a stub says from its own actor**, with a deadline a loaded build host cannot outrun. The
+    /// hand-rolled `for _ in 0..<100 { sleep(5 ms) }` polls gave 500 ms, and mbp16 ran `escapingTheAskLeavesTheLateAnswer-
+    /// Unshown` out of it (2026-10-21): the provider never got its question, and the session was not in `.asking` when
+    /// Escape arrived. The wait is the check — its failure names the sentence the test meant.
+    static func waitUntil(_ predicate: @escaping () async -> Bool, timeout: Duration = .seconds(10)) async -> Bool {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if await predicate() { return true }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
+        return await predicate()
+    }
+
     @Test func theWholeEntryAndTheMarkedSentenceAreSentUnderTheSwitch() async {
         let (session, provider, fetcher) = Self.session()
         session.ask()
@@ -162,10 +175,8 @@ import XDictUI
         session.ask()
         #expect(session.state == .asking)
         // The provider has the question before Escape, so the cancellation interrupts a call in flight.
-        for _ in 0..<100 {
-            if await provider.questions.isEmpty == false { break }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+        #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
+                "the provider never got the question")
         #expect(await provider.questions.count == 1)
         session.cancel()
         #expect(session.state == .cancelled)
@@ -180,10 +191,8 @@ import XDictUI
         let provider = StubProvider(answers: [.success(Self.matched), .success(second)], delay: .milliseconds(200))
         let (session, _, fetcher) = Self.session(provider: provider)
         session.ask()
-        for _ in 0..<100 {
-            if await provider.questions.isEmpty == false { break }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+        #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
+                "the provider never got the question")
         #expect(await provider.questions.count == 1, "the first ask reached its source before the second")
         session.ask()
         #expect(await Self.waitUntil { session.state != .asking })
@@ -503,10 +512,8 @@ import XDictUI
         let (first, _, _) = Self.session(provider: provider)
         let (second, _, _) = Self.session(provider: provider)
         first.ask()
-        for _ in 0..<100 {
-            if await provider.questions.isEmpty == false { break }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
+        #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
+                "the provider never got the question")
         second.ask()
         second.cancel()
         #expect(second.state == .cancelled)
