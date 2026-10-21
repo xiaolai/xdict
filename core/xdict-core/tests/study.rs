@@ -195,3 +195,24 @@ fn a_reordered_definition_leaves_the_note_where_it_is() {
     assert_eq!(report.outcomes[0].result, ReanchorResult::Reordered);
     assert_eq!(core.study_notes().unwrap()[0].target.edition, old);
 }
+
+/// A note named by edition and key — the history card's own facts — and an export that carries its evidence, not the
+/// definition; erase then clears it and says what may remain recoverable.
+#[test]
+fn a_note_named_by_edition_and_an_export_without_the_definition() {
+    let dir = Scratch::new("export");
+    let (core, _dict, edition) = opened(&dir, "noad.mdx", "Test Dictionary", &[W::text("run", RUN)]);
+    let at = 1_790_640_000.0;
+    let note = core
+        .study_note_at(reference(&edition, "run", 0), "mine".into(), "Test Dictionary".into(), stamp(at), "note".into())
+        .unwrap();
+    assert_eq!(note.target.entry_key, "run");
+    let export = core.ledger_export_json().unwrap();
+    assert!(export.contains(&note.target.definition_hash), "the evidence is in the export");
+    assert!(export.contains("\"events\""), "one JSON document, versioned");
+    assert!(!export.contains("move fast"), "the definition's text never enters the export");
+
+    let report = core.ledger_erase("erase".into(), at + 60.0, "device".into()).unwrap();
+    assert_eq!(report.cleared_notes, 1);
+    assert!(core.study_notes().unwrap().is_empty());
+}

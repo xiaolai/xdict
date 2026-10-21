@@ -71,6 +71,8 @@ export type ReviewOutcome = { outcome: RecordOutcome; card: StudyCard };
 export type ReanchorResult = 'reanchored' | 'reordered' | 'changed' | 'missing';
 export type ReanchorOutcome = { target: StudyTarget; result: ReanchorResult };
 export type ReanchorReport = { outcomes: ReanchorOutcome[] };
+export type Recoverability = 'freeBlocks';
+export type EraseReport = { clearedReadings: number; clearedNotes: number; clearedGrades: number; recoverable: Recoverability };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
 export type BlockReason = { type: 'remote'; url: string } | { type: 'script' } | { type: 'unknownScheme'; scheme: string };
 export type Link =
@@ -155,6 +157,9 @@ interface GlueCore {
   ledger_history(now: number, utcOffsetSeconds: number): string;
   study_note(dict: string, entry: string, text: string, name: string, stamp: string, operation: string): string;
   study_notes(): string;
+  study_note_at(entry: string, text: string, name: string, stamp: string, operation: string): string;
+  ledger_export_json(): string;
+  ledger_erase(operation: string, at: number, device: string): string;
   review_queue(now: number, limit: number): string;
   review_grade(targetKey: string, revision: string, grade: number, policy: string, stamp: string, operation: string): string;
   review_undo(targetKey: string, gradeEvent: string, stamp: string, operation: string): string;
@@ -344,6 +349,21 @@ export class XDictCore {
 
   studyNotes(): StudyNote[] {
     return this.call(() => this.inner.study_notes());
+  }
+
+  /** A note named by the history card's facts, resolved to the open dictionary of its edition. */
+  studyNoteAt(entry: EntryRef, text: string, name: string, stamp: Stamp, operation: string): StudyNote {
+    return this.call(() => this.inner.study_note_at(JSON.stringify(entry), text, name, JSON.stringify(stamp), operation));
+  }
+
+  /** The log's events as the reader's export: one JSON document, no dictionary content. */
+  exportLedgerJson(): string {
+    return this.call(() => this.inner.ledger_export_json());
+  }
+
+  /** Erase is a rewrite; the receipt says what may remain recoverable. */
+  eraseLedger(operation: string, at: number, device: string): EraseReport {
+    return this.call(() => this.inner.ledger_erase(operation, at, device));
   }
 
   /** The review queue: due cards, soonest first, a new card at once. */

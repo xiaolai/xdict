@@ -13,12 +13,12 @@ use std::sync::Arc;
 use xdict_core as core;
 use xdict_core::{
     BaseSource, BlockReason, Card, CardState, Config, CoreError, Day, DayLabel, DictInfo, DisplayOption,
-    DisplayOptions, Entry, EntryRef, EntryText, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass,
-    HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link,
-    LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle,
-    ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Resource, ReviewOutcome, ReviewPolicy,
-    ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
-    TargetKind, TextSpan, TextView, Versions, View,
+    DisplayOptions, Entry, EntryRef, EntryText, EraseReport, Feature, FileIdentity, FindingKind, FontReason, Health,
+    HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont,
+    Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan,
+    ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Resource,
+    ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase,
+    StudyTarget, StyleChanges, TargetKind, TextSpan, TextView, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -235,6 +235,19 @@ pub struct StudyCard {
     pub head: String,
     pub note_head: String,
     pub grades: u64,
+}
+
+#[uniffi::remote(Enum)]
+pub enum Recoverability {
+    FreeBlocks,
+}
+
+#[uniffi::remote(Record)]
+pub struct EraseReport {
+    pub cleared_readings: u64,
+    pub cleared_notes: u64,
+    pub cleared_grades: u64,
+    pub recoverable: Recoverability,
 }
 
 #[uniffi::remote(Record)]
@@ -734,6 +747,23 @@ impl Core {
         self.0.study_note(dict, entry, text, name, stamp, operation)
     }
 
+    /// A note named by the history card's facts (an `EntryRef`), resolved to the open dictionary of its edition.
+    pub fn study_note_at(
+        &self,
+        entry: EntryRef,
+        text: String,
+        name: String,
+        stamp: Stamp,
+        operation: String,
+    ) -> Result<Note, CoreError> {
+        self.0.study_note_at(entry, text, name, stamp, operation)
+    }
+
+    /// The log's events as the reader's export: one JSON document, no dictionary content.
+    pub fn ledger_export_json(&self) -> Result<String, CoreError> {
+        self.0.ledger_export_json()
+    }
+
     pub fn study_notes(&self) -> Result<Vec<Note>, CoreError> {
         self.0.study_notes()
     }
@@ -793,6 +823,11 @@ impl Core {
 
     pub fn split_lineage(&self, edition: String, new_lineage: String) -> Result<String, CoreError> {
         self.0.split_lineage(edition, new_lineage)
+    }
+
+    /// **Erase is a rewrite** (ADR-0024): readings, notes and grades leave the log; associations stay.
+    pub fn ledger_erase(&self, operation: String, at: f64, device: String) -> Result<EraseReport, CoreError> {
+        self.0.ledger_erase(operation, at, device)
     }
 
     pub fn lineage_of(&self, edition: String) -> Result<Option<String>, CoreError> {

@@ -506,6 +506,22 @@ impl Core {
         watched_reply(|| self.0.study_note(dict.into(), entry, text.into(), name.into(), stamp, operation.into()))
     }
 
+    /// A note named by the history card's facts (`entry` as JSON), resolved to the open dictionary of its edition.
+    pub fn study_note_at(&self, entry: &str, text: &str, name: &str, stamp: &str, operation: &str) -> Reply {
+        let (entry, stamp) = (from_json(entry)?, from_json(stamp)?);
+        watched_reply(|| self.0.study_note_at(entry, text.into(), name.into(), stamp, operation.into()))
+    }
+
+    /// The log's events as the reader's export: one JSON document, no dictionary content.
+    pub fn ledger_export_json(&self) -> Reply {
+        watched_reply(|| self.0.ledger_export_json())
+    }
+
+    /// Erase is a rewrite: readings, notes and grades leave the log; the receipt says what may remain recoverable.
+    pub fn ledger_erase(&self, operation: &str, at: f64, device: &str) -> Reply {
+        watched_reply(|| self.0.ledger_erase(operation.into(), at, device.into()))
+    }
+
     pub fn study_notes(&self) -> Reply {
         watched_reply(|| self.0.study_notes())
     }
