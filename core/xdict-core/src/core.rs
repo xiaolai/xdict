@@ -13,12 +13,18 @@ use xdict_entry::{Style, StyleSheet};
 #[cfg(not(target_family = "wasm"))]
 use xdict_ledger::FileStore;
 use xdict_ledger::{
-    Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, History, Ledger, MemoryStore, Reading,
-    RecordOutcome, Removal, Store,
+    CardState, Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, GradeRecord, History, Ledger,
+    MemoryStore, Note, Reading, ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult, RecordOutcome,
+    Removal, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp, Store, StudyCard, StudyGrade,
+    StudyPhase, StudyTarget, TargetKind, UndoRecord,
 };
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
+use xdict_schedule::{
+    Card as ScheduleCard, DEFAULT_WEIGHTS, Grade as ScheduleGrade, Phase as SchedulePhase, Scheduler,
+    VERSION as SCHEDULE_VERSION,
+};
 
 use crate::error::{CoreError, Limit, Missing};
 use crate::health::HEALTH;
@@ -1102,6 +1108,281 @@ impl Core {
         Ok(self.opened(&mut held)?.association(&edition).map(str::to_owned))
     }
 
+    // MARK: - Study (plan-history-and-learning §5)
+
+    /// The text view a definition hash is taken through: the whole entry, never cut.
+    fn definition_view() -> TextView {
+        TextView {
+            base_url: "xdict://d/".into(),
+            max_body_bytes: MAX_RESOURCE_BYTES,
+            max_text_bytes: u64::MAX,
+            original_style: false,
+        }
+    }
+
+    /// **The edition's lineage** (ADR-0025): the ledger's association when it has one, else the registry's, written into
+    /// the ledger as a join event so the ledger becomes the truth the registry caches. One operation, one event.
+    fn study_lineage(&self, edition: &str, name: &str, at: f64, device: &str) -> Result<String, CoreError> {
+        let mut held = self.ledger()?;
+        let ledger = self.opened(&mut held)?;
+        if let Some(lineage) = ledger.association(edition) {
+            return Ok(lineage.to_string());
+        }
+        let Some(lineage) = self.registry.lineage(edition).map_err(registry_error)? else {
+            return Err(CoreError::NotFound { what: Missing::Lineage, detail: format!("{edition} has no lineage") });
+        };
+        let joined = DictionaryJoined {
+            lineage: lineage.clone(),
+            edition: edition.to_string(),
+            name: name.to_string(),
+            language: String::new(),
+            at,
+            device: device.to_string(),
+        };
+        ledger.join_dictionary(joined, &format!("association:{edition}")).map_err(ledger_error)?;
+        Ok(lineage)
+    }
+
+    /// The handle of the open dictionary of `edition`.
+    fn dict_of_edition(&self, edition: &str) -> Result<String, CoreError> {
+        let state = self.lock()?;
+        state
+            .open
+            .iter()
+            .find(|(_, dict)| dict.edition == edition)
+            .map(|(handle, _)| self.handle(*handle))
+            .ok_or_else(|| CoreError::NotFound { what: Missing::Edition, detail: format!("{edition} is not open") })
+    }
+
+    /// The hash of the definition at (key, occurrence) in an open dictionary, or `None` when it has no such record.
+    fn occurrence_hash(
+        &self,
+        dict: &str,
+        edition: &str,
+        key: &str,
+        occurrence: u32,
+    ) -> Result<Option<String>, CoreError> {
+        let entry = EntryRef { edition: edition.to_string(), key: key.to_string(), occurrence };
+        match self.entry_text(dict.to_string(), entry, Self::definition_view()) {
+            Ok(projected) => Ok(Some(xdict_ledger::definition_hash(&projected.text))),
+            Err(CoreError::NotFound { what: Missing::Entry, .. }) => Ok(None),
+            Err(error) => Err(error),
+        }
+    }
+
+    /// **Saves the reader's note on an entry** (plan §5.1): the core computes the definition's hash and resolves the
+    /// lineage, so the note carries evidence and never the definition.
+    pub fn study_note(
+        &self,
+        dict: String,
+        entry: EntryRef,
+        text: String,
+        name: String,
+        stamp: Stamp,
+        operation_id: String,
+    ) -> Result<Note, CoreError> {
+        guard(|| {
+            let projected = self.entry_text(dict, entry.clone(), Self::definition_view())?;
+            let lineage = self.study_lineage(&entry.edition, &name, stamp.at, &stamp.device)?;
+            let note = Note {
+                target: StudyTarget {
+                    lineage,
+                    entry_key: entry.key.clone(),
+                    occurrence: entry.occurrence,
+                    kind: TargetKind::Entry,
+                    edition: entry.edition.clone(),
+                    definition_hash: xdict_ledger::definition_hash(&projected.text),
+                },
+                text,
+                at: stamp.at,
+                device: stamp.device.clone(),
+            };
+            let key = note.target.key();
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            ledger.save_note(note, &operation_id).map_err(ledger_error)?;
+            ledger
+                .notes()
+                .into_iter()
+                .find(|held| held.target.key() == key)
+                .ok_or_else(|| CoreError::internal("the note was written and cannot be read back"))
+        })
+    }
+
+    pub fn study_notes(&self) -> Result<Vec<Note>, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.notes())
+    }
+
+    /// **The review queue**: due cards, soonest first, a new card at once.
+    pub fn review_queue(&self, now: f64, limit: u32) -> Result<Vec<StudyCard>, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.queue(now, usize::try_from(limit).unwrap_or(usize::MAX)))
+    }
+
+    pub fn review_summary(&self, now: f64) -> Result<ReviewSummary, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.summary(now))
+    }
+
+    /// **Grades a card** (plan §5.3): the card must still be at `revision` and due; the scheduler transitions it under
+    /// the reader's retention and cap, and the event records the configuration it used.
+    pub fn review_grade(
+        &self,
+        target_key: String,
+        revision: String,
+        grade: u8,
+        policy: ReviewPolicy,
+        stamp: Stamp,
+        operation_id: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        guard(|| {
+            let grade = study_grade(grade)?;
+            let scheduler = Scheduler::with_configuration(policy.retention, policy.maximum_days, DEFAULT_WEIGHTS)
+                .map_err(|error| CoreError::Malformed { detail: format!("scheduler: {error}") })?;
+            let (card, eligible) = {
+                let mut held = self.ledger()?;
+                let ledger = self.opened(&mut held)?;
+                let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
+                    what: Missing::Entry,
+                    detail: format!("no study card for {target_key}"),
+                })?;
+                let due = card.state.is_new() || card.state.due.is_some_and(|due| due <= stamp.at);
+                let eligible = card.head == revision && due;
+                (card, eligible)
+            };
+            let after = scheduler
+                .review(schedule_card(card.state), schedule_grade(grade), stamp.at)
+                .map_err(|error| CoreError::Malformed { detail: format!("scheduler: {error}") })?;
+            let record = GradeRecord {
+                target: card.target.clone(),
+                revision,
+                grade,
+                before: card.state,
+                after: card_state(after),
+                configuration: ScheduleConfiguration {
+                    version: SCHEDULE_VERSION.to_string(),
+                    retention: policy.retention,
+                    maximum_days: policy.maximum_days,
+                    weights: DEFAULT_WEIGHTS.to_vec(),
+                },
+                at: stamp.at,
+                device: stamp.device,
+            };
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            let outcome = ledger.record_grade(record, &operation_id, eligible).map_err(ledger_error)?;
+            let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
+            Ok(ReviewOutcome { outcome, card })
+        })
+    }
+
+    /// **Voids the card's latest grade** (plan §5.3): only while the card is still in the state that grade produced.
+    pub fn review_undo(
+        &self,
+        target_key: String,
+        grade_event: String,
+        stamp: Stamp,
+        operation_id: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        guard(|| {
+            let (card, eligible) = {
+                let mut held = self.ledger()?;
+                let ledger = self.opened(&mut held)?;
+                let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
+                    what: Missing::Entry,
+                    detail: format!("no study card for {target_key}"),
+                })?;
+                (card.clone(), !grade_event.is_empty() && card.head == grade_event)
+            };
+            let undo = UndoRecord { target: card.target.clone(), grade_event, at: stamp.at, device: stamp.device };
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            let outcome = ledger.record_undo(undo, &operation_id, eligible).map_err(ledger_error)?;
+            let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
+            Ok(ReviewOutcome { outcome, card })
+        })
+    }
+
+    /// The hash a note records for an entry's definition (plan §5.1); never the definition itself.
+    pub fn definition_hash_of(&self, dict: String, entry: EntryRef) -> Result<String, CoreError> {
+        let projected = self.entry_text(dict, entry, Self::definition_view())?;
+        Ok(xdict_ledger::definition_hash(&projected.text))
+    }
+
+    /// **Re-anchors notes of `old_edition` to `new_edition`** (plan §5.1): the same occurrence holding the same
+    /// definition hash moves; a moved definition, a reordered occurrence or a missing key leaves the note where it is
+    /// and is reported, never silently bound to another record.
+    pub fn study_reanchor(
+        &self,
+        old_edition: String,
+        new_edition: String,
+        stamp: Stamp,
+        operation_prefix: String,
+    ) -> Result<ReanchorReport, CoreError> {
+        guard(|| {
+            let dict = self.dict_of_edition(&new_edition)?;
+            let notes: Vec<Note> = {
+                let mut held = self.ledger()?;
+                self.opened(&mut held)?.notes().into_iter().filter(|note| note.target.edition == old_edition).collect()
+            };
+            let mut outcomes = Vec::with_capacity(notes.len());
+            for note in notes {
+                let key = note.target.entry_key.clone();
+                let occurrence = note.target.occurrence;
+                let result = match self.occurrence_hash(&dict, &new_edition, &key, occurrence)? {
+                    None => ReanchorResult::Missing,
+                    Some(hash) if hash == note.target.definition_hash => {
+                        self.record_reanchor(&note, &new_edition, &hash, stamp.at, &stamp.device, &operation_prefix)?;
+                        ReanchorResult::Reanchored
+                    }
+                    Some(_) => {
+                        let mut reordered = false;
+                        for other in 0..64u32 {
+                            if other == occurrence {
+                                continue;
+                            }
+                            match self.occurrence_hash(&dict, &new_edition, &key, other)? {
+                                Some(hash) if hash == note.target.definition_hash => {
+                                    reordered = true;
+                                    break;
+                                }
+                                None => break,
+                                Some(_) => {}
+                            }
+                        }
+                        if reordered { ReanchorResult::Reordered } else { ReanchorResult::Changed }
+                    }
+                };
+                outcomes.push(ReanchorOutcome { target: note.target, result });
+            }
+            Ok(ReanchorReport { outcomes })
+        })
+    }
+
+    fn record_reanchor(
+        &self,
+        note: &Note,
+        to_edition: &str,
+        hash: &str,
+        at: f64,
+        device: &str,
+        prefix: &str,
+    ) -> Result<(), CoreError> {
+        let mut held = self.ledger()?;
+        let ledger = self.opened(&mut held)?;
+        let record = ReanchorRecord {
+            target: note.target.clone(),
+            to_edition: to_edition.to_string(),
+            definition_hash: hash.to_string(),
+            at,
+            device: device.to_string(),
+        };
+        let operation = format!("{prefix}:{}:{}", note.target.entry_key, note.target.occurrence);
+        ledger.record_reanchor(record, &operation).map_err(ledger_error)?;
+        Ok(())
+    }
+
     fn lock(&self) -> Result<MutexGuard<'_, State>, CoreError> {
         self.state.lock().map_err(|_| CoreError::internal("the core's state was left inconsistent by an earlier fault"))
     }
@@ -1515,6 +1796,62 @@ impl From<&StyleReport> for ReadingStyle {
             },
         }
     }
+}
+
+/// The scheduler's card from the ledger's state.
+fn schedule_card(state: CardState) -> ScheduleCard {
+    ScheduleCard {
+        stability: state.stability,
+        difficulty: state.difficulty,
+        phase: match state.phase {
+            StudyPhase::New => SchedulePhase::New,
+            StudyPhase::Learning => SchedulePhase::Learning,
+            StudyPhase::Review => SchedulePhase::Review,
+            StudyPhase::Relearning => SchedulePhase::Relearning,
+        },
+        last_review: state.last_review,
+        due: state.due,
+    }
+}
+
+/// The ledger's state from the scheduler's card.
+fn card_state(card: ScheduleCard) -> CardState {
+    CardState {
+        stability: card.stability,
+        difficulty: card.difficulty,
+        phase: match card.phase {
+            SchedulePhase::New => StudyPhase::New,
+            SchedulePhase::Learning => StudyPhase::Learning,
+            SchedulePhase::Review => StudyPhase::Review,
+            SchedulePhase::Relearning => StudyPhase::Relearning,
+        },
+        last_review: card.last_review,
+        due: card.due,
+    }
+}
+
+fn schedule_grade(grade: StudyGrade) -> ScheduleGrade {
+    match grade {
+        StudyGrade::Again => ScheduleGrade::Again,
+        StudyGrade::Hard => ScheduleGrade::Hard,
+        StudyGrade::Good => ScheduleGrade::Good,
+        StudyGrade::Easy => ScheduleGrade::Easy,
+    }
+}
+
+fn study_grade(number: u8) -> Result<StudyGrade, CoreError> {
+    match number {
+        1 => Ok(StudyGrade::Again),
+        2 => Ok(StudyGrade::Hard),
+        3 => Ok(StudyGrade::Good),
+        4 => Ok(StudyGrade::Easy),
+        other => Err(CoreError::Malformed { detail: format!("grade {other} is not 1, 2, 3 or 4") }),
+    }
+}
+
+/// A ledger failure as a typed core error: a busy writer or an unreadable log is loud, never a silent empty history.
+fn ledger_error(error: xdict_ledger::LedgerError) -> CoreError {
+    CoreError::Io { kind: crate::error::IoKind::Other, detail: format!("ledger: {error}") }
 }
 
 #[cfg(test)]
@@ -2284,9 +2621,4 @@ mod tests {
         let refused = page_of(&core, &dict, "a", Budget::new(100, 10));
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's bytes were not counted: {refused:?}");
     }
-}
-
-/// A ledger failure as a typed core error: a busy writer or an unreadable log is loud, never a silent empty history.
-fn ledger_error(error: xdict_ledger::LedgerError) -> CoreError {
-    CoreError::Io { kind: crate::error::IoKind::Other, detail: format!("ledger: {error}") }
 }

@@ -130,6 +130,8 @@ pub enum RecordOutcome {
     Duplicate,
     Uncertain,
     SkippedLanguage,
+    /// The card was not in the state the caller saw, or was not due: nothing was written.
+    Ineligible,
 }
 
 #[uniffi::remote(Record)]

@@ -126,6 +126,23 @@ pub struct EraseReceipt {
 
 // MARK: - Study (plan-history-and-learning §5)
 
+/// When and by which device: the pair every study event carries.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Stamp {
+    pub at: f64,
+    pub device: String,
+}
+
+/// The reader's scheduling settings for a grade: the retention and the interval cap. The weights stay the build's
+/// (xdict-schedule's defaults) until a calibrated profile exists.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewPolicy {
+    pub retention: f64,
+    pub maximum_days: i64,
+}
+
 /// A study target's kind; v1 has entry-level targets, and the tagged enum leaves a sense kind as an addition.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -307,6 +324,41 @@ pub struct ReviewSummary {
     pub due: u64,
     /// The earliest future due instant, when no card is due now.
     pub next_due: Option<u64>,
+}
+
+/// What a grade or an undo did to a card, and the card as it now stands.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewOutcome {
+    pub outcome: RecordOutcome,
+    pub card: StudyCard,
+}
+
+/// What a re-anchor attempt found for one note (plan §5.1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ReanchorResult {
+    /// The same occurrence in the new edition holds the same definition: the note moved.
+    Reanchored,
+    /// The same definition moved to another occurrence: the note is left where it is.
+    Reordered,
+    /// The occurrence holds a different definition: the note is left where it is.
+    Changed,
+    /// The new edition has no record under this key: the note is left where it is.
+    Missing,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReanchorOutcome {
+    pub target: StudyTarget,
+    pub result: ReanchorResult,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReanchorReport {
+    pub outcomes: Vec<ReanchorOutcome>,
 }
 
 /// The SHA-256 of an entry's definition text, in hex: the evidence a note keeps instead of the text.

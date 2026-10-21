@@ -1184,6 +1184,7 @@ dependencies = [
  "xdict-mdx",
  "xdict-mdx-writer",
  "xdict-mmap",
+ "xdict-schedule",
  "xxhash-rust",
 ]
 
