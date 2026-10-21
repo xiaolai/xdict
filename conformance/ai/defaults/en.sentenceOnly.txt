@@ -1,0 +1,4 @@
+What does the word {term} mean in this sentence?
+
+Sentence:
+{sentence}
