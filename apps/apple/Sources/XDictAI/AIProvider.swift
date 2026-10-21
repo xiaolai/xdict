@@ -84,7 +84,7 @@ public enum AIProviderError: Error, Equatable, Sendable {
         case .notSignedIn: "provider.notSignedIn"
         case .versionTooOld: "provider.versionTooOld"
         case .unsupportedAuth: "provider.unsupportedAuth"
-        case .unavailable(let reason): "provider.unavailable.\(reason.rawValue)"
+        case .unavailable(let reason): "provider.unavailable.\(reason.code)"
         case .contextExceeded: "provider.contextExceeded"
         case .guardrail: "provider.guardrail"
         case .framework: "provider.framework"
@@ -100,11 +100,32 @@ extension AIProviderError: CustomStringConvertible, CustomDebugStringConvertible
 
 /// Why Apple's on-device model cannot run, as our own closed set (the framework's enum is neither `Codable` nor
 /// `CaseIterable`, and may gain a case — ADR-0021 d.3).
-public enum AppleAvailability: String, Sendable, Equatable, CaseIterable {
+public enum AppleAvailability: Sendable, Equatable, CaseIterable {
     case available
     case deviceNotEligible
     case appleIntelligenceNotEnabled
     case modelNotReady
+    /// **The system is older than this build's Apple source requires** (ADR-0026): the version the source needs and the
+    /// one this Mac runs. This is a reason of its own, never `.unknown`: the reader is told which system would work.
+    case system(required: String, running: String)
     /// A reason this build does not know.
     case unknown
+
+    /// Every case, for the tests and the rows that must word each one; the system case carries sample versions.
+    public static var allCases: [AppleAvailability] {
+        [.available, .deviceNotEligible, .appleIntelligenceNotEnabled, .modelNotReady,
+         .system(required: String(AppleSource.requiredMacOS), running: "15.0"), .unknown]
+    }
+
+    /// A stable, display-free code for logs and the provider error's identity (never a sentence).
+    public var code: String {
+        switch self {
+        case .available: "available"
+        case .deviceNotEligible: "deviceNotEligible"
+        case .appleIntelligenceNotEnabled: "appleIntelligenceNotEnabled"
+        case .modelNotReady: "modelNotReady"
+        case .system(let required, let running): "system.\(required).\(running)"
+        case .unknown: "unknown"
+        }
+    }
 }

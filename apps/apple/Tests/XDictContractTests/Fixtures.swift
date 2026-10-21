@@ -25,6 +25,16 @@ enum Fixtures {
     /// The file the second dictionary is made of.
     static let otherMDXID = UUID(uuidString: "9D8C7B6A-5948-4736-A251-403F2E1D0C9B") ?? UUID()
     static let newLineage = LineageId(rawValue: "1E2D3C4B-5A69-4788-97A6-B5C4D3E2F100")
+    static let ledgerReading = LedgerReading(
+        surface: "hold", lemma: "hold", sentence: "They hold that view.", span: LedgerSpan(start: 5, len: 4),
+        cut: 0, quality: "complete", edition: edition.rawValue, entryKey: "hold", occurrence: 0,
+        dictionaryName: "Tiny", language: "en", at: 1_790_643_600, device: "fixture")
+    static let ledgerHistory = LedgerHistory(days: [
+        LedgerDay(id: "2026-09-29", start: 1_790_640_000, label: .today, cards: [
+            LedgerCard(reading: ledgerReading, times: 2,
+                       events: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b", "1a2b3c4d-5e6f-7081-92a3-b4c5d6e7f809"]),
+        ]),
+    ])
 
     /// Each file's identity as both the app's `stat` and the service's `fstat` see it: one inode each.
     static let identities: [UUID: FileIdentity] = Dictionary(uniqueKeysWithValues: zip(
@@ -63,12 +73,14 @@ enum Fixtures {
         .convertApple(staging: staging),
         .cancelConversion,
         .displayOptions(dict: dict),
+        .ledgerRecord(reading: ledgerReading, operation: "3E2D1C0B-9A87-4655-8433-221100FFEEDD", targetLanguages: ["en"]),
+        .ledgerHistory(now: 1_790_643_600, utcOffsetSeconds: 0),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 19
+    static let operationCases = 21
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -90,6 +102,8 @@ enum Fixtures {
         case .convertApple: 16
         case .cancelConversion: 17
         case .displayOptions: 18
+        case .ledgerRecord: 19
+        case .ledgerHistory: 20
         }
     }
 
@@ -144,6 +158,8 @@ enum Fixtures {
         .readingStyle(readingStyle),
         .converted(converted),
         .displayOptions(displayOptions),
+        .ledgerRecord(.recorded),
+        .ledgerHistory(ledgerHistory),
     ]
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
@@ -174,7 +190,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 16
+    static let answerCases = 18
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -193,6 +209,8 @@ enum Fixtures {
         case .readingStyle: 13
         case .converted: 14
         case .displayOptions: 15
+        case .ledgerRecord: 16
+        case .ledgerHistory: 17
         }
     }
 

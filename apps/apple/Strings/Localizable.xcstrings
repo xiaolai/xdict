@@ -1630,6 +1630,22 @@
         }
       }
     },
+    "All languages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All languages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所有语言"
+          }
+        }
+      }
+    },
     "Allow XDict in Login Items" : {
       "localizations" : {
         "en" : {
@@ -1866,6 +1882,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Apple 智能已就绪。"
+          }
+        }
+      }
+    },
+    "Apple Intelligence needs macOS %@ or later; this Mac runs macOS %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple Intelligence needs macOS %1$@ or later; this Mac runs macOS %2$@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 智能需要 macOS %1$@ 或更高版本；这台 Mac 运行的是 macOS %2$@。"
           }
         }
       }
@@ -3565,6 +3597,38 @@
         }
       }
     },
+    "History" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史"
+          }
+        }
+      }
+    },
+    "History…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "History…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "历史记录…"
+          }
+        }
+      }
+    },
     "Hold" : {
       "comment" : "Hover gesture: hold the key while the pointer rests",
       "localizations" : {
@@ -3970,6 +4034,22 @@
         }
       }
     },
+    "Keep a reading history on this Mac" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep a reading history on this Mac"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留这台 Mac 上的阅读记录"
+          }
+        }
+      }
+    },
     "Kept as the same dictionary as the file it replaced." : {
       "localizations" : {
         "en" : {
@@ -4115,6 +4195,38 @@
         }
       }
     },
+    "Languages to record" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Languages to record"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要记录的语言"
+          }
+        }
+      }
+    },
+    "Languages to show" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Languages to show"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要显示的语言"
+          }
+        }
+      }
+    },
     "Last checked when the file was there." : {
       "localizations" : {
         "en" : {
@@ -4144,6 +4256,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "拉丁字母"
+          }
+        }
+      }
+    },
+    "Learning" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Learning"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "学习"
           }
         }
       }
@@ -4756,6 +4884,22 @@
         }
       }
     },
+    "No longer in your library" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No longer in your library"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已不在词典库中"
+          }
+        }
+      }
+    },
     "No matches" : {
       "localizations" : {
         "en" : {
@@ -5031,6 +5175,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可查询的内容"
+          }
+        }
+      }
+    },
+    "Nothing yet. A word you look up is kept here, with its sentence." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing yet. A word you look up is kept here, with its sentence."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有记录。你查询的单词会连同句子保存在这里。"
           }
         }
       }
@@ -5807,6 +5967,22 @@
         }
       }
     },
+    "Reading History" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Reading History"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读记录"
+          }
+        }
+      }
+    },
     "Reading the dictionary’s style…" : {
       "localizations" : {
         "en" : {
@@ -6532,6 +6708,22 @@
         }
       }
     },
+    "Show only some languages" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show only some languages"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只显示部分语言"
+          }
+        }
+      }
+    },
     "Show the next result" : {
       "localizations" : {
         "en" : {
@@ -6848,6 +7040,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这不是网站。请输入 example.com 这样的名称，或粘贴网址。"
+          }
+        }
+      }
+    },
+    "The Keychain refused to remove the key (status %d)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The Keychain refused to remove the key (status %d)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "钥匙串拒绝删除密钥（状态 %d）。"
           }
         }
       }
@@ -7428,6 +7636,38 @@
         }
       }
     },
+    "The reading history could not be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading history could not be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取阅读记录。"
+          }
+        }
+      }
+    },
+    "The reading history is off. Turn it on in Settings ▸ Learning." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The reading history is off. Turn it on in Settings ▸ Learning."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读记录已关闭。可在“设置”▸“学习”中开启。"
+          }
+        }
+      }
+    },
     "The request is too long for the source." : {
       "localizations" : {
         "en" : {
@@ -7543,6 +7783,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 中的选中内容太长，无法一次读取。请选中一个词或短语。"
+          }
+        }
+      }
+    },
+    "The sentence around a looked-up word is stored only on this Mac. Nothing is sent anywhere; turning the history off stops new readings and keeps the ones already here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sentence around a looked-up word is stored only on this Mac. Nothing is sent anywhere; turning the history off stops new readings and keeps the ones already here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查询单词时周围的句子只保存在这台 Mac 上，不会发送到任何地方；关闭阅读记录后将不再记录新的查询，已有的记录仍然保留。"
           }
         }
       }
@@ -8541,6 +8797,22 @@
         }
       }
     },
+    "Today" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Today"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "今天"
+          }
+        }
+      }
+    },
     "Try Again" : {
       "localizations" : {
         "en" : {
@@ -8651,6 +8923,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "撤销"
+          }
+        }
+      }
+    },
+    "Unknown" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知"
+          }
+        }
+      }
+    },
+    "Unknown dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未知词典"
           }
         }
       }
@@ -8875,6 +9179,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭所有窗口后，XDict 仍在运行：快捷键、服务和悬停查询照常可用。关闭此项时，XDict 随最后一个窗口退出。"
+          }
+        }
+      }
+    },
+    "With no language chosen, readings in every language are kept." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With no language chosen, readings in every language are kept."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择语言时，将保留所有语言的阅读记录。"
+          }
+        }
+      }
+    },
+    "With no language chosen, the drawer shows every reading." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "With no language chosen, the drawer shows every reading."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择语言时，抽屉会显示全部阅读记录。"
           }
         }
       }
@@ -9279,6 +9615,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 的词典服务未能完成这部词典的转换。请再试一次。"
+          }
+        }
+      }
+    },
+    "Yesterday" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Yesterday"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "昨天"
+          }
+        }
+      }
+    },
+    "Your dictionaries declare no language yet, so every reading is kept." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your dictionaries declare no language yet, so every reading is kept."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的词典尚未声明语言，因此将保留全部阅读记录。"
           }
         }
       }

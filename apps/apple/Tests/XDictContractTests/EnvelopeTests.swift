@@ -80,8 +80,9 @@ struct EnvelopeTests {
     }
 
     @Test func anEventOfAnotherVersionIsAMismatch() {
-        let future = Data(#"{"contract":9,"request":1,"kind":{"sparkle":{}}}"#.utf8)
-        #expect(ServiceEvent.read(future) == .failure(.contractMismatch(service: 9, client: Contract.version)))
+        let next = Contract.version + 1
+        let future = Data(#"{"contract":\#(next),"request":1,"kind":{"sparkle":{}}}"#.utf8)
+        #expect(ServiceEvent.read(future) == .failure(.contractMismatch(service: next, client: Contract.version)))
     }
 
     @Test func bytesThatAreNoEnvelopeAreUndecodableWithNoID() {

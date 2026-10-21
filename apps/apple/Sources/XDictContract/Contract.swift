@@ -47,7 +47,9 @@ public enum Contract {
     /// declares, with its defaults and the core's CSS (ADR-0013 decisions 2, 4 and 6), for Settings and the entry view.
     /// 8 (2026-10-20): the operation `entryText` and its answer, an entry as whole plain text with spans and a cut
     /// report, for the AI pane (ADR-0021 d.5, plan-ai-meaning WI-1/WI-5).
-    public static let version: UInt32 = 8
+    /// 9 (2026-10-21): the operations `ledgerRecord` and `ledgerHistory` and their answers, the local reading history
+    /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
+    public static let version: UInt32 = 9
 }
 
 // MARK: - The request
@@ -225,13 +227,21 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// roles, and the cut report when the text budget trimmed it. The core projects it from the same render an `entry`
     /// call gets (same guards, same roles); a cut is data, never an error. A bulk call, like `entry`.
     case entryText(dict: DictId, entry: EntryRef, text: TextRenderContext)
+    /// **Record a reading in the local history** (ADR-0023, ADR-0024): the language filter runs before anything is
+    /// written, and `operation` is the client's stable id for this record — a retry reuses it and is one event. The
+    /// sentence travels here because the history stores it (D1); the core never sends it anywhere.
+    case ledgerRecord(reading: LedgerReading, operation: String, targetLanguages: [String])
+    /// The days the drawer shows, in the reader's own zone: `now` is the client's clock (whole epoch seconds) and
+    /// `utcOffsetSeconds` its offset east of UTC. The core groups, collapses repeats and labels; the shell draws.
+    case ledgerHistory(now: Double, utcOffsetSeconds: Int32)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
+             .ledgerRecord, .ledgerHistory: nil
         }
     }
 
@@ -240,7 +250,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText: nil
+             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
+             .ledgerRecord, .ledgerHistory: nil
         }
     }
 
@@ -258,7 +269,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .entry, .resource, .entryText: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
-             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions: false
+             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
+             .ledgerRecord, .ledgerHistory: false
         }
     }
 
@@ -269,7 +281,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry, .resource, .entryText: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
-             .readingStyle, .convertApple, .cancelConversion, .displayOptions: nil
+             .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory: nil
         }
     }
 
@@ -282,7 +294,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
-        case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion: []
+        case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
+             .ledgerRecord, .ledgerHistory: []
         }
     }
 
@@ -304,6 +317,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .convertApple: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .ledgerRecord: .ledgerRecord
+        case .ledgerHistory: .ledgerHistory
         }
     }
 
@@ -313,7 +328,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage, .health, .convertApple: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText: false
+             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText, .ledgerRecord,
+             .ledgerHistory: false
         }
     }
 }
@@ -446,13 +462,18 @@ public enum Answer: Codable, Hashable, Sendable {
     case displayOptions(DisplayOptions)
     /// An entry as plain text, its spans and its cut report (contract 8).
     case entryText(EntryText)
+    /// What recording one reading did (contract 9).
+    case ledgerRecord(LedgerRecordOutcome)
+    /// The days the drawer shows (contract 9).
+    case ledgerHistory(LedgerHistory)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText: false
+             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
+             .ledgerHistory: false
         }
     }
 
@@ -483,6 +504,8 @@ public enum Answer: Codable, Hashable, Sendable {
         case .converted: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .ledgerRecord: .ledgerRecord
+        case .ledgerHistory: .ledgerHistory
         }
     }
 }
@@ -500,7 +523,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
-    case readingStyle, converted, displayOptions, entryText
+    case readingStyle, converted, displayOptions, entryText, ledgerRecord, ledgerHistory
 }
 
 // MARK: - Events

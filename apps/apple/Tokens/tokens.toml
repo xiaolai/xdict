@@ -119,6 +119,8 @@ settingsHeight = { value = 560, why = "The Settings window's height: room for Ap
 meaningPaneMin = { value = 260, why = "The answer pane's narrowest: the shortest sense quote wraps to about four lines; below it the entry column keeps its room." }
 meaningPaneIdeal = { value = 340, why = "The answer pane's width when it opens: the quote, its explanation and a two-button row read without wrapping the outcome line." }
 meaningPaneMax = { value = 460, why = "The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence." }
+historyDrawerWidth = { value = 360, why = "The reading-history drawer's width: a sentence a line, beside the menu bar." }
+historyDrawerHeight = { value = 520, why = "The drawer's height: five day groups of cards before it scrolls." }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }

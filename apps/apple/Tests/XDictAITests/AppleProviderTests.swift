@@ -11,6 +11,27 @@ struct AppleProviderTests {
         #expect(AppleAvailability.allCases.contains(availability))
     }
 
+    /// **A system older than the build's source is named with both versions** (ADR-0026), and the framework is not asked
+    /// on a system that may not have it: the autoclosure stays unevaluated below the floor.
+    @Test func anOlderSystemIsATypedCaseThatNamesBothVersions() {
+        #expect(AppleSource.availability(running: "15.7", framework: .available)
+                == .system(required: "27", running: "15.7"))
+        #expect(AppleSource.availability(running: "26.5", framework: .available)
+                == .system(required: "27", running: "26.5"))
+        #expect(AppleSource.availability(running: "27.0", framework: .available) == .available)
+        #expect(AppleSource.availability(running: "27.0", framework: .modelNotReady) == .modelNotReady)
+
+        var asked = false
+        func framework() -> AppleAvailability {
+            asked = true
+            return .available
+        }
+        _ = AppleSource.availability(running: "15.7", framework: framework())
+        #expect(!asked, "the framework must not be touched below the floor")
+        _ = AppleSource.availability(running: "27.0", framework: framework())
+        #expect(asked)
+    }
+
     /// When Apple's model cannot run here, the provider says exactly why and never creates a session.
     @Test(.enabled(if: AppleOnDeviceProvider.availability() != .available))
     func anUnavailableModelIsATypedRefusal() async {

@@ -25,6 +25,11 @@ struct XDictApp: App {
     static var service: ServiceClient { setup.service }
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
     @MainActor static let library = Library(store: LibraryStore(directory: setup.libraryDirectory), backend: service)
+    /// **The reading history** (ADR-0023): the drawer's days and the one place a reading is recorded. The core owns every
+    /// rule; the preferences are Settings ▸ Learning's, and off means nothing is written at all.
+    @MainActor static let history = HistoryModel(service: service, preferences: LearningPreferences.shared)
+    /// The drawer's one window: shown from the menu bar, refreshed each time it opens.
+    @MainActor static let historyDrawer = HistoryDrawerController(model: history)
     /// Add Apple Dictionaries… and Convert Again (ADR-0011), through the app-group container the service shares.
     @MainActor static let appleImporter = AppleImporter(library: library, backend: service,
                                                         root: SharedContainer.appleImports())
@@ -73,7 +78,8 @@ struct XDictApp: App {
             MenuBarMenu(registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
-                        showDictionaries: { MenuBarActions.showDictionaries() })
+                        showDictionaries: { MenuBarActions.showDictionaries() },
+                        showHistory: { MenuBarActions.showHistory() })
         } label: {
             MenuBarLabel()
         }
@@ -88,6 +94,9 @@ struct XDictApp: App {
                 .task { await LibraryLaunch.once() }
         case .readingAndSpeech:
             ReadingSettings()
+        case .learning:
+            // The library's declared search languages: the values the recording filter and the drawer offer (ADR-0023).
+            LearningSettings(declared: { library.declaredSearchLanguages })
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
                             registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
@@ -313,6 +322,16 @@ enum MenuBarActions {
     /// Settings ▸ Dictionaries, at `dictionary` when given (ADR-0012 d.4, d.5).
     static func showDictionaries(_ dictionary: UUID? = nil) {
         SettingsRoute.shared.show(dictionary)
+    }
+
+    /// **The reading history's drawer** (plan-history-and-learning §4): anchored at the menu bar's top-right corner until
+    /// the owned status item supplies its button's own frame — the tray's owner-gated measurement (WI-0).
+    @MainActor static func showHistory() {
+        guard let screen = NSScreen.main else { return }
+        let icon = Tokens.Size.menuBarIcon
+        let anchor = CGRect(x: screen.frame.maxX - icon.width, y: screen.frame.maxY - icon.height,
+                            width: icon.width, height: icon.height)
+        XDictApp.historyDrawer.toggle(near: anchor, on: screen)
     }
 }
 

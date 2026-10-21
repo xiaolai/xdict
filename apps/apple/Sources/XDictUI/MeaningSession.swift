@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import XDictAI
+import XDictCapture
 import XDictClient
 import XDictContract
 
@@ -69,12 +70,15 @@ public struct MeaningHandoff: Sendable {
     public let sentence: String
     /// The term's range in the sentence, in UTF-16 units; nil when the capture carried none.
     public let range: NSRange?
+    /// The ends of the sentence the capture may have cut — the history's own `cut` bits (ADR-0023).
+    public let cut: CutEnds
     public let origin: MeaningOrigin
 
-    public init(term: String, sentence: String, range: NSRange?, origin: MeaningOrigin) {
+    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = [], origin: MeaningOrigin) {
         self.term = term
         self.sentence = sentence
         self.range = range
+        self.cut = cut
         self.origin = origin
     }
 }

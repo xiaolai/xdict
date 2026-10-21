@@ -1,0 +1,298 @@
+import CoreGraphics
+import Foundation
+import Testing
+import XDictCapture
+import XDictClient
+import XDictContract
+import XDictLibrary
+import XDictTokens
+import XDictUI
+
+/// The reading history's app side (ADR-0023, ADR-0024): when a finished document is a reading, what the app makes of one,
+/// and what the model asks the core. Storage, grouping and the language filter's decision are the core's, tested there.
+struct HistoryCaptureTests {
+    @Test func onlyAnEntryThatDrewOnScreenWithASentenceIsRecorded() {
+        #expect(HistoryCapture(onScreen: true, current: true, hasEntry: true, hasSentence: true).records)
+        // A lookup closed before its entry loaded.
+        #expect(!HistoryCapture(onScreen: false, current: true, hasEntry: true, hasSentence: true).records)
+        // A no-results lookup: there is no entry to read.
+        #expect(!HistoryCapture(onScreen: true, current: true, hasEntry: false, hasSentence: true).records)
+        // A stale completion, in the gap before a newer lookup's entry request.
+        #expect(!HistoryCapture(onScreen: true, current: false, hasEntry: true, hasSentence: true).records)
+        // A typed search, or a capture with no sentence: nothing to put on a card.
+        #expect(!HistoryCapture(onScreen: true, current: true, hasEntry: true, hasSentence: false).records)
+    }
+}
+
+struct ReadingCaptureTests {
+    static let entry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:aa"), key: "hold", occurrence: 2)
+
+    @Test func aCappedSentenceCarriesItsCutAndQuality() {
+        let handoff = MeaningHandoff(term: "hold", sentence: "They hold that view.", range: NSRange(location: 5, length: 4),
+                                     cut: [.end], origin: MeaningOrigin(request: 1, generation: 2))
+        let reading = ReadingCapture.reading(handoff: handoff, entry: Self.entry, dictionary: nil,
+                                             at: Date(timeIntervalSince1970: 1_790_641_800.9), device: "d")
+        #expect(reading.surface == "hold")
+        #expect(reading.lemma == "hold")
+        #expect(reading.sentence == "They hold that view.")
+        #expect(reading.span == LedgerSpan(start: 5, len: 4))
+        #expect(reading.cut == 2, "bit 1: the end was cut")
+        #expect(reading.quality == "mayBeCut")
+        #expect(reading.edition == "mdx-sha256-v1:aa")
+        #expect(reading.entryKey == "hold")
+        #expect(reading.occurrence == 2)
+        #expect(reading.at == 1_790_641_800, "whole epoch seconds")
+        #expect(reading.device == "d")
+        #expect(reading.dictionaryName.isEmpty && reading.language.isEmpty, "an unknown dictionary says so")
+    }
+
+    @Test func aWholeSentenceIsCompleteAndTheDictionaryIsNamed() {
+        let handoff = MeaningHandoff(term: "run", sentence: "They run each day.", range: NSRange(location: 5, length: 3),
+                                     origin: MeaningOrigin(request: 1, generation: 1))
+        var dictionary = LibraryEntry(
+            id: UUID(), root: StoredLocation(bookmark: Data(), path: "/tmp/Tiny"),
+            files: [], languages: Languages(proposal: LanguageProposal(pair: LanguagePair(search: "en", explanation: "zh-Hans"),
+                                                                      basis: .stated)))
+        dictionary.readersName = "Tiny"
+        let reading = ReadingCapture.reading(handoff: handoff, entry: Self.entry, dictionary: dictionary,
+                                             at: Date(timeIntervalSince1970: 1_790_641_800), device: "d")
+        #expect(reading.cut == 0)
+        #expect(reading.quality == "complete")
+        #expect(reading.language == "en")
+        #expect(reading.dictionaryName == "Tiny")
+    }
+
+    @Test func theDeviceIsMintedOnceAndKept() throws {
+        let name = "xdict-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        defer { defaults.removePersistentDomain(forName: name) }
+        let first = DeviceIdentity.current(defaults: defaults)
+        #expect(!first.isEmpty)
+        #expect(DeviceIdentity.current(defaults: defaults) == first)
+    }
+}
+
+/// A service that answers the two ledger calls and records what it was asked.
+actor FakeHistoryService: HistoryService {
+    private(set) var operations: [ServiceOperation] = []
+    var history: LedgerHistory
+    var outcomes: [LedgerRecordOutcome]
+
+    init(history: LedgerHistory = LedgerHistory(days: []), outcomes: [LedgerRecordOutcome] = [.recorded]) {
+        self.history = history
+        self.outcomes = outcomes
+    }
+
+    func call(_ operation: ServiceOperation) async -> ClientOutcome {
+        operations.append(operation)
+        switch operation {
+        case .ledgerHistory:
+            return .success(Delivered(answer: .ledgerHistory(history), payload: nil))
+        case .ledgerRecord:
+            let outcome = outcomes.isEmpty ? .recorded : outcomes.removeFirst()
+            return .success(Delivered(answer: .ledgerRecord(outcome), payload: nil))
+        default:
+            return .failure(.wire(.refused(.unsupportedOperation)))
+        }
+    }
+
+    func recorded() -> [ServiceOperation] {
+        operations.filter { if case .ledgerRecord = $0 { return true } else { return false } }
+    }
+}
+
+@MainActor
+struct HistoryModelTests {
+    static func scratch() throws -> (LearningPreferences, UserDefaults, String) {
+        let name = "xdict-tests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        return (LearningPreferences(defaults: defaults), defaults, name)
+    }
+
+    static func reading(_ surface: String = "hold") -> LedgerReading {
+        LedgerReading(surface: surface, lemma: surface, sentence: "They \(surface) that view.",
+                      span: LedgerSpan(start: 5, len: UInt32(surface.utf16.count)), cut: 0, quality: "complete",
+                      edition: "mdx-sha256-v1:aa", entryKey: surface, occurrence: 0, dictionaryName: "Tiny",
+                      language: "en", at: 1_790_641_800, device: "d")
+    }
+
+    @Test func theHistoryOffWritesNothingAndAsksNothing() async throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        preferences.historyEnabled = false
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        #expect(await model.record(Self.reading()) == nil)
+        let calls = await service.operations
+        #expect(calls.isEmpty, "off means no call, not a call the core skips")
+        await model.refresh()
+        #expect(model.state == .off)
+        let afterRefresh = await service.operations
+        #expect(afterRefresh.isEmpty)
+    }
+
+    @Test func aReadingIsRecordedWithTheReadersTargets() async throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        preferences.setTargetLanguages(["en"])
+        let service = FakeHistoryService()
+        let model = HistoryModel(service: service, preferences: preferences)
+        #expect(await model.record(Self.reading()) == .recorded)
+        let calls = await service.recorded()
+        #expect(calls.count == 1)
+        guard case .ledgerRecord(let reading, _, let targets) = try #require(calls.first) else {
+            Issue.record("not a record call")
+            return
+        }
+        #expect(reading.surface == "hold")
+        #expect(targets == ["en"])
+    }
+
+    @Test func anUncertainCommitIsRetriedWithTheSameOperation() async throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let service = FakeHistoryService(outcomes: [.uncertain, .duplicate])
+        let model = HistoryModel(service: service, preferences: preferences)
+        #expect(await model.record(Self.reading()) == .duplicate)
+        let calls = await service.recorded()
+        #expect(calls.count == 2)
+        var operations: [String] = []
+        for call in calls {
+            guard case .ledgerRecord(_, let operation, _) = call else { continue }
+            operations.append(operation)
+        }
+        #expect(Set(operations).count == 1, "a retry reuses the operation id, so the log holds one event")
+    }
+
+    @Test func theDrawerFiltersWhatWasLoadedAndNeverRewritesIt() async throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        let english = LedgerCard(reading: Self.reading("hold"), times: 1, events: ["e1"])
+        let chinese = LedgerReading(surface: "词", lemma: "词", sentence: "这是一个词。", span: nil, cut: 0,
+                                    quality: "complete", edition: "mdx-sha256-v1:aa", entryKey: "词", occurrence: 0,
+                                    dictionaryName: "Tiny", language: "zh-Hans", at: english.reading.at, device: "d")
+        let history = LedgerHistory(days: [
+            LedgerDay(id: "2026-09-29", start: 1_790_640_000, label: .yesterday,
+                      cards: [LedgerCard(reading: chinese, times: 1, events: ["e2"]), english]),
+        ])
+        let service = FakeHistoryService(history: history)
+        let model = HistoryModel(service: service, preferences: preferences)
+        await model.refresh()
+        #expect(model.state == .loaded(history))
+        #expect(model.days.first?.cards.count == 2, "no filter: every stored reading")
+        #expect(model.storedLanguages == ["en", "zh-Hans"])
+
+        preferences.setDrawerLanguages(["en"])
+        #expect(model.days.first?.cards.map(\.reading.surface) == ["hold"])
+        preferences.setDrawerLanguages(["zh-Hans"])
+        #expect(model.days.first?.cards.map(\.reading.surface) == ["词"])
+        // The stored history is untouched: the filter is a view of it.
+        #expect(model.state == .loaded(history))
+    }
+}
+
+/// **The learning settings** (ADR-0023): on for a new reader, every language by default, and both language sets survive a
+/// relaunch. The recording filter's core-side rule is the ledger's test; this is what the panes store.
+@MainActor
+struct LearningPreferencesTests {
+    static func scratch() throws -> (LearningPreferences, UserDefaults, String) {
+        let name = "xdict-learning-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: name))
+        return (LearningPreferences(defaults: defaults), defaults, name)
+    }
+
+    @Test func aNewReaderHasTheHistoryOnAndEveryLanguage() throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        #expect(preferences.historyEnabled, "ADR-0023: a history that begins empty is a failed feature")
+        #expect(preferences.targetLanguages.isEmpty)
+        #expect(preferences.drawerLanguages.isEmpty)
+        #expect(preferences.records(""))
+        #expect(preferences.records("zh-Hans"))
+        #expect(preferences.shows("zh-Hans"))
+    }
+
+    @Test func theSettingsSurviveARelaunch() throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        preferences.historyEnabled = false
+        preferences.setTargetLanguages(["en", "en", "zh-Hans"])
+        preferences.setDrawerLanguages(["en"])
+        let relaunched = LearningPreferences(defaults: defaults)
+        #expect(!relaunched.historyEnabled)
+        #expect(relaunched.targetLanguages == ["en", "zh-Hans"])
+        #expect(relaunched.drawerLanguages == ["en"])
+        #expect(relaunched.records("zh-Hans"))
+        #expect(relaunched.records("en"))
+        #expect(!relaunched.records("fr"), "a language outside the set is not recorded")
+    }
+
+    @Test func anUnknownLanguageIsNeverATargetUnlessTheSetIsEmpty() throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        preferences.setTargetLanguages(["en"])
+        #expect(!preferences.records(""), "unknown is not silently a target")
+        preferences.setTargetLanguages([])
+        #expect(preferences.records(""))
+    }
+}
+
+/// **The card marks its word** (plan-history-and-learning §1): spans are UTF-16 units, as the capture contract states, and
+/// a capture's cut ends show as ellipses.
+struct HistoryRunsTests {
+    @Test func theWordIsMarkedInAPlainSentence() {
+        #expect(HistoryRuns.runs(sentence: "They hold that view.", span: LedgerSpan(start: 5, len: 4), cut: 0)
+                == [.text("They "), .word("hold"), .text(" that view.")])
+    }
+
+    @Test func cjkAndEmojiSpansUseUTF16Units() {
+        #expect(HistoryRuns.runs(sentence: "这是一个词。", span: LedgerSpan(start: 4, len: 1), cut: 0)
+                == [.text("这是一个"), .word("词"), .text("。")])
+        // "a 😀 word": a, space, the two-unit emoji, space, then the word at offset 5.
+        #expect(HistoryRuns.runs(sentence: "a 😀 word", span: LedgerSpan(start: 5, len: 4), cut: 0)
+                == [.text("a 😀 "), .word("word")])
+    }
+
+    @Test func cutEndsShowEllipses() {
+        #expect(HistoryRuns.runs(sentence: "hold that", span: LedgerSpan(start: 0, len: 4), cut: 3)
+                == [.text("…"), .word("hold"), .text(" that"), .text("…")])
+        #expect(HistoryRuns.runs(sentence: "to hold", span: LedgerSpan(start: 3, len: 4), cut: 1)
+                == [.text("…"), .text("to "), .word("hold")])
+    }
+
+    @Test func aSpanOutsideTheSentenceIsClampedAndNeverCrashes() {
+        #expect(HistoryRuns.runs(sentence: "hold", span: LedgerSpan(start: 99, len: 4), cut: 0) == [.text("hold")])
+        #expect(HistoryRuns.runs(sentence: "hold", span: nil, cut: 0) == [.text("hold")])
+    }
+}
+
+/// **The drawer hangs under the menu-bar item and stays on the screen** (plan-history-and-learning §1): the final rect is
+/// computed before the window is shown, for any screen and any item position.
+struct HistoryDrawerPlacementTests {
+    static let size = CGSize(width: Tokens.Window.historyDrawerWidth, height: Tokens.Window.historyDrawerHeight)
+    static let visible = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+
+    @Test func theDrawerHangsUnderTheItemWithItsRightEdgeAtTheItems() {
+        let anchor = CGRect(x: 1_300, y: 875, width: 22, height: 22)
+        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: Self.visible,
+                                                 margin: Tokens.Space.s)
+        #expect(frame.maxX == anchor.maxX)
+        #expect(frame.maxY == anchor.minY - Tokens.Space.s)
+        #expect(Self.visible.contains(frame))
+    }
+
+    @Test func anItemAtTheLeftEdgeKeepsTheWholeDrawerOnScreen() {
+        let anchor = CGRect(x: 10, y: 875, width: 22, height: 22)
+        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: Self.visible,
+                                                 margin: Tokens.Space.s)
+        #expect(frame.minX == Self.visible.minX + Tokens.Space.s)
+        #expect(Self.visible.contains(frame))
+    }
+
+    @Test func aShortScreenKeepsTheDrawerInsideIt() {
+        let visible = CGRect(x: 0, y: 0, width: 800, height: 600)
+        let anchor = CGRect(x: 700, y: 578, width: 22, height: 22)
+        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: visible, margin: Tokens.Space.s)
+        #expect(visible.contains(frame))
+    }
+}

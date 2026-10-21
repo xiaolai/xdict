@@ -4,25 +4,28 @@ import XDictAnywhere
 import XDictCapture
 
 /// **The menu-bar item's menu** (plan-macos-v1 WI-8; XiaolaiDict's `MenuBarItem`, re-checked against the MDX-first
-/// model): XDict has no reading history for a left click to open, so the item is a plain menu — look up the selection,
-/// open the main window, Settings ▸ Dictionaries (ADR-0012 d.5), Settings, quit — with the shortcut's problem at its top when there is one, as the
-/// menu is where a reader looks when the shortcut does nothing. Since plan-capture WI-3, hover's pause group: Pause Hover
-/// for a while, or when it resumes and Resume Hover (XiaolaiDict's `HoverPauseMenu`), from the control's one pause.
+/// model): look up the selection, open the main window, the reading history's drawer, Settings ▸ Dictionaries (ADR-0012
+/// d.5), Settings, quit — with the shortcut's problem at its top when there is one, as the menu is where a reader looks
+/// when the shortcut does nothing. Since plan-capture WI-3, hover's pause group: Pause Hover for a while, or when it
+/// resumes and Resume Hover (XiaolaiDict's `HoverPauseMenu`), from the control's one pause.
 public struct MenuBarMenu: View {
     let registrar: ShortcutRegistrar
     let hover: HoverControl
     let lookUp: () -> Void
     let openMain: () -> Void
     let showDictionaries: () -> Void
+    let showHistory: () -> Void
     @Environment(\.openSettings) private var openSettings
 
     public init(registrar: ShortcutRegistrar, hover: HoverControl, lookUp: @escaping () -> Void,
-                openMain: @escaping () -> Void, showDictionaries: @escaping () -> Void) {
+                openMain: @escaping () -> Void, showDictionaries: @escaping () -> Void,
+                showHistory: @escaping () -> Void) {
         self.registrar = registrar
         self.hover = hover
         self.lookUp = lookUp
         self.openMain = openMain
         self.showDictionaries = showDictionaries
+        self.showHistory = showHistory
     }
 
     public var body: some View {
@@ -38,6 +41,7 @@ public struct MenuBarMenu: View {
             Button("Look Up Selection") { lookUp() }  // placement: menu-bar-extra
         }
         Button("Open XDict") { openMain() }  // placement: menu-bar-extra
+        Button("History…") { showHistory() }  // placement: menu-bar-extra
         Button("Dictionaries…") { showDictionaries() }  // placement: menu-bar-extra
         Divider()
         pauseGroup

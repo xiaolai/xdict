@@ -7,6 +7,8 @@ import Foundation
 public enum SettingsTab: CaseIterable, Hashable, Sendable {
     case dictionaries
     case readingAndSpeech
+    /// The reading history's switch and its two language sets (ADR-0023).
+    case learning
     case general
     case ai
     case setup
@@ -15,6 +17,7 @@ public enum SettingsTab: CaseIterable, Hashable, Sendable {
         switch self {
         case .dictionaries: "Dictionaries"
         case .readingAndSpeech: "Reading & Speech"
+        case .learning: "Learning"
         case .general: "General"
         case .ai: "AI"
         case .setup: "Setup"
@@ -25,6 +28,7 @@ public enum SettingsTab: CaseIterable, Hashable, Sendable {
         switch self {
         case .dictionaries: "books.vertical"
         case .readingAndSpeech: "book"
+        case .learning: "clock.arrow.circlepath"
         case .general: "gearshape"
         case .ai: "sparkles"
         case .setup: "checkmark.seal"

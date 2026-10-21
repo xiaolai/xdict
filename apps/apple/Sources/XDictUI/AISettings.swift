@@ -94,6 +94,13 @@ public struct AISettings: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
+                    // **A floor is named where the reader would choose it** (ADR-0026): never a row silently absent.
+                    if kind == .appleOnDevice, let notice = model.appleSystemNotice {
+                        Text(notice)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("ai.apple.system")
+                    }
                 }
             }
             .contentShape(Rectangle())
