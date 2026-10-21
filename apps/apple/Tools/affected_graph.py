@@ -131,6 +131,12 @@ def generate(repo):
             (value,) = dep.values()
             deps.append(value[0])
         targets[target["name"]] = {"type": kind, "dir": f"apps/apple/{path.rstrip('/')}/", "deps": sorted(deps)}
+    # **Only declared targets are nodes.** A dependency written `.product(name:package:)` names a product of another
+    # package (sayso's `CodexAuth`), which this graph does not build from this repository; keeping it as a `target:`
+    # node made every closure walk die on a name the target table does not hold.
+    declared = set(targets)
+    for entry in targets.values():
+        entry["deps"] = sorted(dep for dep in entry["deps"] if dep in declared)
     return {"version": 1, "crates": dict(sorted(crates.items())), "targets": dict(sorted(targets.items())),
             "manifests": {m: blob_of(repo, m) for m in sorted(manifests)}}
 
