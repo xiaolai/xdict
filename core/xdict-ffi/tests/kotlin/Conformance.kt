@@ -321,7 +321,8 @@ fun main(args: Array<String>) {
             (r["cut"] as java.math.BigDecimal).toInt().toUByte(), r["quality"] as String, r["edition"] as String,
             r["entryKey"] as String, uint(r["occurrence"])!!, r["dictionaryName"] as String, r["language"] as String,
             (r["at"] as java.math.BigDecimal).toDouble(), r["device"] as String)
-        val got = outcome { camel(ledgerCore.ledgerRecord(reading, c["operation"] as String, list(c["targetLanguages"]).map { it as String }).name) }
+        val targets = (c["targetLanguages"] as List<Any?>).map { it as String }
+        val got = outcome { camel(ledgerCore.ledgerRecord(reading, c["operation"] as String, targets).name) }
         check("ledger.readings[$n]", c["expect"], got)
     }
     val when0 = obj(ledgerCases["history"])
