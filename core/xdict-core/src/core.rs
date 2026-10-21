@@ -1209,6 +1209,29 @@ impl Core {
         })
     }
 
+    /// **Saves a note named by edition, key and occurrence** (plan §5.1): the history's cards carry those three, not a
+    /// handle, so the core resolves the open dictionary of the edition itself.
+    pub fn study_note_at(
+        &self,
+        entry: EntryRef,
+        text: String,
+        name: String,
+        stamp: Stamp,
+        operation_id: String,
+    ) -> Result<Note, CoreError> {
+        let dict = self.dict_of_edition(&entry.edition)?;
+        self.study_note(dict, entry, text, name, stamp, operation_id)
+    }
+
+    /// **The log's events as the reader's export** (ADR-0023): one JSON document, the evidence included and no
+    /// dictionary content.
+    pub fn ledger_export_json(&self) -> Result<String, CoreError> {
+        let mut held = self.ledger()?;
+        let events = self.opened(&mut held)?.export();
+        serde_json::to_string(&serde_json::json!({ "version": 1, "events": events }))
+            .map_err(|error| CoreError::internal(format!("export: {error}")))
+    }
+
     pub fn study_notes(&self) -> Result<Vec<Note>, CoreError> {
         let mut held = self.ledger()?;
         Ok(self.opened(&mut held)?.notes())

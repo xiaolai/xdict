@@ -20,6 +20,7 @@ xdict-identity = { path = "../xdict-identity" }
 xdict-lookup = { path = "../xdict-lookup" }
 xdict-mdx = { path = "../xdict-mdx" }
 xdict-schedule = { path = "../xdict-schedule" }
+serde_json.workspace = true
 xxhash-rust.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
