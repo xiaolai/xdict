@@ -68,8 +68,11 @@ struct CLIStub {
                           pid: pid_t(pidText) ?? 0)
     }
 
-    /// Waits up to `seconds` for invocation `n` to have started (its pid file written).
-    func waitForStart(_ n: Int, seconds: Double = 3) async -> pid_t? {
+    /// Waits up to `seconds` for invocation `n` to have started (its pid file written). **Ten seconds by default, because
+    /// the bound is paid only when something is wrong**: a stub starts in 50–270 ms on an idle host (the script's first
+    /// run carries the system's one-time check of a new file), but the full suite runs its targets in parallel and a 2 s
+    /// bound was outrun on mbp16 (2026-10-21: "the stub never started" on a test that had passed minutes before).
+    func waitForStart(_ n: Int, seconds: Double = 10) async -> pid_t? {
         let deadline = Date().addingTimeInterval(seconds)
         while Date() < deadline {
             if let text = try? String(contentsOf: directory.appending(path: "pid.\(n)"), encoding: .utf8),
