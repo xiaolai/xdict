@@ -1,6 +1,7 @@
 import AppKit
 import Observation
 import SwiftUI
+import XDictAnywhere
 import XDictTokens
 
 /// **Where the docked drawer sits** (ported from XiaolaiDict's `DrawerGeometry`, plan-history-and-learning §1): the right
@@ -86,8 +87,10 @@ public final class HistoryDrawerController {
     private let study: StudyModel?
     private let onReview: (() -> Void)?
     private var monitors: [Any] = []
-    private var escape: Any?
     private var screens: NSObjectProtocol?
+    /// The drawer's place in the Escape claim, held for the length of its session (XiaolaiDict's `escape.claim`, kept):
+    /// the panel is nonactivating, so a key monitor inside XDict never sees a reader's Escape — the app in front does.
+    private var escape: EscapeStack.Entry?
     /// The reader asked for the drawer and nothing has hidden it since: true from `show()` until `hide()`, across the one
     /// runloop turn the open's animation waits for, so a click in that turn still finds a drawer to close.
     private var showing = false
@@ -118,8 +121,8 @@ public final class HistoryDrawerController {
         panel.orderFrontRegardless()
         onVisibilityChange?(true)
         observeClicks()
-        observeEscape()
         observeScreens()
+        escape = HotkeyCenter.shared.escape.push { [weak self] in self?.hide() }
         // **One runloop turn, so the parked frame is on screen before the spring starts** (XiaolaiDict's lesson, kept):
         // a state change made in the turn the window first lays out animates from no rendered frame, and the first open
         // snapped while every later one slid. A turn, not a duration — no interval a slow machine can invalidate.
@@ -138,6 +141,8 @@ public final class HistoryDrawerController {
         showing = false
         onVisibilityChange?(false)
         stopObserving()
+        if let escape { HotkeyCenter.shared.escape.pop(escape) }
+        escape = nil
         guard presentation.revealed else {
             // Still waiting for its first rendered frame: there is nothing to animate, so the window just goes. A close
             // already under way is left to its own completion, which sees `showing` false and orders out once.
@@ -163,10 +168,6 @@ public final class HistoryDrawerController {
             NSEvent.removeMonitor(monitor)
         }
         monitors = []
-        if let escape {
-            NSEvent.removeMonitor(escape)
-        }
-        escape = nil
         if let screens {
             NotificationCenter.default.removeObserver(screens)
         }
@@ -234,18 +235,6 @@ public final class HistoryDrawerController {
     public nonisolated static func clickDismisses(at point: CGPoint, content: CGRect, statusItem: CGRect?) -> Bool {
         if let statusItem, statusItem.contains(point) { return false }
         return !content.contains(point)
-    }
-
-    /// Escape closes it, and is claimed only while the drawer is open: the lookup panel's own claim is not disturbed.
-    private func observeEscape() {
-        escape = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            let claimed = MainActor.assumeIsolated { () -> Bool in
-                guard let self, event.keyCode == 53, self.isOpen else { return false }
-                self.hide()
-                return true
-            }
-            return claimed ? nil : event
-        }
     }
 
     /// The display's geometry changed: the rect was placed for the old one, so the drawer closes rather than float.
