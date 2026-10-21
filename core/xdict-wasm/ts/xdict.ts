@@ -52,6 +52,25 @@ export type Card = { reading: Reading; times: number; events: string[] };
 export type DayLabel = 'today' | 'yesterday' | 'weekday' | 'date';
 export type Day = { id: string; start: number; label: DayLabel; cards: Card[] };
 export type History = { days: Day[] };
+export type StudyTarget = {
+  lineage: string; entryKey: string; occurrence: number; kind: 'entry'; edition: string; definitionHash: string;
+};
+export type Stamp = { at: number; device: string };
+export type ReviewPolicy = { retention: number; maximumDays: number };
+export type StudyGrade = 'again' | 'hard' | 'good' | 'easy';
+export type StudyPhase = 'new' | 'learning' | 'review' | 'relearning';
+export type CardState = {
+  stability: number | null; difficulty: number | null; phase: StudyPhase; lastReview: number | null; due: number | null;
+};
+export type StudyNote = { target: StudyTarget; text: string; at: number; device: string };
+export type StudyCard = {
+  target: StudyTarget; note: StudyNote; state: CardState; head: string; noteHead: string; grades: number;
+};
+export type ReviewSummary = { due: number; nextDue: number | null };
+export type ReviewOutcome = { outcome: RecordOutcome; card: StudyCard };
+export type ReanchorResult = 'reanchored' | 'reordered' | 'changed' | 'missing';
+export type ReanchorOutcome = { target: StudyTarget; result: ReanchorResult };
+export type ReanchorReport = { outcomes: ReanchorOutcome[] };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
 export type BlockReason = { type: 'remote'; url: string } | { type: 'script' } | { type: 'unknownScheme'; scheme: string };
 export type Link =
@@ -134,6 +153,14 @@ interface GlueCore {
   entry_text(dict: string, entry: string, view: string): string;
   ledger_record(reading: string, operation: string, targetLanguages: string): string;
   ledger_history(now: number, utcOffsetSeconds: number): string;
+  study_note(dict: string, entry: string, text: string, name: string, stamp: string, operation: string): string;
+  study_notes(): string;
+  review_queue(now: number, limit: number): string;
+  review_grade(targetKey: string, revision: string, grade: number, policy: string, stamp: string, operation: string): string;
+  review_undo(targetKey: string, gradeEvent: string, stamp: string, operation: string): string;
+  review_summary(now: number): string;
+  definition_hash_of(dict: string, entry: string): string;
+  study_reanchor(oldEdition: string, newEdition: string, stamp: string, operationPrefix: string): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
   displayOptions(dict: string): string;
@@ -308,6 +335,46 @@ export class XDictCore {
   /** The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock. */
   ledgerHistory(now: number, utcOffsetSeconds: number): History {
     return this.call(() => this.inner.ledger_history(now, utcOffsetSeconds));
+  }
+
+  /** Saves the reader's note on an entry (plan §5.1) and enrols it for review. */
+  studyNote(dict: string, entry: EntryRef, text: string, name: string, stamp: Stamp, operation: string): StudyNote {
+    return this.call(() => this.inner.study_note(dict, JSON.stringify(entry), text, name, JSON.stringify(stamp), operation));
+  }
+
+  studyNotes(): StudyNote[] {
+    return this.call(() => this.inner.study_notes());
+  }
+
+  /** The review queue: due cards, soonest first, a new card at once. */
+  reviewQueue(now: number, limit: number): StudyCard[] {
+    return this.call(() => this.inner.review_queue(now, limit));
+  }
+
+  /** One grade under the reader's configuration. */
+  reviewGrade(targetKey: string, revision: string, grade: StudyGrade, policy: ReviewPolicy, stamp: Stamp,
+              operation: string): ReviewOutcome {
+    const number = { again: 1, hard: 2, good: 3, easy: 4 }[grade];
+    return this.call(() => this.inner.review_grade(targetKey, revision, number, JSON.stringify(policy),
+                                                   JSON.stringify(stamp), operation));
+  }
+
+  reviewUndo(targetKey: string, gradeEvent: string, stamp: Stamp, operation: string): ReviewOutcome {
+    return this.call(() => this.inner.review_undo(targetKey, gradeEvent, JSON.stringify(stamp), operation));
+  }
+
+  reviewSummary(now: number): ReviewSummary {
+    return this.call(() => this.inner.review_summary(now));
+  }
+
+  /** The hash a note records for an entry's definition; never the definition itself. */
+  definitionHashOf(dict: string, entry: EntryRef): string {
+    return this.call(() => this.inner.definition_hash_of(dict, JSON.stringify(entry)));
+  }
+
+  /** Re-anchors notes of one edition to another under the same lineage (plan §5.1). */
+  studyReanchor(oldEdition: string, newEdition: string, stamp: Stamp, operationPrefix: string): ReanchorReport {
+    return this.call(() => this.inner.study_reanchor(oldEdition, newEdition, JSON.stringify(stamp), operationPrefix));
   }
 
   link(dict: string, url: string, origin: LinkOrigin, view: View): Link {
