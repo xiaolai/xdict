@@ -478,6 +478,11 @@ on_exit() {
     if [ "$finished" != true ]; then
         echo "FAIL  $STAGE: the script stopped at line ${died_at:-?} before the stage finished"
         printf 'RESULT\t%s\tfail\n' "$STAGE"
+        # **Counted, not only written**: the row alone left `failures` at zero, and a trap's last command is the
+        # script's exit status — so on 2026-10-21 a stage that died part-way (an empty array expanded under `set -u`,
+        # bash 3.2) filed its failure and the run still exited 0. The release gate reads the ledger, but a green exit
+        # on a red run is how a reader stops believing the colour.
+        failures=$((failures + 1))
     fi
     [ "$failures" -eq 0 ] || exit 1
 }
@@ -1267,7 +1272,8 @@ substage_setup() {
         local language=()
         [ "$phase" = first ] || language=(-AppleLanguages "(zh-Hans)")
         open -n --stdout "$work/$phase.out" --stderr "$work/$phase.err" "$app" --args --setup-report "$phase" \
-            --library-dir "$work/library" --suite "$suite" --work "$work/$phase" --out "$out" "${language[@]}" \
+            --library-dir "$work/library" --suite "$suite" --work "$work/$phase" --out "$out" \
+            ${language[@]+"${language[@]}"} \
             || { flunk - "setup: the app could not be started ($phase)"; return 0; }
         # Each checkpoint the instrument writes is answered once with the window as `keys ax` reads it from outside
         # (G7, 2026-10-18: SwiftUI does not expose the board's rows to the app's own walk of its views).

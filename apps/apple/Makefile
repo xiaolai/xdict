@@ -217,6 +217,7 @@ test-tools:
 	@Tools/not-on-air.sh
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/e2e-requested-test.sh
+	@python3 -I Tools/tests/e2e_harness_test.py
 	@Tools/tests/not-on-air-test.sh
 	@Tools/tests/expand-entitlements-test.sh
 	@Tools/tests/render-requested-test.sh
