@@ -91,7 +91,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "8a394c1a77165478324755cd42347b331e0b7a07",
+  "apps/apple/Package.swift": "670a8c5fb9c32bff716564a4b718257d47dcce22",
   "core/Cargo.toml": "921757bff067b2b4e5a1a97715fac28ccc74b0b8",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "585986a88be05cb5ca9802a0ab641da63f257d30",
@@ -125,6 +125,26 @@
    ],
    "dir": "apps/apple/Sources/XDict/",
    "type": "executable"
+  },
+  "XDictAI": {
+   "deps": [],
+   "dir": "apps/apple/Sources/XDictAI/",
+   "type": "regular"
+  },
+  "XDictAIMeasure": {
+   "deps": [
+    "XDictAI",
+    "XDictCore"
+   ],
+   "dir": "apps/apple/Sources/XDictAIMeasure/",
+   "type": "executable"
+  },
+  "XDictAITests": {
+   "deps": [
+    "XDictAI"
+   ],
+   "dir": "apps/apple/Tests/XDictAITests/",
+   "type": "test"
   },
   "XDictAnywhere": {
    "deps": [
@@ -415,11 +435,13 @@
   },
   "XDictUI": {
    "deps": [
+    "XDictAI",
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
     "XDictCapture",
     "XDictCaptureMac",
+    "XDictClient",
     "XDictContract",
     "XDictEntryView",
     "XDictLibrary",
@@ -432,11 +454,13 @@
   },
   "XDictUITests": {
    "deps": [
+    "XDictAI",
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",
     "XDictCapture",
     "XDictCaptureMac",
+    "XDictClient",
     "XDictContract",
     "XDictLibrary",
     "XDictSearch",

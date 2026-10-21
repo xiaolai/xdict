@@ -199,6 +199,22 @@ ROUTES = [
     ("panel.expandNarrow", "full", "Open in XDict into a 400 pt main window", "As panel.expand, at the minimum width",
      [NARROW] + look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"),
                                     ("wait", 1.5)]),
+    # The main window's own "Meaning here" (ADR-0021 d.1): with no source chosen the answer pane opens on the no-source
+    # sentence, which is the one answer a tour can reach without a model (WI-6).
+    # The preview before any send (ADR-0021 d.13): a source chosen so composition may run, then the request shown,
+    # composed with the entry on screen and the disclosure switch off (a sentence-only prompt).
+    ("main.meaningPreview", "full", "⌘, ▸ AI ▸ A local endpoint, ⌘W, ⌘⌥D over a word, Open in XDict, Preview the Request…",
+     "The answer pane showing the composed request — the shipped sentence-only template, the marked sentence, the "
+     "response contract appended — with Send and Cancel, and nothing sent",
+     [SETTINGS, ("wait", 1), ("click", "AI"), ("wait", 1), ("click", "ai.source.local"), ("wait", 0.8),
+      ("key", "cmd+w"), ("wait", 1)] + look_up("apple")
+     + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"), ("wait", 1.5),
+        ("press", "meaning.preview"), ("wait", 1.5)]),
+    ("main.meaning", "full", "⌘⌥D over a word, Open in XDict, then Meaning Here",
+     "The answer pane as an inspector at the window's trailing edge, saying no source is chosen and where to choose "
+     "one (Settings ▸ AI); the entry keeps its column",
+     look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"), ("wait", 1.5),
+                         ("press", "meaning.ask"), ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
      [("type", "apple"), ("key", "cmd+a"), ("key", "ctrl+opt+d"), ("wait", 2)]),
     # Settings. Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General. The Dictionaries pane is the only
@@ -254,6 +270,11 @@ ROUTES = [
      "could not tell with Check Again; showing it asks for nothing, so no system prompt (P50, P52; ADR-0014 decision "
      "7); Lookup popup; Background with Glass and Solid, said once; Show Setup…",
      [SETTINGS, ("wait", 1), ("click", "General")]),
+    ("settings.ai", "full", "⌘, ▸ AI", "The sources in setup order — Off, Apple Intelligence, A local endpoint, A "
+     "cloud endpoint, Codex, Claude — each selected row with its caveat, the live status line, the disclosure switch "
+     "off with its one-rule sentence, and the prompt: answer language, question kind, the grounded template in its "
+     "editor, Preview the request, What XDict adds to every request (ADR-0021 d.12, d.13)",
+     [SETTINGS, ("wait", 1), ("click", "AI"), ("wait", 1)]),
     ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table with every dictionary in order, + and − "
      "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice: no 'locked' row, as "
      "the fixtures' registration-code file is refused at import, the notice naming why (ADR-0005 decision 4, "
