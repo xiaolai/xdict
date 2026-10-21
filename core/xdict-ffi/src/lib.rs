@@ -12,11 +12,13 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Card, Config, CoreError, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry,
-    EntryRef, EntryText, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample,
-    HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin,
-    LookupOptions, MatchMode, Missing, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle, RecordOutcome,
-    Resource, SkipReason, SkippedSheet, StyleChanges, TextSpan, TextView, Versions, View,
+    BaseSource, BlockReason, Card, CardState, Config, CoreError, Day, DayLabel, DictInfo, DisplayOption,
+    DisplayOptions, Entry, EntryRef, EntryText, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass,
+    HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link,
+    LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle,
+    ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Resource, ReviewOutcome, ReviewPolicy,
+    ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
+    TargetKind, TextSpan, TextView, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -161,6 +163,109 @@ pub struct Day {
 #[uniffi::remote(Record)]
 pub struct History {
     pub days: Vec<Day>,
+}
+
+#[uniffi::remote(Enum)]
+pub enum TargetKind {
+    Entry,
+}
+
+#[uniffi::remote(Record)]
+pub struct StudyTarget {
+    pub lineage: String,
+    pub entry_key: String,
+    pub occurrence: u32,
+    pub kind: TargetKind,
+    pub edition: String,
+    pub definition_hash: String,
+}
+
+/// When and by which device: the pair every study event carries.
+#[uniffi::remote(Record)]
+pub struct Stamp {
+    pub at: f64,
+    pub device: String,
+}
+
+/// The reader's scheduling settings for a grade.
+#[uniffi::remote(Record)]
+pub struct ReviewPolicy {
+    pub retention: f64,
+    pub maximum_days: i64,
+}
+
+#[uniffi::remote(Enum)]
+pub enum StudyGrade {
+    Again,
+    Hard,
+    Good,
+    Easy,
+}
+
+#[uniffi::remote(Enum)]
+pub enum StudyPhase {
+    New,
+    Learning,
+    Review,
+    Relearning,
+}
+
+#[uniffi::remote(Record)]
+pub struct CardState {
+    pub stability: Option<f64>,
+    pub difficulty: Option<f64>,
+    pub phase: StudyPhase,
+    pub last_review: Option<f64>,
+    pub due: Option<f64>,
+}
+
+#[uniffi::remote(Record)]
+pub struct Note {
+    pub target: StudyTarget,
+    pub text: String,
+    pub at: f64,
+    pub device: String,
+}
+
+#[uniffi::remote(Record)]
+pub struct StudyCard {
+    pub target: StudyTarget,
+    pub note: Note,
+    pub state: CardState,
+    pub head: String,
+    pub note_head: String,
+    pub grades: u64,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReviewSummary {
+    pub due: u64,
+    pub next_due: Option<u64>,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReviewOutcome {
+    pub outcome: RecordOutcome,
+    pub card: StudyCard,
+}
+
+#[uniffi::remote(Enum)]
+pub enum ReanchorResult {
+    Reanchored,
+    Reordered,
+    Changed,
+    Missing,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReanchorOutcome {
+    pub target: StudyTarget,
+    pub result: ReanchorResult,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReanchorReport {
+    pub outcomes: Vec<ReanchorOutcome>,
 }
 
 #[uniffi::remote(Record)]
@@ -614,6 +719,72 @@ impl Core {
     /// The days the drawer shows, in the reader's own zone: `utc_offset_seconds` east of UTC while `now` is the clock.
     pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Result<History, CoreError> {
         self.0.ledger_history(now, utc_offset_seconds)
+    }
+
+    /// **Saves the reader's note on an entry** (plan §5.1) and enrols it for review.
+    pub fn study_note(
+        &self,
+        dict: String,
+        entry: EntryRef,
+        text: String,
+        name: String,
+        stamp: Stamp,
+        operation: String,
+    ) -> Result<Note, CoreError> {
+        self.0.study_note(dict, entry, text, name, stamp, operation)
+    }
+
+    pub fn study_notes(&self) -> Result<Vec<Note>, CoreError> {
+        self.0.study_notes()
+    }
+
+    /// The review queue: due cards, soonest first, a new card at once.
+    pub fn review_queue(&self, now: f64, limit: u32) -> Result<Vec<StudyCard>, CoreError> {
+        self.0.review_queue(now, limit)
+    }
+
+    /// One grade under the reader's configuration: the card transitions, and the event records the configuration.
+    pub fn review_grade(
+        &self,
+        target_key: String,
+        revision: String,
+        grade: u8,
+        policy: ReviewPolicy,
+        stamp: Stamp,
+        operation: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        self.0.review_grade(target_key, revision, grade, policy, stamp, operation)
+    }
+
+    /// Voids the card's latest grade while the card is still in the state it produced.
+    pub fn review_undo(
+        &self,
+        target_key: String,
+        grade_event: String,
+        stamp: Stamp,
+        operation: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        self.0.review_undo(target_key, grade_event, stamp, operation)
+    }
+
+    pub fn review_summary(&self, now: f64) -> Result<ReviewSummary, CoreError> {
+        self.0.review_summary(now)
+    }
+
+    /// The hash a note records for an entry's definition; never the definition itself.
+    pub fn definition_hash_of(&self, dict: String, entry: EntryRef) -> Result<String, CoreError> {
+        self.0.definition_hash_of(dict, entry)
+    }
+
+    /// Re-anchors notes of one edition to another under the same lineage (plan §5.1).
+    pub fn study_reanchor(
+        &self,
+        old_edition: String,
+        new_edition: String,
+        stamp: Stamp,
+        operation_prefix: String,
+    ) -> Result<ReanchorReport, CoreError> {
+        self.0.study_reanchor(old_edition, new_edition, stamp, operation_prefix)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

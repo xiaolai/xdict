@@ -500,6 +500,56 @@ impl Core {
         watched_reply(|| self.0.ledger_record(reading, operation.to_string(), target_languages))
     }
 
+    /// **Saves the reader's note on an entry** (plan §5.1). `stamp` is `{ at, device }` as JSON; the answer is the note.
+    pub fn study_note(&self, dict: &str, entry: &str, text: &str, name: &str, stamp: &str, operation: &str) -> Reply {
+        let (entry, stamp) = (from_json(entry)?, from_json(stamp)?);
+        watched_reply(|| self.0.study_note(dict.into(), entry, text.into(), name.into(), stamp, operation.into()))
+    }
+
+    pub fn study_notes(&self) -> Reply {
+        watched_reply(|| self.0.study_notes())
+    }
+
+    /// The review queue: due cards, soonest first, a new card at once.
+    pub fn review_queue(&self, now: f64, limit: u32) -> Reply {
+        watched_reply(|| self.0.review_queue(now, limit))
+    }
+
+    /// One grade under the reader's configuration; `policy` and `stamp` are JSON.
+    pub fn review_grade(
+        &self,
+        target_key: &str,
+        revision: &str,
+        grade: u8,
+        policy: &str,
+        stamp: &str,
+        operation: &str,
+    ) -> Reply {
+        let (policy, stamp) = (from_json(policy)?, from_json(stamp)?);
+        watched_reply(|| {
+            self.0.review_grade(target_key.into(), revision.into(), grade, policy, stamp, operation.into())
+        })
+    }
+
+    pub fn review_undo(&self, target_key: &str, grade_event: &str, stamp: &str, operation: &str) -> Reply {
+        let stamp = from_json(stamp)?;
+        watched_reply(|| self.0.review_undo(target_key.into(), grade_event.into(), stamp, operation.into()))
+    }
+
+    pub fn review_summary(&self, now: f64) -> Reply {
+        watched_reply(|| self.0.review_summary(now))
+    }
+
+    pub fn definition_hash_of(&self, dict: &str, entry: &str) -> Reply {
+        let entry = from_json(entry)?;
+        watched_reply(|| self.0.definition_hash_of(dict.into(), entry))
+    }
+
+    pub fn study_reanchor(&self, old_edition: &str, new_edition: &str, stamp: &str, operation_prefix: &str) -> Reply {
+        let stamp = from_json(stamp)?;
+        watched_reply(|| self.0.study_reanchor(old_edition.into(), new_edition.into(), stamp, operation_prefix.into()))
+    }
+
     /// The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock.
     pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Reply {
         watched_reply(|| self.0.ledger_history(now, utc_offset_seconds))
