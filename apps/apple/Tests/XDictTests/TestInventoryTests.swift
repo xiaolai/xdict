@@ -23,6 +23,8 @@ struct TestInventoryTests {
         // 8 → 2 (WI-3): the handshake became the contract's `versions`; its tests moved with it, to XDictClientTests
         // (`LaunchHandshakeTests`) and XDictServiceTests (`ServiceContractTests`).
         "XDictBaseTests": 2,
+        // The AI contract's fixtures (plan-ai-meaning WI-3): the vectors, the harness-failure controls and the two guards.
+        "XDictAITests": 4,
         "XDictClientTests": 20,
         "XDictContractTests": 80,
         // 52 → 73 (plan WI-5, 2026-10-18): the Apple import's copy, conversion, source record, joins, sweep and restarts.

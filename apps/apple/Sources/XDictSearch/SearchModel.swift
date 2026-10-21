@@ -466,11 +466,14 @@ public final class SearchModel {
 
     /// **A place handed over from another window** (I5): a new place in this window's trail, its query, scope, entry and
     /// scroll restored, as Back restores one — so Back from it reaches this window's own places.
-    public func adopt(_ visit: Visit) {
+    /// `started` hears the serial of the lookup this adoption begins, when it begins — not the serial current when it was
+    /// queued. A navigation queued before the adoption begins its own lookup first, and only this callback tells the two
+    /// apart (verification finding, 2026-10-20).
+    public func adopt(_ visit: Visit, started: @escaping @MainActor (Int) -> Void = { _ in }) {
         navigate { model in
             await model.leaveCurrent()
             model.trail.push(visit)
-            model.restore(visit)
+            model.restore(visit, started: started)
         }
     }
 
@@ -538,7 +541,7 @@ public final class SearchModel {
         trail.updateCurrent { $0.scroll = offset }
     }
 
-    private func restore(_ visit: Visit) {
+    private func restore(_ visit: Visit, started: @escaping @MainActor (Int) -> Void = { _ in }) {
         liveTask?.cancel()
         provisional = false
         text = visit.typed ?? visit.query
@@ -546,13 +549,15 @@ public final class SearchModel {
         if visit.mode == .reader { scope = visit.scope }
         if let typed = visit.typed, listing?.typed != typed { relist(typed) }
         let landing: Landing = visit.scroll > 0 ? .offset(visit.scroll) : visit.anchor.map(Landing.anchor) ?? .top
-        begin(visit.query, visit.mode, visit.scope, landing: landing, select: visit.result)
+        begin(visit.query, visit.mode, visit.scope, landing: landing, select: visit.result, started: started)
     }
 
     /// A new lookup: every dictionary in scope asked again, the older lookup's calls superseded.
-    private func begin(_ query: String, _ mode: MatchMode, _ scope: SearchScope, landing: Landing, select: ResultID?) {
+    private func begin(_ query: String, _ mode: MatchMode, _ scope: SearchScope, landing: Landing, select: ResultID?,
+                       started: @MainActor (Int) -> Void = { _ in }) {
         serial += 1
         lookup = Lookup(query: query, mode: mode, scope: scope, serial: serial)
+        started(serial)
         asked = [:]
         selection = select
         autoSelect = select == nil ? landing : nil

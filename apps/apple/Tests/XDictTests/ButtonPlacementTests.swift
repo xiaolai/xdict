@@ -51,6 +51,9 @@ struct ButtonPlacementTests {
         "spinner": "a small spinner while a pane loads, not a button",
         "shortcut-field": "the shortcut recorder, a field drawn as a button, placed by its container",
         "form-row": "a button as a grouped Form's LabeledContent value, which the system puts trailing (R5)",
+        "form-pane": "a button in a grouped Settings form the pane draws as its own row (the AI source radios, the key's Test/Replace/Remove), placed by the form",
+        "inspector-row": "a button in the answer pane, an inspector column that is no form (ADR-0021 d.12): its rows are the pane's own",
+        "meaning-chip": "\"Meaning here\" on the presented term (ADR-0021 d.1): the popover's title row and the main window's entry corner, both drawn by their container",
     ]
 
     struct Finding: Equatable, CustomStringConvertible {

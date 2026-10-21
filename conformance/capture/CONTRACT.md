@@ -91,6 +91,10 @@ geometry.
 - The sentence lives in **one ephemeral session per presentation**, in memory only and never persisted; the next
   presentation replaces it, and its end or the presentation's close drops it. Only the **term** goes to search, the
   service, the trail, and observation hooks.
+- **The one consumer that may send the sentence is the AI pane** (amended 2026-10-20, ADR-0021): on the reader's tap it
+  reads the presentation's sentence and the term's range, sends them to the source the reader chose — the entry text only
+  under the reader's switch — and keeps nothing when the presentation ends. What it sends is `conformance/ai/`'s
+  contract; this one still governs where the sentence lives.
 - No description, debug description, dump or log written by the application names the sentence. Diagnostics are
   metadata only.
 - Captured text is **untrusted data for every consumer**. Prompt handling is the consumer's; preserving the text

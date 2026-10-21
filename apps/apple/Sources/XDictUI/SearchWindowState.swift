@@ -49,6 +49,11 @@ public final class SearchWindowState {
     /// where a ⌘-click does nothing new.
     @ObservationIgnored public var openInNewTab: (@MainActor (String) -> Void)?
 
+    /// **"Meaning here"** (ADR-0021, plan-ai-meaning WI-5): the presentation's sentence, its one ask and its answer. Fed
+    /// `entry_text` through the service, the sources are the app's (`MeaningProviders`), and the settings it reads are
+    /// the AI pane's (WI-6).
+    public let meaning: MeaningSession
+
     @ObservationIgnored private let backend: any SearchBackend
 
     /// `window` names the window's callers in the service client, so two windows never supersede each other. `speech`
@@ -60,9 +65,19 @@ public final class SearchWindowState {
         self.library = library
         self.backend = backend
         self.entry = entry
-        model = SearchModel(backend: backend, window: window, guesser: SystemSpellingGuesser()) { [library] in
+        let model = SearchModel(backend: backend, window: window, guesser: SystemSpellingGuesser()) { [library] in
             library.searchSources
         }
+        self.model = model
+        meaning = MeaningSession(
+            fetchEntryText: { [backend] dict, entry, budget in
+                await backend.entryText(dict, entry: entry, maxTextBytes: budget)
+            },
+            presented: { [weak model] in model.flatMap(Self.drawnEntry) },
+            makeProvider: MeaningProviders.make)
+        // **The reader's choices are Settings ▸ AI's** (plan-ai-meaning WI-6): read at each ask, and only then, so the
+        // store is not touched by a window that never asks (and a test never reads the Keychain).
+        meaning.settingsProvider = { MeaningPreferences.shared.settings }
         pronunciation = Pronunciation(backend: backend, output: speech, preferences: speechPreferences)
         model.scrollReader = { [weak entry] in await entry?.scrollOffset() }
         entry.onLookup = { [weak self] query, anchor in self?.follow(query, anchor: anchor) }
@@ -73,6 +88,37 @@ public final class SearchWindowState {
 
     public func focusSearch() { searchFocus += 1 }
     public func focusResults() { resultsFocus += 1 }
+
+    // MARK: - Meaning here
+
+    /// The entry drawn now, as an ask's target: its dictionary's handle and its edition-qualified reference.
+    static func drawnEntry(_ model: SearchModel) -> (DictId, EntryRef)? {
+        guard let shown = model.shown, let source = model.source(shown.result.dictionary), let handle = source.handle
+        else { return nil }
+        return (handle, shown.result.entry)
+    }
+
+    /// **A sentence is handed to this presentation** (a delivery in the popover, or the popover's hand-off on expansion):
+    /// held until the presentation ends or draws another entry, and cancelling any ask that was about the last one.
+    public func holdMeaning(_ handoff: MeaningHandoff, asking: Bool = false,
+                            expecting: MeaningSession.Subject? = nil, adopted: Bool = false) {
+        // **An expansion's ask waits for its own adopted entry** (audit findings, 2026-10-20): asking here sent the
+        // window's previous entry, or failed in a new window; the expected subject keeps a stale draw from starting it,
+        // and the adopted lookup's identity keeps a queued presentation of the previous lookup from binding it.
+        meaning.hold(handoff, asking: asking, expecting: expecting, adopted: adopted)
+    }
+
+    /// **A lookup replaced the presentation**: a query other than the held sentence's word means the reader moved on, and
+    /// the captured sentence is dropped — including a lookup that draws no entry at all, which `drawn` never sees.
+    public func lookupDidChange() {
+        guard let held = meaning.held, let lookup = model.lookup else { return }
+        if lookup.query != held.term { clearMeaning() }
+    }
+
+    /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.
+    public func clearMeaning() {
+        meaning.clear()
+    }
 
     /// A link in the shown entry: looked up in link mode in that entry's dictionary (on the All page, the dictionary
     /// of the frame it is in).
@@ -134,6 +180,20 @@ public final class SearchWindowState {
     /// Shows the model's entry in the pane, from its dictionary as the library has it now: for a typed word over every
     /// dictionary, the All page (P15) with every dictionary's entry, the shown one among them.
     public func present(_ shown: SearchModel.Shown) async {
+        // **A queued presentation the model has passed is stale and draws nothing** (verification finding, 2026-10-20):
+        // the serial says the window has moved on, and binding the held sentence — or firing its deferred ask — to an
+        // entry no longer shown would send the wrong entry. `ask()` samples the presented entry in the same turn as the
+        // draw, so with this guard the target is the one the subject names.
+        guard model.shown == shown else { return }
+        // An entry about to be drawn: the held sentence belongs only to this presentation's own entry, so a reader who
+        // moved on is asked `noContext`, never sent the wrong entry. The drawn target travels with the subject, so a later
+        // ask cannot sample a presentation that replaced this one.
+        let target = model.source(shown.result.dictionary).flatMap { source in
+            source.handle.map { ($0, shown.result.entry) }
+        }
+        meaning.drawn(MeaningSession.Subject(dictionary: shown.result.dictionary, key: shown.result.entry.key,
+                                             occurrence: shown.result.entry.occurrence), target: target,
+                      lookup: shown.lookup)
         if let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode) {
             await presentPage(shown)
             return
@@ -218,6 +278,27 @@ public final class SearchWindowState {
     /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
     /// entry either (UI review X1). Called when the placeholder changes.
     public func placeholderChanged() {
+        // **A settled lookup with nothing drawn ends the presentation**: the captured sentence's entry is no longer on
+        // screen, even when the query was the same word (audit finding, 2026-10-20).
+        switch placeholder {
+        case .noResults, .noResultsIncomplete:
+            // **A tap whose lookup settles with nothing drawn ends typed, not dropped** (verification finding, 2026-10-20):
+            // a deferred ask still waiting when the pane settles has no entry to ground it, and `noEntry` keeps the
+            // sentence beside that reason. An ask that already ended so keeps it; anything else is the reader moving on.
+            if meaning.held != nil, case .unavailable(.noEntry) = meaning.state {
+                break
+            }
+            if meaning.isWaitingToAsk {
+                meaning.noEntry()
+                break
+            }
+            if meaning.held != nil { clearMeaning() }
+        case .noDictionaries:
+            // No dictionary can answer: a waiting tap ends typed rather than waiting for a draw that cannot come.
+            if meaning.isWaitingToAsk { meaning.noEntry() }
+        case .start, .searching, .none:
+            break
+        }
         guard placeholder.clearsEntry, entry.reference != nil else { return }
         entry.closeEntry()
         presented = nil

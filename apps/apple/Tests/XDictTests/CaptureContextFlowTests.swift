@@ -18,6 +18,10 @@ struct CaptureContextFlowTests {
     /// an app that carries it (`Tools/tests/development-lab-test.sh`). Exempt as that folder of the package, and nothing
     /// else is: the folders here are matched from the package root, never anywhere in a path.
     static let instrumentSources = ["Sources/XDictCaptureLab/"]
+    /// **The one authorized AI consumer, by name** (ADR-0021 d.11): the AI pane's hand-off, alone in one file, so the
+    /// sentence may become the meaning ask's input on the reader's tap. It is a file, never a folder: the read is one
+    /// initializer, and its neighbours stay under the rule.
+    static let meaningSources = ["Sources/XDictUI/MeaningHandoffFromTerm.swift"]
     /// What a context access looks like in code (comments and a string's own text removed first).
     static var access: Regex<Substring> { /\.context\b|\bContextOutcome\b|\bSentenceContext\b|\bWordAtPoint\b/ }
 
@@ -74,9 +78,20 @@ struct CaptureContextFlowTests {
     static func consumers(_ files: [(path: String, text: String)], root: String) -> [(path: String, text: String)] {
         let base = root.hasSuffix("/") ? root : root + "/"
         return files.filter { file in
-            !(captureSources + instrumentSources).contains { file.path.hasPrefix(base + $0) }
+            !(captureSources + instrumentSources + meaningSources).contains { file.path.hasPrefix(base + $0) }
                 && !Set(SourceScan.imports(in: file.text)).isDisjoint(with: captureModules)
         }
+    }
+
+    /// **The AI exemption is one file and one read** (ADR-0021 d.11): it exists, it imports capture, and it holds exactly
+    /// one context access — so admitting it admits nothing else. A second read added there fails this guard.
+    @Test func theAIConsumerIsOneFileAndOneRead() throws {
+        let file = Manifest.package.appending(path: Self.meaningSources[0])
+        let text = try String(contentsOf: file, encoding: .utf8)
+        #expect(SourceScan.imports(in: text).contains("XDictCapture"), "the hand-off does not import capture")
+        let reads = SourceScan.codeWithInterpolations(text).split(separator: "\n").filter { $0.contains(Self.access) }
+        #expect(reads.count == 1, "the authorized file holds \(reads.count) context reads, wanted exactly one")
+        #expect(reads.first?.contains("case .available") == true, "the one read is not the hand-off's")
     }
 
     /// **The control**: each shape of access is named, and the session's own call is not.

@@ -91,6 +91,8 @@ struct XDictApp: App {
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
                             registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
+        case .ai:
+            AISettings()
         case .setup:
             SetupView(library: library, registrar: LookupAnywhere.shared.registrar,
                       trusted: { AccessibilityGate.system(false) },

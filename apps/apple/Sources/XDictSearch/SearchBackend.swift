@@ -55,4 +55,24 @@ extension ClientOutcome {
             return .success(keys)
         }
     }
+
+    var entryText: Result<EntryText, ClientFailure> {
+        flatMap { delivered in
+            guard case .entryText(let projected) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not an entry's text")))
+            }
+            return .success(projected)
+        }
+    }
+}
+
+extension SearchBackend {
+    /// **An entry as plain text** (contract 8; ADR-0021 d.5): the whole entry projected for a consumer that reads it —
+    /// the AI pane's question. `maxTextBytes` is the caller's budget; a cut comes back as `complete: false` with its
+    /// report, never as an error. A request no other call supersedes, like an entry (the entry view's own ordering).
+    public func entryText(_ dict: DictId, entry: EntryRef, maxTextBytes: UInt64,
+                          maxBodyBytes: UInt64 = RenderContext.reader.maxBodyBytes) async -> Result<EntryText, ClientFailure> {
+        let text = TextRenderContext(maxBodyBytes: maxBodyBytes, maxTextBytes: maxTextBytes)
+        return await request(.entryText(dict: dict, entry: entry, text: text)).entryText
+    }
 }

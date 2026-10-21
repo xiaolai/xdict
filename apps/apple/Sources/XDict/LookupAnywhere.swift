@@ -496,9 +496,18 @@ final class LookupAnywhere {
 
     /// A term presented for its request: shown in the popover, the term alone to search, its context to the session.
     private func accept(_ delivery: CaptureDelivery) -> CaptureDeliveryAnswer {
-        guard state != nil else { return .refused }
+        guard let state else { return .refused }
         let term = delivery.term
         contextSession.hold(term, request: delivery.request.number, generation: delivery.generation)
+        // **The AI pane's one source of the sentence** (ADR-0021 d.4; `conformance/capture/CONTRACT.md` §6): held for this
+        // presentation only, and only when the capture has one — an ask with no sentence is not an "in context" ask. The
+        // context read itself lives in `MeaningHandoffFromTerm.swift`, the one file the privacy guard admits.
+        if let handoff = MeaningHandoff(term: term, origin: MeaningOrigin(
+            request: delivery.request.number, generation: delivery.generation)) {
+            state.holdMeaning(handoff)
+        } else {
+            state.clearMeaning()
+        }
         acks.delivered(delivery.request, generation: delivery.generation, term: term.term)
         if drawnQuery != term.term { drawnQuery = nil }
         show(.none, query: term.term, near: PanelAnchor.rect(for: term.box, primaryHeight: Self.primaryHeight),
@@ -539,7 +548,10 @@ final class LookupAnywhere {
         presentation += 1
         // **Every presentation that is not a delivery drops the previous sentence** (CONTRACT.md §6): a refusal or the
         // "reading" panel replaces what was presented, and the session holds one context at a time (finding 5).
-        if notice != .none { contextSession.clear() }
+        if notice != .none {
+            contextSession.clear()
+            state.clearMeaning()
+        }
         self.notice = notice
         if let query { state.model.submit(query) }
         let panel = self.panel ?? makePanel(state)
@@ -632,6 +644,7 @@ final class LookupAnywhere {
         // is not presented over the dismissal, and the presented request's context goes with the panel (decision 9).
         requests.close()
         contextSession.clear()
+        state?.clearMeaning()
         acks.closed()
         drawnQuery = nil
         // A read in flight holds Escape with no panel to close (audit-fix 2026-10-20 finding 2): the claim is given back
@@ -675,9 +688,14 @@ final class LookupAnywhere {
 
     /// Into the main window, keeping query, dictionary and scroll: the panel's place, with its entry's offset, handed to
     /// the main window's model as its next place; then XDict comes forward, as the reader asked.
-    func expand() {
+    /// **Expanded into a main window**; with `asking`, the window also asks the reader's chosen source at once (the
+    /// popover's "Meaning here", ADR-0021 d.1: the panel is too small to answer in).
+    func expand(asking: Bool = false) {
         guard let state else { return }
         let mine = presentation
+        // **The sentence travels with the expansion** (ADR-0021 d.4): captured here, while the presentation still holds
+        // it, and handed to the window the place goes to — never stored in the trail (`Visit` is stored; this is not).
+        let meaning = state.meaning.held
         Task { @MainActor [weak self] in
             let place = await state.model.currentPlace()
             // **Dismissed or replaced while the place was read** (finding 2): the continuation closes nothing and
@@ -685,11 +703,12 @@ final class LookupAnywhere {
             guard let self, self.presentation == mine, self.isShown else { return }
             guard let place else {
                 if let query = state.model.lookup?.query { MainWindows.hand(Visit(query: query, mode: .reader, scope: .all,
-                                                                                  isOrigin: true)) }
+                                                                                  isOrigin: true), meaning: meaning,
+                                                                            asking: asking) }
                 self.finishExpanding(nil)
                 return
             }
-            MainWindows.hand(place)
+            MainWindows.hand(place, meaning: meaning, asking: asking)
             self.finishExpanding(place)
         }
     }
@@ -724,7 +743,8 @@ private struct PanelRoot: View {
                         showDictionaries: {
                             anywhere.close(why: "showDictionaries")
                             MenuBarActions.showDictionaries()
-                        })
+                        },
+                        askMeaning: { anywhere.expand(asking: true) })
             .onChange(of: state.placeholder) { _, placeholder in anywhere.placeholderChanged(placeholder) }
             // **The lookup itself, not only its placeholder** (round 3, finding 4): an empty library's "No dictionaries."
             // is the same value for every query, so a delivered request settled to it never fired the observer above.
@@ -758,6 +778,10 @@ final class ServicesProvider: NSObject {
 enum MainWindows {
     private static var states: [WeakState] = []
     private static var pending: Visit?
+    /// The sentence that travels with `pending` (ADR-0021 d.4): handed to the window's presentation explicitly, once.
+    private static var pendingMeaning: MeaningHandoff?
+    /// Whether the window should ask as soon as it holds that sentence: the popover's "Meaning here" (ADR-0021 d.1).
+    private static var pendingAsk = false
 
     private struct WeakState { weak var state: SearchWindowState? }
 
@@ -767,7 +791,11 @@ enum MainWindows {
         if pending != nil { _ = deliver() }
     }
 
-    static func hand(_ place: Visit) { pending = place }
+    static func hand(_ place: Visit, meaning: MeaningHandoff? = nil, asking: Bool = false) {
+        pending = place
+        pendingMeaning = meaning
+        pendingAsk = asking && meaning != nil
+    }
 
     /// Gives the pending place to the most recent main window still open, and brings that window forward; false when
     /// there is none.
@@ -775,7 +803,26 @@ enum MainWindows {
         states.removeAll { $0.state == nil }
         guard let place = pending, let state = states.last?.state else { return false }
         pending = nil
-        state.model.adopt(place)
+        let meaning = pendingMeaning
+        let ask = pendingAsk
+        pendingMeaning = nil
+        pendingAsk = false
+        if let meaning {
+            // Asking waits for the adopted entry, named here so a stale presentation's draw cannot satisfy it; a
+            // hand-off with no sentence drops the last one, so an expansion never asks about an older presentation.
+            let expected = place.result.map {
+                MeaningSession.Subject(dictionary: $0.dictionary, key: $0.entry.key,
+                                       occurrence: $0.entry.occurrence)
+            }
+            state.holdMeaning(meaning, asking: ask, expecting: expected, adopted: true)
+            // **The adoption reports its own lookup, for this hand-off only**: a callback from an adoption a newer
+            // hand-off superseded cannot name the lookup that may bind the sentence now held.
+            let token = state.meaning.handoffToken
+            state.model.adopt(place, started: { serial in state.meaning.adopted(serial, handoff: token) })
+        } else {
+            state.clearMeaning()
+            state.model.adopt(place)
+        }
         state.focusSearch()
         NSApplication.shared.windows.first { $0.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true && $0.isVisible }?
             .makeKeyAndOrderFront(nil)

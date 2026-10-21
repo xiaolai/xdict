@@ -40,9 +40,61 @@ struct PlaceHandoverTests {
         #expect(window.trail.visits.map(\.query) == ["earlier", "abbé"], "the place is the window's next, Back reaches its own")
     }
 
+    /// **The adoption reports its own lookup, not an earlier queued navigation's** (verification finding, 2026-10-20): a
+    /// Back suspended in `leaveCurrent` begins a lookup of the same word first; only the adoption's callback names the
+    /// lookup whose presentations may bind a held sentence.
+    @Test func anAdoptionReportsItsOwnLookupAfterASuspendedNavigation() async throws {
+        let backend = FakeSearchBackend { query, dict, _ in
+            let name = String(dict.rawValue.dropFirst("handle-".count))
+            return .success(Fixture.page([Fixture.hit(name, query)]))
+        }
+        let sources = Sources([Fixture.source(1, "A")])
+        let window = SearchModelTests.model(backend, sources)
+        window.submit("earlier")
+        await window.idle()
+        window.submit("other")
+        await window.idle()
+        window.select(Fixture.result(1, "A", "other"))
+        let place = Visit(query: "other", mode: .reader, scope: .all, result: Fixture.result(1, "A", "other"),
+                          isOrigin: false)
+        let gate = ScrollGate()
+        window.scrollReader = { await gate.read() }
+        window.back()
+        var reported: [Int] = []
+        window.adopt(place, started: { reported.append($0) })
+        // Let the Back reach the scroll read; only then is it truly suspended, with the adoption queued behind it.
+        for _ in 0..<1_000 where !gate.entered { await Task.yield() }
+        #expect(gate.entered, "the Back must be held in the scroll read")
+        #expect(reported.isEmpty, "the adoption has not begun while the navigation ahead of it is suspended")
+        gate.release()
+        await window.idle()
+        #expect(reported == [try #require(window.lookup?.serial)], "the callback names the lookup the adoption began")
+        #expect(window.lookup?.query == "other")
+    }
+
     /// A panel with nothing shown has no place to hand over.
     @Test func noPlaceBeforeALookup() async {
         let panel = SearchModelTests.model(SearchModelTests.apples(), Sources([Fixture.source(1, "A")]))
         #expect(await panel.currentPlace() == nil)
+    }
+}
+
+/// A scroll read that holds until released, then answers at once: the suspension point the adoption test needs.
+@MainActor
+final class ScrollGate {
+    private(set) var entered = false
+    private var waiting: CheckedContinuation<Double?, Never>?
+    private var released = false
+
+    func read() async -> Double? {
+        entered = true
+        if released { return 0 }
+        return await withCheckedContinuation { waiting = $0 }
+    }
+
+    func release() {
+        released = true
+        waiting?.resume(returning: 0)
+        waiting = nil
     }
 }

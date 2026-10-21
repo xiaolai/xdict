@@ -16,12 +16,30 @@ public struct SearchWindow: View {
     @State private var columns = NavigationSplitViewVisibility.detailOnly
     /// The content column's width: the title over it yields when it is narrow (P8).
     @State private var column: CGFloat = Tokens.Window.initialColumn
+    /// **The answer pane** (plan-ai-meaning WI-6): shown when an ask starts, closable, and never modal — the entry stays
+    /// readable beside it.
+    @State private var meaningShown = false
 
     public init(state: SearchWindowState) {
         self.state = state
     }
 
+    /// Two expressions, not one (audit follow-up, 2026-10-20): the whole chain in a single body exceeded the compiler's
+    /// type-check time. The split view is `pane`; `body` adds the meaning session's watchers.
     public var body: some View {
+        pane
+            // **Open on the reader's action, not on every state change**: an answer arriving after the reader closed the
+            // pane must not reopen it. The first transition out of idle is the action's; a preview always opens.
+            .onChange(of: state.meaning.state) { old, new in
+                if old == .idle { meaningShown = true }
+                if case .preview = new { meaningShown = true }
+            }
+            // A lookup the reader typed or followed replaces the presentation: its captured sentence is dropped.
+            .onChange(of: state.model.lookup) { state.lookupDidChange() }
+            .onDisappear { state.clearMeaning() }
+    }
+
+    private var pane: some View {
         NavigationSplitView(columnVisibility: $columns) {
             SearchSidebar(state: state)
                 // Apple's window has no sidebar button: the sidebar comes with a search (P3, P9).
@@ -30,11 +48,17 @@ public struct SearchWindow: View {
                 .navigationSplitViewColumnWidth(min: ToolbarLayout.sidebar.min, ideal: ToolbarLayout.sidebar.ideal,
                                                 max: ToolbarLayout.sidebar.max)
         } detail: {
-            EntryDetail(state: state)
+            EntryDetail(state: state, openMeaning: { meaningShown = true })
                 .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
         }
         .toolbar { toolbar }
+        // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader; the entry keeps its width's room.
+        .inspector(isPresented: $meaningShown) {
+            MeaningAnswerPane(state: state)
+                .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
+                                      max: Tokens.Window.meaningPaneMax)
+        }
         // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
         // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
         // the title back over a 400 pt column (UI tour `main.narrow`, 2026-10-18).
@@ -86,10 +110,34 @@ public struct SearchWindow: View {
 /// starts right under the toolbar: the scope is the search field's menu (P6), not a row of its own.
 struct EntryDetail: View {
     let state: SearchWindowState
+    /// The window's answer pane: the Ask and Preview controls open it before the session changes state, so an ask refused
+    /// without a transition out of idle (no source) still shows its sentence.
+    let openMeaning: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
             PageNotices(state: state)
+            // **"Meaning here" sits on the presented term** (ADR-0021 d.1), and only while a capture's sentence is held:
+            // a typed lookup has nothing to ask about. A row of its own, not an overlay: over the notices it drew on
+            // top of "Show in Settings" and both read as one smear (tour `panel.expand`, 2026-10-20).
+            if state.meaning.canAsk {
+                HStack(spacing: 0) {
+                    Spacer(minLength: 0)
+                    Button("Preview the Request…") {  // placement: meaning-chip
+                        openMeaning()
+                        state.meaning.preview()
+                    }
+                    .accessibilityIdentifier("meaning.preview")
+                    MeaningAskButton(enabled: true) {
+                        openMeaning()
+                        state.meaning.ask()
+                    }
+                }
+                .padding(.horizontal, Tokens.Inset.entryLeading)
+                .padding(.vertical, Tokens.Space.xs)
+                .background(.background)
+                .overlay(alignment: .bottom) { Divider() }
+            }
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
                 .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }

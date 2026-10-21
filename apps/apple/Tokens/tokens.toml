@@ -82,6 +82,7 @@ toolbar = { value = 52, why = "The unified toolbar's height on macOS 27, measure
 shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, recording or not, so the row does not move (UI review S-06)." }
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
 siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
+promptEditor = { value = 140, why = "The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
@@ -115,6 +116,9 @@ initialColumn = { value = 1000, why = "The content column's width before the fir
 searchFieldAtWindow = { value = 859, source = "P5" }
 settingsSidebar = { value = 200, why = "The Settings sidebar's width: 'Reading & Speech' with its icon and the list's margin, at Apple's sidebar proportions." }
 settingsHeight = { value = 560, why = "The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do." }
+meaningPaneMin = { value = 260, why = "The answer pane's narrowest: the shortest sense quote wraps to about four lines; below it the entry column keeps its room." }
+meaningPaneIdeal = { value = 340, why = "The answer pane's width when it opens: the quote, its explanation and a two-button row read without wrapping the outcome line." }
+meaningPaneMax = { value = 460, why = "The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence." }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
