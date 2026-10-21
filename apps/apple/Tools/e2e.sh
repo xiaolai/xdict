@@ -381,6 +381,12 @@ section "run: $SUBSTAGES"
 cat "$scratch/common.sh" - >"$scratch/run.sh" <<'SH'
 set -euo pipefail
 home="$HOME/$1"; failfast=$2; shift 2
+# **The corpus's real folder, for the stages that clone it.** On MacMini-010 the staged corpus is a symlink
+# (`~/XDictE2E/corpus -> ../xdict-corpus/the25`, since 2026-10-20) and `cp -R` copies a symlink *as a symlink*: the clone
+# under /tmp became a dangling link, `realpath` failed in the app, and the library answered "corpus-a unreadable"
+# (2026-10-21 — library.corpus, library.health and the measure stage, all of them silently 0 of 24). The app itself is
+# still given `$home/corpus`: it follows the link.
+corpus_real=$(cd "$home/corpus" 2>/dev/null && pwd -P) || corpus_real="$home/corpus"
 app="$home/XDict.app"; exe="$app/Contents/MacOS/XDict"
 service="$app/Contents/XPCServices/ai.xdict.app.DictionaryService.xpc/Contents/MacOS/XDictService"
 expected="$app/Contents/Resources/CoreVersions.json"
@@ -1052,7 +1058,7 @@ library_import() {
         return 1
     fi
     rm -rf "$reports/corpus-a" "$library_dir"
-    cp -cR "$home/corpus" "$reports/corpus-a" || { flunk - "$STAGE: the corpus could not be cloned"; return 1; }
+    cp -cR "$corpus_real" "$reports/corpus-a" || { flunk - "$STAGE: the corpus could not be cloned"; return 1; }
     if ! report --library-corpus 1800 import "$reports/corpus-a" --library-dir "$library_dir" \
         --expected "$home/library-editions.json" >/dev/null; then
         flunk - "$STAGE: the import launch wrote nothing ($(head -c 300 "$reports/library-corpus.err" 2>/dev/null))"
@@ -1112,7 +1118,7 @@ substage_library_health() {
         return 0
     fi
     rm -rf "$reports/corpus-h" "$reports/library-health"
-    cp -cR "$home/corpus" "$reports/corpus-h" || { flunk - "$STAGE: the corpus could not be cloned"; return 0; }
+    cp -cR "$corpus_real" "$reports/corpus-h" || { flunk - "$STAGE: the corpus could not be cloned"; return 0; }
     if report --library-corpus 3000 health "$reports/corpus-h" --library-dir "$reports/library-health" \
         --expected "$home/health-expected.json" >/dev/null; then
         cp "$reports/library-corpus.json" "$reports/library-corpus-health.json"

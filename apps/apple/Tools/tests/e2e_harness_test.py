@@ -9,7 +9,9 @@
    script at that line.
 
 Both are read off `Tools/e2e.sh`, the one source of the remote run script; each check has a control that plants the old
-shape and must see it named. Run by `make test-tools`.
+shape and must see it named. A third, from the same day's release run: the staged corpus is a symlink on the E2E Mac and
+`cp -R` clones it as a link, so `library.corpus`, `library.health` and the measure stage each read a dangling folder and
+reported 0 of 24. Run by `make test-tools`.
 """
 
 import re
@@ -41,6 +43,9 @@ def problems(text):
         found.append("a stage that died part-way is written but not counted, so the run can exit 0")
     if re.search(r'(?<!\+)"\$\{language\[@\]\}"', text):
         found.append("an empty array expanded under set -u kills bash 3.2 (the setup stage's language array)")
+    if re.search(r'cp -c?R "\$home/corpus"', text):
+        found.append("the corpus is cloned through its path: the staged corpus is a symlink on the E2E Mac, "
+                     "cp copies the link, and the clone dangles")
     return found
 
 
@@ -64,12 +69,15 @@ def main():
         printf 'RESULT\\t%s\\tfail\\n' "$STAGE"
     fi
     open --args "${language[@]}"
+    cp -cR "$home/corpus" "$reports/corpus-a"
     """
     want = ["a stage that died part-way is written but not counted, so the run can exit 0",
-            "an empty array expanded under set -u kills bash 3.2 (the setup stage's language array)"]
+            "an empty array expanded under set -u kills bash 3.2 (the setup stage's language array)",
+            "the corpus is cloned through its path: the staged corpus is a symlink on the E2E Mac, "
+            "cp copies the link, and the clone dangles"]
     got = problems(old)
     if got == want:
-        ok("the control's two old shapes are both named")
+        ok("the control's three old shapes are all named")
     else:
         bad(f"the control named {got}, not {want}")
     good = """
@@ -78,6 +86,7 @@ def main():
         failures=$((failures + 1))
     fi
     open --args ${language[@]+"${language[@]}"}
+    cp -cR "$corpus_real" "$reports/corpus-a"
     """
     if problems(good) == []:
         ok("the corrected shapes pass")
