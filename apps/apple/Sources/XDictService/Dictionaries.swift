@@ -103,6 +103,36 @@ final class Dictionaries: Sendable {
             case .ledgerHistory(let now, let utcOffsetSeconds):
                 let history = try core.ledgerHistory(now: now, utcOffsetSeconds: utcOffsetSeconds)
                 return (.answer(.ledgerHistory(XDictContract.LedgerHistory(history))), nil)
+            // Plan-history-and-learning §5: the study calls; the core owns identity, eligibility and scheduling.
+            case .studyNote(let dict, let entry, let text, let name, let stamp, let operation):
+                let note = try core.studyNote(dict: dict.rawValue, entry: XDictCore.EntryRef(entry), text: text,
+                                              name: name, stamp: XDictCore.Stamp(stamp), operation: operation)
+                return (.answer(.studyNote(XDictContract.StudyNote(note))), nil)
+            case .studyNotes:
+                return (.answer(.studyNotes(try core.studyNotes().map { XDictContract.StudyNote($0) })), nil)
+            case .reviewQueue(let now, let limit):
+                return (.answer(.reviewQueue(try core.reviewQueue(now: now, limit: limit).map {
+                    XDictContract.StudyCard($0)
+                })), nil)
+            case .reviewGrade(let target, let revision, let grade, let policy, let stamp, let operation):
+                let outcome = try core.reviewGrade(targetKey: target, revision: revision, grade: grade.rawValue,
+                                                   policy: XDictCore.ReviewPolicy(policy),
+                                                   stamp: XDictCore.Stamp(stamp), operation: operation)
+                return (.answer(.reviewOutcome(XDictContract.StudyOutcome(outcome))), nil)
+            case .reviewUndo(let target, let gradeEvent, let stamp, let operation):
+                let outcome = try core.reviewUndo(targetKey: target, gradeEvent: gradeEvent,
+                                                  stamp: XDictCore.Stamp(stamp), operation: operation)
+                return (.answer(.reviewOutcome(XDictContract.StudyOutcome(outcome))), nil)
+            case .reviewSummary(let now):
+                return (.answer(.reviewSummary(XDictContract.ReviewSummary(try core.reviewSummary(now: now)))), nil)
+            case .definitionHash(let dict, let entry):
+                let hash = try core.definitionHashOf(dict: dict.rawValue, entry: XDictCore.EntryRef(entry))
+                return (.answer(.definitionHash(hash)), nil)
+            case .studyReanchor(let oldEdition, let newEdition, let stamp, let operationPrefix):
+                let report = try core.studyReanchor(oldEdition: oldEdition.rawValue, newEdition: newEdition.rawValue,
+                                                    stamp: XDictCore.Stamp(stamp),
+                                                    operationPrefix: operationPrefix)
+                return (.answer(.reanchored(XDictContract.ReanchorReport(report))), nil)
             case .link(let dict, let url, let origin, let render):
                 let link = try core.link(dict: dict.rawValue, url: url, origin: XDictCore.LinkOrigin(origin),
                                          view: XDictCore.View(render))

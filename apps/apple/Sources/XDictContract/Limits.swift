@@ -66,7 +66,8 @@ public enum Limits {
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
-             .ledgerHistory: return nil
+             .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
+             .reanchored: return nil
         }
     }
 
@@ -189,7 +190,11 @@ public enum Deadlines {
         case .displayOptions: .seconds(15)
         // ADR-0024: a record is one appended frame and its fsync — milliseconds on an idle disk; 5 s leaves room for a
         // busy one. A history replays the log once (bounded: 14 days, 400 cards) and groups it in memory.
-        case .ledgerRecord, .ledgerHistory: .seconds(5)
+        case .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
+             .reviewSummary: .seconds(5)
+        // A note reads the entry's body to hash it, as `entryText` does; a re-anchor reads one entry per note.
+        case .studyNote, .definitionHash: .seconds(10)
+        case .studyReanchor: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
         case .importPackage, .health, .convertApple: nil
         }

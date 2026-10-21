@@ -110,10 +110,12 @@ extension ServiceOperation {
     var namedDicts: [DictId] {
         switch self {
         case .close(let dict), .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _),
-             .health(let dict), .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _): [dict]
+             .health(let dict), .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
+             .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _): [dict]
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
-             .cancelConversion, .ledgerRecord, .ledgerHistory: []
+             .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
+             .reviewSummary, .studyReanchor: []
         }
     }
 
@@ -128,10 +130,14 @@ extension ServiceOperation {
         case .readingStyle(let dict): .readingStyle(dict: rename(dict))
         case .displayOptions(let dict): .displayOptions(dict: rename(dict))
         case .entryText(let dict, let entry, let text): .entryText(dict: rename(dict), entry: entry, text: text)
+        case .studyNote(let dict, let entry, let text, let name, let stamp, let operation):
+            .studyNote(dict: rename(dict), entry: entry, text: text, name: name, stamp: stamp, operation: operation)
+        case .definitionHash(let dict, let entry): .definitionHash(dict: rename(dict), entry: entry)
         case .lookup(let query, let dicts, let options): .lookup(query: query, dicts: dicts.map(rename), options: options)
         case .suggest(let prefix, let dicts, let limit): .suggest(prefix: prefix, dicts: dicts.map(rename), limit: limit)
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
-             .cancelConversion, .ledgerRecord, .ledgerHistory: self
+             .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
+             .reviewSummary, .studyReanchor: self
         }
     }
 }

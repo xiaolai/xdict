@@ -422,3 +422,102 @@ extension XDictContract.LedgerHistory {
         })
     }
 }
+
+// MARK: - Study (plan-history-and-learning §5)
+
+extension XDictCore.Stamp {
+    init(_ stamp: StudyStamp) {
+        self.init(at: stamp.at, device: stamp.device)
+    }
+}
+
+extension XDictCore.ReviewPolicy {
+    init(_ policy: StudyPolicy) {
+        self.init(retention: policy.retention, maximumDays: policy.maximumDays)
+    }
+}
+
+extension XDictContract.StudyTargetKind {
+    init(_ kind: XDictCore.TargetKind) {
+        switch kind {
+        case .entry: self = .entry
+        }
+    }
+}
+
+extension XDictContract.StudyPhase {
+    init(_ phase: XDictCore.StudyPhase) {
+        switch phase {
+        case .new: self = .new
+        case .learning: self = .learning
+        case .review: self = .review
+        case .relearning: self = .relearning
+        }
+    }
+}
+
+extension XDictContract.StudyTarget {
+    init(_ target: XDictCore.StudyTarget) {
+        self.init(lineage: target.lineage, entryKey: target.entryKey, occurrence: target.occurrence,
+                  kind: XDictContract.StudyTargetKind(target.kind), edition: target.edition,
+                  definitionHash: target.definitionHash)
+    }
+}
+
+extension XDictContract.StudyNote {
+    init(_ note: XDictCore.Note) {
+        self.init(target: XDictContract.StudyTarget(note.target), text: note.text, at: note.at, device: note.device)
+    }
+}
+
+extension XDictContract.StudyCardState {
+    init(_ state: XDictCore.CardState) {
+        self.init(stability: state.stability, difficulty: state.difficulty,
+                  phase: XDictContract.StudyPhase(state.phase), lastReview: state.lastReview, due: state.due)
+    }
+}
+
+extension XDictContract.StudyCard {
+    init(_ card: XDictCore.StudyCard) {
+        self.init(target: XDictContract.StudyTarget(card.target), note: XDictContract.StudyNote(card.note),
+                  state: XDictContract.StudyCardState(card.state), head: card.head, noteHead: card.noteHead,
+                  grades: card.grades)
+    }
+}
+
+extension XDictContract.ReviewSummary {
+    init(_ summary: XDictCore.ReviewSummary) {
+        self.init(due: summary.due, nextDue: summary.nextDue)
+    }
+}
+
+extension XDictContract.StudyOutcome {
+    init(_ outcome: XDictCore.ReviewOutcome) {
+        self.init(outcome: XDictContract.LedgerRecordOutcome(outcome.outcome),
+                  card: XDictContract.StudyCard(outcome.card))
+    }
+}
+
+extension XDictContract.ReanchorResult {
+    init(_ result: XDictCore.ReanchorResult) {
+        switch result {
+        case .reanchored: self = .reanchored
+        case .reordered: self = .reordered
+        case .changed: self = .changed
+        case .missing: self = .missing
+        }
+    }
+}
+
+extension XDictContract.ReanchorOutcome {
+    init(_ outcome: XDictCore.ReanchorOutcome) {
+        self.init(target: XDictContract.StudyTarget(outcome.target),
+                  result: XDictContract.ReanchorResult(outcome.result))
+    }
+}
+
+extension XDictContract.ReanchorReport {
+    init(_ report: XDictCore.ReanchorReport) {
+        self.init(outcomes: report.outcomes.map { XDictContract.ReanchorOutcome($0) })
+    }
+}
