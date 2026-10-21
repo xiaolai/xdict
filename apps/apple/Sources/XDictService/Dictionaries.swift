@@ -95,6 +95,14 @@ final class Dictionaries: Sendable {
                 let projected = try core.entryText(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                    view: XDictCore.TextView(text))
                 return (.answer(.entryText(XDictContract.EntryText(projected))), nil)
+            // ADR-0023/ADR-0024: the local history. The recording filter runs in the core, before any byte is written.
+            case .ledgerRecord(let reading, let operation, let targetLanguages):
+                let outcome = try core.ledgerRecord(reading: XDictCore.Reading(reading), operation: operation,
+                                                    targetLanguages: targetLanguages)
+                return (.answer(.ledgerRecord(XDictContract.LedgerRecordOutcome(outcome))), nil)
+            case .ledgerHistory(let now, let utcOffsetSeconds):
+                let history = try core.ledgerHistory(now: now, utcOffsetSeconds: utcOffsetSeconds)
+                return (.answer(.ledgerHistory(XDictContract.LedgerHistory(history))), nil)
             case .link(let dict, let url, let origin, let render):
                 let link = try core.link(dict: dict.rawValue, url: url, origin: XDictCore.LinkOrigin(origin),
                                          view: XDictCore.View(render))

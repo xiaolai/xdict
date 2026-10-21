@@ -70,6 +70,9 @@ final class LookupAnywhere {
     /// Whether a measured height is taken: not under 2 pt, not from an earlier entry.
     @ObservationIgnored private var fit = PanelFit()
     @ObservationIgnored private var shownEntry = 0
+    /// The shown entry whose finished document was already recorded: the entry view may report one document twice, and a
+    /// second report is not a second reading (plan-history-and-learning §2.2).
+    @ObservationIgnored private var recordedSerial: Int?
 
     @ObservationIgnored private(set) lazy var registrar = ShortcutRegistrar(
         defaults: .standard, hotkeys: .shared) { [weak self] in self?.pressed() }
@@ -606,6 +609,7 @@ final class LookupAnywhere {
         // show for the lookup shown now (plan-capture WI-4 rule 3) — a stale document's finish in the gap before a newer
         // lookup's entry request is not a draw of the newer term.
         if state?.showsPresentedLookup == true { drew(query: state?.model.lookup?.query) }
+        recordReadingIfDrawn()
         shownEntry += 1
         fit.began(entry: shownEntry)
         let entry = shownEntry
@@ -616,6 +620,24 @@ final class LookupAnywhere {
                 await self.fitToEntry(entry)
             }
         }
+    }
+
+    /// **Only an entry that actually drew is recorded** (plan-history-and-learning §2.2): the finished document belongs
+    /// to the lookup shown now, an entry exists (not a no-results placeholder), a sentence was captured, and the panel is
+    /// on screen. A closed panel, a no-results lookup and a stale completion each record nothing; `HistoryModel.record`
+    /// adds the reader's switch, so off writes no bytes at all. One finish records once per shown entry: the entry view
+    /// can report a document more than once.
+    private func recordReadingIfDrawn() {
+        guard let state else { return }
+        let capture = HistoryCapture(onScreen: panel?.isShown == true, current: state.showsPresentedLookup,
+                                     hasEntry: state.model.shown != nil, hasSentence: state.meaning.held != nil)
+        guard capture.records, let shown = state.model.shown, let handoff = state.meaning.held,
+              recordedSerial != shown.serial else { return }
+        recordedSerial = shown.serial
+        let dictionary = state.library.entries.first { $0.id == shown.result.dictionary }
+        let reading = ReadingCapture.reading(handoff: handoff, entry: shown.result.entry, dictionary: dictionary,
+                                             at: Date(), device: DeviceIdentity.current())
+        Task { await XDictApp.history.record(reading) }
     }
 
     /// The panel as tall as its entry, within bounds and the screen's room (UI review P-03, Codex §3), its top edge

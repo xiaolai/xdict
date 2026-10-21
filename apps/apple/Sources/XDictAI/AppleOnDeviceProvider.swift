@@ -39,12 +39,21 @@ public struct AppleOnDeviceProvider: AIProvider {
 
     public init() {}
 
-    /// What Apple reports here and now, mapped to our own closed set.
+    /// What Apple reports here and now, mapped to our own closed set — or the typed system case, with both versions, when
+    /// this Mac is older than this build's Apple source needs (ADR-0026). Below that floor the framework is not asked at
+    /// all; when the deployment floor drops below 27, the framework calls inside `answer` also gain their `#available`
+    /// guards, as ADR-0026 requires.
     public static func availability() -> AppleAvailability {
+        // The autoclosure defers `frameworkAvailability()`: below the floor it is never called.
+        AppleSource.availability(running: AppleSource.running, framework: frameworkAvailability())
+    }
+
+    /// The framework's own answer, asked only when the system is new enough to have it.
+    private static func frameworkAvailability() -> AppleAvailability {
         #if canImport(FoundationModels)
-        return mapped(SystemLanguageModel.default.availability)
+        mapped(SystemLanguageModel.default.availability)
         #else
-        return .unknown
+        .unknown
         #endif
     }
 

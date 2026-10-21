@@ -88,9 +88,13 @@ geometry.
 
 ## 6. Privacy and untrusted text
 
-- The sentence lives in **one ephemeral session per presentation**, in memory only and never persisted; the next
-  presentation replaces it, and its end or the presentation's close drops it. Only the **term** goes to search, the
-  service, the trail, and observation hooks.
+- The sentence lives in **one ephemeral session per presentation**, in memory only, with one exception: the reader's
+  local reading history (amended 2026-10-21, ADR-0023) may persist it on this device. The next presentation replaces it,
+  and its end or the presentation's close drops it from the session. Only the **term** goes to search, the service, the
+  trail, and observation hooks.
+- **The history is the one consumer that may persist the sentence** (amended 2026-10-21, ADR-0023): with the reader's
+  history on it writes the sentence to the on-device ledger, never sends it anywhere, and writes nothing while the
+  history is off or the reading's language is outside the reader's target set.
 - **The one consumer that may send the sentence is the AI pane** (amended 2026-10-20, ADR-0021): on the reader's tap it
   reads the presentation's sentence and the term's range, sends them to the source the reader chose — the entry text only
   under the reader's switch — and keeps nothing when the presentation ends. What it sends is `conformance/ai/`'s
@@ -100,7 +104,9 @@ geometry.
 - Captured text is **untrusted data for every consumer**. Prompt handling is the consumer's; preserving the text
   instruction-like is not proof of safety. A shell MUST run a canary showing the sentence reaches no consumer; macOS's
   is `apps/apple/Tests/XDictCaptureTests/CapturePrivacyCanaryTests.swift` (delivery, settlement, cancellation,
-  replacement, refusal; every description and mirror inspected).
+  replacement, refusal; every description and mirror inspected). The history adds two cases to that canary (ADR-0023):
+  with the history off, a captured sentence reaches no storage and no message; with it on, a reading outside the
+  target languages is not stored.
 - A **Service's text is the query** and never yields a context or geometry from disagreeing Accessibility text.
 
 ## 7. Bounds

@@ -100,6 +100,14 @@ public final class Library {
     }
 
     public private(set) var entries: [LibraryEntry] = []
+
+    /// The **search-side** languages the library declares, distinct and sorted (plan-history-and-learning §2.7): what
+    /// Settings ▸ Learning offers as recording targets and drawer filters, and what a reading records as its language.
+    public var declaredSearchLanguages: [String] {
+        entries.compactMap(\.languages.pair.search).reduce(into: [String]()) { all, code in
+            if !all.contains(code) { all.append(code) }
+        }.sorted()
+    }
     public private(set) var phases: [UUID: EntryPhase] = [:]
     public private(set) var notices: [LibraryNotice] = []
     /// Each open dictionary's health check (WI-12), run one at a time after it opens, below the reader's own calls.

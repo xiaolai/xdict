@@ -475,6 +475,7 @@ struct StringCatalogTests {
         "XDict reading style, rules version %u.": "a version, not a count",
         "record %lld": "which record under a key, an ordinal label",
         "The Keychain refused to save the key (status %d).": "a Keychain status code, not a count",
+        "The Keychain refused to remove the key (status %d).": "a Keychain status code, not a count",
         "The entry was cut at %llu bytes, so only the part before that was sent.": "a byte offset, not a count of a noun",
     ]
 

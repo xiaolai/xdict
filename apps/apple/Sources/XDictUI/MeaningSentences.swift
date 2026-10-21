@@ -124,6 +124,8 @@ public enum MeaningSentences {
         case .appleIntelligenceNotEnabled:
             LocalizedStringResource("Apple Intelligence is off. Turn it on in System Settings.")
         case .modelNotReady: LocalizedStringResource("Apple's model is still getting ready.")
+        case .system(let required, let running):
+            LocalizedStringResource("Apple Intelligence needs macOS \(required) or later; this Mac runs macOS \(running).")
         case .unknown: LocalizedStringResource("Apple's model cannot answer here.")
         }
     }

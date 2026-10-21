@@ -9,7 +9,7 @@ import XDictCapture
 extension MeaningHandoff {
     /// Nil when the capture carries no sentence: an "in context" ask without one is not offered.
     public init?(term: CapturedTerm, origin: MeaningOrigin) {
-        guard case .available(let sentence, let range, _, _) = term.context else { return nil }
-        self.init(term: term.term, sentence: sentence, range: range, origin: origin)
+        guard case .available(let sentence, let range, let cut, _) = term.context else { return nil }
+        self.init(term: term.term, sentence: sentence, range: range, cut: cut, origin: origin)
     }
 }

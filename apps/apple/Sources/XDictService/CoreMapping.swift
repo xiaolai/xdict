@@ -362,3 +362,62 @@ extension XDictContract.DisplayOptions {
                   css: options.css)
     }
 }
+
+// MARK: - The reading history (ADR-0023, ADR-0024)
+
+extension XDictCore.Reading {
+    /// The contract's reading as the core records it: the fields one for one.
+    init(_ reading: XDictContract.LedgerReading) {
+        self.init(surface: reading.surface, lemma: reading.lemma, sentence: reading.sentence,
+                  span: reading.span.map { XDictCore.ReadingSpan(start: $0.start, len: $0.len) },
+                  cut: reading.cut, quality: reading.quality, edition: reading.edition, entryKey: reading.entryKey,
+                  occurrence: reading.occurrence, dictionaryName: reading.dictionaryName, language: reading.language,
+                  at: reading.at, device: reading.device)
+    }
+}
+
+extension XDictContract.LedgerReading {
+    /// The core's reading in the contract's record: what a history reply carries.
+    init(_ reading: XDictCore.Reading) {
+        self.init(surface: reading.surface, lemma: reading.lemma, sentence: reading.sentence,
+                  span: reading.span.map { XDictContract.LedgerSpan(start: $0.start, len: $0.len) },
+                  cut: reading.cut, quality: reading.quality, edition: reading.edition, entryKey: reading.entryKey,
+                  occurrence: reading.occurrence, dictionaryName: reading.dictionaryName, language: reading.language,
+                  at: reading.at, device: reading.device)
+    }
+}
+
+extension XDictContract.LedgerRecordOutcome {
+    init(_ outcome: XDictCore.RecordOutcome) {
+        switch outcome {
+        case .recorded: self = .recorded
+        case .duplicate: self = .duplicate
+        case .uncertain: self = .uncertain
+        case .skippedLanguage: self = .skippedLanguage
+        }
+    }
+}
+
+extension XDictContract.LedgerDayLabel {
+    init(_ label: XDictCore.DayLabel) {
+        switch label {
+        case .today: self = .today
+        case .yesterday: self = .yesterday
+        case .weekday: self = .weekday
+        case .date: self = .date
+        }
+    }
+}
+
+extension XDictContract.LedgerHistory {
+    /// The core's days in the contract's record: grouping and ordering are the core's, the shell adds nothing.
+    init(_ history: XDictCore.History) {
+        self.init(days: history.days.map {
+            XDictContract.LedgerDay(id: $0.id, start: $0.start, label: XDictContract.LedgerDayLabel($0.label),
+                                    cards: $0.cards.map {
+                                        XDictContract.LedgerCard(reading: XDictContract.LedgerReading($0.reading),
+                                                                 times: $0.times, events: $0.events)
+                                    })
+        })
+    }
+}

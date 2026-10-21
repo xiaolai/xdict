@@ -37,6 +37,16 @@ public final class AISettingsModel {
 
     public var language: String { preferences.settings.language }
 
+    /// **The build's Apple source against this Mac, when the Mac is older** (ADR-0026, owner's rule of 2026-10-21): the
+    /// Apple row stays visible on every supported system and says which macOS the source needs and which this Mac runs,
+    /// in the reader's language. Nil when the system is new enough.
+    public var appleSystemNotice: LocalizedStringResource? {
+        if case .system(let required, let running) = AppleOnDeviceProvider.availability() {
+            return MeaningSentences.availability(.system(required: required, running: running))
+        }
+        return nil
+    }
+
     // MARK: - The source
 
     public func select(_ kind: AIProviderKind?, cloud: Bool = false) {

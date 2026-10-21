@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "6cc495feedf20e9aefb45ac8f676881829b9dd8ffd716ac924a4c11d9d4d9423"
+    public static let sourceDigest = "73c198c6912d102154521fd04aabb7553035440f5622187273609d45b5985d48"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -172,6 +172,10 @@ public enum Tokens {
         public static let meaningPaneIdeal: CGFloat = 340
         /// The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence.
         public static let meaningPaneMax: CGFloat = 460
+        /// The reading-history drawer's width: a sentence a line, beside the menu bar.
+        public static let historyDrawerWidth: CGFloat = 360
+        /// The drawer's height: five day groups of cards before it scrolls.
+        public static let historyDrawerHeight: CGFloat = 520
     }
 
     /// Corner radii.
