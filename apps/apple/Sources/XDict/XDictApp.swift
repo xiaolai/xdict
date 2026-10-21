@@ -41,6 +41,9 @@ struct XDictApp: App {
     /// the same ledger, and Review opens the review window.
     @MainActor static let historyDrawer = HistoryDrawerController(model: history, study: study,
                                                                   onReview: { MenuBarActions.openReview() })
+    /// **The menu bar item** (plan-history-and-learning §4, XiaolaiDict's port): a click opens the reading history, a
+    /// right or control click opens the menu. Installed after launch, once a window's environment has handed the actions.
+    @MainActor static let menuBar = MenuBarItem()
     /// Add Apple Dictionaries… and Convert Again (ADR-0011), through the app-group container the service shares.
     @MainActor static let appleImporter = AppleImporter(library: library, backend: service,
                                                         root: SharedContainer.appleImports())
@@ -80,7 +83,7 @@ struct XDictApp: App {
         Window("Review", id: Self.reviewWindow) {
             ReviewView(model: Self.study)
         }
-        .defaultSize(width: Tokens.Window.historyDrawerWidth, height: Tokens.Window.historyDrawerHeight)
+        .defaultSize(width: Tokens.Window.reviewWidth, height: Tokens.Window.reviewHeight)
 
         Settings {
             // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
@@ -89,18 +92,6 @@ struct XDictApp: App {
             SettingsContent(route: .shared)
         }
 
-        // The menu-bar item (plan-macos-v1 WI-8). Its label lives as long as the app, so it is where SwiftUI's
-        // `openWindow` is handed to the panel, which expands into a main window.
-        MenuBarExtra {
-            MenuBarMenu(registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover,
-                        lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
-                        openMain: { MenuBarActions.openMain() },
-                        showDictionaries: { MenuBarActions.showDictionaries() },
-                        showHistory: { MenuBarActions.showHistory() },
-                        showReview: { MenuBarActions.openReview() })
-        } label: {
-            MenuBarLabel()
-        }
     }
 
     /// One Settings pane's content (ADR-0012 d.1): the lookup shortcut sits in General, the speech rows in Reading &
@@ -198,6 +189,7 @@ struct AppSetup: Sendable {
 struct MainWindow: View {
     @State private var state: SearchWindowState?
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Group {
@@ -209,6 +201,20 @@ struct MainWindow: View {
         }
         .onAppear {
             guard state == nil else { return }
+            // **The menu bar item's routes to the app's scenes**, captured here because `openWindow` and `openSettings`
+            // live in a view's environment and the item is AppKit. The main window opens at every launch, so these exist
+            // before a reader can click the icon.
+            LookupAnywhere.shared.openMainWindow = {
+                NewTabLookups.shared.cancel()
+                openWindow(id: XDictApp.mainWindow)
+            }
+            MenuBarActions.open = { openWindow(id: $0) }
+            // Every way into Settings ▸ Dictionaries opens Settings through here, so it works with no other window open
+            // (ADR-0012 d.4).
+            SettingsRoute.shared.open = {
+                NSApp.activate()
+                openSettings()
+            }
             let made = XDictApp.windowState()
             made.showDictionaries = { SettingsRoute.shared.show($0) }
             // A ⌘-clicked word opens in a new tab of this window, looked up as typed and Return (P47).
@@ -264,7 +270,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         MainActor.assumeIsolated {
             LookupAnywhere.shared.start()
-            Task { await LibraryLaunch.once() }
             // The summary plans the reminder before any window asks for it (plan §5.4).
             Task { await XDictApp.study.refresh() }
             // **A join moves the lineage's notes** (plan §5.1): the reader said the changed file is the same dictionary,
@@ -279,6 +284,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     _ = await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder.path))
                 }
             }
+            // **The app's own menu bar item** (XiaolaiDict's port): a click shows the reading history on the display it was
+            // clicked on, a right or control click opens the menu, and the item highlights while the drawer is open.
+            XDictApp.historyDrawer.statusItemFrame = { XDictApp.menuBar.screenFrame }
+            XDictApp.historyDrawer.onVisibilityChange = { XDictApp.menuBar.historyBecame(visible: $0) }
+            XDictApp.menuBar.install()
+            Task {
+                await LibraryLaunch.once()
+                SetupLaunch.openOnAFreshAccount()
+            }
         }
     }
 
@@ -289,50 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// The menu-bar item's icon, and the scene actions it hands over.
-struct MenuBarLabel: View {
-    @Environment(\.openWindow) private var openWindow
-    @Environment(\.openSettings) private var openSettings
-
-    var body: some View {
-        Self.icon
-            .accessibilityLabel(Text(verbatim: "XDict"))
-            .task {
-                LookupAnywhere.shared.openMainWindow = {
-                    NewTabLookups.shared.cancel()
-                    openWindow(id: XDictApp.mainWindow)
-                }
-                MenuBarActions.open = { openWindow(id: $0) }
-                // Every way into Settings ▸ Dictionaries opens Settings through here, so it works with no other window
-                // open (ADR-0012 d.4).
-                SettingsRoute.shared.open = {
-                    NSApp.activate()
-                    openSettings()
-                }
-                await LibraryLaunch.once()
-                SetupLaunch.openOnAFreshAccount()
-            }
-    }
-
-    /// The designer's 22 pt glyph (`Resources/MenuBarIcon.svg`, ported from XiaolaiDict with the app icon), marked as a
-    /// template so the system draws it in the menu bar's own colour: only its alpha is read. `Tools/build-bundle.sh`
-    /// refuses a bundle without it; outside a bundle (`swift run`) there is no resource, and a symbol beats an empty
-    /// slot, which would leave the menu unreachable.
-    private static let icon: Image = {
-        guard let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "svg"),
-              let image = NSImage(contentsOf: url)
-        else {
-            Logger(subsystem: XDictIdentity.app, category: "launch")
-                .error("MenuBarIcon.svg is not in the bundle; the menu bar shows a system symbol")
-            return Image(systemName: "character.book.closed")
-        }
-        image.isTemplate = true
-        image.size = Tokens.Size.menuBarIcon
-        return Image(nsImage: image)
-    }()
-}
-
-/// What the menu-bar menu opens, through the label's `openWindow`.
+/// What the menu-bar item's menu opens, through the environment a window handed over at launch.
 @MainActor
 enum MenuBarActions {
     static var open: ((String) -> Void)?
@@ -365,19 +336,22 @@ enum MenuBarActions {
     @MainActor static func openReview() {
         // The drawer closes first: the review window takes the reader's attention, and a popover behind it would keep
         // clicks of its own (a click outside already closes it).
-        XDictApp.historyDrawer.close()
+        XDictApp.historyDrawer.hide()
         NSApp.activate()
         open?(XDictApp.reviewWindow)
     }
 
-    /// **The reading history's drawer** (plan-history-and-learning §4): anchored at the menu bar's top-right corner until
-    /// the owned status item supplies its button's own frame — the tray's owner-gated measurement (WI-0).
+    /// **The reading history's drawer** (plan-history-and-learning §4): a click on the menu-bar icon shows it — on the
+    /// display the icon is on — and a repeated click keeps it open (XiaolaiDict's decision, kept).
     @MainActor static func showHistory() {
-        guard let screen = NSScreen.main else { return }
-        let icon = Tokens.Size.menuBarIcon
-        let anchor = CGRect(x: screen.frame.maxX - icon.width, y: screen.frame.maxY - icon.height,
-                            width: icon.width, height: icon.height)
-        XDictApp.historyDrawer.toggle(near: anchor, on: screen)
+        XDictApp.historyDrawer.show()
+    }
+
+    /// Settings, from the menu bar: through the environment a window handed over at launch (`openSettings` lives in a
+    /// SwiftUI view's environment; the item is AppKit).
+    @MainActor static func openSettings() {
+        NSApp.activate()
+        SettingsRoute.shared.open?()
     }
 }
 

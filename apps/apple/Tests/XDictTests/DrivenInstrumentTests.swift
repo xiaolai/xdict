@@ -51,7 +51,7 @@ struct DrivenInstrumentTests {
     /// the watcher runs: in a driven run it never does, and the menu said "Hover Is Off in Settings" with hover on, while
     /// the switch read off and a click on it turned hover on (UI tour, 2026-10-19).
     @Test func theMenuAndTheSwitchShowTheSettingNotTheWatcher() throws {
-        for file in ["Sources/XDictUI/MenuBarMenu.swift", "Sources/XDictUI/HoverSettings.swift"] {
+        for file in ["Sources/XDict/MenuBarItem.swift", "Sources/XDictUI/HoverSettings.swift"] {
             let text = try String(contentsOf: Manifest.package.appending(path: file), encoding: .utf8)
             #expect(Self.watcherReads(text) == [], "\(file)")
         }

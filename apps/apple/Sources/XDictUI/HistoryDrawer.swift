@@ -36,34 +36,57 @@ public enum HistoryRuns {
     }
 }
 
-/// **The reading history's drawer** (plan-history-and-learning §1, WI-4): day groups newest first, each card the word
-/// marked in the reader's sentence, the dictionary and the time. The core grouped, collapsed and labelled; the drawer
-/// draws, and its language filter shows a subset of what is stored — never rewriting it.
+/// **The reading history's drawer** (plan-history-and-learning §1, WI-4; ported from XiaolaiDict's docked drawer): the
+/// display's right edge, full height, glass — the list scrolling under the header bar the way system panels do, with the
+/// corners against the screen edge square. The core grouped, collapsed and labelled; the drawer draws, and its language
+/// filter shows a subset of what is stored — never rewriting it. The window is already at its docked rect; only this
+/// content moves, and only when the drawer opens or closes.
 public struct HistoryView: View {
     @State private var model: HistoryModel
-    /// The review's state (plan §5): a card's note is written here, and Review opens the review window.
     private let study: StudyModel?
     private let onReview: (() -> Void)?
+    private let presentation: HistoryDrawerPresentation
     /// The card whose note is being written, and what that note says already.
     @State private var noting: LedgerReading?
     @State private var initialDraft = ""
 
-    public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil) {
+    public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil,
+                presentation: HistoryDrawerPresentation = HistoryDrawerPresentation()) {
         _model = State(initialValue: model)
         self.study = study
         self.onReview = onReview
+        self.presentation = presentation
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider()
-            content
+        // No geometry means the drawer has not been laid out for a display; drawing nothing is right, since a guessed
+        // size would be a window the reader can see and cannot explain.
+        if let geometry = presentation.geometry {
+            let parked = presentation.revealed ? CGSize.zero : geometry.hiddenOffset
+            surface
+                .frame(width: geometry.content.width, height: geometry.content.height)
+                .clipShape(geometry.shape)
+                // **Liquid Glass, not an `NSVisualEffectView`**: macOS 26 and later's material, with its own edge
+                // treatment and its own shadow — so no hand-drawn border, and no `.shadow` stacked on the system's.
+                .glassEffect(.regular, in: geometry.shape)
+                .offset(x: geometry.contentOrigin.x + Motion.travel(parked.width),
+                        y: geometry.contentOrigin.y + Motion.travel(parked.height))
+                .opacity(presentation.revealed ? 1 : 0)
+                .frame(width: geometry.window.width, height: geometry.window.height, alignment: .topLeading)
+                .clipped()
+                .ignoresSafeArea()
+                .accessibilityIdentifier("history.drawer")
         }
-        // The window gives the drawer its size (the surface decides it, R2/R4); the content fills what it is given.
-        .background(Color(nsColor: Tokens.Colour.textBackground.nsColor))
-        .task(id: model.preferences.historyEnabled) { await model.refresh() }
-        .accessibilityIdentifier("history.drawer")
+    }
+
+    private var surface: some View {
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // **A bar, not a header above a rule**: the list scrolls under it, and the system's scroll edge effect is
+            // what separates the two.
+            .safeAreaBar(edge: .top, spacing: 0) {
+                header
+            }
     }
 
     private var header: some View {
@@ -142,8 +165,11 @@ public struct HistoryView: View {
                     }
                 }
             }
-            .padding(Tokens.Space.l)
+            .padding(.horizontal, Tokens.Space.l)
+            .padding(.bottom, Tokens.Space.l)
+            .padding(.top, Tokens.Space.xs)
         }
+        .scrollEdgeEffectStyle(.soft, for: .top)
     }
 
     @ViewBuilder private func cardView(_ card: LedgerCard) -> some View {

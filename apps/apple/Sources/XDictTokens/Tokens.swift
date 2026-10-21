@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "73c198c6912d102154521fd04aabb7553035440f5622187273609d45b5985d48"
+    public static let sourceDigest = "4db883db9b89c60914823a19684ceacd61f982c4fa347a632caf3dbb232f3bc1"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -102,6 +102,20 @@ public enum Tokens {
         public static let promptEditor: CGFloat = 140
     }
 
+    /// Animations the shell runs itself: the drawer's springs.
+    public enum Motion {
+        /// XiaolaiDict's drawer spring, kept: it arrives with a little give.
+        public static let drawerOpenResponse: Double = 0.34
+        /// XiaolaiDict's drawer spring, kept: enough give to see the panel settle.
+        public static let drawerOpenDamping: Double = 0.86
+        /// XiaolaiDict's drawer spring, kept: it leaves faster than it arrives, and without a bounce.
+        public static let drawerCloseResponse: Double = 0.26
+        /// XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back.
+        public static let drawerCloseDamping: Double = 0.95
+        /// How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes.
+        public static let drawerSettleMilliseconds: Double = 320
+    }
+
     /// Widths and heights of windows, panes, columns and sheets.
     public enum Window {
         /// Apple-measured (P1, `Tools/parity/apple-dictionary.tsv`): fixed.
@@ -172,10 +186,20 @@ public enum Tokens {
         public static let meaningPaneIdeal: CGFloat = 340
         /// The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence.
         public static let meaningPaneMax: CGFloat = 460
-        /// The reading-history drawer's width: a sentence a line, beside the menu bar.
+        /// The reading-history drawer's width: a sentence a line, docked to the screen's edge.
         public static let historyDrawerWidth: CGFloat = 360
-        /// The drawer's height: five day groups of cards before it scrolls.
-        public static let historyDrawerHeight: CGFloat = 520
+        /// macOS 27's own window corner, measured on 27.0.1: the drawer sits beside the reader's windows, so it takes theirs. The corners against the screen edge stay square.
+        public static let drawerCornerRadius: CGFloat = 16
+        /// How close to a display's edge counts as touching it: under a point is rounding, not a gap.
+        public static let drawerEdgeTolerance: CGFloat = 1
+        /// Slack around the drawer for the glass's shadow to land in; the window is grown by it and clipped to the display, so a docked drawer casts nothing onto the display next door.
+        public static let drawerShadowMargin: CGFloat = 48
+        /// The review window's width: a card's word, the reader's note and four answers read without wrapping the buttons.
+        public static let reviewWidth: CGFloat = 480
+        /// The review window's opening height: the card, its note and the two answer rows with the outcome line under them.
+        public static let reviewHeight: CGFloat = 560
+        /// The review window's lowest: the word, the note and the answers, with the note scrolling past it.
+        public static let reviewMinHeight: CGFloat = 420
     }
 
     /// Corner radii.

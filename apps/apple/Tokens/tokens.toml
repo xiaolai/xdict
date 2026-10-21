@@ -18,6 +18,7 @@ space = { kind = "length", swift = "Space", doc = "The spacing scale: stack spac
 inset = { kind = "length", swift = "Inset", doc = "Where content starts inside a pane, window or panel: fixed insets, most Apple-measured." }
 row = { kind = "length", swift = "Row", doc = "Row and line heights of lists, tables and the panel." }
 control = { kind = "length", swift = "Control", doc = "The sizes of controls and bars." }
+motion = { kind = "number", swift = "Motion", doc = "Animations the shell runs itself: the drawer's springs." }
 window = { kind = "length", swift = "Window", doc = "Widths and heights of windows, panes, columns and sheets." }
 radius = { kind = "length", swift = "Radius", doc = "Corner radii." }
 line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
@@ -119,8 +120,20 @@ settingsHeight = { value = 560, why = "The Settings window's height: room for Ap
 meaningPaneMin = { value = 260, why = "The answer pane's narrowest: the shortest sense quote wraps to about four lines; below it the entry column keeps its room." }
 meaningPaneIdeal = { value = 340, why = "The answer pane's width when it opens: the quote, its explanation and a two-button row read without wrapping the outcome line." }
 meaningPaneMax = { value = 460, why = "The answer pane's widest: past it the entry column loses more than the answer gains, since an answer is one quote and one sentence." }
-historyDrawerWidth = { value = 360, why = "The reading-history drawer's width: a sentence a line, beside the menu bar." }
-historyDrawerHeight = { value = 520, why = "The drawer's height: five day groups of cards before it scrolls." }
+historyDrawerWidth = { value = 360, why = "The reading-history drawer's width: a sentence a line, docked to the screen's edge." }
+drawerCornerRadius = { value = 16, why = "macOS 27's own window corner, measured on 27.0.1: the drawer sits beside the reader's windows, so it takes theirs. The corners against the screen edge stay square." }
+drawerEdgeTolerance = { value = 1, why = "How close to a display's edge counts as touching it: under a point is rounding, not a gap." }
+drawerShadowMargin = { value = 48, why = "Slack around the drawer for the glass's shadow to land in; the window is grown by it and clipped to the display, so a docked drawer casts nothing onto the display next door." }
+reviewWidth = { value = 480, why = "The review window's width: a card's word, the reader's note and four answers read without wrapping the buttons." }
+reviewHeight = { value = 560, why = "The review window's opening height: the card, its note and the two answer rows with the outcome line under them." }
+reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling past it." }
+
+[motion]
+drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }
+drawerOpenDamping = { value = 0.86, why = "XiaolaiDict's drawer spring, kept: enough give to see the panel settle." }
+drawerCloseResponse = { value = 0.26, why = "XiaolaiDict's drawer spring, kept: it leaves faster than it arrives, and without a bounce." }
+drawerCloseDamping = { value = 0.95, why = "XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back." }
+drawerSettleMilliseconds = { value = 320, why = "How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes." }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
