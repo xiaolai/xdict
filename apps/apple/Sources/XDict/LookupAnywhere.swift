@@ -683,9 +683,14 @@ final class LookupAnywhere {
     /// A click anywhere but the panel closes it: a global monitor for other apps' clicks (mouse events need no
     /// permission), a local one for XDict's own windows — whose event is returned, never swallowed. A click in the
     /// panel's own pop-up menu is the panel's.
+    ///
+    /// **The release of the click, not its press** (2026-10-21): closing on the press removed the panel's window while
+    /// the reader's click was still in flight, and a text view that took that click never completed it — the next key
+    /// went nowhere until another click (the E2E's click-away check, reproduced by hand: TextEdit's selection moved,
+    /// its 72 characters stayed, and three q's in a row were lost). A press is not a click until it is let go.
     private func watchForClicksAway() {
         guard clickMonitors.isEmpty else { return }
-        let kinds: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        let kinds: NSEvent.EventTypeMask = [.leftMouseUp, .rightMouseUp, .otherMouseUp]
         if let global = NSEvent.addGlobalMonitorForEvents(matching: kinds, handler: { [weak self] event in
             let point = NSEvent.mouseLocation
             _ = event
