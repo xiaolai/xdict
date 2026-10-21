@@ -49,7 +49,9 @@ public enum Contract {
     /// report, for the AI pane (ADR-0021 d.5, plan-ai-meaning WI-1/WI-5).
     /// 9 (2026-10-21): the operations `ledgerRecord` and `ledgerHistory` and their answers, the local reading history
     /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
-    public static let version: UInt32 = 9
+    /// 10 (2026-10-21): the study operations — a note, the notes, the review queue, a grade, an undo, the summary, a
+    /// definition's hash and a re-anchor — with their answers (plan-history-and-learning WI-5).
+    public static let version: UInt32 = 10
 }
 
 // MARK: - The request
@@ -235,13 +237,33 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// `utcOffsetSeconds` its offset east of UTC. The core groups, collapses repeats and labels; the shell draws.
     case ledgerHistory(now: Double, utcOffsetSeconds: Int32)
 
+    /// **Saves the reader's note on an entry** (plan §5.1): the core computes the definition's hash and resolves the
+    /// lineage, so the note carries evidence and never the definition.
+    case studyNote(dict: DictId, entry: EntryRef, text: String, name: String, stamp: StudyStamp, operation: String)
+    /// The reader's notes, latest per target.
+    case studyNotes
+    /// **The review queue**: due cards, soonest first, a new card at once.
+    case reviewQueue(now: Double, limit: UInt32)
+    /// **One grade** (plan §5.3): the revision the reader saw and the configuration it is scheduled under.
+    case reviewGrade(target: String, revision: String, grade: StudyGrade, policy: StudyPolicy, stamp: StudyStamp,
+                     operation: String)
+    /// **Voids the card's latest grade** while the card is still in the state it produced.
+    case reviewUndo(target: String, gradeEvent: String, stamp: StudyStamp, operation: String)
+    /// How many cards are due, and when the next falls due while none is.
+    case reviewSummary(now: Double)
+    /// The hash a note records for an entry's definition; never the definition itself.
+    case definitionHash(dict: DictId, entry: EntryRef)
+    /// **Re-anchors notes of one edition to another** under the same lineage (plan §5.1).
+    case studyReanchor(oldEdition: Edition, newEdition: Edition, stamp: StudyStamp, operationPrefix: String)
+
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
-             .ledgerRecord, .ledgerHistory: nil
+             .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
+             .reviewSummary, .definitionHash, .studyReanchor: nil
         }
     }
 
@@ -251,7 +273,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
-             .ledgerRecord, .ledgerHistory: nil
+             .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
+             .reviewSummary, .definitionHash, .studyReanchor: nil
         }
     }
 
@@ -267,10 +290,11 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// `Limits.bulkCallsInFlight` run at once.
     public var isBulk: Bool {
         switch self {
-        case .entry, .resource, .entryText: true
+        case .entry, .resource, .entryText, .studyNote, .definitionHash: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .ledgerRecord, .ledgerHistory: false
+             .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
+             .studyReanchor: false
         }
     }
 
@@ -278,10 +302,11 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// lookup for the calls that search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource, .entryText: .bulk
+        case .entry, .resource, .entryText, .studyNote, .definitionHash: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
-             .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory: nil
+             .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory,
+             .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor: nil
         }
     }
 
@@ -291,11 +316,13 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
         case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
-             .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _):
+             .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
+             .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
-             .ledgerRecord, .ledgerHistory: []
+             .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
+             .studyReanchor: []
         }
     }
 
@@ -319,6 +346,13 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entryText: .entryText
         case .ledgerRecord: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
+        case .studyNote: .studyNote
+        case .studyNotes: .studyNotes
+        case .reviewQueue: .reviewQueue
+        case .reviewGrade, .reviewUndo: .reviewOutcome
+        case .reviewSummary: .reviewSummary
+        case .definitionHash: .definitionHash
+        case .studyReanchor: .reanchored
         }
     }
 
@@ -329,7 +363,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .importPackage, .health, .convertApple: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
              .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText, .ledgerRecord,
-             .ledgerHistory: false
+             .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
+             .definitionHash, .studyReanchor: false
         }
     }
 }
@@ -466,6 +501,18 @@ public enum Answer: Codable, Hashable, Sendable {
     case ledgerRecord(LedgerRecordOutcome)
     /// The days the drawer shows (contract 9).
     case ledgerHistory(LedgerHistory)
+    /// The saved note, and the notes as the log holds them (contract 10).
+    case studyNote(StudyNote)
+    case studyNotes([StudyNote])
+    /// The review queue (contract 10).
+    case reviewQueue([StudyCard])
+    /// What a grade or an undo did (contract 10).
+    case reviewOutcome(StudyOutcome)
+    case reviewSummary(ReviewSummary)
+    /// An entry's definition hash, as a note records it (contract 10).
+    case definitionHash(String)
+    /// What a re-anchor found for each note (contract 10).
+    case reanchored(ReanchorReport)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
@@ -473,7 +520,8 @@ public enum Answer: Codable, Hashable, Sendable {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
-             .ledgerHistory: false
+             .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
+             .reanchored: false
         }
     }
 
@@ -506,6 +554,13 @@ public enum Answer: Codable, Hashable, Sendable {
         case .entryText: .entryText
         case .ledgerRecord: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
+        case .studyNote: .studyNote
+        case .studyNotes: .studyNotes
+        case .reviewQueue: .reviewQueue
+        case .reviewOutcome: .reviewOutcome
+        case .reviewSummary: .reviewSummary
+        case .definitionHash: .definitionHash
+        case .reanchored: .reanchored
         }
     }
 }
@@ -524,6 +579,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
     case readingStyle, converted, displayOptions, entryText, ledgerRecord, ledgerHistory
+    case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
 }
 
 // MARK: - Events

@@ -16,13 +16,17 @@ struct LimitsTests {
         #expect(Limits.maxBodyBytes < Limits.maxResourceBytes)
     }
 
-    @Test func entriesResourcesAndAnEntryTextAreTheBulkCallsAndTwoMayRun() {
+    @Test func entriesResourcesAnEntryTextAndTheStudyBodyReadsAreBulkAndTwoMayRun() {
         #expect(Limits.bulkCallsInFlight == 2)
         let bulk = Fixtures.operations.filter(\.isBulk).map(Fixtures.index)
         #expect(Set(bulk) == [Fixtures.index(.entry(dict: Fixtures.dict, entry: Fixtures.entryRef, render: .reader)),
                               Fixtures.index(.resource(dict: Fixtures.dict, path: "a", render: .reader)),
                               Fixtures.index(.entryText(dict: Fixtures.dict, entry: Fixtures.entryRef,
-                                                        text: TextRenderContext(maxBodyBytes: 1, maxTextBytes: 1)))])
+                                                        text: TextRenderContext(maxBodyBytes: 1, maxTextBytes: 1))),
+                              Fixtures.index(.studyNote(dict: Fixtures.dict, entry: Fixtures.entryRef, text: "t",
+                                                        name: "Tiny", stamp: Fixtures.studyStamp,
+                                                        operation: "op")),
+                              Fixtures.index(.definitionHash(dict: Fixtures.dict, entry: Fixtures.entryRef))])
     }
 
     /// Only an answer that carries a payload has a ceiling: an entry's is the view's, a resource's by its type.

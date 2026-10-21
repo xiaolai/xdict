@@ -25,6 +25,22 @@ enum Fixtures {
     /// The file the second dictionary is made of.
     static let otherMDXID = UUID(uuidString: "9D8C7B6A-5948-4736-A251-403F2E1D0C9B") ?? UUID()
     static let newLineage = LineageId(rawValue: "1E2D3C4B-5A69-4788-97A6-B5C4D3E2F100")
+    static let studyStamp = StudyStamp(at: 1_790_643_600, device: "fixture")
+    static let studyPolicy = StudyPolicy(retention: 0.9, maximumDays: 36_500)
+    static let studyTarget = StudyTarget(lineage: lineage.rawValue, entryKey: "run", occurrence: 0, kind: .entry,
+                                         edition: edition.rawValue,
+                                         definitionHash: String(repeating: "ab", count: 32))
+    static let studyNote = StudyNote(target: studyTarget, text: "my own words", at: 1_790_643_600,
+                                     device: "fixture")
+    static let studyCard = StudyCard(target: studyTarget, note: studyNote,
+                                     state: StudyCardState(stability: 1.5, difficulty: 5, phase: .learning,
+                                                           lastReview: 1_790_643_600, due: 1_790_644_200),
+                                     head: "grade-event", noteHead: "note-event", grades: 1)
+    static let reviewSummary = ReviewSummary(due: 0, nextDue: 1_790_644_200)
+    static let studyOutcome = StudyOutcome(outcome: .recorded, card: studyCard)
+    static let reanchorReport = ReanchorReport(outcomes: [
+        ReanchorOutcome(target: studyTarget, result: .reanchored),
+    ])
     static let ledgerReading = LedgerReading(
         surface: "hold", lemma: "hold", sentence: "They hold that view.", span: LedgerSpan(start: 5, len: 4),
         cut: 0, quality: "complete", edition: edition.rawValue, entryKey: "hold", occurrence: 0,
@@ -75,12 +91,24 @@ enum Fixtures {
         .displayOptions(dict: dict),
         .ledgerRecord(reading: ledgerReading, operation: "3E2D1C0B-9A87-4655-8433-221100FFEEDD", targetLanguages: ["en"]),
         .ledgerHistory(now: 1_790_643_600, utcOffsetSeconds: 0),
+        .studyNote(dict: dict, entry: entryRef, text: "my own words", name: "Tiny", stamp: studyStamp,
+                   operation: "op-study"),
+        .studyNotes,
+        .reviewQueue(now: 1_790_643_600, limit: 10),
+        .reviewGrade(target: studyTarget.key, revision: "grade-event", grade: .good, policy: studyPolicy,
+                     stamp: studyStamp, operation: "op-grade"),
+        .reviewUndo(target: studyTarget.key, gradeEvent: "grade-event", stamp: studyStamp, operation: "op-undo"),
+        .reviewSummary(now: 1_790_643_600),
+        .definitionHash(dict: dict, entry: entryRef),
+        .studyReanchor(oldEdition: edition,
+                       newEdition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32)),
+                       stamp: studyStamp, operationPrefix: "reanchor"),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 21
+    static let operationCases = 29
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -104,6 +132,14 @@ enum Fixtures {
         case .displayOptions: 18
         case .ledgerRecord: 19
         case .ledgerHistory: 20
+        case .studyNote: 21
+        case .studyNotes: 22
+        case .reviewQueue: 23
+        case .reviewGrade: 24
+        case .reviewUndo: 25
+        case .reviewSummary: 26
+        case .definitionHash: 27
+        case .studyReanchor: 28
         }
     }
 
@@ -160,6 +196,13 @@ enum Fixtures {
         .displayOptions(displayOptions),
         .ledgerRecord(.recorded),
         .ledgerHistory(ledgerHistory),
+        .studyNote(studyNote),
+        .studyNotes([studyNote]),
+        .reviewQueue([studyCard]),
+        .reviewOutcome(studyOutcome),
+        .reviewSummary(reviewSummary),
+        .definitionHash(String(repeating: "ab", count: 32)),
+        .reanchored(reanchorReport),
     ]
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
@@ -190,7 +233,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 18
+    static let answerCases = 25
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -211,6 +254,13 @@ enum Fixtures {
         case .displayOptions: 15
         case .ledgerRecord: 16
         case .ledgerHistory: 17
+        case .studyNote: 18
+        case .studyNotes: 19
+        case .reviewQueue: 20
+        case .reviewOutcome: 21
+        case .reviewSummary: 22
+        case .definitionHash: 23
+        case .reanchored: 24
         }
     }
 
