@@ -485,7 +485,7 @@ public final class Library {
             set(id, .ready)
             check(id)
         case .success(.needsImport(let reason)):
-            log.info("dictionary \(id, privacy: .public) needs an import: \(reason.rawValue, privacy: .public)")
+            log.notice("dictionary \(id, privacy: .public) needs an import: \(reason.rawValue, privacy: .public)")
             if let old = handles.removeValue(forKey: id) { _ = await backend.close(old) }
             enqueue(id)
         case .failure(let failure):

@@ -195,7 +195,7 @@ public final class ScreenTextRecogniser: Sendable {
             try Self.recogniseWhole(tile)
         }
         let recognised = ContinuousClock.now
-        Self.log.info("capture: screenshot \(Self.milliseconds(captured - began), privacy: .public) ms, recognition \(Self.milliseconds(recognised - captured), privacy: .public) ms, \(image.width, privacy: .public)×\(image.height, privacy: .public) px")
+        Self.log.notice("capture: screenshot \(Self.milliseconds(captured - began), privacy: .public) ms, recognition \(Self.milliseconds(recognised - captured), privacy: .public) ms, \(image.width, privacy: .public)×\(image.height, privacy: .public) px")
         return try hit(in: lines, at: point, target: target)
     }
 
@@ -216,7 +216,7 @@ public final class ScreenTextRecogniser: Sendable {
         try Task.checkCancellation()
         let began = ContinuousClock.now
         let target = try await capturer.target(at: point, window: window, stripHeight: metrics.strip.initialHeight)
-        Self.log.info("capture: window found in \(Self.milliseconds(ContinuousClock.now - began), privacy: .public) ms")
+        Self.log.notice("capture: window found in \(Self.milliseconds(ContinuousClock.now - began), privacy: .public) ms")
         guard let bundleID = target.bundleID else { throw RecognitionError.unattributable }
         if CaptureAuthorization.refusal(bundleID: bundleID, policy: policy) != nil { throw RecognitionError.excludedApp }
         return target

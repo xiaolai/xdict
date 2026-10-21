@@ -340,7 +340,7 @@ final class LookupAnywhere {
             show(.refused(refusal), query: nil, near: nil, source: source)
         }
         let elapsed = ContinuousClock.now - pressedAt
-        log.info("selection answered in \(elapsed.components.attoseconds / 1_000_000_000_000_000 + elapsed.components.seconds * 1000) ms")
+        log.notice("selection answered in \(elapsed.components.attoseconds / 1_000_000_000_000_000 + elapsed.components.seconds * 1000) ms")
     }
 
     /// The Service: the text macOS handed over, looked up **by the selection** — its box where XDict may read it and
