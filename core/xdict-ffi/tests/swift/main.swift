@@ -436,6 +436,7 @@ func j(_ o: RecordOutcome) -> String {
     case .duplicate: return "duplicate"
     case .uncertain: return "uncertain"
     case .skippedLanguage: return "skippedLanguage"
+    case .ineligible: return "ineligible"
     }
 }
 

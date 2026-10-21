@@ -47,7 +47,7 @@ export type Reading = {
   edition: string; entryKey: string; occurrence: number; dictionaryName: string; language: string; at: number;
   device: string;
 };
-export type RecordOutcome = 'recorded' | 'duplicate' | 'uncertain' | 'skippedLanguage';
+export type RecordOutcome = 'recorded' | 'duplicate' | 'uncertain' | 'skippedLanguage' | 'ineligible';
 export type Card = { reading: Reading; times: number; events: string[] };
 export type DayLabel = 'today' | 'yesterday' | 'weekday' | 'date';
 export type Day = { id: string; start: number; label: DayLabel; cards: Card[] };

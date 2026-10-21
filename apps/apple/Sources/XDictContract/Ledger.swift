@@ -71,6 +71,8 @@ public enum LedgerRecordOutcome: String, Codable, Hashable, Sendable {
     case uncertain
     /// A reading outside the reader's target languages: nothing was written, the sentence included.
     case skippedLanguage
+    /// The card was not in the state the caller saw, or was not due: nothing was written (plan §5.3).
+    case ineligible
 }
 
 /// One card: a reading, how many times it was met that day, and the reading events it is made of — the ids a removal

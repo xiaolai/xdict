@@ -394,6 +394,7 @@ extension XDictContract.LedgerRecordOutcome {
         case .duplicate: self = .duplicate
         case .uncertain: self = .uncertain
         case .skippedLanguage: self = .skippedLanguage
+        case .ineligible: self = .ineligible
         }
     }
 }
