@@ -110,7 +110,7 @@ public enum HoverSentences {
         case .allowed:
             LocalizedStringResource("Hover reads words from the screen where an app does not share its text.")
         case .notAllowed:
-            LocalizedStringResource("Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again.")
+            LocalizedStringResource("Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ \(PrivacySettings.screenRecording()), then check again.")
         case .couldNotTell:
             LocalizedStringResource("Could not tell whether Screen Recording is allowed. Check again in a moment.")
         }

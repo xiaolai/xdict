@@ -30,7 +30,7 @@ public enum AnywhereSentences {
         case .failed(.cancelled, let app):
             LocalizedStringResource("The lookup in \(app) was replaced by a newer one.")
         case .notTrusted:
-            LocalizedStringResource("To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do.")
+            LocalizedStringResource("To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › \(PrivacySettings.accessibility()); the lookup continues once you do.")
         case .noApp:
             LocalizedStringResource("No app is in front, so there is no selection to look up.")
         case .tooLongToRead(let app):

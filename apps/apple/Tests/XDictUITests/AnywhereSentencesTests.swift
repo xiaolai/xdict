@@ -26,7 +26,9 @@ struct AnywhereSentencesTests {
             }
         }
         #expect(texts[3].contains("300"))
-        #expect(texts[9].contains("Accessibility"))
+        // The pane by the name this macOS gives it: macOS 27 renamed the list (Device Control and Data Access), and the
+        // old wording would send the reader to a pane no longer called that (`PrivacySettings`).
+        #expect(texts[9].contains(PrivacySettings.accessibility()), "\(texts[9])")
     }
 
     @Test func aClashSaysWhoHoldsItAndWhatStillWorks() {
