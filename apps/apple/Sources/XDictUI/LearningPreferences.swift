@@ -14,6 +14,8 @@ public final class LearningPreferences {
         static let history = "learning.history.enabled"
         static let targets = "learning.languages.targets"
         static let drawer = "learning.languages.drawer"
+        static let reminders = "learning.reminders.enabled"
+        static let syncFolder = "learning.sync.folder"
     }
 
     @ObservationIgnored private let defaults: UserDefaults
@@ -31,11 +33,31 @@ public final class LearningPreferences {
     /// The languages the drawer shows; **empty shows every stored reading**.
     public private(set) var drawerLanguages: [String]
 
+    /// **Review reminders** (plan §5.4): off for a new reader — a notification is the reader's request, never a default.
+    public var remindersEnabled: Bool {
+        didSet { defaults.set(remindersEnabled, forKey: Key.reminders) }
+    }
+
+    /// **The reader's sync folder** (plan §2.6), kept as a bookmark: nil until they choose one, and a move or a rename does
+    /// not break it.
+    public private(set) var syncFolder: Data?
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         historyEnabled = defaults.object(forKey: Key.history) as? Bool ?? true
         targetLanguages = defaults.stringArray(forKey: Key.targets) ?? []
         drawerLanguages = defaults.stringArray(forKey: Key.drawer) ?? []
+        remindersEnabled = defaults.object(forKey: Key.reminders) as? Bool ?? false
+        syncFolder = defaults.data(forKey: Key.syncFolder)
+    }
+
+    public func setSyncFolder(_ bookmark: Data?) {
+        syncFolder = bookmark
+        if let bookmark {
+            defaults.set(bookmark, forKey: Key.syncFolder)
+        } else {
+            defaults.removeObject(forKey: Key.syncFolder)
+        }
     }
 
     public func setTargetLanguages(_ languages: [String]) {

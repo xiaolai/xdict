@@ -133,6 +133,25 @@ final class Dictionaries: Sendable {
                                                     stamp: XDictCore.Stamp(stamp),
                                                     operationPrefix: operationPrefix)
                 return (.answer(.reanchored(XDictContract.ReanchorReport(report))), nil)
+            case .studyNoteAt(let entry, let text, let name, let stamp, let operation):
+                let note = try core.studyNoteAt(entry: XDictCore.EntryRef(entry), text: text, name: name,
+                                                stamp: XDictCore.Stamp(stamp), operation: operation)
+                return (.answer(.studyNote(XDictContract.StudyNote(note))), nil)
+            case .exportData:
+                return (.answer(.exported(try core.ledgerExportJson())), nil)
+            case .eraseData(let stamp, let operation):
+                let report = try core.ledgerErase(operation: operation, at: stamp.at, device: stamp.device)
+                return (.answer(.erased(XDictContract.StudyEraseReport(report))), nil)
+            case .studyConflicts:
+                let conflicts = try core.reviewConflicts()
+                return (.answer(.conflicts(conflicts.map(XDictContract.CardConflict.init))), nil)
+            case .reviewResolve(let target, let keep, let stamp, let operation):
+                let outcome = try core.reviewResolve(target: target, keep: keep, stamp: XDictCore.Stamp(stamp),
+                                                     operation: operation)
+                return (.answer(.reviewOutcome(XDictContract.StudyOutcome(outcome))), nil)
+            case .ledgerSync(let input, let output, let device):
+                let report = try core.ledgerSync(input: input, output: output, device: device)
+                return (.answer(.synced(XDictContract.SyncReport(report))), nil)
             case .link(let dict, let url, let origin, let render):
                 let link = try core.link(dict: dict.rawValue, url: url, origin: XDictCore.LinkOrigin(origin),
                                          view: XDictCore.View(render))

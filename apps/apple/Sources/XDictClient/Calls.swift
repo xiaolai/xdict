@@ -115,7 +115,8 @@ extension ServiceOperation {
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .studyReanchor: []
+             .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
+             .ledgerSync: []
         }
     }
 
@@ -137,7 +138,8 @@ extension ServiceOperation {
         case .suggest(let prefix, let dicts, let limit): .suggest(prefix: prefix, dicts: dicts.map(rename), limit: limit)
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .studyReanchor: self
+             .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
+             .ledgerSync: self
         }
     }
 }

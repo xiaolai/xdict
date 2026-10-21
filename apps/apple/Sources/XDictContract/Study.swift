@@ -179,3 +179,25 @@ public struct ReanchorReport: Codable, Hashable, Sendable {
         self.outcomes = outcomes
     }
 }
+
+/// What an erase cleared, and what may remain recoverable (ADR-0024).
+public struct StudyEraseReport: Codable, Hashable, Sendable {
+    public let clearedReadings: UInt64
+    public let clearedNotes: UInt64
+    public let clearedGrades: UInt64
+    public let recoverable: Recoverability
+
+    public init(clearedReadings: UInt64, clearedNotes: UInt64, clearedGrades: UInt64, recoverable: Recoverability) {
+        self.clearedReadings = clearedReadings
+        self.clearedNotes = clearedNotes
+        self.clearedGrades = clearedGrades
+        self.recoverable = recoverable
+    }
+}
+
+/// What may remain of erased bytes after the log is rewritten; a shell words it.
+public enum Recoverability: String, Codable, Hashable, Sendable {
+    /// The log's bytes were overwritten or truncated; copies may remain in free blocks, snapshots and backups, which
+    /// only the platform can reclaim.
+    case freeBlocks
+}

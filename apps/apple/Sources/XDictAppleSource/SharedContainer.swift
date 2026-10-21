@@ -49,6 +49,17 @@ public enum SharedContainer {
         return AppGroup.appleImports(in: container)
     }
 
+    /// **`<app-group container>/Sync/`**: where a sync pass's files meet (plan §2.6), in `in/` and `out/`.
+    public static func sync(team: Result<String, SigningTeam.Unavailable> = SigningTeam.own(),
+                            lookup: (String) -> URL? = {
+                                FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: $0)
+                            }) -> URL? {
+        guard case .success(let team) = team, let container = AppGroup.container(team: team, lookup: lookup) else {
+            return nil
+        }
+        return AppGroup.sync(in: container)
+    }
+
     /// `AppleImports/staging/`: the app's copies, each in a folder named by its UUID.
     public static func staging(in root: URL) -> URL {
         root.appending(path: "staging", directoryHint: .isDirectory)

@@ -8,7 +8,7 @@ import XDictContract
 /// entry for that edition and its CSS, carried in the JSON, never as a payload.
 struct DisplayOptionsContractTests {
     @Test func theContractIsVersion10() {
-        #expect(Contract.version == 10)
+        #expect(Contract.version == 11)
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

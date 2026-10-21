@@ -28,8 +28,19 @@ struct XDictApp: App {
     /// **The reading history** (ADR-0023): the drawer's days and the one place a reading is recorded. The core owns every
     /// rule; the preferences are Settings ▸ Learning's, and off means nothing is written at all.
     @MainActor static let history = HistoryModel(service: service, preferences: LearningPreferences.shared)
-    /// The drawer's one window: shown from the menu bar, refreshed each time it opens.
-    @MainActor static let historyDrawer = HistoryDrawerController(model: history)
+    /// **The review session** (plan-history-and-learning §5): the due queue, a grade, an undo and a note. The core owns
+    /// eligibility and scheduling; this is the reader's side of it. Every load of the summary replans the one reminder.
+    @MainActor static let study: StudyModel = {
+        let study = StudyModel(service: service)
+        study.summaryChanged = { summary in Task { await XDictApp.reminders.refresh(summary: summary) } }
+        return study
+    }()
+    /// **Review reminders** (plan §5.4): the reader's switch, the system's permission and the one pending notification.
+    @MainActor static let reminders = ReviewReminders(preferences: LearningPreferences.shared)
+    /// The drawer's one window: shown from the menu bar, refreshed each time it opens. A card's note is written into
+    /// the same ledger, and Review opens the review window.
+    @MainActor static let historyDrawer = HistoryDrawerController(model: history, study: study,
+                                                                  onReview: { MenuBarActions.openReview() })
     /// Add Apple Dictionaries… and Convert Again (ADR-0011), through the app-group container the service shares.
     @MainActor static let appleImporter = AppleImporter(library: library, backend: service,
                                                         root: SharedContainer.appleImports())
@@ -65,6 +76,12 @@ struct XDictApp: App {
         .defaultSize(width: 640, height: 560)
         .commandsRemoved()
 
+        // **The review window** (plan-history-and-learning §5): the card in front, its note and the four answers.
+        Window("Review", id: Self.reviewWindow) {
+            ReviewView(model: Self.study)
+        }
+        .defaultSize(width: Tokens.Window.historyDrawerWidth, height: Tokens.Window.historyDrawerHeight)
+
         Settings {
             // Three panes, in `SettingsTab`'s order (ADR-0012 d.1). Dictionaries first: Apple's Settings opens on its
             // dictionary list (parity P39). The other two are XDict's own, at Apple's width. The pane in front is
@@ -79,7 +96,8 @@ struct XDictApp: App {
                         lookUp: { LookupAnywhere.shared.lookUpFromMenu() },
                         openMain: { MenuBarActions.openMain() },
                         showDictionaries: { MenuBarActions.showDictionaries() },
-                        showHistory: { MenuBarActions.showHistory() })
+                        showHistory: { MenuBarActions.showHistory() },
+                        showReview: { MenuBarActions.openReview() })
         } label: {
             MenuBarLabel()
         }
@@ -90,13 +108,16 @@ struct XDictApp: App {
     @MainActor @ViewBuilder static func settings(_ pane: SettingsTab) -> some View {
         switch pane {
         case .dictionaries:
-            SettingsDictionaries(library: library, route: .shared, appleImport: appleImport)
+            SettingsDictionaries(library: library, route: .shared, appleImport: appleImport, study: study)
                 .task { await LibraryLaunch.once() }
         case .readingAndSpeech:
             ReadingSettings()
         case .learning:
             // The library's declared search languages: the values the recording filter and the drawer offer (ADR-0023).
-            LearningSettings(declared: { library.declaredSearchLanguages })
+            LearningSettings(declared: { library.declaredSearchLanguages }, study: study, reminders: reminders,
+                             performSync: { folder in
+                                 await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder))
+                             })
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
                             registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
@@ -112,6 +133,7 @@ struct XDictApp: App {
 
     static let mainWindow = "main"
     static let acknowledgmentsWindow = "acknowledgments"
+    static let reviewWindow = "review"
     /// XDict as its own login item (`SMAppService.mainApp`), read once and refreshed when Settings shows it.
     @MainActor static let loginItem = LaunchAtLogin(service: MainAppLoginItem())
 
@@ -243,6 +265,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MainActor.assumeIsolated {
             LookupAnywhere.shared.start()
             Task { await LibraryLaunch.once() }
+            // The summary plans the reminder before any window asks for it (plan §5.4).
+            Task { await XDictApp.study.refresh() }
+            // **A join moves the lineage's notes** (plan §5.1): the reader said the changed file is the same dictionary,
+            // so what they wrote about it follows the new edition where the definition is still there.
+            XDictApp.library.didJoin = { old, new in
+                Task { await XDictApp.study.reanchor(from: old, to: new) }
+            }
+            // **A sync folder set once syncs by itself** (plan §2.6): the logs meet before the reader looks.
+            if let bookmark = LearningPreferences.shared.syncFolder, let folder = SyncFolder.open(bookmark) {
+                Task {
+                    defer { folder.stop() }
+                    _ = await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder.path))
+                }
+            }
         }
     }
 
@@ -322,6 +358,16 @@ enum MenuBarActions {
     /// Settings ▸ Dictionaries, at `dictionary` when given (ADR-0012 d.4, d.5).
     static func showDictionaries(_ dictionary: UUID? = nil) {
         SettingsRoute.shared.show(dictionary)
+    }
+
+    /// **The review window** (plan-history-and-learning §5): opened from the menu-bar menu and from the drawer's own
+    /// header, brought forward when it is already open.
+    @MainActor static func openReview() {
+        // The drawer closes first: the review window takes the reader's attention, and a popover behind it would keep
+        // clicks of its own (a click outside already closes it).
+        XDictApp.historyDrawer.close()
+        NSApp.activate()
+        open?(XDictApp.reviewWindow)
     }
 
     /// **The reading history's drawer** (plan-history-and-learning §4): anchored at the menu bar's top-right corner until

@@ -133,14 +133,18 @@ public struct SettingsDictionaries: View {
     @Bindable private var library: Library
     @Bindable private var route: SettingsRoute
     private let appleImport: AppleImportHost?
+    private let study: StudyModel?
     @State private var selection: UUID?
     @State private var paneHeight: CGFloat = 0
     @Environment(\.undoManager) private var undoManager
 
-    public init(library: Library, route: SettingsRoute = .shared, appleImport: AppleImportHost? = nil) {
+    /// `study` says what a join did to the reader's notes; nil leaves the sentence out.
+    public init(library: Library, route: SettingsRoute = .shared, appleImport: AppleImportHost? = nil,
+                study: StudyModel? = nil) {
         self.library = library
         self.route = route
         self.appleImport = appleImport
+        self.study = study
     }
 
     public var body: some View {
@@ -277,7 +281,7 @@ public struct SettingsDictionaries: View {
         if case .details(let id) = route.presentation, let entry = library.entries.first(where: { $0.id == id }) {
             let size = Self.detailsSheetSize(paneHeight: paneHeight)
             VStack(spacing: 0) {
-                LibraryDetail(library: library, entry: entry, locate: { route.locate() })
+                LibraryDetail(library: library, entry: entry, locate: { route.locate() }, study: study)
                     .id(entry.preferencesKey)
                 Divider()
                 Self.detailsFooter(remove: { route.dismiss(); remove(id) }, close: { route.dismiss() })

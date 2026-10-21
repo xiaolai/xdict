@@ -396,6 +396,8 @@ struct LibraryTests {
         let library = library()
         await library.start()
         let id = try #require(library.add([dir.url.appending(path: "r")]).first)
+        var joins: [(Edition, Edition)] = []
+        library.didJoin = { joins.append(($0, $1)) }
         await library.settle()
         let first = try #require(library.entries.first)
         let (e1, l1) = (try #require(first.edition), try #require(first.lineage))
@@ -410,6 +412,8 @@ struct LibraryTests {
 
         #expect(await library.acceptJoin(id))
         #expect(library.entries.first?.lineage == l1 && library.entries.first?.offer == nil)
+        #expect(joins.count == 1 && joins.first?.0 == e1 && joins.first?.1 == offer.edition,
+                "the app hears which edition was left and which was joined, so notes can re-anchor")
         #expect(await backend.lineageCalls == [.join(offer.edition, l1)])
         #expect(try LibraryStore(directory: storeDir).load()?.entries.first?.join?.previous == offer.mintedLineage)
 
