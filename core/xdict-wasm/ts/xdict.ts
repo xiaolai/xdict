@@ -40,6 +40,18 @@ export type Entry = { entry: EntryRef; html: string; csp: string; lossyBytes: nu
 export type TextView = { baseUrl: string; maxBodyBytes: number; maxTextBytes: number; originalStyle?: boolean };
 export type TextSpan = { start: number; len: number; role: string | null; label: string | null; section: string | null };
 export type EntryText = { entry: EntryRef; text: string; spans: TextSpan[]; complete: boolean; omittedBytes: number; cutAt: number; spansDropped: number };
+export type ReadingSpan = { start: number; len: number };
+/** One reading as the history stores it (ADR-0023): the word, its sentence, and the edition's content hash. */
+export type Reading = {
+  surface: string; lemma: string; sentence: string; span: ReadingSpan | null; cut: number; quality: string;
+  edition: string; entryKey: string; occurrence: number; dictionaryName: string; language: string; at: number;
+  device: string;
+};
+export type RecordOutcome = 'recorded' | 'duplicate' | 'uncertain' | 'skippedLanguage';
+export type Card = { reading: Reading; times: number; events: string[] };
+export type DayLabel = 'today' | 'yesterday' | 'weekday' | 'date';
+export type Day = { id: string; start: number; label: DayLabel; cards: Card[] };
+export type History = { days: Day[] };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
 export type BlockReason = { type: 'remote'; url: string } | { type: 'script' } | { type: 'unknownScheme'; scheme: string };
 export type Link =
@@ -120,6 +132,8 @@ interface GlueCore {
   suggest(prefix: string, dicts: string, limit: number): string;
   entry(dict: string, entry: string, view: string): string;
   entry_text(dict: string, entry: string, view: string): string;
+  ledger_record(reading: string, operation: string, targetLanguages: string): string;
+  ledger_history(now: number, utcOffsetSeconds: number): string;
   link(dict: string, url: string, origin: string, view: string): string;
   resource(dict: string, path: string, view: string): ResourceReply;
   displayOptions(dict: string): string;
@@ -284,6 +298,16 @@ export class XDictCore {
 
   entryText(dict: string, entry: EntryRef, view: TextView): EntryText {
     return this.call(() => this.inner.entry_text(dict, JSON.stringify(entry), JSON.stringify(view)));
+  }
+
+  /** Records a reading in the local history: the language filter runs before anything is written. */
+  ledgerRecord(reading: Reading, operation: string, targetLanguages: string[]): RecordOutcome {
+    return this.call(() => this.inner.ledger_record(JSON.stringify(reading), operation, JSON.stringify(targetLanguages)));
+  }
+
+  /** The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock. */
+  ledgerHistory(now: number, utcOffsetSeconds: number): History {
+    return this.call(() => this.inner.ledger_history(now, utcOffsetSeconds));
   }
 
   link(dict: string, url: string, origin: LinkOrigin, view: View): Link {

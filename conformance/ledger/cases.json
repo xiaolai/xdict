@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "comment": "ADR-0023/ADR-0024, plan-history-and-learning WI-2. Every binding records these readings in order, against a fresh core, and compares each outcome; then asks for the history at `history.now` and compares the days. A binding must not group, collapse or label anything itself: the core owns every rule. Times are whole epoch seconds; the reader's zone at the query is UTC. A day is a calendar day, so the reading at 00:10 is the next day's card even though it is ten minutes after one at 02:00.",
+  "readings": [
+    {
+      "operation": "op-1",
+      "targetLanguages": ["en"],
+      "expect": "recorded",
+      "reading": {
+        "surface": "hold",
+        "lemma": "hold",
+        "sentence": "They hold that view.",
+        "span": { "start": 5, "len": 4 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "hold",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "en",
+        "at": 1790641800,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-1",
+      "targetLanguages": ["en"],
+      "expect": "duplicate",
+      "comment": "The same operation id and the same reading: one event, not two.",
+      "reading": {
+        "surface": "hold",
+        "lemma": "hold",
+        "sentence": "They hold that view.",
+        "span": { "start": 5, "len": 4 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "hold",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "en",
+        "at": 1790641800,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-2",
+      "targetLanguages": ["en"],
+      "expect": "recorded",
+      "comment": "The same reading met again: a second event, which the day collapses into one card with times = 2.",
+      "reading": {
+        "surface": "hold",
+        "lemma": "hold",
+        "sentence": "They hold that view.",
+        "span": { "start": 5, "len": 4 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "hold",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "en",
+        "at": 1790641800,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-3",
+      "targetLanguages": ["en"],
+      "expect": "skippedLanguage",
+      "comment": "Outside the reader's targets: nothing is written, the sentence included.",
+      "reading": {
+        "surface": "词",
+        "lemma": "词",
+        "sentence": "这是一个词。",
+        "span": { "start": 4, "len": 1 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "词",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "zh-Hans",
+        "at": 1790643600,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-4",
+      "targetLanguages": ["en"],
+      "expect": "skippedLanguage",
+      "comment": "An unknown language is never silently treated as a target: a non-empty set skips it.",
+      "reading": {
+        "surface": "keep",
+        "lemma": "keep",
+        "sentence": "They keep that view.",
+        "span": { "start": 5, "len": 4 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "keep",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "",
+        "at": 1790645400,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-5",
+      "targetLanguages": [],
+      "expect": "recorded",
+      "comment": "An empty set keeps every language; the unknown one is kept with it.",
+      "reading": {
+        "surface": "run",
+        "lemma": "run",
+        "sentence": "They run each day.",
+        "span": { "start": 5, "len": 3 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "run",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "",
+        "at": 1790647200,
+        "device": "conformance"
+      }
+    },
+    {
+      "operation": "op-6",
+      "targetLanguages": [],
+      "expect": "recorded",
+      "comment": "00:10 the next day: its own calendar day, though ten minutes after the 02:00 reading.",
+      "reading": {
+        "surface": "walk",
+        "lemma": "walk",
+        "sentence": "They walk home.",
+        "span": { "start": 5, "len": 4 },
+        "cut": 0,
+        "quality": "complete",
+        "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+        "entryKey": "walk",
+        "occurrence": 0,
+        "dictionaryName": "Tiny",
+        "language": "en",
+        "at": 1790727000,
+        "device": "conformance"
+      }
+    }
+  ],
+  "history": {
+    "now": 1790730000,
+    "utcOffsetSeconds": 0,
+    "expect": {
+      "days": [
+        {
+          "id": "2026-09-30",
+          "start": 1790726400,
+          "label": "today",
+          "cards": [
+            { "times": 1, "reading": { "surface": "walk" } }
+          ]
+        },
+        {
+          "id": "2026-09-29",
+          "start": 1790640000,
+          "label": "yesterday",
+          "cards": [
+            { "times": 1, "reading": { "surface": "run" } },
+            {
+              "times": 2,
+              "reading": {
+                "surface": "hold",
+                "lemma": "hold",
+                "sentence": "They hold that view.",
+                "span": { "start": 5, "len": 4 },
+                "cut": 0,
+                "quality": "complete",
+                "edition": "mdx-sha256-v1:abababababababababababababababababababababababababababababababab",
+                "entryKey": "hold",
+                "occurrence": 0,
+                "dictionaryName": "Tiny",
+                "language": "en",
+                "at": 1790641800,
+                "device": "conformance"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

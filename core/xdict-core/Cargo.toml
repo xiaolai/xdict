@@ -14,6 +14,7 @@ serde = ["dep:serde"]
 [dependencies]
 serde = { workspace = true, optional = true }
 xdict-entry = { path = "../xdict-entry" }
+xdict-ledger = { path = "../xdict-ledger" }
 xdict-health = { path = "../xdict-health" }
 xdict-identity = { path = "../xdict-identity" }
 xdict-lookup = { path = "../xdict-lookup" }

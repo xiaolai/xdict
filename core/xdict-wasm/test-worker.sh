@@ -11,6 +11,7 @@ core=$(cd "$here/.." && pwd)
 . "$core/binding-env.sh"
 expected=$(absolute "${XDICT_CONFORMANCE_EXPECTED:-$core/../conformance/fixtures/tiny/expected.json}")
 matrix=$(absolute "${XDICT_CONFORMANCE_MATRIX_EXPECTED:-$core/../conformance/fixtures/matrix/expected.json}")
+ledger=$(absolute "${XDICT_CONFORMANCE_LEDGER:-$core/../conformance/ledger/cases.json}")
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
@@ -18,4 +19,4 @@ tsc --noEmit --strict --target es2022 --module esnext --moduleResolution bundler
 cd "$core"
 cargo run -q -p xdict-conformance --bin conformance-fixtures -- "$work/fixtures"
 web_binding "$work/pkg"
-node "$here/tests/worker/run.ts" "$work/pkg" "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix"
+node "$here/tests/worker/run.ts" "$work/pkg" "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix" "$ledger"

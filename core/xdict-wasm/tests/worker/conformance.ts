@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { XDict, XDictError, type ByteSource, type FileIdentity, type Location, type Package, type View } from '../../ts/xdict.ts';
 
-const { pkg, fixtures, expected, matrix, matrixExpected } =
-  workerData as { pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string };
+const { pkg, fixtures, expected, matrix, matrixExpected, ledger } =
+  workerData as { pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string; ledger: string };
 const x = JSON.parse(readFileSync(expected, 'utf8'));
 const failures: string[] = [];
 
@@ -198,6 +198,15 @@ check('lifecycle.afterClose', l.afterClose, outcome(() => core.lookup('run', [se
 check('lifecycle.closeTwice', l.closeTwice, outcome(() => core.close(second.dict)));
 const other = xd.core(config(xd.protocolVersion()));
 check('lifecycle.foreignHandle', l.foreignHandle, outcome(() => other.lookup('run', [dict], page)));
+
+// The reading history (conformance/ledger/cases.json; ADR-0023, ADR-0024): its own core, fresh and untrapped.
+const ledgerCases = JSON.parse(readFileSync(ledger, 'utf8'));
+const ledgerCore = xd.core(config(xd.protocolVersion()));
+ledgerCases.readings.forEach((c: any, i: number) => {
+  check(`ledger.readings[${i}]`, c.expect, outcome(() => ledgerCore.ledgerRecord(c.reading, c.operation, c.targetLanguages)));
+});
+check('ledger.history', ledgerCases.history.expect,
+  outcome(() => ledgerCore.ledgerHistory(ledgerCases.history.now, ledgerCases.history.utcOffsetSeconds)));
 // Two imports stored three indexes (the MDX, its volume, the copy's MDX under the same edition); opening read them
 // in pieces, not whole.
 check('web.indexStorage', true, calls.put >= 2 && calls.get >= 2 && calls.reads > 2);
