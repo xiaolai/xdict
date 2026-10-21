@@ -38,6 +38,9 @@ enum Fixtures {
                                      head: "grade-event", noteHead: "note-event", grades: 1)
     static let reviewSummary = ReviewSummary(due: 0, nextDue: 1_790_644_200)
     static let studyOutcome = StudyOutcome(outcome: .recorded, card: studyCard)
+    /// The readings a history card is made of, hidden or shown again (ADR-0024).
+    static let removal = Removal(eventIds: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"], at: 1_790_643_600,
+                                 device: "fixture")
     /// Two devices' answers to one revision (ADR-0027), the shape the review window draws.
     static let cardConflict = CardConflict(target: studyTarget, note: studyNote, candidates: [
         ConflictCandidate(id: "grade-event", grade: .good, at: 1_790_643_600, device: "fixture",
@@ -117,12 +120,14 @@ enum Fixtures {
         .studyConflicts,
         .reviewResolve(target: studyTarget.key, keep: "grade-event", stamp: studyStamp, operation: "op-resolve"),
         .ledgerSync(input: "/tmp/xdict-sync/in", output: "/tmp/xdict-sync/out", device: "device-a"),
+        .ledgerRemove(removal: removal, operation: "op-remove"),
+        .ledgerRestore(removal: removal, operation: "op-restore"),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 35
+    static let operationCases = 37
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -160,6 +165,8 @@ enum Fixtures {
         case .studyConflicts: 32
         case .reviewResolve: 33
         case .ledgerSync: 34
+        case .ledgerRemove: 35
+        case .ledgerRestore: 36
         }
     }
 

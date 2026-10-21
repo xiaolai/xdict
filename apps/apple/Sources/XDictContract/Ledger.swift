@@ -4,6 +4,20 @@ import Foundation
 /// days the drawer shows. The core owns every rule — the language filter, the collapse of repeats, the calendar day in
 /// the reader's zone — so a shell only carries the values and draws them.
 
+/// **A removal, or the same tombstone applied in reverse**: the readings a history card is made of, hidden or shown
+/// again. The tombstone carries ids and a stamp, never content (ADR-0024).
+public struct Removal: Codable, Hashable, Sendable {
+    public let eventIds: [String]
+    public let at: Double
+    public let device: String
+
+    public init(eventIds: [String], at: Double, device: String) {
+        self.eventIds = eventIds
+        self.at = at
+        self.device = device
+    }
+}
+
 /// A range of the sentence, in UTF-16 code units: the unit the capture contract uses.
 public struct LedgerSpan: Codable, Hashable, Sendable {
     public let start: UInt32

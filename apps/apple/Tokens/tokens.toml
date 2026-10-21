@@ -18,7 +18,10 @@ space = { kind = "length", swift = "Space", doc = "The spacing scale: stack spac
 inset = { kind = "length", swift = "Inset", doc = "Where content starts inside a pane, window or panel: fixed insets, most Apple-measured." }
 row = { kind = "length", swift = "Row", doc = "Row and line heights of lists, tables and the panel." }
 control = { kind = "length", swift = "Control", doc = "The sizes of controls and bars." }
-motion = { kind = "number", swift = "Motion", doc = "Animations the shell runs itself: the drawer's springs." }
+motion = { kind = "number", swift = "Motion", doc = "Timings the shell runs itself: the drawer's springs and how long an undo stays offered." }
+opacity = { kind = "number", swift = "Opacity", doc = "Alpha values a surface is drawn at: a card's tint and its shadow." }
+card = { kind = "length", swift = "Card", doc = "A history card's own lengths: the shadow that lifts it off the glass." }
+tint = { kind = "colour", swift = "Tint", doc = "The tints a history card's border takes, chosen from its own identity: the system's colours, each a tint, never a fill." }
 window = { kind = "length", swift = "Window", doc = "Widths and heights of windows, panes, columns and sheets." }
 radius = { kind = "length", swift = "Radius", doc = "Corner radii." }
 line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
@@ -133,10 +136,32 @@ drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: i
 drawerOpenDamping = { value = 0.86, why = "XiaolaiDict's drawer spring, kept: enough give to see the panel settle." }
 drawerCloseResponse = { value = 0.26, why = "XiaolaiDict's drawer spring, kept: it leaves faster than it arrives, and without a bounce." }
 drawerCloseDamping = { value = 0.95, why = "XiaolaiDict's close spring, kept: no overshoot on the way out, which would read as coming back." }
+removalUndoSeconds = { value = 8, why = "How long a removed history card's Undo stays offered: long enough to notice the mistake, short enough not to sit there." }
 drawerSettleMilliseconds = { value = 320, why = "How long after the close spring starts the window is ordered out: past its settle, so the content has left before the window goes." }
+
+[opacity]
+cardBorder = { value = 0.38, why = "A history card's tinted border: visible as a tint, never as a rule." }
+cardShadow = { value = 0.12, why = "A history card's shadow: enough to lift the card off the glass, never a drop shadow." }
+
+[card]
+shadowRadius = { value = 5, why = "A history card's shadow spread: the card's own softness, under the glass." }
+shadowOffsetY = { value = 1, why = "A history card's shadow sits a point below it: light from above, as every other surface here." }
+
+[tint]
+red = { system = "systemRed" }
+orange = { system = "systemOrange" }
+yellow = { system = "systemYellow" }
+green = { system = "systemGreen" }
+blue = { system = "systemBlue" }
+purple = { system = "systemPurple" }
+pink = { system = "systemPink" }
+teal = { system = "systemTeal" }
+indigo = { system = "systemIndigo" }
+brown = { system = "systemBrown" }
 
 [radius]
 sidebarSelection = { value = 8, source = "P43" }
+cardShadow = { value = 4, why = "A history card's corner: its own rounded rect, inside the drawer's 8 pt selection corner." }
 banner = { value = 16, why = "The pronunciation banner's glass: a floating control layer's rounded rect, as macOS 27's." }
 
 [line]
@@ -165,6 +190,7 @@ panelDictionaryName = { size = 13, weight = "semibold", why = "A dictionary's na
 tableCell = { size = 12, why = "Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12)." }
 
 [colour]
+shadow = { system = "shadowColor" }
 label = { system = "labelColor" }
 secondaryLabel = { system = "secondaryLabelColor" }
 tertiaryLabel = { system = "tertiaryLabelColor" }

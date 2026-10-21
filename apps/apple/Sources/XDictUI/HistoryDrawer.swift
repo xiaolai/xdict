@@ -36,6 +36,29 @@ public enum HistoryRuns {
     }
 }
 
+/// **A history card's tint** (owner, 2026-10-21): a thin border in one of the system's colours and a soft shadow, the
+/// colour chosen from the card's own identity so a lookup keeps its tint across launches. `hashValue` is seeded per
+/// process and would repaint every card on every launch; this is FNV-1a over the newest reading event's id, which is a
+/// content hash and therefore stable.
+public enum HistoryCardTint {
+    /// Made each time it is asked for: `TokenColour` wraps an `NSColor`, which is not `Sendable`, so a stored static
+    /// would be shared mutable state (and the generator's palette is ten constants, not a cost).
+    public static var palette: [TokenColour] {
+        [Tokens.Tint.red, Tokens.Tint.orange, Tokens.Tint.yellow, Tokens.Tint.green, Tokens.Tint.blue,
+         Tokens.Tint.purple, Tokens.Tint.pink, Tokens.Tint.teal, Tokens.Tint.indigo, Tokens.Tint.brown]
+    }
+
+    public static func colour(for events: [String]) -> TokenColour {
+        guard let id = events.first else { return palette[0] }
+        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
+        for byte in id.utf8 {
+            hash ^= UInt64(byte)
+            hash = hash &* 0x0000_0100_0000_01b3
+        }
+        return palette[Int(hash % UInt64(palette.count))]
+    }
+}
+
 /// **The reading history's drawer** (plan-history-and-learning §1, WI-4; ported from XiaolaiDict's docked drawer): the
 /// display's right edge, full height, glass — the list scrolling under the header bar the way system panels do, with the
 /// corners against the screen edge square. The core grouped, collapsed and labelled; the drawer draws, and its language
@@ -48,6 +71,8 @@ public struct HistoryView: View {
     private let presentation: HistoryDrawerPresentation
     /// The card whose note is being written, and what that note says already.
     @State private var noting: LedgerReading?
+    /// The card the pointer is over: its remove control shows while it is there, and not otherwise.
+    @State private var hovered: LedgerCard?
     @State private var initialDraft = ""
 
     public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil,
@@ -87,6 +112,27 @@ public struct HistoryView: View {
             .safeAreaBar(edge: .top, spacing: 0) {
                 header
             }
+            .overlay(alignment: .bottom) { removalToast }
+    }
+
+    /// **The undo a removal leaves behind** (E4: frequent reversible actions take undo, not a confirmation dialog). It
+    /// goes when its window closes, or when the next removal replaces it.
+    @ViewBuilder private var removalToast: some View {
+        if let removal = model.lastRemoval {
+            ActionRow(.strip) {
+                Text("Removed from the history.")
+            } actions: {
+                Button("Undo") { Task { await model.restoreLast() } }
+                    .accessibilityIdentifier("history.undoRemoval")
+            }
+            .padding(.horizontal, Tokens.Space.l)
+            .padding(.vertical, Tokens.Space.s)
+            .accessibilityIdentifier("history.removed")
+            .task(id: removal.eventIds) {
+                try? await Task.sleep(for: .seconds(Tokens.Motion.removalUndoSeconds))
+                model.clearRemoval()
+            }
+        }
     }
 
     private var header: some View {
@@ -198,8 +244,30 @@ public struct HistoryView: View {
         .padding(Tokens.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay {
-            RoundedRectangle(cornerRadius: Tokens.Radius.sidebarSelection)
-                .stroke(Color(nsColor: Tokens.Colour.separator.nsColor), lineWidth: Tokens.Line.hairline)
+            RoundedRectangle(cornerRadius: Tokens.Radius.cardShadow, style: .continuous)
+                .stroke(HistoryCardTint.colour(for: card.events).color.opacity(Tokens.Opacity.cardBorder),
+                        lineWidth: Tokens.Line.hairline)
+        }
+        .shadow(color: Tokens.Colour.shadow.color.opacity(Tokens.Opacity.cardShadow),
+                radius: Tokens.Card.shadowRadius, y: Tokens.Card.shadowOffsetY)
+        .overlay(alignment: .topTrailing) {
+            // **A misread word must be removable** (owner, 2026-10-21); the control appears where the pointer is, so a
+            // card at rest stays only its sentence.
+            if hovered == card {
+                Button {  // placement: glyph
+                    Task { await model.remove(card) }
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                }
+                .buttonStyle(.plain)
+                .help("Remove from the history")
+                .padding(Tokens.Space.xs)
+                .accessibilityIdentifier("history.remove")
+            }
+        }
+        .onHover { inside in
+            hovered = inside ? card : (hovered == card ? nil : hovered)
         }
         // The card reads as one element; its note editor is its own, so a combined card would hide the field.
         .accessibilityElement(children: noting == card.reading ? .contain : .combine)

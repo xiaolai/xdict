@@ -79,6 +79,7 @@ export type CardConflict = { target: StudyTarget; note: StudyNote; candidates: C
 export type SyncReport = { exported: number; peers: number; added: number; skipped: number };
 export type Recoverability = 'freeBlocks';
 export type EraseReport = { clearedReadings: number; clearedNotes: number; clearedGrades: number; recoverable: Recoverability };
+export type Removal = { eventIds: string[]; at: number; device: string };
 export type LinkOrigin = { type: 'entry'; entry: EntryRef } | { type: 'resource'; path: string };
 export type BlockReason = { type: 'remote'; url: string } | { type: 'script' } | { type: 'unknownScheme'; scheme: string };
 export type Link =
@@ -161,6 +162,8 @@ interface GlueCore {
   entry_text(dict: string, entry: string, view: string): string;
   ledger_record(reading: string, operation: string, targetLanguages: string): string;
   ledger_history(now: number, utcOffsetSeconds: number): string;
+  ledger_remove(removal: string, operation: string): string;
+  ledger_restore(removal: string, operation: string): string;
   study_note(dict: string, entry: string, text: string, name: string, stamp: string, operation: string): string;
   study_notes(): string;
   study_note_at(entry: string, text: string, name: string, stamp: string, operation: string): string;
@@ -343,6 +346,15 @@ export class XDictCore {
   /** Records a reading in the local history: the language filter runs before anything is written. */
   ledgerRecord(reading: Reading, operation: string, targetLanguages: string[]): RecordOutcome {
     return this.call(() => this.inner.ledger_record(JSON.stringify(reading), operation, JSON.stringify(targetLanguages)));
+  }
+
+  /** Hides the readings a history card is made of (ADR-0024); `ledgerRestore` shows them again. */
+  ledgerRemove(removal: Removal, operation: string): RecordOutcome {
+    return this.call(() => this.inner.ledger_remove(JSON.stringify(removal), operation));
+  }
+
+  ledgerRestore(removal: Removal, operation: string): RecordOutcome {
+    return this.call(() => this.inner.ledger_restore(JSON.stringify(removal), operation));
   }
 
   /** The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock. */

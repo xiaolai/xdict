@@ -1677,6 +1677,7 @@
       }
     },
     "Accessibility" : {
+      "comment" : "The Accessibility permission, as macOS names it",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3204,6 +3205,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "详细信息…"
+          }
+        }
+      }
+    },
+    "Device Control and Data Access" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Device Control and Data Access"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设备控制与数据访问"
           }
         }
       }
@@ -5635,18 +5652,18 @@
         }
       }
     },
-    "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again." : {
+    "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ %@, then check again." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ Screen & System Audio Recording, then check again."
+            "value" : "Not allowed. Turn XDict on in System Settings ▸ Privacy & Security ▸ %@, then check again."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "未允许。请在“系统设置 ▸ 隐私与安全性 ▸ 录屏与系统录音”中打开 XDict，然后再次检查。"
+            "value" : "未获允许。请在“系统设置”▸“隐私与安全性”▸%@ 中打开 XDict，然后重新检查。"
           }
         }
       }
@@ -6861,6 +6878,38 @@
         }
       }
     },
+    "Remove from the history" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from the history"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从阅读历史中删除"
+          }
+        }
+      }
+    },
+    "Removed from the history." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Removed from the history."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已从阅读历史中删除。"
+          }
+        }
+      }
+    },
     "Replace" : {
       "localizations" : {
         "en" : {
@@ -7118,6 +7167,22 @@
         }
       }
     },
+    "Screen & System Audio Recording" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Screen & System Audio Recording"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏幕与系统音频录制"
+          }
+        }
+      }
+    },
     "Screen Only" : {
       "comment" : "Read text with: always read the screen, needing Screen Recording",
       "localizations" : {
@@ -7136,6 +7201,7 @@
       }
     },
     "Screen Recording" : {
+      "comment" : "The Screen Recording permission, as macOS names it",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7491,6 +7557,7 @@
       }
     },
     "Show Menu" : {
+      "comment" : "VoiceOver action on the menu bar icon",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7504,10 +7571,10 @@
             "value" : "显示菜单"
           }
         }
-      },
-      "comment" : "VoiceOver action on the menu bar icon"
+      }
     },
     "Show Reading History" : {
+      "comment" : "VoiceOver action on the menu bar icon",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -7521,8 +7588,7 @@
             "value" : "显示阅读历史"
           }
         }
-      },
-      "comment" : "VoiceOver action on the menu bar icon"
+      }
     },
     "Show in Finder" : {
       "localizations" : {
@@ -9807,18 +9873,18 @@
         }
       }
     },
-    "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do." : {
+    "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › %@; the lookup continues once you do." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › Accessibility; the lookup continues once you do."
+            "value" : "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › %@; the lookup continues once you do."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "要查询所选内容，请在 macOS 刚刚显示的请求中允许 XDict，或在“系统设置 › 隐私与安全性 › 辅助功能”中打开 XDict；授权后查询会自动继续。"
+            "value" : "要查询所选内容，请在 macOS 刚显示的请求中允许 XDict，或在“系统设置”›“隐私与安全性”›%@ 中打开 XDict；允许后查询会继续。"
           }
         }
       }
@@ -10631,6 +10697,7 @@
       }
     },
     "XDict — click for Reading History, right-click for the menu, press %@ to look up the selection" : {
+      "comment" : "The menu bar icon's tooltip, naming both clicks and the registered lookup shortcut",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10647,6 +10714,7 @@
       }
     },
     "XDict — click for Reading History, right-click for the menu. No lookup shortcut is registered." : {
+      "comment" : "The menu bar icon's tooltip when no lookup shortcut is registered",
       "localizations" : {
         "en" : {
           "stringUnit" : {

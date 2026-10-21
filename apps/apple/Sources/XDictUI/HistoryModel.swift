@@ -35,16 +35,55 @@ public final class HistoryModel {
     @ObservationIgnored private let service: any HistoryService
     @ObservationIgnored private let now: @Sendable () -> Date
     @ObservationIgnored private let utcOffset: @Sendable (Date) -> Int
+    @ObservationIgnored private let device: @Sendable () -> String
     /// A refresh that a newer one replaced must not write its answer (audit rule: a superseded check cannot speak).
     @ObservationIgnored private var generation = 0
 
     public init(service: any HistoryService, preferences: LearningPreferences,
                 now: @escaping @Sendable () -> Date = { Date() },
-                utcOffset: @escaping @Sendable (Date) -> Int = { TimeZone.current.secondsFromGMT(for: $0) }) {
+                utcOffset: @escaping @Sendable (Date) -> Int = { TimeZone.current.secondsFromGMT(for: $0) },
+                device: @escaping @Sendable () -> String = { DeviceIdentity.current() }) {
         self.service = service
         self.preferences = preferences
         self.now = now
         self.utcOffset = utcOffset
+        self.device = device
+    }
+
+    /// **The removal the drawer can undo** (owner, 2026-10-21: a misread word must be removable, and undo rather than a
+    /// confirmation dialog — `E4` in XiaolaiDict's UX ledger): what was hidden, until the toast goes or the next removal.
+    public private(set) var lastRemoval: Removal?
+
+    /// **Hides a card's readings behind a tombstone that carries no content** (ADR-0024): the card's own event ids, the
+    /// stamp, and nothing of the sentence.
+    @discardableResult
+    public func remove(_ card: LedgerCard) async -> LedgerRecordOutcome? {
+        let removal = Removal(eventIds: card.events, at: now().timeIntervalSince1970.rounded(.down), device: device())
+        let result = await service.call(.ledgerRemove(removal: removal, operation: UUID().uuidString))
+        guard case .success(let delivered) = result, case .ledgerRecord(let outcome) = delivered.answer else {
+            return nil
+        }
+        lastRemoval = removal
+        await refresh()
+        return outcome
+    }
+
+    /// Shows the last removal's readings again: the same tombstone's shape, applied in reverse.
+    @discardableResult
+    public func restoreLast() async -> LedgerRecordOutcome? {
+        guard let removal = lastRemoval else { return nil }
+        let result = await service.call(.ledgerRestore(removal: removal, operation: UUID().uuidString))
+        guard case .success(let delivered) = result, case .ledgerRecord(let outcome) = delivered.answer else {
+            return nil
+        }
+        lastRemoval = nil
+        await refresh()
+        return outcome
+    }
+
+    /// The undo window closed: the toast goes and the removal stays.
+    public func clearRemoval() {
+        lastRemoval = nil
     }
 
     /// The days the drawer shows after its language filter; a day with no card left is not shown.

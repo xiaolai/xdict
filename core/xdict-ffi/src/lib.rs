@@ -17,8 +17,9 @@ use xdict_core::{
     FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How,
     ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened,
     Page, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome,
-    Recoverability, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard,
-    StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View,
+    Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp,
+    StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions,
+    View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -295,6 +296,13 @@ pub struct CardConflict {
     pub target: StudyTarget,
     pub note: Note,
     pub candidates: Vec<ConflictCandidate>,
+}
+
+#[uniffi::remote(Record)]
+pub struct Removal {
+    pub event_ids: Vec<String>,
+    pub at: f64,
+    pub device: String,
 }
 
 #[uniffi::remote(Record)]
@@ -860,6 +868,16 @@ impl Core {
     /// **One sync pass** (plan §2.6): merges every peer log in `input` and writes this device's log to `output`.
     pub fn ledger_sync(&self, input: String, output: String, device: String) -> Result<SyncReport, CoreError> {
         self.0.ledger_sync(input, output, device)
+    }
+
+    /// **Hides the readings a history card is made of**, behind a tombstone that carries no content (ADR-0024).
+    pub fn ledger_remove(&self, removal: Removal, operation: String) -> Result<RecordOutcome, CoreError> {
+        self.0.ledger_remove(removal, operation)
+    }
+
+    /// Shows them again: the same tombstone's shape, applied in reverse.
+    pub fn ledger_restore(&self, restore: Removal, operation: String) -> Result<RecordOutcome, CoreError> {
+        self.0.ledger_restore(restore, operation)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

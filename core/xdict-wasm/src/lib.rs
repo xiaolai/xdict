@@ -576,6 +576,16 @@ impl Core {
         watched_reply(|| self.0.review_resolve(target_key.into(), keep.into(), stamp, operation.into()))
     }
 
+    pub fn ledger_remove(&self, removal: &str, operation: &str) -> Reply {
+        let removal = from_json(removal)?;
+        watched_reply(|| self.0.ledger_remove(removal, operation.into()))
+    }
+
+    pub fn ledger_restore(&self, restore: &str, operation: &str) -> Reply {
+        let restore = from_json(restore)?;
+        watched_reply(|| self.0.ledger_restore(restore, operation.into()))
+    }
+
     /// The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock.
     pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Reply {
         watched_reply(|| self.0.ledger_history(now, utc_offset_seconds))

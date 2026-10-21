@@ -51,7 +51,7 @@ public enum Contract {
     /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
     /// 10 (2026-10-21): the study operations — a note, the notes, the review queue, a grade, an undo, the summary, a
     /// definition's hash and a re-anchor — with their answers (plan-history-and-learning WI-5).
-    public static let version: UInt32 = 11
+    public static let version: UInt32 = 12
 }
 
 // MARK: - The request
@@ -267,6 +267,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// **Keeps one branch of a conflict**: `keep` names one of its candidates, and the others are voided with what came
     /// after them.
     case reviewResolve(target: String, keep: String, stamp: StudyStamp, operation: String)
+    /// **Hides the readings a history card is made of** (ADR-0024), behind a tombstone that carries no content.
+    case ledgerRemove(removal: Removal, operation: String)
+    /// Shows them again: the same tombstone's shape, applied in reverse.
+    case ledgerRestore(removal: Removal, operation: String)
     /// **One sync pass** (plan §2.6): every peer log in `input` merges, then this device's log is written to `output`.
     /// The two are the app group's — the service's sandbox cannot read the reader's folder. The artifact carries no
     /// dictionary text.
@@ -280,7 +284,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
         }
     }
 
@@ -292,7 +296,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
         }
     }
 
@@ -312,7 +316,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: false
+             .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove,
+             .ledgerRestore: false
         }
     }
 
@@ -325,7 +330,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory,
              .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor, .exportData,
-             .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: nil
+             .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
         }
     }
 
@@ -341,7 +346,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: []
+             .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
+             .ledgerRemove, .ledgerRestore: []
         }
     }
 
@@ -363,7 +369,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .convertApple: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
-        case .ledgerRecord: .ledgerRecord
+        case .ledgerRecord, .ledgerRemove, .ledgerRestore: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
         case .studyNote, .studyNoteAt: .studyNote
         case .studyNotes: .studyNotes
@@ -389,7 +395,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync: false
+             .ledgerSync, .ledgerRemove, .ledgerRestore: false
         }
     }
 }

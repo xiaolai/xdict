@@ -86,7 +86,7 @@ SYSTEM_COLOURS = ["labelColor", "secondaryLabelColor", "tertiaryLabelColor", "qu
                   "textBackgroundColor", "selectedTextColor", "selectedTextBackgroundColor", "windowBackgroundColor",
                   "underPageBackgroundColor", "gridColor", "headerTextColor", "findHighlightColor", "systemRed",
                   "systemOrange", "systemYellow", "systemGreen", "systemMint", "systemTeal", "systemCyan",
-                  "systemBlue", "systemIndigo", "systemPurple", "systemPink", "systemBrown", "systemGray"]
+                  "systemBlue", "systemIndigo", "systemPurple", "systemPink", "systemBrown", "systemGray", "shadowColor"]
 SWIFT_KEYWORDS = {"default", "class", "struct", "enum", "func", "let", "var", "if", "else", "for", "in", "return",
                   "self", "Self", "Type", "init", "case", "switch", "where", "while", "repeat", "import", "protocol",
                   "extension", "static", "public", "private", "internal", "operator", "is", "as", "nil", "true",
