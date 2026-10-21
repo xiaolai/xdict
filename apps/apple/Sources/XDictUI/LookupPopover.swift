@@ -37,7 +37,13 @@ public final class LookupPopover: NSObject, NSPopoverDelegate {
 
     override public init() {
         super.init()
-        popover.behavior = .transient
+        // **Dismissed by the app's own click-away, not by AppKit's transient behaviour**: a transient popover takes the
+        // outside click for itself — the click never reaches the app the reader clicked, its selection stays as it was,
+        // and the app that was active before the panel comes back to the front (2026-10-21: the E2E's click-away check
+        // found TextEdit's selection untouched and Chrome front after a click on TextEdit's own text). The two monitors
+        // in `LookupAnywhere.watchForClicksAway` close it on every click outside — other apps' and XDict's — and hand
+        // the event on, which is what a reader's click means.
+        popover.behavior = .applicationDefined
         popover.animates = false
         popover.hasFullSizeContent = true
         popover.delegate = self

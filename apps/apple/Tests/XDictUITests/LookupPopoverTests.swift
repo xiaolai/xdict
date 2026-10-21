@@ -40,7 +40,10 @@ struct LookupPopoverTests {
                      visible: CGRect(x: 0, y: 0, width: 1440, height: 900))
         await settle()
         #expect(popover.isShown)
-        #expect(popover.popover.behavior == .transient)
+        // **`applicationDefined`, not `transient`** (2026-10-21): a transient popover takes the outside click that
+        // dismisses it, so the click never reaches the app the reader clicked and that app comes back to the front.
+        // XDict's own two monitors close the panel and hand the event on; AppKit takes nothing.
+        #expect(popover.popover.behavior == .applicationDefined)
         #expect(popover.anchor.frame == CGRect(x: 400, y: 500, width: 40, height: 14), "anchored at the word")
         #expect(popover.popover.contentViewController?.view.window?.isKeyWindow != true, "the popover became key")
         #expect(focus() == before, "showing moved the focus")
