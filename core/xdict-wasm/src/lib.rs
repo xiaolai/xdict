@@ -566,6 +566,16 @@ impl Core {
         watched_reply(|| self.0.study_reanchor(old_edition.into(), new_edition.into(), stamp, operation_prefix.into()))
     }
 
+    /// **The cards two devices left conflicted** (ADR-0027); sync itself is a native shell's (no folder on the Web).
+    pub fn review_conflicts(&self) -> Reply {
+        watched_reply(|| self.0.review_conflicts())
+    }
+
+    pub fn review_resolve(&self, target_key: &str, keep: &str, stamp: &str, operation: &str) -> Reply {
+        let stamp = from_json(stamp)?;
+        watched_reply(|| self.0.review_resolve(target_key.into(), keep.into(), stamp, operation.into()))
+    }
+
     /// The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock.
     pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Reply {
         watched_reply(|| self.0.ledger_history(now, utc_offset_seconds))

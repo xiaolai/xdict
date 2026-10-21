@@ -12,13 +12,13 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Card, CardState, Config, CoreError, Day, DayLabel, DictInfo, DisplayOption,
-    DisplayOptions, Entry, EntryRef, EntryText, EraseReport, Feature, FileIdentity, FindingKind, FontReason, Health,
-    HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont,
-    Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan,
-    ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Resource,
-    ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase,
-    StudyTarget, StyleChanges, TargetKind, TextSpan, TextView, Versions, View,
+    BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Day, DayLabel,
+    DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport, Feature, FileIdentity,
+    FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How,
+    ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened,
+    Page, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome,
+    Recoverability, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp, StudyCard,
+    StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -279,6 +279,30 @@ pub struct ReanchorOutcome {
 #[uniffi::remote(Record)]
 pub struct ReanchorReport {
     pub outcomes: Vec<ReanchorOutcome>,
+}
+
+#[uniffi::remote(Record)]
+pub struct ConflictCandidate {
+    pub id: String,
+    pub grade: StudyGrade,
+    pub at: f64,
+    pub device: String,
+    pub after: CardState,
+}
+
+#[uniffi::remote(Record)]
+pub struct CardConflict {
+    pub target: StudyTarget,
+    pub note: Note,
+    pub candidates: Vec<ConflictCandidate>,
+}
+
+#[uniffi::remote(Record)]
+pub struct SyncReport {
+    pub exported: u64,
+    pub peers: u64,
+    pub added: u64,
+    pub skipped: u64,
 }
 
 #[uniffi::remote(Record)]
@@ -815,6 +839,27 @@ impl Core {
         operation_prefix: String,
     ) -> Result<ReanchorReport, CoreError> {
         self.0.study_reanchor(old_edition, new_edition, stamp, operation_prefix)
+    }
+
+    /// **The cards two devices left conflicted** (ADR-0027): the reader chooses a branch.
+    pub fn review_conflicts(&self) -> Result<Vec<CardConflict>, CoreError> {
+        self.0.review_conflicts()
+    }
+
+    /// Keeps one branch of a conflict; replay voids the others and what descended from them.
+    pub fn review_resolve(
+        &self,
+        target: String,
+        keep: String,
+        stamp: Stamp,
+        operation: String,
+    ) -> Result<ReviewOutcome, CoreError> {
+        self.0.review_resolve(target, keep, stamp, operation)
+    }
+
+    /// **One sync pass** (plan §2.6): merges every peer log in `input` and writes this device's log to `output`.
+    pub fn ledger_sync(&self, input: String, output: String, device: String) -> Result<SyncReport, CoreError> {
+        self.0.ledger_sync(input, output, device)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

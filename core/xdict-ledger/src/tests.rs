@@ -557,3 +557,165 @@ fn a_note_keeps_a_definition_hash_and_never_the_definition() {
     assert!(exported.contains(&hash), "the evidence is the hash");
     assert!(!exported.contains(definition), "the definition itself never enters the log");
 }
+
+// MARK: - Sync and conflicts (plan §2.6, ADR-0027)
+
+/// A second device: a log of its own that starts as a copy of `from`, the way a sync makes one.
+fn peer(from: &Ledger) -> Ledger {
+    let mut peer = ledger();
+    peer.merge(&from.log_bytes().unwrap()).unwrap();
+    peer
+}
+
+fn grade_by(device: &str, revision: &str, before: CardState, after: CardState, at: f64) -> GradeRecord {
+    let mut record = grade(revision, before, after, at, 0);
+    record.device = device.into();
+    record
+}
+
+#[test]
+fn history_sync_is_the_union_of_content_addressed_events() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    a.record(reading("hold", "They hold that view.", at, "en"), "a-1", &[]).unwrap();
+    let mut b = ledger();
+    b.record(reading("walk", "They walk there.", at, "en"), "b-1", &[]).unwrap();
+    b.record(reading("hold", "They hold that view.", at, "en"), "b-2", &[]).unwrap();
+
+    let merged = a.merge(&b.log_bytes().unwrap()).unwrap();
+    assert_eq!(merged, MergeReport { added: 2, skipped: 0 });
+    assert_eq!(a.history(at + 1.0, 0).days[0].cards.len(), 2, "both devices' readings are here");
+
+    // The other direction converges: the same events, the same ids, nothing counted twice.
+    let merged = b.merge(&a.log_bytes().unwrap()).unwrap();
+    assert_eq!(merged, MergeReport { added: 1, skipped: 2 });
+    assert_eq!(a.event_count(), b.event_count());
+    // A merge of what is already held adds nothing, and a second pass is idempotent.
+    assert_eq!(a.merge(&b.log_bytes().unwrap()).unwrap(), MergeReport { added: 0, skipped: 3 });
+    assert_eq!(a.event_count(), 3);
+}
+
+#[test]
+fn two_offline_grades_of_one_revision_are_a_conflict_the_reader_resolves() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    a.save_note(note("mine", at, 0), "note").unwrap();
+    let mut b = peer(&a);
+
+    let after_a = state(StudyPhase::Learning, Some(at + 600.0), Some(at + 10.0));
+    let after_b = state(StudyPhase::Learning, Some(at + 86_400.0), Some(at + 20.0));
+    a.record_grade(grade_by("a", "", CardState::new(), after_a, at + 10.0), "grade-a", true).unwrap();
+    b.record_grade(grade_by("b", "", CardState::new(), after_b, at + 20.0), "grade-b", true).unwrap();
+    let key = target(0).key();
+    let head_a = a.card(&key).unwrap().head;
+
+    a.merge(&b.log_bytes().unwrap()).unwrap();
+    b.merge(&a.log_bytes().unwrap()).unwrap();
+    for ledger in [&a, &b] {
+        let conflict = ledger.conflict(&key).expect("two answers to one revision");
+        assert_eq!(conflict.candidates.len(), 2);
+        assert_eq!(conflict.candidates[0].device, "a", "oldest first");
+        assert_eq!(conflict.candidates[1].device, "b");
+        assert!(ledger.queue(at + 30.0, 10).is_empty(), "a conflicted card waits for the reader, not for time");
+        assert_eq!(ledger.summary(at + 30.0), ReviewSummary { due: 0, next_due: None }, "nor is it counted due");
+        assert_eq!(ledger.conflicts().len(), 1);
+    }
+
+    // The reader keeps device a's answer; replay voids b's, and both logs agree afterwards.
+    let resolution = ResolutionRecord { target: target(0), keep: head_a.clone(), at: at + 40.0, device: "a".into() };
+    assert_eq!(a.resolve(resolution, "resolve-1", true), Ok(RecordOutcome::Recorded));
+    b.merge(&a.log_bytes().unwrap()).unwrap();
+    for ledger in [&a, &b] {
+        assert!(ledger.conflict(&key).is_none(), "resolved");
+        let card = ledger.card(&key).unwrap();
+        assert_eq!(card.head, head_a, "the kept branch stands");
+        assert_eq!(card.state, after_a);
+        assert_eq!(card.grades, 1, "the other answer is voided, not deleted");
+    }
+    assert_eq!(a.merge(&b.log_bytes().unwrap()).unwrap(), MergeReport { added: 0, skipped: a.event_count() as u64 });
+}
+
+#[test]
+fn an_undo_on_one_branch_and_a_grade_on_the_other_are_a_conflict() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    a.save_note(note("mine", at, 0), "note").unwrap();
+    let after_1 = state(StudyPhase::Learning, Some(at + 600.0), Some(at + 10.0));
+    a.record_grade(grade_by("a", "", CardState::new(), after_1, at + 10.0), "grade-1", true).unwrap();
+    let g1 = a.card(&target(0).key()).unwrap().head;
+    let mut b = peer(&a);
+
+    // Device b undoes the grade it saw; device a, offline, grades from it.
+    let undo = UndoRecord { target: target(0), grade_event: g1.clone(), at: at + 20.0, device: "b".into() };
+    b.record_undo(undo, "undo-b", true).unwrap();
+    let after_2 = state(StudyPhase::Review, Some(at + 5.0 * 86_400.0), Some(at + 30.0));
+    a.record_grade(grade_by("a", &g1, after_1, after_2, at + 30.0), "grade-2", true).unwrap();
+    let g2 = a.card(&target(0).key()).unwrap().head;
+
+    a.merge(&b.log_bytes().unwrap()).unwrap();
+    let conflict = a.conflict(&target(0).key()).expect("the undo met the grade it never saw");
+    let ids: Vec<&str> = conflict.candidates.iter().map(|candidate| candidate.id.as_str()).collect();
+    assert_eq!(ids, vec![g1.as_str(), g2.as_str()]);
+
+    // Keeping the branch that grew past the undo: the grade stands and the card continues from it.
+    let resolution = ResolutionRecord { target: target(0), keep: g2.clone(), at: at + 40.0, device: "a".into() };
+    a.resolve(resolution, "resolve", true).unwrap();
+    assert!(a.conflict(&target(0).key()).is_none());
+    assert_eq!(a.card(&target(0).key()).unwrap().state, after_2);
+}
+
+#[test]
+fn a_clock_rollback_still_replays_a_grade_after_its_parent() {
+    let at = 1_790_640_000.0;
+    let mut first = ledger();
+    first.save_note(note("mine", at, 0), "note").unwrap();
+    let after_1 = state(StudyPhase::Learning, Some(at + 600.0), Some(at + 100.0));
+    first.record_grade(grade_by("a", "", CardState::new(), after_1, at + 100.0), "grade-1", true).unwrap();
+    let g1 = first.card(&target(0).key()).unwrap().head;
+    // The second grade's clock is behind its parent's: causality, not wall time, orders it.
+    let after_2 = state(StudyPhase::Review, Some(at + 90_000.0), Some(at + 99.0));
+    first.record_grade(grade_by("a", &g1, after_1, after_2, at + 99.0), "grade-2", true).unwrap();
+    let card = first.card(&target(0).key()).unwrap();
+    assert_eq!(card.state, after_2);
+    assert_ne!(card.head, g1, "the later event in causal order is the head");
+
+    // The same order survives a merge: a peer that had only the first grade learns both.
+    let mut second = ledger();
+    second.save_note(note("mine", at, 0), "note").unwrap();
+    let after_1_peer = state(StudyPhase::Learning, Some(at + 600.0), Some(at + 100.0));
+    second.record_grade(grade_by("a", "", CardState::new(), after_1_peer, at + 100.0), "grade-1", true).unwrap();
+    second.merge(&first.log_bytes().unwrap()).unwrap();
+    assert_eq!(second.card(&target(0).key()).unwrap().state, after_2);
+}
+
+#[test]
+fn equal_timestamps_across_devices_merge_without_reordering_a_card() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    a.save_note(note("mine", at, 0), "note").unwrap();
+    let mut b = peer(&a);
+    let after_a = state(StudyPhase::Learning, Some(at + 600.0), Some(at));
+    let after_b = state(StudyPhase::Learning, Some(at + 1_200.0), Some(at));
+    a.record_grade(grade_by("a", "", CardState::new(), after_a, at), "grade-a", true).unwrap();
+    b.record_grade(grade_by("b", "", CardState::new(), after_b, at), "grade-b", true).unwrap();
+    a.merge(&b.log_bytes().unwrap()).unwrap();
+    // Equal instants are a conflict too: the reader decides, never the tie-break.
+    assert!(a.conflict(&target(0).key()).is_some());
+    let conflict = a.conflict(&target(0).key()).unwrap();
+    assert_eq!(conflict.candidates.len(), 2);
+}
+
+#[test]
+fn a_merge_after_an_erase_brings_the_other_devices_events_back() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    a.record(reading("hold", "They hold that view.", at, "en"), "a-1", &[]).unwrap();
+    let untouched = peer(&a);
+    a.erase("erase", at + 60.0, "test").unwrap();
+    assert!(a.history(at, 0).days.is_empty(), "the erase rewrote this device's log");
+
+    // ADR-0024: erasure is this device's. Another device's readings are its own, and a sync brings them — the reader is
+    // told so where they erase, never silently.
+    a.merge(&untouched.log_bytes().unwrap()).unwrap();
+    assert_eq!(a.history(at, 0).days[0].cards.len(), 1);
+}

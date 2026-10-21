@@ -361,6 +361,63 @@ pub struct ReanchorReport {
     pub outcomes: Vec<ReanchorOutcome>,
 }
 
+/// **A grade a device made from a revision another device also graded** (ADR-0027): both stay in the log, and the
+/// reader says which stands.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictCandidate {
+    /// The grade event's id: what a resolution keeps.
+    pub id: String,
+    pub grade: StudyGrade,
+    pub at: f64,
+    pub device: String,
+    /// The state the grade left, so the reader chooses by what each answer would do.
+    pub after: CardState,
+}
+
+/// **A card two devices' answers left in two states** (ADR-0027): replay marks it, and it waits for the reader.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CardConflict {
+    pub target: StudyTarget,
+    pub note: Note,
+    /// The competing grades, oldest first; the reader keeps one.
+    pub candidates: Vec<ConflictCandidate>,
+}
+
+/// **The reader's choice among a conflict's branches** (ADR-0027): the kept grade stands, and every other candidate is
+/// voided, with what descended from it. Nothing is retracted silently — this event is the retraction.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResolutionRecord {
+    pub target: StudyTarget,
+    pub keep: String,
+    pub at: f64,
+    pub device: String,
+}
+
+/// What a merge did: the events this log did not hold, and those it already did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MergeReport {
+    pub added: u64,
+    pub skipped: u64,
+}
+
+/// What one sync pass did with the reader's folder (plan §2.6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncReport {
+    /// This device's log file's size, as written for the other devices.
+    pub exported: u64,
+    /// The peer logs it read.
+    pub peers: u64,
+    /// The events the peers had that this log did not.
+    pub added: u64,
+    /// The events both already had.
+    pub skipped: u64,
+}
+
 /// The SHA-256 of an entry's definition text, in hex: the evidence a note keeps instead of the text.
 pub fn definition_hash(text: &str) -> String {
     use sha2::Digest;
@@ -397,6 +454,8 @@ pub enum Event {
     Graded(GradeRecord),
     Undone(UndoRecord),
     Reanchored(ReanchorRecord),
+    /// **The reader settled a conflict** (ADR-0027): the kept branch stands and the others are voided by replay.
+    Resolved(ResolutionRecord),
 }
 
 /// What a record call did.
@@ -669,6 +728,31 @@ impl Ledger {
         self.append(operation_id, None, Event::Reanchored(moved), true)
     }
 
+    /// **Keeps one branch of a conflict** (ADR-0027): the caller read the card and passes `eligible` when it is
+    /// conflicted and `keep` names one of its candidates. Replay voids the others and what descended from them.
+    pub fn resolve(
+        &mut self,
+        resolution: ResolutionRecord,
+        operation_id: &str,
+        eligible: bool,
+    ) -> Result<RecordOutcome, LedgerError> {
+        valid_target(&resolution.target)?;
+        if resolution.keep.is_empty() || !valid_instant(resolution.at) {
+            return Err(LedgerError::InvalidEvent);
+        }
+        self.append(operation_id, None, Event::Resolved(resolution), eligible)
+    }
+
+    /// The cards whose answers conflict, each with its candidates; empty for a log one device wrote.
+    pub fn conflicts(&self) -> Vec<CardConflict> {
+        self.projection.conflicts()
+    }
+
+    /// One card's conflict, when two branches left it in two states.
+    pub fn conflict(&self, key: &str) -> Option<CardConflict> {
+        self.projection.conflict(key)
+    }
+
     /// The reader's notes, latest per target, each carrying the target's current evidence.
     pub fn notes(&self) -> Vec<Note> {
         self.projection.study.notes.keys().filter_map(|key| self.projection.note(key)).collect()
@@ -731,6 +815,63 @@ impl Ledger {
         projection::frontier(&self.file_ids)
     }
 
+    /// The log's own bytes: what a sync pass writes for the other devices (plan §2.6).
+    pub fn log_bytes(&self) -> Result<Vec<u8>, LedgerError> {
+        self.store.load()
+    }
+
+    /// **Merges another device's log** (plan §2.6, ADR-0027): the union of content-addressed events. An event this log
+    /// holds — the same SHA-256 — is skipped; anything else is appended with its own bytes, so its id and its parent
+    /// chain are the source's. The whole batch is ordered before it is written: a cycle or an event whose parent no log
+    /// holds refuses the merge and writes nothing.
+    ///
+    /// Erasure is this device's: a peer's events that were erased here come back, because they are the peer's, and the
+    /// reader is told so where they erase (ADR-0024).
+    pub fn merge(&mut self, bytes: &[u8]) -> Result<MergeReport, LedgerError> {
+        let mut offset = 0;
+        let mut fresh: Vec<(String, StoredEvent, Vec<u8>)> = Vec::new();
+        let mut skipped = 0u64;
+        while let Some((payload, next)) = next_frame(bytes, offset) {
+            let id = event_id(payload);
+            if self.ids.contains(&id) {
+                skipped += 1;
+            } else {
+                let stored: StoredEvent =
+                    serde_json::from_slice(payload).map_err(|error| LedgerError::Corrupt(error.to_string()))?;
+                fresh.push((id, stored, payload.to_vec()));
+            }
+            offset = next;
+        }
+        if fresh.is_empty() {
+            return Ok(MergeReport { added: 0, skipped });
+        }
+        let mut parsed: Vec<(String, StoredEvent)> =
+            self.entries.iter().map(|entry| (entry.id.clone(), entry.stored.clone())).collect();
+        for (id, stored, _) in &fresh {
+            parsed.push((id.clone(), stored.clone()));
+        }
+        // Ordered first: a merge that would make the log unreadable leaves it exactly as it was.
+        let entries = projection::ordered(parsed)?;
+        let mut batch = Vec::new();
+        for (_, _, payload) in &fresh {
+            batch.extend_from_slice(&frame_bytes(payload));
+        }
+        let added = fresh.len() as u64;
+        self.store.append(&batch)?;
+        self.store.sync()?;
+        for (id, stored, _) in fresh {
+            self.ids.insert(id.clone());
+            if !stored.operation_id.is_empty() {
+                self.operations.insert(stored.operation_id.clone());
+            }
+            self.file_ids.push(id);
+        }
+        self.entries = entries;
+        self.projection = projection::project(&self.entries);
+        self.checkpoint()?;
+        Ok(MergeReport { added, skipped })
+    }
+
     /// **Retention is compaction** (ADR-0024): readings past the drawer's bound are removed from the log, not only from
     /// a query. Dictionary associations, erase receipts and the tombstones of kept readings stay; a tombstone whose
     /// targets all went goes with them. The kept events are re-framed from the same stored values, so their ids do not
@@ -749,7 +890,8 @@ impl Ledger {
                 | Event::NoteRevised(_)
                 | Event::Graded(_)
                 | Event::Undone(_)
-                | Event::Reanchored(_) => true,
+                | Event::Reanchored(_)
+                | Event::Resolved(_) => true,
                 Event::Removed(tombstone) | Event::Restored(tombstone) => {
                     tombstone.event_ids.iter().any(|id| kept_readings.contains(id))
                 }

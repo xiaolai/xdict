@@ -3,11 +3,11 @@
 use std::sync::Arc;
 
 pub use xdict_ledger::{
-    Card, CardState, Compaction, Day, DayLabel, DictionaryJoined, DictionarySplit, EraseReceipt, EraseReport, Event,
-    Frontier, GradeRecord, History, Note, Reading, ReadingSpan, ReanchorOutcome, ReanchorRecord, ReanchorReport,
-    ReanchorResult, RecordOutcome, Recoverability, Removal, ReviewOutcome, ReviewPolicy, ReviewSummary,
-    ScheduleConfiguration, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, TargetKind, UndoRecord,
-    definition_hash,
+    Card, CardConflict, CardState, Compaction, ConflictCandidate, Day, DayLabel, DictionaryJoined, DictionarySplit,
+    EraseReceipt, EraseReport, Event, Frontier, GradeRecord, History, MergeReport, Note, Reading, ReadingSpan,
+    ReanchorOutcome, ReanchorRecord, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal,
+    ResolutionRecord, ReviewOutcome, ReviewPolicy, ReviewSummary, ScheduleConfiguration, Stamp, StudyCard, StudyGrade,
+    StudyPhase, StudyTarget, SyncReport, TargetKind, UndoRecord, definition_hash,
 };
 
 pub use xdict_identity::FileIdentity;

@@ -8,12 +8,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::frame::next_frame;
 use crate::{
-    Card, Day, DayLabel, Event, Frontier, GradeRecord, History, LedgerError, MAX_CARDS, MAX_DAYS, Note, Reading,
-    ReviewSummary, StudyCard, StudyTarget,
+    Card, CardConflict, ConflictCandidate, Day, DayLabel, Event, Frontier, GradeRecord, History, LedgerError,
+    MAX_CARDS, MAX_DAYS, Note, Reading, ReviewSummary, StudyCard, StudyTarget,
 };
 
-/// The projection's own version: a change to what is projected discards every snapshot built before it.
-pub(crate) const PROJECTION_VERSION: u32 = 2;
+/// The projection's own version: a change to what is projected discards every snapshot built before it. 3 adds the
+/// reader's resolutions (ADR-0027).
+pub(crate) const PROJECTION_VERSION: u32 = 3;
 const SECONDS_PER_DAY: f64 = 86_400.0;
 
 /// One event as the log stores it. The operation id is the caller's retry key; `parent` is the event this one saw, which
@@ -61,6 +62,9 @@ pub(crate) struct StudyProjection {
     pub grades: BTreeMap<String, Vec<GradeEntry>>,
     /// Each target's current evidence: what a re-anchor moved, else the note's own target.
     pub evidence: BTreeMap<String, StudyTarget>,
+    /// The grades a resolution kept, per target: an undo the reader settled is not asked about again (ADR-0027).
+    #[serde(default)]
+    pub resolved: BTreeMap<String, HashSet<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,6 +223,39 @@ pub(crate) fn project(entries: &[Entry]) -> Projection {
                 target.definition_hash = moved.definition_hash.clone();
                 projection.study.evidence.insert(key, target);
             }
+            Event::Resolved(resolution) => {
+                // **The reader chose a branch** (ADR-0027): every other candidate is voided, and so is everything that
+                // descended from one — a branch is kept or dropped whole, never spliced.
+                let key = resolution.target.key();
+                projection.study.resolved.entry(key.clone()).or_default().insert(resolution.keep.clone());
+                if let Some(list) = projection.study.grades.get_mut(&key) {
+                    let keep = resolution.keep.clone();
+                    let revision =
+                        list.iter().find(|grade| grade.id == keep).map(|grade| grade.record.revision.clone());
+                    if let Some(revision) = revision {
+                        let mut doomed: Vec<String> = list
+                            .iter()
+                            .filter(|grade| grade.id != keep && !grade.voided && grade.record.revision == revision)
+                            .map(|grade| grade.id.clone())
+                            .collect();
+                        let mut pending = doomed.clone();
+                        while let Some(id) = pending.pop() {
+                            for grade in list.iter() {
+                                let descends = grade.record.revision == id;
+                                if descends && !grade.voided && !doomed.contains(&grade.id) && grade.id != keep {
+                                    doomed.push(grade.id.clone());
+                                    pending.push(grade.id.clone());
+                                }
+                            }
+                        }
+                        for grade in list.iter_mut() {
+                            if doomed.contains(&grade.id) {
+                                grade.voided = true;
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     projection.readings.retain(|reading| !projection.removed.contains(&reading.id));
@@ -261,9 +298,16 @@ impl Projection {
         self.study.notes.keys().filter_map(|key| self.card(key)).collect()
     }
 
-    /// The cards due now — a new card is due at once — soonest first, new cards before scheduled ones.
+    /// The cards due now — a new card is due at once — soonest first, new cards before scheduled ones. **A conflicted
+    /// card is not in the queue** (ADR-0027): it waits for the reader's choice, not for time.
     pub(crate) fn queue(&self, now: f64, limit: usize) -> Vec<StudyCard> {
-        let mut due: Vec<StudyCard> = self.cards().into_iter().filter(|card| is_due(card, now)).collect();
+        let conflicted: HashSet<String> = self.conflicts().into_iter().map(|conflict| conflict.target.key()).collect();
+        let mut due: Vec<StudyCard> = self
+            .cards()
+            .into_iter()
+            .filter(|card| !conflicted.contains(&card.target.key()))
+            .filter(|card| is_due(card, now))
+            .collect();
         due.sort_by(|left, right| {
             let when = |card: &StudyCard| card.state.due.unwrap_or(f64::NEG_INFINITY);
             when(left)
@@ -275,9 +319,87 @@ impl Projection {
         due
     }
 
-    /// How many cards are due, and the earliest future due instant when none is.
+    /// **The cards two branches left in two states** (ADR-0027): two live grades that extend the same revision, or a live
+    /// grade whose parent another device undid. Oldest candidate first, so the reader reads the story in order.
+    pub(crate) fn conflicts(&self) -> Vec<CardConflict> {
+        self.study.notes.keys().filter_map(|key| self.conflict(key)).collect()
+    }
+
+    pub(crate) fn conflict(&self, key: &str) -> Option<CardConflict> {
+        let grades = self.study.grades.get(key)?;
+        let live: Vec<&GradeEntry> = grades.iter().filter(|grade| !grade.voided).collect();
+        let mut candidates: Vec<&GradeEntry> = Vec::new();
+        let mut by_revision: BTreeMap<&str, Vec<&GradeEntry>> = BTreeMap::new();
+        for grade in &live {
+            by_revision.entry(grade.record.revision.as_str()).or_default().push(grade);
+        }
+        for group in by_revision.values() {
+            if group.len() > 1 {
+                for grade in group {
+                    if !candidates.iter().any(|seen| seen.id == grade.id) {
+                        candidates.push(grade);
+                    }
+                }
+            }
+        }
+        // **An undo met a grade it never saw**: device B undid revision 7 while device A graded from it. The undo stands
+        // or the branch does, and both answers are the reader's.
+        for grade in &live {
+            // A keep that left the branch standing answered this question already.
+            let settled = self.study.resolved.get(key).is_some_and(|kept| kept.contains(&grade.id));
+            if grade.record.revision.is_empty() || settled {
+                continue;
+            }
+            if let Some(parent) = grades.iter().find(|parent| parent.id == grade.record.revision)
+                && parent.voided
+            {
+                for candidate in [parent, grade] {
+                    if !candidates.iter().any(|seen| seen.id == candidate.id) {
+                        candidates.push(candidate);
+                    }
+                }
+            }
+        }
+        if candidates.is_empty() {
+            return None;
+        }
+        let entry = self.study.notes.get(key)?;
+        let mut target = entry.note.target.clone();
+        if let Some(evidence) = self.study.evidence.get(key) {
+            target = evidence.clone();
+        }
+        let mut note = entry.note.clone();
+        note.target = target.clone();
+        candidates.sort_by(|left, right| {
+            left.record
+                .at
+                .partial_cmp(&right.record.at)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(left.id.cmp(&right.id))
+        });
+        Some(CardConflict {
+            target,
+            note,
+            candidates: candidates
+                .into_iter()
+                .map(|grade| ConflictCandidate {
+                    id: grade.id.clone(),
+                    grade: grade.record.grade,
+                    at: grade.record.at,
+                    device: grade.record.device.clone(),
+                    after: grade.record.after,
+                })
+                .collect(),
+        })
+    }
+
+    /// How many cards are due, and the earliest future due instant when none is. **A conflicted card is counted
+    /// nowhere** (ADR-0027): it is not a card the queue will show, so saying it is due would send the reader to an empty
+    /// review window.
     pub(crate) fn summary(&self, now: f64) -> ReviewSummary {
-        let cards = self.cards();
+        let conflicted: HashSet<String> = self.conflicts().into_iter().map(|conflict| conflict.target.key()).collect();
+        let cards: Vec<StudyCard> =
+            self.cards().into_iter().filter(|card| !conflicted.contains(&card.target.key())).collect();
         let due = cards.iter().filter(|card| is_due(card, now)).count() as u64;
         let next_due = if due > 0 {
             None
