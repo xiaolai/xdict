@@ -262,6 +262,15 @@ struct HTTPProviderTests {
         }
         let provider = try Self.provider()
         let task = Task { try await provider.answer(to: "q") }
+        // **The request must reach the stub before this test ends.** URLSession delivers `startLoading` on its own queue:
+        // cancelling first let the request land after the test returned, and the next test — which reads `requests.first`
+        // — saw this "q" instead of its own (2026-10-21). Wait for the delivery, bounded, so the cancel is the only
+        // thing this test leaves pending.
+        for _ in 0..<200 {
+            if !Stub.requests.isEmpty { break }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(!Stub.requests.isEmpty, "the ask never reached the stub, so there is nothing to cancel")
         task.cancel()
         await #expect(throws: AIProviderError.cancelled) { try await task.value }
     }
