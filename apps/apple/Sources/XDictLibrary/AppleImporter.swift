@@ -151,7 +151,7 @@ public final class AppleImporter {
         guard let root, let referenced = library.appleConversions else { return nil }
         let report = AppleImportSweep.sweep(root, referenced: referenced, now: now)
         if report != AppleImportSweep.Report() {
-            log.info("swept \(report.staging.count) staging and \(report.outputs.count) unnamed conversion folders")
+            log.notice("swept \(report.staging.count) staging and \(report.outputs.count) unnamed conversion folders")
         }
         return report
     }

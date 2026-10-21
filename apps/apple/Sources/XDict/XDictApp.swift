@@ -132,7 +132,7 @@ struct XDictApp: App {
         let log = Logger(subsystem: XDictIdentity.app, category: "launch")
         switch await service.handshake() {
         case .success(let versions):
-            log.info("the dictionary service answered: core \(versions.core, privacy: .public), protocol \(versions.protocolVersion)")
+            log.notice("the dictionary service answered: core \(versions.core, privacy: .public), protocol \(versions.protocolVersion)")
             return .answered(versions)
         case .failure(let failure):
             log.error("the dictionary service did not answer: \(String(describing: failure), privacy: .public)")

@@ -102,7 +102,7 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         let request: Request
         switch Request.receive(envelope, handles: facts, filesOf: context.dictionaries.filesOf()) {
         case .answered(let response):
-            context.log.info("refused a request before decoding it whole: \(String(describing: response.outcome), privacy: .public)")
+            context.log.notice("refused a request before decoding it whole: \(String(describing: response.outcome), privacy: .public)")
             return answer(response, payload: nil, credit: nil, reply: reply)
         case .admitted(let admitted):
             request = admitted
