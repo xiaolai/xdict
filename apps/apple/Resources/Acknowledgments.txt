@@ -1,7 +1,7 @@
 XDict — third-party notices
 
 XDict is ISC-licensed. Its dictionary service links the Rust crates below; its entries use the fonts below.
-XDict's own crates: xdict-core, xdict-entry, xdict-ffi, xdict-health, xdict-identity, xdict-lookup, xdict-mdx, xdict-mmap.
+XDict's own crates: xdict-core, xdict-entry, xdict-ffi, xdict-health, xdict-identity, xdict-ledger, xdict-lookup, xdict-mdx, xdict-mmap.
 
 Fonts
 =====
@@ -33,6 +33,7 @@ crate errno 0.3.14 (MIT OR Apache-2.0)
 crate fastrand 2.5.0 (Apache-2.0 OR MIT)
 crate flate2 1.1.10 (MIT OR Apache-2.0)
 crate fs-err 3.3.2 (MIT OR Apache-2.0)
+crate fs2 0.4.3 (MIT/Apache-2.0)
 crate getrandom 0.4.3 (MIT OR Apache-2.0)
 crate glob 0.3.4 (MIT OR Apache-2.0)
 crate goblin 0.8.2 (MIT)
@@ -732,7 +733,7 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
---- bitflags 2.13.2, camino 1.2.6, cfg-if 1.0.5, equivalent 1.0.2, errno 0.3.14, fastrand 2.5.0, flate2 1.1.10, fs-err 3.3.2, glob 0.3.4, hashbrown 0.17.1, heck 0.5.0, indexmap 2.14.2, log 0.4.34, once_cell 1.21.4, percent-encoding 2.3.2, plain 0.2.3, rustix 1.1.5, scopeguard 1.2.0, tempfile 3.27.0, unicode-normalization 0.1.25, unicode-width 0.2.2
+--- bitflags 2.13.2, camino 1.2.6, cfg-if 1.0.5, equivalent 1.0.2, errno 0.3.14, fastrand 2.5.0, flate2 1.1.10, fs-err 3.3.2, fs2 0.4.3, glob 0.3.4, hashbrown 0.17.1, heck 0.5.0, indexmap 2.14.2, log 0.4.34, once_cell 1.21.4, percent-encoding 2.3.2, plain 0.2.3, rustix 1.1.5, scopeguard 1.2.0, tempfile 3.27.0, unicode-normalization 0.1.25, unicode-width 0.2.2
 
 Apache License
                         Version 2.0, January 2004
@@ -1886,6 +1887,34 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
+--- fs2 0.4.3, heck 0.5.0, unicode-normalization 0.1.25, unicode-width 0.2.2
+
+Copyright (c) 2015 The Rust Project Developers
+
+Permission is hereby granted, free of charge, to any
+person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the
+Software without restriction, including without
+limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software
+is furnished to do so, subject to the following
+conditions:
+
+The above copyright notice and this permission notice
+shall be included in all copies or substantial portions
+of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
+TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
+SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
+IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 --- getrandom 0.4.3
 
 Apache License
@@ -2146,34 +2175,6 @@ SOFTWARE.
 --- hashbrown 0.17.1
 
 Copyright (c) 2016 Amanieu d'Antras
-
-Permission is hereby granted, free of charge, to any
-person obtaining a copy of this software and associated
-documentation files (the "Software"), to deal in the
-Software without restriction, including without
-limitation the rights to use, copy, modify, merge,
-publish, distribute, sublicense, and/or sell copies of
-the Software, and to permit persons to whom the Software
-is furnished to do so, subject to the following
-conditions:
-
-The above copyright notice and this permission notice
-shall be included in all copies or substantial portions
-of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF
-ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED
-TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
-PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT
-SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
-OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
-IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-DEALINGS IN THE SOFTWARE.
-
---- heck 0.5.0, unicode-normalization 0.1.25, unicode-width 0.2.2
-
-Copyright (c) 2015 The Rust Project Developers
 
 Permission is hereby granted, free of charge, to any
 person obtaining a copy of this software and associated

@@ -5,10 +5,17 @@
 
 use std::collections::{HashMap, HashSet};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 use xdict_entry::{Style, StyleSheet};
+#[cfg(not(target_family = "wasm"))]
+use xdict_ledger::FileStore;
+use xdict_ledger::{
+    Compaction, DictionaryJoined, DictionarySplit, EraseReport, Frontier, History, Ledger, MemoryStore, Reading,
+    RecordOutcome, Removal, Store,
+};
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
 use xdict_mdx::index::{Derive, Plain};
 use xdict_mdx::{Budget, File, Kind};
@@ -57,6 +64,10 @@ pub struct Core {
     state: Mutex<State>,
     indexes: Box<dyn IndexStore>,
     registry: Box<dyn Registry>,
+    /// Where the reading history's log lives; `None` keeps it in memory (the tests, the Web).
+    ledger_path: Option<PathBuf>,
+    /// Opened on first use; one writer for the process (ADR-0024).
+    ledger: Mutex<Option<Ledger>>,
 }
 
 struct State {
@@ -147,12 +158,15 @@ impl Core {
                 Some(dir) => Box::new(FileRegistry::open(dir).map_err(registry_error)?),
                 None => Box::new(MemoryRegistry::default()),
             };
+            let ledger_path = config.data_dir.as_ref().map(|dir| Path::new(dir).join("ledger").join("history.log"));
             Ok(Self {
                 nonce,
                 strip_off_for_tests: config.strip_off_for_tests,
                 state: Mutex::new(state),
                 indexes,
                 registry,
+                ledger_path,
+                ledger: Mutex::new(None),
             })
         })
     }
@@ -983,6 +997,109 @@ impl Core {
             field(dict.as_bytes());
         }
         hasher.digest() as u32
+    }
+
+    // MARK: - The reading history (ADR-0023, ADR-0024)
+
+    /// The ledger's slot. Opened on first use: a file store under `data_dir` (one writer, ADR-0024), else memory.
+    fn ledger(&self) -> Result<MutexGuard<'_, Option<Ledger>>, CoreError> {
+        self.ledger
+            .lock()
+            .map_err(|_| CoreError::internal("the ledger's lock was left inconsistent by an earlier fault"))
+    }
+
+    fn opened<'a>(&self, held: &'a mut Option<Ledger>) -> Result<&'a mut Ledger, CoreError> {
+        if held.is_none() {
+            let store = Self::ledger_store(&self.ledger_path)?;
+            *held = Some(Ledger::open(store).map_err(ledger_error)?);
+        }
+        held.as_mut().ok_or_else(|| CoreError::internal("the ledger could not be opened"))
+    }
+
+    /// **Records a reading** (ADR-0023): the language filter runs before anything is written, and a retry (the
+    /// same operation id) is one event. The sentence never leaves this call.
+    pub fn ledger_record(
+        &self,
+        reading: Reading,
+        operation_id: String,
+        target_languages: Vec<String>,
+    ) -> Result<RecordOutcome, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.record(reading, &operation_id, &target_languages).map_err(ledger_error)
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn ledger_store(path: &Option<PathBuf>) -> Result<Arc<dyn Store>, CoreError> {
+        match path {
+            Some(path) => Ok(Arc::new(FileStore::open(path).map_err(ledger_error)?)),
+            None => Ok(Arc::new(MemoryStore::default())),
+        }
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn ledger_store(_path: &Option<PathBuf>) -> Result<Arc<dyn Store>, CoreError> {
+        Ok(Arc::new(MemoryStore::default()))
+    }
+
+    /// The days the drawer shows, in the reader's own zone.
+    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Result<History, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.history(now, utc_offset_seconds))
+    }
+
+    /// Everything the log holds, in causal order: the reader's export (ADR-0023).
+    pub fn ledger_export(&self) -> Result<Vec<xdict_ledger::Event>, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.export())
+    }
+
+    /// **The reader joined an edition to a dictionary lineage** (ADR-0025): the ledger owns the association the
+    /// registry caches.
+    pub fn ledger_join(&self, joined: DictionaryJoined, operation_id: String) -> Result<RecordOutcome, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.join_dictionary(joined, &operation_id).map_err(ledger_error)
+    }
+
+    /// **The reader split an edition into a lineage of its own** (ADR-0025).
+    pub fn ledger_split(&self, split: DictionarySplit, operation_id: String) -> Result<RecordOutcome, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.split_dictionary(split, &operation_id).map_err(ledger_error)
+    }
+
+    /// **Hides readings behind a tombstone that carries no content** (ADR-0024).
+    pub fn ledger_remove(&self, removal: Removal, operation_id: String) -> Result<RecordOutcome, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.remove(removal, &operation_id).map_err(ledger_error)
+    }
+
+    /// Shows removed readings again (ADR-0024).
+    pub fn ledger_restore(&self, restore: Removal, operation_id: String) -> Result<RecordOutcome, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.restore(restore, &operation_id).map_err(ledger_error)
+    }
+
+    /// **Retention is compaction** (ADR-0024): readings past the drawer's bound leave the log itself.
+    pub fn ledger_compact(&self, now: f64, utc_offset_seconds: i32) -> Result<Compaction, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.compact(now, utc_offset_seconds).map_err(ledger_error)
+    }
+
+    /// **Erase is a rewrite** (ADR-0024): the readings leave the log; the receipt says what may remain recoverable.
+    pub fn ledger_erase(&self, operation_id: String, at: f64, device: String) -> Result<EraseReport, CoreError> {
+        let mut held = self.ledger()?;
+        self.opened(&mut held)?.erase(&operation_id, at, &device).map_err(ledger_error)
+    }
+
+    /// The log's frontier: what a snapshot must match, and what an erase receipt records (ADR-0024).
+    pub fn ledger_frontier(&self) -> Result<Frontier, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.frontier())
+    }
+
+    /// The lineage the ledger associates with an edition, as its last join or split left it (ADR-0025).
+    pub fn ledger_association(&self, edition: String) -> Result<Option<String>, CoreError> {
+        let mut held = self.ledger()?;
+        Ok(self.opened(&mut held)?.association(&edition).map(str::to_owned))
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, State>, CoreError> {
@@ -2167,4 +2284,9 @@ mod tests {
         let refused = page_of(&core, &dict, "a", Budget::new(100, 10));
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's bytes were not counted: {refused:?}");
     }
+}
+
+/// A ledger failure as a typed core error: a busy writer or an unreadable log is loud, never a silent empty history.
+fn ledger_error(error: xdict_ledger::LedgerError) -> CoreError {
+    CoreError::Io { kind: crate::error::IoKind::Other, detail: format!("ledger: {error}") }
 }

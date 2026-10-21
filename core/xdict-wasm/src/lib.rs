@@ -491,6 +491,20 @@ impl Core {
         watched_reply(|| self.0.entry_text(dict.into(), entry, view))
     }
 
+    /// **Records a reading** in the local history (ADR-0023). `reading` is a `Reading` as JSON; `targetLanguages` is a
+    /// JSON array of the languages the reader keeps. The answer is the outcome's JSON: `"recorded"`, `"duplicate"`,
+    /// `"uncertain"` or `"skippedLanguage"`. The Web's log lives in memory until its worker adapter lands (ADR-0024).
+    pub fn ledger_record(&self, reading: &str, operation: &str, target_languages: &str) -> Reply {
+        let reading = from_json(reading)?;
+        let target_languages = from_json(target_languages)?;
+        watched_reply(|| self.0.ledger_record(reading, operation.to_string(), target_languages))
+    }
+
+    /// The days the drawer shows, in the reader's own zone: `utcOffsetSeconds` east of UTC while `now` is the clock.
+    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Reply {
+        watched_reply(|| self.0.ledger_history(now, utc_offset_seconds))
+    }
+
     pub fn link(&self, dict: &str, url: &str, origin: &str, view: &str) -> Reply {
         reply(self.0.link(dict.into(), url.into(), from_json(origin)?, from_json(view)?))
     }

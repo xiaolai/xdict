@@ -2,6 +2,11 @@
 
 use std::sync::Arc;
 
+pub use xdict_ledger::{
+    Card, Compaction, Day, DayLabel, DictionaryJoined, DictionarySplit, EraseReceipt, EraseReport, Event, Frontier,
+    History, Reading, ReadingSpan, RecordOutcome, Recoverability, Removal,
+};
+
 pub use xdict_identity::FileIdentity;
 
 use crate::source::ByteSource;

@@ -12,10 +12,11 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Config, CoreError, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText,
-    Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, Hit, HitProblem,
-    How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Opened,
-    Page, Problem, ReadingStyle, Resource, SkipReason, SkippedSheet, StyleChanges, TextSpan, TextView, Versions, View,
+    BaseSource, BlockReason, Card, Config, CoreError, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry,
+    EntryRef, EntryText, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample,
+    HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin,
+    LookupOptions, MatchMode, Missing, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle, RecordOutcome,
+    Resource, SkipReason, SkippedSheet, StyleChanges, TextSpan, TextView, Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -97,6 +98,67 @@ pub struct EntryText {
     pub omitted_bytes: u64,
     pub cut_at: u64,
     pub spans_dropped: u64,
+}
+
+#[uniffi::remote(Record)]
+pub struct ReadingSpan {
+    pub start: u32,
+    pub len: u32,
+}
+
+#[uniffi::remote(Record)]
+pub struct Reading {
+    pub surface: String,
+    pub lemma: String,
+    pub sentence: String,
+    pub span: Option<ReadingSpan>,
+    pub cut: u8,
+    pub quality: String,
+    pub edition: String,
+    pub entry_key: String,
+    pub occurrence: u32,
+    pub dictionary_name: String,
+    pub language: String,
+    pub at: f64,
+    pub device: String,
+}
+
+/// What a record call did (ADR-0023): an uncertain commit is answered as such, and a retry settles it.
+#[uniffi::remote(Enum)]
+pub enum RecordOutcome {
+    Recorded,
+    Duplicate,
+    Uncertain,
+    SkippedLanguage,
+}
+
+#[uniffi::remote(Record)]
+pub struct Card {
+    pub reading: Reading,
+    pub times: u32,
+    /// The ids of the reading events the card collapses: what a removal names.
+    pub events: Vec<String>,
+}
+
+#[uniffi::remote(Enum)]
+pub enum DayLabel {
+    Today,
+    Yesterday,
+    Weekday,
+    Date,
+}
+
+#[uniffi::remote(Record)]
+pub struct Day {
+    pub id: String,
+    pub start: f64,
+    pub label: DayLabel,
+    pub cards: Vec<Card>,
+}
+
+#[uniffi::remote(Record)]
+pub struct History {
+    pub days: Vec<Day>,
 }
 
 #[uniffi::remote(Record)]
@@ -534,6 +596,22 @@ impl Core {
     /// The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013).
     pub fn display_options(&self, dict: String) -> Result<DisplayOptions, CoreError> {
         self.0.display_options(dict)
+    }
+
+    /// **Records a reading** in the local history (ADR-0023): the language filter runs before anything is written, and
+    /// a retry with the same operation id is one event.
+    pub fn ledger_record(
+        &self,
+        reading: Reading,
+        operation: String,
+        target_languages: Vec<String>,
+    ) -> Result<RecordOutcome, CoreError> {
+        self.0.ledger_record(reading, operation, target_languages)
+    }
+
+    /// The days the drawer shows, in the reader's own zone: `utc_offset_seconds` east of UTC while `now` is the clock.
+    pub fn ledger_history(&self, now: f64, utc_offset_seconds: i32) -> Result<History, CoreError> {
+        self.0.ledger_history(now, utc_offset_seconds)
     }
 
     pub fn join_lineage(&self, edition: String, lineage: String) -> Result<String, CoreError> {

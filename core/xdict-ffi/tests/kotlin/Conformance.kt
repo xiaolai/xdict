@@ -88,6 +88,16 @@ fun j(f: HealthFinding) = mapOf("kind" to j(f.kind), "count" to f.count, "name" 
 fun j(o: DisplayOption) = mapOf("id" to o.id, "attribute" to o.attribute, "values" to o.values, "defaultValue" to o.defaultValue)
 fun j(d: DisplayOptions) = mapOf("version" to d.version, "options" to d.options.map { j(it) }, "css" to d.css)
 fun j(h: Health) = mapOf("version" to h.version, "entries" to h.entries, "findings" to h.findings.map { j(it) }, "classes" to h.classes.map { mapOf("name" to it.name, "count" to it.count) })
+fun j(r: Reading): Map<String, Any?> = mapOf(
+    "surface" to r.surface, "lemma" to r.lemma, "sentence" to r.sentence,
+    "span" to r.span?.let { mapOf("start" to it.start, "len" to it.len) },
+    "cut" to r.cut, "quality" to r.quality, "edition" to r.edition, "entryKey" to r.entryKey,
+    "occurrence" to r.occurrence, "dictionaryName" to r.dictionaryName, "language" to r.language,
+    "at" to r.at, "device" to r.device)
+fun j(h: History): Map<String, Any?> = mapOf("days" to h.days.map { d ->
+    mapOf("id" to d.id, "start" to d.start, "label" to camel(d.label.name),
+          "cards" to d.cards.map { c -> mapOf("reading" to j(c.reading), "times" to c.times) })
+})
 fun j(f: Feature): Map<String, Any?> = when (f) {
     is Feature.FormatVersion -> mapOf("type" to "formatVersion", "version" to f.version)
     is Feature.ResourceLibraryV3 -> mapOf("type" to "resourceLibraryV3")
@@ -117,7 +127,8 @@ fun outcome(call: () -> Any?): Any? = try { call() } catch (e: CoreException) { 
 // Comparison.
 fun number(v: Any?): java.math.BigDecimal? = when (v) {
     is java.math.BigDecimal -> v; is UInt -> v.toLong().toBigDecimal(); is ULong -> java.math.BigDecimal(v.toString())
-    is UByte -> v.toInt().toBigDecimal(); is Int -> v.toBigDecimal(); is Long -> v.toBigDecimal(); else -> null
+    is UByte -> v.toInt().toBigDecimal(); is Int -> v.toBigDecimal(); is Long -> v.toBigDecimal()
+    is Double -> v.toBigDecimal(); else -> null
 }
 fun subset(expected: Any?, actual: Any?, at: String): String? {
     if (expected is Map<*, *>) {
@@ -164,7 +175,7 @@ class Moving(val bytes: ByteArray, @Volatile var ident: FileIdentity) : ByteSour
 }
 
 fun main(args: Array<String>) {
-    if (args.size != 4) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>"); exitProcess(2) }
+    if (args.size != 5) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json>"); exitProcess(2) }
     val dir = File(args[0])
     val x = Json(File(args[1]).readText()).parse() as Map<String, Any?>
     val failures = ArrayList<String>()
@@ -297,6 +308,26 @@ fun main(args: Array<String>) {
     val other = Core(config(protocolVersion()))
     check("lifecycle.foreignHandle", l["foreignHandle"], outcome { j(other.lookup("run", listOf(dict), page)) })
     check("lifecycle.panic", l["panic"], outcome { core.selfTestPanic(); "returned" })
+
+    // The reading history (conformance/ledger/cases.json; ADR-0023, ADR-0024): its own core, fresh and untrapped.
+    val ledgerCases = Json(File(args[4]).readText()).parse() as Map<String, Any?>
+    val ledgerCore = Core(config(protocolVersion()))
+    list(ledgerCases["readings"]).forEachIndexed { n, c ->
+        val r = obj(c["reading"])
+        val span = (r["span"] as? Map<*, *>)?.let {
+            ReadingSpan(uint(it["start"])!!, uint(it["len"])!!)
+        }
+        val reading = Reading(r["surface"] as String, r["lemma"] as String, r["sentence"] as String, span,
+            (r["cut"] as java.math.BigDecimal).toInt().toUByte(), r["quality"] as String, r["edition"] as String,
+            r["entryKey"] as String, uint(r["occurrence"])!!, r["dictionaryName"] as String, r["language"] as String,
+            (r["at"] as java.math.BigDecimal).toDouble(), r["device"] as String)
+        val got = outcome { camel(ledgerCore.ledgerRecord(reading, c["operation"] as String, list(c["targetLanguages"]).map { it as String }).name) }
+        check("ledger.readings[$n]", c["expect"], got)
+    }
+    val when0 = obj(ledgerCases["history"])
+    check("ledger.history", when0["expect"], outcome {
+        j(ledgerCore.ledgerHistory((when0["now"] as java.math.BigDecimal).toDouble(), (when0["utcOffsetSeconds"] as java.math.BigDecimal).toInt()))
+    })
 
     // The matrix: every variant imported, opened and asked the same questions.
     val matrixDir = File(args[2])

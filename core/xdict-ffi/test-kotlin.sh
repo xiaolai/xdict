@@ -10,6 +10,7 @@ core=$(cd "$here/.." && pwd)
 . "$core/binding-env.sh"
 expected=$(absolute "${XDICT_CONFORMANCE_EXPECTED:-$core/../conformance/fixtures/tiny/expected.json}")
 matrix=$(absolute "${XDICT_CONFORMANCE_MATRIX_EXPECTED:-$core/../conformance/fixtures/matrix/expected.json}")
+ledger=$(absolute "${XDICT_CONFORMANCE_LEDGER:-$core/../conformance/ledger/cases.json}")
 jna=$(absolute "${JNA_JAR:-$HOME/.m2/repository/net/java/dev/jna/jna/5.12.1/jna-5.12.1.jar}")
 [ -f "$jna" ] || { echo "JNA not found at $jna: set JNA_JAR" >&2; exit 2; }
 work=$(mktemp -d)
@@ -25,4 +26,4 @@ kotlinc -nowarn -include-runtime -cp "$jna" -d "$work/conformance.jar" \
 grep -v '^warning:' "$work/kotlinc.log" >&2 || true
 [ "$status" -eq 0 ] || { echo "kotlinc failed (exit $status)" >&2; exit 1; }
 java --enable-native-access=ALL-UNNAMED -Djna.library.path="$release" \
-    -cp "$work/conformance.jar:$jna" ConformanceKt "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix"
+    -cp "$work/conformance.jar:$jna" ConformanceKt "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix" "$ledger"

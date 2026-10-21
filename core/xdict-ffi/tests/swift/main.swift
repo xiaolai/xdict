@@ -1,6 +1,6 @@
 // The conformance scenario (conformance/README.md) through the UniFFI Swift binding.
-// Usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>, the dirs as
-// conformance-fixtures writes them.
+// Usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json>, the dirs
+// as conformance-fixtures writes them and the ledger vectors from conformance/ledger/.
 // Exits 1 with every mismatch printed, 0 when all agree.
 
 import Foundation
@@ -276,8 +276,8 @@ final class Moving: ByteSource, @unchecked Sendable {
 // MARK: - The scenario
 
 let args = CommandLine.arguments
-guard args.count == 5 else {
-    print("usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json>")
+guard args.count == 6 else {
+    print("usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json>")
     exit(2)
 }
 let dir = URL(fileURLWithPath: args[1])
@@ -427,6 +427,66 @@ check("lifecycle.closeTwice", l["closeTwice"], outcome { try core.close(dict: se
 let other = try Core(config: config(protocolVersion()))
 check("lifecycle.foreignHandle", l["foreignHandle"], outcome { j(try other.lookup(query: "run", dicts: [dict], options: page)) })
 check("lifecycle.panic", l["panic"], outcome { try core.selfTestPanic(); return "returned" })
+
+// MARK: - The reading history (conformance/ledger/cases.json; ADR-0023, ADR-0024)
+
+func j(_ o: RecordOutcome) -> String {
+    switch o {
+    case .recorded: return "recorded"
+    case .duplicate: return "duplicate"
+    case .uncertain: return "uncertain"
+    case .skippedLanguage: return "skippedLanguage"
+    }
+}
+
+func j(_ l: DayLabel) -> String {
+    switch l {
+    case .today: return "today"
+    case .yesterday: return "yesterday"
+    case .weekday: return "weekday"
+    case .date: return "date"
+    }
+}
+
+func j(_ r: Reading) -> [String: Any] {
+    ["surface": r.surface, "lemma": r.lemma, "sentence": r.sentence,
+     "span": r.span.map { ["start": $0.start, "len": $0.len] } ?? NSNull(),
+     "cut": r.cut, "quality": r.quality, "edition": r.edition, "entryKey": r.entryKey,
+     "occurrence": r.occurrence, "dictionaryName": r.dictionaryName, "language": r.language,
+     "at": r.at, "device": r.device]
+}
+
+func j(_ h: History) -> [String: Any] {
+    let days: [[String: Any]] = h.days.map { day in
+        let cards: [[String: Any]] = day.cards.map { card in ["reading": j(card.reading), "times": card.times] }
+        return ["id": day.id, "start": day.start, "label": j(day.label), "cards": cards]
+    }
+    return ["days": days]
+}
+
+let ledgerCases = try JSONSerialization.jsonObject(with: Data(contentsOf: URL(fileURLWithPath: args[5]))) as! [String: Any]
+let ledgerCore = try Core(config: config(protocolVersion()))
+for (i, c) in (ledgerCases["readings"] as! [[String: Any]]).enumerated() {
+    let r = c["reading"] as! [String: Any]
+    let span = (r["span"] as? [String: Any]).map { ReadingSpan(start: int($0["start"])!, len: int($0["len"])!) }
+    let reading = Reading(surface: r["surface"] as! String, lemma: r["lemma"] as! String,
+                          sentence: r["sentence"] as! String, span: span,
+                          cut: UInt8(truncatingIfNeeded: int(r["cut"])!), quality: r["quality"] as! String,
+                          edition: r["edition"] as! String, entryKey: r["entryKey"] as! String,
+                          occurrence: int(r["occurrence"])!, dictionaryName: r["dictionaryName"] as! String,
+                          language: r["language"] as! String, at: (r["at"] as! NSNumber).doubleValue,
+                          device: r["device"] as! String)
+    let got = outcome {
+        j(try ledgerCore.ledgerRecord(reading: reading, operation: c["operation"] as! String,
+                                      targetLanguages: c["targetLanguages"] as! [String]))
+    }
+    check("ledger.readings[\(i)]", c["expect"], got)
+}
+let when = ledgerCases["history"] as! [String: Any]
+check("ledger.history", when["expect"], outcome {
+    j(try ledgerCore.ledgerHistory(now: (when["now"] as! NSNumber).doubleValue,
+                                   utcOffsetSeconds: Int32((when["utcOffsetSeconds"] as! NSNumber).intValue)))
+})
 
 // MARK: - The matrix: every variant imported, opened and asked the same questions
 
