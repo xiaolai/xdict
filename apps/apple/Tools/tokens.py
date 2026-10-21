@@ -66,12 +66,12 @@ STYLE_DIR = "Sources/XDictEntryView/Style"
 SKIP_DIRS = ("Sources/XDictTokens",)
 SKIP_FILES = ("Sources/XDictEntryView/EntryStyleFiles.swift",)
 
-KINDS = {"length", "size", "rect", "string", "font", "colour", "css", "css-palette", "css-accent", "css-density",
-         "css-fill"}
+KINDS = {"length", "size", "rect", "number", "string", "font", "colour", "css", "css-palette", "css-accent",
+         "css-density", "css-fill"}
 # Kinds that become a Swift enum of the group's own name. The CSS kinds become `Tokens.ReadingStyle` (their data, for
 # the shell's checks and the palette it writes) and CSS files; `css-fill` becomes `Tokens.ReadingStyle.fills`, the
 # values of the `{{fill-<name>}}` placeholders a stylesheet uses where `var()` cannot go (a media query).
-SWIFT_KINDS = {"length", "size", "rect", "string", "font", "colour"}
+SWIFT_KINDS = {"length", "size", "rect", "number", "string", "font", "colour"}
 PALETTE_OUT = "Sources/XDictEntryView/Style/palette.css"
 DENSITY_OUT = "Sources/XDictEntryView/Style/density.css"
 TEXT_STYLES = ["largeTitle", "title", "title2", "title3", "headline", "subheadline", "body", "callout", "footnote",
@@ -248,6 +248,10 @@ def check_fields(kind, f, ids):
         allowed |= {"value"}
         if not is_number(f.get("value")) or f.get("value") < 0:
             out.append("`value` must be a number of points, 0 or more")
+    elif kind == "number":
+        allowed |= {"value"}
+        if not is_number(f.get("value")):
+            out.append("`value` must be a number")
     elif kind == "size":
         allowed |= {"width", "height"}
         if not all(is_number(f.get(k)) and f.get(k) >= 0 for k in ("width", "height")):
@@ -367,6 +371,8 @@ def render_swift(data, tokens, digest):
             out.append(f"        /// {swift_doc(t)}")
             if t.kind == "length":
                 out.append(f"        public static let {t.name}: CGFloat = {num(f['value'])}")
+            elif t.kind == "number":
+                out.append(f"        public static let {t.name}: Double = {num(f['value'])}")
             elif t.kind == "size":
                 out.append(f"        public static let {t.name} = CGSize(width: {num(f['width'])}, "
                            f"height: {num(f['height'])})")

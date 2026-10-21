@@ -45,7 +45,6 @@ struct ButtonPlacementTests {
         "P38": "the Help menu: XDict Help",
         "P39": "Settings ▸ Dictionaries' table: its checkbox column and the + menu and − button under it",
         "P41": "the lookup popover: the speaker in its title row and its two footer rows",
-        "menu-bar-extra": "XDict's menu-bar item's menu, a menu the system lays out; Apple's Dictionary has none",
         "system-alert": "an NSAlert: AppKit puts the default rightmost with Return and Cancel left of it with Escape (R3)",
         "glyph": "an icon-only button at its symbol's own size, beside what it acts on (a notice's close, Copy)",
         "spinner": "a small spinner while a pane loads, not a button",
@@ -55,6 +54,7 @@ struct ButtonPlacementTests {
         "inspector-row": "a button in the answer pane, an inspector column that is no form (ADR-0021 d.12): its rows are the pane's own",
         "meaning-chip": "\"Meaning here\" on the presented term (ADR-0021 d.1): the popover's title row and the main window's entry corner, both drawn by their container",
         "history-menu": "the reading-history drawer's language menu, a menu the system lays out (plan-history-and-learning WI-4)",
+        "menubar-item": "an NSMenuItem's key equivalent: the menu-bar item's menu is drawn and dispatched by the system, and its items are not buttons a view places",
     ]
 
     struct Finding: Equatable, CustomStringConvertible {
@@ -457,7 +457,7 @@ struct ButtonPlacementTests {
     /// its own line.
     @Test func aMarkerCoversABlockOnlyWhereItOpensAMenuOrToolbar() {
         #expect(Self.lines("""
-            var body: some View {  // placement: menu-bar-extra
+            var body: some View {  // placement: P35
                 Button("Open") { open() }
             }
             CommandMenu("Go") {  // placement: P35

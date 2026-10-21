@@ -180,11 +180,15 @@ ROUTES = [
     ("menu.help", "full", "Click Help (P38)", "The help search field and XDict Help", [("menuopen", 8)]),
     ("menu.services", "full", "Select the search field's word, XDict ▸ Services", "The Services submenu, XDict's "
      "own lookup among them", look_up("apple") + [SEARCH, ("menu", 1, "Services|服务")]),
-    ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, History…, Review…, "
-     "Dictionaries…, Settings…, Quit XDict", [("extra",)]),
-    ("review.window", "full", "XDict's menu-bar item ▸ Review… (plan-history-and-learning §5)", "The review window: "
-     "'Review' and 'Nothing due' over an empty ledger, and it closes like any window",
-     [("extra",), ("press", "Review…"), ("wait", 1.5)]),
+    ("menubar.extra", "full", "Right-click XDict's menu-bar item (a left click opens the reading history)", "Look Up "
+     "Selection (⌃⌥D), Open XDict, Review, Dictionaries…, Pause Hover, Settings…, Quit XDict — and no History item: the "
+     "icon's own click is the history", [("extraMenu",), ("key", "escape")]),
+    ("review.window", "full", "Right-click XDict's menu-bar item ▸ Review (plan-history-and-learning §5)", "The review "
+     "window: 'Review' and 'Nothing due' over an empty ledger, and it closes like any window",
+     [("extraMenu",), ("press", "Review"), ("wait", 1.5)]),
+    ("history.drawer", "full", "Click XDict's menu-bar item (plan-history-and-learning §4, the tray's behaviour ported "
+     "from XiaolaiDict)", "The reading-history drawer docked to the display's right edge, full height, glass — empty over "
+     "an empty ledger; the click shows it and never toggles it", [("extra",), ("wait", 1)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
      [("menu", 1, "Acknowledgments")]),
@@ -296,15 +300,15 @@ ROUTES = [
       ("type", "example.org")]),
     ("menubar.hoverPause", "full", "Click XDict's menu-bar item, then Pause Hover", "Pause Hover's lengths: For 15 "
      "minutes, For 1 hour, For 8 hours, between Dictionaries… and Settings… (P51)",
-     [("extra",), ("press", "Pause Hover"), ("wait", 0.6)]),
+     [("extraMenu",), ("press", "Pause Hover"), ("wait", 0.6)]),
     # A pause length's title is the system's words for its length ("For %@" in English, the length alone in Chinese).
     ("menubar.hoverPaused", "full", "Pause Hover ▸ For 15 minutes, then XDict's menu-bar item again", "'Hover resumes "
      "in 15 minutes' or 14 (disabled) and Resume Hover where Pause Hover was (P51)",
-     [("extra",), ("press", "Pause Hover"), ("wait", 0.6), ("press", "For 15 minutes", "15分钟"), ("wait", 0.6),
-      ("extra",)]),
+     [("extraMenu",), ("press", "Pause Hover"), ("wait", 0.6), ("press", "For 15 minutes", "15分钟"), ("wait", 0.6),
+      ("extraMenu",)]),
     ("menubar.hoverOff", "full", "Hover turned off in Settings (stored before the launch), then XDict's menu-bar item",
      "'Hover Is Off in Settings', disabled, where Pause Hover was (P51)",
-     [("pref", "hoverLookupEnabled", False), ("extra",)]),
+     [("pref", "hoverLookupEnabled", False), ("extraMenu",)]),
     # Not driven
     ("settings.dictionaries.appleUpdated", "full", "An imported Apple dictionary whose bundle Apple updated", "Beneath "
      "the table, 'Apple updated <name>.' with Convert Again; after it, 'Kept as the same dictionary…' with Undo "

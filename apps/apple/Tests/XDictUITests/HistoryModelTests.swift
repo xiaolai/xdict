@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import Foundation
 import Testing
@@ -279,31 +280,68 @@ struct HistoryRunsTests {
 
 /// **The drawer hangs under the menu-bar item and stays on the screen** (plan-history-and-learning §1): the final rect is
 /// computed before the window is shown, for any screen and any item position.
-struct HistoryDrawerPlacementTests {
-    static let size = CGSize(width: Tokens.Window.historyDrawerWidth, height: Tokens.Window.historyDrawerHeight)
-    static let visible = CGRect(x: 0, y: 0, width: 1_440, height: 900)
+struct HistoryDrawerGeometryTests {
+    static let screen = CGRect(x: 0, y: 0, width: 1_440, height: 900)
 
-    @Test func theDrawerHangsUnderTheItemWithItsRightEdgeAtTheItems() {
-        let anchor = CGRect(x: 1_300, y: 875, width: 22, height: 22)
-        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: Self.visible,
-                                                 margin: Tokens.Space.s)
-        #expect(frame.maxX == anchor.maxX)
-        #expect(frame.maxY == anchor.minY - Tokens.Space.s)
-        #expect(Self.visible.contains(frame))
+    static func geometry(visible: CGRect = screen, screen: CGRect = screen, width: CGFloat = Tokens.Window.historyDrawerWidth)
+        -> HistoryDrawerGeometry {
+        HistoryDrawerGeometry.make(width: width, visible: visible, screen: screen,
+                                   cornerRadius: Tokens.Window.drawerCornerRadius,
+                                   shadowMargin: Tokens.Window.drawerShadowMargin)
     }
 
-    @Test func anItemAtTheLeftEdgeKeepsTheWholeDrawerOnScreen() {
-        let anchor = CGRect(x: 10, y: 875, width: 22, height: 22)
-        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: Self.visible,
-                                                 margin: Tokens.Space.s)
-        #expect(frame.minX == Self.visible.minX + Tokens.Space.s)
-        #expect(Self.visible.contains(frame))
+    /// **Full height at the display's right edge** (plan §1, XiaolaiDict's docked drawer): the width is the token, the
+    /// height is the whole visible frame, and the corners against the edge stay square the way system panels do.
+    @Test func theDrawerIsFullHeightAtTheDisplaysRightEdge() {
+        let g = Self.geometry()
+        #expect(g.content.width == Tokens.Window.historyDrawerWidth)
+        #expect(g.content.height == Self.screen.height)
+        #expect(g.content.maxX == Self.screen.maxX)
+        #expect(g.isFlush, "the visible frame reaches the display's edge: no Dock on that side")
+        #expect(g.squaresTrailingCorners)
+        // The window is grown for the shadow and clipped to the display: it never reaches past the edge.
+        #expect(g.window.maxX == Self.screen.maxX)
+        #expect(g.window.minX < g.content.minX)
     }
 
-    @Test func aShortScreenKeepsTheDrawerInsideIt() {
-        let visible = CGRect(x: 0, y: 0, width: 800, height: 600)
-        let anchor = CGRect(x: 700, y: 578, width: 22, height: 22)
-        let frame = HistoryDrawerPlacement.frame(size: Self.size, anchor: anchor, visible: visible, margin: Tokens.Space.s)
-        #expect(visible.contains(frame))
+    /// With the Dock on the right the visible frame stops short of the display's edge, and a drawer that squared its
+    /// corners there would look cut off in mid-air.
+    @Test func aDockOnTheRightTakesTheEdgeAway() {
+        let visible = CGRect(x: 0, y: 0, width: 1_360, height: 900)
+        let g = Self.geometry(visible: visible)
+        #expect(!g.isFlush)
+        #expect(!g.squaresTrailingCorners)
+        #expect(g.content.maxX == visible.maxX)
+    }
+
+    /// A display narrower than the drawer is not overrun: the thickness is clamped to what is there.
+    @Test func aDisplayNarrowerThanTheDrawerIsNotOverrun() {
+        let visible = CGRect(x: 0, y: 0, width: 300, height: 700)
+        let g = Self.geometry(visible: visible)
+        #expect(g.content.width == 300)
+        #expect(g.content.minX == 0)
+    }
+
+    /// Hidden, the content is parked past the window's docked edge, where the window's clip hides every pixel of it.
+    @Test func theContentParksPastTheWindowWhenHidden() {
+        let g = Self.geometry()
+        #expect(g.contentOrigin.x + g.hiddenOffset.width >= g.window.width)
+    }
+}
+
+/// **Which click asks for the menu** (ported from XiaolaiDict): a right click, and a control click — the system's rule, so a
+/// reader with secondary click switched off still reaches the menu.
+struct StatusItemClickTests {
+    static func event(_ type: NSEvent.EventType, control: Bool = false) -> NSEvent? {
+        NSEvent.mouseEvent(with: type, location: .zero, modifierFlags: control ? .control : [], timestamp: 0,
+                           windowNumber: 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 0)
+    }
+
+    @Test func aRightOrControlClickAsksForTheMenu() {
+        #expect(StatusItemClick.isSecondary(Self.event(.rightMouseDown)))
+        #expect(StatusItemClick.isSecondary(Self.event(.rightMouseUp)))
+        #expect(StatusItemClick.isSecondary(Self.event(.leftMouseUp, control: true)))
+        #expect(!StatusItemClick.isSecondary(Self.event(.leftMouseUp)))
+        #expect(!StatusItemClick.isSecondary(nil), "a VoiceOver press carries no mouse event: the history, not the menu")
     }
 }

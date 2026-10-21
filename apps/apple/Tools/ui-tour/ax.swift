@@ -152,6 +152,17 @@ func clickAt(_ x: Double, _ y: Double) {
     }
 }
 
+/// A real secondary click at a point: the only way to the menu of an owned status item, whose primary click opens the
+/// reading history (plan-history-and-learning §4). An AX press carries no mouse event, and answers the primary click.
+func rightClickAt(_ x: Double, _ y: Double) {
+    let point = CGPoint(x: x, y: y)
+    for type in [CGEventType.mouseMoved, .rightMouseDown, .rightMouseUp] {
+        CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .right)?
+            .post(tap: .cghidEventTap)
+        usleep(type == .mouseMoved ? 80_000 : 40_000)
+    }
+}
+
 func menuItems(_ menu: AXUIElement, depth: Int) -> [[String: Any]] {
     children(menu).filter { string($0, kAXRoleAttribute) == "AXMenuItem" }.map { item in
         var out: [String: Any] = ["title": string(item, kAXTitleAttribute) ?? ""]
@@ -318,6 +329,12 @@ case "extra":
           let item = children(extras as! AXUIElement).first else { fail("the app shows no menu-bar extra") }
     _ = AXUIElementPerformAction(item, kAXPressAction as CFString)
     emit(["opened": frame(item) ?? []])
+case "extraMenu":
+    guard let extras = attribute(app, "AXExtrasMenuBar"),
+          let item = children(extras as! AXUIElement).first else { fail("the app shows no menu-bar extra") }
+    guard let box = frame(item) else { fail("the menu-bar item has no frame") }
+    rightClickAt(box[0] + box[2] / 2, box[1] + box[3] / 2)
+    emit(["opened": box])
 case "at":
     // What is under a point (global top-left): a refused drop names what it landed on.
     guard arguments.count >= 5, let x = Float(arguments[3]), let y = Float(arguments[4]) else {

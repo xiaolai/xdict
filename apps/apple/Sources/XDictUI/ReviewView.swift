@@ -41,13 +41,13 @@ public struct ReviewView: View {
             }
         }
         .padding(Tokens.Space.xl)
-        .frame(minWidth: Tokens.Window.historyDrawerWidth, minHeight: Tokens.Window.historyDrawerHeight)
+        .frame(minWidth: Tokens.Window.reviewWidth, minHeight: Tokens.Window.reviewMinHeight)
         .task { await model.refresh() }
         .sheet(isPresented: $editing) {
             if let entry {
                 // A sheet sizes to its content: the editor is given the review window's width.
                 StudyNoteEditor(study: model, entry: entry, name: "", initial: model.current?.note.text ?? "",
-                                width: Tokens.Window.historyDrawerWidth) { editing = false }
+                                width: Tokens.Window.reviewWidth) { editing = false }
             }
         }
     }
@@ -207,7 +207,7 @@ public struct StudyNoteEditor: View {
                 .font(Tokens.TextRole.headline.font)
             TextEditor(text: $draft)
                 .font(Tokens.TextRole.body.font)
-                .frame(minHeight: Tokens.Window.historyDrawerHeight / 2)
+                .frame(minHeight: Tokens.Window.reviewMinHeight / 2)
             if failed {
                 Text("The note could not be saved.")
                     .font(Tokens.TextRole.caption.font)

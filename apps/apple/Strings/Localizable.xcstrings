@@ -4155,22 +4155,6 @@
         }
       }
     },
-    "History…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "History…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "历史记录…"
-          }
-        }
-      }
-    },
     "Hold" : {
       "comment" : "Hover gesture: hold the key while the pointer rests",
       "localizations" : {
@@ -7070,22 +7054,6 @@
         }
       }
     },
-    "Review…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Review…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "复习…"
-          }
-        }
-      }
-    },
     "Same Dictionary" : {
       "localizations" : {
         "en" : {
@@ -7521,6 +7489,40 @@
           }
         }
       }
+    },
+    "Show Menu" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Menu"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示菜单"
+          }
+        }
+      },
+      "comment" : "VoiceOver action on the menu bar icon"
+    },
+    "Show Reading History" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Reading History"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示阅读历史"
+          }
+        }
+      },
+      "comment" : "VoiceOver action on the menu bar icon"
     },
     "Show in Finder" : {
       "localizations" : {
@@ -10306,6 +10308,7 @@
       }
     },
     "XDict" : {
+      "comment" : "The menu bar icon, for VoiceOver",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -10623,6 +10626,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 使用自己的配置文件夹运行 claude 命令。在“终端”中运行一次 claude 即可登录；登录由 Claude Code 保管，XDict 从不读取。"
+          }
+        }
+      }
+    },
+    "XDict — click for Reading History, right-click for the menu, press %@ to look up the selection" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict — click for Reading History, right-click for the menu, press %@ to look up the selection"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict — 单击查看阅读历史，右键单击显示菜单，按 %@ 查询所选内容"
+          }
+        }
+      }
+    },
+    "XDict — click for Reading History, right-click for the menu. No lookup shortcut is registered." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict — click for Reading History, right-click for the menu. No lookup shortcut is registered."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict — 单击查看阅读历史，右键单击显示菜单。未注册查询快捷键。"
           }
         }
       }

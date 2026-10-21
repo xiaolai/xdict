@@ -236,7 +236,12 @@ class Session:
             self.ax("size", step[1], step[2])
             time.sleep(0.6)
         elif kind == "extra":
+            # A primary click on the menu-bar item: the reading history.
             self.ax("extra")
+            time.sleep(0.8)
+        elif kind == "extraMenu":
+            # A real secondary click on it: only an owned status item can route that (plan-history-and-learning §4).
+            self.ax("extraMenu")
             time.sleep(0.8)
         elif kind == "drop":
             self.drop(os.path.join(fixtures, "library", step[1]))

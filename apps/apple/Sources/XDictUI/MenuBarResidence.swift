@@ -3,7 +3,7 @@ import Foundation
 /// **Whether closing the last window leaves XDict running in the menu bar** (Settings ▸ General; XiaolaiDict's menu-bar
 /// app never quit with its windows, ported as a switch, on by default): on, the menu-bar item, the lookup shortcut, the
 /// Service and hover stay; off, XDict quits with its last window. The menu-bar item itself is always inserted: it is where
-/// the scene's actions are handed over (`MenuBarLabel`), and inserting it conditionally (`MenuBarExtra(isInserted:)`)
+/// the scene's actions are handed over (a window's `onAppear`), and inserting the item conditionally (`MenuBarExtra(isInserted:)`)
 /// rebuilt the main menu forever on macOS 27 (`ui-fix`, 2026-10-17).
 public struct MenuBarResidence {
     public static let key = "keepsRunningInMenuBar"
