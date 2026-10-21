@@ -170,18 +170,21 @@ public final class HistoryDrawerController {
     }
 
     /// A click outside closes it; a click inside is the reader's, whether it opens the language menu or selects text.
-    /// The drawer's own rect is the test, not the window's: the window is grown for the shadow.
+    /// The drawer's own rect is the test, not the window's: the window is grown for the shadow. **The owned status
+    /// button's live rectangle is excluded** (XiaolaiDict `9695fcb`, whose commit names the symptom: a visible shudder on
+    /// every repeated tray click): its click belongs to the button's own action, and dismissing on the mouse-down would
+    /// close the drawer just before that action re-shows it on the mouse-up.
     private func observeClicks() {
         for mask in [NSEvent.EventTypeMask.leftMouseDown, .rightMouseDown] {
             if let global = NSEvent.addGlobalMonitorForEvents(matching: mask, handler: { [weak self] _ in
-                MainActor.assumeIsolated { self?.hide() }
+                MainActor.assumeIsolated { _ = self?.clickedOutside(at: NSEvent.mouseLocation) }
             }) {
                 monitors.append(global)
             }
             if let local = NSEvent.addLocalMonitorForEvents(matching: mask, handler: { [weak self] event in
                 let closes = MainActor.assumeIsolated { () -> Bool in
-                    guard let self, let geometry = self.presentation.geometry, self.isOpen,
-                          !geometry.content.contains(NSEvent.mouseLocation) else { return false }
+                    guard let self, self.isOpen else { return false }
+                    guard self.clickedOutside(at: NSEvent.mouseLocation) else { return false }
                     self.hide()
                     return true
                 }
@@ -190,6 +193,23 @@ public final class HistoryDrawerController {
                 monitors.append(local)
             }
         }
+    }
+
+    /// Hands the decision to `clickDismisses` and says whether it was a dismissal, so each monitor keeps its own way of
+    /// acting on it: the global one watches, the local one consumes.
+    private func clickedOutside(at point: CGPoint) -> Bool {
+        guard let geometry = presentation.geometry else { return false }
+        guard Self.clickDismisses(at: point, content: geometry.content, statusItem: statusItemFrame?()) else { return false }
+        hide()
+        return true
+    }
+
+    /// **Does a click at `point` dismiss the open drawer?** A click inside the content is the reader's, and a click on the
+    /// status button belongs to its action — dismissing on the down and re-showing on the up is the shudder XiaolaiDict
+    /// fixed (`9695fcb`). The rectangle is asked for live, so an item moved to another display is still excluded.
+    public nonisolated static func clickDismisses(at point: CGPoint, content: CGRect, statusItem: CGRect?) -> Bool {
+        if let statusItem, statusItem.contains(point) { return false }
+        return !content.contains(point)
     }
 
     /// Escape closes it, and is claimed only while the drawer is open: the lookup panel's own claim is not disturbed.
