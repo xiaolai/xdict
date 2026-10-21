@@ -104,7 +104,7 @@
  },
  "manifests": {
   "apps/apple/Package.swift": "b8b252f8ca8e3110b7da6ad2937c8bd000ca973a",
-  "core/Cargo.toml": "7e82ff1da499ac06f4faaa372973321448b35b95",
+  "core/Cargo.toml": "e5eaa9e63a6a0fc401c636a04946c1aa08dff1b2",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "d3da77c790a6b99d5a9eb8312fababe3932e963d",
   "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
