@@ -67,7 +67,7 @@ public enum Limits {
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored: return nil
+             .reanchored, .exported, .erased, .conflicts, .synced: return nil
         }
     }
 
@@ -193,8 +193,16 @@ public enum Deadlines {
         case .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary: .seconds(5)
         // A note reads the entry's body to hash it, as `entryText` does; a re-anchor reads one entry per note.
-        case .studyNote, .definitionHash: .seconds(10)
+        case .studyNote, .studyNoteAt, .definitionHash: .seconds(10)
         case .studyReanchor: .seconds(15)
+        // The log's own bytes out, and a rewrite that fsyncs the result.
+        case .exportData, .eraseData: .seconds(5)
+        // Conflicts replay the log as `reviewQueue` does; a resolution is one appended frame.
+        case .studyConflicts, .reviewResolve: .seconds(5)
+        // Merging every peer log in the inbox (each at most the core's 256 MiB sync bound: 25 s from a 10 MB/s disk) is
+        // bounded by the contract's own 15 s like the rest; a pass over a normal reader's history is milliseconds. Writing
+        // this device's log fsyncs it, as `ledgerRecord` does.
+        case .ledgerSync: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
         case .importPackage, .health, .convertApple: nil
         }

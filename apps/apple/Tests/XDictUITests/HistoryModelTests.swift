@@ -212,6 +212,17 @@ struct LearningPreferencesTests {
         #expect(preferences.shows("zh-Hans"))
     }
 
+    /// **The sync folder is a bookmark** (plan §2.6): kept until the reader clears it, so a moved folder still resolves.
+    @Test func theSyncFolderIsRememberedAndCanBeCleared() throws {
+        let (preferences, defaults, name) = try Self.scratch()
+        defer { defaults.removePersistentDomain(forName: name) }
+        #expect(preferences.syncFolder == nil, "no folder until the reader chooses one")
+        preferences.setSyncFolder(Data([1, 2, 3]))
+        #expect(preferences.syncFolder == Data([1, 2, 3]))
+        preferences.setSyncFolder(nil)
+        #expect(preferences.syncFolder == nil)
+    }
+
     @Test func theSettingsSurviveARelaunch() throws {
         let (preferences, defaults, name) = try Self.scratch()
         defer { defaults.removePersistentDomain(forName: name) }

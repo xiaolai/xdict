@@ -345,6 +345,8 @@ struct StringCatalogTests {
         #expect(Self.isProse("Show All"))
         #expect(Self.isProse("About"), "one capitalised word is prose")
         #expect(Self.isProse("the dictionary did not answer"), "a sentence is prose whatever case it starts in")
+        #expect(!Self.isProse(" "), "a separator is not prose")
+        #expect(!Self.isProse("…"), "a mark on its own is not prose")
         #expect(!Self.isProse("clock.arrow.circlepath"), "an SF Symbol name is not prose")
         #expect(!Self.isProse("CFBundleVersion"), "an interior capital makes it a key")
         #expect(!Self.isProse("ai.xdict.app"), "a bundle identifier is not prose")
@@ -525,6 +527,8 @@ struct StringCatalogTests {
     /// makes it not prose; a space makes it prose; otherwise one capitalised word with no interior capital is prose.
     static func isProse(_ literal: String) -> Bool {
         guard let first = literal.first else { return false }
+        // A separator, a rule or a blank is not something a translator writes: no letter, no prose.
+        guard literal.contains(where: \.isLetter) else { return false }
         if literal.contains(where: \.isNumber) { return false }
         if literal.contains(where: { "_/:@#\\%{}<>[]|=+*~$".contains($0) }) { return false }
         if literal.hasPrefix("-") { return false }

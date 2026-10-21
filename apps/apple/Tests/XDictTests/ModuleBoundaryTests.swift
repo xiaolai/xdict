@@ -61,8 +61,9 @@ struct ModuleBoundaryTests {
         // `UniformTypeIdentifiers` names what the library's Add Dictionaries… offers; `AppKit` is the main window's
         // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6);
         // `ServiceManagement` launch at login and `os` the log of its refusal (WI-9); `Security` the cloud endpoint's
-        // key in the Keychain (ADR-0021 d.3, `KeychainKeyStore`), the only secret the app stores.
-        "XDictUI": ["AppKit", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "os"],
+        // key in the Keychain (ADR-0021 d.3, `KeychainKeyStore`), the only secret the app stores; `UserNotifications` the
+        // review reminder, which the shell delivers through the system's own notification centre (plan §5.4).
+        "XDictUI": ["AppKit", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         // `Observation`: the tests watch the model's `found` for a needless change (the title's count, P2).

@@ -12,8 +12,9 @@ target (aarch64-apple-darwin): the crates reachable from `xdict-ffi` by normal d
 dependencies are not linked; proc-macros are kept, conservatively, since their output is). XDict's own crates are ISC
 and named once. Each crate's licence texts are the files it ships (LICENSE*, LICENCE*, COPYING*, NOTICE*, UNLICENSE*);
 a crate that ships none gets the canonical text of its licence from `Tools/notices/` only where its licence expression
-is exactly one listed in SUPPLIED, else the run fails. And every font in `Resources/Fonts` needs its family's
-`OFL-<family>.txt` beside it, included verbatim.
+is exactly one listed in SUPPLIED, else the run fails. Every font in `Resources/Fonts` needs its family's
+`OFL-<family>.txt` beside it, included verbatim. And the texts XDict's own code ships from upstream — the FSRS-6 parity
+vectors and the scheduler port (plan-history-and-learning §5.2, MIT) — are included from the file they are kept in.
 
 **Committed, not generated at bundle time**: the bundle is assembled and signed on a Mac that may hold no cargo
 registry, a notice is a legal text worth reviewing in a diff when it changes, and `check` holds the committed file to
@@ -29,7 +30,8 @@ import subprocess
 import sys
 
 APPLE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.path.join(os.path.dirname(os.path.dirname(APPLE)), "core")
+REPO = os.path.dirname(os.path.dirname(APPLE))
+CORE = os.path.join(REPO, "core")
 NOTICES = os.path.join(APPLE, "Resources", "Acknowledgments.txt")
 FONTS = os.path.join(APPLE, "Resources", "Fonts")
 TRIPLE = "aarch64-apple-darwin"
@@ -37,6 +39,9 @@ ROOT = "xdict-ffi"
 PREFIXES = ("LICENSE", "LICENCE", "COPYING", "NOTICE", "UNLICENSE")
 # Licences whose canonical text is complete without a copyright line of the crate's own.
 SUPPLIED = {"MPL-2.0": os.path.join(APPLE, "Tools", "notices", "MPL-2.0.txt")}
+# The upstream texts XDict's own code ships, each kept where the code is (plan-history-and-learning §5.2).
+UPSTREAM = [("FSRS-6 scheduler and parity vectors (Open Spaced Repetition, MIT)",
+             os.path.join(REPO, "conformance", "review", "UPSTREAM-LICENSE.txt"))]
 
 
 def fail(why):
@@ -111,6 +116,9 @@ def render(own, crates, families):
            f"XDict's own crates: {', '.join(own)}.", "", "Fonts", "====="]
     for family in sorted(families):
         out.append(f"font {family} (SIL Open Font License 1.1)")
+    out += ["", "Upstream texts", "=============="]
+    for title, path in UPSTREAM:
+        out += ["", f"--- {title}", "", read(path).rstrip()]
     out += ["", "Rust crates", "==========="]
     for name, version, licence, _ in crates:
         out.append(f"crate {name} {version} ({licence})")

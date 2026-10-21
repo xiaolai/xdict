@@ -180,8 +180,11 @@ ROUTES = [
     ("menu.help", "full", "Click Help (P38)", "The help search field and XDict Help", [("menuopen", 8)]),
     ("menu.services", "full", "Select the search field's word, XDict ▸ Services", "The Services submenu, XDict's "
      "own lookup among them", look_up("apple") + [SEARCH, ("menu", 1, "Services|服务")]),
-    ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, Dictionaries…, "
-     "Settings…, Quit XDict", [("extra",)]),
+    ("menubar.extra", "full", "Click XDict's menu-bar item", "Look Up Selection (⌃⌥D), Open XDict, History…, Review…, "
+     "Dictionaries…, Settings…, Quit XDict", [("extra",)]),
+    ("review.window", "full", "XDict's menu-bar item ▸ Review… (plan-history-and-learning §5)", "The review window: "
+     "'Review' and 'Nothing due' over an empty ledger, and it closes like any window",
+     [("extra",), ("press", "Review…"), ("wait", 1.5)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
      [("menu", 1, "Acknowledgments")]),

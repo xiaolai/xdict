@@ -41,9 +41,17 @@ public enum HistoryRuns {
 /// draws, and its language filter shows a subset of what is stored — never rewriting it.
 public struct HistoryView: View {
     @State private var model: HistoryModel
+    /// The review's state (plan §5): a card's note is written here, and Review opens the review window.
+    private let study: StudyModel?
+    private let onReview: (() -> Void)?
+    /// The card whose note is being written, and what that note says already.
+    @State private var noting: LedgerReading?
+    @State private var initialDraft = ""
 
-    public init(model: HistoryModel) {
+    public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil) {
         _model = State(initialValue: model)
+        self.study = study
+        self.onReview = onReview
     }
 
     public var body: some View {
@@ -59,10 +67,13 @@ public struct HistoryView: View {
     }
 
     private var header: some View {
-        HStack(spacing: Tokens.Space.s) {
+        ActionRow(.strip) {
             Text("History")
                 .font(Tokens.TextRole.headline.font)
-            Spacer(minLength: Tokens.Space.s)
+        } actions: {
+            if let onReview {
+                Button("Review") { onReview() }
+            }
             languageMenu
         }
         .padding(.horizontal, Tokens.Space.l)
@@ -135,7 +146,7 @@ public struct HistoryView: View {
         }
     }
 
-    private func cardView(_ card: LedgerCard) -> some View {
+    @ViewBuilder private func cardView(_ card: LedgerCard) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
             sentence(card.reading)
                 .font(Tokens.TextRole.body.font)
@@ -152,6 +163,11 @@ public struct HistoryView: View {
             }
             .font(Tokens.TextRole.caption.font)
             .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            // **A card's note** (plan §5.1): the reader's own words about the entry, written where they met it.
+            if let study, noting == card.reading {
+                StudyNoteEditor(study: study, entry: reference(card.reading),
+                                name: card.reading.dictionaryName, initial: initialDraft) { noting = nil }
+            }
         }
         .padding(Tokens.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -159,8 +175,26 @@ public struct HistoryView: View {
             RoundedRectangle(cornerRadius: Tokens.Radius.sidebarSelection)
                 .stroke(Color(nsColor: Tokens.Colour.separator.nsColor), lineWidth: Tokens.Line.hairline)
         }
-        .accessibilityElement(children: .combine)
+        // The card reads as one element; its note editor is its own, so a combined card would hide the field.
+        .accessibilityElement(children: noting == card.reading ? .contain : .combine)
         .accessibilityIdentifier("history.card")
+        .contextMenu {
+            if let study {
+                Button("Note…") {  // placement: history-menu
+                    let entry = reference(card.reading)
+                    Task {
+                        await study.loadNotes()
+                        initialDraft = study.note(for: entry)?.text ?? ""
+                        noting = card.reading
+                    }
+                }
+            }
+        }
+    }
+
+    private func reference(_ reading: LedgerReading) -> EntryRef {
+        EntryRef(edition: Edition(rawValue: reading.edition), key: reading.entryKey,
+                 occurrence: reading.occurrence)
     }
 
     /// The sentence as one attributed run, the word in bold: `Text` concatenation is deprecated on macOS 26, and its

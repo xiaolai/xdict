@@ -14,13 +14,16 @@ struct LibraryDetail: View {
     let entry: LibraryEntry
     /// Locate… (the open panel), as the Library list does it.
     let locate: () -> Void
+    /// What the last join did to the reader's notes (plan §5.1); nil leaves the sentence out.
+    let study: StudyModel?
     /// ADR-0010 Q3: this dictionary in its own style, kept under its lineage (never its path), off by default.
     @AppStorage private var originalStyle: Bool
 
-    init(library: Library, entry: LibraryEntry, locate: @escaping () -> Void = {}) {
+    init(library: Library, entry: LibraryEntry, locate: @escaping () -> Void = {}, study: StudyModel? = nil) {
         self.library = library
         self.entry = entry
         self.locate = locate
+        self.study = study
         _originalStyle = AppStorage(wrappedValue: false, EntryPreferences.originalStyleKey(entry.preferencesKey))
     }
 
@@ -34,6 +37,7 @@ struct LibraryDetail: View {
             problem
             if let offer = entry.offer { joinQuestion(offer) }
             if entry.join != nil { joined }
+            if let summary = study?.lastReanchor, summary.to == entry.edition { notesFollowed(summary) }
             Section {
                 TextField(text: Binding(get: { entry.readersName ?? "" }, set: { library.rename(entry.id, $0) }),
                           prompt: Text(verbatim: DisplayName.of(readers: nil, title: entry.info?.title ?? "",
@@ -193,6 +197,26 @@ struct LibraryDetail: View {
             } primary: {
                 Button("Same Dictionary") { Task { _ = await library.acceptJoin(entry.id) } }
             }
+        }
+    }
+
+    /// **Where the reader's notes went** (plan §5.1): the count that followed this edition, and the count that could not
+    /// be found in it — a changed, reordered or missing definition never binds another record.
+    private func notesFollowed(_ summary: StudyModel.ReanchorSummary) -> some View {
+        let moved = summary.report.outcomes.filter { $0.result == .reanchored }.count
+        let left = summary.report.outcomes.count - moved
+        return Section {
+            VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                if moved > 0 {
+                    Text("\(moved) notes now point to this edition.")
+                }
+                if left > 0 {
+                    Text("\(left) notes could not be found in this edition and stay on the old one.")
+                }
+            }
+            .font(.callout)
+        } header: {
+            Text("Notes")
         }
     }
 

@@ -125,6 +125,9 @@ public final class Library {
 
     /// Every change of phase, for the instruments: who measured what, when.
     @ObservationIgnored public var onPhase: (@MainActor (UUID, EntryPhase) -> Void)?
+    /// **A join the reader made**, with the edition it left and the one it joined: the app re-anchors that lineage's notes
+    /// (plan-history-and-learning §5.1). The library keeps no study state of its own.
+    @ObservationIgnored public var didJoin: (@MainActor (Edition, Edition) -> Void)?
 
     @ObservationIgnored private let store: LibraryStore
     @ObservationIgnored private let backend: any LibraryBackend
@@ -790,6 +793,7 @@ public final class Library {
                                   offer: offer)
             $0.offer = nil
         }
+        didJoin?(offer.earlierEdition, offer.edition)
         return true
     }
 

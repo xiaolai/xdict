@@ -476,6 +476,74 @@
         }
       }
     },
+    "%lld notes could not be found in this edition and stay on the old one." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld note could not be found in this edition and stays on the old one."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notes could not be found in this edition and stay on the old one."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld 条笔记在这个版本中找不到，仍留在旧版本上。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%lld notes now point to this edition." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld note now points to this edition."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld notes now point to this edition."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld 条笔记现在指向这个版本。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld of %lld" : {
       "localizations" : {
         "en" : {
@@ -535,6 +603,40 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "去掉了 %llu 处背景、边框等样式声明"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%llu cards are due." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu card is due."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu cards are due."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 张卡片该复习了。"
                 }
               }
             }
@@ -603,6 +705,40 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%llu 处互见指向本词典没有的词。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%llu due" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu due"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu due"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu 张待复习"
                 }
               }
             }
@@ -920,6 +1056,40 @@
         }
       }
     },
+    "%llu grades erased." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu grade erased."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu grades erased."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "已删除 %llu 条评分。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%llu headwords hold extra spaces, invisible characters or HTML code." : {
       "localizations" : {
         "en" : {
@@ -981,6 +1151,40 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "%llu 处行高改为相对值"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%llu notes erased." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu note erased."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu notes erased."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "已删除 %llu 条笔记。"
                 }
               }
             }
@@ -1192,6 +1396,40 @@
         }
       }
     },
+    "%llu readings erased." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu reading erased."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu readings erased."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "已删除 %llu 条阅读记录。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%llu results" : {
       "localizations" : {
         "en" : {
@@ -1306,6 +1544,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "另一部词典"
+          }
+        }
+      }
+    },
+    "A card is due for review." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A card is due for review."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "有一张卡片该复习了。"
           }
         }
       }
@@ -1614,6 +1868,22 @@
         }
       }
     },
+    "Again" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Again"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重来"
+          }
+        }
+      }
+    },
     "All Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -1726,6 +1996,22 @@
         }
       }
     },
+    "Already recorded." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already recorded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已经记录过了。"
+          }
+        }
+      }
+    },
     "Always" : {
       "localizations" : {
         "en" : {
@@ -1818,6 +2104,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "另一个 App 已占用此快捷键。"
+          }
+        }
+      }
+    },
+    "Another folder can be chosen; what is already here is left alone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Another folder can be chosen; what is already here is left alone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可以另选一个文件夹；这里已有的内容不受影响。"
           }
         }
       }
@@ -2472,6 +2774,70 @@
         }
       }
     },
+    "Choose" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选取"
+          }
+        }
+      }
+    },
+    "Choose Folder…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose Folder…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选取文件夹…"
+          }
+        }
+      }
+    },
+    "Choose a folder XDict can sync with on your other devices." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a folder XDict can sync with on your other devices."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选取一个文件夹，XDict 通过它与你的其他设备同步。"
+          }
+        }
+      }
+    },
+    "Choose a folder in your own storage — iCloud Drive, a WebDAV mount — and your readings, notes and grades sync with your other devices through it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a folder in your own storage — iCloud Drive, a WebDAV mount — and your readings, notes and grades sync with your other devices through it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你自己的存储中选取一个文件夹——iCloud 云盘、WebDAV 挂载点都可以——你的阅读记录、笔记和评分就会通过它与你的其他设备同步。"
+          }
+        }
+      }
+    },
     "Choose a source in Settings ▸ AI." : {
       "localizations" : {
         "en" : {
@@ -2986,6 +3352,22 @@
         }
       }
     },
+    "Easy" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easy"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "简单"
+          }
+        }
+      }
+    },
     "Edition" : {
       "localizations" : {
         "en" : {
@@ -3162,6 +3544,86 @@
         }
       }
     },
+    "Erase" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除"
+          }
+        }
+      }
+    },
+    "Erase all learning data?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase all learning data?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除全部学习数据？"
+          }
+        }
+      }
+    },
+    "Erase every reading, note and grade kept on this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase every reading, note and grade kept on this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除这台 Mac 上保存的每一条阅读记录、笔记和评分。"
+          }
+        }
+      }
+    },
+    "Erase…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Erase…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "删除…"
+          }
+        }
+      }
+    },
+    "Every reading, note and grade on this Mac is erased. This cannot be undone." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Every reading, note and grade on this Mac is erased. This cannot be undone."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这台 Mac 上的每一条阅读记录、笔记和评分都会被删除，且无法撤销。"
+          }
+        }
+      }
+    },
     "Exact match" : {
       "localizations" : {
         "en" : {
@@ -3206,6 +3668,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "释义语言"
+          }
+        }
+      }
+    },
+    "Exported to %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exported to %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已导出到 %@。"
+          }
+        }
+      }
+    },
+    "Export…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导出…"
           }
         }
       }
@@ -3515,6 +4009,38 @@
         }
       }
     },
+    "Good" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Good"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "良好"
+          }
+        }
+      }
+    },
+    "Graded." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Graded."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已评分。"
+          }
+        }
+      }
+    },
     "Granted. The shortcut can read the selection in any app." : {
       "localizations" : {
         "en" : {
@@ -3543,6 +4069,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "依据词条"
+          }
+        }
+      }
+    },
+    "Hard" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hard"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "困难"
           }
         }
       }
@@ -3809,6 +4351,22 @@
         }
       }
     },
+    "How well did you know it?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How well did you know it?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你记得怎么样？"
+          }
+        }
+      }
+    },
     "IPA" : {
       "localizations" : {
         "en" : {
@@ -4014,6 +4572,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "跳到所选内容"
+          }
+        }
+      }
+    },
+    "Keep" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留"
           }
         }
       }
@@ -4932,6 +5506,38 @@
         }
       }
     },
+    "No note yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No note yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有笔记。"
+          }
+        }
+      }
+    },
+    "No other device's log is in this folder yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No other device's log is in this folder yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个文件夹里还没有其他设备的日志。"
+          }
+        }
+      }
+    },
     "No source is chosen, so XDict never asks anything. Dictionaries still work as before." : {
       "localizations" : {
         "en" : {
@@ -4944,6 +5550,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未选择来源，XDict 不会发出任何询问。词典照常工作。"
+          }
+        }
+      }
+    },
+    "No sync folder yet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No sync folder yet."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还没有同步文件夹。"
           }
         }
       }
@@ -5093,6 +5715,22 @@
         }
       }
     },
+    "Not recorded: outside your languages." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not recorded: outside your languages."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未记录：不在你设置的语言范围内。"
+          }
+        }
+      }
+    },
     "Not set up yet." : {
       "localizations" : {
         "en" : {
@@ -5105,6 +5743,70 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "尚未设置。"
+          }
+        }
+      }
+    },
+    "Note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔记"
+          }
+        }
+      }
+    },
+    "Notes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔记"
+          }
+        }
+      }
+    },
+    "Note…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔记…"
+          }
+        }
+      }
+    },
+    "Nothing due" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing due"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有待复习"
           }
         }
       }
@@ -5147,6 +5849,38 @@
         }
       }
     },
+    "Nothing is due." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing is due."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有待复习的内容。"
+          }
+        }
+      }
+    },
+    "Nothing is due. The next card falls due at %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing is due. The next card falls due at %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有待复习的内容。下一张卡片在 %@ 到期。"
+          }
+        }
+      }
+    },
     "Nothing is selected in %@, or %@ does not share its selection. Select a word and try again." : {
       "localizations" : {
         "en" : {
@@ -5175,6 +5909,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可查询的内容"
+          }
+        }
+      }
+    },
+    "Nothing was erased." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing was erased."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有删除任何内容。"
           }
         }
       }
@@ -6031,6 +6781,22 @@
         }
       }
     },
+    "Recorded, but not yet flushed to disk." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recorded, but not yet flushed to disk."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已记录，但尚未写入磁盘。"
+          }
+        }
+      }
+    },
     "Red" : {
       "localizations" : {
         "en" : {
@@ -6043,6 +6809,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "红色"
+          }
+        }
+      }
+    },
+    "Remind me when cards are due" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remind me when cards are due"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡片到期时提醒我"
           }
         }
       }
@@ -6240,6 +7022,70 @@
         }
       }
     },
+    "Review" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复习"
+          }
+        }
+      }
+    },
+    "Review Reminders" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review Reminders"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复习提醒"
+          }
+        }
+      }
+    },
+    "Review due" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review due"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该复习了"
+          }
+        }
+      }
+    },
+    "Review…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复习…"
+          }
+        }
+      }
+    },
     "Same Dictionary" : {
       "localizations" : {
         "en" : {
@@ -6252,6 +7098,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "同一部词典"
+          }
+        }
+      }
+    },
+    "Save" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保存"
           }
         }
       }
@@ -6932,6 +7794,72 @@
         }
       }
     },
+    "Sync" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步"
+          }
+        }
+      }
+    },
+    "Sync Now" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Now"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "立即同步"
+          }
+        }
+      }
+    },
+    "Synced: %llu new events." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Synced: %llu new event."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "Synced: %llu new events."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "已同步：%llu 条新事件。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Teal" : {
       "localizations" : {
         "en" : {
@@ -7140,6 +8068,22 @@
         }
       }
     },
+    "The card had moved or was not due." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The card had moved or was not due."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "卡片已经变了，或者还没到期。"
+          }
+        }
+      }
+    },
     "The check could not finish. It runs again when the dictionary next opens." : {
       "localizations" : {
         "en" : {
@@ -7248,6 +8192,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 还没来得及转换，这部词典的副本就不见了。请再试一次。"
+          }
+        }
+      }
+    },
+    "The data could not be exported." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The data could not be exported."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法导出数据。"
           }
         }
       }
@@ -7428,6 +8388,22 @@
         }
       }
     },
+    "The file could not be written." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The file could not be written."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法写入文件。"
+          }
+        }
+      }
+    },
     "The file of this dictionary changed. Is it still the same dictionary?" : {
       "localizations" : {
         "en" : {
@@ -7552,6 +8528,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该服务器上的模型名称；留空则由服务器决定。"
+          }
+        }
+      }
+    },
+    "The note could not be saved." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The note could not be saved."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法保存笔记。"
           }
         }
       }
@@ -7696,6 +8688,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "回复格式由 XDict 附加，不可编辑。提示词可使用 {term}、{sentence}、{entry} 和 {language}；缺失或未知的占位符会在发送前被拒绝。"
+          }
+        }
+      }
+    },
+    "The review list could not be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The review list could not be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取复习列表。"
           }
         }
       }
@@ -8043,6 +9051,22 @@
         }
       }
     },
+    "The sync could not finish." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sync could not finish."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步未能完成。"
+          }
+        }
+      }
+    },
     "The system did not change whether XDict opens when you log in." : {
       "localizations" : {
         "en" : {
@@ -8103,6 +9127,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "取自你所用词典的文字。"
+          }
+        }
+      }
+    },
+    "Their bytes may remain in free blocks, snapshots and backups, which only macOS can reclaim." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Their bytes may remain in free blocks, snapshots and backups, which only macOS can reclaim."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这些数据的字节可能仍留在空闲块、快照和备份中，只有 macOS 能回收。"
           }
         }
       }
@@ -8825,6 +9865,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "重试"
+          }
+        }
+      }
+    },
+    "Two devices answered this card. Keep one." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Two devices answered this card. Keep one."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两台设备都回答了这张卡片，请保留一个。"
           }
         }
       }
@@ -9635,6 +10691,22 @@
         }
       }
     },
+    "Your Data" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your Data"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的数据"
+          }
+        }
+      }
+    },
     "Your dictionaries declare no language yet, so every reading is kept." : {
       "localizations" : {
         "en" : {
@@ -9699,6 +10771,22 @@
         }
       }
     },
+    "Your readings, notes and grades, as one JSON file." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Your readings, notes and grades, as one JSON file."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你的阅读记录、笔记和评分，导出为一个 JSON 文件。"
+          }
+        }
+      }
+    },
     "Your wording, not measured" : {
       "localizations" : {
         "en" : {
@@ -9727,6 +10815,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS 找不到 XDict，无法在登录时打开。"
+          }
+        }
+      }
+    },
+    "macOS is not allowing XDict's notifications. Allow them in System Settings ▸ Notifications." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS is not allowing XDict's notifications. Allow them in System Settings ▸ Notifications."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 不允许 XDict 发送通知。请在“系统设置”▸“通知”中允许。"
           }
         }
       }

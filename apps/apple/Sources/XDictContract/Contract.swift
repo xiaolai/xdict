@@ -51,7 +51,7 @@ public enum Contract {
     /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
     /// 10 (2026-10-21): the study operations — a note, the notes, the review queue, a grade, an undo, the summary, a
     /// definition's hash and a re-anchor — with their answers (plan-history-and-learning WI-5).
-    public static let version: UInt32 = 10
+    public static let version: UInt32 = 11
 }
 
 // MARK: - The request
@@ -255,6 +255,22 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     case definitionHash(dict: DictId, entry: EntryRef)
     /// **Re-anchors notes of one edition to another** under the same lineage (plan §5.1).
     case studyReanchor(oldEdition: Edition, newEdition: Edition, stamp: StudyStamp, operationPrefix: String)
+    /// **Saves a note named by the history card's facts** — an entry reference, not a handle — resolved to the open
+    /// dictionary of its edition.
+    case studyNoteAt(entry: EntryRef, text: String, name: String, stamp: StudyStamp, operation: String)
+    /// **The reader's export** (ADR-0023): one versioned JSON document of the log's events, no dictionary content.
+    case exportData
+    /// **Erase is a rewrite** (ADR-0024): readings, notes and grades leave the log; the receipt reports what it cleared.
+    case eraseData(stamp: StudyStamp, operation: String)
+    /// **The cards two devices' answers left in two states** (ADR-0027); they are not in the queue.
+    case studyConflicts
+    /// **Keeps one branch of a conflict**: `keep` names one of its candidates, and the others are voided with what came
+    /// after them.
+    case reviewResolve(target: String, keep: String, stamp: StudyStamp, operation: String)
+    /// **One sync pass** (plan §2.6): every peer log in `input` merges, then this device's log is written to `output`.
+    /// The two are the app group's — the service's sandbox cannot read the reader's folder. The artifact carries no
+    /// dictionary text.
+    case ledgerSync(input: String, output: String, device: String)
 
     /// The package this operation opens or imports, whose files' handles travel with it.
     public var packageSpec: PackageSpec? {
@@ -263,7 +279,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .definitionHash, .studyReanchor: nil
+             .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
+             .reviewResolve, .ledgerSync: nil
         }
     }
 
@@ -274,7 +291,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
              .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
-             .reviewSummary, .definitionHash, .studyReanchor: nil
+             .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
+             .reviewResolve, .ledgerSync: nil
         }
     }
 
@@ -290,11 +308,11 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// `Limits.bulkCallsInFlight` run at once.
     public var isBulk: Bool {
         switch self {
-        case .entry, .resource, .entryText, .studyNote, .definitionHash: true
+        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor: false
+             .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: false
         }
     }
 
@@ -302,11 +320,12 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// lookup for the calls that search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource, .entryText, .studyNote, .definitionHash: .bulk
+        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: .bulk
         case .openPackage, .lookup, .suggest, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory,
-             .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor: nil
+             .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor, .exportData,
+             .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: nil
         }
     }
 
@@ -322,7 +341,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor: []
+             .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync: []
         }
     }
 
@@ -346,13 +365,18 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entryText: .entryText
         case .ledgerRecord: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
-        case .studyNote: .studyNote
+        case .studyNote, .studyNoteAt: .studyNote
         case .studyNotes: .studyNotes
         case .reviewQueue: .reviewQueue
         case .reviewGrade, .reviewUndo: .reviewOutcome
         case .reviewSummary: .reviewSummary
         case .definitionHash: .definitionHash
         case .studyReanchor: .reanchored
+        case .exportData: .exported
+        case .eraseData: .erased
+        case .studyConflicts: .conflicts
+        case .reviewResolve: .reviewOutcome
+        case .ledgerSync: .synced
         }
     }
 
@@ -364,7 +388,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
              .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .definitionHash, .studyReanchor: false
+             .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
+             .ledgerSync: false
         }
     }
 }
@@ -513,6 +538,14 @@ public enum Answer: Codable, Hashable, Sendable {
     case definitionHash(String)
     /// What a re-anchor found for each note (contract 10).
     case reanchored(ReanchorReport)
+    /// The log's events as the reader's export (contract 10).
+    case exported(String)
+    /// What an erase cleared (contract 10).
+    case erased(StudyEraseReport)
+    /// The cards two devices left conflicted, with their candidates (contract 11).
+    case conflicts([CardConflict])
+    /// What one sync pass did with the reader's folder (contract 11).
+    case synced(SyncReport)
 
     /// Whether a payload travels beside this answer: an entry, or a found resource.
     public var carriesPayload: Bool {
@@ -521,7 +554,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored: false
+             .reanchored, .exported, .erased, .conflicts, .synced: false
         }
     }
 
@@ -561,6 +594,10 @@ public enum Answer: Codable, Hashable, Sendable {
         case .reviewSummary: .reviewSummary
         case .definitionHash: .definitionHash
         case .reanchored: .reanchored
+        case .exported: .exported
+        case .erased: .erased
+        case .conflicts: .conflicts
+        case .synced: .synced
         }
     }
 }
@@ -580,6 +617,7 @@ enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
     case readingStyle, converted, displayOptions, entryText, ledgerRecord, ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
+    case exported, erased, conflicts, synced
 }
 
 // MARK: - Events

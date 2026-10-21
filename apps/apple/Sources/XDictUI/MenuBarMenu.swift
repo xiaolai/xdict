@@ -15,17 +15,19 @@ public struct MenuBarMenu: View {
     let openMain: () -> Void
     let showDictionaries: () -> Void
     let showHistory: () -> Void
+    let showReview: () -> Void
     @Environment(\.openSettings) private var openSettings
 
     public init(registrar: ShortcutRegistrar, hover: HoverControl, lookUp: @escaping () -> Void,
                 openMain: @escaping () -> Void, showDictionaries: @escaping () -> Void,
-                showHistory: @escaping () -> Void) {
+                showHistory: @escaping () -> Void, showReview: @escaping () -> Void) {
         self.registrar = registrar
         self.hover = hover
         self.lookUp = lookUp
         self.openMain = openMain
         self.showDictionaries = showDictionaries
         self.showHistory = showHistory
+        self.showReview = showReview
     }
 
     public var body: some View {
@@ -42,6 +44,7 @@ public struct MenuBarMenu: View {
         }
         Button("Open XDict") { openMain() }  // placement: menu-bar-extra
         Button("History…") { showHistory() }  // placement: menu-bar-extra
+        Button("Review…") { showReview() }  // placement: menu-bar-extra
         Button("Dictionaries…") { showDictionaries() }  // placement: menu-bar-extra
         Divider()
         pauseGroup

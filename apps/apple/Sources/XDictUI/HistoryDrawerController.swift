@@ -25,9 +25,15 @@ public final class HistoryDrawerController {
     private var escape: Any?
     private var screens: NSObjectProtocol?
 
-    public init(model: HistoryModel) {
+    /// `study` writes a card's note; `onReview` opens the review window from the drawer's header.
+    public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil) {
         self.model = model
+        self.study = study
+        self.onReview = onReview
     }
+
+    private let study: StudyModel?
+    private let onReview: (() -> Void)?
 
     public var isOpen: Bool { panel?.isVisible == true }
 
@@ -79,7 +85,7 @@ public final class HistoryDrawerController {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .transient, .ignoresCycle]
-        panel.contentView = NSHostingView(rootView: HistoryView(model: model))
+        panel.contentView = NSHostingView(rootView: HistoryView(model: model, study: study, onReview: onReview))
         panel.setAccessibilityIdentifier("history.drawer")
         return panel
     }

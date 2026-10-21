@@ -26,6 +26,8 @@ struct LimitsTests {
                               Fixtures.index(.studyNote(dict: Fixtures.dict, entry: Fixtures.entryRef, text: "t",
                                                         name: "Tiny", stamp: Fixtures.studyStamp,
                                                         operation: "op")),
+                              Fixtures.index(.studyNoteAt(entry: Fixtures.entryRef, text: "t", name: "Tiny",
+                                                          stamp: Fixtures.studyStamp, operation: "op")),
                               Fixtures.index(.definitionHash(dict: Fixtures.dict, entry: Fixtures.entryRef))])
     }
 

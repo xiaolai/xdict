@@ -101,6 +101,36 @@ struct StudyServiceTests {
         #expect(undone.card.head.isEmpty)
     }
 
+    /// **Sync and conflicts through the service** (contract 11): one device sees no conflict, and a sync pass writes its
+    /// log into the reader's folder and reports what it did.
+    @Test func aSyncPassWritesTheLogAndOneDeviceSeesNoConflict() async throws {
+        let opened = try #require(try await Self.opened())
+        let (_, client, dict, ref) = opened
+        _ = await client.call(.studyNote(dict: dict, entry: ref, text: "mine", name: "Tiny", stamp: Self.stamp,
+                                         operation: "note-sync"))
+        let conflicts = await client.call(.studyConflicts)
+        guard case .success(let delivered) = conflicts, case .conflicts(let found) = delivered.answer else {
+            Issue.record("no conflicts answer: \(conflicts)")
+            return
+        }
+        #expect(found.isEmpty, "one device cannot disagree with itself")
+
+        let root = FileManager.default.temporaryDirectory.appending(path: "xdict-sync-\(UUID().uuidString)")
+        let inbox = root.appending(path: "in"), outbox = root.appending(path: "out")
+        try FileManager.default.createDirectory(at: inbox, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let report = await client.call(.ledgerSync(input: inbox.path(percentEncoded: false),
+                                                   output: outbox.path(percentEncoded: false),
+                                                   device: "test-device"))
+        guard case .success(let synced) = report, case .synced(let summary) = synced.answer else {
+            Issue.record("no sync answer: \(report)")
+            return
+        }
+        #expect(summary.peers == 0 && summary.added == 0)
+        #expect(summary.exported > 0, "this device's log is written for the others")
+        #expect(FileManager.default.fileExists(atPath: outbox.appending(path: "xdict-test-device.xdlog").path))
+    }
+
     @Test func aRetryOfACommittedNoteIsOneNote() async throws {
         let opened = try #require(try await Self.opened())
         let (_, client, dict, ref) = opened

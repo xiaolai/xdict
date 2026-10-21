@@ -38,4 +38,11 @@ public enum AppGroup {
     public static func appleImports(in container: URL) -> URL {
         container.appending(path: "AppleImports", directoryHint: .isDirectory)
     }
+
+    /// **Where one sync pass's files meet** (plan §2.6): the app copies the reader's folder's logs into `Sync/in` — the
+    /// service's sandbox cannot read that folder — the service merges them and writes this device's log to `Sync/out`,
+    /// and the app copies it back. Both processes hold the group.
+    public static func sync(in container: URL) -> URL {
+        container.appending(path: "Sync", directoryHint: .isDirectory)
+    }
 }

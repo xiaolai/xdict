@@ -17,7 +17,8 @@
     "xdict-ledger",
     "xdict-lookup",
     "xdict-mdx",
-    "xdict-mmap"
+    "xdict-mmap",
+    "xdict-schedule"
    ],
    "dev": [
     "xdict-mdx-writer"
@@ -105,7 +106,7 @@
   "apps/apple/Package.swift": "b8b252f8ca8e3110b7da6ad2937c8bd000ca973a",
   "core/Cargo.toml": "7e82ff1da499ac06f4faaa372973321448b35b95",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
-  "core/xdict-core/Cargo.toml": "0d59d1fbd0fbba989fde3c5c072b789bee516ed6",
+  "core/xdict-core/Cargo.toml": "d3da77c790a6b99d5a9eb8312fababe3932e963d",
   "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
   "core/xdict-ffi/Cargo.toml": "ac303ff831d1e474a26e106112c7a12aeffbd293",
   "core/xdict-health/Cargo.toml": "42b7213a18cb38c66a647483ab58e8328fca29ec",

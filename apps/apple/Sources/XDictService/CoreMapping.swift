@@ -521,3 +521,49 @@ extension XDictContract.ReanchorReport {
         self.init(outcomes: report.outcomes.map { XDictContract.ReanchorOutcome($0) })
     }
 }
+
+extension XDictContract.Recoverability {
+    init(_ recoverability: XDictCore.Recoverability) {
+        switch recoverability {
+        case .freeBlocks: self = .freeBlocks
+        }
+    }
+}
+
+extension XDictContract.StudyEraseReport {
+    init(_ report: XDictCore.EraseReport) {
+        self.init(clearedReadings: report.clearedReadings, clearedNotes: report.clearedNotes,
+                  clearedGrades: report.clearedGrades, recoverable: XDictContract.Recoverability(report.recoverable))
+    }
+}
+
+extension XDictContract.StudyGrade {
+    init(_ grade: XDictCore.StudyGrade) {
+        switch grade {
+        case .again: self = .again
+        case .hard: self = .hard
+        case .good: self = .good
+        case .easy: self = .easy
+        }
+    }
+}
+
+extension XDictContract.ConflictCandidate {
+    init(_ candidate: XDictCore.ConflictCandidate) {
+        self.init(id: candidate.id, grade: XDictContract.StudyGrade(candidate.grade), at: candidate.at,
+                  device: candidate.device, after: XDictContract.StudyCardState(candidate.after))
+    }
+}
+
+extension XDictContract.CardConflict {
+    init(_ conflict: XDictCore.CardConflict) {
+        self.init(target: XDictContract.StudyTarget(conflict.target), note: XDictContract.StudyNote(conflict.note),
+                  candidates: conflict.candidates.map(XDictContract.ConflictCandidate.init))
+    }
+}
+
+extension XDictContract.SyncReport {
+    init(_ report: XDictCore.SyncReport) {
+        self.init(exported: report.exported, peers: report.peers, added: report.added, skipped: report.skipped)
+    }
+}

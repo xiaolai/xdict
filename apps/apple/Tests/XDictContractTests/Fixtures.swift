@@ -38,6 +38,13 @@ enum Fixtures {
                                      head: "grade-event", noteHead: "note-event", grades: 1)
     static let reviewSummary = ReviewSummary(due: 0, nextDue: 1_790_644_200)
     static let studyOutcome = StudyOutcome(outcome: .recorded, card: studyCard)
+    /// Two devices' answers to one revision (ADR-0027), the shape the review window draws.
+    static let cardConflict = CardConflict(target: studyTarget, note: studyNote, candidates: [
+        ConflictCandidate(id: "grade-event", grade: .good, at: 1_790_643_600, device: "fixture",
+                          after: studyCard.state),
+        ConflictCandidate(id: "grade-event-b", grade: .again, at: 1_790_643_700, device: "fixture-b",
+                          after: studyCard.state),
+    ])
     static let reanchorReport = ReanchorReport(outcomes: [
         ReanchorOutcome(target: studyTarget, result: .reanchored),
     ])
@@ -103,12 +110,19 @@ enum Fixtures {
         .studyReanchor(oldEdition: edition,
                        newEdition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32)),
                        stamp: studyStamp, operationPrefix: "reanchor"),
+        .studyNoteAt(entry: entryRef, text: "my own words", name: "Tiny", stamp: studyStamp,
+                     operation: "op-study-at"),
+        .exportData,
+        .eraseData(stamp: studyStamp, operation: "op-erase"),
+        .studyConflicts,
+        .reviewResolve(target: studyTarget.key, keep: "grade-event", stamp: studyStamp, operation: "op-resolve"),
+        .ledgerSync(input: "/tmp/xdict-sync/in", output: "/tmp/xdict-sync/out", device: "device-a"),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 29
+    static let operationCases = 35
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -140,6 +154,12 @@ enum Fixtures {
         case .reviewSummary: 26
         case .definitionHash: 27
         case .studyReanchor: 28
+        case .studyNoteAt: 29
+        case .exportData: 30
+        case .eraseData: 31
+        case .studyConflicts: 32
+        case .reviewResolve: 33
+        case .ledgerSync: 34
         }
     }
 
@@ -203,6 +223,10 @@ enum Fixtures {
         .reviewSummary(reviewSummary),
         .definitionHash(String(repeating: "ab", count: 32)),
         .reanchored(reanchorReport),
+        .exported(#"{"version":1,"events":[]}"#),
+        .erased(StudyEraseReport(clearedReadings: 0, clearedNotes: 0, clearedGrades: 0, recoverable: .freeBlocks)),
+        .conflicts([cardConflict]),
+        .synced(SyncReport(exported: 4_096, peers: 1, added: 3, skipped: 41)),
     ]
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
@@ -233,7 +257,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 25
+    static let answerCases = 29
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -261,6 +285,10 @@ enum Fixtures {
         case .reviewSummary: 22
         case .definitionHash: 23
         case .reanchored: 24
+        case .exported: 25
+        case .erased: 26
+        case .conflicts: 27
+        case .synced: 28
         }
     }
 
