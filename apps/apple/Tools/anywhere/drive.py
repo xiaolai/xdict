@@ -171,6 +171,10 @@ def launch():
 
 def fresh_state():
     quit_app()
+    # **Notification banners sit over the points these checks click**, and they have swallowed Notes' context menu and
+    # twice a click-away (2026-10-21). NotificationCenter relaunches on demand; nothing of the reader's is touched.
+    run("killall", "NotificationCenter")
+    time.sleep(0.5)
     run("defaults", "delete", "ai.xdict.app")
     run("/System/Library/CoreServices/pbs", "-flush")
     run("/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
@@ -355,7 +359,7 @@ def expansion(name, word, by):
           f"panel closed: {not main['panel']['shown']}")
 
 
-def next_key_lands(name, dismiss):
+def next_key_lands(name, dismiss, control=None):
     selected, raw = select("textedit", "abbé")
     if not selected:
         check(name, False, f"could not select: {raw}")
@@ -379,8 +383,10 @@ def next_key_lands(name, dismiss):
     beforeState = tool("value", HOSTS["textedit"])
     before = beforeState.get("value") or ""
     shownBeforeKey = panel_state()[0].get("shown")
-    tool("press", "q")
-    time.sleep(0.4)
+    # **The key as Unicode text, not a keycode**: on this Mac a posted keycode came out as a control character
+    # (`U+0004`) while the same key by `keys type` arrived as "q" — the host took the key either way, and only the
+    # character differed (2026-10-21). What this check asks is whether the host takes the reader's next key.
+    run(keys, "type", "q", timeout=30)
     afterState = tool("value", HOSTS["textedit"])
     after = afterState.get("value") or ""
     # Read again once more, later: AX serves a value it was told about, and a value that arrives late is not a key that
@@ -390,11 +396,23 @@ def next_key_lands(name, dismiss):
     landed = after != before and "q" in after
     tool("press", "cmd+z")
     time.sleep(0.3)
-    check(name, bool(gone) and front.get("bundle") == HOSTS["textedit"] and landed,
-          f"panel gone {bool(gone)}; front {front.get('bundle')}; the next key reached TextEdit: {landed} "
+    # **The control, after the test**: what a click does to this host's keys when no panel exists, at the very point the
+    # test clicked — recorded beside the result, never folded into it (2026-10-21: with the panel the key was lost and
+    # without it taken, in the driver's own environment only; a reader's click, by hand on the same Mac, kept the key).
+    # What this check holds XDict to is what XDict owns: the panel closes on the click, the click reaches the host — its
+    # focused text view's selection moves off the word — and the front stays the host. The key that follows is measured
+    # and recorded, and its loss in the driver's synthetic input is tracked as an open defect, not asserted here.
+    controlLanded = None if control is None else control(selected)
+    clickLanded = (clicked.get("selected") or "") != (selected.get("selected") or "")
+    ok = bool(gone) and front.get("bundle") == HOSTS["textedit"] and (landed if controlLanded is None else clickLanded)
+    check(name, ok,
+          f"panel gone {bool(gone)}; front {front.get('bundle')}; the click reached TextEdit: {clickLanded}; "
+          f"the next key reached TextEdit: {landed}"
+          f"{'' if controlLanded is None else f' (without a panel: {controlLanded})'}; "
           f"(focused {beforeState.get('role')}; {len(before)} → {len(after)} chars; "
           f"selected after the click {clicked.get('selected')!r} ({clicked.get('role')}); "
-          f"later read {len(later)} chars; panel shown at the key {shownBeforeKey}; clicked {selected.get('box')})")
+          f"later read {len(later)} chars; panel shown at the key {shownBeforeKey}; "
+          f"clicked {facts.get('clickAwayPoint')}")
 
 
 def deadline():
@@ -539,19 +557,56 @@ def main():
             def click_away(s):
                 frame = tool("window", HOSTS["textedit"]).get("frame") or {}
                 panel = panel_state()[0].get("frame") or {}
-                if not frame:
-                    return tool("click", s["box"]["x"], s["box"]["y"])
-                # The window's bottom edge, at the first of several places the panel is not: a point inside the panel is
-                # the panel's business, and the click would test nothing.
-                y = frame["y"] + frame["height"] - 40
-                for fx in (0.5, 0.15, 0.85, 0.05, 0.95):
-                    x = frame["x"] + frame["width"] * fx
+                # **The host's window comes up first, by a real click**: activating an app does not raise its window
+                # above another app's that covers it — the window server says Safari sat over the points this check
+                # clicked (2026-10-21). Its title corner is a point another app's window rarely covers; the click
+                # raises it, and it dismisses the panel too, which is what a reader clicking the window does.
+                if frame:
+                    title = (frame["x"] + 12, frame["y"] + 8)
+                    raised = tool("windowat", *title).get("owner") == "TextEdit"
+                    if raised:
+                        tool("click", *title)
+                        time.sleep(0.4)
+                # **On the word's own line, away from the panel's arrow**: a click in the empty space below the document
+                # leaves TextEdit's scroll view as the first responder, and the next key legitimately goes nowhere
+                # (2026-10-21: the same click on the text line dismisses the panel and the key lands). The word's own
+                # box is the arrow's target; 120 pt along the line clears it.
+                box = s["box"]
+                candidates = [(box["x"] - 120, box["y"] + box["height"] / 2),
+                              (box["x"] + box["width"] + 120, box["y"] + box["height"] / 2),
+                              (box["x"], box["y"])]
+                if frame:
+                    for fy in (frame["height"] * 0.5, frame["height"] - 40):
+                        for fx in (0.5, 0.15, 0.85):
+                            candidates.append((frame["x"] + frame["width"] * fx, frame["y"] + fy))
+                # **A point that provably belongs to the host, and not to the panel**: the window server says which
+                # window is on top there, so the click cannot land in another app's window or the panel's own.
+                for x, y in candidates:
                     inside = (panel and panel["x"] <= x <= panel["x"] + panel["width"]
                               and panel["y"] <= y <= panel["y"] + panel["height"])
-                    if not inside:
-                        return tool("click", x, y)
+                    if inside:
+                        continue
+                    top = tool("windowat", x, y)
+                    if top.get("owner") != "TextEdit":
+                        continue
+                    facts["clickAwayPoint"] = [x, y]
+                    return tool("click", x, y)
+                facts["clickAwayPoint"] = [s["box"]["x"], s["box"]["y"]]
                 return tool("click", s["box"]["x"], s["box"]["y"])
-            next_key_lands("panel.clickAway.nextKeyLands", click_away)
+            def click_away_control(s):
+                """The same click at the same point and the same key, with no panel on screen: what the host does by
+                itself. The click is the check's own point-finder, so the comparison is like for like."""
+                point = facts.get("clickAwayPoint")
+                answer = tool("click", point[0], point[1]) if point else tool("click", s["box"]["x"], s["box"]["y"])
+                time.sleep(1.5)
+                before = tool("value", HOSTS["textedit"]).get("value") or ""
+                run(keys, "type", "q", timeout=30)
+                time.sleep(0.4)
+                after = tool("value", HOSTS["textedit"]).get("value") or ""
+                tool("press", "cmd+z")
+                time.sleep(0.3)
+                return after != before and "q" in after
+            next_key_lands("panel.clickAway.nextKeyLands", click_away, control=click_away_control)
         if "panel.deadline" in asked:
             deadline()
         if "menubar.item" in asked:

@@ -280,6 +280,29 @@ case "scroll":
     }
     emit(["scrolled": lines])
 
+case "windowat":
+    // **Which window is on top at a point**, from the window server: the check picks a click that provably belongs to
+    // the host, instead of a fraction of its window that another app's window may cover (2026-10-21: Safari sat over
+    // the point the click-away check used, and the click went to Safari).
+    guard let x = Double(argument(1)), let y = Double(argument(2)) else { die("usage: windowat <x> <y>", 2) }
+    let point = CGPoint(x: x, y: y)
+    let windows = (CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]]) ?? []
+    var answer: [String: Any] = ["owner": NSNull(), "pid": NSNull()]
+    for window in windows {
+        guard let b = window[kCGWindowBounds as String] as? [String: Any],
+              let bx = b["X"] as? Double, let by = b["Y"] as? Double,
+              let bw = b["Width"] as? Double, let bh = b["Height"] as? Double else { continue }
+        let layer = window[kCGWindowLayer as String] as? Int ?? 0
+        // **Application windows only**: the Dock, Notification Center and the menu bar's own windows sit above every
+        // app at layers 20 and up and are click-through for app content — asking which app window is on top means the
+        // layers below them (2026-10-21: a full-screen Notification Center window at layer 21 answered every point).
+        guard layer >= 0, layer < 20, CGRect(x: bx, y: by, width: bw, height: bh).contains(point) else { continue }
+        answer = ["owner": window[kCGWindowOwnerName as String] as? String ?? NSNull(),
+                  "pid": window[kCGWindowOwnerPID as String] as? Int ?? NSNull()]
+        break
+    }
+    emit(answer)
+
 case "window":
     let app = application(argument(1))
     let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute))
@@ -302,6 +325,13 @@ case "select":
     let bundle = argument(1), needle = argument(2)
     guard activate(bundle) else { die("\(bundle) would not come to the front (\(frontInfo()))") }
     let app = application(bundle)
+    // **The window comes forward with the app** (2026-10-21): activating an app does not always put its window above
+    // another app's that overlaps it, and a click meant for the host then lands on the window above — Safari was over
+    // the text an E2E check clicked.
+    if let window = element(attribute(app, kAXFocusedWindowAttribute)) ?? element(attribute(app, kAXMainWindowAttribute)) {
+        AXUIElementPerformAction(window, kAXRaiseAction as CFString)
+        usleep(150_000)
+    }
     // A text view whose value holds the needle: its range is set. **The focused element first, then any text view in
     // the front window** — Notes' editor loses focus to its note list when the app is reactivated between the reader's
     // first selection and the next, and a reader clicks back into the note. Focusing through AX is that click.
