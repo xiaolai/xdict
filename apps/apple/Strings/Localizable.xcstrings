@@ -312,6 +312,34 @@
         }
       }
     },
+    "%lld Apple dictionaries are in use in Dictionary.app." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Apple dictionary is in use in Dictionary.app."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%lld Apple dictionaries are in use in Dictionary.app."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 部 Apple 词典已在“词典”App 中启用。"
+          }
+        }
+      }
+    },
     "%lld dictionaries couldn’t be searched" : {
       "localizations" : {
         "en" : {
@@ -1628,6 +1656,22 @@
         }
       }
     },
+    "A source is chosen in Settings ▸ AI. Whether it answers is checked there." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A source is chosen in Settings ▸ AI. Whether it answers is checked there."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在“设置 ▸ AI”中选择了来源；它是否可用，请在那里检查。"
+          }
+        }
+      }
+    },
     "AI" : {
       "localizations" : {
         "en" : {
@@ -1913,6 +1957,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "所有语言"
+          }
+        }
+      }
+    },
+    "All three of Apple’s Look Up triggers are off: its keyboard shortcut, its three-finger tap and its own dictionaries." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All three of Apple’s Look Up triggers are off: its keyboard shortcut, its three-finger tap and its own dictionaries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 的三种查询方式都已关闭：键盘快捷键、三指轻点，以及 Apple 自己的词典。"
           }
         }
       }
@@ -2269,6 +2329,54 @@
         }
       }
     },
+    "Apple’s Look Up" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple’s Look Up"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 的查询"
+          }
+        }
+      }
+    },
+    "Apple’s dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple’s dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple 的词典"
+          }
+        }
+      }
+    },
+    "Apple’s own dictionaries are active in Dictionary.app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Apple’s own dictionaries are active in Dictionary.app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“词典”App 中启用了 Apple 自己的词典。"
+          }
+        }
+      }
+    },
     "Ask Again" : {
       "localizations" : {
         "en" : {
@@ -2410,6 +2518,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“自动”读取应用提供的文字，应用不提供时读取屏幕。“仅屏幕”始终读取屏幕，需要“屏幕录制”权限；只要“从不在这些网站上查询”中列有任何网站，就不读取网页浏览器中的内容；其他应用中内嵌的网页则按该应用的屏幕内容读取。"
+          }
+        }
+      }
+    },
+    "Available in Dictionary.app" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Available in Dictionary.app"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可在“词典”App 中下载"
           }
         }
       }
@@ -2720,6 +2844,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请检查拼写，或试试这个词更短的形式。"
+          }
+        }
+      }
+    },
+    "Check this in System Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check this in System Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请在系统设置中检查"
           }
         }
       }
@@ -3306,6 +3446,22 @@
         }
       }
     },
+    "Dictionary" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典"
+          }
+        }
+      }
+    },
     "Dictionary’s Own Colors" : {
       "localizations" : {
         "en" : {
@@ -3382,6 +3538,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "完成"
+          }
+        }
+      }
+    },
+    "Download in Dictionary.app…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download in Dictionary.app…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在“词典”App 中下载…"
           }
         }
       }
@@ -4286,6 +4458,38 @@
         }
       }
     },
+    "Hold %@ and rest the pointer on a word in any app. Change the key in General." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold %@ and rest the pointer on a word in any app. Change the key in General."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住 %@，把指针停在任意 App 中的单词上。可在“通用”中更改按键。"
+          }
+        }
+      }
+    },
+    "Hover" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hover"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "悬停"
+          }
+        }
+      }
+    },
     "Hover Is Off in Settings" : {
       "comment" : "Menu bar line, disabled: why Pause Hover is not offered",
       "localizations" : {
@@ -4577,6 +4781,38 @@
         }
       }
     },
+    "Include in Spotlight" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Include in Spotlight"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "收录到 Spotlight"
+          }
+        }
+      }
+    },
+    "Included: a Spotlight search for a headword finds it, and Return opens it in XDict. The index holds the words only, and stays on this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Included: a Spotlight search for a headword finds it, and Return opens it in XDict. The index holds the words only, and stays on this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已在 Spotlight 中收录：搜索词头即可找到，按 Return 在 XDict 中打开。索引只含词头，保存在这台 Mac 上。"
+          }
+        }
+      }
+    },
     "Increase font size" : {
       "localizations" : {
         "en" : {
@@ -4802,6 +5038,38 @@
         }
       }
     },
+    "Keyboard Shortcuts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyboard Shortcuts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "键盘快捷键"
+          }
+        }
+      }
+    },
+    "Keyboard shortcut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keyboard shortcut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "键盘快捷键"
+          }
+        }
+      }
+    },
     "Known once the dictionary is imported." : {
       "localizations" : {
         "en" : {
@@ -5008,6 +5276,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询所选内容"
+          }
+        }
+      }
+    },
+    "Look Up in XDict Service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up in XDict Service"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 查询服务"
           }
         }
       }
@@ -5296,6 +5580,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "读取你在其他 App 中选中的词需要此权限。请在“系统设置 ▸ 隐私与安全性 ▸ 辅助功能”中打开 XDict，这一行会自动更新。"
+          }
+        }
+      }
+    },
+    "Needs a check" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Needs a check"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "需要检查"
           }
         }
       }
@@ -5717,6 +6017,22 @@
         }
       }
     },
+    "None of Apple’s dictionaries is active in Dictionary.app." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of Apple’s dictionaries is active in Dictionary.app."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“词典”App 中没有启用任何 Apple 词典。"
+          }
+        }
+      }
+    },
     "Normalizing changed nothing in its style sheets." : {
       "localizations" : {
         "en" : {
@@ -5809,6 +6125,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 中没有。"
+          }
+        }
+      }
+    },
+    "Not installed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not installed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未安装"
           }
         }
       }
@@ -5947,6 +6279,22 @@
         }
       }
     },
+    "Nothing here is required, but whatever Apple’s Look Up still has on shows its own panel before XDict’s. The lines below say what is on." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nothing here is required, but whatever Apple’s Look Up still has on shows its own panel before XDict’s. The lines below say what is on."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这里都不是必需的，但 Apple 的查询只要还开着，就会先显示它自己的面板。下面几行说明哪些还开着。"
+          }
+        }
+      }
+    },
     "Nothing is due." : {
       "localizations" : {
         "en" : {
@@ -6075,6 +6423,134 @@
         }
       }
     },
+    "Off. A three-finger tap does not look a word up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. A three-finger tap does not look a word up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。三指轻点不会查询单词。"
+          }
+        }
+      }
+    },
+    "Off. Apple’s Look Up shortcut does nothing." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. Apple’s Look Up shortcut does nothing."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。Apple 的查询快捷键不会起作用。"
+          }
+        }
+      }
+    },
+    "Off. Choose a source in Settings ▸ AI to look up a meaning in context." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. Choose a source in Settings ▸ AI to look up a meaning in context."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。在“设置 ▸ AI”中选择来源，即可查询上下文中的含义。"
+          }
+        }
+      }
+    },
+    "Off. Include your dictionaries’ headwords in Spotlight to find them while you search — the words only, on this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. Include your dictionaries’ headwords in Spotlight to find them while you search — the words only, on this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。把词典的词头收录到 Spotlight，搜索时就能找到——只收词头，保存在这台 Mac 上。"
+          }
+        }
+      }
+    },
+    "Off. Turn it on to look up the word under the pointer: hold %@ and rest it on a word, in any app, with no BetterTouchTool." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. Turn it on to look up the word under the pointer: hold %@ and rest it on a word, in any app, with no BetterTouchTool."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。开启后，按住 %@ 并把指针停在单词上，即可在任意 App 中查询指针下的词，不需要其他工具。"
+          }
+        }
+      }
+    },
+    "Off. Turn it on to look up the word under the pointer: tap %@ twice with it resting on a word, in any app, with no BetterTouchTool." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off. Turn it on to look up the word under the pointer: tap %@ twice with it resting on a word, in any app, with no BetterTouchTool."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已关闭。开启后，把指针停在单词上连按两次 %@，即可在任意 App 中查询指针下的词，不需要其他工具。"
+          }
+        }
+      }
+    },
+    "On. Turn off Look Up & data detectors in Trackpad; Force Click is in the same pane." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On. Turn off Look Up & data detectors in Trackpad; Force Click is in the same pane."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启。请在“触控板”中关闭“查询与数据检测器”；力度点按在同一面板中。"
+          }
+        }
+      }
+    },
+    "On. Turn off Look Up in Dictionary under Keyboard Shortcuts ▸ Services." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On. Turn off Look Up in Dictionary under Keyboard Shortcuts ▸ Services."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已开启。请在“键盘快捷键 ▸ 服务”中关闭“在词典中查询”。"
+          }
+        }
+      }
+    },
     "One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose." : {
       "localizations" : {
         "en" : {
@@ -6155,6 +6631,22 @@
         }
       }
     },
+    "Open AI Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open AI Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 AI 设置"
+          }
+        }
+      }
+    },
     "Open Accessibility Settings" : {
       "localizations" : {
         "en" : {
@@ -6203,6 +6695,54 @@
         }
       }
     },
+    "Open Dictionary.app" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Dictionary.app"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“词典”App"
+          }
+        }
+      }
+    },
+    "Open General" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open General"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“通用”"
+          }
+        }
+      }
+    },
+    "Open Keyboard Shortcuts" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Keyboard Shortcuts"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“键盘快捷键”"
+          }
+        }
+      }
+    },
     "Open Login Items Settings…" : {
       "localizations" : {
         "en" : {
@@ -6231,6 +6771,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开“阅读与朗读”设置"
+          }
+        }
+      }
+    },
+    "Open Spotlight Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Spotlight Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开“Spotlight”设置"
           }
         }
       }
@@ -6376,6 +6932,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Option %@"
+          }
+        }
+      }
+    },
+    "Optional" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选"
+          }
+        }
+      }
+    },
+    "Optional, not set up: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional, not set up: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选，尚未设置：%@。"
           }
         }
       }
@@ -6602,6 +7190,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "播放词典自带的录音。"
+          }
+        }
+      }
+    },
+    "Pointer gesture" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Pointer gesture"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "指针手势"
           }
         }
       }
@@ -6911,6 +7515,22 @@
         }
       }
     },
+    "Recheck" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Recheck"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新检查"
+          }
+        }
+      }
+    },
     "Recorded, but not yet flushed to disk." : {
       "localizations" : {
         "en" : {
@@ -7051,6 +7671,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "替换"
+          }
+        }
+      }
+    },
+    "Rescan" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rescan"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重新扫描"
           }
         }
       }
@@ -7960,6 +8596,54 @@
         }
       }
     },
+    "Spotlight" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotlight"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotlight"
+          }
+        }
+      }
+    },
+    "Spotlight could not be updated. Turn this off and on to try again." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotlight could not be updated. Turn this off and on to try again."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spotlight 更新失败。请关闭再打开这个开关重试。"
+          }
+        }
+      }
+    },
+    "Still needs you: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Still needs you: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "还需要你完成：%@。"
+          }
+        }
+      }
+    },
     "Stored in the Keychain" : {
       "localizations" : {
         "en" : {
@@ -8054,6 +8738,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Tap %@ twice with the pointer resting on a word. Change the key in General." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tap %@ twice with the pointer resting on a word. Change the key in General."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "把指针停在单词上连按两次 %@。可在“通用”中更改按键。"
           }
         }
       }
@@ -8922,6 +9622,22 @@
         }
       }
     },
+    "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回复格式由 XDict 附加，不可编辑。提示词可使用 {term}、{sentence}、{entry} 和 {language}；缺失或未知的占位符会在发送前被拒绝。"
+          }
+        }
+      }
+    },
     "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt." : {
       "localizations" : {
         "en" : {
@@ -9133,6 +9849,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务器的 OpenAI 兼容基础地址，例如 Ollama 的 http://127.0.0.1:11434/v1。"
+          }
+        }
+      }
+    },
+    "The service is on: Look Up in XDict is in every app’s Services menu." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service is on: Look Up in XDict is in every app’s Services menu."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务已开启：每个 App 的“服务”菜单中都有“在 XDict 中查询”。"
           }
         }
       }
@@ -10067,6 +10799,22 @@
         }
       }
     },
+    "Three-finger tap" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Three-finger tap"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "三指轻点"
+          }
+        }
+      }
+    },
     "Through your ChatGPT sign-in, held by the Codex tool. It signs in with Codex's own login command." : {
       "localizations" : {
         "en" : {
@@ -10195,6 +10943,22 @@
         }
       }
     },
+    "Trackpad" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Trackpad"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "触控板"
+          }
+        }
+      }
+    },
     "Try Again" : {
       "localizations" : {
         "en" : {
@@ -10223,6 +10987,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "两台设备都回答了这张卡片，请保留一个。"
+          }
+        }
+      }
+    },
+    "Two prompts: one sends the entry’s text, the other only the sentence." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Two prompts: one sends the entry’s text, the other only the sentence."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "两种提示词：一种发送词条正文，另一种只发送句子。"
           }
         }
       }
@@ -10385,6 +11165,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "使用词典的录音"
+          }
+        }
+      }
+    },
+    "Verified: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Verified: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已验证：%@。"
           }
         }
       }
@@ -10746,6 +11542,22 @@
         }
       }
     },
+    "XDict could not read which dictionaries Dictionary.app knows about on this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict could not read which dictionaries Dictionary.app knows about on this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 无法读取这台 Mac 上“词典”App 知道哪些词典。"
+          }
+        }
+      }
+    },
     "XDict could not save the converted dictionary. Check that your disk has room, then try again." : {
       "localizations" : {
         "en" : {
@@ -10806,6 +11618,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 根据文件名推测了这些语言。是否正确？"
+          }
+        }
+      }
+    },
+    "XDict is set up." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict is set up."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 已设置完成。"
           }
         }
       }
@@ -11164,6 +11992,22 @@
         }
       }
     },
+    "macOS 26 and later needs you to turn this on: open Keyboard Shortcuts, then Services, and tick Look Up in XDict. XDict must be signed for the service to appear." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 26 and later needs you to turn this on: open Keyboard Shortcuts, then Services, and tick Look Up in XDict. XDict must be signed for the service to appear."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 26 及更高版本需要你手动开启：打开“键盘快捷键”，进入“服务”，勾选“在 XDict 中查询”。服务要出现，XDict 必须已签名。"
+          }
+        }
+      }
+    },
     "macOS cannot find XDict to open at login." : {
       "localizations" : {
         "en" : {
@@ -11176,6 +12020,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "macOS 找不到 XDict，无法在登录时打开。"
+          }
+        }
+      }
+    },
+    "macOS downloads dictionaries in Dictionary ▸ Settings. XDict cannot start the download." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS downloads dictionaries in Dictionary ▸ Settings. XDict cannot start the download."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "macOS 在“词典 ▸ 设置”中下载词典。XDict 无法发起下载。"
           }
         }
       }

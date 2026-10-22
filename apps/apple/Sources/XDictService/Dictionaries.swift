@@ -87,6 +87,9 @@ final class Dictionaries: Sendable {
                 return (.answer(.page(XDictContract.Page(page))), nil)
             case .suggest(let prefix, let dicts, let limit):
                 return (.answer(.suggestions(try core.suggest(prefix: prefix, dicts: dicts.map(\.rawValue), limit: limit))), nil)
+            case .words(let dict, let from, let limit):
+                return (.answer(.words(XDictContract.Words(try core.words(dict: dict.rawValue, from: from, limit: limit)))),
+                        nil)
             case .entry(let dict, let entry, let render):
                 let (answer, payload) = Answer.of(try core.entry(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                                  view: XDictCore.View(render)))

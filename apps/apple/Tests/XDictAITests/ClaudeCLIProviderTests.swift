@@ -97,9 +97,12 @@ struct ClaudeCLIProviderTests {
 
     @Test func aHangTimesOutAndTheChildIsGone() async throws {
         let (stub, url) = try Self.stub(hang: true)
-        // Generous, because the script's first execution carries the system's one-time check of a new file
-        // (measured here: 50–270 ms against ~5 ms afterwards); the ask is what must time out, not the probe.
-        let provider = Self.provider(stub, url, timeout: .seconds(2))
+        // **The budget covers the probe and the ask**, so it has to be generous enough that the ask starts: the script's
+        // first execution carries the system's one-time check of a new file (measured here: 50–270 ms against ~5 ms
+        // afterwards), and on a loaded Mac running many test bundles at once that check alone outran 2 s — the ask never
+        // launched, `argv.2` was never written, and this test failed with "argv.2 … no such file" (audit-fix
+        // 2026-10-22). The ask is what must time out, not the probe.
+        let provider = Self.provider(stub, url, timeout: .seconds(6))
         await expect(.timeout) { () async throws(AIProviderError) -> String in
             try await provider.answer(to: "q") }
         let pid = try stub.invocation(2).pid

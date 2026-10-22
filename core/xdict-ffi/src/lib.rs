@@ -19,7 +19,7 @@ use xdict_core::{
     Page, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome,
     Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, Sense, SkipReason, SkippedSheet,
     Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView,
-    Versions, View,
+    Versions, View, Words,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -343,6 +343,15 @@ pub struct Page {
     pub total: u64,
     pub generation: u32,
     pub problems: Vec<HitProblem>,
+}
+
+/// **One dictionary's words, a page at a time** (plan-setup-v2 WI-6, ADR-0028): what Core Spotlight indexes.
+#[uniffi::remote(Record)]
+pub struct Words {
+    pub edition: String,
+    pub words: Vec<String>,
+    pub total: u64,
+    pub next: u64,
 }
 
 #[uniffi::remote(Record)]
@@ -729,6 +738,12 @@ impl Core {
 
     pub fn suggest(&self, prefix: String, dicts: Vec<String>, limit: u32) -> Result<Vec<String>, CoreError> {
         self.0.suggest(prefix, dicts, limit)
+    }
+
+    /// **A page of one dictionary's words**, for Core Spotlight (plan-setup-v2 WI-6, ADR-0028: headwords only).
+    /// Spotlight is macOS's, so `xdict-wasm`, the Web binding, does not carry it.
+    pub fn words(&self, dict: String, from: u64, limit: u32) -> Result<Words, CoreError> {
+        self.0.words(dict, from, limit)
     }
 
     pub fn entry(&self, dict: String, entry: EntryRef, view: View) -> Result<Entry, CoreError> {

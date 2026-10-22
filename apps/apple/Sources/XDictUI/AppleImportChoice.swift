@@ -3,9 +3,10 @@ import XDictAppleSource
 import XDictContract
 import XDictLibrary
 
-/// **The Add Apple Dictionaries… sheet as data** (ADR-0011 decisions 1 and 11; plan WI-5): the installed bundles, which
-/// ones the reader ticked, which are already in the library, which XDict will not convert and why, and where each import
-/// is. Pure: the sheet draws it, the tests hold it.
+/// **The Add Apple Dictionaries… sheet as data** (ADR-0011 decisions 1 and 11; plan WI-5; the not-installed ones by
+/// plan-setup-v2 WI-3): the installed bundles, what Dictionary.app knows is available on this Mac, which ones the reader
+/// ticked, which are already in the library, which XDict will not convert and why, and where each import is. Pure: the
+/// sheet draws it, the tests hold it.
 public struct AppleImportChoice: Equatable, Sendable {
     /// What a row can be.
     public enum Availability: Equatable, Sendable {
@@ -14,12 +15,16 @@ public struct AppleImportChoice: Equatable, Sendable {
         case alreadyImported
         /// XDict will not convert it: greyed, with its sentence.
         case refused(AppleImportRefusal)
+        /// **Dictionary.app knows it and this Mac has not downloaded it** (plan-setup-v2 WI-3): named, "not installed",
+        /// and sent to Dictionary.app, which is the only thing that can download it.
+        case notInstalled
     }
 
     public struct Row: Identifiable, Equatable, Sendable {
         public let id: String
         public let name: String
-        /// Its languages as the dictionary table writes them; empty when it declares none.
+        /// Its languages as the dictionary table writes them; empty when it declares none — and for one this Mac has
+        /// not downloaded, which declares nothing at all.
         public let language: String
         public let bytes: UInt64
         public let availability: Availability
@@ -42,17 +47,23 @@ public struct AppleImportChoice: Equatable, Sendable {
 
     public private(set) var bundles: [InstalledBundle]
     public private(set) var imported: Set<String>
+    /// What Dictionary.app knows and this Mac has not downloaded; **nil when the preference could not be read**, which
+    /// the sheet says in words rather than drawing an empty section (plan-setup-v2 WI-3).
+    public private(set) var available: [AvailableBundle]?
     public private(set) var chosen: Set<String> = []
 
-    public init(bundles: [InstalledBundle] = [], imported: Set<String> = []) {
+    public init(bundles: [InstalledBundle] = [], imported: Set<String> = [], available: [AvailableBundle]? = nil) {
         self.bundles = bundles
         self.imported = imported
+        self.available = available
     }
 
-    /// The bundles as found again, and the library's imported ones: a tick on what is no longer available goes.
-    public mutating func update(bundles: [InstalledBundle], imported: Set<String>) {
+    /// The bundles as found again, the library's imported ones, and what Dictionary.app knows: a tick on something no
+    /// longer available goes.
+    public mutating func update(bundles: [InstalledBundle], imported: Set<String>, available: [AvailableBundle]?) {
         self.bundles = bundles
         self.imported = imported
+        self.available = available
         chosen = chosen.filter { id in bundles.contains { $0.identifier == id && availability(of: $0) == .available } }
     }
 
@@ -68,7 +79,13 @@ public struct AppleImportChoice: Equatable, Sendable {
         if chosen.contains(id) { chosen.remove(id) } else { chosen.insert(id) }
     }
 
+    /// Every row the sheet draws: the installed bundles first, then the ones Dictionary.app knows.
     public func rows(steps: [String: AppleImportStep], locale: Locale = .current) -> [Row] {
+        installedRows(steps: steps, locale: locale) + availableRows()
+    }
+
+    /// The bundles on this Mac, in the order they were found.
+    public func installedRows(steps: [String: AppleImportStep], locale: Locale = .current) -> [Row] {
         bundles.map { bundle in
             let availability = availability(of: bundle)
             let pair = LanguagePair(search: bundle.searchLanguage, explanation: bundle.explanationLanguage)
@@ -76,6 +93,15 @@ public struct AppleImportChoice: Equatable, Sendable {
                        language: SettingsDictionaries.language(pair, in: locale), bytes: bundle.bytes,
                        availability: availability, isChosen: chosen.contains(bundle.identifier) && availability == .available,
                        step: steps[bundle.identifier])
+        }
+    }
+
+    /// The dictionaries Dictionary.app knows and this Mac has not downloaded, by name. Never ticked, never imported:
+    /// macOS downloads them, and XDict lists them so the reader can see what there is.
+    public func availableRows() -> [Row] {
+        (available ?? []).map { bundle in
+            Row(id: bundle.name, name: bundle.name, language: "", bytes: 0, availability: .notInstalled, isChosen: false,
+                step: nil)
         }
     }
 

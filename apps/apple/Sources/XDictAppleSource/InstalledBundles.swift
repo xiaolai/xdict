@@ -62,6 +62,14 @@ public enum InstalledBundles {
         }
     }
 
+    /// **A listing, not a scan**: the bundle folders under `root` by their whole path, reading no `Info.plist` and no
+    /// file size. The Add Apple Dictionaries sheet polls this every two seconds to learn whether macOS has installed,
+    /// removed or **replaced** something (a replacement lives under a new asset folder), and pays for a full `discover`
+    /// only when the set changes (audit-fix 2026-10-22: the poll used to re-walk all 85 bundles on every tick).
+    public static func listing(root: URL = systemRoot) -> Set<String> {
+        Set(bundleURLs(under: root).map(\.path))
+    }
+
     /// The `*.dictionary` folders of `<root>/*/AssetData/`, never through a link.
     static func bundleURLs(under root: URL) -> [URL] {
         let fm = FileManager.default

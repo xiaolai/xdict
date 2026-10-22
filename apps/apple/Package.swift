@@ -39,7 +39,8 @@ let package = Package(
         // The view layer, apart from the app so Xcode can preview it. Reader-facing text lives here and in the app,
         // and nowhere below (`StringCatalogTests`). The main window (plan-macos-v1 WI-6) hosts the entry view.
         .target(name: "XDictUI", dependencies: ["XDictAI", "XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient",
-                                                "XDictContract", "XDictEntryView", "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTokens"]),
+                                                "XDictContract", "XDictEntryView", "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictSpotlight",
+                                                "XDictTokens"]),
 
         // **The main window's model** (plan-macos-v1 WI-6): a search over every enabled dictionary or one, each
         // dictionary looked up on its own and its results painted as they arrive (Q12), paged to every record (Q10);
@@ -64,6 +65,11 @@ let package = Package(
         // for the voice), behind a seam the window's pronunciation is tested through without a sound. Knows no
         // dictionary and no wire.
         .target(name: "XDictSpeech", dependencies: ["XDictBase"]),
+
+        // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028, owner's decision of 2026-10-22: headwords only): the
+        // words of the reader's dictionaries, opt-in and on this Mac, and nothing about their entries. Foundation and
+        // CoreSpotlight, no AppKit: the builder, the index behind a seam, the batching, and the reader's switch.
+        .target(name: "XDictSpotlight"),
 
         // **Lookup from anywhere** (plan-macos-v1 WI-8), moved from XiaolaiDict and re-checked against the MDX-first
         // model (ADR-0001): the lookup shortcut — the combination, the reader's choice kept, Carbon's exclusive hot key
@@ -119,7 +125,7 @@ let package = Package(
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
         .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
-                                                        "XDictTokens", "XDictUI"]),
+                                                        "XDictSpotlight", "XDictTokens", "XDictUI"]),
 
         // **A development instrument, never in XDict.app** (`Tools/build-lab.sh`, `Tools/build-bundle.sh` holds the app
         // to its two executables): the production entry view, fed by the core linked in directly, so the E2E stages can
@@ -175,6 +181,7 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
+        .testTarget(name: "XDictSpotlightTests", dependencies: ["XDictSpotlight"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictAI", "XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient",
                                                         "XDictContract", "XDictEntryView", "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTestSupport",
                                                         "XDictTokens", "XDictUI"]),

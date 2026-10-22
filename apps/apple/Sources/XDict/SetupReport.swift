@@ -68,15 +68,53 @@ enum SetupReport {
         let trust = HeldTrust()
         let window = show(library: library, trusted: { trust.check() })
         let before = await reader.identifiers(waitingFor: "setup.accessibility.needed")
+        let rows = SetupBoard.Step.allCases.filter { step in
+            before.contains { $0.hasPrefix("setup.\(step.rawValue).") }
+        }
         findings.check("setup.rowsLive",
-                       before.contains("setup.dictionaries.needed") && before.contains("setup.accessibility.needed")
-                           && before.contains(where: { $0.hasPrefix("setup.shortcut.") }),
+                       rows == SetupBoard.Step.allCases && before.contains("setup.summary"),
                        "rows on an empty library: \(before.filter { $0.hasPrefix("setup.") }.sorted())\(reader.note)")
+        // **What still needs the reader, said in the footer** (plan-setup-v2 WI-2, WI-7): an empty library is two
+        // required rows short, and the summary says so rather than claiming a finished setup.
+        let texts = SetupWindowReading.contentTexts(await reader.read())
+        findings.check("setup.summary",
+                       texts.contains { $0.hasPrefix("Still needs you:") } && texts.contains { $0.hasPrefix("Verified:") },
+                       "footer texts: \(texts.filter { $0.contains("needs you") || $0.hasPrefix("Verified") })"
+                           + reader.note)
         trust.released = true
         let after = await reader.identifiers(waitingFor: "setup.accessibility.done")
         findings.check("setup.grantCompletesRow", after.contains("setup.accessibility.done"),
                        "after the grant, without relaunch: \(after.filter { $0.hasPrefix("setup.accessibility") })"
                            + reader.note)
+        window.close()
+
+        // **The positive control every new row needs** (plan-setup-v2 WI-8), as transitions rather than one state: a
+        // board whose facts are ready draws both rows done, and the board below draws one done beside one "check". A
+        // board starts at "check" before any read, so a control that asked only for "check" would pass with the refresh
+        // removed (audit-fix 2026-10-22).
+        let ready = show(library: library, trusted: { AccessibilityGate.system(false) }, probes: Self.readyProbes)
+        let readyRows = await reader.identifiers(waitingFor: "setup.services.done")
+        let readyText = readyRows.filter { $0.hasPrefix("setup.services") || $0.hasPrefix("setup.appleLookUp") }.sorted()
+        ready.close()
+        // **One window, both halves**: the Service reads ready and Apple's three triggers read nothing, so a `done` row
+        // can only come from a published answer and a `needsCheck` row can only come from judging an unreadable fact.
+        // Asking only for the second would pass on the board's initial state with the publication removed.
+        let reads = ProbeReads()
+        let unreadable = show(library: library, trusted: { AccessibilityGate.system(false) },
+                              probes: SystemProbes { name in
+                                  name == "pbs" ? Self.readyFacts(name) : reads.read()
+                              })
+        // The Service is the half that proves the answer was published; both identifiers are read in one snapshot.
+        let probeRows = await reader.identifiers(waitingFor: "setup.services.done")
+        let probed = probeRows.filter { $0.hasPrefix("setup.services") || $0.hasPrefix("setup.appleLookUp") }.sorted()
+        findings.check("setup.needsCheck",
+                       // The ready window proves the whole board; this one proves both halves on one board: a published
+                       // answer (the Service, done) beside a fact that was read and could not be (Apple's triggers).
+                       readyText.contains("setup.services.done") && readyText.contains("setup.appleLookUp.done")
+                           && probed.contains("setup.services.done") && probed.contains("setup.appleLookUp.needsCheck")
+                           && reads.reads > 0,
+                       "ready board: \(readyText); mixed board: \(probed); \(reads.reads) unreadable reads\(reader.note)")
+        unreadable.close()
 
         let login = LaunchAtLogin(service: MainAppLoginItem())
         login.set(true)
@@ -88,7 +126,6 @@ enum SetupReport {
         EntryPreferences(defaults: defaults).setAccent(.indigo)
         InterfaceLanguage.simplifiedChinese.apply(to: defaults)
         findings.fact("chosen", "accent indigo, language zh-Hans")
-        window.close()
         return findings
     }
 
@@ -111,10 +148,56 @@ enum SetupReport {
         return findings
     }
 
+    /// **A count of domain reads**, so the control can prove the probe ran in the unreadable window too — a fresh view
+    /// starts at "check" before any read, and a check that accepted that would pass with the wiring removed
+    /// (audit-fix 2026-10-22).
+    final class ProbeReads: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+
+        /// One read, answered nil: what a domain nobody wrote answers.
+        func read() -> PlistValue? {
+            lock.lock()
+            defer { lock.unlock() }
+            count += 1
+            return nil
+        }
+
+        var reads: Int {
+            lock.lock()
+            defer { lock.unlock() }
+            return count
+        }
+    }
+
+    /// **The facts a settled Mac answers**, for the control below: the Service on, Apple's shortcut off, both trackpads
+    /// at zero, and none of Apple's dictionaries active.
+    static func readyFacts(_ name: String) -> PlistValue? {
+        switch name {
+        case "pbs":
+            .dictionary(["NSServicesStatus": .dictionary([
+                "ai.xdict.app/lookUpInXDict": .dictionary(["enabled_services_menu": .integer(1)])])])
+        case "com.apple.symbolichotkeys":
+            .dictionary(["AppleSymbolicHotKeys": .dictionary(["70": .dictionary(["enabled": .integer(0)])])])
+        case "com.apple.AppleMultitouchTrackpad", "com.apple.driver.AppleBluetoothMultitouch.trackpad":
+            .dictionary(["TrackpadThreeFingerTapGesture": .integer(0)])
+        case "com.apple.DictionaryServices":
+            .dictionary(["DCSActiveDictionaries": .array([])])
+        default:
+            nil
+        }
+    }
+
+    static let readyProbes = SystemProbes(domain: readyFacts)
+
+    /// The window the instrument draws: the production board, with the app's own hover, and **inert actions** — the
+    /// stage reads rows and never presses a button, so nothing here opens System Settings on the E2E Mac.
     @MainActor
-    static func show(library: Library, trusted: @escaping @MainActor () -> Bool) -> NSWindow {
+    static func show(library: Library, trusted: @escaping @MainActor () -> Bool,
+                     probes: SystemProbes = .live) -> NSWindow {
         let view = SetupView(library: library, registrar: LookupAnywhere.shared.registrar, trusted: trusted,
-                             showDictionaries: {})
+                             showDictionaries: {}, hover: LookupAnywhere.shared.hover, probes: probes,
+                             actions: SetupActions(openSettings: { _ in }, openDictionary: {}))
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.makeKeyAndOrderFront(nil)
         NSApp.activate()

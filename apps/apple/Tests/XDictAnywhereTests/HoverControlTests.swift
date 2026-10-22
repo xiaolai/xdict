@@ -308,6 +308,20 @@ struct HoverControlTests {
         #expect(try !control(suite).isEnabled)
     }
 
+    /// **The key and gesture the reader actually has, for the setup board's line** (plan-setup-v2 WI-4): read-only
+    /// accessors over the one stored policy, so the board cannot say "hold ⌥" to a reader who taps ⌥⌥.
+    @Test func theGestureAndKeyFollowTheReadersPolicy() throws {
+        let hover = try control()
+        #expect(hover.isDoubleTap == (hover.policy.gesture == .doubleTap))
+        #expect(hover.keySymbol == hover.policy.modifier.symbol)
+        var changed = hover.policy
+        changed.gesture = .doubleTap
+        hover.setPolicy(changed)
+        #expect(hover.isDoubleTap)
+        #expect(hover.keySymbol == hover.policy.modifier.symbol, "the key is the key; the verb says how it is used")
+        #expect(hover.isOn == hover.isEnabled, "reading the gesture changes nothing about whether hover runs")
+    }
+
     /// **Hover off starts nothing**: launching with the reader's hover turned off installs no watcher. Red if
     /// `startAtLaunch` ignores the setting.
     @Test func hoverOffStartsNoWatcher() throws {

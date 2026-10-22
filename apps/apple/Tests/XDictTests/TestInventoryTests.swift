@@ -27,6 +27,9 @@ struct TestInventoryTests {
         "XDictAITests": 4,
         "XDictClientTests": 20,
         "XDictContractTests": 80,
+        // Core Spotlight's own target (plan-setup-v2 WI-6; ADR-0028): the item's fields and the identifier's round trip,
+        // the batching, the cancellation, the refusal, the domain deletion, and the opt-in switch.
+        "XDictSpotlightTests": 8,
         // 52 → 73 (plan WI-5, 2026-10-18): the Apple import's copy, conversion, source record, joins, sweep and restarts.
         "XDictLibraryTests": 73,
         "XDictSearchTests": 49,
