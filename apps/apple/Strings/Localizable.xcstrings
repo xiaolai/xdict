@@ -9622,22 +9622,6 @@
         }
       }
     },
-    "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回复格式由 XDict 附加，不可编辑。提示词可使用 {term}、{sentence}、{entry} 和 {language}；缺失或未知的占位符会在发送前被拒绝。"
-          }
-        }
-      }
-    },
     "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt." : {
       "localizations" : {
         "en" : {
@@ -10987,22 +10971,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "两台设备都回答了这张卡片，请保留一个。"
-          }
-        }
-      }
-    },
-    "Two prompts: one sends the entry’s text, the other only the sentence." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Two prompts: one sends the entry’s text, the other only the sentence."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "两种提示词：一种发送词条正文，另一种只发送句子。"
           }
         }
       }
