@@ -1,0 +1,18 @@
+<Window
+    x:Class="XDict.App.SettingsWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <NavigationView x:Name="Nav" IsBackButtonVisible="Collapsed" IsSettingsVisible="False"
+                    PaneDisplayMode="Left" SelectionChanged="OnRouteChanged"
+                    AutomationProperties.AutomationId="SettingsNav">
+        <NavigationView.MenuItems>
+            <NavigationViewItem x:Name="DictionariesItem" Tag="dictionaries"
+                                AutomationProperties.AutomationId="SettingsDictionaries" />
+            <NavigationViewItem x:Name="ReadingItem" Tag="reading"
+                                AutomationProperties.AutomationId="SettingsReading" />
+            <NavigationViewItem x:Name="GeneralItem" Tag="general"
+                                AutomationProperties.AutomationId="SettingsGeneral" />
+        </NavigationView.MenuItems>
+        <Grid x:Name="Pages" />
+    </NavigationView>
+</Window>

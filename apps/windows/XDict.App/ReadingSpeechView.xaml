@@ -1,0 +1,26 @@
+<UserControl
+    x:Class="XDict.App.ReadingSpeechView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="16">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="ZoomLabel" />
+                <Slider x:Name="Zoom" Minimum="0.5" Maximum="3" StepFrequency="0.05"
+                        AutomationProperties.AutomationId="SettingsZoom" ValueChanged="OnZoomChanged" />
+                <TextBlock x:Name="ZoomValue" />
+            </StackPanel>
+            <ToggleSwitch x:Name="OriginalStyle" AutomationProperties.AutomationId="SettingsOriginalStyle"
+                          Toggled="OnOriginalStyleToggled" />
+            <ToggleSwitch x:Name="UseRecordings" AutomationProperties.AutomationId="SettingsUseRecordings"
+                          Toggled="OnRecordingsToggled" />
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="AccentLabel" />
+                <ComboBox x:Name="Accent" AutomationProperties.AutomationId="SettingsAccent"
+                          SelectionChanged="OnAccentChanged" MinWidth="220" />
+            </StackPanel>
+            <TextBlock x:Name="Status" AutomationProperties.AutomationId="SettingsReadingStatus" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

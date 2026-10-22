@@ -1,0 +1,61 @@
+{
+  "contract": 1,
+  "status": "frozen at contract 1 (2026-10-20): tests/rust and tests/cs decode, validate and re-encode every fixture",
+  "transport": {
+    "pipe": "a private duplex pair created by the app at each spawn; the service's ends inherited through PROC_THREAD_ATTRIBUTE_HANDLE_LIST",
+    "frame": ["u32 length (little-endian, payload bytes)", "u8 kind", "payload"],
+    "kinds": { "1": "json envelope", "2": "u64 transfer id, then bulk bytes" },
+    "jsonMax": 1048576,
+    "bulkMax": 67108864
+  },
+  "envelope": {
+    "required": ["contract", "id", "op", "files", "operation"],
+    "contract": 1,
+    "id": "u64, unique per connection, echoed",
+    "files": {
+      "id": "uuid, the app's file id",
+      "name": "the name the core keys the source by",
+      "handle": "u64, valid in the service process (DuplicateHandle with DUPLICATE_SAME_ACCESS)",
+      "identity": { "device": "u64", "inode": "u64", "size": "u64", "mtimeNs": "i64", "ctimeNs": "i64" },
+      "observedAt": "u64, monotonic; newest wins per file"
+    }
+  },
+  "reply": {
+    "ok": { "contract": 1, "id": "echoed", "ok": "the operation's record" },
+    "error": { "contract": 1, "id": "echoed", "error": { "type": "one of the typed errors", "detail": "logs only" } },
+    "bulk": { "transfer": "u64", "length": "u64", "mime": "string; the kind-2 frame with this transfer id follows before any other reply" }
+  },
+  "operations": {
+    "versions": { "operation": null, "ok": ["protocol", "core", "indexFormat", "normalization"] },
+    "import": { "operation": ["package", "progress"], "ok": "Imported" },
+    "cancel": { "operation": ["id"], "ok": ["cancelled"] },
+    "open": { "operation": ["package"], "ok": "Opened" },
+    "close": { "operation": ["dict"], "ok": "closed" },
+    "lookup": { "operation": ["query", "dicts", "options"], "ok": "Page" },
+    "suggest": { "operation": ["prefix", "dicts", "limit"], "ok": "string[]" },
+    "entry": { "operation": ["dict", "entry", "view"], "ok": "Entry, with bulk" },
+    "link": { "operation": ["dict", "url", "origin", "view"], "ok": "Link" },
+    "resource": { "operation": ["dict", "path", "view"], "ok": "Resource, with bulk when found" },
+    "health": { "operation": ["dict"], "ok": "Health" },
+    "displayOptions": { "operation": ["dict"], "ok": "DisplayOptions" },
+    "readingStyle": { "operation": ["dict"], "ok": "ReadingStyle" },
+    "joinLineage": { "operation": ["edition", "lineage"], "ok": "LineageId" },
+    "splitLineage": { "operation": ["edition", "newLineage"], "ok": "LineageId" },
+    "lineageOf": { "operation": ["edition"], "ok": "LineageId?" }
+  },
+  "errors": {
+    "core": ["unsupported", "malformed", "tooLarge", "notFound", "io", "staleHandle", "editionMismatch", "sourceChanged", "cancelled", "incompatible", "internal"],
+    "wire": ["contractMismatch", "admission", "busy", "deadline", "closed"]
+  },
+  "limits": {
+    "jsonMax": 1048576,
+    "bodyMax": 16777216,
+    "resourceMax": 67108864,
+    "page": 1000,
+    "suggestions": 1000,
+    "bulkInFlight": 2,
+    "lookupClassInFlight": 8,
+    "imports": 1
+  },
+  "deadlines": { "lookupClassSeconds": 10, "import": "the app cancels", "bulkSeconds": 30 }
+}
