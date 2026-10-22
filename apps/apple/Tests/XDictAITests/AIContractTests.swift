@@ -1,7 +1,7 @@
 import CryptoKit
 import Foundation
 import Testing
-import XDictAI
+@testable import XDictAI
 
 /// **The AI contract's fixtures** (`conformance/ai/CONTRACT.md` §8; plan-ai-meaning WI-3): every case in
 /// `conformance/ai/vectors.jsonl` through the **production** marking, composer and validator, the complete output compared
@@ -32,7 +32,7 @@ struct AIContractTests {
             guard object["format"] as? Int == 1 else {
                 throw Harness(description: "\(where_): unsupported grammar \(String(describing: object["format"]))")
             }
-            guard object["contract"] as? Int == 2 else {
+            guard object["contract"] as? Int == 3 else {
                 throw Harness(description: "\(where_): unsupported major \(String(describing: object["contract"]))")
             }
             guard let id = object["id"] as? String, ids.insert(id).inserted else {
@@ -95,7 +95,7 @@ struct AIContractTests {
             entry = nil
         }
         let question = AIQuestion(term: term, termRange: .notFound, sentence: sentence, entry: entry,
-                                  language: language, mode: mode)
+                                  sense: Self.sense(input), language: language, mode: mode)
         do {
             let composed = try AIComposer.compose(template: template, question: question)
             guard expect["status"] as? String == "ok", let wanted = expect["text"] as? String else {
@@ -128,7 +128,8 @@ struct AIContractTests {
             return "\(id): harness: the answer cannot be encoded"
         }
         do {
-            let validated = try AIAnswerValidator.validate(json: data, mode: mode, entry: entry)
+            let validated = try AIAnswerValidator.validate(json: data, mode: mode, entry: entry,
+                                                          sense: Self.sense(input))
             guard expect["status"] as? String == "ok" else {
                 return "\(id): expected \(expect["code"] ?? "invalid"), got \(validated.outcome.rawValue)"
             }
@@ -192,6 +193,43 @@ struct AIContractTests {
                                                                        sentence: "Please hold", entry: nil,
                                                                        language: "en", mode: .sentenceOnly))
         #expect(!sentenceOnly.contains("The entry above is"))
+    }
+
+    /// **The chosen sense's completeness reaches the model** (§4a, contract 3): a span-dropped sense is partial even
+    /// when the entry is whole, and the model gets fixed bytes saying so. (Audit finding, 2026-10-23.)
+    @Test func theComposedQuestionCarriesTheChosenSensesCompleteness() throws {
+        let whole = try Self.explainQuestion(whole: true)
+        let partial = try Self.explainQuestion(whole: false)
+        #expect(whole.contains("The chosen sense above is complete: every part of it was sent."))
+        #expect(partial.contains("The chosen sense above is incomplete: part of it was not sent."))
+        #expect(!whole.contains("The chosen sense above is incomplete"))
+        #expect(!partial.contains("The chosen sense above is complete"))
+    }
+
+    /// **A range that splits a character names no text** (§2): an empty target at a continuation byte is refused as
+    /// surely as a mismatched one. (Verification finding, 2026-10-23.)
+    @Test func aSenseRangeThatSplitsACharacterIsRefused() {
+        let entry = AIEntryText(text: "café", complete: true, cutAt: 0,
+                                ref: AIEntryRef(edition: "e", key: "k", occurrence: 0))
+        // "café" is five UTF-8 bytes; byte 4 is the second half of "é".
+        let sense = AISense(id: 1, start: 4, len: 0, text: "", label: nil, section: nil, whole: true)
+        let question = AIQuestion(term: "cafe", termRange: .notFound, sentence: "A cafe", entry: entry,
+                                  sense: sense, language: "en", mode: .explainSense)
+        do {
+            _ = try AIComposer.compose(template: "{term} {sentence} {entry} {sense}", question: question)
+            Issue.record("a sense range inside a character was composed")
+        } catch {
+            #expect(error == .senseTextMismatch)
+        }
+    }
+
+    private static func explainQuestion(whole: Bool) throws -> String {
+        let entry = AIEntryText(text: "1. to keep", complete: true, cutAt: 0,
+                                ref: AIEntryRef(edition: "e", key: "k", occurrence: 0))
+        let sense = AISense(id: 1, start: 0, len: 10, text: "1. to keep", label: "1", section: nil, whole: whole)
+        let question = AIQuestion(term: "hold", termRange: .notFound, sentence: "Please hold", entry: entry,
+                                  sense: sense, language: "en", mode: .explainSense)
+        return try AIComposer.compose(template: "{term}: {sentence} Entry: {entry} Sense: {sense}", question: question)
     }
 
     /// **The cap is enforced while rendering** (§4.5): many `{entry}` placeholders must not materialise a huge string
@@ -277,10 +315,47 @@ struct AIContractTests {
         #expect(AIComposer.responseContract == block, "the suffix differs from CONTRACT.md §6")
     }
 
+    /// **The chosen-sense suffix is §6a's block**, byte for byte (contract 3).
+    @Test func theChosenSenseSuffixIsTheContracts() throws {
+        let text = try String(contentsOf: Self.root.appending(path: "conformance/ai/CONTRACT.md"), encoding: .utf8)
+        let section = try #require(text.range(of: "## 6a."), "CONTRACT.md has no section 6a")
+        let after = text[section.upperBound...]
+        let opening = try #require(after.range(of: "```text\n"), "section 6a has no text block")
+        let rest = after[opening.upperBound...]
+        let closing = try #require(rest.range(of: "\n```"), "the text block is not closed")
+        let block = String(rest[..<closing.lowerBound])
+        #expect(AIComposer.explainResponseContract == block, "the suffix differs from CONTRACT.md §6a")
+    }
+
+    /// **The providers can generate every outcome the contract names** (contract 3; plan-explain-sense WI-4): the CLI's
+    /// schema and Apple's guided enum carry the two chosen-sense verdicts, and the validator (the vectors above) keeps
+    /// them out of the old modes.
+    @Test func theProvidersCanGenerateEveryOutcomeTheContractNames() {
+        let outcomes = Set(AIOutcome.allCases.map(\.rawValue))
+        for outcome in outcomes {
+            #expect(ClaudeCLIProvider.answerSchema.contains("\"\(outcome)\""),
+                    "the Claude schema omits \(outcome)")
+        }
+        #if canImport(FoundationModels)
+        #expect(Set(AppleAnswerOutcome.allCases.map(\.rawValue)) == outcomes,
+                "the guided enum and the contract disagree")
+        #endif
+    }
+
+    /// A chosen-sense record from a fixture's `sense` object.
+    static func sense(_ input: [String: Any]) -> AISense? {
+        guard let object = input["sense"] as? [String: Any], let text = object["text"] as? String else { return nil }
+        return AISense(id: (object["id"] as? NSNumber)?.uint32Value ?? 0,
+                       start: (object["start"] as? NSNumber)?.uint64Value ?? 0,
+                       len: (object["len"] as? NSNumber)?.uint64Value ?? 0,
+                       text: text, label: object["label"] as? String, section: object["section"] as? String,
+                       whole: object["whole"] as? Bool ?? true)
+    }
+
     /// **The shipped defaults are the files** (`CONTRACT.md` §4.7), byte for byte.
     @Test func theDefaultTemplatesAreTheFiles() throws {
         for language in AITemplates.languages {
-            for mode in [AIMode.grounded, AIMode.sentenceOnly] {
+            for mode in AIMode.allCases {
                 let file = Self.root.appending(path: "conformance/ai/defaults/\(language).\(mode.rawValue).txt")
                 let wanted = try String(contentsOf: file, encoding: .utf8)
                 let got = try #require(AITemplates.defaultTemplate(language: language, mode: mode),

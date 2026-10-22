@@ -34,7 +34,7 @@ public struct ClaudeCLIProvider: AIProvider {
     /// on 2026-10-20: `claude` 2.1.304.
     public static let minimumVersion = "2.1.0"
     /// The answer's shape (`CONTRACT.md` §5), handed to `--json-schema`.
-    public static let answerSchema = #"{"type":"object","properties":{"outcome":{"type":"string","enum":["matched","ambiguous","noMatchingSense","insufficientContext","incompleteInput","explanationOnly","refused","guardrail"]},"quotes":{"type":"array","items":{"type":"string"},"maxItems":3},"explanation":{"type":"string"}},"required":["outcome","quotes","explanation"],"additionalProperties":false}"#
+    public static let answerSchema = #"{"type":"object","properties":{"outcome":{"type":"string","enum":["matched","ambiguous","noMatchingSense","insufficientContext","incompleteInput","explanationOnly","refused","guardrail","explained","doesNotFit"]},"quotes":{"type":"array","items":{"type":"string"},"maxItems":3},"explanation":{"type":"string"}},"required":["outcome","quotes","explanation"],"additionalProperties":false}"#
 
     public let id = AIProviderID(kind: .claudeCLI)
     private let configuration: Configuration
