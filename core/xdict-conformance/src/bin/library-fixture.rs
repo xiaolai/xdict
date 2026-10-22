@@ -25,21 +25,23 @@ use xdict_mdx_writer::{Compression, Defect, Entry, Spec, Version, write};
 
 const MIB: usize = 1 << 20;
 
-/// Writes one dictionary file.
-fn file(path: &Path, spec: &Spec, entries: &[Entry]) -> Result<(), String> {
+/// Writes a file and its parent folders, naming the path in any error.
+fn put(path: &Path, bytes: &[u8]) -> Result<(), String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
     }
-    let bytes = write(spec, entries).map_err(|e| format!("{}: {e}", path.display()))?;
     std::fs::write(path, bytes).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Writes one dictionary file.
+fn file(path: &Path, spec: &Spec, entries: &[Entry]) -> Result<(), String> {
+    let bytes = write(spec, entries).map_err(|e| format!("{}: {e}", path.display()))?;
+    put(path, &bytes)
 }
 
 /// Writes a plain file beside the dictionaries.
 fn plain(path: &Path, bytes: &[u8]) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| format!("{}: {e}", parent.display()))?;
-    }
-    std::fs::write(path, bytes).map_err(|e| format!("{}: {e}", path.display()))
+    put(path, bytes)
 }
 
 fn titled(title: &str) -> Spec {
@@ -47,13 +49,28 @@ fn titled(title: &str) -> Spec {
 }
 
 fn write_all(out: &Path) -> Result<(), String> {
-    let mdd = Spec::mdd();
+    single(out)?;
+    volumes(out)?;
+    gap(out)?;
+    dropped(out)?;
+    refused(out)?;
+    languages(out)?;
+    escape(out)?;
+    sounds(out)?;
+    rewrites(out)?;
+    big(out)
+}
+
+fn single(out: &Path) -> Result<(), String> {
     file(
         &out.join("file/single.mdx"),
         &titled("Single File"),
         &[Entry::text("apple", "<b>apple</b> a fruit"), Entry::text("banana", "<b>banana</b> another fruit")],
-    )?;
+    )
+}
 
+fn volumes(out: &Path) -> Result<(), String> {
+    let mdd = Spec::mdd();
     let vol = out.join("folder/vol");
     file(
         &vol.join("vol.mdx"),
@@ -74,15 +91,22 @@ fn write_all(out: &Path) -> Result<(), String> {
         &[Entry::bytes("\\b.bin", b"volume 1"), Entry::bytes("\\shared.bin", b"shared from volume 1")],
     )?;
     file(&vol.join("vol.2.mdd"), &mdd, &[Entry::bytes("\\c.bin", b"volume 2")])?;
-    plain(&vol.join("vol.css"), b".vol { float: left }\n")?;
+    plain(&vol.join("vol.css"), b".vol { float: left }\n")
+}
 
+fn gap(out: &Path) -> Result<(), String> {
+    let mdd = Spec::mdd();
     let gap = out.join("gap");
     file(&gap.join("gap.mdx"), &titled("Gap"), &[Entry::text("gap", "a dictionary missing its second volume")])?;
     file(&gap.join("gap.mdd"), &mdd, &[Entry::bytes("\\first.bin", b"volume 0")])?;
-    file(&gap.join("gap.2.mdd"), &mdd, &[Entry::bytes("\\third.bin", b"volume 2")])?;
+    file(&gap.join("gap.2.mdd"), &mdd, &[Entry::bytes("\\third.bin", b"volume 2")])
+}
 
-    file(&out.join("drop/dropped.mdx"), &titled("Dropped"), &[Entry::text("dropped", "arrived by drag and drop")])?;
+fn dropped(out: &Path) -> Result<(), String> {
+    file(&out.join("drop/dropped.mdx"), &titled("Dropped"), &[Entry::text("dropped", "arrived by drag and drop")])
+}
 
+fn refused(out: &Path) -> Result<(), String> {
     let refused = out.join("refused");
     file(&refused.join("v3/v3.mdx"), &titled("Format Three Resources"), &[Entry::text("three", "an entry")])?;
     file(
@@ -99,16 +123,20 @@ fn write_all(out: &Path) -> Result<(), String> {
         &refused.join("damaged/damaged.mdx"),
         &Spec { defect: Some(Defect::HeaderChecksum), ..titled("Damaged") },
         &[Entry::text("damaged", "never read")],
-    )?;
+    )
+}
 
+fn languages(out: &Path) -> Result<(), String> {
     // The title is the placeholder MdxBuilder leaves, so the name the reader sees comes from the file.
     file(
         &out.join("lang/牛津高阶英汉双解词典.mdx"),
         &titled("Title (No HTML code allowed)"),
         &[Entry::text("ox", "牛")],
     )?;
-    file(&out.join("lang/Plain Glossary.mdx"), &titled("Plain Glossary"), &[Entry::text("term", "a term")])?;
+    file(&out.join("lang/Plain Glossary.mdx"), &titled("Plain Glossary"), &[Entry::text("term", "a term")])
+}
 
+fn escape(out: &Path) -> Result<(), String> {
     let esc = out.join("escape/esc");
     file(&esc.join("esc.mdx"), &titled("Escape"), &[Entry::text("esc", "<link rel=\"stylesheet\" href=\"esc.css\">")])?;
     plain(&out.join("outside/secret.css"), b"/* outside the folder the reader chose */\n")?;
@@ -123,7 +151,11 @@ fn write_all(out: &Path) -> Result<(), String> {
     std::os::windows::fs::symlink_file("..\\..\\outside\\secret.css", &link).map_err(|e| {
         format!("a symbolic link needs Developer Mode or the privilege on Windows: {}: {e}", link.display())
     })?;
+    Ok(())
+}
 
+fn sounds(out: &Path) -> Result<(), String> {
+    let mdd = Spec::mdd();
     let sounds = out.join("sounds");
     file(
         &sounds.join("sounds.mdx"),
@@ -141,17 +173,20 @@ fn write_all(out: &Path) -> Result<(), String> {
             Entry::bytes("\\here.mp3", b"ID3 not really a recording"),
             Entry::bytes("\\present.spx", b"Speex not really a recording"),
         ],
-    )?;
+    )
+}
 
+fn rewrites(out: &Path) -> Result<(), String> {
     let rewrite = out.join("rewrite");
     file(&rewrite.join("first.mdx"), &titled("Rewrite"), &[Entry::text("word", "the first edition")])?;
-    file(&rewrite.join("second.mdx"), &titled("Rewrite"), &[Entry::text("word", "the second edition, rewritten")])?;
+    file(&rewrite.join("second.mdx"), &titled("Rewrite"), &[Entry::text("word", "the second edition, rewritten")])
+}
 
+fn big(out: &Path) -> Result<(), String> {
     let record = "x".repeat(4 * MIB);
-    let big: Vec<Entry> = (0..32).map(|n| Entry::text(&format!("big{n:02}"), &record)).collect();
+    let entries: Vec<Entry> = (0..32).map(|n| Entry::text(&format!("big{n:02}"), &record)).collect();
     let stored = Spec { compression: Compression::None, block_size: 4 * MIB, ..titled("Big") };
-    file(&out.join("big/big.mdx"), &stored, &big)?;
-    Ok(())
+    file(&out.join("big/big.mdx"), &stored, &entries)
 }
 
 fn main() -> ExitCode {

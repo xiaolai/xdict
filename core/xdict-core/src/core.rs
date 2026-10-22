@@ -114,6 +114,9 @@ pub struct StyleReport {
     pub counts: xdict_entry::Counts,
 }
 
+/// What reading an edition's sheets produced: the texts kept, their paths, and the sheets passed over and why.
+type SheetSet = (Vec<String>, Vec<String>, Vec<SkippedSheet>);
+
 impl Core {
     /// A core for one process. Fails with `Incompatible` when the shell was built for another protocol.
     pub fn new(config: Config) -> Result<Self, CoreError> {
@@ -608,11 +611,9 @@ impl Core {
         Ok(paths)
     }
 
-    /// The edition's reading style, read from its sheets on first use: the sidecars' `.css`, then the volumes'.
-    fn edition_style(&self, opened: &Dict) -> Result<Arc<EditionStyle>, CoreError> {
-        if let Some(style) = opened.style.get() {
-            return Ok(Arc::clone(style));
-        }
+    /// The edition's sheets, read within the shared budget: their texts, the paths kept, and why each other was
+    /// skipped. A sheet past what is left of the budget is passed over from its declared size, unread.
+    fn read_sheets(&self, opened: &Dict) -> Result<SheetSet, CoreError> {
         let paths = Self::edition_paths(opened, ".css")?;
         let (mut texts, mut sheets, mut skipped, mut total) = (Vec::new(), Vec::new(), Vec::new(), 0usize);
         for path in paths {
@@ -620,8 +621,6 @@ impl Core {
                 skipped.push(SkippedSheet { path, reason: SkipReason::TooMany { limit: STYLE_SHEETS as u64 } });
                 continue;
             }
-            // What is left of the budget is the ceiling: a sheet past it is passed over from its declared size,
-            // unread (reading 44 MiB only to drop it raised `resource()`'s peak by 40%).
             let room = STYLE_BYTES.saturating_sub(total);
             match self.find_resource(opened, &path, room as u64) {
                 Ok(Some(bytes)) => {
@@ -641,6 +640,15 @@ impl Core {
                 Err(e) => skipped.push(SkippedSheet { path, reason: SkipReason::Unreadable { detail: e.to_string() } }),
             }
         }
+        Ok((texts, sheets, skipped))
+    }
+
+    /// The edition's reading style, read from its sheets on first use: the sidecars' `.css`, then the volumes'.
+    fn edition_style(&self, opened: &Dict) -> Result<Arc<EditionStyle>, CoreError> {
+        if let Some(style) = opened.style.get() {
+            return Ok(Arc::clone(style));
+        }
+        let (texts, sheets, skipped) = self.read_sheets(opened)?;
         let entries = sample(opened)?;
         // The base is measured under the sheets the sample links; if it links none, under all of them.
         let names: std::collections::HashSet<String> =
