@@ -15,12 +15,14 @@ public class LibraryLineageTests
             ?? throw new InvalidOperationException("XDICT_SERVICE must name the built service");
         string root = Path.Combine(Path.GetTempPath(), "xdict-lineage-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+        // Its own service storage: the registry persists joins, and a previous run's join would decide this one.
+        var options = new ServiceClientOptions { Storage = "test-" + Guid.NewGuid().ToString("N") };
         try
         {
             string path = Path.Combine(root, "d.mdx");
             File.Copy(Path.Combine(fixtures, "rewrite", "first.mdx"), path);
             LibraryDictionary first;
-            using (var client = new ServiceClient(service))
+            using (var client = new ServiceClient(service, options))
             {
                 client.Handshake();
                 first = await LibraryImporter.ImportAsync(client, PackageFinder.Discover(path));
@@ -30,7 +32,7 @@ public class LibraryLineageTests
             File.Copy(Path.Combine(fixtures, "rewrite", "second.mdx"), path, overwrite: true);
             Assert.Contains(LibraryVerifier.Check(first), check => check.State == LibraryFileState.Changed);
 
-            using var reader = new ServiceClient(service);
+            using var reader = new ServiceClient(service, options);
             reader.Handshake();
             LibraryDictionary second = await LibraryImporter.ImportAsync(
                 reader, PackageFinder.Discover(path), existing: first);

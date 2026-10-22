@@ -76,7 +76,7 @@ internal static class EntryCorpusLab
                 string uri = resource.GetProperty("uri").GetString()!;
                 if (!uri.StartsWith("xdict://d/r/", StringComparison.Ordinal)) continue;
                 var parsed = new Uri(uri);
-                EntryResponse resolved = await source.ResourceAsync(parsed.AbsolutePath[3..] + parsed.Query, false, default);
+                EntryResponse resolved = await source.ResourceAsync(parsed.AbsolutePath[3..] + parsed.Query, default);
                 if (resolved.Status == 200 && !resource.GetProperty("loaded").GetBoolean())
                     throw new InvalidOperationException(name + " resolved resource did not load: " + uri);
             }

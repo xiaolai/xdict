@@ -12,8 +12,7 @@ internal static class EntryLab
 {
     private sealed class Synthetic : IEntrySource
     {
-        public string Dictionary => "synthetic-selftest";
-        public Task<EntryResponse> ResourceAsync(string path, bool sound, CancellationToken cancellation) =>
+        public Task<EntryResponse> ResourceAsync(string path, CancellationToken cancellation) =>
             Task.FromResult(new EntryResponse(Encoding.UTF8.GetBytes("body{color:rgb(0,128,0)}"), "text/css", ""));
     }
     public static async Task RunAsync(WebView2 browser, string configuration, ServiceClient client)
