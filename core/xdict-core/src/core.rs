@@ -139,6 +139,9 @@ pub struct StyleReport {
     pub counts: xdict_entry::Counts,
 }
 
+/// What reading an edition's sheets produced: the texts kept, their paths, and the sheets passed over and why.
+type SheetSet = (Vec<String>, Vec<String>, Vec<SkippedSheet>);
+
 impl Core {
     /// A core for one process. Fails with `Incompatible` when the shell was built for another protocol.
     pub fn new(config: Config) -> Result<Self, CoreError> {
@@ -686,11 +689,7 @@ impl Core {
             let opened = self.dict(&dict)?;
             let travelled = xdict_entry::travelled(&path);
             let resolved = travelled.resolved();
-            // MDict paths may hold `?` and `#`; a web-style `a.css?v=2` is tried without its query after.
-            let mut tries = vec![resolved.to_owned()];
-            if let Some(cut) = resolved.find(['?', '#']).and_then(|at| resolved.get(..at)) {
-                tries.push(cut.to_owned());
-            }
+            let tries = resource_tries(resolved);
             for name in &tries {
                 let mime = mime(name);
                 // A stylesheet, script or page is a body the view renders, held to the view's ceiling whether or
@@ -715,14 +714,12 @@ impl Core {
 
     /// A resource's bytes by its resolved path: a sidecar of that name, else the first volume that holds it.
     /// One larger than `ceiling` is refused from its declared size, before it is read.
-    /// The edition's reading style, read from its sheets on first use: the sidecars' `.css`, then the volumes'.
-    fn edition_style(&self, opened: &Dict) -> Result<Arc<EditionStyle>, CoreError> {
-        if let Some(style) = opened.style.get() {
-            return Ok(Arc::clone(style));
-        }
+    /// The paths of one file kind the edition carries: the sidecars' first, then every volume's, deduped
+    /// case-insensitively. Sheets and scripts both read their list this way.
+    fn edition_paths(opened: &Dict, extension: &str) -> Result<Vec<String>, CoreError> {
         let mut paths: Vec<String> = Vec::new();
         for (name, _) in &opened.sidecars {
-            if name.to_ascii_lowercase().ends_with(".css") {
+            if name.to_ascii_lowercase().ends_with(extension) {
                 paths.push(name.clone());
             }
         }
@@ -730,7 +727,7 @@ impl Core {
             check.unchanged()?;
             for key in volume.keys() {
                 let key = key?;
-                if key.to_ascii_lowercase().ends_with(".css") {
+                if key.to_ascii_lowercase().ends_with(extension) {
                     let path = key.trim_start_matches('\\').replace('\\', "/");
                     if !paths.iter().any(|p| p.eq_ignore_ascii_case(&path)) {
                         paths.push(path);
@@ -738,14 +735,19 @@ impl Core {
                 }
             }
         }
+        Ok(paths)
+    }
+
+    /// The edition's sheets, read within the shared budget: their texts, the paths kept, and why each other was
+    /// skipped. A sheet past what is left of the budget is passed over from its declared size, unread.
+    fn read_sheets(&self, opened: &Dict) -> Result<SheetSet, CoreError> {
+        let paths = Self::edition_paths(opened, ".css")?;
         let (mut texts, mut sheets, mut skipped, mut total) = (Vec::new(), Vec::new(), Vec::new(), 0usize);
         for path in paths {
             if sheets.len() >= STYLE_SHEETS {
                 skipped.push(SkippedSheet { path, reason: SkipReason::TooMany { limit: STYLE_SHEETS as u64 } });
                 continue;
             }
-            // What is left of the budget is the ceiling: a sheet past it is passed over from its declared size,
-            // unread (reading 44 MiB only to drop it raised `resource()`'s peak by 40%).
             let room = STYLE_BYTES.saturating_sub(total);
             match self.find_resource(opened, &path, room as u64) {
                 Ok(Some(bytes)) => {
@@ -765,6 +767,15 @@ impl Core {
                 Err(e) => skipped.push(SkippedSheet { path, reason: SkipReason::Unreadable { detail: e.to_string() } }),
             }
         }
+        Ok((texts, sheets, skipped))
+    }
+
+    /// The edition's reading style, read from its sheets on first use: the sidecars' `.css`, then the volumes'.
+    fn edition_style(&self, opened: &Dict) -> Result<Arc<EditionStyle>, CoreError> {
+        if let Some(style) = opened.style.get() {
+            return Ok(Arc::clone(style));
+        }
+        let (texts, sheets, skipped) = self.read_sheets(opened)?;
         let entries = sample(opened)?;
         // The base is measured under the sheets the sample links; if it links none, under all of them.
         let names: std::collections::HashSet<String> =
@@ -787,24 +798,7 @@ impl Core {
     /// The text of an edition's scripts that run (Q6): the sidecars' `.js`, then the volumes', within
     /// [`STYLE_BYTES`] together.
     fn edition_scripts(&self, opened: &Dict) -> Result<Vec<String>, CoreError> {
-        let mut paths: Vec<String> = Vec::new();
-        for (name, _) in &opened.sidecars {
-            if name.to_ascii_lowercase().ends_with(".js") {
-                paths.push(name.clone());
-            }
-        }
-        for (check, volume) in &opened.mdd {
-            check.unchanged()?;
-            for key in volume.keys() {
-                let key = key?;
-                if key.to_ascii_lowercase().ends_with(".js") {
-                    let path = key.trim_start_matches('\\').replace('\\', "/");
-                    if !paths.iter().any(|p| p.eq_ignore_ascii_case(&path)) {
-                        paths.push(path);
-                    }
-                }
-            }
-        }
+        let paths = Self::edition_paths(opened, ".js")?;
         let (mut texts, mut total) = (Vec::new(), 0usize);
         for path in paths.into_iter().take(STYLE_SHEETS) {
             // As for sheets: one past what is left of the budget is passed over from its declared size, unread.
@@ -941,11 +935,7 @@ impl Core {
     fn holds(&self, opened: &Dict, path: &str) -> bool {
         let travelled = xdict_entry::travelled(path);
         let resolved = travelled.resolved();
-        let mut tries = vec![resolved.to_owned()];
-        if let Some(cut) = resolved.find(['?', '#']).and_then(|at| resolved.get(..at)) {
-            tries.push(cut.to_owned());
-        }
-        tries.iter().any(|name| {
+        resource_tries(resolved).iter().any(|name| {
             opened.sidecars.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) || {
                 let key = format!("\\{}", name.replace('/', "\\"));
                 opened.mdd.iter().any(|(_, volume)| volume.find(&key).map_or(true, |found| !found.is_empty()))
@@ -1631,7 +1621,6 @@ fn info(file: &File) -> DictInfo {
     }
 }
 
-/// An index's name in the store: its identity, and what it indexes.
 /// Where an edition's health report is kept: by the checker's version, the edition, and a digest of the package's
 /// resource names, which a changed volume or sidecar changes.
 fn health_name(edition: &str, resources: &HashSet<String>, sidecars: &HashSet<String>) -> String {
@@ -1647,6 +1636,7 @@ fn health_name(edition: &str, resources: &HashSet<String>, sidecars: &HashSet<St
     format!("health-{HEALTH}-{edition}-{:016x}", hasher.digest())
 }
 
+/// An index's name in the store: its identity, and what it indexes.
 fn index_name(identity: &[u8; 32], kind: Kind) -> String {
     let kind = if kind == Kind::Mdd { "mdd" } else { "mdx" };
     format!("{}.{kind}.xdidx", xdict_identity::hex(identity))
@@ -1846,8 +1836,23 @@ fn served(
     Ok(rewritten.into_bytes())
 }
 
+/// The names a resource path is tried under: as travelled, then without a web-style `?`/`#` suffix. MDict paths
+/// may hold both, so `a.css?v=2` is looked for as written and as `a.css`.
+fn resource_tries(resolved: &str) -> Vec<String> {
+    let mut tries = vec![resolved.to_owned()];
+    if let Some(cut) = resolved.find(['?', '#']).and_then(|at| resolved.get(..at)) {
+        tries.push(cut.to_owned());
+    }
+    tries
+}
+
 fn mime(path: &str) -> &'static str {
-    let ext = path.rsplit('.').next().unwrap_or("").to_ascii_lowercase();
+    // A name with no dot has no extension: `rsplit('.').next()` returned the whole path, typing a resource named
+    // "css" as a stylesheet and rewriting it.
+    let Some((_, extension)) = path.rsplit_once('.') else {
+        return "application/octet-stream";
+    };
+    let ext = extension.to_ascii_lowercase();
     match ext.as_str() {
         "css" => "text/css",
         "js" => "text/javascript",
@@ -2656,18 +2661,17 @@ mod tests {
         let at: Vec<usize> = damaged.windows(7).enumerate().filter(|(_, w)| *w == b"runaway").map(|(i, _)| i).collect();
         assert_eq!(at.len(), 1, "the key text, once");
         damaged[at[0]] ^= 1;
-        // An index is written read-only; damage it in place and make it read-only again, so that what refuses it
-        // is the checksum, not its mode.
+        // Write the damage to a second file and rename it over the index: the open dictionary's map keeps the old
+        // bytes (Windows refuses a write into a mapped file, by design), and the next `open` reads the new one, so
+        // what refuses it is the checksum, not the map's sharing mode.
+        let damaged_path = index.with_extension("damaged");
+        std::fs::write(&damaged_path, damaged).unwrap();
         #[cfg(unix)]
-        let set_mode = |mode| {
+        {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&index, std::fs::Permissions::from_mode(mode)).unwrap();
-        };
-        #[cfg(unix)]
-        set_mode(0o600);
-        std::fs::write(&index, damaged).unwrap();
-        #[cfg(unix)]
-        set_mode(0o400);
+            std::fs::set_permissions(&damaged_path, std::fs::Permissions::from_mode(0o400)).unwrap();
+        }
+        std::fs::rename(&damaged_path, &index).unwrap();
         assert_eq!(core.open(package).unwrap(), Opened::NeedsImport { reason: ImportReason::IndexMissing });
         std::fs::remove_dir_all(&dir).unwrap();
     }

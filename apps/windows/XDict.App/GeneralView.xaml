@@ -1,0 +1,29 @@
+<UserControl
+    x:Class="XDict.App.GeneralView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer>
+        <StackPanel Padding="24" Spacing="16">
+            <TextBlock x:Name="Heading" Style="{ThemeResource SubtitleTextBlockStyle}" />
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="ThemeLabel" />
+                <ComboBox x:Name="Theme" AutomationProperties.AutomationId="SettingsTheme"
+                          SelectionChanged="OnThemeChanged" MinWidth="220" />
+            </StackPanel>
+            <ToggleSwitch x:Name="StartAtLogin" AutomationProperties.AutomationId="SettingsStartAtLogin"
+                          Toggled="OnStartAtLoginToggled" />
+            <StackPanel Spacing="4">
+                <TextBlock x:Name="HotkeyLabel" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock x:Name="HotkeyText" VerticalAlignment="Center"
+                               AutomationProperties.AutomationId="SettingsHotkeyValue" />
+                    <Button x:Name="ChangeHotkeyButton" Click="OnChangeHotkey"
+                            AutomationProperties.AutomationId="SettingsChangeHotkey" />
+                </StackPanel>
+            </StackPanel>
+            <Button x:Name="AcknowledgementsButton" Click="OnAcknowledgements"
+                    AutomationProperties.AutomationId="SettingsAcknowledgements" />
+            <TextBlock x:Name="Status" TextWrapping="Wrap" Foreground="{ThemeResource SystemFillColorCriticalBrush}" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

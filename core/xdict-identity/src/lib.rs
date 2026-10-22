@@ -138,6 +138,9 @@ pub struct LocationRecord {
     pub identity: Option<FileIdentity>,
     /// The volumes, in search order.
     pub volumes: Vec<VolumeRecord>,
+    /// Kept because version 2's document shape carries it; a build that dropped it would fail to load on one that
+    /// still expects it. The reader resolves sidecars by name, so nothing reads it today.
+    #[serde(default)]
     pub sidecars: Vec<String>,
 }
 

@@ -108,3 +108,8 @@ CLAUDE.local.md
 .cc-suite/audits/
 # <<< cc-suite <<<
 __pycache__/
+
+# The Windows shell's build output.
+/apps/windows/**/bin/
+/apps/windows/**/obj/
+/apps/windows/out/

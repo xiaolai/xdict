@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The unpackaged Windows installer: the self-contained publish beside its service, a Start-menu shortcut, and an
+     Add/Remove Programs entry. Built by Tools/installer.ps1; signed with bundle.ps1's certificate thumbprint. -->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="XDict" Manufacturer="XDict" Version="$(var.Version)" UpgradeCode="41C24C37-620F-46DC-A1E0-BF1D638ADE6E"
+           Scope="perMachine" Compressed="yes" InstallerVersion="500">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of XDict is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="XDict" />
+    </StandardDirectory>
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+      <Files Include="$(var.PublishDir)\**" />
+    </ComponentGroup>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ProgramMenuDir" Name="XDict">
+        <Component Id="StartMenuShortcut" Guid="*">
+          <Shortcut Id="XDictShortcut" Name="XDict" Target="[INSTALLFOLDER]XDict.exe"
+                    WorkingDirectory="INSTALLFOLDER" />
+          <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
+          <RegistryValue Root="HKLM" Key="Software\XDict\Installer" Name="Shortcut" Type="integer" Value="1" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+    <Feature Id="Main" Title="XDict" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+  </Package>
+</Wix>

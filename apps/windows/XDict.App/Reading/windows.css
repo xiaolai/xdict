@@ -1,0 +1,58 @@
+/* Windows reading catalogue. Segoe UI / Microsoft YaHei UI are Windows system faces.
+   Reading choices: 17px body, 1.5 leading, a 72-character measure, and a 16px narrow inset.
+   Role rules are shared; these values are owned by the Windows shell, not Apple's measured catalogue. */
+@font-face{font-family:'XDict Phonetic';src:url('xdict://d/font/Charis-Regular.ttf') format('truetype');font-weight:400}
+@font-face{font-family:'XDict Phonetic';src:url('xdict://d/font/Charis-Bold.ttf') format('truetype');font-weight:700}
+@font-face{font-family:'XDict Phonetic';src:url('xdict://d/font/Charis-Italic.ttf') format('truetype');font-style:italic}
+@font-face{font-family:'XDict Phonetic';src:url('xdict://d/font/Charis-BoldItalic.ttf') format('truetype');font-weight:700;font-style:italic}
+:root{
+--xdict-base:17px;--xdict-font:'Segoe UI','Microsoft YaHei UI',sans-serif;--xdict-font-ui:var(--xdict-font);
+--xdict-font-cjk:'Microsoft YaHei UI';--xdict-font-text:var(--xdict-font);
+--xdict-font-phon:'XDict Phonetic','Segoe UI',serif;--xdict-font-mono:Consolas,monospace;
+--xdict-fs-xs:.765rem;--xdict-fs-s:.882rem;--xdict-fs-m:1rem;--xdict-fs-l:1.176rem;
+--xdict-fs-xl:1.412rem;--xdict-fs-xxl:1.765rem;--xdict-fs-min:var(--xdict-fs-xs);--xdict-fs-max:var(--xdict-fs-xxl);
+--xdict-fs-hw:1.765rem;--xdict-weight-headword:600;--xdict-weight-bold:600;--xdict-leading:1.5;--xdict-leading-tight:1.25;
+--xdict-space-1:.235rem;--xdict-space-2:.47rem;--xdict-space-3:.706rem;--xdict-space-4:.94rem;--xdict-space-5:1.412rem;
+--xdict-gap:var(--xdict-space-2);--xdict-indent:1.4em;--xdict-indent-max:4.2em;--xdict-measure:72ch;
+--xdict-pad-block:1rem;--xdict-pad-inline:clamp(16px,3vw,32px);--xdict-paper-pad-inline:var(--xdict-pad-inline);
+--xdict-cell-pad:.3em .7em;--xdict-radius:4px;--xdict-hit:28px;--xdict-icon:1em;--xdict-phon-colour:var(--xdict-text-2);
+--xdict-mark:Highlight;--xdict-mark-current:Highlight;--xdict-paper:#faf9f6;--xdict-paper-text:#202020;
+--xdict-hairline:1px;--xdict-focus-ring:2px;--xdict-control-gap:.2em;--xdict-glyph-baseline:-.1em;
+--xdict-tag-tracking:.025em;--xdict-tag-gap:.5em;--xdict-label-tracking:.025em;--xdict-frequency-tracking:.075em;
+--xdict-heading-tracking:.025em;--xdict-rule-gap:.35em;--xdict-arrow-gap:.25em;--xdict-marker-raise:.2em;
+--xdict-marker-size:.3em;--xdict-marker-gap:.4em;--xdict-marker-gutter:.8em;--xdict-half-line:.5lh;
+--xdict-label-gap:.4em;--xdict-label-before:.3em;--xdict-speaker-gap:.4em;--xdict-speaker-before:.3em;
+--xdict-chevron-gap:.3em;--xdict-sensenum-gap:.3em;--xdict-hang-default:1em;--xdict-layout-cell-gap:.3em;
+--xdict-image-max:22em;--xdict-float-max-width:13em;--xdict-float-max-height:17em;
+--xdict-badge-height:1em;--xdict-badge-max-height:1.3em;--xdict-badge-baseline:-.1em;--xdict-badge-gap:.3em;
+--xdict-icon-image-height:1.2em;--xdict-icon-image-baseline:-.15em;--xdict-icon-image-gap:.15em;
+--xdict-space-translation:0em;--xdict-space-example:.6em;--xdict-space-sense:.8em;--xdict-space-subhead:.8em;
+--xdict-space-heading:1.2em;--xdict-space-phrase:1.2em;--xdict-space-pos:1.6em;--xdict-space-after-heading:.3em;--xdict-space-image:.8em;
+--xdict-bg:#ffffff;--xdict-panel:#f3f3f3;--xdict-text:#1a1a1a;--xdict-text-2:#5d5d5d;--xdict-rule:#d1d1d1;
+--xdict-plate:#faf9f6;--xdict-link:#005a9e;--xdict-accent:#005a9e;
+--xdict-red-deep:#750b1c;--xdict-red:#a4262c;--xdict-red-tint:#fde7e9;
+--xdict-orange-deep:#7f2f00;--xdict-orange:#8e562e;--xdict-orange-tint:#fff4ce;
+--xdict-yellow-deep:#6d5700;--xdict-yellow:#7a6400;--xdict-yellow-tint:#fff4ce;
+--xdict-green-deep:#0b4d0b;--xdict-green:#107c10;--xdict-green-tint:#dff6dd;
+--xdict-teal-deep:#004b50;--xdict-teal:#006666;--xdict-teal-tint:#d7f5f5;
+--xdict-blue-deep:#004578;--xdict-blue:#005a9e;--xdict-blue-tint:#deecf9;
+--xdict-purple-deep:#4c1c70;--xdict-purple:#744da9;--xdict-purple-tint:#eee5f5;
+--xdict-pink-deep:#77004d;--xdict-pink:#9b0070;--xdict-pink-tint:#ffe2f2;
+}
+:root[data-xdict-theme=dark]{
+--xdict-bg:#202020;--xdict-panel:#2c2c2c;--xdict-text:#f5f5f5;--xdict-text-2:#c8c8c8;--xdict-rule:#606060;
+--xdict-link:#60cdff;--xdict-accent:#60cdff;
+--xdict-red-deep:#ffc9ce;--xdict-red:#f7a2ac;--xdict-red-tint:#442126;
+--xdict-orange-deep:#ffd6ae;--xdict-orange:#efb17d;--xdict-orange-tint:#3d2b20;
+--xdict-yellow-deep:#fff1a5;--xdict-yellow:#e6d17a;--xdict-yellow-tint:#38311b;
+--xdict-green-deep:#b2f2ae;--xdict-green:#9bd295;--xdict-green-tint:#203a22;
+--xdict-teal-deep:#aff2f2;--xdict-teal:#84d6d6;--xdict-teal-tint:#203737;
+--xdict-blue-deep:#bde5ff;--xdict-blue:#60cdff;--xdict-blue-tint:#203446;
+--xdict-purple-deep:#e9d5ff;--xdict-purple:#cbb2ef;--xdict-purple-tint:#33273f;
+--xdict-pink-deep:#ffd1ec;--xdict-pink:#f3afd8;--xdict-pink-tint:#402537;
+}
+html{font-size:var(--xdict-base);background:var(--xdict-bg)!important;color:var(--xdict-text);color-scheme:light}
+:root[data-xdict-theme=dark]{color-scheme:dark}
+[data-xdict-phon]{font-family:var(--xdict-font-phon)!important}
+/* W1: LDOCE writes its arrow back on every toggle. Keep its script hook; the frame draws the chevron. */
+[data-xdict-control=disclosure]>.arrow{display:none!important}

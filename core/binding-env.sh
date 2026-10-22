@@ -38,7 +38,11 @@ host_triple() {
 # Sets $release, the directory that holds the library. Built for the host by name, so its artifacts are under
 # target/<host>/release whatever build target a Cargo configuration sets.
 native_binding() {
-    case $(uname) in Darwin) native_lib=libxdict_ffi.dylib ;; *) native_lib=libxdict_ffi.so ;; esac
+    case $(uname) in
+        Darwin) native_lib=libxdict_ffi.dylib ;;
+        MINGW*|MSYS*|CYGWIN*) native_lib=xdict_ffi.dll ;;
+        *) native_lib=libxdict_ffi.so ;;
+    esac
     host=$(host_triple)
     release=$(target_dir)/$host/release
     cargo build -q --release -p xdict-ffi --target "$host"
