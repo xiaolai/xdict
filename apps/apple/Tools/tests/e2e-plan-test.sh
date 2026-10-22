@@ -169,7 +169,10 @@ lab_hit=""; for s in $lab_subs; do has "$s" "$got" && lab_hit="$lab_hit $s"; don
 if [ -z "$lab_hit" ] && has launch "$got" && has service.conformance "$got"; then
     ok "the service's code (no rule) selects the app's sub-stages by the graph, not the lab's"
 else bad "the service's code: lab [$lab_hit], got $(tr '\n' ' ' <<<"$got")"; fi
-same "a Package.swift change selects everything" "$(bash $plan substages)" "$(bash $affected --paths apps/apple/Package.swift)"
+# A manifest edit is build-level: the build gate compiles it and launch is the smoke that the app still starts. It must
+# not select the whole plan — an unrelated dependency line once re-ran every sub-stage (owner, 2026-10-23: only what a
+# change could affect).
+same "a Package.swift change is the launch smoke" "launch" "$(bash $affected --paths apps/apple/Package.swift)"
 got=$(bash $affected --paths apps/apple/Sources/XDictSearch/SearchModel.swift)
 lab_hit=""; for s in $lab_subs; do has "$s" "$got" && lab_hit="$lab_hit $s"; done
 [ -z "$lab_hit" ] && ok "an XDictSearch change selects no lab hostile sub-stage" || bad "an XDictSearch change selects$lab_hit"
