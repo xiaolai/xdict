@@ -10,6 +10,14 @@
 /.cc-suite.md
 /.mcp.json
 
+# The same, wherever a tool writes them inside an app: `apps/apple/` held `.cc-suite/`, `.cc-suite.md`, `.codex/`
+# and a `CLAUDE.md` link, and untracked they made the tree uncommittable for a release — the tree a release ships must be
+# HEAD's, and a file the tree hash counts but no one commits can never be (2026-10-22). Ignored, they are in neither.
+/apps/apple/.cc-suite/
+/apps/apple/.cc-suite.md
+/apps/apple/.codex/
+/apps/apple/CLAUDE.md
+
 # Every other AI assistant's files stay private the same way: project plugins' state (english-buddy) and
 # the instruction files and folders other coding agents create.
 /.english-buddy.json
