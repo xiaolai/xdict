@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>XDict.Models</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../XDict.Contract/XDict.Contract.csproj" />
+    <ProjectReference Include="../XDict.Client/XDict.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Strings/strings.json" LogicalName="XDict.Models.strings.json" />
+  </ItemGroup>
+</Project>

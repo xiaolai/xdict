@@ -1,0 +1,76 @@
+XDict - acknowledgements
+
+XDict itself is licensed under the ISC licence.
+
+Rust crates (the dictionary service):
+  block-buffer 0.12.1 - MIT OR Apache-2.0
+  cfg-if 1.0.5 - MIT OR Apache-2.0
+  const-oid 0.10.2 - Apache-2.0 OR MIT
+  core_detect 1.0.0 - MIT/Apache-2.0
+  cpufeatures 0.3.1 - MIT OR Apache-2.0
+  crypto-common 0.2.2 - MIT OR Apache-2.0
+  digest 0.11.3 - MIT OR Apache-2.0
+  encoding_rs 0.8.42 - (Apache-2.0 OR MIT) AND BSD-3-Clause
+  flate2 1.1.10 - MIT OR Apache-2.0
+  hybrid-array 0.4.15 - MIT OR Apache-2.0
+  itoa 1.0.18 - MIT OR Apache-2.0
+  libc 0.2.191 - MIT OR Apache-2.0
+  memchr 2.8.3 - Unlicense OR MIT
+  memmap2 0.9.11 - MIT OR Apache-2.0
+  multiversion_no_op 1.0.0 - Apache-2.0 OR MIT
+  proc-macro2 1.0.107 - MIT OR Apache-2.0
+  quote 1.0.47 - MIT OR Apache-2.0
+  ripemd 0.2.0 - MIT OR Apache-2.0
+  rustversion 1.0.23 - MIT OR Apache-2.0
+  scopeguard 1.2.0 - MIT OR Apache-2.0
+  serde 1.0.229 - MIT OR Apache-2.0
+  serde_core 1.0.229 - MIT OR Apache-2.0
+  serde_derive 1.0.229 - MIT OR Apache-2.0
+  serde_json 1.0.154 - MIT OR Apache-2.0
+  sha2 0.11.1 - MIT OR Apache-2.0
+  simdutf8 0.1.5 - MIT OR Apache-2.0
+  syn 3.0.9 - MIT OR Apache-2.0
+  thiserror 2.0.21 - MIT OR Apache-2.0
+  thiserror-impl 2.0.21 - MIT OR Apache-2.0
+  tinyvec 1.13.3 - Zlib OR Apache-2.0 OR MIT
+  typenum 1.20.1 - MIT OR Apache-2.0
+  unicode-ident 1.0.27 - (MIT OR Apache-2.0) AND Unicode-3.0
+  unicode-normalization 0.1.25 - MIT OR Apache-2.0
+  xdict-core 0.0.6 - ISC
+  xdict-entry 0.0.6 - ISC
+  xdict-health 0.0.6 - ISC
+  xdict-identity 0.0.6 - ISC
+  xdict-lookup 0.0.6 - ISC
+  xdict-mdx 0.0.6 - ISC
+  xdict-mmap 0.0.6 - ISC
+  xdict-service 0.0.0 - see the crate
+  xdict-win-fileid 0.0.6 - ISC
+  xxhash-rust 0.8.19 - BSL-1.0
+  zlib-rs 0.6.8 - Zlib
+  zmij 1.0.23 - MIT
+
+.NET and the Windows App SDK (the app):
+  Microsoft.Web.WebView2 1.0.3719.77 - LICENSE.txtfile
+  Microsoft.Windows.AI.MachineLearning 2.1.74 - license.txtfile
+  Microsoft.Windows.SDK.BuildTools 10.0.26100.4654 - https://aka.ms/WinSDKLicenseURL
+  Microsoft.Windows.SDK.BuildTools.MSIX 1.7.251221100 - sdk_license.txtfile
+  Microsoft.WindowsAppSDK 2.5.1 - license.txtfile
+  Microsoft.WindowsAppSDK.AI 2.5.5 - license.txtfile
+  Microsoft.WindowsAppSDK.Base 2.0.4 - license.txtfile
+  Microsoft.WindowsAppSDK.DWrite 2.1.0 - license.txtfile
+  Microsoft.WindowsAppSDK.Foundation 2.3.12 - license.txtfile
+  Microsoft.WindowsAppSDK.InteractiveExperiences 2.1.9 - license.txtfile
+  Microsoft.WindowsAppSDK.ML 2.1.94 - license.txtfile
+  Microsoft.WindowsAppSDK.Runtime 2.5.1 - license.txtfile
+  Microsoft.WindowsAppSDK.Search 2.5.5 - license.txtfile
+  Microsoft.WindowsAppSDK.Widgets 2.0.5 - license.txtfile
+  Microsoft.WindowsAppSDK.WinUI 2.3.9 - license.txtfile
+  System.Numerics.Tensors 9.0.0 - MITexpression
+
+Components shipped as runtime or data:
+  Microsoft Windows App SDK runtime - Microsoft, the Windows App SDK licence.
+  Microsoft Edge WebView2 Runtime - Microsoft, the WebView2 Runtime licence.
+  Charis SIL - SIL International, the SIL Open Font License 1.1 (the licence text ships with the fonts).
+  UI Automation and the Windows Runtime - Microsoft, the Windows licence terms.
+
+MDict is a format by Bugu; XDict's reader is clean-room and ships no dictionary content.

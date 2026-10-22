@@ -26,6 +26,10 @@ xxhash-rust.workspace = true
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 xdict-mmap = { path = "../xdict-mmap" }
 
+# The file index and change time Rust's stable `std` does not expose: one Win32 call, behind safe functions.
+[target.'cfg(windows)'.dependencies]
+xdict-win-fileid = { path = "../xdict-win-fileid" }
+
 [dev-dependencies]
 serde_json.workspace = true
 xdict-mdx-writer = { path = "../xdict-mdx-writer" }

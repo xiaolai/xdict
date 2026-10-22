@@ -1,0 +1,64 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.22000.0</TargetPlatformMinVersion>
+    <RootNamespace>XDict.App</RootNamespace>
+    <AssemblyName>XDict</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\icons\XDict.ico</ApplicationIcon>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+    <Platforms>x64;ARM64</Platforms>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
+    <!-- System.Windows.Automation (UIA2): the measured-working desktop-wide selection read (WI-1 spike 6). -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../XDict.Client/XDict.Client.csproj" />
+    <ProjectReference Include="../XDict.Models/XDict.Models.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/display-options.js" LogicalName="XDict.Reading.display-options.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/word-clicks-core.js" LogicalName="XDict.Reading.word-clicks-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/word-clicks.js" LogicalName="XDict.Reading.word-clicks.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/placeholder-clicks.js" LogicalName="XDict.Reading.placeholder-clicks.js" />
+    <EmbeddedResource Include="Reading/windows.css" LogicalName="XDict.Reading.windows.css" />
+    <EmbeddedResource Include="Notices.txt" LogicalName="XDict.App.Notices.txt" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/frame-core.js" LogicalName="XDict.Reading.frame-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/readability-core.js" LogicalName="XDict.Reading.readability-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/frame.js" LogicalName="XDict.Reading.frame.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/find-core.js" LogicalName="XDict.Reading.find-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/find.js" LogicalName="XDict.Reading.find.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/disclosure-core.js" LogicalName="XDict.Reading.disclosure-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/disclosure.js" LogicalName="XDict.Reading.disclosure.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/pron-run-core.js" LogicalName="XDict.Reading.pron-run-core.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/pron-run.js" LogicalName="XDict.Reading.pron-run.js" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/column.css" LogicalName="XDict.Reading.column.css" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/type.css" LogicalName="XDict.Reading.type.css" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/controls.css" LogicalName="XDict.Reading.controls.css" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/marks.css" LogicalName="XDict.Reading.marks.css" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/reading-labels.css" LogicalName="XDict.Reading.reading-labels.css" />
+    <EmbeddedResource Include="../../apple/Sources/XDictEntryView/Style/original-phon.css" LogicalName="XDict.Reading.original-phon.css" />
+    <EmbeddedResource Include="../../apple/Resources/Fonts/Charis-Regular.ttf" LogicalName="XDict.Fonts.Charis-Regular.ttf" />
+    <EmbeddedResource Include="../../apple/Resources/Fonts/Charis-Bold.ttf" LogicalName="XDict.Fonts.Charis-Bold.ttf" />
+    <EmbeddedResource Include="../../apple/Resources/Fonts/Charis-Italic.ttf" LogicalName="XDict.Fonts.Charis-Italic.ttf" />
+    <EmbeddedResource Include="../../apple/Resources/Fonts/Charis-BoldItalic.ttf" LogicalName="XDict.Fonts.Charis-BoldItalic.ttf" />
+    <EmbeddedResource Include="../../apple/Resources/Fonts/OFL-Charis.txt" LogicalName="XDict.Fonts.OFL-Charis.txt" />
+  </ItemGroup>
+  <!-- The service lands beside the app, and a missing service fails the build rather than a launch. -->
+  <Target Name="CopyServiceBesideTheApp" AfterTargets="Build">
+    <PropertyGroup>
+      <CargoProfile Condition="'$(Configuration)' == 'Debug'">debug</CargoProfile>
+      <CargoProfile Condition="'$(Configuration)' != 'Debug'">release</CargoProfile>
+      <ServiceExe>$(MSBuildThisFileDirectory)..\service\target\$(CargoProfile)\xdict-service.exe</ServiceExe>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(ServiceExe)')" Code="XDC0001"
+           Text="The service is not built: $(ServiceExe). Run apps/windows/Tools/build.ps1, or cargo build --manifest-path apps/windows/service/Cargo.toml" />
+    <Copy SourceFiles="$(ServiceExe)" DestinationFiles="$(OutDir)XDictService.exe" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

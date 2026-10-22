@@ -30,6 +30,21 @@ jobs:
       - run: cargo test
       - run: cargo clippy --all-targets -- -D warnings
 
+  # The core on Windows: the file identity crate, the conformance suite through Location::Path, and the mmap crate's
+  # own Windows test. UI and the service are not here (no desktop on a runner; the service's own gate is Windows-only
+  # and runs on the E2E host).
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f # v1
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo test
+      - run: cargo clippy --all-targets -- -D warnings
+
   swift:
     runs-on: macos-latest
     steps:

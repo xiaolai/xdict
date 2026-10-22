@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="XDict.App/XDict.App.csproj" />
+  <Project Path="XDict.Client/XDict.Client.csproj" />
+  <Project Path="XDict.Contract/XDict.Contract.csproj" />
+  <Project Path="XDict.Conformance/XDict.Conformance.csproj" />
+  <Project Path="XDict.Models/XDict.Models.csproj" />
+  <Project Path="XDict.Tests/XDict.Tests.csproj" />
+</Solution>
