@@ -1,0 +1,31 @@
+[package]
+name = "xdict-service"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[features]
+# Test artifact only: confinement probes never ship in the production service.
+acceptance-probes = []
+acceptance-contract2 = []
+
+[dependencies]
+# The core's serde feature gives the contract's camelCase, type-tagged records.
+xdict-core = { path = "../../../core/xdict-core", features = ["serde"] }
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.154"
+
+[target.'cfg(windows)'.dependencies]
+xdict-win-fileid = { path = "../../../core/xdict-win-fileid" }
+
+[lints.rust]
+unsafe_code = "deny"
+warnings = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"

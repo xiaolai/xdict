@@ -1,0 +1,2 @@
+id	status	dictionary	defect	guard	red evidence
+W1	in-progress	ldoce	Fold script restores a decorative arrow beside the frame chevron; closing changes visible text by one character	EntryCorpusLab @collocations_1 toggle and exact text-length restoration	entry-5e459edb90804fea9b97ee81a81d8366 before=455 open=503 closed=456

@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>XDict.Conformance</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../XDict.Client/XDict.Client.csproj" />
+    <ProjectReference Include="../XDict.Contract/XDict.Contract.csproj" />
+  </ItemGroup>
+</Project>
