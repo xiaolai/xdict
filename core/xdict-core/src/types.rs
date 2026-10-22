@@ -174,15 +174,37 @@ record! {
         pub role: Option<String>,
         pub label: Option<String>,
         pub section: Option<String>,
+        /// The innermost sense containing this run (ADR-0029 d.2).
+        pub sense: Option<u32>,
+    }
+
+    /// **One sense the entry's markup names** (ADR-0029 d.2): its ordinal, its canonical range in the entry's text,
+    /// the label as printed, its section, its parent and whether the sent text carries it whole.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Sense {
+        pub id: u32,
+        pub start: u64,
+        pub len: u64,
+        /// The printed label (the sense number), or none when the sheet draws it.
+        pub label: Option<String>,
+        pub section: Option<String>,
+        pub parent: Option<u32>,
+        /// True only when the whole range is in `text` and no run of it was dropped by the span cap.
+        pub whole: bool,
     }
 
     /// **An entry as plain text, whole, for a consumer that reads it** (ADR-0021 d.5): the text, where each run came
-    /// from, and what the budget left out. A cut is data — `complete: false` — never an error.
+    /// from, the senses the markup names, and what the budget left out. A cut is data — `complete: false` — never an
+    /// error.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct EntryText {
         pub entry: EntryRef,
         pub text: String,
         pub spans: Vec<TextSpan>,
+        /// The senses the markup names, in document order (ADR-0029 d.2). Empty when it names none.
+        pub senses: Vec<Sense>,
+        /// The rendering revision the ordinals belong to (`xdict_entry::STYLE`, ADR-0029 d.3).
+        pub style: u32,
         /// False whenever any part of the entry is missing from `text`.
         pub complete: bool,
         /// UTF-8 bytes the budget left out.

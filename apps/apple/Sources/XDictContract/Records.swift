@@ -236,13 +236,40 @@ public struct TextSpan: Codable, Hashable, Sendable {
     public let role: String?
     public let label: String?
     public let section: String?
+    /// The innermost sense containing this run (ADR-0029 d.2).
+    public let sense: UInt32?
 
-    public init(start: UInt64, len: UInt64, role: String?, label: String?, section: String?) {
+    public init(start: UInt64, len: UInt64, role: String?, label: String?, section: String?, sense: UInt32? = nil) {
         self.start = start
         self.len = len
         self.role = role
         self.label = label
         self.section = section
+        self.sense = sense
+    }
+}
+
+/// **One sense the entry's markup names** (ADR-0029 d.2): its ordinal, its canonical range in the entry's text, the
+/// label as printed, its section, its parent and whether the sent text carries it whole. An ordinal is valid for one
+/// `EntryRef` and one rendering revision (`EntryText.style`); it is never a durable identity.
+public struct Sense: Codable, Hashable, Sendable {
+    public let id: UInt32
+    public let start: UInt64
+    public let len: UInt64
+    public let label: String?
+    public let section: String?
+    public let parent: UInt32?
+    public let whole: Bool
+
+    public init(id: UInt32, start: UInt64, len: UInt64, label: String?, section: String?, parent: UInt32?,
+                whole: Bool) {
+        self.id = id
+        self.start = start
+        self.len = len
+        self.label = label
+        self.section = section
+        self.parent = parent
+        self.whole = whole
     }
 }
 
@@ -252,6 +279,10 @@ public struct EntryText: Codable, Hashable, Sendable {
     public let entry: EntryRef
     public let text: String
     public let spans: [TextSpan]
+    /// The senses the markup names, in document order (ADR-0029 d.2). Empty when it names none.
+    public let senses: [Sense]
+    /// The rendering revision the ordinals belong to (ADR-0029 d.3).
+    public let style: UInt32
     public let complete: Bool
     /// UTF-8 bytes the budget left out.
     public let omittedBytes: UInt64
@@ -260,11 +291,13 @@ public struct EntryText: Codable, Hashable, Sendable {
     /// Runs (and so their roles) the budget left out.
     public let spansDropped: UInt64
 
-    public init(entry: EntryRef, text: String, spans: [TextSpan], complete: Bool, omittedBytes: UInt64, cutAt: UInt64,
-                spansDropped: UInt64) {
+    public init(entry: EntryRef, text: String, spans: [TextSpan], senses: [Sense] = [], style: UInt32 = 0,
+                complete: Bool, omittedBytes: UInt64, cutAt: UInt64, spansDropped: UInt64) {
         self.entry = entry
         self.text = text
         self.spans = spans
+        self.senses = senses
+        self.style = style
         self.complete = complete
         self.omittedBytes = omittedBytes
         self.cutAt = cutAt

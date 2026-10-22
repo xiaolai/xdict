@@ -17,9 +17,9 @@ use xdict_core::{
     FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How,
     ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened,
     Page, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome,
-    Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, SkipReason, SkippedSheet, Stamp,
-    StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions,
-    View,
+    Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, Sense, SkipReason, SkippedSheet,
+    Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView,
+    Versions, View,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -90,6 +90,20 @@ pub struct TextSpan {
     pub role: Option<String>,
     pub label: Option<String>,
     pub section: Option<String>,
+    /// The innermost sense containing this run (ADR-0029 d.2).
+    pub sense: Option<u32>,
+}
+
+/// One sense the entry's markup names (ADR-0029 d.2).
+#[uniffi::remote(Record)]
+pub struct Sense {
+    pub id: u32,
+    pub start: u64,
+    pub len: u64,
+    pub label: Option<String>,
+    pub section: Option<String>,
+    pub parent: Option<u32>,
+    pub whole: bool,
 }
 
 #[uniffi::remote(Record)]
@@ -97,6 +111,8 @@ pub struct EntryText {
     pub entry: EntryRef,
     pub text: String,
     pub spans: Vec<TextSpan>,
+    pub senses: Vec<Sense>,
+    pub style: u32,
     pub complete: bool,
     pub omitted_bytes: u64,
     pub cut_at: u64,

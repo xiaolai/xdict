@@ -4,11 +4,14 @@
 //! renderer wrote (`data-xdict-role`, `data-xdict-label`, `data-xdict-section`, `hidden`) are read as they are, and
 //! text the rules did not classify is kept, marked with no role.
 
+use std::collections::BTreeMap;
+
 use crate::rewrite::unescape_text;
 use crate::roles::{attributes, void};
 
-/// One run of the entry's text and where it came from: offsets in UTF-8 bytes of [`Projection::text`], and the
-/// nearest role, label kind and section kind written around it — none for text the rules did not classify.
+/// One run of the entry's text and where it came from: offsets in UTF-8 bytes of [`Projection::text`], the
+/// nearest role, label kind and section kind written around it — none for text the rules did not classify — and
+/// the innermost sense containing it, when the markup names one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TextRun {
     pub start: usize,
@@ -16,6 +19,26 @@ pub struct TextRun {
     pub role: Option<String>,
     pub label: Option<String>,
     pub section: Option<String>,
+    /// The id of the innermost sense container this run lies in (ADR-0029 d.2).
+    pub sense: Option<u32>,
+}
+
+/// One sense the entry's markup names (`data-xdict-sense`): its ordinal, its canonical byte range in
+/// [`Projection::text`], the label as printed, its section, its parent and whether the projection carries it whole
+/// (ADR-0029 d.2, d.3). The range includes the printed label, definitions, examples, translations, nested children
+/// and the separators between them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Sense {
+    pub id: u32,
+    pub start: usize,
+    pub len: usize,
+    /// The printed sense label (the sense-number text), or none when it is not text (CSS counters) or was cut.
+    pub label: Option<String>,
+    pub section: Option<String>,
+    /// The id of the nearest ancestor sense, or none for a top-level sense.
+    pub parent: Option<u32>,
+    /// True only when the whole range is in `text` and none of its runs was dropped by the span cap.
+    pub whole: bool,
 }
 
 /// An entry's text under its budget, and what the budget left out.
@@ -23,6 +46,8 @@ pub struct TextRun {
 pub struct Projection {
     pub text: String,
     pub runs: Vec<TextRun>,
+    /// The senses the markup names, in document order (ADR-0029 d.2). Empty for markup that names none.
+    pub senses: Vec<Sense>,
     /// False whenever any part of the entry is missing from `text` — after a cut, never false otherwise.
     pub complete: bool,
     /// UTF-8 bytes of the whole entry's text that the budget left out.
@@ -88,9 +113,33 @@ struct Frame {
     block: bool,
 }
 
+/// A sense while it is being followed: its range begins at its first element and ends where the next sense at its
+/// level, an end marker or its scope element ends it (ADR-0029 d.2). Its runs carry the innermost open sense, so text
+/// between two elements of a run is covered as the reader sees it.
+struct Draft {
+    id: u32,
+    start: usize,
+    end: usize,
+    parent: Option<u32>,
+    label: Option<String>,
+    section: Option<String>,
+    /// The element depth the run started at: its parent's close ends it.
+    scope_depth: usize,
+    /// A run head reaches into its following siblings, so an explicit end marker ends it; a container holds its own
+    /// element and only that element's close ends it (verification finding, 2026-10-23).
+    run: bool,
+    closed: bool,
+}
+
 /// The most spans one projection carries: 16,384 runs of JSON stay far inside the 4 MB IPC envelope, while a text of
 /// 200,000 one-character spans would not. Spans past this are dropped and counted. (Audit finding, 2026-10-20.)
 pub const MAX_SPANS: usize = 4_096;
+
+/// **The most senses one projection carries.** An untrusted entry can name a sense on every element; without a cap its
+/// sense list alone would push the reply past the IPC envelope. Well past any real entry (the corpus's largest has
+/// hundreds), and the text budget usually binds first. Past this, later sense ids are ignored — their text stays in the
+/// projection with the enclosing sense's membership, as unclassified text does.
+pub const MAX_SENSES: usize = 16_384;
 
 /// **`html` as plain text, held to `max_bytes`.** A budget that cuts reports the cut (`complete: false`, the bytes
 /// left out, where it fell, the runs dropped); it is data, never an error. A zero budget is an empty text that says
@@ -122,6 +171,9 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
             }
         }
     }
+    // **A sense still open at the end of the document ends with it**: malformed markup closes nothing, and a range
+    // must never reach past the text it was opened in. (ADR-0029 d.2.)
+    close_all(&mut state);
     while state.text.ends_with('\n') {
         state.text.pop();
     }
@@ -144,12 +196,56 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
         cut = if kept == 0 { 0 } else { state.runs.get(kept - 1).map_or(0, |r| r.start + r.len) };
     }
     let kept_by_cap = kept.min(MAX_SPANS);
+    // **A sense whose run the span cap dropped is not whole**, even though its text is still in `text`: the shell
+    // cannot prove membership for it, and a target it cannot bind is not a target. The drop reaches every ancestor.
+    // (ADR-0029 d.2.)
+    let mut dropped_sense = vec![false; state.senses.len()];
+    for run in state.runs.iter().skip(kept_by_cap) {
+        let mut at = run.sense.and_then(|id| state.by_id.get(&id).copied());
+        while let Some(index) = at {
+            let Some(draft) = state.senses.get(index) else { break };
+            let already = dropped_sense.get(index).copied().unwrap_or(true);
+            if let Some(slot) = dropped_sense.get_mut(index) {
+                *slot = true;
+            }
+            if already {
+                // Already marked with its ancestors: nothing above can be unmarked.
+                break;
+            }
+            at = draft.parent.and_then(|id| state.by_id.get(&id).copied());
+        }
+    }
     let complete = cut == full_len && kept == all_runs;
+    // The label is the sense's own printed number: the first `sensenum` run in its own text, before the cut.
+    let senses: Vec<Sense> = state
+        .senses
+        .iter()
+        .enumerate()
+        .map(|(index, draft)| {
+            // **A range never points past the text it describes**: a sense beyond the cut keeps only the part the
+            // shell actually has, and `whole` carries the rest of the truth.
+            let raw_end = draft.end.min(trimmed);
+            let start = draft.start.min(cut);
+            let end = raw_end.min(cut);
+            // The label the renderer wrote, else the first sense number seen in the run.
+            let label = draft.label.clone().or_else(|| state.labels_seen.get(&draft.id).cloned());
+            Sense {
+                id: draft.id,
+                start,
+                len: end.saturating_sub(start),
+                label,
+                section: draft.section.clone(),
+                parent: draft.parent,
+                whole: raw_end <= cut && !dropped_sense.get(index).copied().unwrap_or(true),
+            }
+        })
+        .collect();
     state.text.truncate(cut);
     state.runs.truncate(kept_by_cap);
     Projection {
         text: state.text,
         runs: state.runs,
+        senses,
         complete,
         omitted_bytes: (full_len - cut) as u64,
         cut_at: cut as u64,
@@ -162,6 +258,15 @@ pub fn entry_text_from_html(html: &str, max_bytes: usize) -> Projection {
 struct State {
     text: String,
     runs: Vec<TextRun>,
+    /// The senses seen so far, in document order, and the ones open now (outermost first): a repeated element of a
+    /// run is the same sense, and a closed id that appears again is ignored (ADR-0029 d.2).
+    senses: Vec<Draft>,
+    /// An id's draft, so a repeat costs a lookup rather than a scan: an entry naming a sense on every element must not
+    /// turn the projection quadratic (audit finding, 2026-10-22).
+    by_id: BTreeMap<u32, usize>,
+    /// The first printed sense number seen per sense, for markup that names a container but not its label.
+    labels_seen: BTreeMap<u32, String>,
+    open: Vec<usize>,
     /// A whitespace-only node between two inline elements: the space belongs before the next run, not to none.
     pending_space: bool,
 }
@@ -240,12 +345,24 @@ impl State {
         }
         let start = self.text.len();
         self.text.push_str(&run);
+        let role = context.and_then(|f| f.role.clone());
+        let sense = self.open.last().and_then(|&i| self.senses.get(i)).map(|d| d.id);
+        // **The first sense number of each sense**, kept here so the final pass looks up a label rather than scanning
+        // every run per sense (audit finding, 2026-10-22).
+        if let Some(id) = sense
+            && role.as_deref() == Some("sensenum")
+            && run.len() <= 32
+            && !self.labels_seen.contains_key(&id)
+        {
+            self.labels_seen.insert(id, run.trim().to_owned());
+        }
         self.runs.push(TextRun {
             start,
             len: run.len(),
-            role: context.and_then(|f| f.role.clone()),
+            role,
             label: context.and_then(|f| f.label.clone()),
             section: context.and_then(|f| f.section.clone()),
+            sense,
         });
         if trailing_space {
             self.pending_space = true;
@@ -275,6 +392,9 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
         if let Some(pos) = frames.iter().rposition(|f| f.name.eq_ignore_ascii_case(name)) {
             let block = frames.get(pos).is_some_and(|f| f.block);
             frames.truncate(pos);
+            // **A run ends with the element that held it**, before the block boundary that follows: that newline
+            // belongs to what comes next, not to the sense. (ADR-0029 d.2.)
+            close_scoped(state, frames.len(), false);
             if block {
                 state.boundary(frames);
             }
@@ -303,17 +423,139 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
     }
     let parent = frames.last();
     let is_pre = lower == "pre";
-    frames.push(Frame {
-        name: lower,
-        // The nearest ancestor's value unless this element writes its own: cached here, never walked again.
-        role: attribute(&attrs, "data-xdict-role").or_else(|| parent.and_then(|f| f.role.clone())),
-        label: attribute(&attrs, "data-xdict-label").or_else(|| parent.and_then(|f| f.label.clone())),
-        section: attribute(&attrs, "data-xdict-section").or_else(|| parent.and_then(|f| f.section.clone())),
-        hidden,
-        pre: parent.is_some_and(|f| f.pre) || is_pre,
-        block,
-    });
+    // The nearest ancestor's value unless this element writes its own: cached here, never walked again.
+    let role = attribute(&attrs, "data-xdict-role").or_else(|| parent.and_then(|f| f.role.clone()));
+    let label = attribute(&attrs, "data-xdict-label").or_else(|| parent.and_then(|f| f.label.clone()));
+    let section = attribute(&attrs, "data-xdict-section").or_else(|| parent.and_then(|f| f.section.clone()));
+    let pre = parent.is_some_and(|f| f.pre) || is_pre;
+    // **The end marker**: every run at this level has ended; the element that follows is not part of it.
+    if attrs.iter().any(|(k, _)| k.eq_ignore_ascii_case("data-xdict-sense-end")) {
+        close_scoped(state, frames.len(), true);
+    }
+    // **A sense start**: a new id opens a run at this point; an element repeating an open run's id is that run, and a
+    // closed id that appears again is ignored (ADR-0029 d.2).
+    if let Some(id) = attribute(&attrs, "data-xdict-sense").and_then(|value| parse_sense_id(&value)) {
+        open_sense(state, frames.len(), id, &attrs, section.as_deref());
+    }
+    frames.push(Frame { name: lower, role, label, section, hidden, pre, block });
     after
+}
+
+/// A sense id from `data-xdict-sense`: ASCII digits, 1 based, bounded. Anything else names no sense.
+fn parse_sense_id(value: &str) -> Option<u32> {
+    if value.is_empty() || value.len() > 7 || !value.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    value.parse::<u32>().ok().filter(|id| (1..=1_000_000).contains(id))
+}
+
+/// **A sense starts here**: its range begins at the text written so far, after the boundary that opened the block.
+/// The runs it is not inside end here; the label and parent are the renderer's own, never guessed.
+fn open_sense(state: &mut State, depth: usize, id: u32, attrs: &[(String, String)], section: Option<&str>) {
+    // **A repeat is the same sense**; past the cap a new id is not carried at all, and — because the run that was open
+    // ends here — its text belongs to no sense, never to the one before it (verification finding, 2026-10-23).
+    if state.by_id.contains_key(&id) {
+        return;
+    }
+    if state.senses.len() >= MAX_SENSES {
+        let now = current_end(state);
+        let open = std::mem::take(&mut state.open);
+        for index in open {
+            close_draft(state, index, now);
+        }
+        return;
+    }
+    // **The renderer's parent is final**: 0 (or no attribute) is a top-level sense, and an id names that sense. The
+    // projection never invents a parent from whatever run happens to be open.
+    let parent = match attribute(attrs, "data-xdict-sense-parent") {
+        Some(raw) if raw == "0" => None,
+        Some(raw) => parse_sense_id(&raw).filter(|parent| *parent != id && state.by_id.contains_key(parent)),
+        None => None,
+    };
+    // The runs still open that are this sense's ancestors stay; the rest end where it starts.
+    let mut ancestors = Vec::new();
+    let mut at = parent;
+    while let Some(parent) = at {
+        if ancestors.contains(&parent) {
+            break;
+        }
+        ancestors.push(parent);
+        at = state.by_id.get(&parent).and_then(|index| state.senses.get(*index)).and_then(|d| d.parent);
+    }
+    // **A separator between senses is not part of either**: a block boundary emitted just before this start stays
+    // outside the sense that ends there, while the new sense begins after it.
+    let end_now = current_end(state);
+    let start_now = state.text.len();
+    let open = std::mem::take(&mut state.open);
+    for index in open {
+        if state.senses.get(index).is_some_and(|d| ancestors.contains(&d.id)) {
+            state.open.push(index);
+        } else {
+            close_draft(state, index, end_now);
+        }
+    }
+    // **A run head ends with its parent; a container ends with itself** (the renderer says which). The container's
+    // own close is one depth deeper than the parent's.
+    let run = attrs.iter().any(|(key, _)| key.eq_ignore_ascii_case("data-xdict-sense-run"));
+    let index = state.senses.len();
+    state.senses.push(Draft {
+        id,
+        start: start_now,
+        end: start_now,
+        parent,
+        label: attribute(attrs, "data-xdict-sense-label").filter(|v| v.len() <= 32),
+        section: section.map(str::to_owned),
+        scope_depth: if run { depth } else { depth + 1 },
+        run,
+        closed: false,
+    });
+    state.by_id.insert(id, index);
+    state.open.push(index);
+}
+
+/// Ends one draft at `at`, once.
+fn close_draft(state: &mut State, index: usize, at: usize) {
+    if let Some(draft) = state.senses.get_mut(index)
+        && !draft.closed
+    {
+        draft.end = at;
+        draft.closed = true;
+    }
+}
+
+/// Ends every run whose scope element is now closed. An end marker ends the runs at its own level; a closing element
+/// ends the runs and containers whose scope was inside it. **A container is never ended by a marker**: the renderer
+/// writes one where a run reaches no further, and the container's element still holds what follows
+/// (verification finding, 2026-10-23).
+fn close_scoped(state: &mut State, depth: usize, explicit: bool) {
+    let now = current_end(state);
+    let open = std::mem::take(&mut state.open);
+    for index in open {
+        let scoped = state
+            .senses
+            .get(index)
+            .is_some_and(|d| if explicit { d.run && d.scope_depth >= depth } else { d.scope_depth > depth });
+        if scoped {
+            close_draft(state, index, now);
+        } else {
+            state.open.push(index);
+        }
+    }
+}
+
+/// Ends every run at the end of the document.
+fn close_all(state: &mut State) {
+    let now = current_end(state);
+    let open = std::mem::take(&mut state.open);
+    for index in open {
+        close_draft(state, index, now);
+    }
+}
+
+/// Where a sense ends now: a block boundary's final newline is the separator before what comes next, not part of the
+/// sense that ends here.
+fn current_end(state: &State) -> usize {
+    if state.text.ends_with('\n') { state.text.len() - 1 } else { state.text.len() }
 }
 
 /// The content of a `script`, `style` or `head` starts at `after`: the scan resumes at its end tag, or never.
@@ -370,6 +612,9 @@ fn attribute(attrs: &[(String, String)], name: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    // The workspace forbids these in library code; a test asserts by failing, which is the point.
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
     use super::*;
 
     type Runs<'a> = Vec<(usize, usize, Option<&'a str>, Option<&'a str>, Option<&'a str>)>;
@@ -604,5 +849,147 @@ mod tests {
         let p = entry_text_from_html(&html, usize::MAX);
         assert_eq!(p.runs.len(), MAX_SPANS);
         assert_eq!(p.runs_dropped as usize, 500);
+    }
+
+    #[test]
+    fn senses_carry_a_range_a_label_and_their_runs() {
+        let html = r#"<div data-xdict-role="sense" data-xdict-sense="1"><span data-xdict-role="sensenum">1</span> <span data-xdict-role="def">a body of water</span></div><div data-xdict-role="sense" data-xdict-sense="2"><span data-xdict-role="sensenum">2</span> <span data-xdict-role="def">to move fast</span></div>"#;
+        let p = entry_text_from_html(html, usize::MAX);
+        assert_eq!(p.text, "1 a body of water\n2 to move fast");
+        assert_eq!(p.senses.len(), 2);
+        let first = p.senses.first().unwrap();
+        assert_eq!((first.id, first.start, first.len), (1, 0, 17));
+        assert_eq!(first.label.as_deref(), Some("1"));
+        assert_eq!(first.parent, None);
+        assert!(first.whole);
+        let second = p.senses.get(1).unwrap();
+        assert_eq!((second.id, second.start, second.len), (2, 18, 14));
+        assert_eq!(second.label.as_deref(), Some("2"));
+        assert!(second.whole);
+        // Membership is the innermost sense, projected — never guessed from the text.
+        let senses: Vec<Option<u32>> = p.runs.iter().map(|r| r.sense).collect();
+        assert_eq!(senses, vec![Some(1), Some(1), Some(2), Some(2)]);
+    }
+
+    #[test]
+    fn a_nested_sense_names_its_parent_and_is_contained_by_it() {
+        let p = entry_text_from_html(
+            r#"<div data-xdict-sense="1" data-xdict-sense-parent="0"><span data-xdict-sense="2" data-xdict-sense-parent="1">inner</span> outer</div>"#,
+            usize::MAX,
+        );
+        assert_eq!(p.text, "inner outer");
+        let outer = p.senses.first().unwrap();
+        let inner = p.senses.get(1).unwrap();
+        assert_eq!((outer.id, outer.start, outer.len), (1, 0, 11));
+        assert_eq!((inner.id, inner.start, inner.len), (2, 0, 5));
+        assert_eq!(inner.parent, Some(1));
+        assert_eq!(p.runs.first().and_then(|r| r.sense), Some(2));
+        assert_eq!(p.runs.last().and_then(|r| r.sense), Some(1));
+    }
+
+    #[test]
+    fn a_duplicate_sense_id_is_not_a_second_sense() {
+        let p =
+            entry_text_from_html(r#"<div data-xdict-sense="1">a</div><div data-xdict-sense="1">b</div>"#, usize::MAX);
+        assert_eq!(p.text, "a\nb");
+        assert_eq!(p.senses.len(), 1);
+        assert_eq!(p.senses.first().map(|s| s.len), Some(1));
+    }
+
+    #[test]
+    fn a_zero_or_forged_sense_id_names_no_sense() {
+        for id in ["0", "-1", "1.1", "x", ""] {
+            let p = entry_text_from_html(&format!(r#"<div data-xdict-sense="{id}">a</div>"#), usize::MAX);
+            assert!(p.senses.is_empty(), "{id:?} named a sense");
+        }
+    }
+
+    #[test]
+    fn a_sense_the_budget_cut_is_not_whole() {
+        let html = r#"<div data-xdict-sense="1">first</div><div data-xdict-sense="2">second</div>"#;
+        let p = entry_text_from_html(html, 6);
+        assert_eq!(p.text, "first");
+        assert!(p.senses.first().is_some_and(|s| s.whole));
+        assert!(p.senses.get(1).is_some_and(|s| !s.whole));
+        // The cut sense has no text of its own in the projection: its range is empty, and it says so.
+        assert_eq!(p.senses.get(1).map(|s| s.len), Some(0));
+    }
+
+    #[test]
+    fn a_sense_past_the_span_cap_is_not_whole() {
+        let mut html = String::from(r#"<div data-xdict-sense="1">"#);
+        for _ in 0..(MAX_SPANS + 1) {
+            html.push_str("<span>a</span> ");
+        }
+        html.push_str("</div>");
+        let p = entry_text_from_html(&html, usize::MAX);
+        assert_eq!(p.runs.len(), MAX_SPANS);
+        assert!(p.senses.first().is_some_and(|s| !s.whole), "a dropped run makes its sense unbound");
+    }
+
+    #[test]
+    fn a_sense_without_a_printed_number_has_no_label() {
+        let p = entry_text_from_html(r#"<div data-xdict-sense="1">a body</div>"#, usize::MAX);
+        assert_eq!(p.senses.first().and_then(|s| s.label.as_deref()), None);
+    }
+
+    #[test]
+    fn two_dictionaries_may_print_the_same_ordinal_differently() {
+        // The label is what the reader's dictionary printed, not the ordinal restated in one house style.
+        let a = entry_text_from_html(
+            r#"<div data-xdict-sense="1" data-xdict-sense-label="1." data-xdict-sense-parent="0">a</div>"#,
+            usize::MAX,
+        );
+        let b = entry_text_from_html(
+            r#"<div data-xdict-sense="1" data-xdict-sense-label="①" data-xdict-sense-parent="0">b</div>"#,
+            usize::MAX,
+        );
+        assert_eq!(a.senses.first().and_then(|s| s.label.as_deref()), Some("1."));
+        assert_eq!(b.senses.first().and_then(|s| s.label.as_deref()), Some("①"));
+    }
+
+    #[test]
+    fn a_sense_covers_the_text_between_its_elements() {
+        // `one <em>two</em> three`: the space between the runs and the inner element's text are the same sense.
+        let p = entry_text_from_html(
+            r#"<div data-xdict-sense="1" data-xdict-sense-parent="0" data-xdict-sense-run>one <em>two</em> three</div>"#,
+            usize::MAX,
+        );
+        assert_eq!(p.text, "one two three");
+        let first = p.senses.first().unwrap();
+        assert_eq!((first.start, first.len), (0, 13));
+        assert!(p.runs.iter().all(|run| run.sense == Some(1)));
+    }
+
+    #[test]
+    fn an_end_marker_ends_a_run_but_not_its_container() {
+        // A heading between a run and the rest of its container ends the run and nothing else: the container's
+        // element still holds the heading's text and what follows (verification finding, 2026-10-23).
+        let p = entry_text_from_html(
+            r#"<div data-xdict-sense="1"><span data-xdict-sense="2" data-xdict-sense-parent="1" data-xdict-sense-run>a</span><h4 data-xdict-sense-end>note</h4>tail</div>"#,
+            usize::MAX,
+        );
+        assert_eq!(p.text, "a\nnote\ntail");
+        let outer = p.senses.first().unwrap();
+        let inner = p.senses.get(1).unwrap();
+        assert_eq!((outer.id, outer.start, outer.len), (1, 0, 11));
+        assert_eq!((inner.id, inner.start, inner.len), (2, 0, 1));
+        assert_eq!(p.text.get(outer.start..outer.start + outer.len), Some("a\nnote\ntail"));
+        assert_eq!(p.text.get(inner.start..inner.start + inner.len), Some("a"));
+        assert!(outer.whole && inner.whole);
+    }
+
+    #[test]
+    fn a_shared_label_before_the_sense_is_not_part_of_it() {
+        // A part of speech above the senses is shared, and the sense begins where its own text does.
+        let p = entry_text_from_html(
+            r#"<span data-xdict-role="pos">verb</span> <span data-xdict-sense="1" data-xdict-sense-parent="0" data-xdict-sense-run>to move</span>"#,
+            usize::MAX,
+        );
+        // The separator between the shared label and the sense is the sense's leading edge, as the ADR says ranges
+        // include their separators.
+        let first = p.senses.first().unwrap();
+        assert_eq!(first.start, 4);
+        assert_eq!(first.len, 8);
     }
 }

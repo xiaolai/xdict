@@ -38,8 +38,20 @@ export type Page = { hits: Hit[]; total: number; generation: number; problems: H
 export type View = { baseUrl: string; maxBodyBytes: number; originalStyle?: boolean };
 export type Entry = { entry: EntryRef; html: string; csp: string; lossyBytes: number };
 export type TextView = { baseUrl: string; maxBodyBytes: number; maxTextBytes: number; originalStyle?: boolean };
-export type TextSpan = { start: number; len: number; role: string | null; label: string | null; section: string | null };
-export type EntryText = { entry: EntryRef; text: string; spans: TextSpan[]; complete: boolean; omittedBytes: number; cutAt: number; spansDropped: number };
+export type TextSpan = {
+  start: number; len: number; role: string | null; label: string | null; section: string | null;
+  /** The innermost sense containing this run (ADR-0029 d.2). */
+  sense?: number | null;
+};
+/** One sense the entry's markup names (ADR-0029 d.2). */
+export type Sense = {
+  id: number; start: number; len: number; label: string | null; section: string | null;
+  parent: number | null; whole: boolean;
+};
+export type EntryText = {
+  entry: EntryRef; text: string; spans: TextSpan[]; senses: Sense[]; style: number;
+  complete: boolean; omittedBytes: number; cutAt: number; spansDropped: number;
+};
 export type ReadingSpan = { start: number; len: number };
 /** One reading as the history stores it (ADR-0023): the word, its sentence, and the edition's content hash. */
 export type Reading = {

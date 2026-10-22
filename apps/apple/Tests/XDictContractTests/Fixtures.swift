@@ -202,8 +202,11 @@ enum Fixtures {
         .entry(Entry(entry: entryRef, csp: "default-src 'none'; img-src xdict://d/ data:", lossyBytes: 2)),
         .entryText(EntryText(entry: entryRef, text: "hold\n  to keep\n  an opinion", spans: [
             TextSpan(start: 0, len: 4, role: "headword", label: nil, section: nil),
-            TextSpan(start: 6, len: 29, role: "definition", label: "1", section: "verb"),
-        ], complete: false, omittedBytes: 12, cutAt: 35, spansDropped: 1)),
+            TextSpan(start: 6, len: 29, role: "definition", label: "1", section: "verb", sense: 1),
+        ], senses: [
+            Sense(id: 1, start: 6, len: 9, label: "1", section: "verb", parent: nil, whole: true),
+            Sense(id: 2, start: 17, len: 18, label: "2", section: "verb", parent: nil, whole: true),
+        ], style: 13, complete: false, omittedBytes: 12, cutAt: 35, spansDropped: 1)),
         .link(.lookup(query: "hold", anchor: "sense2")),
         .link(.lookup(query: "hold", anchor: nil)),
         .link(.resource(path: "images/a%20b.png")),

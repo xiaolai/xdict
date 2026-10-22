@@ -43,8 +43,10 @@ enum Harness {
     }
 
     static func entry(text: String, cutAt: UInt64 = 0, complete: Bool = true) -> EntryText {
+        // A synthetic entry: no senses and no rendering revision (0) — nothing here selects one.
         EntryText(entry: EntryRef(edition: "synthetic", key: "hold", occurrence: 0), text: text,
-                  spans: [], complete: complete, omittedBytes: 0, cutAt: cutAt, spansDropped: 0)
+                  spans: [], senses: [], style: 0, complete: complete, omittedBytes: 0, cutAt: cutAt,
+                  spansDropped: 0)
     }
 
     // MARK: - Self-test

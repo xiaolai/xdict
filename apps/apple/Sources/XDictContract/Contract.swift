@@ -51,7 +51,9 @@ public enum Contract {
     /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
     /// 10 (2026-10-21): the study operations — a note, the notes, the review queue, a grade, an undo, the summary, a
     /// definition's hash and a re-anchor — with their answers (plan-history-and-learning WI-5).
-    public static let version: UInt32 = 12
+    /// 13 (2026-10-22): `EntryText` gained `senses` and `style`, and `TextSpan` gained `sense`: the senses the markup
+    /// names, their canonical ranges, and the rendering revision the ordinals belong to (ADR-0029 d.2, d.3).
+    public static let version: UInt32 = 13
 }
 
 // MARK: - The request

@@ -29,6 +29,9 @@ pub(crate) enum Sure {
     /// Inside an example, text that is not the example's own (a gloss, a grammar pattern, a label): it keeps the
     /// dictionary's look. Not a role; written `data-xdict-sure="keep"`, and only inside an example.
     Keep,
+    /// **A sense container** (ADR-0029 d.2): not a role and not written as `data-xdict-sure`; the sense pass reads it
+    /// and numbers the sense. (No markup table in the corpus styles sense containers, so it sits outside [`Sure::ALL`].)
+    Sense,
 }
 
 impl Sure {
@@ -46,6 +49,15 @@ pub(crate) struct Profile {
     pub(crate) pos_words: bool,
     /// Sense numbers: only an element whose text is a number (`roles::numbered`) is one.
     sensenum: Sel,
+    /// **A sense container**: the element a sense starts in, where the markup names one (ADR-0029 d.2). It is not a
+    /// role: the sense pass reads it, and writes `data-xdict-sense`, so the reading style is untouched. An element the
+    /// selector names *inside* a sense already started is the same sense, not a second one, unless its own number is a
+    /// sub-label.
+    sense: Sel,
+    /// **A sense header**: the element a sense starts in when the definition and examples follow it as siblings, so
+    /// the run extends past it (COBUILD's `div.caption`, OALD's single-sense `span.def`). An element in `sense`
+    /// instead holds its whole sense.
+    sense_header: Sel,
     /// Examples.
     example: Sel,
     /// Inside an example, what is not its own text (`Sure::Keep`).
@@ -67,6 +79,8 @@ const NONE: Profile = Profile {
     pos: &[],
     pos_words: false,
     sensenum: &[],
+    sense: &[],
+    sense_header: &[],
     example: &[],
     example_keep: &[],
     example_blocks: false,
@@ -82,7 +96,9 @@ fn matches(sel: Sel, tag: &str, classes: &[String]) -> bool {
 impl Profile {
     /// The role this markup's table gives an element of `tag` (lower case) and `classes` (lower case), if any.
     pub(crate) fn sure(&self, tag: &str, classes: &[String]) -> Option<Sure> {
-        if matches(self.pos, tag, classes) {
+        if matches(self.sense, tag, classes) || matches(self.sense_header, tag, classes) {
+            Some(Sure::Sense)
+        } else if matches(self.pos, tag, classes) {
             Some(Sure::Pos)
         } else if matches(self.sensenum, tag, classes) {
             Some(Sure::Sensenum)
@@ -101,6 +117,11 @@ impl Profile {
         }
     }
 
+    /// Whether this element is a sense **header** (the run continues past it), not a whole container.
+    pub(crate) fn is_sense_header(&self, tag: &str, classes: &[String]) -> bool {
+        matches(self.sense_header, tag, classes)
+    }
+
     /// Whether the table names the role at all: then the generic rule's guesses of it are not written.
     pub(crate) fn decides(&self, sure: Sure) -> bool {
         match sure {
@@ -110,7 +131,7 @@ impl Profile {
             Sure::Heading => !self.heading.is_empty(),
             Sure::Trans => !self.trans.is_empty(),
             Sure::Subhead => !self.subhead.is_empty(),
-            Sure::Keep => false,
+            Sure::Keep | Sure::Sense => false,
         }
     }
 }
@@ -124,6 +145,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["chwd", "collobox", "pos"],
         pos: SPAN_POS,
         sensenum: &[(Some("span"), &["sensenum"])],
+        sense: &[(Some("span"), &["sense"])],
         // An example in a sense, and the corpus's examples (`ul.exas`); a gloss in one, "(=keeping its profits …)".
         example: &[(Some("span"), &["example"]), (Some("ul"), &["exas"])],
         example_keep: &[(Some("span"), &["gloss"])],
@@ -144,6 +166,10 @@ pub(crate) const PROFILES: &[Profile] = &[
     Profile {
         signature: &["oup_icons", "ox3ksym_a1", "pos"],
         pos: SPAN_POS,
+        // A numbered sense is the `li.sense`, which holds its examples itself; a single-sense entry (OALD's
+        // `sense_single`) has no number in the markup at all, and its definition span is a header whose examples follow.
+        sense: &[(Some("li"), &["sense"])],
+        sense_header: &[(Some("span"), &["def"])],
         // `span.x`, an example; `gloss`, its explanation in brackets ("(= Certainly not!)").
         example: &[(Some("span"), &["x"])],
         example_keep: &[(Some("span"), &["gloss"])],
@@ -159,6 +185,8 @@ pub(crate) const PROFILES: &[Profile] = &[
         pos: &[(Some("span"), &["pos"]), (Some("div"), &["pos"])],
         pos_words: true,
         sensenum: &[(Some("span"), &["num"])],
+        sense: &[(Some("div"), &["ysl"])],
+        sense_header: &[],
         // `p.en`, an example's English; a grammar note inside it ("with clause") is a label.
         example: &[(Some("p"), &["en"])],
         example_keep: &[(Some("span"), &["grammatical-note"])],
@@ -185,6 +213,10 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["collins_en_cn", "tips_box", "st"],
         pos: &[(Some("span"), &["st"])],
         sensenum: &[(Some("span"), &["num"]), (Some("span"), &["text_blue"])],
+        // Each sense opens in its `div.caption`; the definition and examples follow as its siblings, and the sense
+        // pass carries the run through them. The English sense captions carry `hide_cn`; the entry's Trends and Image
+        // tabs are `caption` too, and are navigation, not senses.
+        sense_header: &[(Some("div"), &["caption", "hide_cn"])],
         // A list item is an example, its English and its Chinese (a Chinese block is the translation: `roles`);
         // `tips_sentence`, a grammar pattern after it ("[+ to]").
         example: &[(Some("li"), &[])],
@@ -243,6 +275,7 @@ pub(crate) const PROFILES: &[Profile] = &[
         signature: &["a8e", "aej", "xno"],
         pos: &[(Some("span"), &["xno"])],
         sensenum: &[(Some("span"), &["vkq"])],
+        sense: &[(Some("div"), &["ysl"])],
         example: &[(Some("em"), &["xv4"]), (Some("li"), &["lmn"])],
         heading: &[(Some("span"), &["tki"])],
         // A derived word: ODE's only `h4` (15,197 records, every text a derived word; census 2026-10-18).
