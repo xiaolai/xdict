@@ -265,8 +265,15 @@ extension XDictContract.EntryText {
     /// The core's projection in the contract's record: the same fields, one for one.
     init(_ projected: XDictCore.EntryText) {
         self.init(entry: XDictContract.EntryRef(projected.entry), text: projected.text,
-                  spans: projected.spans.map { XDictContract.TextSpan(start: $0.start, len: $0.len, role: $0.role,
-                                                                     label: $0.label, section: $0.section) },
+                  spans: projected.spans.map {
+                      XDictContract.TextSpan(start: $0.start, len: $0.len, role: $0.role, label: $0.label,
+                                             section: $0.section, sense: $0.sense)
+                  },
+                  senses: projected.senses.map {
+                      XDictContract.Sense(id: $0.id, start: $0.start, len: $0.len, label: $0.label,
+                                          section: $0.section, parent: $0.parent, whole: $0.whole)
+                  },
+                  style: projected.style,
                   complete: projected.complete, omittedBytes: projected.omittedBytes, cutAt: projected.cutAt,
                   spansDropped: projected.spansDropped)
     }

@@ -44,6 +44,20 @@ struct EntryTextServiceTests {
         for span in projected.spans {
             #expect(span.start <= bytes && span.len <= bytes - span.start, "a span outside its text: \(span)")
         }
+        // **The senses crossed the IPC contract with the text** (contract 13, ADR-0029 d.2, d.3): the revision is
+        // named, every sense lies inside the text, and every run's membership names a sense that is there.
+        #expect(projected.style == 13)
+        for sense in projected.senses {
+            #expect(sense.start <= bytes && sense.len <= bytes - sense.start, "a sense outside its text: \(sense)")
+            if let parent = sense.parent {
+                #expect(projected.senses.contains { $0.id == parent }, "a parent that is not a sense: \(sense)")
+            }
+        }
+        for span in projected.spans {
+            if let sense = span.sense {
+                #expect(projected.senses.contains { $0.id == sense }, "a run in a sense that is not there: \(span)")
+            }
+        }
     }
 
     @Test func aBudgetCutsTheTextWithItsReportRatherThanFailing() async throws {

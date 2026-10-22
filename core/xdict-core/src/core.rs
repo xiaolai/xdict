@@ -533,8 +533,23 @@ impl Core {
                         role: run.role,
                         label: run.label,
                         section: run.section,
+                        sense: run.sense,
                     })
                     .collect(),
+                senses: projection
+                    .senses
+                    .into_iter()
+                    .map(|sense| crate::types::Sense {
+                        id: sense.id,
+                        start: sense.start as u64,
+                        len: sense.len as u64,
+                        label: sense.label,
+                        section: sense.section,
+                        parent: sense.parent,
+                        whole: sense.whole,
+                    })
+                    .collect(),
+                style: xdict_entry::STYLE,
                 complete: projection.complete,
                 omitted_bytes: projection.omitted_bytes,
                 cut_at: projection.cut_at,

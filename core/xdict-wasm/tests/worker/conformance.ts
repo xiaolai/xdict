@@ -126,6 +126,14 @@ x.entries.forEach((c: any, i: number) => {
   if (c.cspContains && typeof got?.csp === 'string') check(`entries[${i}].csp contains ${c.cspContains}`, true, got.csp.includes(c.cspContains));
   check(`entries[${i}]`, c.error ? { error: c.error } : c.result, got);
 });
+// The sense projection crosses the Worker binding (contract 13, ADR-0029 d.2, d.3).
+const projected = core.entryText(dict, { edition: imported.edition, key: 'run', occurrence: 0 },
+  { ...view(1 << 20), maxTextBytes: 1 << 20 });
+const senseIds = new Set(projected.senses.map((s) => s.id));
+const textBytes = new TextEncoder().encode(projected.text).length;
+check('entryText.style', true, projected.style > 0);
+check('entryText.senses', true, projected.senses.every((s) => s.start + s.len <= textBytes));
+check('entryText.membership', true, projected.spans.every((s) => s.sense == null || senseIds.has(s.sense)));
 const origin = { type: 'entry' as const, entry: { edition: imported.edition, key: 'run', occurrence: 0 } };
 x.links.forEach((c: any, i: number) => check(`links[${i}]`, c.link, outcome(() => core.link(dict, c.url, origin, view()))));
 x.resources.forEach((c: any, i: number) => check(`resources[${i}]`, c.resource, outcome(() => core.resource(dict, c.path, { ...view(), originalStyle: c.originalStyle === true }))));

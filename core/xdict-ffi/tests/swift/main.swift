@@ -329,6 +329,16 @@ for (i, c) in (x["entries"] as! [[String: Any]]).enumerated() {
     }
     check("entries[\(i)]", c["error"].map { ["error": $0] } ?? c["result"], got)
 }
+// **The sense projection crosses the Swift binding** (contract 13, ADR-0029 d.2, d.3): the revision is named, every
+// sense lies in the text, and every run's membership names a sense that is there.
+let projected = try core.entryText(dict: dict, entry: EntryRef(edition: imported.edition, key: "run", occurrence: 0),
+                                   view: TextView(baseUrl: viewSpec["baseUrl"] as! String, maxBodyBytes: 1 << 20,
+                                                  maxTextBytes: 1 << 20, originalStyle: false))
+let senseIds = Set(projected.senses.map { $0.id })
+let textBytes = UInt64(projected.text.utf8.count)
+check("entryText.style", true, projected.style > 0)
+check("entryText.senses", true, projected.senses.allSatisfy { $0.start <= textBytes && $0.len <= textBytes - $0.start })
+check("entryText.membership", true, projected.spans.allSatisfy { $0.sense == nil || senseIds.contains($0.sense!) })
 let origin = LinkOrigin.entry(entry: EntryRef(edition: imported.edition, key: "run", occurrence: 0))
 for (i, c) in (x["links"] as! [[String: Any]]).enumerated() {
     check("links[\(i)]", c["link"], outcome { j(try core.link(dict: dict, url: c["url"] as! String, origin: origin, view: view())) })

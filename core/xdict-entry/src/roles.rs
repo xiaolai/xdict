@@ -566,6 +566,8 @@ struct Node {
     sig: u64,
     /// The role the edition's markup table names it (`profiles`), before its text is checked.
     profiled: Option<profiles::Sure>,
+    /// The table names it a sense **header**: its run reaches into its following siblings (ADR-0029 d.2).
+    sense_header: bool,
     /// What the icon rules read (`icons`), and what of it is inherited.
     icon: icons::Attrs,
     inherit: icons::Inherited,
@@ -687,6 +689,7 @@ impl<'s> Roles<'s> {
             boxed: true,
             sig: 0,
             profiled: None,
+            sense_header: false,
             icon: icons::Attrs::default(),
             inherit: icons::Inherited::default(),
         };
@@ -857,6 +860,7 @@ impl<'s> Roles<'s> {
         let (icon, inherit) = icons::Attrs::of(&lower, &attrs, &classes, link, self.facts, &self.nodes, &self.stack);
         let pos = self.nodes.get(parent as usize).map_or(0, |p| p.kids.len()) as u32;
         let profiled = self.profile.and_then(|p| p.sure(&lower, &classes));
+        let sense_header = self.profile.is_some_and(|p| p.is_sense_header(&lower, &classes));
         let id = self.nodes.len() as u32;
         let at = self.buf_at();
         if !self.line_text {
@@ -899,6 +903,7 @@ impl<'s> Roles<'s> {
                 h.finish()
             },
             profiled,
+            sense_header,
             icon,
             inherit,
         });
@@ -1067,6 +1072,7 @@ impl<'s> Roles<'s> {
             self.empty(&mut decided);
         }
         let roles = if self.key.is_some() { t.assign() } else { Vec::new() };
+        let senses = if self.key.is_some() { t.senses(&roles) } else { SenseMap::default() };
         icons::decide(&self.nodes, &t, &roles, &self.glyphs, self.facts, &mut decided);
         for &i in &self.hugs {
             if let Some(n) = self.nodes.get(i as usize) {
@@ -1095,6 +1101,8 @@ impl<'s> Roles<'s> {
             let mut led: Option<(u64, u32, usize)> = None;
             // Where the role loop below writes a sure mark: a mark it does not write is written alone after it.
             let mut wrote_sure = vec![false; self.nodes.len()];
+            // The elements whose tag the role loop writes: the sense attributes of the rest follow it.
+            let mut wrote_role = vec![false; self.nodes.len()];
             for (i, role) in roles.iter().enumerate() {
                 let (Some(role), Some(node)) = (role, self.nodes.get(i)) else { continue };
                 if *role == Role::Headword {
@@ -1116,6 +1124,12 @@ impl<'s> Roles<'s> {
                     continue;
                 }
                 let mut attr = format!(" data-xdict-role=\"{name}\"");
+                // **The sense run** (ADR-0029 d.2): the same id on every element of a run, its label and parent on
+                // the first, and the end marker on the element after it. Not a role: the reading style does not see it.
+                append_sense(&mut attr, i, &senses);
+                if let Some(slot) = wrote_role.get_mut(i) {
+                    *slot = true;
+                }
                 // Only the short marks a dictionary parts from a word before them: a part of speech, a label.
                 if matches!(role, Role::Pos | Role::Label(_)) && self.line_starts.binary_search(&(i as u32)).is_ok() {
                     attr.push_str(" data-xdict-line-start");
@@ -1167,6 +1181,20 @@ impl<'s> Roles<'s> {
                 }
                 *decided.roles.entry(counted).or_default() += 1;
                 decided.edits.push((node.attr_at, node.attr_at, attr));
+            }
+            // **The run elements the role loop did not write**: the sense attributes go on their tags alone.
+            for (i, node) in self.nodes.iter().enumerate().skip(1) {
+                if wrote_role.get(i).copied().unwrap_or(false) {
+                    continue;
+                }
+                if senses.ids.get(i).copied().flatten().is_none() && !senses.ends.get(i).copied().unwrap_or(false) {
+                    continue;
+                }
+                let mut attr = String::new();
+                append_sense(&mut attr, i, &senses);
+                if !attr.is_empty() {
+                    decided.edits.push((node.attr_at, node.attr_at, attr));
+                }
             }
             // Inside a sure example, what keeps the dictionary's look and a Chinese block (its translation) carry
             // their mark whatever role the generic rule gave them, or none.
@@ -1594,7 +1622,8 @@ fn sure_role(sure: profiles::Sure) -> Option<Role> {
         profiles::Sure::Example => Some(Role::Example),
         profiles::Sure::Heading => Some(Role::Heading),
         profiles::Sure::Subhead => Some(Role::Subhead),
-        profiles::Sure::Trans | profiles::Sure::Keep => None,
+        // A sense container is not a role: the sense pass reads it and writes `data-xdict-sense` (ADR-0029 d.2).
+        profiles::Sure::Trans | profiles::Sure::Keep | profiles::Sure::Sense => None,
     }
 }
 
@@ -1845,6 +1874,7 @@ impl<'n> Tree<'n> {
             profiles::Sure::Heading => f.len > 0 && f.len <= 120,
             profiles::Sure::Subhead => f.len > 0 && f.len <= 120,
             profiles::Sure::Keep => false,
+            profiles::Sure::Sense => f.len > 0,
         };
         ok.then_some(sure)
     }
@@ -1888,6 +1918,20 @@ impl<'n> Tree<'n> {
             Kid::El(c) => Some(*c as usize),
             Kid::Text { .. } => None,
         })
+    }
+
+    /// The element right before or after `i` among its siblings, whatever text lies between: a sense run covers the
+    /// text, so only an element can end it.
+    fn sibling_element(&self, i: usize, forward: bool) -> Option<usize> {
+        let n = self.node(i)?;
+        let p = self.node(n.parent as usize)?;
+        let mut k = n.pos as usize;
+        loop {
+            k = if forward { k.checked_add(1)? } else { k.checked_sub(1)? };
+            if let Kid::El(c) = p.kids.get(k)? {
+                return Some(*c as usize);
+            }
+        }
     }
 
     /// The element right before or after `i` among its siblings, spaces skipped; text in between ends the search.
@@ -2375,6 +2419,741 @@ impl<'n> Tree<'n> {
 }
 
 /// An element the browser lays out as a block by default: punctuation after it would start a line of its own.
+/// **The senses the entry's markup names** (ADR-0029 d.2): per node, the sense run it belongs to, the first element of
+/// a run and its printed label and parent, and the element that begins after a run. `Role::Sense`, a markup table's
+/// sense selector, a sense number and a block that opens with a printed label all start one; where an entry names no
+/// sense at all, its first definition block is the sense. **No role is changed**: the reading style is untouched.
+#[derive(Default)]
+struct SenseMap {
+    ids: Vec<Option<u32>>,
+    labels: Vec<Option<String>>,
+    parents: Vec<Option<u32>>,
+    starts: Vec<bool>,
+    ends: Vec<bool>,
+    /// The start's run continues into its following siblings: it ends with its parent, not with its own element.
+    runs: Vec<bool>,
+}
+
+impl Tree<'_> {
+    /// The sense runs, numbered in document order.
+    fn senses(&self, roles: &[Option<Role>]) -> SenseMap {
+        let n = self.nodes.len();
+        let mut map = SenseMap {
+            ids: vec![None; n],
+            labels: vec![None; n],
+            parents: vec![None; n],
+            starts: vec![false; n],
+            ends: vec![false; n],
+            runs: vec![false; n],
+        };
+        if n < 2 {
+            return map;
+        }
+        let role = |i: usize| roles.get(i).copied().flatten();
+        // 0. Which elements sit in a section that is not a definition's (idioms, etymology, a thesaurus): computed
+        // once, in one pass — the check used to walk every ancestor's children per element, which is quadratic on a
+        // deeply nested entry and failed the icons' linearity test.
+        let other_sections = self.other_sections(roles);
+        // **Exclusion follows a wrapper too**: a node whose prose is all in excluded children is itself excluded, so
+        // the fallback cannot carry that prose into a sense.
+        let content_excluded = self.content_excluded(&other_sections);
+        // 1. Where a sense may start, in document order, and whether its run reaches into its siblings.
+        let mut starts: Vec<(usize, Option<String>, bool, bool)> = Vec::new();
+        for i in 1..n {
+            // A hidden element is not on the page: it cannot be a target.
+            if self.node(i).is_some_and(|n| n.flags.hidden) {
+                continue;
+            }
+            if other_sections.get(i).copied().unwrap_or(false) {
+                continue;
+            }
+            let profiled = self.sure(i) == Some(profiles::Sure::Sense);
+            // **A header's run reaches past its element** (COBUILD's caption, OALD's single-sense `span.def`); a
+            // container holds its whole sense.
+            let header = self.node(i).is_some_and(|n| n.sense_header);
+            let container = role(i) == Some(Role::Sense);
+            let sensenum = role(i) == Some(Role::Sensenum);
+            if profiled || container {
+                let (label, sub) = self.sense_label(i, roles).map_or((None, false), |(l, s)| (Some(l), s));
+                // **A wrapper is not a container**: one holding two or more *primary* numbers holds several senses.
+                if container && !profiled && self.primary_labels_inside(i, roles) >= 2 {
+                    continue;
+                }
+                // A label-less container is a sense only when it reads as a definition: a "Trends of …" block is not.
+                if label.is_none() && !profiled && !self.definition_like(i, roles) {
+                    continue;
+                }
+                starts.push((i, label, sub, profiled && header));
+            } else if sensenum {
+                // A sense number is a number: a countability mark ("C") is not one.
+                let Some((label, sub)) = self.sense_label(i, roles) else { continue };
+                starts.push((i, Some(label), sub, true));
+            } else if let Some((label, sub)) = self.pattern_start(i, roles) {
+                starts.push((i, Some(label), sub, true));
+            }
+        }
+        // **A markup numbered only in brackets, circles or Roman numerals** (a dictionary whose top level is `(1)`,
+        // `②`, `ii.`): none of those is a sub-label when no plain number exists to be shallow, and left as sub-labels
+        // they would trigger the unnumbered fallback and invent a parent. The rank rule is `primary_labels_inside`'s
+        // (audit finding, 2026-10-23).
+        if !starts.iter().any(|(_, _, sub, _)| !*sub) {
+            let shallowest = starts.iter().filter_map(|(_, label, _, _)| label.as_deref()).map(label_rank).min();
+            if shallowest == Some(1) {
+                for (_, label, sub, _) in &mut starts {
+                    if label.as_deref().is_some_and(|l| label_rank(l) == 1) {
+                        *sub = false;
+                    }
+                }
+            }
+        }
+        let mut primary_at = vec![false; n];
+        for (node, _, sub, _) in &starts {
+            if !sub && let Some(slot) = primary_at.get_mut(*node) {
+                *slot = true;
+            }
+        }
+        // **A sub-label with no numbered sense above it** (NOAD's `■`, a lettered entry): the entry's first definition
+        // block is its first sense, and the label's block is a sense after it.
+        if !primary_at.iter().any(|p| *p)
+            && let Some(i) = self.first_definition(roles, &content_excluded)
+        {
+            starts.push((i, None, false, true));
+            starts.sort_by_key(|(node, _, _, _)| *node);
+            if let Some(slot) = primary_at.get_mut(i) {
+                *slot = true;
+            }
+        }
+        // 2. Which subtrees hold a primary start: a wrapper holding one ends the run before it.
+        let mut contains = primary_at.clone();
+        for i in (1..n).rev() {
+            let p = self.node(i).map_or(ROOT as usize, |x| x.parent as usize);
+            if contains.get(i).copied().unwrap_or(false)
+                && let Some(slot) = contains.get_mut(p)
+            {
+                *slot = true;
+            }
+        }
+        let mut start_flags = vec![false; n];
+        for (node, _, _, _) in &starts {
+            if let Some(slot) = start_flags.get_mut(*node) {
+                *slot = true;
+            }
+        }
+        let start_at = |i: usize| start_flags.get(i).copied().unwrap_or(false);
+        // 3. The runs.
+        let mut next = 1u32;
+        // The last primary sense started: a sub-label with no enclosing sense belongs to it (ODE's `1.1` sits inside
+        // a wrapper beside `1`, not inside `1`'s element; NOAD's `■` follows `1)` as a sibling).
+        let mut last_primary: Option<u32> = None;
+        // Where each id's run starts, so a parent relationship can be checked against the elements, not assumed.
+        let mut start_node: Vec<usize> = Vec::new();
+        for (node, label, mut sub, runs) in starts {
+            // **Inside a sense already started**: the same sense, not a second one (its own sub-labels excepted).
+            let mut inside = false;
+            let mut at = self.node(node).map_or(ROOT as usize, |x| x.parent as usize);
+            for _ in 0..MAX_DEPTH {
+                if at == ROOT as usize {
+                    break;
+                }
+                if map.starts.get(at).copied().unwrap_or(false) || map.ids.get(at).copied().flatten().is_some() {
+                    inside = true;
+                    break;
+                }
+                at = self.node(at).map_or(ROOT as usize, |x| x.parent as usize);
+            }
+            if inside && !sub {
+                continue;
+            }
+            // **The number that named its container is not a second sense**: a sub-label equal to the enclosing
+            // sense's own label is the same label read once.
+            if inside && sub {
+                let mut at = self.node(node).map_or(ROOT as usize, |x| x.parent as usize);
+                for _ in 0..MAX_DEPTH {
+                    if at == ROOT as usize {
+                        break;
+                    }
+                    if map.starts.get(at).copied().unwrap_or(false) {
+                        let outer = map.labels.get(at).and_then(|l| l.as_deref());
+                        if outer.is_some() && outer == label.as_deref() {
+                            inside = false;
+                        }
+                        break;
+                    }
+                    at = self.node(at).map_or(ROOT as usize, |x| x.parent as usize);
+                }
+                if !inside {
+                    continue;
+                }
+            }
+            // The parent: a self-scoped sense's element that encloses this one, else (a sub-label) the primary
+            // sibling before it. A run head's element is not a parent: the next sense is not inside it.
+            let mut parent = None;
+            let mut at = self.node(node).map_or(ROOT as usize, |x| x.parent as usize);
+            for _ in 0..MAX_DEPTH {
+                if at == ROOT as usize {
+                    break;
+                }
+                if map.starts.get(at).copied().unwrap_or(false) && !map.runs.get(at).copied().unwrap_or(false) {
+                    parent = map.ids.get(at).copied().flatten();
+                    break;
+                }
+                at = self.node(at).map_or(ROOT as usize, |x| x.parent as usize);
+            }
+            if parent.is_none()
+                && sub
+                && let Some(id) = last_primary
+                && let Some(start) = start_node.get(id as usize - 1).copied()
+            {
+                // **A sub-label belongs to the primary sense it follows** when that sense's element encloses it or its
+                // run's scope does; a self-contained parent whose element has closed cannot own a later block, and a
+                // run scoped to an earlier paragraph cannot reach one in a later paragraph (audit and verification
+                // findings, 2026-10-22/23). Otherwise the label is a sense of its own, not a child outside its parent.
+                let reaches = self.descends_from(node, start)
+                    || (map.runs.get(start).copied().unwrap_or(false)
+                        && self.node(start).is_some_and(|n| self.descends_from(node, n.parent as usize)));
+                if reaches {
+                    parent = Some(id);
+                }
+            }
+            if sub && parent.is_none() {
+                sub = false;
+            }
+            let id = next;
+            next += 1;
+            if start_node.len() < id as usize {
+                start_node.resize(id as usize, usize::MAX);
+            }
+            if let Some(slot) = start_node.get_mut(id as usize - 1) {
+                *slot = node;
+            }
+            if !sub {
+                last_primary = Some(id);
+            }
+            if let Some(slot) = map.ids.get_mut(node) {
+                *slot = Some(id);
+            }
+            if let Some(slot) = map.starts.get_mut(node) {
+                *slot = true;
+            }
+            if let Some(slot) = map.labels.get_mut(node) {
+                *slot = label;
+            }
+            if let Some(slot) = map.parents.get_mut(node) {
+                *slot = parent;
+            }
+            if let Some(slot) = map.runs.get_mut(node) {
+                *slot = runs;
+            }
+            // **A run head reaches into its following siblings** (the definition and examples after a number); a
+            // container holds its own. A sub-label's start inside a primary run is included there and takes over.
+            if !runs {
+                continue;
+            }
+            let mut current = node;
+            for _ in 0..MAX_NODES {
+                // **Text between elements belongs to the run**: the next *element* is what can end it.
+                let Some(sib) = self.sibling_element(current, true) else { break };
+                // A separator written as bare text between two elements ("• • •") ends the run at the element after it.
+                if let (Some(a), Some(b)) =
+                    (self.node(current).map(|n| n.text.1 as usize), self.node(sib).map(|n| n.text.0 as usize))
+                    && let Some(between) = self.buf.get(a..b)
+                {
+                    let between = between.trim();
+                    if !between.is_empty()
+                        && between.chars().count() <= 12
+                        && between.chars().all(|c| "•·.…-—* \n\t".contains(c))
+                    {
+                        if let Some(slot) = map.ends.get_mut(sib) {
+                            *slot = true;
+                        }
+                        break;
+                    }
+                }
+                if map.ids.get(sib).copied().flatten().is_some_and(|own| own != id) {
+                    break;
+                }
+                // **A separator ends the sense**: a line of dots or bullets ("• • •") divides the entry's blocks.
+                if let Some(text) = self.whole(sib) {
+                    let text = text.trim();
+                    if !text.is_empty() && text.chars().count() <= 12 && text.chars().all(|c| "•·.…-—* ".contains(c))
+                    {
+                        if let Some(slot) = map.ends.get_mut(sib) {
+                            *slot = true;
+                        }
+                        break;
+                    }
+                }
+                if role(sib)
+                    .is_some_and(|r| matches!(r, Role::Heading | Role::Subhead | Role::Section(_) | Role::Chrome))
+                {
+                    if let Some(slot) = map.ends.get_mut(sib) {
+                        *slot = true;
+                    }
+                    break;
+                }
+                if primary_at.get(sib).copied().unwrap_or(false) {
+                    break;
+                }
+                if start_at(sib) {
+                    if sub {
+                        break;
+                    }
+                    if let Some(slot) = map.ids.get_mut(sib) {
+                        *slot = Some(id);
+                    }
+                    current = sib;
+                    continue;
+                }
+                if contains.get(sib).copied().unwrap_or(false) {
+                    if let Some(slot) = map.ends.get_mut(sib) {
+                        *slot = true;
+                    }
+                    break;
+                }
+                if let Some(slot) = map.ids.get_mut(sib) {
+                    *slot = Some(id);
+                }
+                current = sib;
+            }
+        }
+        map
+    }
+
+    /// The label a sense starts with: the first sense number inside it, else a printed label at its start. `None` for
+    /// a sense whose number the sheet draws (OALD 10's counters).
+    fn sense_label(&self, i: usize, roles: &[Option<Role>]) -> Option<(String, bool)> {
+        let mut stack = vec![i];
+        let mut seen = 0;
+        while let Some(j) = stack.pop() {
+            seen += 1;
+            if seen > 256 {
+                break;
+            }
+            if j != i
+                && roles.get(j).copied().flatten() == Some(Role::Sensenum)
+                && let Some(text) = self.whole(j)
+                && let Some(label) = any_label(&text)
+            {
+                return Some(label);
+            }
+            let kids: Vec<usize> = self.el_kids(j).collect();
+            for kid in kids.into_iter().rev() {
+                stack.push(kid);
+            }
+        }
+        self.whole(i).and_then(|text| any_label(&text))
+    }
+
+    /// A block whose text opens with a printed label — NOAD's `1)` and `■`, a dictionary that writes its numbers as
+    /// text. A bare number is not enough here (a year opens a paragraph too); the label must be punctuated.
+    fn pattern_start(&self, i: usize, roles: &[Option<Role>]) -> Option<(String, bool)> {
+        let node = self.node(i)?;
+        if !block_tag(&node.name) {
+            return None;
+        }
+        if !matches!(
+            roles.get(i).copied().flatten(),
+            None | Some(Role::Label(_)) | Some(Role::Pos) | Some(Role::Def) | Some(Role::Sense)
+        ) {
+            return None;
+        }
+        if self.in_role(i, roles, Role::Example) {
+            return None;
+        }
+        let text = self.whole(i)?;
+        if text.len() < 20 {
+            return None;
+        }
+        let (label, sub) = printed_label(&text, false)?;
+        if text.get(label.len()..).unwrap_or("").trim().chars().count() < 10 {
+            return None;
+        }
+        Some((label.trim().to_owned(), sub))
+    }
+
+    /// **Which elements sit in a section that is not a definition's** — an idiom list, an etymology, a thesaurus. Those
+    /// sections hold senses of their own only in the dictionary's own sense of the word; the mode explains the
+    /// headword's sense, and a navigation or etymology block is not one. One forward pass: a node is in one when it is
+    /// such a section, holds a heading that names one, or is inside a node that is.
+    fn other_sections(&self, roles: &[Option<Role>]) -> Vec<bool> {
+        const OTHER: &[&str] = &[
+            "idioms",
+            "phrasal",
+            "phrases",
+            "examples",
+            "etym",
+            "derivatives",
+            "usage",
+            "thesaurus",
+            "colloc",
+            "synonyms",
+            "antonyms",
+            "pron",
+            "pronunciation",
+            "pronunciations",
+            "translations",
+            "grammar",
+            "trending",
+            "vocabulary",
+            "inflections",
+            "notes",
+            "help",
+        ];
+        let n = self.nodes.len();
+        let mut own = vec![false; n];
+        let mut after = vec![false; n];
+        for i in 1..n {
+            let section = matches!(
+                roles.get(i).copied().flatten(),
+                Some(Role::Section(kind)) if OTHER.contains(&kind)
+            );
+            // **A heading names what follows it, not what precedes it**: an "Idioms" heading at the end of a block
+            // must not exclude the definitions above it (audit finding, 2026-10-22). A section marked as a whole but
+            // holding such a heading is scoped the same way; one with no heading child is excluded whole.
+            let mut in_other = false;
+            let mut saw_heading = false;
+            for c in self.el_kids(i) {
+                let heading = roles.get(c).copied().flatten() == Some(Role::Heading)
+                    && self.whole(c).is_some_and(|text| {
+                        let low = text.to_lowercase();
+                        let low = low.trim_end_matches(|ch: char| ch.is_whitespace() || ":：.".contains(ch));
+                        heading_kind(low).is_some_and(|kind| OTHER.contains(&kind))
+                    });
+                if heading {
+                    in_other = true;
+                    saw_heading = true;
+                }
+                if in_other && let Some(slot) = after.get_mut(c) {
+                    *slot = true;
+                }
+            }
+            if section
+                && !saw_heading
+                && let Some(slot) = own.get_mut(i)
+            {
+                *slot = true;
+            }
+        }
+        let mut out = vec![false; n];
+        for i in 1..n {
+            let parent = self.node(i).map_or(ROOT as usize, |x| x.parent as usize);
+            let inherited = out.get(parent).copied().unwrap_or(false);
+            let mine = own.get(i).copied().unwrap_or(false) || after.get(i).copied().unwrap_or(false);
+            if let Some(slot) = out.get_mut(i) {
+                *slot = inherited || mine;
+            }
+        }
+        out
+    }
+
+    /// Whether an element reads as a definition: prose of its own, not a heading, not a run of navigation, and not a
+    /// section that opens with one.
+    fn definition_like(&self, i: usize, roles: &[Option<Role>]) -> bool {
+        if matches!(
+            roles.get(i).copied().flatten(),
+            Some(Role::Heading | Role::Subhead | Role::Chrome | Role::Section(_))
+        ) {
+            return false;
+        }
+        // A section opens with its heading; a sense does not (OALD's "Trends of …", ODE's "Origin").
+        for c in self.el_kids(i).take(2) {
+            if matches!(roles.get(c).copied().flatten(), Some(Role::Heading | Role::Subhead | Role::Section(_))) {
+                return false;
+            }
+        }
+        let f = self.f(i);
+        // A label-less sense is a definition, not a heading line or a list: give it room to be prose.
+        f.words >= 5 && f.len >= 80
+    }
+
+    /// **The distinct top-level labels inside an element**: two or more make it a wrapper over several senses, not one.
+    /// A markup whose only numbering is bracketed, circled or roman (`(1)`, `①`, `ii.`) is numbered by those; one that
+    /// has plain numbers counts only them, so a numbered sense with lettered subsenses is not a wrapper (verification
+    /// finding, 2026-10-23).
+    fn primary_labels_inside(&self, i: usize, roles: &[Option<Role>]) -> usize {
+        let mut stack = vec![i];
+        let mut labels: Vec<(u8, String)> = Vec::new();
+        let mut seen = 0;
+        while let Some(j) = stack.pop() {
+            seen += 1;
+            if seen > 256 {
+                break;
+            }
+            if j != i
+                && roles.get(j).copied().flatten() == Some(Role::Sensenum)
+                && let Some(text) = self.whole(j)
+                && let Some((label, _)) = any_label(&text)
+            {
+                let label = label.trim().to_owned();
+                let rank = label_rank(&label);
+                if !labels.iter().any(|(r, l)| *r == rank && *l == label) {
+                    labels.push((rank, label));
+                }
+            }
+            let kids: Vec<usize> = self.el_kids(j).collect();
+            for kid in kids.into_iter().rev() {
+                stack.push(kid);
+            }
+        }
+        // **The top-level labels are the ones at the shallowest rank present**: a `(1)` with `a.`/`b.` is one sense,
+        // while `(1)`/`(2)` or `①`/`②` alone number two (verification finding, 2026-10-23).
+        let Some(top) = labels.iter().map(|(rank, _)| *rank).min() else { return 0 };
+        labels.iter().filter(|(rank, _)| *rank == top).count()
+    }
+
+    /// **Which elements' prose is excluded**, following wrappers: an element in an excluded section, or one with no
+    /// prose of its own whose element children are all excluded. One reverse pass — children follow their parents.
+    fn content_excluded(&self, excluded: &[bool]) -> Vec<bool> {
+        let n = self.nodes.len();
+        let mut out = vec![false; n];
+        for i in (1..n).rev() {
+            let Some(node) = self.node(i) else { continue };
+            let kids: Vec<usize> = self.el_kids(i).collect();
+            let kids_excluded = !kids.is_empty() && kids.iter().all(|c| out.get(*c).copied().unwrap_or(true));
+            let mine = excluded.get(i).copied().unwrap_or(false) || (!node.direct && kids_excluded);
+            if let Some(slot) = out.get_mut(i) {
+                *slot = mine;
+            }
+        }
+        out
+    }
+
+    /// Whether `i` is a descendant of `ancestor` in the element tree.
+    fn descends_from(&self, i: usize, ancestor: usize) -> bool {
+        let mut at = self.node(i).map(|n| n.parent as usize);
+        for _ in 0..MAX_DEPTH {
+            match at {
+                Some(p) if p == ancestor => return true,
+                Some(p) if p != ROOT as usize => at = self.node(p).map(|n| n.parent as usize),
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// Whether an element is inside one whose role is `want`.
+    fn in_role(&self, i: usize, roles: &[Option<Role>], want: Role) -> bool {
+        let mut at = self.node(i).map(|n| n.parent as usize);
+        for _ in 0..MAX_DEPTH {
+            let Some(p) = at.filter(|p| *p != ROOT as usize) else { return false };
+            if roles.get(p).copied().flatten() == Some(want) {
+                return true;
+            }
+            at = self.node(p).map(|n| n.parent as usize);
+        }
+        false
+    }
+
+    /// **The first definition block**, for an entry that names no sense at all: the innermost element with prose of
+    /// its own, no role that says it is something else, and no enclosing example or section. Its run is the sense.
+    fn first_definition(&self, roles: &[Option<Role>], content_excluded: &[bool]) -> Option<usize> {
+        let mut matches = Vec::new();
+        for i in 1..self.nodes.len() {
+            let Some(node) = self.node(i) else { continue };
+            // **The fallback obeys the same eligibility as the main pass**: a hidden element, or one in an idiom,
+            // etymology or navigation section (or a wrapper over one), is never the definition (audit findings,
+            // 2026-10-22/23).
+            if node.flags.hidden || content_excluded.get(i).copied().unwrap_or(true) {
+                continue;
+            }
+            // A definition is often the element the generic rules name `Def` (an internal role, never written); that
+            // does not make it something else. A structural role does.
+            if !matches!(
+                roles.get(i).copied().flatten(),
+                None | Some(Role::Def) | Some(Role::Pos) | Some(Role::Label(_))
+            ) {
+                continue;
+            }
+            if matches!(&*node.name, "script" | "style" | "head" | "title") {
+                continue;
+            }
+            let f = self.f(i);
+            if f.len < 40 {
+                continue;
+            }
+            if self.in_role(i, roles, Role::Example) {
+                continue;
+            }
+            // **A wrapper over excluded content is not the definition**: its text is the excluded prose's, and making
+            // it the sense would carry that prose into the target. Prose split across inline children stays eligible.
+            if content_excluded.get(i).copied().unwrap_or(true) {
+                continue;
+            }
+            // The text must read as prose: a phonetics line, a run of links or a list of labels is not a definition.
+            let Some(text) = self.whole(i) else { continue };
+            if text.split_whitespace().count() < 5 {
+                continue;
+            }
+            matches.push(i);
+        }
+        // **The innermost match**: a wrapper holding the entry's blocks matches too, and is not the definition.
+        for &i in &matches {
+            let mut has_below = false;
+            for &j in &matches {
+                if j == i {
+                    continue;
+                }
+                let mut at = self.node(j).map(|n| n.parent as usize);
+                for _ in 0..MAX_DEPTH {
+                    match at {
+                        Some(p) if p == i => {
+                            has_below = true;
+                            break;
+                        }
+                        Some(p) if p != ROOT as usize => at = self.node(p).map(|n| n.parent as usize),
+                        _ => break,
+                    }
+                }
+                if has_below {
+                    break;
+                }
+            }
+            if !has_below {
+                return Some(i);
+            }
+        }
+        None
+    }
+}
+
+/// The sense attributes one element's tag carries (ADR-0029 d.2).
+fn append_sense(attr: &mut String, i: usize, senses: &SenseMap) {
+    if let Some(id) = senses.ids.get(i).copied().flatten() {
+        attr.push_str(&format!(" data-xdict-sense=\"{id}\""));
+        if senses.starts.get(i).copied().unwrap_or(false) {
+            if let Some(label) = senses.labels.get(i).and_then(Option::as_deref) {
+                attr.push_str(&format!(" data-xdict-sense-label=\"{}\"", attr_text(label)));
+            }
+            // **The renderer is the authority on the hierarchy**: 0 says a top-level sense, so the projection never
+            // invents a parent from whatever run happens to be open (ADR-0029 d.2).
+            let parent = senses.parents.get(i).copied().flatten().unwrap_or(0);
+            attr.push_str(&format!(" data-xdict-sense-parent=\"{parent}\""));
+            if senses.runs.get(i).copied().unwrap_or(false) {
+                attr.push_str(" data-xdict-sense-run");
+            }
+        }
+    }
+    if senses.ends.get(i).copied().unwrap_or(false) {
+        attr.push_str(" data-xdict-sense-end");
+    }
+}
+
+/// A label as an attribute value: the four characters markup cannot hold written as entities, controls dropped.
+fn attr_text(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars().filter(|c| !c.is_control()) {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '"' => out.push_str("&quot;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// **A label as the markup writes it**: the printed forms [`printed_label`] reads, else a form [`sense_number`]
+/// accepts and the renderer recognised as a sense number (`①`, `ii.`, `一、`) — a label the classifier accepted must
+/// start a sense (audit finding, 2026-10-22).
+fn any_label(text: &str) -> Option<(String, bool)> {
+    let text = text.trim();
+    if let Some((label, sub)) = printed_label(text, true) {
+        return Some((label.trim().to_owned(), sub));
+    }
+    if numbered(text) {
+        let first = text.chars().next()?;
+        let sub = !(first.is_ascii_digit() || "一二三四五六七八九十".contains(first));
+        return Some((text.chars().take(32).collect(), sub));
+    }
+    None
+}
+
+/// **How shallow a label's numbering is**: 0 a plain number, 1 a bracketed, circled or roman one, 2 a letter, a
+/// multi-part number or a marker. The shallowest rank present is a container's top level (verification finding,
+/// 2026-10-23).
+fn label_rank(label: &str) -> u8 {
+    let Some(first) = label.chars().next() else { return 2 };
+    let code = u32::from(first);
+    if first.is_ascii_digit() {
+        // **A multi-part number is a subsense of the plain one**: `1.1` under `1`, never a second top level.
+        let bytes = label.as_bytes();
+        let mut at = 1;
+        while bytes.get(at).is_some_and(|b| b.is_ascii_digit()) {
+            at += 1;
+        }
+        if bytes.get(at) == Some(&b'.') && bytes.get(at + 1).is_some_and(|b| b.is_ascii_digit()) {
+            return 2;
+        }
+        return 0;
+    }
+    if "一二三四五六七八九十".contains(first) {
+        0
+    } else if first == '('
+        || (0x2460..=0x2473).contains(&code)
+        || (0x2776..=0x277F).contains(&code)
+        || "ivxIVX".contains(first)
+    {
+        1
+    } else {
+        2
+    }
+}
+
+/// A printed sense label at the start of `t`: a marker (`■`), a number (`1`, `1.`, `1)`, `1.1`), a bracketed number
+/// (`(1)`), or a lettered sub-sense (`a.`–`h.`, never a part of speech such as `n.`). `true` when it is a sub-label.
+fn printed_label(t: &str, allow_bare: bool) -> Option<(&str, bool)> {
+    let t = t.trim_start_matches(|c: char| c.is_whitespace() || matches!(c, '►' | '•' | '·'));
+    if t.is_empty() {
+        return None;
+    }
+    let first = t.chars().next()?;
+    // A square marks a sub-sense (NOAD's `■`); a round bullet is a bullet, not a label.
+    if "■□".contains(first) {
+        return Some((t.get(..first.len_utf8())?, true));
+    }
+    let bytes = t.as_bytes();
+    let digits = bytes.iter().take(3).take_while(|b| b.is_ascii_digit()).count();
+    // **Four leading digits are a year, not a sense number**; a shorter number continues with `.` or `)` at byte 3
+    // (`1.12`, `12.3`), which the guard must not reject (audit finding, 2026-10-22).
+    if digits == 3 && bytes.get(3).is_some_and(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    if digits > 0 {
+        let mut at = digits;
+        let mut multi = false;
+        while bytes.get(at) == Some(&b'.') && bytes.get(at + 1).is_some_and(|b| b.is_ascii_digit()) {
+            multi = true;
+            at += 1;
+            while bytes.get(at).is_some_and(|b| b.is_ascii_digit()) {
+                at += 1;
+            }
+        }
+        let mut end = at;
+        if bytes.get(end).is_some_and(|b| *b == b'.' || *b == b')') {
+            end += 1;
+        }
+        if multi || end > at {
+            return Some((t.get(..end)?, multi));
+        }
+        if allow_bare {
+            return Some((t.get(..digits)?, false));
+        }
+        return None;
+    }
+    // A lettered sub-sense: a–h, punctuated and followed by a space. "n." is a part of speech, not a label.
+    if ('a'..='h').contains(&first) || ('A'..='H').contains(&first) {
+        let after = t.get(first.len_utf8()..)?.chars().next();
+        if matches!(after, Some('.') | Some(')')) {
+            let end = first.len_utf8() + 1;
+            if t.get(end..).is_none_or(|rest| rest.chars().next().is_none_or(char::is_whitespace)) {
+                return Some((t.get(..end)?, true));
+            }
+        }
+    }
+    None
+}
+
 /// Whether short text reads as a part of speech: a word or phrase of [`POS_WORDS`] or [`POS_PHRASES`], or up to
 /// three of the words joined by `and`/`or`.
 fn pos_text(t: &str) -> bool {
@@ -2560,6 +3339,9 @@ fn minion(c: char) -> Option<&'static str> {
 
 #[cfg(test)]
 mod tests {
+    // The workspace forbids these in library code; a test asserts by failing, which is the point.
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
     use super::*;
 
     /// Past the last element followed, the text kept is only what that element's rules read: 50 MiB of links kept
@@ -2617,5 +3399,42 @@ mod tests {
         assert_eq!(label_kind("law", "(law)", false), Some("domain"));
         assert!(freq("B2") && freq("★★★") && freq("S1, W2") && !freq("D4"));
         assert!(gram("[C]") && gram("[T, I]") && !gram("[ok]"));
+    }
+
+    #[test]
+    fn a_labels_rank_says_which_level_its_numbering_is() {
+        // A plain number is the top level; a multi-part number is a subsense; bracketed, circled and roman numbers
+        // are their own top level when no plain one exists; a letter or a marker is below them.
+        assert_eq!(label_rank("1."), 0);
+        assert_eq!(label_rank("12"), 0);
+        assert_eq!(label_rank("一、"), 0);
+        assert_eq!(label_rank("1.1"), 2);
+        assert_eq!(label_rank("1)"), 0);
+        assert_eq!(label_rank("(1)"), 1);
+        assert_eq!(label_rank("①"), 1);
+        assert_eq!(label_rank("ii."), 1);
+        assert_eq!(label_rank("a."), 2);
+        assert_eq!(label_rank("■"), 2);
+    }
+
+    #[test]
+    fn an_entry_numbered_only_in_brackets_gives_two_top_level_senses() {
+        // No plain number exists, so `(1)` and `(2)` are the top level: left as sub-labels they would trigger the
+        // unnumbered fallback and give the first sense a fabricated parent (audit finding, 2026-10-23).
+        let style = crate::Style::of_edition([], []);
+        let context = crate::Entry {
+            key: "bracketed",
+            resource: None,
+            is_key: None,
+            strip_off_for_tests: false,
+            original: false,
+        };
+        let html = concat!(
+            r#"<div class="entry"><div><span class="num">(1)</span><span class="def">a body of water</span></div>"#,
+            r#"<div><span class="num">(2)</span><span class="def">to move fast</span></div></div>"#
+        );
+        let (marked, _) = crate::entry_normalized_within(html, "", "", &style, &context, usize::MAX).unwrap();
+        assert_eq!(marked.matches("data-xdict-sense=\"").count(), 2, "{marked}");
+        assert_eq!(marked.matches("data-xdict-sense-parent=\"0\"").count(), 2, "{marked}");
     }
 }

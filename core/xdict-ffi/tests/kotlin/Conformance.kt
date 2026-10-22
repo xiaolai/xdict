@@ -226,6 +226,12 @@ fun main(args: Array<String>) {
         }
         check("entries[$n]", errorOr(c, "result"), got)
     }
+    // The sense projection crosses the Kotlin binding (contract 13, ADR-0029 d.2, d.3).
+    val projected = core.entryText(dict, EntryRef(imported.edition, "run", 0u),
+        TextView(viewSpec["baseUrl"] as String, 1uL shl 20, 1uL shl 20, false))
+    val senseIds = projected.senses.map { it.id }.toSet()
+    check("entryText.style", true, projected.style > 0u)
+    check("entryText.membership", true, projected.spans.all { it.sense == null || senseIds.contains(it.sense) })
     val origin = LinkOrigin.Entry(EntryRef(imported.edition, "run", 0u))
     list(x["links"]).forEachIndexed { n, c -> check("links[$n]", c["link"], outcome { j(core.link(dict, c["url"] as String, origin, view())) }) }
     list(x["resources"]).forEachIndexed { n, c -> check("resources[$n]", c["resource"], outcome { j(core.resource(dict, c["path"] as String, view().copy(originalStyle = c["originalStyle"] == true))) }) }
