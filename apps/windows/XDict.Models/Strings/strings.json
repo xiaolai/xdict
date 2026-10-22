@@ -110,7 +110,12 @@
     "capture.hotkeyTaken": "The capture shortcut is taken by another app; choose another in Settings.",
     "capture.trayRefused": "XDict could not add its tray icon; look up the selection from the main window.",
     "search.unavailable": "A dictionary is busy or not answering; try again.",
-    "settings.saveFailed": "The setting could not be saved: {0}"
+    "settings.saveFailed": "The setting could not be saved: {0}",
+    "library.unreadable": "The dictionary library could not be read: {0}",
+    "library.missingVolume": "Could not add {0}: volume {1} is missing.",
+    "library.fileStates": "{0} file(s) missing, {1} changed.",
+    "library.fileMissing": "missing",
+    "library.fileChanged": "changed since import"
   },
   "zh-Hans": {
     "app.title": "XDict",
@@ -223,6 +228,11 @@
     "capture.hotkeyTaken": "捕获快捷键已被其他应用占用；请在设置中选择其他快捷键。",
     "capture.trayRefused": "XDict 无法添加托盘图标；请从主窗口查询所选内容。",
     "search.unavailable": "词典正忙或没有响应；请重试。",
-    "settings.saveFailed": "无法保存设置：{0}"
+    "settings.saveFailed": "无法保存设置：{0}",
+    "library.unreadable": "无法读取词典库：{0}",
+    "library.missingVolume": "无法添加 {0}：缺少第 {1} 卷。",
+    "library.fileStates": "{0} 个文件缺失，{1} 个已更改。",
+    "library.fileMissing": "缺失",
+    "library.fileChanged": "自导入以来已更改"
   }
 }

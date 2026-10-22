@@ -27,6 +27,7 @@ public sealed partial class CapturePanel : Window
     public CapturePanel()
     {
         InitializeComponent();
+        ThemeApplier.Apply(Content as FrameworkElement, AppSettings.Load().Theme);
         Title = Strings.Get("app.title");
         Handle = WindowNative.GetWindowHandle(this);
         long style = (long)Win32.GetWindowLongPtrW(Handle, Win32.GWL_EXSTYLE);

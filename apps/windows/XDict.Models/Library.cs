@@ -18,6 +18,9 @@ public sealed record LibraryFile(
     string Id, string Name, LibraryRole Role, int Order, string Path, FileIdentity? Identity = null);
 
 /// <summary>A dictionary the reader added. The edition and lineage are the core's; the rest is presentation.</summary>
+/// <summary>The library file exists but cannot be read; the shell says so instead of showing an empty list.</summary>
+public sealed class LibraryUnreadableException(string message, Exception inner) : Exception(message, inner);
+
 public sealed record LibraryDictionary(
     string Edition,
     string Lineage,
@@ -70,12 +73,20 @@ public sealed class LibraryStore
     {
         path ??= DefaultPath;
         if (!File.Exists(path)) return new LibraryStore(path, []);
-        var loaded = JsonSerializer.Deserialize<List<LibraryDictionary>>(File.ReadAllText(path), Options)
-            ?? throw new InvalidOperationException("the library file did not decode");
-        for (int i = 0; i < loaded.Count; i++)
-            if (loaded[i].Order != i)
-                loaded[i] = loaded[i] with { Order = i };
-        return new LibraryStore(path, loaded);
+        try
+        {
+            var loaded = JsonSerializer.Deserialize<List<LibraryDictionary>>(File.ReadAllText(path), Options)
+                ?? throw new InvalidOperationException("the library file did not decode");
+            for (int i = 0; i < loaded.Count; i++)
+                if (loaded[i].Order != i)
+                    loaded[i] = loaded[i] with { Order = i };
+            return new LibraryStore(path, loaded);
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
+        {
+            // Other settings files fall back; the library is the reader's list, so it is named, never silently emptied.
+            throw new LibraryUnreadableException(path + ": " + error.Message, error);
+        }
     }
 
     public void Save()
@@ -154,6 +165,14 @@ public sealed class LibraryStore
     }
 }
 
+/// <summary>A package whose volumes skip a number: importing it would lose the missing volume's pictures and sounds.</summary>
+public sealed class PackageIncompleteException(string mdx, IReadOnlyList<int> volumes) : Exception(
+    Path.GetFileName(mdx) + " is missing volume " + string.Join(", ", volumes))
+{
+    public string Mdx { get; } = mdx;
+    public IReadOnlyList<int> Volumes { get; } = volumes;
+}
+
 /// <summary>Assembling a package from what the reader chose: the MDX, its ordered volumes, the loose files beside it.</summary>
 public static class PackageFinder
 {
@@ -208,7 +227,7 @@ public static class PackageFinder
         return new PackageFiles(full, volumes, sidecars, missing);
     }
 
-    /// <summary>A language pair, and whether the name actually said it: an uncertain pair is the reader's to answer.</summary>
+/// <summary>A language pair, and whether the name actually said it: an uncertain pair is the reader's to answer.</summary>
     public sealed record LanguageGuess(string Search, string Explain, bool Certain);
 
     public static LanguageGuess Guess(string fileName)

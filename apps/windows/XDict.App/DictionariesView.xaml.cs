@@ -64,8 +64,8 @@ public sealed partial class DictionariesView : UserControl
         }
     }
 
-    /// <summary>Raised after a batch of files was imported, so the open session can pick them up.</summary>
-    public event Action? Imported;
+    /// <summary>Raised after the library changed (an import or a toggle/remove/move), so the session can follow.</summary>
+    public event Action? LibraryChanged;
 
     public string StatusText => Status.Text;
 
@@ -178,11 +178,16 @@ public sealed partial class DictionariesView : UserControl
                     await AskLanguagesAsync(inspected.Edition);
             }
             Refresh();
-            Imported?.Invoke();
+            LibraryChanged?.Invoke();
         }
         catch (OperationCanceledException)
         {
             Status.Text = Strings.Get("library.cancelled");
+        }
+        catch (PackageIncompleteException error)
+        {
+            Status.Text = Strings.Format("library.missingVolume", Path.GetFileName(error.Mdx),
+                string.Join(", ", error.Volumes));
         }
         catch (ServiceFailureException error)
         {
@@ -217,6 +222,19 @@ public sealed partial class DictionariesView : UserControl
     }
 
     private void Cancel(object sender, RoutedEventArgs e) => importing?.Cancel();
+
+    /// <summary>A store change that may fail on a locked or full disk: the list keeps working and says so.</summary>
+    private void Mutate(Action change)
+    {
+        try { change(); }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            Status.Text = Strings.Format("library.failed", "", error.Message);
+            return;
+        }
+        Refresh();
+        LibraryChanged?.Invoke();
+    }
 
     private async void Join(object sender, RoutedEventArgs e)
     {
@@ -308,17 +326,17 @@ public sealed partial class DictionariesView : UserControl
 
     private void Move(int delta)
     {
-        if (Selected is { } dictionary) { store.Move(dictionary.Edition, delta); Refresh(); }
+        if (Selected is { } dictionary) Mutate(() => store.Move(dictionary.Edition, delta));
     }
 
     private void Toggle(object sender, RoutedEventArgs e)
     {
-        if (Selected is { } dictionary) { store.SetEnabled(dictionary.Edition, !dictionary.Enabled); Refresh(); }
+        if (Selected is { } dictionary) Mutate(() => store.SetEnabled(dictionary.Edition, !dictionary.Enabled));
     }
 
     private void Remove(object sender, RoutedEventArgs e)
     {
-        if (Selected is { } dictionary) { store.Remove(dictionary.Edition); Refresh(); }
+        if (Selected is { } dictionary) Mutate(() => store.Remove(dictionary.Edition));
     }
 
     private void ShowDetails(object sender, RoutedEventArgs e)
@@ -334,6 +352,17 @@ public sealed partial class DictionariesView : UserControl
             text.AppendLine(Strings.Get("library.health") + ": " + health);
         if (dictionary.StyleJson is { } style)
             text.AppendLine(Strings.Get("library.style") + ": " + style);
+        // Whether the files are still the ones recorded at import: a moved, missing or rewritten file is said here.
+        IReadOnlyList<LibraryFileCheck> checks = LibraryVerifier.Check(dictionary);
+        int missing = checks.Count(check => check.State == LibraryFileState.Missing);
+        int changed = checks.Count(check => check.State == LibraryFileState.Changed);
+        if (missing > 0 || changed > 0)
+        {
+            text.AppendLine(Strings.Format("library.fileStates", missing, changed));
+            foreach (LibraryFileCheck check in checks.Where(item => item.State != LibraryFileState.Ok))
+                text.AppendLine("  " + check.Path + " — " +
+                    Strings.Get(check.State == LibraryFileState.Missing ? "library.fileMissing" : "library.fileChanged"));
+        }
         DetailsText.Text = text.ToString();
     }
 }

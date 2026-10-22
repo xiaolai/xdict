@@ -21,15 +21,12 @@ public sealed partial class MainWindow : Window
     private ServiceClient? client;
     private LibraryStore? store;
     private SearchSession? session;
-    private DictionaryEntrySource? source;
-    private EntryPane? pane;
-    private string? paneEdition;
+    private readonly PaneLease paneLease = new();
     private RequestGeneration? searchGeneration;
     private IReadOnlyList<SearchHit> hits = [];
     private JsonElement? currentEntry;
     private string? currentDict;
     private string? currentHeadword;
-    private string? paneFolder;
     private readonly SemaphoreSlim showGate = new(1, 1);
     private SettingsWindow? settingsWindow;
     private MediaPlayer? player;
@@ -57,7 +54,8 @@ public sealed partial class MainWindow : Window
         AutomationProperties.SetName(LibraryButton, Strings.Get("settings.title"));
         UpdateTrail();
         StatusText.Text = Strings.Get("app.starting");
-        Closed += (_, _) => { capture?.Dispose(); pane?.Dispose(); client?.Dispose(); };
+        // The client outlives this window: a Settings window can still be open and uses it; the process exit closes it.
+        Closed += (_, _) => { capture?.Dispose(); paneLease.Reset(); };
         _ = StartAsync();
     }
 
@@ -315,6 +313,11 @@ public sealed partial class MainWindow : Window
 #endif
             await SetupSearchAsync(started);
         }
+        catch (LibraryUnreadableException error)
+        {
+            StatusText.Text = Strings.Format("library.unreadable", error.Message);
+            TraceFailure("library: " + error.Message);
+        }
         catch (ServiceFailureException error)
         {
             StatusText.Text = ServiceMessages.For(error.ErrorType);
@@ -386,7 +389,7 @@ public sealed partial class MainWindow : Window
         if (hits.Count == 0) return;
         await ShowAsync(hits[0].Edition, hits[0].Entry, term, record: true);
         // The panel's own position is kept: the reader is looking at the same entry, not a fresh one.
-        if (scroll > 0 && pane?.View.CoreWebView2 is { } core)
+        if (scroll > 0 && paneLease.Pane?.View.CoreWebView2 is { } core)
             await core.ExecuteScriptAsync("window.scrollTo(0," + scroll.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")");
     }
 
@@ -509,22 +512,18 @@ public sealed partial class MainWindow : Window
         await showGate.WaitAsync();
         try
         {
-            if (pane is null || paneEdition != edition)
+            // The handle changes when the session closes and reopens a dictionary; the old pane still sends it.
+            bool rebuilt = !paneLease.Matches(edition, dictionary.Handle);
+            if (rebuilt) EntryHost.Children.Clear();
+            var (pane, source, built) = await paneLease.EnsureAsync(client, edition, dictionary.Handle,
+                view => EntryHost.Children.Add(view), readingPreferences);
+            if (built)
             {
-                pane?.Dispose();
-                PaneFactory.Cleanup(paneFolder);
-                paneFolder = null;
-                EntryHost.Children.Clear();
-                PaneFactory.Built built = await PaneFactory.CreateAsync(client, edition, dictionary.Handle,
-                    view => EntryHost.Children.Add(view), readingPreferences);
-                pane = built.Pane;
-                source = built.Source;
-                paneFolder = built.Folder;
                 pane.Message += OnPaneMessage;
-                paneEdition = edition;
+                pane.Failure += OnPaneFailure;
             }
-            EntryResponse response = await source!.EntryAsync(entry);
-            await pane!.ShowAsync(response);
+            EntryResponse response = await source.EntryAsync(entry);
+            await pane.ShowAsync(response);
         }
         finally
         {
@@ -551,6 +550,14 @@ public sealed partial class MainWindow : Window
         if (message.Kind is "link" or "sound" && !string.IsNullOrWhiteSpace(message.Value))
             await FollowLinkAsync(message.Value);
     });
+
+    /// <summary>The renderer died: drop the pane so the next entry builds a live one instead of failing forever.</summary>
+    private void OnPaneFailure(string reason)
+    {
+        paneLease.Reset();
+        StatusText.Text = Strings.Get("entry.guardFailed");
+        TraceFailure("renderer: " + reason);
+    }
 
     /// <summary>A handler fault becomes a sentence, never an unhandled exception that ends the app.</summary>
     private async Task GuardAsync(Func<Task> work)
@@ -647,18 +654,43 @@ public sealed partial class MainWindow : Window
         using var synth = new SpeechSynthesizer();
         (string Name, string Language)[] voices = SpeechSynthesizer.AllVoices
             .Select(voice => (voice.DisplayName, voice.Language)).ToArray();
-        string? chosen = SpeechText.ChooseVoice(voices, "en", AppSettings.Load().Accent);
+        string language = store?.Dictionaries.FirstOrDefault(item => item.Edition == paneLease.Edition)?.ExplainLanguage ?? "en";
+        string? chosen = SpeechText.ChooseVoice(voices, language, AppSettings.Load().Accent);
         if (chosen is not null)
             synth.Voice = SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == chosen);
-        SpeechSynthesisStream stream = await synth.SynthesizeTextToStreamAsync(text);
+        // The entry's own IPA, when it has one, is what the voice should pronounce; the SSML names the voice's tag.
+        string? ipa = await CurrentIpaAsync();
+        string tag = chosen is null
+            ? language
+            : SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == chosen).Language;
+        SpeechSynthesisStream stream = ipa is null
+            ? await synth.SynthesizeTextToStreamAsync(text)
+            : await synth.SynthesizeSsmlToStreamAsync(SpeechText.Ssml(text, ipa, tag));
         player?.Dispose();
         player = new MediaPlayer { Source = MediaSource.CreateFromStream(stream, stream.ContentType) };
         player.Play();
     }
 
+    /// <summary>The displayed entry's IPA, if it has a sane one; the page is the only place the entry's text lives.</summary>
+    private async Task<string?> CurrentIpaAsync()
+    {
+        if (paneLease.Pane?.View.CoreWebView2 is not { } core) return null;
+        try
+        {
+            string answer = await core.ExecuteScriptAsync(
+                "Array.from(document.querySelectorAll('.t_IPA')).map(e=>e.textContent.trim()).find(t=>t.length>0&&t.length<120)||''");
+            string ipa = JsonSerializer.Deserialize<string>(answer) ?? "";
+            return ipa.Length > 0 ? ipa : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
     private async Task ScrollAnchorAsync(string name)
     {
-        if (pane?.View.CoreWebView2 is not { } core) return;
+        if (paneLease.Pane?.View.CoreWebView2 is not { } core) return;
         await core.ExecuteScriptAsync("document.getElementById(" + JsonSerializer.Serialize(name) + ")?.scrollIntoView()");
     }
 
@@ -724,9 +756,18 @@ public sealed partial class MainWindow : Window
         // One Settings window, over the live store, so a dictionary added or disabled there reaches search and the
         // capture panel; closing it reopens the session against what the reader chose.
         if (settingsWindow is not null) { settingsWindow.Activate(); return; }
-        LibraryStore live = store ?? LibraryStore.Load();
-        store ??= live;
-        settingsWindow = new SettingsWindow(live, client, capture);
+        LibraryStore live;
+        try
+        {
+            live = store ?? LibraryStore.Load();
+            store ??= live;
+            settingsWindow = new SettingsWindow(live, client, capture);
+        }
+        catch (LibraryUnreadableException error)
+        {
+            StatusText.Text = Strings.Format("library.unreadable", error.Message);
+            return;
+        }
         // An import that finishes while Settings is open reaches search at once, not only when the window closes.
         settingsWindow.LibraryChanged += () => _ = GuardAsync(RefreshSessionAsync);
         settingsWindow.Closed += async (_, _) =>
@@ -741,11 +782,23 @@ public sealed partial class MainWindow : Window
     private async Task RefreshSessionAsync()
     {
         if (session is null || store is null) return;
+        string? chosen = SelectedEdition();
         await session.OpenAsync(store.Dictionaries);
+        // Reading & Speech is global: a stored edition preference follows the settings from now on. The old handle
+        // also changed, so the next entry rebuilds its pane and reads the new preference.
+        AppSettings settings = AppSettings.Load();
+        ReadingPreferences current = ReadingPreferenceStore.FromSettings(settings, ThemeApplier.Effective(settings.Theme));
+        foreach (LibraryDictionary dictionary in store.Dictionaries)
+            if (readingPreferences.Has(dictionary.Edition)) readingPreferences.Write(dictionary.Edition, current);
+        // Show the entry again: the refresh closed its handle, so this rebuilds the pane and reads the preference.
+        if (currentEntry is { } shown && paneLease.Edition is { } shownEdition &&
+            session.Dictionaries.Any(item => item.Edition == shownEdition))
+            await ShowAsync(shownEdition, shown, string.Empty, record: false);
         ScopeBox.Items.Clear();
         ScopeBox.Items.Add(Strings.Get("search.all"));
         foreach (OpenDictionary dictionary in session.Dictionaries) ScopeBox.Items.Add(dictionary.Name);
-        if (ScopeBox.Items.Count > 0) ScopeBox.SelectedIndex = 0;
+        int restore = chosen is null ? 0 : session.Dictionaries.ToList().FindIndex(item => item.Edition == chosen) + 1;
+        ScopeBox.SelectedIndex = restore > 0 && restore < ScopeBox.Items.Count ? restore : 0;
     }
 
     private async Task WatchQuitAsync()

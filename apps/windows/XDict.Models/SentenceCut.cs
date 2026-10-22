@@ -81,7 +81,10 @@ public static class SentenceCut
         return end;
     }
 
-    private static bool Splits(string text, int start, int length)
+    private static bool Splits(string text, int start, int length) => SplitsSurrogate(text, start, length);
+
+    /// <summary>Whether [start, start + length) begins or ends inside a surrogate pair. One rule, two callers.</summary>
+    public static bool SplitsSurrogate(string text, int start, int length)
     {
         if (start > 0 && char.IsLowSurrogate(text[start]) && char.IsHighSurrogate(text[start - 1])) return true;
         int end = start + length;

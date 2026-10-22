@@ -18,30 +18,33 @@ public static class CaptureValue
 
     public static Result Make(JsonNode input)
     {
+        // A value is a JSON object. Anything else cannot carry the contract's fields, and indexing a non-object
+        // throws; it is refused like an empty term instead.
+        if (input is not JsonObject root) return Invalid("term");
         // 1. The term: not empty, no Unicode control character (Cc).
-        if (input["term"] is not JsonValue termNode || !termNode.TryGetValue(out string? term) || string.IsNullOrEmpty(term))
+        if (root["term"] is not JsonValue termNode || !termNode.TryGetValue(out string? term) || string.IsNullOrEmpty(term))
             return Invalid("term");
         if (term.Any(char.IsControl)) return Invalid("term");
 
         // 2. Confidence: finite, within 0..1.
-        if (!TryFinite(input["confidence"], out double confidence) || confidence < 0 || confidence > 1)
+        if (!TryFinite(root["confidence"], out double confidence) || confidence < 0 || confidence > 1)
             return Invalid("confidence");
 
         // 3. Every coordinate is finite.
-        JsonNode? box = input["box"];
-        string? boxKind = Text(box?["kind"]);
+        JsonNode? box = root["box"];
+        string? boxKind = Text(Map(box, "kind"));
         if (boxKind == "measured")
         {
-            JsonNode? rect = box?["rect"];
-            if (!TryFinite(rect?["x"], out _) || !TryFinite(rect?["y"], out _) ||
-                !TryFinite(rect?["width"], out _) || !TryFinite(rect?["height"], out _)) return Invalid("geometry");
+            JsonNode? rect = Map(box, "rect");
+            if (!TryFinite(Map(rect, "x"), out _) || !TryFinite(Map(rect, "y"), out _) ||
+                !TryFinite(Map(rect, "width"), out _) || !TryFinite(Map(rect, "height"), out _)) return Invalid("geometry");
         }
         else if (boxKind == "clickPlacement")
         {
-            JsonNode? point = box?["point"];
-            if (!TryFinite(point?["x"], out _) || !TryFinite(point?["y"], out _)) return Invalid("geometry");
+            JsonNode? point = Map(box, "point");
+            if (!TryFinite(Map(point, "x"), out _) || !TryFinite(Map(point, "y"), out _)) return Invalid("geometry");
         }
-        if (input["pointer"] is JsonObject pointer)
+        if (root["pointer"] is JsonObject pointer)
         {
             foreach (string axis in new[] { "x", "y" })
                 if (pointer[axis] is not null && !TryFinite(pointer[axis], out _)) return Invalid("geometry");
@@ -49,20 +52,23 @@ public static class CaptureValue
 
         // 4-6. An available context: ceiling, range, canonical equality, then cleaning with the range moving.
         JsonNode value = input.DeepClone();
-        JsonNode? context = value["context"];
-        if (context is null || Text(context["kind"]) != "available") return new Result(true, null, value);
+        if (Map(value, "context") is not JsonObject context || Text(context["kind"]) != "available")
+            return new Result(true, null, value);
         string sentence = Text(context["sentence"]) ?? "";
-        JsonNode? range = context["term"];
-        bool startAsString = range?["start"] is JsonValue startScalar && startScalar.TryGetValue(out string? _);
-        if (!TryIndex(range?["start"], out int start) || !TryIndex(range?["length"], out int length)) return Invalid("range");
+        if (context["term"] is not JsonObject range) return Invalid("range");
+        bool startAsString = range["start"] is JsonValue startScalar && startScalar.TryGetValue(out string? _);
+        if (!TryIndex(range["start"], out int start) || !TryIndex(range["length"], out int length)) return Invalid("range");
         if (CheckContext(sentence, start, length, term) is { } refusal) return Invalid(refusal);
 
         (string cleaned, int movedStart) = Clean(sentence, start);
         context["sentence"] = cleaned;
         // The range keeps the encoding it arrived in: the vectors carry it as a string, and a node's kind never changes.
-        context["term"]!["start"] = startAsString ? JsonValue.Create(movedStart.ToString()) : JsonValue.Create(movedStart);
+        range["start"] = startAsString ? JsonValue.Create(movedStart.ToString()) : JsonValue.Create(movedStart);
         return new Result(true, null, value);
     }
+
+    /// <summary>A map member, or null when the node is not a map: a hostile value never throws out of a lookup.</summary>
+    private static JsonNode? Map(JsonNode? node, string key) => node is JsonObject map ? map[key] : null;
 
     private static Result Invalid(string code) => new(false, code, null);
 
@@ -118,13 +124,8 @@ public static class CaptureValue
         catch (Exception) { return false; }
     }
 
-    private static bool SplitsSurrogate(string sentence, int start, int length)
-    {
-        bool startsLow = start > 0 && char.IsLowSurrogate(sentence[start]) && char.IsHighSurrogate(sentence[start - 1]);
-        int end = start + length;
-        bool endsHigh = end > 0 && end < sentence.Length && char.IsHighSurrogate(sentence[end - 1]) && char.IsLowSurrogate(sentence[end]);
-        return startsLow || endsHigh;
-    }
+    private static bool SplitsSurrogate(string sentence, int start, int length) =>
+        SentenceCut.SplitsSurrogate(sentence, start, length);
 
     /// <summary>Rule 6: tab, LF, CR, VT, FF and NEL become a space; other controls vanish; the start moves.</summary>
     private static (string Cleaned, int MovedStart) Clean(string sentence, int start)
