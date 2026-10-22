@@ -30,6 +30,55 @@ $declared = Get-XDictE2EStageNames
 if (($stages.Name -join ',') -ne ($declared -join ',')) {
     throw 'the E2E stage table and Get-XDictE2EStageNames disagree'
 }
+# One stage in a child process: bounded, its exit code kept, and a log file the report can point at.
+function Invoke-E2EStage {
+    param($Stage, [bool]$Full, [string]$ReportDirectory)
+    $log = Join-Path $ReportDirectory ($Stage.name + '.log')
+    $started = Get-Date
+    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot $Stage.Script)) + $Stage.Args
+    $acceptsFull = -not ($Stage.ContainsKey('Full')) -or [bool]$Stage.Full
+    if ($Full -and $acceptsFull) { $arguments += '-Full' }
+    # A child process per stage: a stage that exits, crashes or hangs is bounded and its output kept.
+    $code = 1
+    try {
+        # No output redirection and no shared MSBuild server: a redirected pipe plus node reuse deadlocked a build
+        # against the next stage's dotnet test (2026-10-22). The stage's console is the run's console.
+        $info = New-Object System.Diagnostics.ProcessStartInfo
+        $info.FileName = 'powershell.exe'
+        $info.Arguments = ($arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
+        $info.UseShellExecute = $false
+        $info.EnvironmentVariables['MSBUILDDISABLENODEREUSE'] = '1'
+        $info.EnvironmentVariables['DOTNET_CLI_USE_MSBUILD_SERVER'] = '0'
+        $process = [System.Diagnostics.Process]::Start($info)
+        if (-not $process.WaitForExit(30 * 60 * 1000)) {
+            try { $process.Kill() } catch { }
+            $code = -1
+        }
+        else {
+            $code = $process.ExitCode
+        }
+        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: {1} in {2:N1}s; console output stays on the run console (never redirected: a pipe plus MSBuild node reuse deadlocked the next stage)" -f $Stage.name, $(if ($code -eq 0) { 'pass' } else { "exit $code" }), ((Get-Date) - $started).TotalSeconds)
+    }
+    catch {
+        $code = 1
+        Set-Content -LiteralPath ($log + '.err') -Value $_.Exception.Message -Encoding UTF8
+        # The report's log path must exist even when the stage could not start.
+        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: could not run ({1}); see the .err file" -f $Stage.name, $_.Exception.Message)
+    }
+    $seconds = ((Get-Date) - $started).TotalSeconds
+    return [ordered]@{ name = $Stage.Name; seconds = [math]::Round($seconds, 1); pass = ($code -eq 0); exit = $code; log = ($log + '.out') }
+}
+
+# A finished report, printed once and ending the run when a stage failed.
+function Show-E2EReport {
+    param($Result, [string]$Report)
+    foreach ($stage in $Result.stages) {
+        Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.name, ($stage.seconds), $(if ($stage.pass) { 'pass' } else { 'FAIL' }))
+    }
+    Write-Host ("E2E: {0} of {1} stages passed; report {2}" -f $Result.passed, $Result.total, $Report)
+    if ($Result.failed -gt 0) { throw ("$($Result.failed) E2E stage(s) failed") }
+}
+
 if ($Only) {
     # A comma-separated list: the UIA stages run over SSH, the rest can run detached (each context has its own limits).
     $names = @($Only -split ',' | ForEach-Object { $_.Trim() })
@@ -49,12 +98,8 @@ if ($Detached) {
     if (Test-Path -LiteralPath $Report) {
         if (-not $polling) { throw "a report already exists at $Report; pass a new -Report for a fresh run" }
         $existing = Get-Content -LiteralPath $Report -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($stage in $existing.stages) {
-            Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.name, ($stage.seconds), $(if ($stage.pass) { 'pass' } else { 'FAIL' }))
-        }
-        Write-Host ("E2E: {0} of {1} stages passed; report {2}" -f $existing.passed, $existing.total, $Report)
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        if ($existing.failed -gt 0) { throw ("$($existing.failed) E2E stage(s) failed") }
+        Show-E2EReport -Result $existing -Report $Report
         return
     }
     $task = $null
@@ -85,12 +130,8 @@ if ($Detached) {
         }
         # The report is written once, at the end; a partial file is never trusted.
         $result = Get-Content -LiteralPath $Report -Raw -Encoding UTF8 | ConvertFrom-Json
-        foreach ($stage in $result.stages) {
-            Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.name, ($stage.seconds), $(if ($stage.pass) { 'pass' } else { 'FAIL' }))
-        }
-        Write-Host ("E2E: {0} of {1} stages passed; report {2}" -f $result.passed, $result.total, $Report)
         Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
-        if ($result.failed -gt 0) { throw ("$($result.failed) E2E stage(s) failed") }
+        Show-E2EReport -Result $result -Report $Report
     }
     finally { if ($task) { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue } }
     return
@@ -112,43 +153,10 @@ $tree = Get-XDictTreeHash -Roots @($layout.AppRoot, (Join-Path $layout.RepoRoot 
 $records = New-Object System.Collections.Generic.List[object]
 $failed = 0
 foreach ($stage in $stages) {
-    $log = Join-Path $reportDirectory ($stage.name + '.log')
-    $started = Get-Date
-    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot $stage.Script)) + $stage.Args
-    $acceptsFull = -not ($stage.ContainsKey('Full')) -or [bool]$stage.Full
-    if ($Full -and $acceptsFull) { $arguments += '-Full' }
-    # A child process per stage: a stage that exits, crashes or hangs is bounded and its output kept.
-    $code = 1
-    try {
-        # No output redirection and no shared MSBuild server: a redirected pipe plus node reuse deadlocked a build
-        # against the next stage's dotnet test (2026-10-22). The stage's console is the run's console.
-        $info = New-Object System.Diagnostics.ProcessStartInfo
-        $info.FileName = 'powershell.exe'
-        $info.Arguments = ($arguments | ForEach-Object { if ($_ -match '\s') { '"' + $_ + '"' } else { $_ } }) -join ' '
-        $info.UseShellExecute = $false
-        $info.EnvironmentVariables['MSBUILDDISABLENODEREUSE'] = '1'
-        $info.EnvironmentVariables['DOTNET_CLI_USE_MSBUILD_SERVER'] = '0'
-        $process = [System.Diagnostics.Process]::Start($info)
-        if (-not $process.WaitForExit(30 * 60 * 1000)) {
-            try { $process.Kill() } catch { }
-            $code = -1
-        }
-        else {
-            $code = $process.ExitCode
-        }
-        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: {1} in {2:N1}s; console output stays on the run console (never redirected: a pipe plus MSBuild node reuse deadlocked the next stage)" -f $stage.name, $(if ($code -eq 0) { 'pass' } else { "exit $code" }), ((Get-Date) - $started).TotalSeconds)
-    }
-    catch {
-        $code = 1
-        Set-Content -LiteralPath ($log + '.err') -Value $_.Exception.Message -Encoding UTF8
-        # The report's log path must exist even when the stage could not start.
-        Set-Content -LiteralPath ($log + '.out') -Encoding UTF8 -Value ("stage {0}: could not run ({1}); see the .err file" -f $stage.name, $_.Exception.Message)
-    }
-    $seconds = ((Get-Date) - $started).TotalSeconds
-    $pass = $code -eq 0
-    if (-not $pass) { $failed++ }
-    $records.Add([ordered]@{ name = $stage.Name; seconds = [math]::Round($seconds, 1); pass = $pass; exit = $code; log = ($log + '.out') })
-    Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.Name, $seconds, $(if ($pass) { 'pass' } else { "FAIL ($code)" }))
+    $record = Invoke-E2EStage -Stage $stage -Full:$Full -ReportDirectory $reportDirectory
+    if (-not $record.pass) { $failed++ }
+    $records.Add($record)
+    Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $record.name, $record.seconds, $(if ($record.pass) { 'pass' } else { "FAIL ($($record.exit))" }))
 }
 $os = Get-CimInstance Win32_OperatingSystem
 $summary = [ordered]@{

@@ -19,22 +19,8 @@ Invoke-XDictGate -Name 'search-scope-uia' -Inputs (Get-XDictLabInputs -Layout $l
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny, $drop) } |
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $prep = 'xdict-prep-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $libraryConfig + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $prep -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $prep
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        $prepared = Join-Path $folder 'library-result.json'
-        while (-not (Test-Path -LiteralPath $prepared)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library preparation produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $prep -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
+        -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
 
     $launchId = 'scope-' + [Guid]::NewGuid().ToString('N')
     $result = Join-Path $folder 'result.json'

@@ -8,57 +8,7 @@ $layout = Get-XDictLayout
 $started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
-Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout) `
-    -Extra @([string]$Only, [string]$SkipElevated) -Full:$Full -Action {
-    Write-Host (Get-PSDrive C | Format-Table Name,Used,Free -AutoSize | Out-String)
-    Get-Service sshd -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize | Out-String | Write-Host
-    # A Surface on Modern Standby suspends the session mid-run; keep the machine awake for this run and no longer.
-    Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);' -Name Power -Namespace XDictLab
-    $stayAwake = [System.Convert]::ToUInt32('80000003', 16)
-    $notNeeded = [System.Convert]::ToUInt32('80000000', 16)
-    $null = [XDictLab.Power]::SetThreadExecutionState($stayAwake)
-    try {
-    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
-    $folder = Join-Path $env:LOCALAPPDATA ('XDict\capture-lab\' + [Guid]::NewGuid().ToString('N'))
-    New-Item -ItemType Directory -Force -Path $folder | Out-Null
-    $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
-    if (-not (Test-Path -LiteralPath $tiny)) { throw "the tiny fixture is missing: $tiny" }
-    $library = Join-Path $folder 'library.json'
-    $text = Join-Path $folder 'selection.txt'
-    Set-Content -LiteralPath $text -Value 'The run reader selects this sentence.' -Encoding UTF8
-    $html = Join-Path $folder 'selection.html'
-    Set-Content -LiteralPath $html -Encoding UTF8 -Value @'
-<!doctype html><html><head><meta charset="utf-8"><title>XDict capture lab</title></head>
-<body style="font: 20px sans-serif; padding: 40px"><p id="line">The run reader selects this sentence.</p>
-<script>
-  function applySelection() {
-    const line = document.getElementById('line');
-    const text = line.firstChild.textContent;
-    const start = text.indexOf('run');
-    const range = document.createRange();
-    range.setStart(line.firstChild, start);
-    range.setEnd(line.firstChild, start + 3);
-    const selection = getSelection();
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
-  applySelection();
-  // A click focuses the page but collapses the selection; the fixture puts it back, as a reader's drag would have.
-  document.addEventListener('click', () => setTimeout(applySelection, 100));
-</script></body></html>
-'@
-    $settings = Join-Path $folder 'capture.json'
-    $config = Join-Path $folder 'capture-config.json'
-    $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-
-    # 1. A private library through the library lab.
-    $libraryConfig = Join-Path $folder 'library-config.json'
-    @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
-        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
-    $prepared = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') -Output (Join-Path $folder 'library-result.json')
-    if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
-    Stop-XDictLabProcesses -Name @('XDict') -Since $started
-
+function Invoke-MainPass {
     # 2. The main pass: the real chord over a Notepad selection.
     if (-not $Only -or $Only -eq 'main') {
     @{ output = (Join-Path $folder 'capture-result.json'); mode = 'main'; settings = $settings; library = $library; text = $html } |
@@ -86,6 +36,9 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     if ($main.settingsAfterClash[0] -ne 7 -or $main.settingsAfterClash[1] -ne 75) { throw 'the clash disturbed the working combination' }
 
     }
+}
+
+function Invoke-NotepadPass {
     # 2b. The same path over Notepad (its WinUI menu bar holds focus first; the document is clicked on purpose).
     if (-not $Only -or $Only -eq 'notepad') {
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
@@ -101,6 +54,9 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     if ($notepadRun.acknowledgement -ne 'Shown') { throw "the Notepad entry was not acknowledged: $($notepadRun.acknowledgement)" }
 
     }
+}
+
+function Invoke-SuspendedPass {
     # 2b2. The panel with the dictionary service suspended: it must be on screen within the same second.
     if (-not $Only -or $Only -eq 'suspended') {
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
@@ -114,6 +70,9 @@ Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     if ($suspended.term -ne 'run') { throw "the suspended-service panel's term is '$($suspended.term)'" }
 
     }
+}
+
+function Invoke-WordAndPdfPass {
     # 2c. Word, when it is installed: a .docx with the same sentence, its document selected through UIA.
     if (-not $Only -or $Only -eq 'word') {
     $wordExe = $null
@@ -214,6 +173,9 @@ $word.Quit()
     }
     else { Write-Host 'WORD NOT MEASURED: Word is not installed on this host' }
     }
+}
+
+function Invoke-RelaunchPass {
     # 3. A relaunch reads the rebinding back and the new chord works.
     if (-not $Only -or $Only -eq 'relaunch') {
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
@@ -227,6 +189,9 @@ $word.Quit()
     if ($relaunch.settingsModifiers -ne 7 -or $relaunch.settingsKey -ne 75) { throw 'the rebinding did not survive the relaunch' }
     if (-not $relaunch.panelShown -or $relaunch.term -ne 'run') { throw 'the rebound chord did not look up the selection' }
     }
+}
+
+function Invoke-ElevatedPass {
     # 4. An elevated window is refused with its sentence, never read.
     if ((-not $SkipElevated) -and (-not $Only -or $Only -eq 'elevated')) {
         Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
@@ -266,6 +231,71 @@ try { if (-not $notepad.HasExited) { Stop-Process -Id $notepad.Id -Force } } cat
         }
         finally { Unregister-ScheduledTask -TaskName $elevatedTask -Confirm:$false -ErrorAction SilentlyContinue }
     }
+}
+
+Invoke-XDictGate -Name 'capture-lab' -Inputs (Get-XDictLabInputs -Layout $layout) `
+    -Extra @([string]$Only, [string]$SkipElevated) -Full:$Full -Action {
+    Write-Host (Get-PSDrive C | Format-Table Name,Used,Free -AutoSize | Out-String)
+    Get-Service sshd -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize | Out-String | Write-Host
+    # A Surface on Modern Standby suspends the session mid-run; keep the machine awake for this run and no longer.
+    Add-Type -MemberDefinition '[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);' -Name Power -Namespace XDictLab
+    $stayAwake = [System.Convert]::ToUInt32('80000003', 16)
+    $notNeeded = [System.Convert]::ToUInt32('80000000', 16)
+    $null = [XDictLab.Power]::SetThreadExecutionState($stayAwake)
+    try {
+    Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
+    $folder = Join-Path $env:LOCALAPPDATA ('XDict\capture-lab\' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $folder | Out-Null
+    $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
+    if (-not (Test-Path -LiteralPath $tiny)) { throw "the tiny fixture is missing: $tiny" }
+    $library = Join-Path $folder 'library.json'
+    $text = Join-Path $folder 'selection.txt'
+    Set-Content -LiteralPath $text -Value 'The run reader selects this sentence.' -Encoding UTF8
+    $html = Join-Path $folder 'selection.html'
+    Set-Content -LiteralPath $html -Encoding UTF8 -Value @'
+<!doctype html><html><head><meta charset="utf-8"><title>XDict capture lab</title></head>
+<body style="font: 20px sans-serif; padding: 40px"><p id="line">The run reader selects this sentence.</p>
+<script>
+  function applySelection() {
+    const line = document.getElementById('line');
+    const text = line.firstChild.textContent;
+    const start = text.indexOf('run');
+    const range = document.createRange();
+    range.setStart(line.firstChild, start);
+    range.setEnd(line.firstChild, start + 3);
+    const selection = getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+  applySelection();
+  // A click focuses the page but collapses the selection; the fixture puts it back, as a reader's drag would have.
+  document.addEventListener('click', () => setTimeout(applySelection, 100));
+</script></body></html>
+'@
+    $settings = Join-Path $folder 'capture.json'
+    $config = Join-Path $folder 'capture-config.json'
+    $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
+
+    # 1. A private library through the library lab.
+    $libraryConfig = Join-Path $folder 'library-config.json'
+    @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
+        ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
+    $prepared = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') -Output (Join-Path $folder 'library-result.json')
+    if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
+
+    Invoke-MainPass
+
+    Invoke-NotepadPass
+
+    Invoke-SuspendedPass
+
+    Invoke-WordAndPdfPass
+
+    Invoke-RelaunchPass
+
+    Invoke-ElevatedPass
+
     Stop-XDictLabProcesses -Name @('XDict', 'notepad', 'msedge', 'chrome') -Since $started
     }
     finally { $null = [XDictLab.Power]::SetThreadExecutionState($notNeeded) }
