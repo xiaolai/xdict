@@ -18,7 +18,8 @@
     "xdict-lookup",
     "xdict-mdx",
     "xdict-mmap",
-    "xdict-schedule"
+    "xdict-schedule",
+    "xdict-win-fileid"
    ],
    "dev": [
     "xdict-mdx-writer"
@@ -85,7 +86,9 @@
    "dir": "core/xdict-mdx-writer/"
   },
   "xdict-mmap": {
-   "deps": [],
+   "deps": [
+    "xdict-win-fileid"
+   ],
    "dev": [],
    "dir": "core/xdict-mmap/"
   },
@@ -100,13 +103,20 @@
    ],
    "dev": [],
    "dir": "core/xdict-wasm/"
+  },
+  "xdict-win-fileid": {
+   "deps": [
+    "xdict-identity"
+   ],
+   "dev": [],
+   "dir": "core/xdict-win-fileid/"
   }
  },
  "manifests": {
   "apps/apple/Package.swift": "99c72458d14ab5c70740488043eae49d4ad85eb8",
-  "core/Cargo.toml": "e5eaa9e63a6a0fc401c636a04946c1aa08dff1b2",
+  "core/Cargo.toml": "2db618197be41c3e4fbf2696dcf21addc73d4894",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
-  "core/xdict-core/Cargo.toml": "d3da77c790a6b99d5a9eb8312fababe3932e963d",
+  "core/xdict-core/Cargo.toml": "dd46ce67179487585a134a2b9fde19091887befa",
   "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
   "core/xdict-ffi/Cargo.toml": "ac303ff831d1e474a26e106112c7a12aeffbd293",
   "core/xdict-health/Cargo.toml": "42b7213a18cb38c66a647483ab58e8328fca29ec",
@@ -115,9 +125,10 @@
   "core/xdict-lookup/Cargo.toml": "96edf6336ff7032b686767131bd122b25e76916d",
   "core/xdict-mdx-writer/Cargo.toml": "1fb57ab7b0dc2fc8714afdd244f8ff989efe7520",
   "core/xdict-mdx/Cargo.toml": "ac5ac88a5d4fa81f2cac4b7ecc6fdb2443e7e698",
-  "core/xdict-mmap/Cargo.toml": "0eb2755ee029e254c9522c5776deb017f039b881",
+  "core/xdict-mmap/Cargo.toml": "c7974d18d22903f37e657ecdbe6c7073e27d233c",
   "core/xdict-schedule/Cargo.toml": "ac52900c6571131cad4fcf94c3fd0e5f40cf0dac",
-  "core/xdict-wasm/Cargo.toml": "733c1f6f8dc886e31557f124de2ad9d831edff98"
+  "core/xdict-wasm/Cargo.toml": "733c1f6f8dc886e31557f124de2ad9d831edff98",
+  "core/xdict-win-fileid/Cargo.toml": "3e162f414dacdae0ae6e69ddcff7c92756329ba6"
  },
  "targets": {
   "XDict": {
