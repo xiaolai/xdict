@@ -19,12 +19,14 @@ public sealed partial class SettingsWindow : Window
     public SettingsWindow(LibraryStore store, ServiceClient client, Capture.CaptureController? capture = null)
     {
         InitializeComponent();
+        // Every window follows the saved theme, not only the main window that applied it before opening this one.
+        ThemeApplier.Apply(Content as Microsoft.UI.Xaml.FrameworkElement, AppSettings.Load().Theme);
         Title = Strings.Get("settings.title");
         DictionariesItem.Content = Strings.Get("settings.dictionaries");
         ReadingItem.Content = Strings.Get("settings.reading");
         GeneralItem.Content = Strings.Get("settings.general");
         dictionaries = new DictionariesView(store, client, this);
-        dictionaries.Imported += () => LibraryChanged?.Invoke();
+        dictionaries.LibraryChanged += () => LibraryChanged?.Invoke();
         reading = new ReadingSpeechView();
         general = new GeneralView(capture);
         foreach (UIElement page in new UIElement[] { dictionaries, reading, general }) Pages.Children.Add(page);

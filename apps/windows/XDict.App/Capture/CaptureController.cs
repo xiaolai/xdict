@@ -21,10 +21,7 @@ public sealed class CaptureController : IDisposable
     private readonly Hotkey hotkey;
     private readonly TrayIcon tray;
     private CapturePanel? panel;
-    private EntryPane? pane;
-    private DictionaryEntrySource? source;
-    private string? paneEdition;
-    private string? paneFolder;
+    private readonly PaneLease paneLease = new();
     private CancellationTokenSource? inFlight;
     private CaptureRequest? inFlightRequest;
     private Win32.HookProc? escapeHook;
@@ -163,7 +160,8 @@ public sealed class CaptureController : IDisposable
                 ["cut"] = cut,
                 ["gap"] = null,
             };
-        JsonObject box = read.Boxes.Count == 0
+        SelectionBox? union = UnionBox(read.Boxes);
+        JsonObject box = union is not { } measured
             ? new JsonObject { ["kind"] = "absent" }
             : new JsonObject
             {
@@ -171,10 +169,10 @@ public sealed class CaptureController : IDisposable
                 ["quality"] = "containing",
                 ["rect"] = new JsonObject
                 {
-                    ["x"] = read.Boxes.Min(item => item.X),
-                    ["y"] = read.Boxes.Min(item => item.Y),
-                    ["width"] = read.Boxes.Max(item => item.X + item.Width) - read.Boxes.Min(item => item.X),
-                    ["height"] = read.Boxes.Max(item => item.Y + item.Height) - read.Boxes.Min(item => item.Y),
+                    ["x"] = measured.X,
+                    ["y"] = measured.Y,
+                    ["width"] = measured.Width,
+                    ["height"] = measured.Height,
                 },
             };
         var input = new JsonObject
@@ -202,7 +200,18 @@ public sealed class CaptureController : IDisposable
         // A stale delivery (superseded, closed) shows nothing: the reader's newer gesture owns the panel.
         if (!book.IsCurrent(delivery.Request)) return;
         inFlightRequest = null;
-        CapturePanel view = EnsurePanel();
+        CapturePanel view;
+        try
+        {
+            view = EnsurePanel();
+        }
+        catch (Exception error)
+        {
+            // The sink accepted the delivery; if no panel can be built, it still ends rather than staying open.
+            LastFailure = error.GetType().Name + ": " + error.Message;
+            Acknowledge(delivery, CaptureOutcome.NotShown);
+            return;
+        }
         bool drawn = false;
         try
         {
@@ -214,7 +223,9 @@ public sealed class CaptureController : IDisposable
             LastForegroundAfterShow = after.ToInt64();
             // GetForegroundWindow can read 0 while a window is being created; the stable foreground is the claim.
             LastFocusUnchanged = after == before || after == IntPtr.Zero;
-            SearchPage page = await session.LookupAsync(delivery.Term.Term, null, 0, 20);
+            // Per dictionary, as the main window does: one replaced or busy dictionary must not hide another's hit.
+            IReadOnlyList<SearchPage> pages = await session.LookupEachAsync(delivery.Term.Term, null, 20);
+            SearchPage page = pages.FirstOrDefault(item => item.Hits.Count > 0) ?? new SearchPage([], 0, 0, null);
             if (!book.IsCurrent(delivery.Request)) return;
             if (page.Hits.Count == 0)
             {
@@ -225,35 +236,24 @@ public sealed class CaptureController : IDisposable
             else
             {
                 SearchHit hit = page.Hits[0];
-                if (pane is null || paneEdition != hit.Edition)
+                string handle = session.Dictionaries.First(item => item.Edition == hit.Edition).Handle;
+                bool rebuilt = !paneLease.Matches(hit.Edition, handle);
+                if (rebuilt) view.EntryHostGrid.Children.Clear();
+                var reading = new ReadingPreferenceStore(ReadingPreferenceStore.DefaultPath);
+                var (pane, source, built) = await paneLease.EnsureAsync(client, hit.Edition, handle,
+                    browser => view.EntryHostGrid.Children.Add(browser), reading);
+                // A newer delivery took over while this pane was initializing: drop it and leave the grid clean.
+                if (!book.IsCurrent(delivery.Request))
                 {
-                    pane?.Dispose();
-                    PaneFactory.Cleanup(paneFolder);
-                    paneFolder = null;
+                    paneLease.Reset();
                     view.EntryHostGrid.Children.Clear();
-                    var reading = new ReadingPreferenceStore(ReadingPreferenceStore.DefaultPath);
-                    PaneFactory.Built built = await PaneFactory.CreateAsync(client, hit.Edition,
-                        session.Dictionaries.First(item => item.Edition == hit.Edition).Handle,
-                        browser => view.EntryHostGrid.Children.Add(browser), reading);
-                    // A newer delivery took over while this pane was initializing: drop it, fields and all.
-                    if (!book.IsCurrent(delivery.Request))
-                    {
-                        built.Pane.Dispose();
-                        PaneFactory.Cleanup(built.Folder);
-                        // The old pane was disposed just above; the fields must not keep naming it, or a later
-                        // delivery for the same edition reuses a closed view. The disposed browser leaves the grid.
-                        view.EntryHostGrid.Children.Clear();
-                        pane = null;
-                        source = null;
-                        paneEdition = null;
-                        return;
-                    }
-                    pane = built.Pane;
-                    source = built.Source;
-                    paneFolder = built.Folder;
-                    paneEdition = hit.Edition;
+                    return;
                 }
-                EntryResponse response = await source!.EntryAsync(hit.Entry);
+                if (built) pane.Failure += _ => ResetEntry();
+                // The fetch is an await too: a newer delivery can take the panel between the lookup and the show.
+                if (!book.IsCurrent(delivery.Request)) return;
+                EntryResponse response = await source.EntryAsync(hit.Entry);
+                if (!book.IsCurrent(delivery.Request)) return;
                 await pane!.ShowAsync(response);
                 if (!book.IsCurrent(delivery.Request)) return;
                 view.SetStatus(Strings.Format("search.results", page.Hits.Count));
@@ -279,12 +279,7 @@ public sealed class CaptureController : IDisposable
     /// <summary>Drops the entry a previous capture showed; the panel's host, its binding and its private folder.</summary>
     private void ResetEntry()
     {
-        pane?.Dispose();
-        pane = null;
-        source = null;
-        paneEdition = null;
-        PaneFactory.Cleanup(paneFolder);
-        paneFolder = null;
+        paneLease.Reset();
         panel?.EntryHostGrid.Children.Clear();
     }
 
@@ -317,7 +312,8 @@ public sealed class CaptureController : IDisposable
     {
         ResetEntry();
         CapturePanel view = EnsurePanel();
-        view.SetContent(Strings.Get("capture.panelTitle"), sentence);
+        // A notice has no term: the Open button sends TermText, and a title there would be searched for.
+        view.SetContent("", sentence);
         Win32.GetCursorPos(out Win32.POINT point);
         view.ShowAt(new SelectionBox(point.X, point.Y, 0, 0));
     }
@@ -346,7 +342,7 @@ public sealed class CaptureController : IDisposable
         double scroll = 0;
         try
         {
-            if (pane?.View.CoreWebView2 is { } core)
+            if (paneLease.Pane?.View.CoreWebView2 is { } core)
             {
                 string answer = await core.ExecuteScriptAsync("window.scrollY");
                 if (double.TryParse(answer, System.Globalization.CultureInfo.InvariantCulture, out double y)) scroll = y;
@@ -417,7 +413,7 @@ public sealed class CaptureController : IDisposable
         RemoveEscape();
         inFlight?.Cancel();
         inFlight?.Dispose();
-        pane?.Dispose();
+        paneLease.Reset();
         hotkey.Dispose();
         tray.Dispose();
         reader.Dispose();

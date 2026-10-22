@@ -16,6 +16,7 @@ public static class LibraryImporter
         ServiceClient client, PackageFiles package, string? displayName = null, CancellationToken cancellation = default,
         LibraryDictionary? existing = null)
     {
+        if (package.MissingVolumes.Count > 0) throw new PackageIncompleteException(package.Mdx, package.MissingVolumes);
         string root = Path.GetDirectoryName(package.Mdx) ?? throw new ArgumentException("the MDX has no folder");
         // A file is the same location by its path first; order is only the fallback for a relocated package. Matching
         // by list position alone gave the wrong id when a volume gap was filled or a sidecar inserted ahead.

@@ -232,8 +232,6 @@ public sealed class EntryPane : IDisposable
         if (verified && html.Length > 0) await ShowAsync(new(html, "text/html", csp));
     }
     public Task SetDisplayOptionsAsync(IReadOnlyDictionary<string, string> chosen) => SetReadingAsync(preferences with { DisplayOptions = new Dictionary<string, string>(chosen) });
-    public Task<string> FindAsync(string query) => view.CoreWebView2.ExecuteScriptAsync("window.__xdictFind.find(" + JsonSerializer.Serialize(query) + ")").AsTask();
-    public Task<string> FindNextAsync(bool forward) => view.CoreWebView2.ExecuteScriptAsync("window.__xdictFind.step(" + (forward ? "true" : "false") + ")").AsTask();
 
     private async Task DisplayAsync(EntryResponse response)
     {

@@ -32,16 +32,19 @@ public sealed class SelectionReader : IDisposable
     private Worker? worker;
     private int stuck;
 
-    public Task<SelectionRead> ReadAsync(CancellationToken cancellation)
+    public async Task<SelectionRead> ReadAsync(CancellationToken cancellation)
     {
         Worker current;
         lock (gate)
         {
-            if (stuck >= StuckLimit) return Task.FromResult(SelectionRead.Failed("stuck", 0));
+            if (stuck >= StuckLimit) return SelectionRead.Failed("stuck", 0);
             worker ??= new Worker();
             current = worker;
         }
-        return current.Post(ReadOnce, cancellation);
+        SelectionRead read = await current.Post(ReadOnce, cancellation).ConfigureAwait(false);
+        // A read that answered proves the provider is alive: two old timeouts must not disable capture for good.
+        if (read.Refusal != "stuck") lock (gate) stuck = 0;
+        return read;
     }
 
     /// <summary>The caller stopped waiting: the worker is wedged, so the next ask gets a fresh thread.</summary>

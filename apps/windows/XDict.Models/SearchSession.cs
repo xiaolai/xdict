@@ -1,5 +1,6 @@
 // The reader's search: the library's enabled dictionaries opened through the service, a query against a visible
 // scope, suggestions, and the five states a dictionary can be unavailable in — kept distinct, never one "error".
+using System.ComponentModel;
 using System.Text.Json;
 using XDict.Client;
 using XDict.Contract;
@@ -71,6 +72,12 @@ public sealed class SearchSession
             {
                 await Drop(record.Edition);
                 outcomes.Add(new OpenOutcome(record.Edition, record.DisplayName, State(error)));
+            }
+            catch (Win32Exception)
+            {
+                // A share-mode refusal from another program is transient, not a damaged dictionary.
+                await Drop(record.Edition);
+                outcomes.Add(new OpenOutcome(record.Edition, record.DisplayName, OpenOutcome.Unavailable));
             }
             catch (ReparseRefusedException)
             {

@@ -41,13 +41,14 @@ public static class SpeechText
             var accented = list.FirstOrDefault(voice => voice.Language.ToLowerInvariant() == exact);
             if (accented.Name is not null) return accented.Name;
         }
-        var sameLanguage = list.FirstOrDefault(voice => Lang(voice.Language) == wanted);
-        if (sameLanguage.Name is not null) return sameLanguage.Name;
+        // Simplified Chinese prefers a zh-CN voice before any other Chinese one, so the preference must run first.
         if (wanted == "zh")
         {
             var chinese = list.FirstOrDefault(voice => voice.Language.ToLowerInvariant().StartsWith("zh-cn"));
             if (chinese.Name is not null) return chinese.Name;
         }
+        var sameLanguage = list.FirstOrDefault(voice => Lang(voice.Language) == wanted);
+        if (sameLanguage.Name is not null) return sameLanguage.Name;
         return null;
     }
 }

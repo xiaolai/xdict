@@ -57,7 +57,12 @@ public sealed partial class GeneralView : UserControl
     {
         if (loading) return;
         bool wanted = StartAtLogin.IsOn;
-        if (StartupRegistration.Set(wanted)) { (AppSettings.Load() with { StartAtLogin = wanted }).Save(); return; }
+        if (StartupRegistration.Set(wanted))
+        {
+            try { (AppSettings.Load() with { StartAtLogin = wanted }).Save(); }
+            catch (Exception error) { Status.Text = Strings.Format("settings.saveFailed", error.Message); }
+            return;
+        }
         // Put the switch back without re-entering this handler: a failed write in both directions used to
         // ping-pong until the stack overflowed.
         loading = true;
