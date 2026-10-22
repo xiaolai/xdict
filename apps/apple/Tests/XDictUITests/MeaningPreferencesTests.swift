@@ -58,6 +58,22 @@ struct MeaningPreferencesTests {
         #expect(second.effectiveTemplate(language: "en", mode: .grounded) == shipped)
     }
 
+    /// **The chosen-sense kind keeps its own prompt** (plan-explain-sense WI-5; ADR-0029 d.6): three kinds, three
+    /// templates, and an edit of one never changes another's question.
+    @Test func theChosenSenseTemplateIsItsOwnKind() {
+        let defaults = Self.defaults()
+        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        let shipped = meaningDefaultTemplate(language: "en", mode: .explainSense)
+        #expect(!shipped.isEmpty)
+        #expect(first.effectiveTemplate(language: "en", mode: .explainSense) == shipped)
+        first.setTemplate("Which sense? {term} {sentence} {entry} {sense}", language: "en", mode: .explainSense)
+        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        #expect(second.storedTemplate(language: "en", mode: .explainSense)
+            == "Which sense? {term} {sentence} {entry} {sense}")
+        #expect(second.storedTemplate(language: "en", mode: .grounded) == nil, "one kind answers another's ask")
+        #expect(second.storedTemplate(language: "en", mode: .sentenceOnly) == nil)
+    }
+
     @Test func aTemplateEditIsKeptPerLanguage() {
         let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
         preferences.setTemplate("English wording", language: "en", mode: .grounded)

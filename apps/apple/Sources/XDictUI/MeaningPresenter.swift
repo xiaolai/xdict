@@ -24,10 +24,18 @@ public struct MeaningPresentation: Equatable, Sendable {
     public let problem: LocalizedStringResource?
     /// The stable contract code behind a failure (`provider.unauthorised`, `answer.quote.notFound`), shown small.
     public let code: String?
+    /// **The sense the reader chose**, in the chosen-sense mode only: shown as printed, so the pane names the target it
+    /// explains (plan-explain-sense WI-5).
+    public let chosenSense: AISense?
+    /// The dictionary the sense was clicked in, when the window knows its name.
+    public let dictionaryName: String?
+    /// Part of the chosen sense was not sent: the answer may be missing what was not.
+    public let senseCoverage: LocalizedStringResource?
 
     public init(source: LocalizedStringResource?, grounding: Grounding, outcome: LocalizedStringResource?,
                 coverage: LocalizedStringResource?, quotes: [String], explanation: String,
-                problem: LocalizedStringResource?, code: String?) {
+                problem: LocalizedStringResource?, code: String?, chosenSense: AISense? = nil,
+                dictionaryName: String? = nil, senseCoverage: LocalizedStringResource? = nil) {
         self.source = source
         self.grounding = grounding
         self.outcome = outcome
@@ -36,6 +44,9 @@ public struct MeaningPresentation: Equatable, Sendable {
         self.explanation = explanation
         self.problem = problem
         self.code = code
+        self.chosenSense = chosenSense
+        self.dictionaryName = dictionaryName
+        self.senseCoverage = senseCoverage
     }
 
     public var isProblem: Bool { problem != nil }
@@ -48,35 +59,44 @@ public enum MeaningPresenter {
                                sent: MeaningSent?) -> MeaningPresentation? {
         // The request's own source when it has one: switching sources in Settings must not relabel an old answer.
         let source = MeaningSentences.source(sent?.source ?? settings.source)
+        let chosen = sent?.sense
+        // **The entry's and the sense's cuts are two facts** (contract 3, §4a): a whole entry can hold a partial sense.
+        let senseCoverage = sent?.sense?.whole == false ? MeaningSentences.partialSense : nil
         switch state {
         case .idle, .asking, .preview:
             return nil
         case .answer(let answer, let mode):
             return MeaningPresentation(
                 source: source,
-                grounding: mode == .grounded ? .grounded : .ungrounded,
+                // The chosen-sense question sends the entry, so its answer is grounded like the model's own choice.
+                grounding: mode == .sentenceOnly ? .ungrounded : .grounded,
                 outcome: MeaningSentences.outcome(answer.outcome),
-                coverage: mode == .grounded && sent?.complete == false ? MeaningSentences.partialEntry : nil,
+                coverage: mode != .sentenceOnly && sent?.complete == false ? MeaningSentences.partialEntry : nil,
                 quotes: answer.quotes,
                 explanation: answer.explanation,
                 problem: nil,
-                code: nil)
+                code: nil,
+                chosenSense: chosen,
+                dictionaryName: sent?.dictionaryName,
+                senseCoverage: senseCoverage)
         case .template(let error):
-            return problem(MeaningSentences.compose(error), code: error.code, source: source)
+            return problem(MeaningSentences.compose(error), code: error.code, source: source, sent: sent)
         case .invalid(let error):
-            return problem(MeaningSentences.invalidAnswer, code: error.code, source: source)
+            return problem(MeaningSentences.invalidAnswer, code: error.code, source: source, sent: sent)
         case .unavailable(let unavailable):
             let code: String?
             if case .provider(let error) = unavailable { code = error.code } else { code = nil }
-            return problem(MeaningSentences.problem(unavailable), code: code, source: source)
+            return problem(MeaningSentences.problem(unavailable), code: code, source: source, sent: sent)
         case .cancelled:
-            return problem(MeaningSentences.cancelled, code: nil, source: source)
+            return problem(MeaningSentences.cancelled, code: nil, source: source, sent: sent)
         }
     }
 
     private static func problem(_ problem: LocalizedStringResource, code: String?,
-                                source: LocalizedStringResource?) -> MeaningPresentation {
+                                source: LocalizedStringResource?, sent: MeaningSent?) -> MeaningPresentation {
         MeaningPresentation(source: source, grounding: .none, outcome: nil, coverage: nil, quotes: [],
-                            explanation: "", problem: problem, code: code)
+                            explanation: "", problem: problem, code: code, chosenSense: sent?.sense,
+                            dictionaryName: sent?.dictionaryName,
+                            senseCoverage: sent?.sense?.whole == false ? MeaningSentences.partialSense : nil)
     }
 }

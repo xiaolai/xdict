@@ -60,6 +60,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public var onSpeak: ((_ text: String) -> Void)?
     /// A word the reader ⌘-clicked in the entry, to look up in a new tab (parity P47).
     public var onOpenInNewTab: ((_ word: String) -> Void)?
+    /// **A sense the reader clicked** (plan-explain-sense WI-5): the ordinal, with the entry it was clicked in — its
+    /// dictionary's handle, its edition and its reference — so the window can name the frame's dictionary, never the
+    /// one that happens to be shown.
+    public var onSelectSense: ((_ handle: String, _ edition: String, _ reference: EntryReference, _ id: UInt32) -> Void)?
 
     private var environment: EntryEnvironment
     private var pane: EntryPane?
@@ -539,6 +543,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         guard owns(pane) else { return }
         record(.wordOpenedInNewTab(word: click.word))
         onOpenInNewTab?(click.word)
+    }
+
+    /// **The clicked frame's own entry**: its pane's binding and reference, so two dictionaries showing the same
+    /// ordinal are told apart by the frame the reader clicked in (plan-explain-sense WI-5).
+    func selectSense(_ click: EntrySenseClick, from pane: EntryPane) {
+        // **The document's reference, not the one being fetched** (plan-explain-sense WI-5): a click from a document the
+        // pane has begun replacing is refused by the pane's URL guard; this one is the document left on screen.
+        guard owns(pane), let reference = pane.documentReference else { return }
+        onSelectSense?(pane.binding.handle, pane.binding.edition, reference, click.id)
     }
 
     func askReader(_ url: URL, from pane: EntryPane) {

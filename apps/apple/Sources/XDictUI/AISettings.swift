@@ -296,9 +296,10 @@ public struct AISettings: View {
             Picker(selection: $model.promptKind) {
                 Text("Grounded in the entry").tag(AIMode.grounded)
                 Text("From the sentence alone").tag(AIMode.sentenceOnly)
+                Text("Explaining a chosen sense").tag(AIMode.explainSense)
             } label: {
                 Text("Question kind")
-                Text("Two prompts: one sends the entry’s text, the other only the sentence.")
+                Text("One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose.")
             }
             .pickerStyle(.radioGroup)
             .accessibilityIdentifier("ai.prompt.kind")
@@ -329,7 +330,10 @@ public struct AISettings: View {
             }
             .accessibilityIdentifier("ai.prompt.preview")
             DisclosureGroup {
-                Text(verbatim: AIComposer.responseContract)
+                // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would
+                // describe an answer this ask never accepts.
+                Text(verbatim: model.promptKind == .explainSense ? AIComposer.explainResponseContract
+                                                                 : AIComposer.responseContract)
                     .font(.caption.monospaced())
                     .textSelection(.enabled)
             } label: {
@@ -338,7 +342,7 @@ public struct AISettings: View {
         } header: {
             Text("The prompt")
         } footer: {
-            Text("The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent.")
+            Text("The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt.")
         }
     }
 

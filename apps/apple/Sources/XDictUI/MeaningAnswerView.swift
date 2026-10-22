@@ -1,4 +1,5 @@
 import SwiftUI
+import XDictAI
 import XDictEntryView
 import XDictTokens
 
@@ -60,6 +61,9 @@ public struct MeaningAnswerPane: View {
             if let source = MeaningSentences.source(settings.source) {
                 Text("To “\(source)”").font(.caption).foregroundStyle(.secondary)
             }
+            if let sense = sent.sense {
+                chosenSense(sense, dictionary: sent.dictionaryName)
+            }
             PromptText(text: sent.text)
                 .accessibilityIdentifier("meaning.preview.text")
             if !sent.complete {
@@ -119,6 +123,15 @@ public struct MeaningAnswerPane: View {
                     .foregroundStyle(.secondary)
                     .accessibilityIdentifier("meaning.coverage")
             }
+            if let sense = presentation.chosenSense {
+                chosenSense(sense, dictionary: presentation.dictionaryName)
+            }
+            if let coverage = presentation.senseCoverage {
+                Label { Text(coverage) } icon: { Image(systemName: "scissors") }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("meaning.sense.coverage")
+            }
             ForEach(presentation.quotes, id: \.self) { quote in
                 VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                     Text(verbatim: quote)
@@ -157,9 +170,37 @@ public struct MeaningAnswerPane: View {
                 }
                 .accessibilityIdentifier("meaning.prompt")
             }
+            if case .answer(let answer, mode: .explainSense) = state.meaning.state, answer.outcome == .doesNotFit {
+                // **The verdict is not the end of the question** (plan-explain-sense WI-5): the model can be asked
+                // which sense the sentence uses instead, on the same sentence and entry.
+                Text(MeaningSentences.doesNotFitOffer)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Button("Ask Which Sense It Is") {  // placement: inspector-row
+                    state.meaning.askSelection()
+                }
+                .accessibilityIdentifier("meaning.selection-ask")
+            }
             if state.meaning.canAsk {
-                Button("Ask Again") { state.meaning.ask() }  // placement: inspector-row
+                Button("Ask Again") { state.meaning.askAgain() }  // placement: inspector-row
                     .accessibilityIdentifier("meaning.again")
+            }
+        }
+    }
+
+    /// **The sense as printed** (plan-explain-sense WI-5): its label and its text, verbatim from the core's projection,
+    /// and the dictionary it was clicked in when that is not obvious.
+    @ViewBuilder private func chosenSense(_ sense: AISense, dictionary: String?) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+            Text(MeaningSentences.chosenSense).font(.caption).foregroundStyle(.secondary)
+            if let label = sense.label, !label.isEmpty {
+                Text(verbatim: label).font(.caption.monospaced()).foregroundStyle(.secondary)
+            }
+            Text(verbatim: sense.text)
+                .textSelection(.enabled)
+                .accessibilityIdentifier("meaning.sense")
+            if let dictionary {
+                Text(verbatim: dictionary).font(.caption).foregroundStyle(.secondary)
             }
         }
     }

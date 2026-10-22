@@ -103,7 +103,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "b8b252f8ca8e3110b7da6ad2937c8bd000ca973a",
+  "apps/apple/Package.swift": "0ed8b4fc11bdbf35da1d02842b4d5ab3a73fa75d",
   "core/Cargo.toml": "e5eaa9e63a6a0fc401c636a04946c1aa08dff1b2",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "d3da77c790a6b99d5a9eb8312fababe3932e963d",
@@ -476,6 +476,7 @@
     "XDictCaptureMac",
     "XDictClient",
     "XDictContract",
+    "XDictEntryView",
     "XDictLibrary",
     "XDictSearch",
     "XDictSpeech",

@@ -2285,6 +2285,22 @@
         }
       }
     },
+    "Ask Which Sense It Is" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask Which Sense It Is"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "询问是哪个义项"
+          }
+        }
+      }
+    },
     "Ask the source you chose what this word means in this sentence." : {
       "localizations" : {
         "en" : {
@@ -2297,6 +2313,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "向所选来源询问这个词在这个句子里的意思。"
+          }
+        }
+      }
+    },
+    "Ask what the sense you chose means in this sentence." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ask what the sense you chose means in this sentence."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "询问你选的义项在这句话里是什么意思。"
           }
         }
       }
@@ -3210,6 +3242,7 @@
       }
     },
     "Device Control and Data Access" : {
+      "comment" : "macOS 27's name for the Accessibility list — use the system's own wording",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3317,6 +3350,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "关闭"
+          }
+        }
+      }
+    },
+    "Does not fit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Does not fit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不适用"
           }
         }
       }
@@ -3673,6 +3722,38 @@
         }
       }
     },
+    "Explain This Sense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explain This Sense"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解释这个义项"
+          }
+        }
+      }
+    },
+    "Explained" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explained"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已解释"
+          }
+        }
+      }
+    },
     "Explained in" : {
       "localizations" : {
         "en" : {
@@ -3685,6 +3766,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "释义语言"
+          }
+        }
+      }
+    },
+    "Explaining a chosen sense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Explaining a chosen sense"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "解释所选义项"
           }
         }
       }
@@ -5978,6 +6075,22 @@
         }
       }
     },
+    "One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每种问题各有提示词：由模型从词条中选择义项、仅凭句子，或解释你选的义项。"
+          }
+        }
+      }
+    },
     "Only a compact voice is available for this language. macOS offers nothing better for it." : {
       "localizations" : {
         "en" : {
@@ -6279,6 +6392,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "原始样式"
+          }
+        }
+      }
+    },
+    "Part of the chosen sense could not be read, so the answer may be missing something." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Part of the chosen sense could not be read, so the answer may be missing something."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选义项有一部分未能读取，答案可能缺少内容。"
           }
         }
       }
@@ -7168,6 +7297,7 @@
       }
     },
     "Screen & System Audio Recording" : {
+      "comment" : "macOS 27's name for the Screen Recording list — use the system's own wording",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -8168,6 +8298,38 @@
         }
       }
     },
+    "The chosen sense does not match the entry that would be sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The chosen sense does not match the entry that would be sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选定的义项与将要发送的词条不一致。"
+          }
+        }
+      }
+    },
+    "The chosen sense is not in this entry." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The chosen sense is not in this entry."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "所选义项不在此词条中。"
+          }
+        }
+      }
+    },
     "The color a dictionary's colored words are drawn in." : {
       "localizations" : {
         "en" : {
@@ -8436,6 +8598,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词条在第 %llu 字节处被截断，因此只发送了之前的部分。"
+          }
+        }
+      }
+    },
+    "The entry-text switch changed while the question was being prepared, so nothing was sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The entry-text switch changed while the question was being prepared, so nothing was sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "准备问题时，发送词条正文的开关发生了变化，因此没有发送任何内容。"
           }
         }
       }
@@ -8744,18 +8922,18 @@
         }
       }
     },
-    "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent." : {
+    "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry} and {language}; a missing or unknown one is refused before anything is sent."
+            "value" : "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "回复格式由 XDict 附加，不可编辑。提示词可使用 {term}、{sentence}、{entry} 和 {language}；缺失或未知的占位符会在发送前被拒绝。"
+            "value" : "回答格式由 XDict 附加，无法编辑。提示词可使用 {term}、{sentence}、{entry}、{sense} 和 {language}；缺少或出现未知占位符时，会在发送前被拒绝。每种问题各有自己的提示词。"
           }
         }
       }
@@ -8859,6 +9037,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ 中的选中内容太长，无法一次读取。请选中一个词或短语。"
+          }
+        }
+      }
+    },
+    "The sense you chose" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sense you chose"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你选择的义项"
+          }
+        }
+      }
+    },
+    "The sense you chose does not fit this sentence. XDict can ask which sense it is." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sense you chose does not fit this sentence. XDict can ask which sense it is."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你选的义项不符合这句话。XDict 可以询问它是哪个义项。"
           }
         }
       }
@@ -9227,6 +9437,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有可供回答的取词句子。"
+          }
+        }
+      }
+    },
+    "There is no chosen sense to explain." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "There is no chosen sense to explain."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有可解释的选定义项。"
           }
         }
       }
@@ -9729,6 +9955,38 @@
         }
       }
     },
+    "This prompt may not use {sense} outside the chosen-sense question." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This prompt may not use {sense} outside the chosen-sense question."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此提示词不能在解释选定义项的问题之外使用 {sense}。"
+          }
+        }
+      }
+    },
+    "This question sends the entry’s text. Turn on “Send the entry’s text with the question” in Settings ▸ AI." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This question sends the entry’s text. Turn on “Send the entry’s text with the question” in Settings ▸ AI."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此问题会发送词条正文。请在“设置 ▸ AI”中打开“随问题一起发送词条正文”。"
+          }
+        }
+      }
+    },
     "This recording (%@) could not be opened: it may be damaged." : {
       "localizations" : {
         "en" : {
@@ -9873,6 +10131,22 @@
         }
       }
     },
+    "To explain a chosen sense, turn on “Send the entry’s text with the question” in Settings ▸ AI." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To explain a chosen sense, turn on “Send the entry’s text with the question” in Settings ▸ AI."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要解释所选义项，请在“设置 ▸ AI”中打开“随问题一起发送词条正文”。"
+          }
+        }
+      }
+    },
     "To look up what you select, allow XDict in the request macOS just showed, or turn XDict on in System Settings › Privacy & Security › %@; the lookup continues once you do." : {
       "localizations" : {
         "en" : {
@@ -9949,22 +10223,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "两台设备都回答了这张卡片，请保留一个。"
-          }
-        }
-      }
-    },
-    "Two prompts: one sends the entry’s text, the other only the sentence." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Two prompts: one sends the entry’s text, the other only the sentence."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "两种提示词：一种发送词条正文，另一种只发送句子。"
           }
         }
       }
