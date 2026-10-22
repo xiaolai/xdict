@@ -159,18 +159,21 @@ def lookup(word):
     tool("type", word)
     time.sleep(0.05)
     tool("press", "return")
-    resubmitted = False
+    attempts = 0
     end = time.time() + SAMPLE_WAIT
     while time.time() < end:
         got = samples()
         if len(got) > before:
             return got[-1]
         # **The submit is asked again when nothing painted** (2026-10-22): this Mac drops a posted Return now and then —
-        # the field held the word, the app had the key, and no sample came until the same key was sent again — and a
-        # dropped submit cost the protocol its sample (88 of 200 warm). One retry, a second after the first, and only
-        # while nothing has painted: a submit that worked writes its sample and this never fires.
-        if not resubmitted and time.time() > end - SAMPLE_WAIT + 1.0:
-            resubmitted = True
+        # the field held the word, the app had the key, and no sample came until the key was sent again — and a dropped
+        # submit cost the protocol its sample (88 of 200 warm). The first Return can also leave the search field's focus
+        # in the entry view, so a bare retry presses Return where it cannot submit: a probe missed its first cold word,
+        # then wrote the sample on `front` + Return, every time. Each retry puts the field back first; three of them, a
+        # second apart, and only while nothing has painted — a submit that worked writes its sample and this never fires.
+        if attempts < 3 and time.time() > end - SAMPLE_WAIT + attempts + 1:
+            attempts += 1
+            ask("front")
             tool("press", "return")
         time.sleep(0.05)
     return None
