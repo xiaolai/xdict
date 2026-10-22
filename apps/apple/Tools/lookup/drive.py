@@ -257,6 +257,17 @@ if not geometry.get("web") or not geometry.get("text"):
     geometry = tool("geometry", pid) or {}
 facts["entryGeometry"] = json.dumps(geometry)
 placed, placed_detail = lookup_checks.entry_placement(geometry)
+# **A notice row can arrive between the reads**: the second unavailable dictionary's status row is inserted when its
+# lookup settles, and a geometry read made in between reports the first row alone — the entry 102 pt below a bottom the
+# screen no longer has (2026-10-23: the same tree passed alone, 47 s, under the same key). A second read a moment later
+# is the screen as it settled; a real band (the scope row this check exists to catch) is still there to fail.
+if placed is not True and geometry.get("noticeRows"):
+    time.sleep(0.5)
+    settled = tool("geometry", pid) or {}
+    settled_placed, settled_detail = lookup_checks.entry_placement(settled)
+    if settled_placed is not None:
+        geometry, placed, placed_detail = settled, settled_placed, settled_detail
+        facts["entryGeometry"] = json.dumps(geometry)
 check("ax.entryBelowToolbar", placed is True, placed_detail)
 web, text = geometry.get("web"), geometry.get("text")
 if web and text:
