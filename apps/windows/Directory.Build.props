@@ -7,6 +7,6 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <Deterministic>true</Deterministic>
     <!-- The Windows shell's version: Provenance.txt, the MSI and its file name all read it from here. -->
-    <Version>1.0.0</Version>
+    <Version>0.1.0</Version>
   </PropertyGroup>
 </Project>
