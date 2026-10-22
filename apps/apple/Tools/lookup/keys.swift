@@ -238,11 +238,33 @@ if command == "geometry" {
     }
     // What may stand between the toolbar and the entry (P6): the page's notices while a dictionary could not search;
     // the scope is the search field's menu since 2026-10-18, not a row of its own.
-    let notices = first(in: main, 0) { string($0, "AXIdentifier") == "page.notices" }
+    //
+    // **The group's frame is the union of its rows** (2026-10-22): a SwiftUI container with `children: .contain`
+    // reported only its first row (109 pt above a second unavailable dictionary that sat 102 pt lower), so the entry
+    // looked 102 pt below the notices when it was right under the second row. Reading the container's own frame alone
+    // measures the wrong rectangle; the union of the element and its descendants is the group's bottom.
+    func merge(_ a: [String: Double], _ b: [String: Double]) -> [String: Double] {
+        guard let ax = a["x"], let ay = a["y"], let aw = a["width"], let ah = a["height"],
+              let bx = b["x"], let by = b["y"], let bw = b["width"], let bh = b["height"] else { return a }
+        let x = min(ax, bx), y = min(ay, by)
+        return ["x": x, "y": y, "width": max(ax + aw, bx + bw) - x, "height": max(ay + ah, by + bh) - y]
+    }
+    func unionFrame(_ element: AXUIElement, _ depth: Int = 0) -> [String: Double]? {
+        var result = frame(element)
+        guard depth < 60 else { return result }
+        for child in children(element) {
+            if let childFrame = unionFrame(child, depth + 1) {
+                result = result.map { merge($0, childFrame) } ?? childFrame
+            }
+        }
+        return result
+    }
+    let notices = first(in: main, 0) { string($0, "AXIdentifier") == "page.notices" }.flatMap { unionFrame($0) }
     var found: [String: Any] = [:]
-    for (name, item) in [("window", main), ("toolbar", toolbar), ("notices", notices), ("web", web), ("text", text)] {
+    for (name, item) in [("window", main), ("toolbar", toolbar), ("web", web), ("text", text)] {
         found[name] = item.flatMap(frame) ?? NSNull()
     }
+    found["notices"] = notices ?? NSNull()
     found["textValue"] = text.flatMap { string($0, kAXValueAttribute) } ?? NSNull()
     emit(found)
 }
