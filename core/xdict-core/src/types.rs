@@ -124,6 +124,25 @@ record! {
         pub problems: Vec<HitProblem>,
     }
 
+    /// **A page of one dictionary's words** (plan-setup-v2 WI-6, ADR-0028): what a consumer that lists them — Core
+    /// Spotlight, today — reads, and nothing else. Public keys only, one per spelling, in the key block's own order;
+    /// no bodies, so a page costs no decompression.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Words {
+        /// The edition these words belong to: a page from another edition cannot be continued, so the reader starts
+        /// that dictionary again rather than mixing two.
+        pub edition: String,
+        /// The words this page holds: one item **per key entry**, so a repeated spelling appears once per entry and the
+        /// consumer keys its items by the word. May be fewer than asked for, since internal keys are passed over.
+        pub words: Vec<String>,
+        /// Key entries in the dictionary, internal ones and repeats included: page from 0 until `from` reaches it.
+        pub total: u64,
+        /// **The key position after this page**, which is the next page's `from`. It is not `from + words.len()`: internal
+        /// keys and repeats are passed over, so only the core knows where the page ended (audit-fix 2026-10-22 — the
+        /// consumer's arithmetic skipped and rescanned).
+        pub next: u64,
+    }
+
     /// The render context, passed to everything that produces something a view shows (ADR-0007 decision 6).
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct View {

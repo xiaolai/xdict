@@ -167,6 +167,13 @@ extension XDictContract.Hit {
     }
 }
 
+extension XDictContract.Words {
+    init(_ words: XDictCore.Words) {
+        self.init(edition: XDictContract.Edition(rawValue: words.edition), words: words.words, total: words.total,
+                  next: words.next)
+    }
+}
+
 extension XDictContract.Page {
     init(_ page: XDictCore.Page) {
         self.init(hits: page.hits.map(XDictContract.Hit.init), total: page.total, generation: page.generation,

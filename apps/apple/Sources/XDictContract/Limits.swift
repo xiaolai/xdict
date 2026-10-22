@@ -64,7 +64,8 @@ public enum Limits {
         switch answer {
         case .entry: return viewCeiling
         case .resource(.found(_, let mime)): return isRenderedByTheView(mime: mime) ? viewCeiling : maxResourceBytes
-        case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
+        case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .words, .link,
+             .resource(.missing),
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
              .reanchored, .exported, .erased, .conflicts, .synced: return nil
@@ -175,7 +176,7 @@ public enum Deadlines {
         // (ADR-0007 row 23), 128 concurrent lookups and entries 3.6–7.3 ms (spike 1). Two orders of magnitude over the
         // worst, and five times the whole reader loop's warm p95 goal of 1 s (plan WI-10). The lineage calls read or
         // write the registry, which is no slower.
-        case .openPackage, .lookup, .suggest, .link, .joinLineage, .splitLineage, .lineageOf: .seconds(5)
+        case .openPackage, .lookup, .suggest, .words, .link, .joinLineage, .splitLineage, .lineageOf: .seconds(5)
         // One record block read, inflated and rewritten: a 62 MB entry replied in 154 ms on the E2E Mac, 2–4× that on
         // the loaded build Mac (spike 2); the rest is room for a slow disk and one bulk call ahead in the service.
         // `entryText` is that render plus a pass over its text: the same budget, the projection is linear in the body.

@@ -185,6 +185,26 @@ public enum HitProblem: Codable, Hashable, Sendable {
     case redirectLimit(chain: [String])
 }
 
+// MARK: - Words (plan-setup-v2 WI-6, ADR-0028)
+
+/// **A page of one dictionary's words**, for Core Spotlight: the core's `Words`, with the edition it belongs to so a
+/// page from another edition is not continued. No body travels beside it.
+public struct Words: Codable, Hashable, Sendable {
+    public let edition: Edition
+    public let words: [String]
+    /// Key entries in the dictionary, repeats and internal keys included: page from 0 until `from` reaches it.
+    public let total: UInt64
+    /// The next page's `from`, as the core counted it: not `from + words.count`.
+    public let next: UInt64
+
+    public init(edition: Edition, words: [String], total: UInt64, next: UInt64) {
+        self.edition = edition
+        self.words = words
+        self.total = total
+        self.next = next
+    }
+}
+
 // MARK: - Rendering
 
 /// The render context of `entry`, `link` and `resource` (the core's `View`, ADR-0007 decision 6), **less its base**:

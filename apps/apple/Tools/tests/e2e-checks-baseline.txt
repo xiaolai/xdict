@@ -181,6 +181,9 @@ setup.grantCompletesRow
 setup.loginItemRegisters
 setup.choicesPersist
 setup.chineseOnly
+# added by plan-setup-v2 WI-2, WI-7 and WI-8 (the ordered board's footer, and the unreadable-probe control)
+setup.summary
+setup.needsCheck
 # added by WI-10 (the measurement, an extra sub-stage)
 measure.warm
 measure.cold

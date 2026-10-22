@@ -66,6 +66,22 @@ public enum AppleImportSentences {
     public static let alreadyImported = LocalizedStringResource("Already imported")
     public static let importButton = LocalizedStringResource("Import")
 
+    // MARK: - Available in Dictionary.app (plan-setup-v2 WI-3)
+
+    /// The second section: what Dictionary.app knows this Mac could download.
+    public static let availableSection = LocalizedStringResource("Available in Dictionary.app")
+    /// Under the list: who does the downloading, since XDict cannot.
+    public static let availableNote = LocalizedStringResource("""
+        macOS downloads dictionaries in Dictionary ▸ Settings. XDict cannot start the download.
+        """)
+    public static let notInstalled = LocalizedStringResource("Not installed")
+    /// Dictionary.app's own list could not be read: said, rather than leaving only the download instructions.
+    public static let availableUnreadable = LocalizedStringResource(
+        "XDict could not read which dictionaries Dictionary.app knows about on this Mac.")
+    public static let download = LocalizedStringResource("Download in Dictionary.app…")
+    public static let rescan = LocalizedStringResource("Rescan")
+    public static let openDictionary = LocalizedStringResource("Open Dictionary.app")
+
     /// Where one import is, in the row's own words; nil while nothing was asked.
     /// The line over a conversion's bar in the dictionary's own box.
     public static func converting(name: String) -> LocalizedStringResource {

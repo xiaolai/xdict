@@ -57,6 +57,8 @@ struct LimitsTests {
         #expect(Set(lookups) == [Fixtures.index(.openPackage(spec: Fixtures.package)),
                                  Fixtures.index(.lookup(query: "", dicts: [], options: LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil))),
                                  Fixtures.index(.suggest(prefix: "", dicts: [], limit: 1)),
+                                 // `words` searches the index too, and reads no body: the lookup class's four credits.
+                                 Fixtures.index(.words(dict: Fixtures.dict, from: 0, limit: 1_000)),
                                  Fixtures.index(.link(dict: Fixtures.dict, url: "", origin: .resource(path: ""), render: .reader))])
         for operation in Fixtures.operations {
             #expect((operation.creditClass == .bulk) == operation.isBulk, "\(operation)")
