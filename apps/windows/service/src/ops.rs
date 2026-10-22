@@ -59,6 +59,27 @@ impl Progress for ServiceProgress<'_> {
     }
 }
 
+/// The dictionaries a request names, decoded through the same body types its operation uses. A renamed field fails
+/// here as it would in the operation, instead of silently skipping the observation check.
+fn named_dicts(operation: &str, body: &Value) -> Result<Vec<String>, Failure> {
+    fn one<T: DeserializeOwned>(body: &Value) -> Result<T, Failure> {
+        serde_json::from_value(body.clone()).map_err(|error| {
+            Failure::Core(CoreError::Malformed {
+                detail: error.to_string(),
+            })
+        })
+    }
+    Ok(match operation {
+        "lookup" => one::<LookupBody>(body)?.dicts,
+        "suggest" => one::<SuggestBody>(body)?.dicts,
+        "entry" => vec![one::<EntryBody>(body)?.dict],
+        "resource" => vec![one::<ResourceBody>(body)?.dict],
+        "link" => vec![one::<LinkBody>(body)?.dict],
+        "close" | "health" | "readingStyle" | "displayOptions" => vec![one::<DictBody>(body)?.dict],
+        _ => Vec::new(),
+    })
+}
+
 pub struct Service {
     core: Core,
     ledger: Arc<Ledger>,
@@ -94,20 +115,19 @@ impl Service {
     }
 
     pub fn run(&self, request: &Request, events: &dyn Events) -> Result<Answer, Failure> {
-        // Every operation that may read updates path observations, including lookup/entry/resource on held sources.
-        // Admit once here so temporary duplicates are owned and closed even when the operation is refused.
+        let sources = self.admit_request(request)?;
+        self.dispatch(request, events, sources)
+    }
+
+    /// Admits every file the request names and checks each named dictionary's observations, before any operation
+    /// decodes: a temporary duplicate is owned and closed even when the operation is refused.
+    fn admit_request(&self, request: &Request) -> Result<HashMap<String, HandleSource>, Failure> {
         let sources = admit(&request.files, &self.ledger)?;
-        let mut dicts = Vec::new();
-        if let Some(dict) = request.operation.get("dict").and_then(Value::as_str) {
-            dicts.push(dict);
-        }
-        if let Some(named) = request.operation.get("dicts").and_then(Value::as_array) {
-            dicts.extend(named.iter().filter_map(Value::as_str));
-        }
+        let dicts = named_dicts(&request.op, &request.operation)?;
         if request.op != "close" {
             let packages = self.files_of.lock().unwrap_or_else(|p| p.into_inner());
             for dict in dicts {
-                if let Some(ids) = packages.get(dict)
+                if let Some(ids) = packages.get(&dict)
                     && ids.iter().any(|id| !sources.contains_key(id))
                 {
                     return Err(Failure::admission(
@@ -116,6 +136,15 @@ impl Service {
                 }
             }
         }
+        Ok(sources)
+    }
+
+    fn dispatch(
+        &self,
+        request: &Request,
+        events: &dyn Events,
+        sources: HashMap<String, HandleSource>,
+    ) -> Result<Answer, Failure> {
         match request.op.as_str() {
             #[cfg(feature = "acceptance-probes")]
             "acceptanceProbe" => {
