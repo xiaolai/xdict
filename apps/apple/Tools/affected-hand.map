@@ -33,7 +33,11 @@ binary xdictFFI crate:xdict-ffi
 
 # What the map does not name and no target owns: the package's manifest is the Swift graph itself; resources by the
 # target that reads them; the graph's own files.
-apps/apple/Package.swift                            all
+# A manifest edit is build-level (the build gate compiles it); what it could do to a run is keep the app from starting,
+# which launch is the smoke for (owner's rule of 2026-10-23).
+apps/apple/Package.swift                            launch
+apps/apple/Resources/Info.plist                     launch
+apps/apple/Resources/DictionaryService-Info.plist   launch
 apps/apple/Resources/DictionaryService*             target:XDictService
 apps/apple/Resources/Fonts/*                        target:XDictEntryView
 apps/apple/Resources/*                              target:XDict

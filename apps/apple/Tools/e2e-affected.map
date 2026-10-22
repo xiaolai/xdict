@@ -20,6 +20,10 @@ control library.corpus     library.control
 # --- What no E2E sub-stage reads: the notes, the other platforms, tests that run only here ---------------------------
 *.md                                                none
 LICENSE                                             none
+.gitignore                                          none
+# CI configuration runs no part of the macOS E2E: a workflow edit (the Windows v1 branch changed conformance.yml) must
+# not select all 31 sub-stages (owner, 2026-10-23: only what a change could affect should run).
+.github/*                                           none
 dev-docs/*                                          none
 apps/android/*                                      none
 apps/windows/*                                      none
@@ -53,6 +57,12 @@ core/*/benches/*                                    none
 core/xdict-health/*                                 library.health
 core/xdict-lookup/*                                 lookup library.corpus
 core/xdict-entry/*                                  hostile.production hostile.app hostile.faults hostile.binding reader entries.full entries.persistence lookup.core sound
+# The workspace manifest and the build scripts are build-level: the build gates compile them, and no E2E sub-stage
+# reads them (owner's rule of 2026-10-23: only what a change could affect). The Windows merge's Cargo.toml/Cargo.lock
+# change selected every sub-stage before this line.
+core/Cargo.toml                                     none
+core/Cargo.lock                                     none
+core/binding-env.sh                                 none
 core/*                                              all
 conformance/fixtures/hostile/*                      check:hostile.production hostile.app
 conformance/fixtures/twin-*                         check:hostile.binding
@@ -159,6 +169,13 @@ apps/apple/Sources/XDictUI/InterfaceLanguage.swift  setup
 apps/apple/Sources/XDictUI/Hover*                   lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.permission hover.popover
 apps/apple/Sources/XDictUI/MenuBarMenu.swift        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.popover
 apps/apple/Sources/XDictUI/LookupPopover.swift      lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup hover.popover
+# The AI pane and the main window's search code: the window they live in is what lookup reads (its AX tree and its
+# rows); the settings window's own rows are setup's. The generic rule below stays for the files not named here.
+apps/apple/Sources/XDictUI/AISettings.swift         lookup
+apps/apple/Sources/XDictUI/Meaning*                 lookup
+apps/apple/Sources/XDictUI/SearchWindow*.swift      lookup
+apps/apple/Sources/XDictUI/SettingsRoute.swift      setup
+apps/apple/Sources/XDictUI/SystemProbes.swift       setup
 apps/apple/Sources/XDictUI/*                        lookup library.generated library.health hostile.app entries.quick reader sound selection services panel menubar shortcut setup
 # The catalog's text reaches only the checks that compare a reader-facing sentence or run the app in Chinese; the
 # instruments read every other string through `String(localized:)`, so a reworded line cannot fail them. Audited by
