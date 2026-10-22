@@ -259,12 +259,28 @@ if command == "geometry" {
         }
         return result
     }
-    let notices = first(in: main, 0) { string($0, "AXIdentifier") == "page.notices" }.flatMap { unionFrame($0) }
+    func collect(_ element: AXUIElement, _ depth: Int, _ match: (AXUIElement) -> Bool,
+                 _ out: inout [AXUIElement]) {
+        if match(element) { out.append(element) }
+        guard depth < 60 else { return }
+        for child in children(element) { collect(child, depth + 1, match, &out) }
+    }
+    // The rows are AX groups with identifier `status`, siblings the notices container does not expose as its
+    // children (the 2026-10-22 run: two rows, the container reporting only the first, the entry 102 pt below the
+    // second). The group's bottom is the union of the container **and every status row**.
+    var noticeRows: [AXUIElement] = []
+    collect(main, 0, { string($0, "AXIdentifier") == "status" && string($0, kAXRoleAttribute) == "AXGroup" },
+            &noticeRows)
+    var notices = first(in: main, 0) { string($0, "AXIdentifier") == "page.notices" }.flatMap { unionFrame($0) }
+    for row in noticeRows {
+        if let rowFrame = unionFrame(row) { notices = notices.map { merge($0, rowFrame) } ?? rowFrame }
+    }
     var found: [String: Any] = [:]
     for (name, item) in [("window", main), ("toolbar", toolbar), ("web", web), ("text", text)] {
         found[name] = item.flatMap(frame) ?? NSNull()
     }
     found["notices"] = notices ?? NSNull()
+    found["noticeRows"] = noticeRows.count
     found["textValue"] = text.flatMap { string($0, kAXValueAttribute) } ?? NSNull()
     emit(found)
 }
