@@ -37,6 +37,16 @@ readonly RELEASE_EXTRAS="measure.protocol"
 readonly RELEASE_SMOKE="launch"
 fail() { echo "e2e-status: $*" >&2; exit 1; }
 
+# **A sub-stage the owner waives for one release** (2026-10-23): XDICT_E2E_WAIVE names them on the release command and
+# nowhere else, so the waiver cannot silently carry into another release. It is for a judgement the keys cannot make —
+# that a change reaching a sub-stage's inputs cannot reach its behaviour — and every check says what it waived.
+waived_stages() { printf '%s\n' ${XDICT_E2E_WAIVE:-} | tr ',' ' ' | tr ' ' '\n' | sed '/^$/d'; }
+waived_note() {
+    local w
+    w=$(waived_stages | paste -sd' ' -)
+    [ -z "$w" ] || echo "e2e-status: WAIVED by the owner for this release: $w (XDICT_E2E_WAIVE)" >&2
+}
+
 # args_of <output of e2e-facts.sh>: its lines into the array `facts` (bash 3.2 has no mapfile).
 facts=()
 args_of() { local line; facts=(); while IFS= read -r line; do [ -z "$line" ] || facts+=("$line"); done <<<"$1"; }
@@ -55,11 +65,23 @@ record() {
 }
 
 required() {
-    if [ "${1:-}" = --bootstrap ]; then echo "$BOOTSTRAP_STAGES"; return; fi
-    local stages
-    stages=$(Tools/e2e.sh --list-stages | paste -sd' ' -)
-    [ -n "$stages" ] || fail "Tools/e2e.sh listed no stages"
-    echo "$stages $RELEASE_EXTRAS"
+    local all out s w
+    if [ "${1:-}" = --bootstrap ]; then
+        all=$BOOTSTRAP_STAGES
+    else
+        all=$(Tools/e2e.sh --list-stages | paste -sd' ' -)
+        [ -n "$all" ] || fail "Tools/e2e.sh listed no stages"
+        all="$all $RELEASE_EXTRAS"
+    fi
+    # A waiver is for a required sub-stage only: a typo is refused, never silently ignored.
+    for w in $(waived_stages); do
+        case " $all " in *" $w "*) ;; *) fail "XDICT_E2E_WAIVE names '$w', which is not a required sub-stage" ;; esac
+    done
+    out=""
+    for s in $all; do
+        case " $(waived_stages | paste -sd' ' -) " in *" $s "*) ;; *) out="$out $s" ;; esac
+    done
+    echo $out
 }
 
 # plan_rows [--bootstrap] [--human]: the ledger's plan for a release built now and run on XDICT_E2E_HOST.
@@ -68,6 +90,7 @@ plan_rows() {
     [ "${1:-}" != --bootstrap ] || { bootstrap=--bootstrap; shift; }
     [ "${1:-}" != --human ] || human=--human
     [ -n "${XDICT_E2E_HOST:-}" ] || [ -n "${XDICT_FACT_MACOS:-}" ] || fail "XDICT_E2E_HOST is not set: the plan keys on its macOS build"
+    waived_note
     out=$(Tools/e2e-facts.sh plan "${XDICT_E2E_HOST:-}") || fail "the facts could not be read"
     args_of "$out"
     stages=$(required $bootstrap) || exit 1
@@ -78,6 +101,7 @@ plan_rows() {
 require_fresh() {
     local what=full rows runs
     [ "${1:-}" != --bootstrap ] || what=bootstrap
+    waived_note
     rows=$(plan_rows ${1:+"$1"}) || fail "the plan failed"
     runs=$(awk -F'\t' '$1 == "run" { print "  " $2 ": " $4 }' <<<"$rows")
     if [ -n "$runs" ]; then
