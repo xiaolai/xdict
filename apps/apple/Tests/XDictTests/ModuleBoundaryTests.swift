@@ -66,6 +66,12 @@ struct ModuleBoundaryTests {
         "XDictUI": ["AppKit", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
+        // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028): the system's index and nothing else; the words'
+        // own source (the service) is the app's to hand in, so this target knows no client, no library and no AppKit.
+        "XDictSpotlight": ["CoreSpotlight", "Foundation", "Observation"],
+        // The system's index is the fake's to stand in for, so the tests need CoreSpotlight's own types and nothing of
+        // the app's.
+        "XDictSpotlightTests": ["CoreSpotlight", "Foundation", "Testing"],
         // `Observation`: the tests watch the model's `found` for a needless change (the title's count, P2).
         "XDictSearchTests": ["Foundation", "Observation", "Synchronization", "Testing"],
         // Sound and speech (WI-7): the system's voices, its audio player and synthesiser; their log.
@@ -95,7 +101,10 @@ struct ModuleBoundaryTests {
         // main window's instruments read the entry's page in a content world of their own (`InstrumentPage`, WI-6).
         // `ApplicationServices`: the lookup-anywhere instrument says whether the app may read other apps
         // (`AXIsProcessTrusted`); `Observation`: the panel's state (plan-macos-v1 WI-8).
-        "XDict": ["AppKit", "ApplicationServices", "Foundation", "Observation", "SwiftUI", "WebKit", "os"],
+        // `CoreSpotlight`: a Spotlight result arrives as an activity of that type, and `MainWindow` reads its word to
+        // open it (plan-setup-v2 WI-6, ADR-0028 decision 4).
+        "XDict": ["AppKit", "ApplicationServices", "CoreSpotlight", "Foundation", "Observation", "SwiftUI", "WebKit",
+                  "os"],
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
         // The AI prompt harness (plan-ai-meaning WI-0): `FoundationModels` counts the on-device model's tokens and asks

@@ -25,7 +25,8 @@
     launch.handshakeVersions launch.entryViewReady launch.handshakeParent launch.quitsOnTerm
 
 @ setup default kit
-    setup.rowsLive setup.grantCompletesRow setup.loginItemRegisters setup.choicesPersist setup.chineseOnly
+    setup.rowsLive setup.summary setup.grantCompletesRow setup.needsCheck setup.loginItemRegisters setup.choicesPersist
+    setup.chineseOnly
 
 @ service.conformance default fixtures
     conformance.tiny conformance.matrix

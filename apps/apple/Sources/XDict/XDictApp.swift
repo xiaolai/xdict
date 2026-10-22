@@ -1,4 +1,5 @@
 import AppKit
+import CoreSpotlight
 import SwiftUI
 import XDictAnywhere
 import XDictAppleSource
@@ -8,6 +9,7 @@ import XDictEntryView
 import XDictLibrary
 import XDictSearch
 import XDictSpeech
+import XDictSpotlight
 import XDictUI
 import os
 import XDictTokens
@@ -21,6 +23,26 @@ struct XDictApp: App {
     /// The reader's, unless a development instrument runs the real app over a library of its own.
     static let setup = LookupWindowReport.setup(CommandLine.arguments) ?? AnywhereReport.setup(CommandLine.arguments)
         ?? MeasureReport.setup(CommandLine.arguments) ?? AppSetup.reader
+    /// **The reader's Spotlight switch and the run that obeys it** (plan-setup-v2 WI-6; ADR-0028): off until the reader
+    /// turns it on in Setup, and then the library's words are indexed, dictionary by dictionary.
+    @MainActor static let spotlightSettings = SpotlightSettings()
+    /// **The one Spotlight run**: a new setting cancels the run in flight and waits for it, so an off-run can never be
+    /// overtaken by an on-run's deletions or the other way round (audit-fix 2026-10-22).
+    @MainActor private static var spotlightRun: Task<Void, Never>? = nil
+
+    /// Applies the switch's value, one run at a time.
+    @MainActor static func applySpotlight(_ on: Bool) {
+        let previous = spotlightRun
+        previous?.cancel()
+        spotlightRun = Task { @MainActor in
+            _ = await previous?.value   // the older run finishes (or gives up) before this one begins
+            let outcome = await spotlight.apply(on)
+            spotlightSettings.record(failed: outcome.isFailure)
+        }
+    }
+    @MainActor static var spotlight: SpotlightLibrary {
+        SpotlightLibrary(library: library, client: service)
+    }
     /// The app's one client of its dictionary service: one connection at a time, made on demand (`ServiceClient`).
     static var service: ServiceClient { setup.service }
     /// The reader's library, in the app's own Application Support (ADR-0009 decision 2), opened once at launch.
@@ -49,7 +71,11 @@ struct XDictApp: App {
                                                         root: SharedContainer.appleImports())
     @MainActor static var appleImport: AppleImportHost {
         let root = setup.appleAssets
-        return AppleImportHost(importer: appleImporter, discover: { InstalledBundles.discover(root: root) })
+        return AppleImportHost(importer: appleImporter,
+                               discover: { InstalledBundles.discover(root: root) },
+                               available: { installed in AvailableBundles.discover(installed: installed) },
+                               listing: { InstalledBundles.listing(root: root) },
+                               availableEntries: { AvailableBundles.read() })
     }
 
     var body: some Scene {
@@ -117,7 +143,11 @@ struct XDictApp: App {
         case .setup:
             SetupView(library: library, registrar: LookupAnywhere.shared.registrar,
                       trusted: { AccessibilityGate.system(false) },
-                      showDictionaries: { MenuBarActions.showDictionaries() })
+                      showDictionaries: { MenuBarActions.showDictionaries() },
+                      hover: LookupAnywhere.shared.hover,
+                      spotlight: spotlightSettings,
+                      aiConfigured: { MeaningPreferences.shared.settings.source != nil },
+                      onSpotlight: { on in XDictApp.applySpotlight(on) })
                 .task { await LibraryLaunch.once() }
         }
     }
@@ -234,6 +264,16 @@ struct MainWindow: View {
             MainWindows.made(made)
             Task { made.service = await XDictApp.handshake() }
         }
+        // **A Spotlight result opens its word here** (ADR-0028 decision 4): the item's identifier carries the word, and
+        // the window looks it up exactly as the reader typing it would.
+        .onContinueUserActivity(CSSearchableItemActionType) { activity in
+            guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
+                  let word = SpotlightLibrary.word(inActivity: identifier) else { return }
+            Task {
+                await LibraryLaunch.once()
+                state?.model.submit(word)
+            }
+        }
     }
 }
 
@@ -248,6 +288,17 @@ enum LibraryLaunch {
         await XDictApp.library.start()
         // ADR-0011 decisions 7 and 9: the launch sweep, then each Apple dictionary compared with its installed bundle.
         if XDictApp.setup.isReader { XDictApp.appleImporter.sweep() }
+        // **The index follows the library when the reader asked for it** (audit-fix 2026-10-22): the switch is kept
+        // across launches, so a launch with it on indexes again — a dictionary imported or replaced since the last run
+        // is included, and the run is the same one the toggle starts.
+        // **The reader's own run only**: an instrument's scratch library must never index itself into the reader's index.
+        if XDictApp.setup.isReader {
+            if XDictApp.spotlightSettings.enabled {
+                XDictApp.applySpotlight(true)
+            } else if XDictApp.spotlightSettings.needsCleanup() {
+                XDictApp.applySpotlight(false)   // a deletion a failed run still owed (audit-fix 2026-10-22)
+            }
+        }
         let host = XDictApp.appleImport
         if !XDictApp.library.importedAppleBundles.isEmpty {
             await host.importer.checkForUpdates(installed: await host.find())

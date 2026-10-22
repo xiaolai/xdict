@@ -91,6 +91,16 @@ struct IdleServiceTests {
         rig.idle.start()
         let (harness, client, _) = try await Self.service(rig)
         #expect(await client.versions().isSuccess, "answered before the decision")
+        // **Wait for the reply's re-arm before moving the clock** (audit-fix 2026-10-22): the reply's `idle.end()` runs
+        // in the service, after the client already has its answer, so advancing first re-arms for a quiet period that
+        // starts *later* — the timer then correctly does not fire, and this test failed as "rig.exited" under a loaded
+        // suite. Bounded, like the barrier wait above: the re-arm is what is being awaited, not a delay.
+        var rearmed = rig.armed == .seconds(30)
+        for _ in 0..<2_000 where !rearmed {
+            try await Task.sleep(for: .milliseconds(1))
+            rearmed = rig.armed == .seconds(30)
+        }
+        try #require(rearmed, "the reply never re-armed the idle timer")
         rig.advance(.seconds(30))
         rig.idle.timerFired()
         try #require(rig.exited)

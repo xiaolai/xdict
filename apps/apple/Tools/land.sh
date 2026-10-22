@@ -60,8 +60,12 @@ if [ "${1:-}" = --facts-of ]; then facts_of "${2:?gate}" "${3:-}"; exit 0; fi
 readonly CORPUS_NAME=the24
 # The tests name others (Tools/tests/land-test.sh).
 readonly AIR_CORPUS=${XDICT_LAND_CORPUS:-$HOME/xdict-corpus/$CORPUS_NAME}
-readonly LOCAL_MK=${XDICT_LAND_LOCAL_MK:-$REPO/local.mk}
+local_mk=${XDICT_LAND_LOCAL_MK:-$REPO/local.mk}
 MAIN=$(Tools/main-checkout.sh "$REPO") || fail "no main checkout"
+# **A worktree has no local.mk of its own: the main checkout's is read**, as the Makefile's `-include` does (AGENTS.md,
+# "Where builds and tests run"). Without this, `make land` in a worktree refused before running one gate (2026-10-22).
+[ -f "$local_mk" ] || { [ ! -f "$MAIN/local.mk" ] || local_mk=$MAIN/local.mk; }
+readonly LOCAL_MK=$local_mk
 NAME=$(basename "$REPO")
 [[ "$NAME" =~ ^[A-Za-z0-9._-]+$ ]] || fail "the checkout's folder name is not a plain name: $NAME"
 readonly REMOTE=xdict-build/$NAME-land

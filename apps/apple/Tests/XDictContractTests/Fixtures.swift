@@ -122,12 +122,13 @@ enum Fixtures {
         .ledgerSync(input: "/tmp/xdict-sync/in", output: "/tmp/xdict-sync/out", device: "device-a"),
         .ledgerRemove(removal: removal, operation: "op-remove"),
         .ledgerRestore(removal: removal, operation: "op-restore"),
+        .words(dict: dict, from: 0, limit: 1_000),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 37
+    static let operationCases = 38
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -167,6 +168,7 @@ enum Fixtures {
         case .ledgerSync: 34
         case .ledgerRemove: 35
         case .ledgerRestore: 36
+        case .words: 37
         }
     }
 
@@ -182,6 +184,8 @@ enum Fixtures {
         ],
         total: 66_355, generation: 0xDEAD_BEEF,
         problems: [.danglingRedirect(from: "x", target: "y"), .redirectLoop(chain: ["a", "a"])])
+
+    static let words = Words(edition: edition, words: ["hold", "abbé"], total: 66_355, next: 2)
 
     static let answers: [Answer] = [
         .versions(Versions(protocolVersion: 1, core: "0.1.0", indexFormat: 3, normalization: 2)),
@@ -237,6 +241,7 @@ enum Fixtures {
         .erased(StudyEraseReport(clearedReadings: 0, clearedNotes: 0, clearedGrades: 0, recoverable: .freeBlocks)),
         .conflicts([cardConflict]),
         .synced(SyncReport(exported: 4_096, peers: 1, added: 3, skipped: 41)),
+        .words(words),
     ]
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
@@ -267,7 +272,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 29
+    static let answerCases = 30
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -299,6 +304,7 @@ enum Fixtures {
         case .erased: 26
         case .conflicts: 27
         case .synced: 28
+        case .words: 29
         }
     }
 

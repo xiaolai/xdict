@@ -69,12 +69,48 @@ struct AppleImportChoiceTests {
     @Test func anImportedBundleLosesItsTick() {
         var choice = AppleImportChoice(bundles: [Self.oxford])
         choice.toggle("noad")
-        choice.update(bundles: choice.bundles, imported: ["noad"])
+        choice.update(bundles: choice.bundles, imported: ["noad"], available: nil)
         #expect(choice.chosen.isEmpty && choice.rows(steps: [:]).first?.availability == .alreadyImported)
         #expect(choice.toImport(steps: [:]).isEmpty)
     }
 
+    /// **What Dictionary.app knows and this Mac has not downloaded** (plan-setup-v2 WI-3): listed after the installed
+    /// ones, named, never ticked and never imported — macOS downloads them, not XDict.
+    @Test func theNotInstalledOnesAreListedAndCannotBeImported() {
+        let available = [AvailableBundle(name: "Assamese - English"), AvailableBundle(name: "Bulgarian")]
+        var choice = AppleImportChoice(bundles: [Self.oxford], available: available)
+        let rows = choice.rows(steps: [:], locale: Locale(identifier: "en"))
+        #expect(rows.map(\.name) == ["Oxford Dictionary of English", "Assamese - English", "Bulgarian"])
+        #expect(rows.map(\.availability) == [.available, .notInstalled, .notInstalled])
+        #expect(rows.map(\.isChooseable) == [true, false, false])
+        #expect(rows.dropFirst().allSatisfy { $0.bytes == 0 && $0.language.isEmpty && $0.step == nil })
+        choice.toggle("Assamese - English")
+        #expect(choice.chosen.isEmpty, "one this Mac has not downloaded cannot be ticked")
+        #expect(choice.toImport(steps: [:]).isEmpty)
+        // The older accessor still means the installed ones, in the order they were found.
+        #expect(choice.installedRows(steps: [:]).map(\.id) == ["noad"])
+    }
+
+    /// **A list that could not be read is not an empty list** (plan-setup-v2 WI-3 item 4): the sheet says so and offers
+    /// Dictionary.app, rather than a section that looks like nothing exists.
+    @Test func anUnreadablePreferenceIsNotAnEmptyList() {
+        var choice = AppleImportChoice(bundles: [Self.oxford])
+        #expect(choice.available == nil)
+        #expect(choice.availableRows().isEmpty)
+        choice.update(bundles: choice.bundles, imported: [], available: [])
+        #expect(choice.available == [], "read, and nothing left to download")
+        #expect(choice.availableRows().isEmpty)
+    }
+
     @Test func theSheetSpeaksBothLanguages() {
+        #expect(Self.text(AppleImportSentences.availableSection, "zh-Hans") != Self.text(AppleImportSentences.availableSection))
+        #expect(Self.text(AppleImportSentences.availableNote).contains("Dictionary ▸ Settings"))
+        #expect(Self.text(AppleImportSentences.notInstalled, "zh-Hans") != Self.text(AppleImportSentences.notInstalled))
+        #expect(Self.text(AppleImportSentences.download, "zh-Hans") != Self.text(AppleImportSentences.download))
+        #expect(Self.text(AppleImportSentences.rescan, "zh-Hans") != Self.text(AppleImportSentences.rescan))
+        #expect(Self.text(AppleImportSentences.openDictionary, "zh-Hans") != Self.text(AppleImportSentences.openDictionary))
+        #expect(Self.text(AppleImportSentences.availableUnreadable, "zh-Hans")
+                != Self.text(AppleImportSentences.availableUnreadable), "the fallback says the list could not be read")
         #expect(Self.text(AppleImportSentences.title) == "Add Apple Dictionaries")
         #expect(Self.text(AppleImportSentences.alreadyImported, "zh-Hans") == "已导入")
         #expect(Self.text(AppleImportSentences.howToDownload).contains("Dictionary.app ▸ Settings"))

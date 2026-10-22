@@ -56,6 +56,22 @@ public final class SettingsRoute {
         open?()
     }
 
+    /// **Any pane, by name** (plan-setup-v2 WI-2): the setup board's rows open General (hover's key, settle time, the
+    /// apps hover never reads) and AI, and neither is a dictionary, so neither goes through `show(_:)`.
+    public func showPane(_ pane: SettingsTab) {
+        self.pane = pane
+        open?()
+    }
+
+    /// **Add Apple Dictionaries… from the setup board** (plan-setup-v2 WI-2): the sheet belongs to the Dictionaries pane
+    /// (ADR-0012 d.3, one presentation), so the row opens Settings there with the sheet up, as `requestImport()` does
+    /// for the open panel.
+    public func requestAppleImport() {
+        pane = .dictionaries
+        request(.appleImport)
+        open?()
+    }
+
     /// Settings ▸ Dictionaries with the open panel up (File ▸ Add Dictionaries…, the setup board, the main window).
     public func requestImport() {
         pane = .dictionaries
