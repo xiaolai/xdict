@@ -30,6 +30,7 @@ unsafe extern "system" {
         overlapped: *mut c_void,
     ) -> i32;
     fn GetLastError() -> u32;
+    fn CloseHandle(handle: *mut c_void) -> i32;
 }
 
 /// The only error that proves a handle was opened without write access.
@@ -106,7 +107,13 @@ impl HandleSource {
                 spec.id
             )));
         }
-        let at_open = identity(&file);
+        // An unreadable identity is a refusal with a sentence, not a source the core will later find unrecordable.
+        let at_open = Some(identity(&file).map_err(|error| {
+            Failure::admission(format!(
+                "{}: the file's identity cannot be read: {error}",
+                spec.id
+            ))
+        })?);
         Ok(Self {
             file,
             id: spec.id.clone(),
@@ -122,13 +129,18 @@ impl HandleSource {
         &self.name
     }
 
-    pub fn held_identity(&self) -> Option<FileIdentity> {
-        identity(&self.file)
+    pub fn held_identity(&self) -> Result<FileIdentity, Failure> {
+        identity(&self.file).map_err(|error| {
+            Failure::admission(format!(
+                "{}: the file's identity cannot be read: {error}",
+                self.id
+            ))
+        })
     }
 }
 
-fn identity(file: &File) -> Option<FileIdentity> {
-    xdict_win_fileid::identity(file).ok()
+fn identity(file: &File) -> std::io::Result<FileIdentity> {
+    xdict_win_fileid::identity(file)
 }
 
 /// Whether the handle was opened for writing: a zero-length `WriteFile` is refused on a read-only handle and writes
@@ -191,9 +203,10 @@ impl ByteSource for HandleSource {
     }
 
     fn identity(&self) -> Option<FileIdentity> {
+        // Admission already refused a source whose identity could not be read; a later failure reads as unknown.
         identity_rule(
             self.at_open,
-            identity(&self.file),
+            identity(&self.file).ok(),
             self.ledger.state(&self.id),
         )
     }
@@ -231,42 +244,69 @@ pub fn admit(
     let mut sources = HashMap::new();
     // One HANDLE value, one owner: two specs naming it would become two `File`s over one handle and close it twice.
     let mut handles = std::collections::HashSet::new();
-    for spec in specs {
-        if !handles.insert(spec.handle) {
-            return Err(Failure::Core(xdict_core::CoreError::Malformed {
-                detail: format!("the handle {} is named by two files", spec.handle),
-            }));
-        }
-        let previous = ledger.state(&spec.id).flatten();
-        ledger.merge(
-            &spec.id,
-            Observation {
-                observed_at: spec.observed_at,
-                identity: spec.identity,
-            },
-        );
-        let source = HandleSource::take(spec, ledger.clone())?;
-        let held = source.held_identity();
-        match spec.identity {
-            Some(observed) if held != Some(observed) && !same_object(held, previous) => {
-                return Err(Failure::admission(format!(
-                    "{}: the handle is not the file the path names",
-                    spec.id
-                )));
+    // Every handle this request duplicated is the service's to close. One it never took (an error on an earlier
+    // spec) would otherwise leak until the process dies.
+    let mut owned = std::collections::HashSet::new();
+    let result = (|| -> Result<(), Failure> {
+        for spec in specs {
+            if !handles.insert(spec.handle) {
+                return Err(Failure::Core(xdict_core::CoreError::Malformed {
+                    detail: format!("the handle {} is named by two files", spec.handle),
+                }));
             }
-            None if previous.is_some() && !same_object(held, previous) => {
-                return Err(Failure::admission(format!(
-                    "{}: the path is gone and the handle is not the file last seen",
-                    spec.id
-                )));
+            let previous = ledger.state(&spec.id).flatten();
+            ledger.merge(
+                &spec.id,
+                Observation {
+                    observed_at: spec.observed_at,
+                    identity: spec.identity,
+                },
+            );
+            // From here a File owns the handle; its drop closes it on every error path of `take`.
+            owned.insert(spec.handle);
+            let source = HandleSource::take(spec, ledger.clone())?;
+            let held = source.held_identity()?;
+            match spec.identity {
+                // A rename over the path is admitted on purpose: the handle is the file last seen, and the core
+                // answers SourceChanged for lookup. Import refuses a changed source of its own (ops.rs).
+                Some(observed) if held != observed && !same_object(Some(held), previous) => {
+                    return Err(Failure::admission(format!(
+                        "{}: the handle is not the file the path names",
+                        spec.id
+                    )));
+                }
+                None if previous.is_some() && !same_object(Some(held), previous) => {
+                    return Err(Failure::admission(format!(
+                        "{}: the path is gone and the handle is not the file last seen",
+                        spec.id
+                    )));
+                }
+                _ => {}
             }
-            _ => {}
+            if sources.insert(spec.id.clone(), source).is_some() {
+                return Err(Failure::admission(format!("{}: sent twice", spec.id)));
+            }
         }
-        if sources.insert(spec.id.clone(), source).is_some() {
-            return Err(Failure::admission(format!("{}: sent twice", spec.id)));
+        Ok(())
+    })();
+    if let Err(failure) = result {
+        for spec in specs {
+            if !owned.contains(&spec.handle) {
+                close_raw(spec.handle);
+            }
         }
+        return Err(failure);
     }
     Ok(sources)
+}
+
+/// Closes a handle the service was given but never took: no `File` owns it, so nobody else will.
+#[allow(unsafe_code)]
+fn close_raw(handle: u64) {
+    if handle == 0 || handle > i64::MAX as u64 {
+        return;
+    }
+    unsafe { CloseHandle(handle as *mut c_void) };
 }
 
 // The held object's times may have moved since the last observation. Admit that same file object so the core's

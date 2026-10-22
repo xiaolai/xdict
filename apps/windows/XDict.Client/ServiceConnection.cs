@@ -66,6 +66,39 @@ internal sealed class ServiceConnection : IDisposable
         return reply;
     }
 
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, bool> cancelled = new();
+
+    /// <summary>The contract's fast cancel path (§5): the next progress event for this import is answered
+    /// `cancel:true`. The separate cancel operation remains the durable one.</summary>
+    public void CancelImport(ulong id) => cancelled[id] = true;
+
+    private async void AnswerCancel(ulong id)
+    {
+        try
+        {
+            byte[] payload = JsonSerializer.SerializeToUtf8Bytes(new
+            {
+                contract = Wire.Version, id, @event = "answer", cancel = true,
+            }, Wire.Options);
+            await writer.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await Task.Run(() =>
+                {
+                    Child.Input.Write(BitConverter.GetBytes((uint)payload.Length));
+                    Child.Input.WriteByte(1);
+                    Child.Input.Write(payload);
+                    Child.Input.Flush();
+                }, CancellationToken.None).ConfigureAwait(false);
+            }
+            finally { writer.Release(); }
+        }
+        catch (Exception)
+        {
+            // The import's own cancel op still stops it; this answer only reaches the core a little sooner.
+        }
+    }
+
     private void ReadReplies()
     {
         try
@@ -78,8 +111,12 @@ internal sealed class ServiceConnection : IDisposable
                 if (root.TryGetProperty("event", out JsonElement eventKind))
                 {
                     if (eventKind.GetString() == "progress")
-                        Progress?.Invoke(root.GetProperty("id").GetUInt64(), root.GetProperty("done").GetUInt64(),
+                    {
+                        ulong eventId = root.GetProperty("id").GetUInt64();
+                        Progress?.Invoke(eventId, root.GetProperty("done").GetUInt64(),
                             root.GetProperty("total").GetUInt64());
+                        if (cancelled.TryRemove(eventId, out _)) AnswerCancel(eventId);
+                    }
                     continue;
                 }
                 Validate.Reply(root);
