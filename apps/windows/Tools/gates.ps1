@@ -12,7 +12,7 @@ function Get-XDictTreeHash {
     param(
         [string[]]$Roots,
         [string[]]$Extra = @(),
-        [string[]]$Exclude = @('\\bin\\', '\\obj\\', '\\target\\', '\\.git\\')
+        [string[]]$Exclude = @('\\bin\\', '\\obj\\', '\\target\\', '\\out\\', '\\.git\\')
     )
     $lines = New-Object System.Collections.Generic.List[string]
     foreach ($root in $Roots) {
@@ -85,7 +85,8 @@ function Invoke-XDictTask {
         [Parameter(Mandatory)][string]$Output,
         [int]$Seconds = 180,
         [string]$RunLevel = 'Limited',
-        [string]$Prefix = 'xdict-task'
+        [string]$Prefix = 'xdict-task',
+        [switch]$TolerateTimeout
     )
     if ([string]::IsNullOrWhiteSpace($Executable)) {
         $Executable = 'powershell.exe'
@@ -95,12 +96,21 @@ function Invoke-XDictTask {
     $action = New-ScheduledTaskAction -Execute $Executable -Argument $Arguments
     $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) `
         -LogonType Interactive -RunLevel $RunLevel
+    $started = Get-Date
     try {
         Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
         Start-ScheduledTask -TaskName $id
         $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
         while (-not (Test-Path -LiteralPath $Output)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw "the task produced no result: $Output" }
+            if ([DateTime]::UtcNow -gt $deadline) {
+                # Unregistering alone leaves the wrapper and its app alive; the next stage's window search takes
+                # the stale window. Stop the task and everything the run started.
+                Stop-ScheduledTask -TaskName $id -ErrorAction SilentlyContinue
+                Stop-XDictLabProcesses -Since $started
+                # The measurement tolerates one sample's timeout and records it; every other caller fails loud.
+                if ($TolerateTimeout) { return $null }
+                throw "the task produced no result: $Output"
+            }
             Start-Sleep -Milliseconds 250
         }
         return (Get-Content -LiteralPath $Output -Raw -Encoding UTF8 | ConvertFrom-Json)

@@ -11,7 +11,8 @@ $ids = @(Get-Content -LiteralPath $vectors | Where-Object { $_.Trim() } | ForEac
 $revision = (Get-FileHash -LiteralPath $vectors -Algorithm SHA256).Hash.ToLowerInvariant()
 
 Invoke-XDictGate -Name 'capture-conformance' -Inputs @($vectors, (Join-Path $layout.AppRoot 'XDict.Models\Capture.cs'),
-    (Join-Path $layout.AppRoot 'XDict.Models\CaptureLifecycle.cs'), (Join-Path $layout.AppRoot 'XDict.Tests')) -Full:$Full -Action {
+    (Join-Path $layout.AppRoot 'XDict.Models\CaptureLifecycle.cs'), (Join-Path $layout.AppRoot 'XDict.Tests'),
+    $PSCommandPath, (Join-Path $PSScriptRoot 'gates.ps1')) -Full:$Full -Action {
     Push-Location $layout.AppRoot
     $previous = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'

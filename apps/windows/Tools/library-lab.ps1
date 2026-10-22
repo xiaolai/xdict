@@ -18,23 +18,9 @@ Invoke-XDictGate -Name 'library-lab' -Inputs (Get-XDictLabInputs -Layout $layout
     @{ output = $output; library = (Join-Path $folder 'library.json'); paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $id = 'library-lab-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $config + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $id
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        while (-not (Test-Path -LiteralPath $output)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library lab produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-        $result = Get-Content -LiteralPath $output -Raw -Encoding UTF8 | ConvertFrom-Json
-        Write-Host ($result | ConvertTo-Json -Depth 5)
-        if ($result.count -lt 1) { throw 'the library window added no dictionary' }
-        if (-not ($result.editions[0] -like 'mdx-sha256-v1:*')) { throw 'the library record has no edition' }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $id -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    $result = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $config + '"') -Output $output `
+        -Seconds 120 -Prefix 'library-lab'
+    Write-Host ($result | ConvertTo-Json -Depth 5)
+    if ($result.count -lt 1) { throw 'the library window added no dictionary' }
+    if (-not ($result.editions[0] -like 'mdx-sha256-v1:*')) { throw 'the library record has no edition' }
 }

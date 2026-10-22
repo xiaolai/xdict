@@ -42,32 +42,45 @@ if ($Detached) {
         $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
         $Report = Join-Path $env:LOCALAPPDATA ('XDict\e2e\' + $stamp + '\report.json')
     }
+    # The marker tells a poll from a fresh request: a report without one is an old run, and a marker without a
+    # report is a run still going. Without this, re-running with an old -Report silently replayed it.
+    $marker = $Report + '.run'
+    $polling = Test-Path -LiteralPath $marker
     if (Test-Path -LiteralPath $Report) {
+        if (-not $polling) { throw "a report already exists at $Report; pass a new -Report for a fresh run" }
         $existing = Get-Content -LiteralPath $Report -Raw -Encoding UTF8 | ConvertFrom-Json
         foreach ($stage in $existing.stages) {
             Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.name, ($stage.seconds), $(if ($stage.pass) { 'pass' } else { 'FAIL' }))
         }
         Write-Host ("E2E: {0} of {1} stages passed; report {2}" -f $existing.passed, $existing.total, $Report)
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         if ($existing.failed -gt 0) { throw ("$($existing.failed) E2E stage(s) failed") }
         return
     }
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Report) | Out-Null
-    $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'),
-        '-Report', ('"' + $Report + '"'))
-    if ($Full) { $arguments += '-Full' }
-    # The task command line is raw text: a value with a space must be quoted, as the inline branch does.
-    if ($Only) { $arguments += @('-Only', ('"' + $Only + '"')) }
-    if ($SkipElevated) { $arguments += '-SkipElevated' }
-    $task = 'xdict-e2e-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ($arguments -join ' ')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
+    $task = $null
+    if (-not $polling) {
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Report) | Out-Null
+        $arguments = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'),
+            '-Report', ('"' + $Report + '"'))
+        if ($Full) { $arguments += '-Full' }
+        # The task command line is raw text: a value with a space must be quoted, as the inline branch does.
+        if ($Only) { $arguments += @('-Only', ('"' + $Only + '"')) }
+        if ($SkipElevated) { $arguments += '-SkipElevated' }
+        $task = 'xdict-e2e-' + [Guid]::NewGuid().ToString('N')
+        $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ($arguments -join ' ')
+        $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
+        Register-ScheduledTask -TaskName $task -Action $action -Principal $principal | Out-Null
+        Set-Content -LiteralPath $marker -Value $task -Encoding Ascii
+    }
     try {
-        Start-ScheduledTask -TaskName $task
+        if ($task) { Start-ScheduledTask -TaskName $task }
         Write-Host ("started: {0}" -f $Report)
         $deadline = [DateTime]::UtcNow.AddMinutes(90)
         while (-not (Test-Path -LiteralPath $Report)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the E2E run produced no report' }
+            if ([DateTime]::UtcNow -gt $deadline) {
+                Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
+                throw 'the E2E run produced no report'
+            }
             Start-Sleep -Seconds 10
         }
         # The report is written once, at the end; a partial file is never trusted.
@@ -76,9 +89,10 @@ if ($Detached) {
             Write-Host ("{0,-12} {1,7:N1}s  {2}" -f $stage.name, ($stage.seconds), $(if ($stage.pass) { 'pass' } else { 'FAIL' }))
         }
         Write-Host ("E2E: {0} of {1} stages passed; report {2}" -f $result.passed, $result.total, $Report)
+        Remove-Item -LiteralPath $marker -Force -ErrorAction SilentlyContinue
         if ($result.failed -gt 0) { throw ("$($result.failed) E2E stage(s) failed") }
     }
-    finally { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue }
+    finally { if ($task) { Unregister-ScheduledTask -TaskName $task -Confirm:$false -ErrorAction SilentlyContinue } }
     return
 }
 
@@ -94,7 +108,7 @@ if ([string]::IsNullOrWhiteSpace($Report)) {
 }
 $reportDirectory = Split-Path -Parent $Report
 New-Item -ItemType Directory -Force -Path $reportDirectory | Out-Null
-$tree = Get-XDictTreeHash -Roots @($layout.AppRoot, (Join-Path $layout.RepoRoot 'core'), (Join-Path $layout.RepoRoot 'conformance')) -Exclude @('\\bin\\', '\\obj\\', '\\target\\')
+$tree = Get-XDictTreeHash -Roots @($layout.AppRoot, (Join-Path $layout.RepoRoot 'core'), (Join-Path $layout.RepoRoot 'conformance')) -Exclude @('\\bin\\', '\\obj\\', '\\target\\', '\\out\\')
 $records = New-Object System.Collections.Generic.List[object]
 $failed = 0
 foreach ($stage in $stages) {

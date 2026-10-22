@@ -5,6 +5,7 @@ param([switch]$Full)
 
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
+$started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'trail-lab' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
@@ -17,47 +18,19 @@ Invoke-XDictGate -Name 'trail-lab' -Inputs (Get-XDictLabInputs -Layout $layout) 
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $prep = 'xdict-prep-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $libraryConfig + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $prep -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $prep
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        $prepared = Join-Path $folder 'library-result.json'
-        while (-not (Test-Path -LiteralPath $prepared)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library preparation produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $prep -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
+        -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
 
     $config = Join-Path $folder 'config.json'
     $result = Join-Path $folder 'result.json'
     @{ output = $result; library = $library } | ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
-    $id = 'xdict-trail-lab-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--trail-lab "' + $config + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $id
-        $deadline = [DateTime]::UtcNow.AddSeconds(180)
-        while (-not (Test-Path -LiteralPath $result)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the trail lab produced no result (the entry open may still hang)' }
-            Start-Sleep -Milliseconds 250
-        }
-        $uia = Get-Content -LiteralPath $result -Raw -Encoding UTF8 | ConvertFrom-Json
-        Write-Host ($uia | ConvertTo-Json -Depth 4)
-        if ($uia.runRows -lt 1 -or $uia.cafeRows -lt 1) { throw 'a search painted no rows' }
-        if (-not $uia.openedFirst -or -not $uia.openedSecond) { throw 'an entry did not open' }
-        if ($uia.firstBack) { throw 'Back was enabled after the first visit' }
-        if (-not $uia.secondBack) { throw 'Back was not enabled after the second visit' }
-        if ($uia.afterBack) { throw 'Back did not move back to the first visit' }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $id -Confirm:$false -ErrorAction SilentlyContinue
-        Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
-    }
+    $uia = Invoke-XDictTask -Executable $exe -Arguments ('--trail-lab "' + $config + '"') -Output $result `
+        -Seconds 180 -Prefix 'xdict-trail-lab'
+    Write-Host ($uia | ConvertTo-Json -Depth 4)
+    if ($uia.runRows -lt 1 -or $uia.cafeRows -lt 1) { throw 'a search painted no rows' }
+    if (-not $uia.openedFirst -or -not $uia.openedSecond) { throw 'an entry did not open' }
+    if ($uia.firstBack) { throw 'Back was enabled after the first visit' }
+    if (-not $uia.secondBack) { throw 'Back was not enabled after the second visit' }
+    if ($uia.afterBack) { throw 'Back did not move back to the first visit' }
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
 }

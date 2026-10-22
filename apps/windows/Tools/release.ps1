@@ -1,10 +1,13 @@
-# The Windows release: evidence first, then notices, the signed-or-unsigned bundle, the MSI and its validation.
+# The Windows release: notices, evidence for the exact tree that ships, then the signed-or-unsigned bundle, the MSI and its validation.
 # Evidence is the latest E2E report for this exact tree, passed, and within 14 days — the ledger rule, in one file.
 [CmdletBinding()]
 param([string]$CertificateThumbprint = '', [switch]$SkipEvidence)
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
-$tree = Get-XDictTreeHash -Roots @($layout.AppRoot, (Join-Path $layout.RepoRoot 'core'), (Join-Path $layout.RepoRoot 'conformance')) -Exclude @('\\bin\\', '\\obj\\', '\\target\\')
+# Notices are regenerated BEFORE the tree is hashed: the evidence must cover the file that ships.
+& (Join-Path $PSScriptRoot 'notices.ps1')
+if ($LASTEXITCODE -ne 0) { throw 'notices generation failed' }
+$tree = Get-XDictTreeHash -Roots @($layout.AppRoot, (Join-Path $layout.RepoRoot 'core'), (Join-Path $layout.RepoRoot 'conformance')) -Exclude @('\\bin\\', '\\obj\\', '\\target\\', '\\out\\')
 # Evidence may come from several reports for this tree — the UIA stages run over SSH and the rest detached, each
 # context with its own limits — but between them every stage must have passed on this exact tree, within 14 days.
 $reports = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'XDict\e2e') -Filter report.json -Recurse -ErrorAction SilentlyContinue |
@@ -25,8 +28,6 @@ else {
     if ($missing.Count -gt 0) { throw ("no passing evidence for: " + ($missing -join ', ') + "; run Tools\e2e.ps1") }
     Write-Host ("evidence: all 15 stages passed on this tree, from " + $used.Count + " report(s): " + ($used -join '; '))
 }
-& (Join-Path $PSScriptRoot 'notices.ps1')
-if ($LASTEXITCODE -ne 0) { throw 'notices generation failed' }
 $bundle = @{}
 if (-not [string]::IsNullOrWhiteSpace($CertificateThumbprint)) {
     $bundle['CertificateThumbprint'] = $CertificateThumbprint

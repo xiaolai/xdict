@@ -5,11 +5,12 @@ param([switch]$Full)
 
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
+$started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name 'search-trail-uia' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
     # A stale app from an earlier timed-out run shares the window name and the WebView2 provider; never start over it.
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\search-trail\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
@@ -19,24 +20,10 @@ Invoke-XDictGate -Name 'search-trail-uia' -Inputs (Get-XDictLabInputs -Layout $l
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $config -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $prep = 'xdict-prep-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $config + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $prep -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $prep
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        $prepared = Join-Path $folder 'library-result.json'
-        while (-not (Test-Path -LiteralPath $prepared)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library preparation produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $prep -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $config + '"') `
+        -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
     # The prep app's own window is also titled XDict; never let UIA attach to the dying lab instance.
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
     Start-Sleep -Seconds 1
 
     $launchId = 'trail-' + [Guid]::NewGuid().ToString('N')
@@ -161,7 +148,7 @@ finally {
     $log = Join-Path $folder 'run.log'
     $script = $template.Replace('__LIBRARY__', $library).Replace('__LAUNCH__', $launchId).
         Replace('__EXE__', $exe).Replace('__RESULT__', $result).Replace('__QUIT__', $quit).Replace('__LOG__', $log)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding Ascii
+    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
 
     try {
         $uia = Invoke-XDictTask -Script $wrapper -Output $result -Seconds 240
@@ -180,5 +167,5 @@ finally {
 }
 finally {
     # A timed-out wrapper leaves its app alive, holding a WebView2 folder; never let it poison the next run.
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
 }

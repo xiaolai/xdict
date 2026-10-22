@@ -48,6 +48,7 @@ try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
     Add-Type -AssemblyName System.Windows.Forms
+    . '__TOOLS__\uia-common.ps1'
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     $byId = {
         param($parent, $id)
@@ -55,13 +56,7 @@ try {
             [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
         return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
-    $window = $null
-    $deadline = (Get-Date).AddSeconds(60)
-    while (-not $window -and (Get-Date) -lt $deadline) {
-        $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-        foreach ($candidate in $windows) { if ($candidate.Current.Name -eq 'XDict') { $window = $candidate; break } }
-        if (-not $window) { Start-Sleep -Milliseconds 500 }
-    }
+    $window = Find-XDictWindow $root 60
     $result = [ordered]@{ window = $false; scopeAll = -1; scopeTiny = -1; scopeDropped = -1
         error = '' }
     if ($window) {
@@ -120,8 +115,8 @@ finally {
 }
 '@
     $script = $template.Replace('__LIBRARY__', $library).Replace('__LAUNCH__', $launchId).
-        Replace('__EXE__', $exe).Replace('__RESULT__', $result).Replace('__QUIT__', $quit)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding Ascii
+        Replace('__EXE__', $exe).Replace('__TOOLS__', $PSScriptRoot).Replace('__RESULT__', $result).Replace('__QUIT__', $quit)
+    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $result -Seconds 240
     Write-Host ($uia | ConvertTo-Json -Depth 6)

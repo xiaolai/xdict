@@ -4,6 +4,7 @@
 param([switch]$Full, [int]$Scale = 0)
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
+$started = Get-Date
 & (Join-Path $PSScriptRoot 'build.ps1') -Full:$Full
 
 Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } else { '' })) -Inputs (Get-XDictLabInputs -Layout $layout) -Extra @([string]$Scale) -Full:$Full -Action {
@@ -18,7 +19,7 @@ Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } el
         Start-Sleep -Seconds 1
     }
     try {
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
     $folder = Join-Path $env:LOCALAPPDATA ('XDict\settings-uia\' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
     $tiny = Join-Path $env:LOCALAPPDATA 'XDict\conformance-fixtures\tiny\tiny.mdx'
@@ -28,20 +29,9 @@ Invoke-XDictGate -Name ('settings-uia' + $(if ($Scale -gt 0) { '-' + $Scale } el
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $prep = 'xdict-prep-' + [Guid]::NewGuid().ToString('N')
-    $prepAction = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $libraryConfig + '"')
-    $prepPrincipal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $prep -Action $prepAction -Principal $prepPrincipal | Out-Null
-        Start-ScheduledTask -TaskName $prep
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        while (-not (Test-Path -LiteralPath (Join-Path $folder 'library-result.json'))) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library preparation produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-    }
-    finally { Unregister-ScheduledTask -TaskName $prep -Confirm:$false -ErrorAction SilentlyContinue }
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
+        -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-prep' 
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
     Start-Sleep -Seconds 1
 
     $launchId = 'settings-' + [Guid]::NewGuid().ToString('N')
@@ -131,7 +121,7 @@ finally {
     $settingsPath = Join-Path $folder 'app-settings.json'
     $script = $template.Replace('__LIBRARY__', $library).Replace('__SETTINGS__', $settingsPath).
         Replace('__LAUNCH__', $launchId).Replace('__EXE__', $exe).Replace('__RESULT__', $result).Replace('__QUIT__', $quit)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding Ascii
+    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $result -Seconds 240
     Write-Host ($uia | ConvertTo-Json -Depth 6)
@@ -145,8 +135,9 @@ finally {
         if (-not $uia.routeControls.$route) { throw "the $route route showed not its own control" }
     }
     if ($uia.keyboardRoute -eq '') { throw 'the keyboard did not move the route selection' }
-    if ($uia.keyboardRoute -like 'denied:*') { Write-Host ('keyboard not measured: ' + $uia.keyboardRoute) }
-    Get-Process -Name XDict -ErrorAction SilentlyContinue | Stop-Process -Force
+    # A denied synthetic-key probe means the route was never exercised; passing it would make the check unfailable.
+    if ($uia.keyboardRoute -like 'denied:*') { throw ('the keyboard route was not exercised: ' + $uia.keyboardRoute) }
+    Stop-XDictLabProcesses -Name @('XDict') -Since $started
     }
     finally {
         if ($Scale -gt 0) {
