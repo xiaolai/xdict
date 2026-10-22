@@ -201,6 +201,23 @@ impl Service {
         mut sources: HashMap<String, HandleSource>,
     ) -> Result<Answer, Failure> {
         let body: ImportBody = decode(&request.operation)?;
+        // Import must not register bytes the app did not observe. A path replaced under a held handle is refused
+        // here, where the handle's identity and the request's observation are both in hand; lookup keeps its
+        // SourceChanged answer instead (handles.rs admission admits the old object on purpose).
+        for file in &request.files {
+            let Some(source) = sources.get(&file.id) else {
+                continue;
+            };
+            let changed = matches!(
+                (source.held_identity(), file.identity),
+                (Ok(held), Some(observed)) if held != observed
+            );
+            if changed {
+                return Err(Failure::Core(CoreError::SourceChanged {
+                    detail: format!("{}: the file changed as it was imported", file.id),
+                }));
+            }
+        }
         let package = self.package(&body.package, &mut sources)?;
         // The server registers the flag before this runs; this is only a fallback for a direct caller.
         let cancel = self.cancel_state(request.id);

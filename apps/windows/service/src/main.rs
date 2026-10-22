@@ -57,7 +57,13 @@ fn main() {
         }
         let value: Value = match serde_json::from_slice(&body) {
             Ok(value) => value,
-            Err(_) => break,
+            Err(error) => {
+                // One malformed write must not end the service and invalidate every handle.
+                writer.json(&json!({"contract": CONTRACT, "id": 0, "error": {
+                    "type": "malformed", "detail": error.to_string()
+                }}));
+                continue;
+            }
         };
         // Read permanent envelope fields before attempting any version-specific record.
         let Some(id) = value.get("id").and_then(Value::as_u64) else {

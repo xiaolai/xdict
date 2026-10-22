@@ -196,6 +196,7 @@ impl Core {
                 edition: edition.clone(),
                 identity: opened.identity,
                 volumes: records,
+                sidecars: package.sidecars.iter().map(location_key).collect(),
             };
             // The last moment to stop: nothing is registered yet, so a cancellation here leaves the registry as it
             // was (the Web binding answers `false` once a source of the import has thrown).

@@ -63,7 +63,8 @@ impl OwnDirectory {
         // between would leave a file of another identity. Unix compares (dev, ino); Windows asks the volume serial,
         // file index and change time, through the one crate allowed the call.
         #[cfg(windows)]
-        let before = xdict_win_fileid::identity_of_path(&path)?;
+        let before = xdict_win_fileid::identity_of_path(&path)
+            .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))?;
         let file = open_read_only(&path)?;
         #[cfg(windows)]
         if before != xdict_win_fileid::identity(&file)? {

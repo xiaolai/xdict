@@ -222,6 +222,8 @@ public sealed class ServiceClient : IDisposable
             // awaited: a busy or closed queue answers with a typed error, which a discarded fire-and-forget call hid.
             if (operation == "import" && sent && current is not null && current.IsAlive)
             {
+                // The contract's answer path: the next progress event carries cancel:true to the core.
+                current.CancelImport(id);
                 for (int attempt = 0; attempt < 3; attempt++)
                 {
                     Reply cancelled = await CallAsync("cancel", new { id }, cancellation: CancellationToken.None)
