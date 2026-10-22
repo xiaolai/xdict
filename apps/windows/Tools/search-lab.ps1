@@ -11,22 +11,8 @@ $layout = Get-XDictLayout
 function Invoke-XDictWindowLab {
     param([string]$Config, [string]$Output, [string]$Name)
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $id = 'xdict-lab-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--' + $Name + '-lab "' + $Config + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $id
-        $deadline = [DateTime]::UtcNow.AddSeconds(180)
-        while (-not (Test-Path -LiteralPath $Output)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw "$Name produced no result" }
-            Start-Sleep -Milliseconds 250
-        }
-        return (Get-Content -LiteralPath $Output -Raw -Encoding UTF8 | ConvertFrom-Json)
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $id -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    return Invoke-XDictTask -Executable $exe -Arguments ('--' + $Name + '-lab "' + $Config + '"') -Output $Output `
+        -Seconds 180 -Prefix 'xdict-lab'
 }
 
 Invoke-XDictGate -Name 'search-lab' -Inputs (Get-XDictLabInputs -Layout $layout) -Full:$Full -Action {
