@@ -132,6 +132,20 @@ struct EntryDetail: View {
                         openMeaning()
                         state.meaning.ask()
                     }
+                    // **The sense the reader picked can be the question** (plan-explain-sense WI-5): shown while a
+                    // sentence is held and a sense is selected; without the switch it stays visible, disabled, with
+                    // the reason — never silently absent (ADR-0021 d.4).
+                    if state.meaning.hasSenseSelection {
+                        Button("Explain This Sense") {  // placement: meaning-chip
+                            openMeaning()
+                            state.meaning.explain()
+                        }
+                        .disabled(!state.meaning.senseExplainAllowed)
+                        .help(state.meaning.senseExplainAllowed
+                              ? String(localized: "Ask what the sense you chose means in this sentence.")
+                              : String(localized: MeaningSentences.explainNeedsEntryText))
+                        .accessibilityIdentifier("meaning.explain")
+                    }
                 }
                 .padding(.horizontal, Tokens.Inset.entryLeading)
                 .padding(.vertical, Tokens.Space.xs)

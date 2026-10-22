@@ -134,7 +134,7 @@ public final class MeaningPreferences {
 
     private static func storedTemplates(_ defaults: UserDefaults, language: String) -> [AIMode: String] {
         var templates: [AIMode: String] = [:]
-        for mode in [AIMode.grounded, .sentenceOnly] {
+        for mode in AIMode.allCases {
             if let text = defaults.string(forKey: Key.template(language, mode)) {
                 templates[mode] = text
             }

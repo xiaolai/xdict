@@ -12,6 +12,9 @@ protocol EntryPaneHost: AnyObject {
     func askReader(_ url: URL, from pane: EntryPane)
     /// A word the reader ⌘-clicked, to open in a new tab (parity P47).
     func openInNewTab(_ click: EntryWordClick, from pane: EntryPane)
+    /// A sense the reader clicked (plan-explain-sense WI-5): its ordinal, and this frame's entry for the window to
+    /// name it in the dictionary it was clicked in.
+    func selectSense(_ click: EntrySenseClick, from pane: EntryPane)
     /// A new window, asked for only when the confinement allows one (the lab's control for that layer, never the app).
     func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView?
     func documentFinished(_ pane: EntryPane)
@@ -52,6 +55,10 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     /// The documents asked of WebKit whose navigation it has not yet asked about.
     private var loads = EntryDocumentLoads()
     private(set) var current: URL?
+    /// **The reference of the document that is shown**, paired with `current` when its navigation is allowed — never the
+    /// newer `reference` a `show` has already set (plan-explain-sense WI-5): in the gap between the two the old document
+    /// still runs, and a click from it must be read against the old entry.
+    private(set) var documentReference: EntryReference?
     private var generation = 0
     private(set) var scheme: EntryColourScheme
     private var frame: EntryReadingFrame
@@ -222,6 +229,13 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
             host?.displayApplied(self)
         }
         return true
+    }
+
+    /// **The document now shown is the one this navigation loads**, with the reference it was asked for: the pair is
+    /// written together, so no reader of one can see the other's newer value.
+    private func documentShown(_ url: URL?) {
+        current = url
+        documentReference = reference
     }
 
     private func load(_ url: URL) {
@@ -399,13 +413,13 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
                                  mainFrame: action.targetFrame?.isMainFrame ?? false, type: kind.rawValue))
         if let url, verdict == .loadDocument || verdict == .dropSuperseded { loads.answered(url) }
         guard confinement.navigationPolicy else {
-            if case .loadDocument = verdict { current = url }
+            if case .loadDocument = verdict { documentShown(url) }
             decisionHandler(.allow)
             return
         }
         switch verdict {
         case .loadDocument:
-            current = url
+            documentShown(url)
             decisionHandler(.allow)
         case .dropSuperseded:
             decisionHandler(.cancel)
@@ -460,7 +474,8 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
     }
 
     private func route(_ url: String, activatedByALink: Bool) {
-        guard let reference else { return }
+        // The document the reader clicked in, not the one a newer `show` is already fetching.
+        guard let reference = documentReference ?? reference else { return }
         Task { @MainActor in
             let link: EntryLink
             do {
@@ -492,11 +507,24 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
 
     // MARK: - WKScriptMessageHandler (the shell's world only)
 
-    /// What a message to the handler is: only the shell's world is heard, and only in the two shapes its scripts post.
+    /// What a message to the handler is: only the shell's world is heard, and only in the shapes its scripts post.
     enum Message: Equatable {
         case blockedImage(String)
         case word(EntryWordClick)
+        case sense(EntrySenseClick)
         case refused
+    }
+
+    /// **The same document, a fragment aside**: an in-page link leaves a fragment on the URL the frame reports, and the
+    /// reader who followed it is still reading this entry. A different path, query or scheme is another document.
+    nonisolated static func sameDocument(_ message: URL?, _ current: URL?) -> Bool {
+        guard let message, let current else { return false }
+        func bare(_ url: URL) -> String {
+            var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)
+            parts?.fragment = nil
+            return parts?.string ?? url.absoluteString
+        }
+        return bare(message) == bare(current)
     }
 
     nonisolated static func message(_ body: Any, fromShellsWorld: Bool) -> Message {
@@ -504,6 +532,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         switch object["kind"] as? String {
         case "blocked-image": return (object["url"] as? String).map(Message.blockedImage) ?? .refused
         case "word": return EntryWordClick(message: body).map(Message.word) ?? .refused
+        case "sense": return EntrySenseClick(message: body).map(Message.sense) ?? .refused
         default: return .refused
         }
     }
@@ -514,6 +543,17 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
             host?.record(.messageRefused)
         case .word(let click):
             host?.openInNewTab(click, from: self)
+        case .sense(let click):
+            // **A message from a document the pane has moved past is stale** (plan-explain-sense WI-5): the old
+            // document can still run while the next one's navigation is being decided, and its ordinal would be read
+            // against the new entry. The frame's own request says which document posted it; only the main frame's
+            // counts, and a fragment an in-page link left does not make another document.
+            guard message.frameInfo.isMainFrame,
+                  Self.sameDocument(message.frameInfo.request.url, current) else {
+                host?.record(.messageRefused)
+                return
+            }
+            host?.selectSense(click, from: self)
         case .blockedImage(let text):
             guard case .blocked(let remote) = EntryRoutes.route(URL(string: text), method: "GET") else { return }
             guard let url = RemoteOpenGate.openable(remote) else {

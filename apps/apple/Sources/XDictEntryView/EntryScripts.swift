@@ -77,7 +77,8 @@ enum EntryScripts {
                appearance(scheme, frame: frame, style: style), style.script("placeholder-clicks.js"),
                style.script("speaker-clicks.js"), style.script("disclosure-core.js"), style.script("disclosure.js"),
                style.script("pron-run-core.js"), style.script("pron-run.js"), style.script("word-clicks-core.js"),
-               style.script("word-clicks.js"), style.script("hover-word.js")]
+               style.script("word-clicks.js"), style.script("sense-clicks-core.js"), style.script("sense-clicks.js"),
+               style.script("hover-word.js")]
     }
 
     /// **The word under a hover point, for hover in XDict's own window** (`EntryWebView.hoverText`): after the word
@@ -115,6 +116,14 @@ enum EntryScripts {
     /// A reader's click on a blocked image's placeholder asks the same question as a remote link. Trusted clicks only:
     /// a script's `click()` or `dispatchEvent` is not the reader. An image inside a link is left to the link.
     static var placeholderClicks: String { EntryStyle.bundled.script("placeholder-clicks.js") }
+
+    /// **A click on a sense selects it** (plan-explain-sense WI-5; ADR-0029): the ordinal's own bounds and uniqueness,
+    /// and which clicks are the reader's, with no DOM — so `swift test` runs it in JavaScriptCore.
+    static var senseClicksCore: String { EntryStyle.bundled.script("sense-clicks-core.js") }
+
+    /// The DOM side: the nearest `data-xdict-sense` ancestor of the clicked element, its ordinal sent alone. The text
+    /// is the core's projection, never this page's.
+    static var senseClicksDOM: String { EntryStyle.bundled.script("sense-clicks.js") }
 
     /// The word under a caret, by the segmenter's word granularity and trimmed of punctuation, and whether a click may
     /// open it in a new tab: with no DOM, so `swift test` runs it in JavaScriptCore (parity P47).

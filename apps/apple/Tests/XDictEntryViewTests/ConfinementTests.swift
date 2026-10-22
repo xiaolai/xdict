@@ -234,6 +234,7 @@ struct ConfinementTests {
             func perform(_ action: EntryLinkAction, from pane: EntryPane) {}
             func askReader(_ url: URL, from pane: EntryPane) {}
             func openInNewTab(_ click: EntryWordClick, from pane: EntryPane) {}
+            func selectSense(_ click: EntrySenseClick, from pane: EntryPane) {}
             func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView? { nil }
             func documentFinished(_ pane: EntryPane) {}
             func displayValues(_ options: EntryDisplayOptions, for pane: EntryPane) -> [EntryDisplayValue] { [] }

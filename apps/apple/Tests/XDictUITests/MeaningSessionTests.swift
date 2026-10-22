@@ -3,7 +3,7 @@ import Testing
 import XDictAI
 import XDictClient
 import XDictContract
-import XDictUI
+@testable import XDictUI
 
 /// **One ask, from the reader's tap to the answer** (plan-ai-meaning WI-5; `conformance/ai/CONTRACT.md` §8.3): the entry's
 /// text only under the switch, one source with no fallback, one ask at a time, and cancellation that nothing late can
@@ -19,6 +19,14 @@ import XDictUI
             TextSpan(start: 6, len: 21, role: "definition", label: "1", section: "verb"),
         ], complete: true, omittedBytes: 0, cutAt: 27, spansDropped: 0)
     static let matched = #"{"outcome":"matched","quotes":["to keep"],"explanation":"It means to keep."}"#
+    /// The same entry with the senses ADR-0029's projection would carry: "hold" at 0, "to keep" at 7, "an opinion" at 17.
+    static let senseEntryText = EntryText(
+        entry: entry, text: "hold\n  to keep\n  an opinion", spans: [], senses: [
+            Sense(id: 1, start: 7, len: 7, label: "1", section: "verb", parent: nil, whole: true),
+            Sense(id: 2, start: 17, len: 10, label: "2", section: "verb", parent: nil, whole: true),
+        ], style: 13, complete: true, omittedBytes: 0, cutAt: 27, spansDropped: 0)
+    static let explained = #"{"outcome":"explained","quotes":["an opinion"],"explanation":"It means the view they keep."}"#
+    static let doesNotFit = #"{"outcome":"doesNotFit","quotes":[],"explanation":"This sense is not the one used here."}"#
     /// The entry the fixture's sentence belongs to; a presentation draws it, as the window's would.
     static let subject = MeaningSession.Subject(
         dictionary: UUID(uuidString: "00000000-0000-0000-0000-00000000a1a1") ?? UUID(),
@@ -534,6 +542,209 @@ import XDictUI
         session.ask()
         #expect(await Self.waitUntil { session.state != .asking })
         #expect(session.state == .cancelled)
+    }
+
+    // MARK: - Consent at the send boundary (plan-explain-sense WI-2)
+
+    /// A session whose fetch the test gates, so the switch can be turned off while the entry is being read.
+    static func gatedSession(_ fetcher: GatedFetcher, _ provider: StubProvider) -> MeaningSession {
+        let session = MeaningSession(
+            fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+            presented: { (Self.dict, Self.entry) },
+            makeProvider: { _ in provider })
+        session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
+        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
+                                    range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 7, generation: 2)))
+        session.drawn(Self.subject, target: (Self.dict, Self.entry))
+        return session
+    }
+
+    @Test func aSwitchTurnedOffWhileTheEntryIsReadSendsNothing() async {
+        let fetcher = GatedFetcher(.success(Self.entryText))
+        let provider = StubProvider(answers: [.success(Self.matched)])
+        let session = Self.gatedSession(fetcher, provider)
+        session.ask()
+        #expect(await Self.waitUntil { await fetcher.calls == 1 })
+        session.settings.sendEntryText = false
+        await fetcher.open()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(await provider.questions.isEmpty, "the entry's text left after the switch was turned off")
+        #expect(session.state == .unavailable(.consentChanged))
+    }
+
+    @Test func aSwitchTurnedOffWhileWaitingForTheSourceSendsNothing() async {
+        let (session, provider, fetcher) = Self.session()
+        let ticket = UUID()
+        #expect(await MeaningQueue.shared.acquire(.http, id: ticket), "the test could not hold the source")
+        session.ask()
+        #expect(await Self.waitUntil { await fetcher.calls.count == 1 })
+        // The ask has read the entry and waits for the source's permit.
+        try? await Task.sleep(for: .milliseconds(100))
+        session.settings.sendEntryText = false
+        await MeaningQueue.shared.release(.http)
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(await provider.questions.isEmpty, "the entry's text left after the switch was turned off")
+        #expect(session.state == .unavailable(.consentChanged))
+    }
+
+    // MARK: - The chosen sense (plan-explain-sense WI-5)
+
+    /// A session with the sentence bound, a sense selected, and `senseEntryText` as the projection.
+    static func senseSession(provider: StubProvider = StubProvider(answers: [.success(explained)]),
+                             fetched: Result<EntryText, ClientFailure> = .success(senseEntryText),
+                             selection: UInt32 = 2, dictionary: DictId = dict,
+                             entry: EntryRef = entry) -> (MeaningSession, StubProvider, Fetcher) {
+        let (session, provider, fetcher) = Self.session(
+            settings: MeaningSettings(source: .http, model: "m", sendEntryText: true), fetched: fetched, provider: provider)
+        session.select(MeaningSelection(dictionary: dictionary, entry: entry, sense: selection, dictionaryName: "Test"))
+        return (session, provider, fetcher)
+    }
+
+    @Test func theChosenSenseQuestionCarriesTheEntryTheSenseAndItsState() async {
+        let (session, provider, fetcher) = Self.senseSession()
+        session.explain()
+        #expect(await Self.waitUntil { session.state != .asking })
+        guard case .answer(let answer, let mode) = session.state else {
+            Issue.record("no answer: \(session.state)")
+            return
+        }
+        #expect(mode == .explainSense)
+        #expect(answer.outcome == .explained && answer.quotes == ["an opinion"])
+        let question = await provider.questions.first ?? ""
+        #expect(question.contains("an opinion"), "the chosen sense's text is sent")
+        #expect(question.contains("The chosen sense above is complete: every part of it was sent."))
+        #expect(question.contains("\"outcome\":\"explained|doesNotFit|insufficientContext|incompleteInput"),
+                "the chosen-sense contract is appended")
+        #expect(!question.contains("\"outcome\":\"matched|ambiguous|noMatchingSense|insufficientContext"),
+                "the selection contract is not")
+        #expect(await fetcher.calls.count == 1)
+        #expect(session.sent?.sense?.id == 2 && session.sent?.dictionaryName == "Test")
+    }
+
+    @Test func aChosenSenseTheProjectionDoesNotHoldSendsNothing() async {
+        let (session, provider, _) = Self.senseSession(
+            fetched: .success(EntryText(entry: Self.entry, text: "hold", spans: [], senses: [], complete: true,
+                                        omittedBytes: 0, cutAt: 4, spansDropped: 0)))
+        session.explain()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.state == .unavailable(.noSense))
+        #expect(await provider.questions.isEmpty)
+    }
+
+    @Test func theChosenSenseAskNeedsTheSwitchAndNeverFallsBackToTheSentence() async {
+        let (session, provider, fetcher) = Self.senseSession()
+        session.settings.sendEntryText = false
+        session.explain()
+        #expect(session.state == .unavailable(.entryTextOff))
+        #expect(await fetcher.calls.isEmpty)
+        #expect(await provider.questions.isEmpty)
+    }
+
+    @Test func aNewSelectionDropsThePreviewOfTheOldOne() async {
+        let (session, provider, _) = Self.senseSession()
+        session.preview()
+        #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
+        guard case .preview(let previewed) = session.state else { return }
+        #expect(previewed.mode == .explainSense && previewed.sense?.id == 2)
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
+        #expect(session.state == .idle)
+        #expect(session.sent == nil)
+        #expect(session.selection?.sense == 1)
+        #expect(await provider.questions.isEmpty, "selecting a sense sends nothing")
+    }
+
+    @Test func askAgainRepeatsTheChosenSenseAndTheSelectionAskIsTheGroundedOne() async {
+        let provider = StubProvider(answers: [.success(Self.explained), .success(Self.doesNotFit), .success(Self.matched)])
+        let (session, _, _) = Self.senseSession(provider: provider)
+        session.explain()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
+        session.askAgain()
+        #expect(await Self.waitUntil { await provider.questions.count == 2 && session.state != .asking })
+        session.askSelection()
+        #expect(await Self.waitUntil { await provider.questions.count == 3 && session.state != .asking })
+        let questions = await provider.questions
+        #expect(questions[1].contains("The chosen sense above is complete"), "Ask Again repeated the chosen sense")
+        #expect(!questions[2].contains("The chosen sense above is"), "the selection ask is the grounded one")
+        #expect(questions[2].contains(Self.entryText.text), "the grounded ask carries the whole entry")
+    }
+
+    @Test func aSentenceOnlyPreviewSendsEvenWhileASenseStaysSelected() async {
+        let (session, provider, _) = Self.senseSession()
+        // The switch goes off after the selection: the preview is the sentence-only request, which ignores the sense.
+        session.settings.sendEntryText = false
+        session.preview()
+        #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
+        guard case .preview(let previewed) = session.state else { return }
+        #expect(previewed.mode == .sentenceOnly && previewed.sense == nil)
+        session.ask()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
+        #expect(await provider.questions.first == previewed.text, "Send sent other bytes than the preview showed")
+    }
+
+    @Test func theFollowUpAfterDoesNotFitKeepsTheFramesEntry() async {
+        let otherDict = DictId(rawValue: "feedface00000002")
+        let otherEntry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32)),
+                                  key: "hold", occurrence: 0)
+        let provider = StubProvider(answers: [.success(Self.doesNotFit), .success(Self.matched)])
+        let (session, _, fetcher) = Self.senseSession(provider: provider, dictionary: otherDict, entry: otherEntry)
+        session.explain()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
+        session.askSelection()
+        #expect(await Self.waitUntil { await provider.questions.count == 2 && session.state != .asking })
+        let calls = await fetcher.calls
+        #expect(calls.count == 2)
+        #expect(calls.allSatisfy { $0.0 == otherDict && $0.1 == otherEntry },
+                "the follow-up asked about another frame's entry: \(calls)")
+    }
+
+    @Test func aSelectionCancelsTheAskInFlightAndItsLateAnswerIsNotShown() async {
+        let provider = StubProvider(answers: [.success(Self.explained)], delay: .milliseconds(300))
+        let (session, _, _) = Self.senseSession(provider: provider)
+        session.explain()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 })
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
+        #expect(session.state == .idle)
+        try? await Task.sleep(for: .milliseconds(500))
+        #expect(session.state == .idle, "the late answer to the old sense was shown")
+        #expect(session.sent == nil)
+    }
+
+    @Test func aSwitchTurnedOffBetweenPreviewAndSendSendsNothing() async {
+        let (session, provider, _) = Self.session()
+        session.preview()
+        #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
+        session.settings.sendEntryText = false
+        session.ask()
+        #expect(await Self.waitUntil { session.state == .cancelled })
+        #expect(await provider.questions.isEmpty,
+                "a preview composed with the switch on was sent after it was turned off")
+    }
+}
+
+/// **An entry fetch the test can suspend** (plan-explain-sense WI-2): the switch is turned off while it is in flight.
+actor GatedFetcher {
+    private(set) var calls = 0
+    private var continuation: CheckedContinuation<Void, Never>?
+    private var opened = false
+    private let result: Result<EntryText, ClientFailure>
+
+    init(_ result: Result<EntryText, ClientFailure>) {
+        self.result = result
+    }
+
+    func fetch(_ dict: DictId, _ entry: EntryRef, _ budget: UInt64) async -> Result<EntryText, ClientFailure> {
+        calls += 1
+        if !opened {
+            await withCheckedContinuation { continuation = $0 }
+        }
+        return result
+    }
+
+    func open() {
+        opened = true
+        continuation?.resume()
+        continuation = nil
     }
 }
 

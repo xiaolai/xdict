@@ -84,12 +84,52 @@ public final class SearchWindowState {
         entry.onSound = { [weak self] path in self?.playRecording(path) }
         entry.onSpeak = { [weak self] text in self?.speak(text) }
         entry.onOpenInNewTab = { [weak self] word in self?.openInNewTab?(word) }
+        // **A click on a sense names the frame's own entry** (plan-explain-sense WI-5): the window matches it to what
+        // it presents now, so a forged ordinal or a frame that is gone selects nothing.
+        entry.onSelectSense = { [weak self] handle, edition, reference, id in
+            self?.selectSense(handle: handle, edition: edition, reference: reference, id: id)
+        }
     }
 
     public func focusSearch() { searchFocus += 1 }
     public func focusResults() { resultsFocus += 1 }
 
     // MARK: - Meaning here
+
+    /// **The reader clicked a sense in an entry** (plan-explain-sense WI-5; ADR-0029 d.6): the click carries the
+    /// frame's own handle, edition and reference, and is accepted only when that entry is one this window presents now
+    /// — the single entry, or one of the All page's frames. On the All page the selection names that frame's dictionary,
+    /// never `model.shown`'s.
+    public func selectSense(handle: String, edition: String, reference: EntryReference, id: UInt32) {
+        guard meaning.held != nil,
+              let selection = Self.senseTarget(
+                  handle: handle, edition: edition, reference: reference, sense: id,
+                  among: presentedResults.map { (result: $0, source: model.source($0.dictionary)) })
+        else { return }
+        meaning.select(selection)
+    }
+
+    /// The entries this presentation offers: the All page's frames while one is shown, else the shown entry.
+    public var presentedResults: [ResultID] {
+        if let results = pageResults { return results }
+        guard let shown = model.shown else { return [] }
+        return [shown.result]
+    }
+
+    /// **The frame's entry matched to what is presented** (plan-explain-sense WI-5): the ordinal alone is never trusted;
+    /// the dictionary's handle, the edition and the reference must all name one of these entries, whose name the pane
+    /// then shows. Two dictionaries with the same ordinal are told apart by the frame.
+    nonisolated static func senseTarget(handle: String, edition: String, reference: EntryReference, sense: UInt32,
+                                        among presented: [(result: ResultID, source: SearchSource?)]) -> MeaningSelection? {
+        guard let match = presented.first(where: { candidate in
+            candidate.source?.handle?.rawValue == handle
+                && candidate.result.entry.edition.rawValue == edition
+                && candidate.result.entry.key == reference.key
+                && candidate.result.entry.occurrence == reference.occurrence
+        }) else { return nil }
+        return MeaningSelection(dictionary: DictId(rawValue: handle), entry: match.result.entry, sense: sense,
+                                dictionaryName: match.source?.name)
+    }
 
     /// The entry drawn now, as an ask's target: its dictionary's handle and its edition-qualified reference.
     static func drawnEntry(_ model: SearchModel) -> (DictId, EntryRef)? {

@@ -45,6 +45,8 @@ public enum MeaningSentences {
         case .explanationOnly: LocalizedStringResource("From the sentence alone")
         case .refused: LocalizedStringResource("The model declined")
         case .guardrail: LocalizedStringResource("The model's guardrails declined")
+        case .explained: LocalizedStringResource("Explained")
+        case .doesNotFit: LocalizedStringResource("Does not fit")
         }
     }
 
@@ -61,6 +63,21 @@ public enum MeaningSentences {
     public static let partialEntry =
         LocalizedStringResource("Part of this entry could not be read, so the answer may be missing something.")
 
+    /// **The chosen sense**, as the pane labels it (plan-explain-sense WI-5).
+    public static let chosenSense = LocalizedStringResource("The sense you chose")
+
+    /// The chosen sense itself was cut, though the entry may have been whole (contract 3, §4a).
+    public static let partialSense =
+        LocalizedStringResource("Part of the chosen sense could not be read, so the answer may be missing something.")
+
+    /// A `doesNotFit` verdict's offer: ask the model which sense the sentence uses instead.
+    public static let doesNotFitOffer =
+        LocalizedStringResource("The sense you chose does not fit this sentence. XDict can ask which sense it is.")
+
+    /// Why the chosen-sense row is disabled: its question always sends the entry's text.
+    public static let explainNeedsEntryText = LocalizedStringResource(
+        "To explain a chosen sense, turn on “Send the entry’s text with the question” in Settings ▸ AI.")
+
     /// Why no answer came.
     public static func problem(_ unavailable: MeaningSession.Unavailable) -> LocalizedStringResource {
         switch unavailable {
@@ -68,6 +85,12 @@ public enum MeaningSentences {
         case .noContext: LocalizedStringResource("There is no captured sentence to answer about.")
         case .noEntry: LocalizedStringResource("No entry is on screen for this sentence.")
         case .entryUnreadable: LocalizedStringResource("The entry could not be read.")
+        case .consentChanged:
+            LocalizedStringResource("The entry-text switch changed while the question was being prepared, so nothing was sent.")
+        case .noSense:
+            LocalizedStringResource("The chosen sense is not in this entry.")
+        case .entryTextOff:
+            LocalizedStringResource("This question sends the entry’s text. Turn on “Send the entry’s text with the question” in Settings ▸ AI.")
         case .provider(let error): provider(error)
         }
     }
@@ -145,6 +168,12 @@ public enum MeaningSentences {
             LocalizedStringResource("There is no entry to send for this ask.")
         case .questionTooLong:
             LocalizedStringResource("The request is too long for the source.")
+        case .senseOutsideExplainSense:
+            LocalizedStringResource("This prompt may not use {sense} outside the chosen-sense question.")
+        case .senseRequired:
+            LocalizedStringResource("There is no chosen sense to explain.")
+        case .senseTextMismatch:
+            LocalizedStringResource("The chosen sense does not match the entry that would be sent.")
         }
     }
 
