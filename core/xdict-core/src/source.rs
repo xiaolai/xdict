@@ -51,6 +51,9 @@ impl Opened {
                     _ => CoreError::io(&e),
                 })?);
                 let metadata = file.metadata().map_err(|e| CoreError::io(&e))?;
+                #[cfg(windows)]
+                let identity = xdict_win_fileid::identity(&file).ok();
+                #[cfg(not(windows))]
                 let identity = identity_of(&metadata);
                 let source = xdict_mdx::DiskFile::shared(file.clone(), metadata.len());
                 Ok(Self { source: Box::new(source), identity, check: Check::Path { path: path.clone(), file } })
@@ -84,13 +87,28 @@ impl Opened {
         let now = match &self.check {
             #[cfg(any(unix, windows))]
             Check::Path { path, file } => {
-                let held = file.metadata().map_err(|e| CoreError::io(&e))?;
-                // Nothing at the path any more: the file was moved or deleted, which is a change, not a miss.
-                let at_path = match std::fs::metadata(path) {
-                    Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(changed(path)),
-                    other => other.map_err(|e| CoreError::io(&e))?,
+                #[cfg(windows)]
+                let held = xdict_win_fileid::identity(file).ok();
+                #[cfg(not(windows))]
+                let held = {
+                    let metadata = file.metadata().map_err(|e| CoreError::io(&e))?;
+                    identity_of(&metadata)
                 };
-                let (held, at_path) = (identity_of(&held), identity_of(&at_path));
+                // Nothing at the path any more: the file was moved or deleted, which is a change, not a miss.
+                #[cfg(windows)]
+                let at_path = match xdict_win_fileid::identity_of_path(std::path::Path::new(path)) {
+                    Ok(identity) => Some(identity),
+                    Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(changed(path)),
+                    Err(e) => return Err(CoreError::io(&e)),
+                };
+                #[cfg(not(windows))]
+                let at_path = {
+                    let metadata = match std::fs::metadata(path) {
+                        Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(changed(path)),
+                        other => other.map_err(|e| CoreError::io(&e))?,
+                    };
+                    identity_of(&metadata)
+                };
                 if held != at_path {
                     return Err(changed(path));
                 }
@@ -109,8 +127,9 @@ fn changed(what: &str) -> CoreError {
     CoreError::SourceChanged { detail: format!("{what} changed after it was opened") }
 }
 
-/// The identity of a file: (device, inode, size, mtime, ctime) on Unix. Windows has no stable inode in Rust's
-/// standard library, so its files are weak locations until the shell supplies one.
+/// The identity of a file: (device, inode, size, mtime, ctime) on Unix. Windows reads the same tuple through
+/// `xdict-win-fileid` from the handle or the path, because stable `std` exposes neither the file index nor the
+/// change time.
 #[cfg(unix)]
 pub(crate) fn identity_of(metadata: &std::fs::Metadata) -> Option<FileIdentity> {
     use std::os::unix::fs::MetadataExt;
@@ -122,11 +141,6 @@ pub(crate) fn identity_of(metadata: &std::fs::Metadata) -> Option<FileIdentity> 
         mtime_ns: ns(metadata.mtime(), metadata.mtime_nsec()),
         ctime_ns: ns(metadata.ctime(), metadata.ctime_nsec()),
     })
-}
-
-#[cfg(windows)]
-pub(crate) fn identity_of(_: &std::fs::Metadata) -> Option<FileIdentity> {
-    None
 }
 
 /// A shell's source as the reader's.
@@ -246,7 +260,14 @@ impl xdict_mdx::Source for Verified<'_> {
             let start = number * self.chunk;
             let mut last = self.last.lock().map_err(|_| io::Error::other("a verified read was poisoned"))?;
             if last.as_ref().is_none_or(|(n, _)| *n != number) {
-                *last = Some((number, self.verified_chunk(number)?));
+                // The source read is the long step, and for a shell source it crosses the binding. Release the cache
+                // lock for it: holding it serialized every reader of this source behind one chunk read.
+                drop(last);
+                let verified = self.verified_chunk(number)?;
+                last = self.last.lock().map_err(|_| io::Error::other("a verified read was poisoned"))?;
+                if last.as_ref().is_none_or(|(n, _)| *n != number) {
+                    *last = Some((number, verified));
+                }
             }
             let chunk = last.as_ref().map(|(_, b)| b.as_slice()).unwrap_or(&[]);
             let from = usize::try_from(at - start).map_err(|_| io::ErrorKind::InvalidInput)?;

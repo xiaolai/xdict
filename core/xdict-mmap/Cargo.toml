@@ -10,6 +10,11 @@ rust-version.workspace = true
 [dependencies]
 memmap2 = "=0.9.11"
 
+# The file index and change time, so a name that names another file between the check and the open is refused for
+# the same reason on Windows as on Unix.
+[target.'cfg(windows)'.dependencies]
+xdict-win-fileid = { path = "../xdict-win-fileid" }
+
 # The workspace forbids unsafe code; this crate is the exception, so it states its lints itself: unsafe is
 # denied, and allowed on the one call that needs it.
 [lints.rust]

@@ -114,7 +114,15 @@ fn write_all(out: &Path) -> Result<(), String> {
     plain(&out.join("outside/secret.css"), b"/* outside the folder the reader chose */\n")?;
     let link = esc.join("esc.css");
     let _ = std::fs::remove_file(&link);
+    // A symbolic link is Unix's spelling. On Windows it needs Developer Mode or SeCreateSymbolicLinkPrivilege; the
+    // library fixture is a macOS shell fixture and is not run there, but it must compose, and if it is run without
+    // the privilege it fails with this sentence rather than skipping the escape case silently.
+    #[cfg(unix)]
     std::os::unix::fs::symlink("../../outside/secret.css", &link).map_err(|e| format!("{}: {e}", link.display()))?;
+    #[cfg(windows)]
+    std::os::windows::fs::symlink_file("..\\..\\outside\\secret.css", &link).map_err(|e| {
+        format!("a symbolic link needs Developer Mode or the privilege on Windows: {}: {e}", link.display())
+    })?;
 
     let sounds = out.join("sounds");
     file(

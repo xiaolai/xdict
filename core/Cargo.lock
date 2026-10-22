@@ -1151,6 +1151,7 @@ dependencies = [
  "xdict-mdx",
  "xdict-mdx-writer",
  "xdict-mmap",
+ "xdict-win-fileid",
  "xxhash-rust",
 ]
 
@@ -1234,6 +1235,7 @@ name = "xdict-mmap"
 version = "0.0.6"
 dependencies = [
  "memmap2",
+ "xdict-win-fileid",
 ]
 
 [[package]]
@@ -1244,6 +1246,13 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "xdict-core",
+]
+
+[[package]]
+name = "xdict-win-fileid"
+version = "0.0.6"
+dependencies = [
+ "xdict-identity",
 ]
 
 [[package]]
