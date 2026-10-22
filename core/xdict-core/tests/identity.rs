@@ -3,7 +3,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::time::Duration;
 
 use xdict_core::*;
@@ -463,4 +463,79 @@ fn progress_cancels_and_may_reenter_the_core() {
     let result = finished.recv_timeout(Duration::from_secs(10)).expect("the import deadlocked");
     assert!(result.is_ok(), "{result:?}");
     assert!(calls.load(Ordering::SeqCst) > 0);
+}
+
+/// A source whose identity moves once it has answered `after` reads, or on demand: the handle-backed source
+/// `plan-windows-v1` WI-2 names, where the held handle is unchanged but the file it names is not.
+struct Moving {
+    bytes: Vec<u8>,
+    base: FileIdentity,
+    after: AtomicU64,
+    reads: AtomicU64,
+    moved: AtomicBool,
+}
+
+impl Moving {
+    fn new(bytes: Vec<u8>, after: u64) -> Arc<Self> {
+        let size = bytes.len() as u64;
+        Arc::new(Self {
+            bytes,
+            base: FileIdentity { device: 1, inode: 2, size, mtime_ns: 3, ctime_ns: 4 },
+            after: AtomicU64::new(after),
+            reads: AtomicU64::new(0),
+            moved: AtomicBool::new(false),
+        })
+    }
+
+    fn package(source: &Arc<Self>) -> Package {
+        Package {
+            mdx: Location::Source { name: "moving.mdx".into(), source: source.clone() as Arc<dyn ByteSource> },
+            mdd: vec![],
+            sidecars: vec![],
+        }
+    }
+}
+
+impl ByteSource for Moving {
+    fn size(&self) -> u64 {
+        self.bytes.len() as u64
+    }
+    fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+        let start = offset as usize;
+        let end = start.saturating_add(len as usize).min(self.bytes.len());
+        let bytes = self.bytes.get(start..end).unwrap_or(&[]).to_vec();
+        let read = self.reads.fetch_add(1, Ordering::SeqCst) + 1;
+        if read > self.after.load(Ordering::SeqCst) {
+            self.moved.store(true, Ordering::SeqCst);
+        }
+        Ok(bytes)
+    }
+    fn identity(&self) -> Option<FileIdentity> {
+        let mut identity = self.base;
+        if self.moved.load(Ordering::SeqCst) {
+            identity.inode = identity.inode.wrapping_add(1);
+        }
+        Some(identity)
+    }
+}
+
+#[test]
+fn a_source_that_moves_during_an_import_is_refused() {
+    let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+    let source = Moving::new(mdx("to move"), 0);
+    let error = core.import(Moving::package(&source), &NoProgress).unwrap_err();
+    assert!(matches!(error, CoreError::SourceChanged { .. }), "{error:?}");
+}
+
+#[test]
+fn a_source_that_moves_before_a_lookup_is_refused() {
+    let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
+    let source = Moving::new(mdx("to move"), u64::MAX);
+    let package = Moving::package(&source);
+    core.import(package.clone(), &NoProgress).unwrap();
+    let (dict, _) = ready(core.open(package).unwrap());
+    source.moved.store(true, Ordering::SeqCst);
+    let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
+    let error = core.lookup("run".into(), vec![dict], options).unwrap_err();
+    assert!(matches!(error, CoreError::SourceChanged { .. }), "{error:?}");
 }

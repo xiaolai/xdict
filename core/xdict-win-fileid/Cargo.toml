@@ -1,0 +1,24 @@
+[package]
+name = "xdict-win-fileid"
+description = "A Windows file's identity: volume serial, file index, size, last write and change times"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xdict-identity = { path = "../xdict-identity" }
+
+# The workspace forbids unsafe code; this crate is the exception, like xdict-mmap: the one Win32 call needs it, and
+# the module note writes down why it is sound. It is a dependency of xdict-core on Windows only.
+[lints.rust]
+unsafe_code = "deny"
+warnings = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+undocumented_unsafe_blocks = "deny"

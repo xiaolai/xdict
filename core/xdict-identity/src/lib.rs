@@ -138,7 +138,6 @@ pub struct LocationRecord {
     pub identity: Option<FileIdentity>,
     /// The volumes, in search order.
     pub volumes: Vec<VolumeRecord>,
-    pub sidecars: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -537,13 +536,7 @@ mod tests {
     use super::*;
 
     fn record(location: &str, edition: &str) -> LocationRecord {
-        LocationRecord {
-            location: location.into(),
-            edition: edition.into(),
-            identity: None,
-            volumes: vec![],
-            sidecars: vec![],
-        }
+        LocationRecord { location: location.into(), edition: edition.into(), identity: None, volumes: vec![] }
     }
 
     fn scratch(name: &str) -> PathBuf {

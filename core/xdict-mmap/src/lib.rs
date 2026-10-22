@@ -55,16 +55,31 @@ impl OwnDirectory {
     /// it is not a file this directory wrote (a link, another kind of file, one that anybody may write).
     pub fn map(&self, name: &str) -> io::Result<Mapped> {
         let path = self.path(name)?;
-        let meta = std::fs::symlink_metadata(&path)?;
-        if !meta.file_type().is_file() || writable(&meta) {
+        let named = std::fs::symlink_metadata(&path)?;
+        if !named.file_type().is_file() {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "not a file XDict wrote"));
         }
+        // What the name held when it was checked, and what the opened file is: a rename or a link put there in
+        // between would leave a file of another identity. Unix compares (dev, ino); Windows asks the volume serial,
+        // file index and change time, through the one crate allowed the call.
+        #[cfg(windows)]
+        let before = xdict_win_fileid::identity_of_path(&path)?;
         let file = open_read_only(&path)?;
-        // The file opened is the one checked: a rename in between would leave a file of another identity.
-        if !same_file(&meta, &file.metadata()?) {
+        #[cfg(windows)]
+        if before != xdict_win_fileid::identity(&file)? {
             return Err(io::Error::new(io::ErrorKind::InvalidData, "the file changed as it was opened"));
         }
-        if meta.len() == 0 {
+        #[cfg(not(windows))]
+        if !same_file(&named, &file.metadata()?) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "the file changed as it was opened"));
+        }
+        // The remaining checks belong to the object actually opened, not to the name inspected before the open:
+        // a swap between the two used to let the mapped file differ from the one these checks describe.
+        let opened = file.metadata()?;
+        if !opened.file_type().is_file() || writable(&opened) {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "not a file XDict wrote"));
+        }
+        if opened.len() == 0 {
             return Err(io::Error::new(io::ErrorKind::UnexpectedEof, "an empty file cannot be mapped"));
         }
         // SAFETY: see the module's safety argument: the file is a regular, read-only file in this directory,
@@ -169,7 +184,7 @@ fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
     (a.dev(), a.ino()) == (b.dev(), b.ino())
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn same_file(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
     a.len() == b.len() && a.modified().ok() == b.modified().ok()
 }
@@ -274,6 +289,22 @@ mod tests {
         assert_eq!(mapped.as_ref(), b"ours");
         drop(mapped);
         assert_eq!(own.map("index").unwrap().as_ref(), b"theirs");
+        std::fs::remove_dir_all(&own.dir).unwrap();
+    }
+
+    /// The check the map makes is the identity, not length and mtime: a name that now holds another file is
+    /// another file even when both are the same size.
+    #[cfg(windows)]
+    #[test]
+    fn a_name_that_now_holds_another_file_is_another_file() {
+        let own = scratch("identity");
+        own.replace("index", b"ours").unwrap();
+        let path = own.dir.join("index");
+        let before = xdict_win_fileid::identity_of_path(&path).unwrap();
+        own.replace("index", b"them").unwrap();
+        let file = open_read_only(&path).unwrap();
+        assert_eq!(before.size, xdict_win_fileid::identity(&file).unwrap().size, "the same size");
+        assert_ne!(before, xdict_win_fileid::identity(&file).unwrap());
         std::fs::remove_dir_all(&own.dir).unwrap();
     }
 
