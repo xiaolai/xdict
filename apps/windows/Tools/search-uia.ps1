@@ -20,22 +20,8 @@ Invoke-XDictGate -Name 'search-uia' -Inputs (Get-XDictLabInputs -Layout $layout)
     @{ output = (Join-Path $folder 'library-result.json'); library = $library; paths = @($tiny) } |
         ConvertTo-Json | Set-Content -LiteralPath $libraryConfig -Encoding Ascii
     $exe = Join-Path (Get-XDictAppOutput) 'XDict.exe'
-    $libraryTask = 'xdict-library-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument ('--library-lab "' + $libraryConfig + '"')
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $libraryTask -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $libraryTask
-        $deadline = [DateTime]::UtcNow.AddSeconds(120)
-        $libraryOutput = Join-Path $folder 'library-result.json'
-        while (-not (Test-Path -LiteralPath $libraryOutput)) {
-            if ([DateTime]::UtcNow -gt $deadline) { throw 'the library preparation produced no result' }
-            Start-Sleep -Milliseconds 250
-        }
-    }
-    finally {
-        Unregister-ScheduledTask -TaskName $libraryTask -Confirm:$false -ErrorAction SilentlyContinue
-    }
+    $null = Invoke-XDictTask -Executable $exe -Arguments ('--library-lab "' + $libraryConfig + '"') `
+        -Output (Join-Path $folder 'library-result.json') -Seconds 120 -Prefix 'xdict-library' 
     if (-not (Test-Path -LiteralPath $library)) { throw 'the private library was not written' }
 
     # 2. The in-session client: read the tree, type, read the results, quit the app.
@@ -52,6 +38,7 @@ try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
     Add-Type -AssemblyName System.Windows.Forms
+    . '__TOOLS__\uia-common.ps1'
     $root = [System.Windows.Automation.AutomationElement]::RootElement
     $byId = {
         param($parent, $id)
@@ -59,15 +46,7 @@ try {
             [System.Windows.Automation.AutomationElement]::AutomationIdProperty, $id)
         return $parent.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
     }
-    $window = $null
-    $deadline = (Get-Date).AddSeconds(60)
-    while (-not $window -and (Get-Date) -lt $deadline) {
-        $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-        foreach ($candidate in $windows) {
-            if ($candidate.Current.Name -eq 'XDict') { $window = $candidate; break }
-        }
-        if (-not $window) { Start-Sleep -Milliseconds 500 }
-    }
+    $window = Find-XDictWindow $root 60
     $result = [ordered]@{ window = ($null -ne $window); ids = @(); roles = @{}; items = @(); statusNoMatch = '' }
     if ($window) {
         foreach ($id in 'SearchBox', 'ScopeBox', 'Results', 'BackButton', 'ForwardButton', 'ReturnButton', 'LibraryButton') {
@@ -118,8 +97,8 @@ finally {
 '@
     $log = Join-Path $folder 'run.log'
     $script = $template.Replace('__LIBRARY__', $library).Replace('__LAUNCH__', $launchId).
-        Replace('__EXE__', $exe).Replace('__RESULT__', $result).Replace('__QUIT__', $quit).Replace('__LOG__', $log)
-    Set-Content -LiteralPath $wrapper -Value $script -Encoding Ascii
+        Replace('__EXE__', $exe).Replace('__TOOLS__', $PSScriptRoot).Replace('__RESULT__', $result).Replace('__QUIT__', $quit).Replace('__LOG__', $log)
+    Set-Content -LiteralPath $wrapper -Value $script -Encoding UTF8
 
     $uia = Invoke-XDictTask -Script $wrapper -Output $result -Seconds 180
     Write-Host ($uia | ConvertTo-Json -Depth 6)
@@ -176,13 +155,8 @@ try {
     Add-Type -AssemblyName UIAutomationClient
     Add-Type -AssemblyName UIAutomationTypes
     $root = [System.Windows.Automation.AutomationElement]::RootElement
-    $window = $null
-    $deadline = (Get-Date).AddSeconds(60)
-    while (-not $window -and (Get-Date) -lt $deadline) {
-        $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
-        foreach ($candidate in $windows) { if ($candidate.Current.Name -eq 'XDict') { $window = $candidate; break } }
-        if (-not $window) { Start-Sleep -Milliseconds 500 }
-    }
+    . '__TOOLS__\uia-common.ps1'
+    $window = Find-XDictWindow $root 60
     Start-Sleep -Seconds 3
     $status = $null
     if ($window) {
@@ -200,7 +174,7 @@ finally {
 }
 '@
     $statesScript = $statesTemplate.Replace('__LIBRARY__', $statesLibrary).Replace('__LAUNCH__', $statesLaunch).
-        Replace('__EXE__', $exe).Replace('__RESULT__', $statesResult).Replace('__QUIT__', $statesQuit)
+        Replace('__EXE__', $exe).Replace('__TOOLS__', $PSScriptRoot).Replace('__RESULT__', $statesResult).Replace('__QUIT__', $statesQuit)
     Set-Content -LiteralPath $statesWrapper -Value $statesScript -Encoding Ascii
     $states = Invoke-XDictTask -Script $statesWrapper -Output $statesResult -Seconds 180
     Write-Host ($states | ConvertTo-Json -Depth 4)

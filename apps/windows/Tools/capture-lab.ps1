@@ -189,9 +189,12 @@ $word.Quit()
         }
         Write-Host ($wordRun | ConvertTo-Json -Depth 6)
         if (-not $wordRun.panelShown -or $wordRun.term -ne 'run') {
-            # Office on this host is not activated: its sign-in dialog overlays the document and offers only sign-in
-            # or closing Word. The case is recorded, not faked; a licensed Office is an owner dependency.
-            Write-Host ("WORD NOT MEASURED: term '$($wordRun.term)' refusal '$($wordRun.refusal)' -- $($wordRun.focusInfo)")
+            # Only a reader that exposes no text is an environment gap (Office unactivated overlays a sign-in
+            # dialog); a run that fails any other way is a regression, never a skip.
+            if ($wordRun.refusal -notin @('noTextPattern', 'noSelection')) {
+                throw ("the Word capture regressed: term '$($wordRun.term)' refusal '$($wordRun.refusal)' -- $($wordRun.focusInfo)")
+            }
+            Write-Host ("WORD NOT MEASURED (the reader exposes no text): term '$($wordRun.term)' refusal '$($wordRun.refusal)'")
         }
         elseif ($wordRun.acknowledgement -ne 'Shown') { throw "the Word entry was not acknowledged: $($wordRun.acknowledgement)" }
 
@@ -203,7 +206,10 @@ $word.Quit()
         $pdfRun = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $pdfConfig + '"') -Output (Join-Path $folder 'pdf-result.json')
         Write-Host ($pdfRun | ConvertTo-Json -Depth 6)
         if (-not $pdfRun.panelShown -or $pdfRun.term -ne 'run') {
-            Write-Host ("PDF NOT MEASURED: term '$($pdfRun.term)' refusal '$($pdfRun.refusal)' -- $($pdfRun.focusInfo)")
+            if ($pdfRun.refusal -notin @('noTextPattern', 'noSelection')) {
+                throw ("the PDF capture regressed: term '$($pdfRun.term)' refusal '$($pdfRun.refusal)' -- $($pdfRun.focusInfo)")
+            }
+            Write-Host ("PDF NOT MEASURED (the viewer exposes no text): term '$($pdfRun.term)' refusal '$($pdfRun.refusal)'")
         }
     }
     else { Write-Host 'WORD NOT MEASURED: Word is not installed on this host' }
@@ -254,7 +260,7 @@ try { if (-not $notepad.HasExited) { Stop-Process -Id $notepad.Id -Force } } cat
                     ConvertTo-Json | Set-Content -LiteralPath $elevatedConfig -Encoding Ascii
                 $elevated = Invoke-XDictTask -Executable $exe -Arguments ('--capture-lab "' + $elevatedConfig + '"') -Output (Join-Path $folder 'elevated-result.json')
                 Write-Host ($elevated | ConvertTo-Json -Depth 6)
-                if ($elevated.PSObject.Properties['error']) { Write-Host ('ELEVATED NOT MEASURED: ' + $elevated.error) }
+                if ($elevated.PSObject.Properties['error']) { throw ('the elevated capture failed: ' + $elevated.error) }
                 elseif ($elevated.refusal -ne 'elevated') { throw "an elevated window was not refused: $($elevated.refusal)" }
             }
         }

@@ -7,6 +7,7 @@
 param([int]$Warm = 200, [int]$Cold = 20, [string]$Corpus = '', [string]$Out = '', [string]$Library = '', [switch]$SkipImport)
 . (Join-Path $PSScriptRoot 'gates.ps1')
 $layout = Get-XDictLayout
+$started = Get-Date
 if ([string]::IsNullOrWhiteSpace($Corpus)) { $Corpus = Join-Path $env:USERPROFILE 'xdict-corpus\the24' }
 if (-not (Test-Path -LiteralPath $Corpus)) { throw "the corpus is missing: $Corpus" }
 if ([string]::IsNullOrWhiteSpace($Out)) {
@@ -22,20 +23,9 @@ $queries = @('run', 'hold', 'cafe', 'take off', 'abb', 'window', 'reader', 'sent
 
 function Invoke-Lab {
     param([string]$Arguments, [string]$Output, [int]$Seconds = 900)
-    $id = 'xdict-measure-' + [Guid]::NewGuid().ToString('N')
-    $action = New-ScheduledTaskAction -Execute $exe -Argument $Arguments
-    $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    try {
-        Register-ScheduledTask -TaskName $id -Action $action -Principal $principal | Out-Null
-        Start-ScheduledTask -TaskName $id
-        $deadline = [DateTime]::UtcNow.AddSeconds($Seconds)
-        while (-not (Test-Path -LiteralPath $Output)) {
-            if ([DateTime]::UtcNow -gt $deadline) { return $null }
-            Start-Sleep -Seconds 1
-        }
-        return (Get-Content -LiteralPath $Output -Raw -Encoding UTF8 | ConvertFrom-Json)
-    }
-    finally { Unregister-ScheduledTask -TaskName $id -Confirm:$false -ErrorAction SilentlyContinue }
+    # A measurement sample that never arrived is recorded by its caller, not turned into a silent skip.
+    return Invoke-XDictTask -Executable $exe -Arguments $Arguments -Output $Output -Seconds $Seconds `
+        -Prefix 'xdict-measure' -TolerateTimeout
 }
 
 function Invoke-MeasureApp {
@@ -61,7 +51,7 @@ if (-not $SkipImport) {
         if (Test-Path -LiteralPath $library) { $imported = @((Get-Content -LiteralPath $library -Raw | ConvertFrom-Json)).Count }
     }
     Write-Host ("dictionaries in the measurement library: " + $imported)
-    Get-Process -Name XDict, XDictService -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
     Start-Sleep -Seconds 3
 }
 if (-not (Test-Path -LiteralPath $library)) { throw "the library to measure is missing: $library" }
@@ -72,7 +62,7 @@ if ($null -eq $warmRun) { throw 'the warm measurement produced no result' }
 $coldSamples = New-Object System.Collections.Generic.List[object]
 $coldOpens = New-Object System.Collections.Generic.List[double]
 for ($i = 0; $i -lt $Cold; $i++) {
-    Get-Process -Name XDict, XDictService -ErrorAction SilentlyContinue | Stop-Process -Force
+    Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
     Start-Sleep -Milliseconds 500
     $coldOutput = Join-Path $folder ('cold-' + $i + '.json')
     $coldRun = Invoke-MeasureApp -Mode 'cold' -Count 1 -Output $coldOutput
@@ -84,10 +74,10 @@ if ($coldSamples.Count -lt $Cold) {
     throw "the cold measurement produced $($coldSamples.Count) of $Cold samples; p50/p95 over fewer would be a lie"
 }
 $memoryOutput = Join-Path $folder 'memory.json'
-Get-Process -Name XDict, XDictService -ErrorAction SilentlyContinue | Stop-Process -Force
+Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
 Start-Sleep -Milliseconds 500
 $memory = Invoke-MeasureApp -Mode 'memory' -Count 0 -Output $memoryOutput
-Get-Process -Name XDict, XDictService -ErrorAction SilentlyContinue | Stop-Process -Force
+Stop-XDictLabProcesses -Name @('XDict', 'XDictService') -Since $started
 
 function Percentile($values, [double]$p) {
     $sorted = @($values | Sort-Object)
