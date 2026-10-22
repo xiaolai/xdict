@@ -51,7 +51,9 @@ public enum Contract {
     /// the drawer shows (ADR-0023, ADR-0024, plan-history-and-learning WI-2).
     /// 10 (2026-10-21): the study operations — a note, the notes, the review queue, a grade, an undo, the summary, a
     /// definition's hash and a re-anchor — with their answers (plan-history-and-learning WI-5).
-    public static let version: UInt32 = 12
+    /// 13 (2026-10-22): the operation `words` and its answer, a page of one dictionary's public keys for Core Spotlight
+    /// (plan-setup-v2 WI-6, ADR-0028: headwords only).
+    public static let version: UInt32 = 13
 }
 
 // MARK: - The request
@@ -187,6 +189,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     case close(dict: DictId)
     case lookup(query: String, dicts: [DictId], options: LookupOptions)
     case suggest(prefix: String, dicts: [DictId], limit: UInt32)
+    /// **A page of one dictionary's words** (plan-setup-v2 WI-6, ADR-0028): the public keys from key position
+    /// `from`, for Core Spotlight. No body is read; the words come from the edition's index.
+    case words(dict: DictId, from: UInt64, limit: UInt32)
     /// An entry rendered for `render`; its HTML is the reply's payload.
     case entry(dict: DictId, entry: EntryRef, render: RenderContext)
     case link(dict: DictId, url: String, origin: LinkOrigin, render: RenderContext)
@@ -280,8 +285,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var packageSpec: PackageSpec? {
         switch self {
         case .importPackage(let spec), .openPackage(let spec): spec
-        case .versions, .cancel, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
+        case .versions, .cancel, .close, .lookup, .suggest, .words, .entry, .link, .resource, .joinLineage,
+             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
+             .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
@@ -292,8 +298,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var render: RenderContext? {
         switch self {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
-        case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .joinLineage, .splitLineage,
-             .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions, .entryText,
+        case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .joinLineage,
+             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
+             .entryText,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
@@ -313,7 +320,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var isBulk: Bool {
         switch self {
         case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: true
-        case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .link, .joinLineage,
+        case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove,
@@ -326,7 +333,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var creditClass: CreditClass? {
         switch self {
         case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: .bulk
-        case .openPackage, .lookup, .suggest, .link: .lookup
+        case .openPackage, .lookup, .suggest, .words, .link: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory,
              .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor, .exportData,
@@ -344,6 +351,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
+        case .words(let dict, _, _): filesOf[dict] ?? []
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
@@ -360,6 +368,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .close: .closed
         case .lookup: .page
         case .suggest: .suggestions
+        case .words: .words
         case .entry: .entry
         case .link: .link
         case .resource: .resource
@@ -391,8 +400,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var reportsProgress: Bool {
         switch self {
         case .importPackage, .health, .convertApple: true
-        case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .entry, .link, .resource, .joinLineage,
-             .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText, .ledgerRecord,
+        case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .words, .entry, .link, .resource,
+             .joinLineage, .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText,
+             .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
              .ledgerSync, .ledgerRemove, .ledgerRestore: false
@@ -510,6 +520,8 @@ public enum Answer: Codable, Hashable, Sendable {
     case closed
     case page(Page)
     case suggestions([String])
+    /// A page of one dictionary's words (contract 13).
+    case words(Words)
     /// The entry's reference, policy and lossy count; **its HTML is the payload**, as UTF-8.
     case entry(Entry)
     case link(Link)
@@ -557,8 +569,9 @@ public enum Answer: Codable, Hashable, Sendable {
     public var carriesPayload: Bool {
         switch self {
         case .entry, .resource(.found): true
-        case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .link, .resource(.missing),
-             .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .ledgerRecord,
+        case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .words, .link,
+             .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
+             .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
              .reanchored, .exported, .erased, .conflicts, .synced: false
         }
@@ -582,6 +595,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .closed: .closed
         case .page: .page
         case .suggestions: .suggestions
+        case .words: .words
         case .entry: .entry
         case .link: .link
         case .resource: .resource
@@ -620,7 +634,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
-    case versions, imported, cancellation, opened, closed, page, suggestions, entry, link, resource, lineage, health
+    case versions, imported, cancellation, opened, closed, page, suggestions, words, entry, link, resource, lineage, health
     case readingStyle, converted, displayOptions, entryText, ledgerRecord, ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
     case exported, erased, conflicts, synced

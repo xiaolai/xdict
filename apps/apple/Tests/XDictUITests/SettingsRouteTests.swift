@@ -81,6 +81,30 @@ struct SettingsRouteTests {
         #expect(route.presentation == .importer)
     }
 
+    /// **Add Apple Dictionaries… from the setup board** (plan-setup-v2 WI-2): Settings on Dictionaries with that sheet
+    /// up, opened cold like the importer.
+    @Test func theAppleSheetIsRoutedToTheDictionariesPane() {
+        var opened = 0
+        let route = SettingsRoute(open: { opened += 1 })
+        route.pane = .setup
+        route.requestAppleImport()
+        #expect(opened == 1)
+        #expect(route.pane == .dictionaries)
+        #expect(route.presentation == .appleImport)
+    }
+
+    /// **Any pane by name** (plan-setup-v2 WI-2): the hover row's Open General and the AI row's Open AI Settings go
+    /// straight to their pane, with nothing queued over it.
+    @Test func aPaneCanBeAskedForByName() {
+        var opened = 0
+        let route = SettingsRoute(open: { opened += 1 })
+        route.showPane(.general)
+        #expect(opened == 1 && route.pane == .general)
+        route.showPane(.ai)
+        #expect(opened == 2 && route.pane == .ai)
+        #expect(route.presentation == .none)
+    }
+
     /// A request while another is shown is queued, never shown over it nor dropped; the same one again is a no-op.
     @Test func aRequestWhilePresentedIsQueued() {
         let route = SettingsRoute(open: {})

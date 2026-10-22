@@ -82,7 +82,8 @@ def not_in_appearance(route, appearance):
 
 ROUTES = [
     ("reader.firstLaunch", "reader", "Launch XDict for the first time (a real launch, no instrument; `--reader`)",
-     "The setup board opening by itself over the first main window; English, the Mac's own appearance", []),
+     "The setup board opening by itself over the first main window — the ordered rows, the summary and Recheck; "
+     "English, the Mac's own appearance", []),
     # The main window
     ("main.start", "full", "Launch XDict", "As Apple's Dictionary (P2–P6, P14): the title 'XDict' (XDict's own); Back / "
      "Forward, Smaller / Bigger Text and the search field ('Search', its magnifier the scope menu) in the toolbar; "
@@ -192,10 +193,12 @@ ROUTES = [
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
      [("menu", 1, "Acknowledgments")]),
-    ("setup.board", "full", "XDict ▸ Set Up XDict… (Settings ▸ Setup)", "Each setup row with its live state and action",
+    ("setup.board", "full", "XDict ▸ Set Up XDict… (Settings ▸ Setup)", "The ordered setup board: dictionaries, "
+     "accessibility, the lookup shortcut, the pointer gesture, the Service, Apple's Look Up triggers, AI — each with its "
+     "live state and action — and the footer's summary with Recheck", [("menu", 1, "Set Up XDict…")]),
+    ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library (Settings ▸ Setup)", "The Dictionaries row "
+     "needed, 'Add Dictionaries…' and 'Add Apple Dictionaries…', the footer saying what still needs the reader",
      [("menu", 1, "Set Up XDict…")]),
-    ("setup.boardEmpty", "empty", "XDict ▸ Set Up XDict… over an empty library (Settings ▸ Setup)", "The Dictionaries row not done, "
-     "'Add Dictionaries…'", [("menu", 1, "Set Up XDict…")]),
     # The panel
     ("panel.selection", "full", "Select 'apple' in the search field, ⌃⌥D", "The lookup panel: the query, the "
      "dictionary picker, the entry, 'Open in XDict'", look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"),

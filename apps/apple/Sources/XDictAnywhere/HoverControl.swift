@@ -220,6 +220,13 @@ public final class HoverControl {
     /// 2026-10-19). Except **a start that failed says off**, which is what is true; the switch then asks again.
     public var isOn: Bool { isEnabled && !startFailed }
 
+    /// **The key and the gesture the reader actually has**, read-only, for the setup board's line (plan-setup-v2
+    /// WI-4): the sentence's verb carries the gesture ("hold" or "tap twice"), so it takes the key's own symbol.
+    public var keySymbol: String { policy.modifier.symbol }
+
+    /// Whether the reader's gesture is a double tap rather than a hold.
+    public var isDoubleTap: Bool { policy.gesture == .doubleTap }
+
     public var isPaused: Bool { pauseSwitch.isPaused(at: .now) }
 
     public func pause(for duration: Duration) { pauseSwitch.pause(for: duration, from: .now) }

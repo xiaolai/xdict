@@ -410,6 +410,47 @@ impl Core {
         guard(|| self.lookup_within(&query, &dicts, options, Budget::new(LOOKUP_BYTES, LOOKUP_CANDIDATES)))
     }
 
+    /// **One dictionary's words, a page at a time** (plan-setup-v2 WI-6, ADR-0028): `from` is a key position in the
+    /// key block's order, and the page holds the public keys at and after it. An internal key is passed over by the
+    /// index's own classification, never by a guess about its spelling.
+    ///
+    /// **One item per key entry, and a spelling may repeat** — a key block is not always sorted, so a repeated word is
+    /// not always its neighbour (measured: "ACTH" twice, far apart, in the corpus's `ahd`). The consumer keys its items
+    /// by the word, so a spelling reaches the index once; asking this call to do that would need a set the size of the
+    /// dictionary held across pages.
+    ///
+    /// **A word is not always one a reader can type**: a public key may be punctuation alone (the corpus's `ahd` has
+    /// `,`), which a reader-mode lookup folds away and finds nothing for. What to show is the consumer's decision —
+    /// this call names the keys the index holds, whatever they are.
+    ///
+    /// **No body is read**: the words come from the index, so a page costs no decompression and the ceiling on a page
+    /// is the caller's to pace. `total` counts key entries, not pages, so a caller pages until `from` reaches it.
+    pub fn words(&self, dict: String, from: u64, limit: u32) -> Result<Words, CoreError> {
+        guard(|| {
+            if limit > MAX_PAGE {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Page,
+                    detail: format!("a page holds at most {MAX_PAGE} words, {limit} were asked"),
+                });
+            }
+            let opened = self.dict(&dict)?;
+            // The file is checked before it is read, as a lookup checks it: words read from a file rewritten meanwhile
+            // are never answered from the old index.
+            opened.mdx_source.unchanged()?;
+            let mdx = &opened.mdx;
+            let total = mdx.len() as u64;
+            let mut words: Vec<String> = Vec::new();
+            let mut i = usize::try_from(from).unwrap_or(usize::MAX);
+            while i < mdx.len() && words.len() < limit as usize {
+                if mdx.is_public(i)? {
+                    words.push(mdx.key(i)?.into_owned());
+                }
+                i += 1;
+            }
+            Ok(Words { edition: opened.edition.clone(), words, total, next: i as u64 })
+        })
+    }
+
     /// [`Self::lookup`], reading no more records than `budget` allows across every dictionary and redirect.
     fn lookup_within(
         &self,

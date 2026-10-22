@@ -121,7 +121,8 @@ public struct LookupPanelView: View {
     }
 
     /// System Settings › Privacy & Security › Device Control and Data Access (macOS 27's name; `PrivacySettings`).
-    static let accessibilityPane = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+    /// The URL lives in `SettingsLink`, the one place the setup board's buttons take theirs from too.
+    static let accessibilityPane = SettingsLink.accessibility.url
         ?? URL(fileURLWithPath: "/System/Applications/System Settings.app")
 
     private var expandHelp: Text {
