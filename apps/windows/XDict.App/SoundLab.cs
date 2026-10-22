@@ -17,22 +17,20 @@ internal static class SoundLab
         using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(configPath));
         string output = config.RootElement.GetProperty("output").GetString()!;
         string folder = Path.GetDirectoryName(output)!;
-        (string Name, string Language)[] voices = SpeechSynthesizer.AllVoices
-            .Select(voice => (voice.DisplayName, voice.Language)).ToArray();
+        (string Name, string Language)[] voices = VoicePicker.Voices();
         using var synth = new SpeechSynthesizer();
         ulong plain = 0, ipa = 0, chinese = 0;
-        string? english = SpeechText.ChooseVoice(voices, "en", "us");
-        if (english is not null)
+        string? english = null, zh = null;
+        if (synth.Choose(voices, "en", "us") is not null)
         {
-            synth.Voice = SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == english);
+            english = synth.Voice?.DisplayName;
             using (SpeechSynthesisStream stream = await synth.SynthesizeTextToStreamAsync("record")) plain = stream.Size;
             using (SpeechSynthesisStream stream = await synth.SynthesizeSsmlToStreamAsync(
                        SpeechText.Ssml("record", "rɪˈkɔːrd", "en-US"))) ipa = stream.Size;
         }
-        string? zh = SpeechText.ChooseVoice(voices, "zh-Hans");
-        if (zh is not null)
+        if (synth.Choose(voices, "zh-Hans") is not null)
         {
-            synth.Voice = SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == zh);
+            zh = synth.Voice?.DisplayName;
             using SpeechSynthesisStream stream = await synth.SynthesizeTextToStreamAsync("词典");
             chinese = stream.Size;
         }

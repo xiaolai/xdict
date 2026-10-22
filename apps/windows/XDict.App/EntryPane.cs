@@ -12,8 +12,7 @@ namespace XDict.App;
 public sealed record EntryResponse(byte[] Bytes, string Mime, string Csp, int Status = 200, EntryDisplayOptions? Display = null);
 public interface IEntrySource
 {
-    string Dictionary { get; }
-    Task<EntryResponse> ResourceAsync(string path, bool sound, CancellationToken cancellation);
+    Task<EntryResponse> ResourceAsync(string path, CancellationToken cancellation);
 }
 
 public sealed class EntryPane : IDisposable
@@ -301,43 +300,12 @@ public sealed class EntryPane : IDisposable
         CancellationToken cancellation = lifetime.Token;
         try
         {
-            EntryResponse response;
             EntryRoute route = EntryPolicy.Route(e.Request.Uri, e.Request.Method);
 #if DEBUG
             // Isolated controls keep only the named layer. Production never takes this branch.
             if (route == EntryRoute.Refused && TestIsolation.Length > 0 && TestIsolation != "filter-on") return;
 #endif
-            if (!ready || disposed || route == EntryRoute.Refused)
-            {
-                Refused?.Invoke(e.Request.Uri);
-                response = new([], "text/plain", csp, 403);
-            }
-            else if (route == EntryRoute.Document && e.Request.Uri.Split('#')[0] == document)
-                response = new(html, "text/html; charset=utf-8", csp);
-            else if (route == EntryRoute.Blocked)
-            {
-                string remote = Uri.UnescapeDataString(new Uri(e.Request.Uri).AbsolutePath[9..]);
-                string label = Uri.TryCreate(remote, UriKind.Absolute, out Uri? target) && target.Host.Length > 0 ? target.Host : remote;
-                label = label[..Math.Min(label.Length, 256)];
-                string text = System.Security.SecurityElement.Escape(Strings.Format("entry.remoteImage", label))!;
-                string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='64' viewBox='0 0 320 64'><rect width='320' height='64' rx='4' fill='#f3f3f3'/><text x='12' y='36' font-family='Segoe UI,Microsoft YaHei UI,sans-serif' font-size='13' fill='#333333'>" + text + "</text></svg>";
-                response = new(Encoding.UTF8.GetBytes(svg), "image/svg+xml", csp);
-            }
-            else if (route == EntryRoute.Font)
-            {
-                byte[] font = ReadingFrame.Font(new Uri(e.Request.Uri).AbsolutePath[6..]);
-                response = new(font, "font/ttf", csp, font.Length > 0 ? 200 : 404);
-            }
-            else if (route is EntryRoute.Resource or EntryRoute.Sound)
-            {
-                var uri = new Uri(e.Request.Uri);
-                int prefix = route == EntryRoute.Resource ? 3 : 7;
-                if (probing && uri.AbsolutePath == "/r/" + probePath)
-                    response = new(Encoding.UTF8.GetBytes("body{color:rgb(1,2,3)}"), "text/css", csp);
-                else response = await source.ResourceAsync(uri.AbsolutePath[prefix..] + uri.Query, route == EntryRoute.Sound, cancellation);
-            }
-            // Blocked is answered above; a route that reaches here is not this entry's (404).
-            else response = new([], "text/plain", csp, 404);
+            EntryResponse response = await RespondAsync(e, route, cancellation);
             if (cancellation.IsCancellationRequested || requestedGeneration != generation)
                 response = new([], "text/plain", "default-src 'none'", 410);
             // The entry's core policy reaches every response, including resources and refusals. Never redirect.
@@ -360,6 +328,46 @@ public sealed class EntryPane : IDisposable
             Failure?.Invoke(error.GetType().Name);
         }
         finally { deferral.Complete(); }
+    }
+
+    /// <summary>One route's answer: the document, a refusal, the blocked-image card, a font, a resource, or 404.</summary>
+    private async Task<EntryResponse> RespondAsync(CoreWebView2WebResourceRequestedEventArgs e, EntryRoute route,
+        CancellationToken cancellation)
+    {
+        if (!ready || disposed || route == EntryRoute.Refused)
+        {
+            Refused?.Invoke(e.Request.Uri);
+            return new([], "text/plain", csp, 403);
+        }
+        if (route == EntryRoute.Document && e.Request.Uri.Split('#')[0] == document)
+            return new(html, "text/html; charset=utf-8", csp);
+        if (route == EntryRoute.Blocked) return BlockedImage(e.Request.Uri);
+        if (route == EntryRoute.Font)
+        {
+            byte[] font = ReadingFrame.Font(new Uri(e.Request.Uri).AbsolutePath[6..]);
+            return new(font, "font/ttf", csp, font.Length > 0 ? 200 : 404);
+        }
+        if (route is EntryRoute.Resource or EntryRoute.Sound)
+        {
+            var uri = new Uri(e.Request.Uri);
+            int prefix = route == EntryRoute.Resource ? 3 : 7;
+            if (probing && uri.AbsolutePath == "/r/" + probePath)
+                return new(Encoding.UTF8.GetBytes("body{color:rgb(1,2,3)}"), "text/css", csp);
+            return await source.ResourceAsync(uri.AbsolutePath[prefix..] + uri.Query, cancellation);
+        }
+        // Blocked is answered above; a route that reaches here is not this entry's (404).
+        return new([], "text/plain", csp, 404);
+    }
+
+    /// <summary>The card a blocked remote image is replaced with: the remote host is named, the request is not made.</summary>
+    private EntryResponse BlockedImage(string requestUri)
+    {
+        string remote = Uri.UnescapeDataString(new Uri(requestUri).AbsolutePath[9..]);
+        string label = Uri.TryCreate(remote, UriKind.Absolute, out Uri? target) && target.Host.Length > 0 ? target.Host : remote;
+        label = label[..Math.Min(label.Length, 256)];
+        string text = System.Security.SecurityElement.Escape(Strings.Format("entry.remoteImage", label))!;
+        string svg = "<svg xmlns='http://www.w3.org/2000/svg' width='320' height='64' viewBox='0 0 320 64'><rect width='320' height='64' rx='4' fill='#f3f3f3'/><text x='12' y='36' font-family='Segoe UI,Microsoft YaHei UI,sans-serif' font-size='13' fill='#333333'>" + text + "</text></svg>";
+        return new(Encoding.UTF8.GetBytes(svg), "image/svg+xml", csp);
     }
 
     private static string Bridge(string nonce, ulong generation) => $$"""

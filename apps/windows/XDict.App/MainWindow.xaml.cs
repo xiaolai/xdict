@@ -82,230 +82,8 @@ public sealed partial class MainWindow : Window
             StatusText.Text = Strings.Get("app.ready");
             probe?.RecordVersions(versions, started.ProcessId);
 #if DEBUG
-            string[] arguments = Environment.GetCommandLineArgs();
-            int captureLab = Array.IndexOf(arguments, "--capture-lab");
-            if (captureLab >= 0 && captureLab + 1 < arguments.Length)
+            if (await RunLabAsync(started))
             {
-                await Capture.CaptureLab.RunAsync(arguments[captureLab + 1], started);
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int libraryLab = Array.IndexOf(arguments, "--library-lab");
-            if (libraryLab >= 0 && libraryLab + 1 < arguments.Length)
-            {
-                using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[libraryLab + 1]));
-                string output = config.RootElement.GetProperty("output").GetString()!;
-                string libraryPath = config.RootElement.GetProperty("library").GetString()!;
-                string[] paths = config.RootElement.GetProperty("paths").EnumerateArray()
-                    .Select(path => path.GetString()!).ToArray();
-                LibraryStore labStore = LibraryStore.Load(libraryPath);
-                var window = new LibraryWindow(labStore, started, askLanguages: false);
-                await window.AddPathsAsync(paths);
-                await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
-                {
-                    count = labStore.Dictionaries.Count,
-                    editions = labStore.Dictionaries.Select(item => item.Edition).ToArray(),
-                    status = window.StatusText,
-                }));
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int measureLab = Array.IndexOf(arguments, "--measure-lab");
-            if (measureLab >= 0 && measureLab + 1 < arguments.Length)
-            {
-                // In-app measurement: the UIA provider wedges under a long query loop, so the production search is
-                // timed where it runs — submit, results applied, and the dispatcher's next turn (the first paint).
-                using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[measureLab + 1]));
-                string output = config.RootElement.GetProperty("output").GetString()!;
-                string libraryPath = config.RootElement.GetProperty("library").GetString()!;
-                string mode = config.RootElement.GetProperty("mode").GetString()!;
-                int count = config.RootElement.GetProperty("count").GetInt32();
-                string[] queries = config.RootElement.GetProperty("queries").EnumerateArray()
-                    .Select(item => item.GetString()!).ToArray();
-                store = LibraryStore.Load(libraryPath);
-                session = new SearchSession(started);
-                long openStarted = Environment.TickCount64;
-                await session.OpenAsync(store.Dictionaries);
-                long openMs = Environment.TickCount64 - openStarted;
-                if (mode == "memory")
-                {
-                    long serviceMb = -1;
-                    try { serviceMb = System.Diagnostics.Process.GetProcessById(started.ProcessId).WorkingSet64 / (1024 * 1024); }
-                    catch (Exception) { }
-                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
-                    {
-                        mode, openMs, dictionaries = session.Dictionaries.Count,
-                        appMb = Environment.WorkingSet / (1024 * 1024), serviceMb,
-                    }));
-                    started.Dispose();
-                    Application.Current.Exit();
-                    return;
-                }
-                var samples = new List<object>();
-                for (int i = 0; i < count; i++)
-                {
-                    string query = queries[i % queries.Length];
-                    SearchBox.Text = query;
-                    var watch = System.Diagnostics.Stopwatch.StartNew();
-                    await SearchAsync(query);
-                    var drawn = new TaskCompletionSource();
-                    DispatcherQueue.TryEnqueue(() => drawn.TrySetResult());
-                    await drawn.Task;
-                    watch.Stop();
-                    samples.Add(new { query, ms = watch.Elapsed.TotalMilliseconds, rows = hits.Count });
-                }
-                await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
-                {
-                    mode, openMs, dictionaries = session.Dictionaries.Count, samples,
-                }));
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int soundLinkLab = Array.IndexOf(arguments, "--sound-link-lab");
-            if (soundLinkLab >= 0 && soundLinkLab + 1 < arguments.Length)
-            {
-                void Trace(string step) => File.AppendAllText(Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XDict", "lab-trace.txt"),
-                    DateTime.Now.ToString("HH:mm:ss.fff") + " " + step + "\n");
-                Trace("start");
-                using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[soundLinkLab + 1]));
-                string output = config.RootElement.GetProperty("output").GetString()!;
-                string fixtures = config.RootElement.GetProperty("fixtures").GetString()!;
-                Trace("importing");
-                LibraryDictionary record = await LibraryImporter.ImportAsync(started,
-                    PackageFinder.Discover(Path.Combine(fixtures, "sounds", "sounds.mdx")));
-                Trace("imported");
-                string dict = await LibraryInspector.OpenAsync(started, record);
-                Trace("opened");
-                Reply page;
-                try
-                {
-                    page = await started.CallAsync("lookup", new { query = "sounds", dicts = new[] { dict },
-                        options = new { limit = 10, offset = 0, mode = "reader", generation = (uint?)null } });
-                }
-                catch (Exception error)
-                {
-                    Trace("lookup threw: " + error.GetType().Name + ": " + error.Message);
-                    throw;
-                }
-                Trace("lookup: " + (page.Error is { } failure ? failure.GetRawText() : "ok"));
-                JsonElement entry = page.Ok!.Value.GetProperty("hits")[0].GetProperty("entry").Clone();
-                Trace("entry");
-                var links = new List<object>();
-                var resources = new List<object>();
-                foreach (string url in new[] { "sound://here.mp3", "sound://present.spx", "sound://gone.mp3" })
-                {
-                    Trace("link request " + url);
-                    Reply link = await started.CallAsync("link", new
-                    {
-                        dict, url, origin = new { type = "entry", entry },
-                        view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20 },
-                    });
-                    Trace("link: " + (link.Error is { } linkError ? linkError.GetRawText() : "ok"));
-                    JsonElement answer = link.Ok!.Value;
-                    string type = answer.GetProperty("type").GetString()!;
-                    string? path = type == "sound" ? answer.GetProperty("path").GetString() : null;
-                    links.Add(new { url, type, path });
-                    if (path is null) continue;
-                    Trace("resource request " + path);
-                    Reply resource = await started.CallAsync("resource", new
-                    {
-                        dict, path,
-                        view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20 },
-                    });
-                    Trace("resource: " + (resource.Error is { } resourceError ? resourceError.GetRawText() : "ok"));
-                    JsonElement ok = resource.Ok!.Value;
-                    bool found = ok.GetProperty("type").GetString() == "found";
-                    string? mime = found ? ok.GetProperty("mime").GetString() : null;
-                    SoundChoice choice = SoundSupport.Classify(path, found, mime);
-                    resources.Add(new { path, found, mime, kind = choice.Kind.ToString() });
-                }
-                Trace("writing");
-                await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { links, resources }));
-                Trace("written");
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int soundLab = Array.IndexOf(arguments, "--sound-lab");
-            if (soundLab >= 0 && soundLab + 1 < arguments.Length)
-            {
-                await SoundLab.RunAsync(arguments[soundLab + 1]);
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int trailLab = Array.IndexOf(arguments, "--trail-lab");
-            if (trailLab >= 0 && trailLab + 1 < arguments.Length)
-            {
-                using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[trailLab + 1]));
-                string output = config.RootElement.GetProperty("output").GetString()!;
-                string libraryPath = config.RootElement.GetProperty("library").GetString()!;
-                store = LibraryStore.Load(libraryPath);
-                session = new SearchSession(started);
-                await session.OpenAsync(store.Dictionaries);
-                await SearchAsync("run");
-                int runRows = hits.Count;
-                bool openedFirst = false, firstBack = false;
-                if (hits.Count > 0)
-                {
-                    await ShowAsync(hits[0].Edition, hits[0].Entry, "run", record: true);
-                    openedFirst = true;
-                    firstBack = trail.CanBack;
-                }
-                await SearchAsync("cafe");
-                int cafeRows = hits.Count;
-                bool openedSecond = false, secondBack = false, afterBack = false;
-                if (hits.Count > 0)
-                {
-                    await ShowAsync(hits[0].Edition, hits[0].Entry, "cafe", record: true);
-                    openedSecond = true;
-                    secondBack = trail.CanBack;
-                    if (trail.Back() is not null)
-                    {
-                        await RestoreAsync();
-                        afterBack = trail.CanBack;
-                    }
-                }
-                await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
-                {
-                    runRows, cafeRows, openedFirst, openedSecond, firstBack, secondBack, afterBack,
-                }));
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int searchLab = Array.IndexOf(arguments, "--search-lab");
-            if (searchLab >= 0 && searchLab + 1 < arguments.Length)
-            {
-                using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[searchLab + 1]));
-                string output = config.RootElement.GetProperty("output").GetString()!;
-                string libraryPath = config.RootElement.GetProperty("library").GetString()!;
-                string query = config.RootElement.GetProperty("query").GetString()!;
-                store = LibraryStore.Load(libraryPath);
-                session = new SearchSession(started);
-                await session.OpenAsync(store.Dictionaries);
-                await SearchAsync(query);
-                await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
-                {
-                    hits = hits.Count,
-                    first = hits.Count > 0 ? hits[0].Headword : null,
-                    status = StatusText.Text,
-                }));
-                started.Dispose();
-                Application.Current.Exit();
-                return;
-            }
-            int lab = Array.IndexOf(arguments, "--entry-lab");
-            if (lab >= 0 && lab + 1 < arguments.Length)
-            {
-                EntryHost.Visibility = Visibility.Visible;
-                var browser = new Microsoft.UI.Xaml.Controls.WebView2();
-                EntryHost.Children.Add(browser);
-                await EntryLab.RunAsync(browser, arguments[lab + 1], started);
                 started.Dispose();
                 Application.Current.Exit();
                 return;
@@ -334,6 +112,224 @@ public sealed partial class MainWindow : Window
         if (probe is not null)
             await WatchQuitAsync();
     }
+
+#if DEBUG
+    /// <summary>The developer labs: one mode per run and the caller exits; false when no lab was named.</summary>
+    private async Task<bool> RunLabAsync(ServiceClient started)
+    {
+                string[] arguments = Environment.GetCommandLineArgs();
+                int captureLab = Array.IndexOf(arguments, "--capture-lab");
+                if (captureLab >= 0 && captureLab + 1 < arguments.Length)
+                {
+                    await Capture.CaptureLab.RunAsync(arguments[captureLab + 1], started);
+                    return true;
+                }
+                int libraryLab = Array.IndexOf(arguments, "--library-lab");
+                if (libraryLab >= 0 && libraryLab + 1 < arguments.Length)
+                {
+                    using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[libraryLab + 1]));
+                    string output = config.RootElement.GetProperty("output").GetString()!;
+                    string libraryPath = config.RootElement.GetProperty("library").GetString()!;
+                    string[] paths = config.RootElement.GetProperty("paths").EnumerateArray()
+                        .Select(path => path.GetString()!).ToArray();
+                    LibraryStore labStore = LibraryStore.Load(libraryPath);
+                    var window = new LibraryWindow(labStore, started, askLanguages: false);
+                    await window.AddPathsAsync(paths);
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
+                    {
+                        count = labStore.Dictionaries.Count,
+                        editions = labStore.Dictionaries.Select(item => item.Edition).ToArray(),
+                        status = window.StatusText,
+                    }));
+                    return true;
+                }
+                int measureLab = Array.IndexOf(arguments, "--measure-lab");
+                if (measureLab >= 0 && measureLab + 1 < arguments.Length)
+                {
+                    // In-app measurement: the UIA provider wedges under a long query loop, so the production search is
+                    // timed where it runs — submit, results applied, and the dispatcher's next turn (the first paint).
+                    using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[measureLab + 1]));
+                    string output = config.RootElement.GetProperty("output").GetString()!;
+                    string libraryPath = config.RootElement.GetProperty("library").GetString()!;
+                    string mode = config.RootElement.GetProperty("mode").GetString()!;
+                    int count = config.RootElement.GetProperty("count").GetInt32();
+                    string[] queries = config.RootElement.GetProperty("queries").EnumerateArray()
+                        .Select(item => item.GetString()!).ToArray();
+                    store = LibraryStore.Load(libraryPath);
+                    session = new SearchSession(started);
+                    long openStarted = Environment.TickCount64;
+                    await session.OpenAsync(store.Dictionaries);
+                    long openMs = Environment.TickCount64 - openStarted;
+                    if (mode == "memory")
+                    {
+                        long serviceMb = -1;
+                        try { serviceMb = System.Diagnostics.Process.GetProcessById(started.ProcessId).WorkingSet64 / (1024 * 1024); }
+                        catch (Exception) { }
+                        await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
+                        {
+                            mode, openMs, dictionaries = session.Dictionaries.Count,
+                            appMb = Environment.WorkingSet / (1024 * 1024), serviceMb,
+                        }));
+                        return true;
+                    }
+                    var samples = new List<object>();
+                    for (int i = 0; i < count; i++)
+                    {
+                        string query = queries[i % queries.Length];
+                        SearchBox.Text = query;
+                        var watch = System.Diagnostics.Stopwatch.StartNew();
+                        await SearchAsync(query);
+                        var drawn = new TaskCompletionSource();
+                        DispatcherQueue.TryEnqueue(() => drawn.TrySetResult());
+                        await drawn.Task;
+                        watch.Stop();
+                        samples.Add(new { query, ms = watch.Elapsed.TotalMilliseconds, rows = hits.Count });
+                    }
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
+                    {
+                        mode, openMs, dictionaries = session.Dictionaries.Count, samples,
+                    }));
+                    return true;
+                }
+                int soundLinkLab = Array.IndexOf(arguments, "--sound-link-lab");
+                if (soundLinkLab >= 0 && soundLinkLab + 1 < arguments.Length)
+                {
+                    void Trace(string step) => File.AppendAllText(Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "XDict", "lab-trace.txt"),
+                        DateTime.Now.ToString("HH:mm:ss.fff") + " " + step + "\n");
+                    Trace("start");
+                    using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[soundLinkLab + 1]));
+                    string output = config.RootElement.GetProperty("output").GetString()!;
+                    string fixtures = config.RootElement.GetProperty("fixtures").GetString()!;
+                    Trace("importing");
+                    LibraryDictionary record = await LibraryImporter.ImportAsync(started,
+                        PackageFinder.Discover(Path.Combine(fixtures, "sounds", "sounds.mdx")));
+                    Trace("imported");
+                    string dict = await LibraryInspector.OpenAsync(started, record);
+                    Trace("opened");
+                    Reply page;
+                    try
+                    {
+                        page = await started.CallAsync("lookup", new { query = "sounds", dicts = new[] { dict },
+                            options = new { limit = 10, offset = 0, mode = "reader", generation = (uint?)null } });
+                    }
+                    catch (Exception error)
+                    {
+                        Trace("lookup threw: " + error.GetType().Name + ": " + error.Message);
+                        throw;
+                    }
+                    Trace("lookup: " + (page.Error is { } failure ? failure.GetRawText() : "ok"));
+                    JsonElement entry = page.Ok!.Value.GetProperty("hits")[0].GetProperty("entry").Clone();
+                    Trace("entry");
+                    var links = new List<object>();
+                    var resources = new List<object>();
+                    foreach (string url in new[] { "sound://here.mp3", "sound://present.spx", "sound://gone.mp3" })
+                    {
+                        Trace("link request " + url);
+                        Reply link = await started.CallAsync("link", new
+                        {
+                            dict, url, origin = new { type = "entry", entry },
+                            view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20 },
+                        });
+                        Trace("link: " + (link.Error is { } linkError ? linkError.GetRawText() : "ok"));
+                        JsonElement answer = link.Ok!.Value;
+                        string type = answer.GetProperty("type").GetString()!;
+                        string? path = type == "sound" ? answer.GetProperty("path").GetString() : null;
+                        links.Add(new { url, type, path });
+                        if (path is null) continue;
+                        Trace("resource request " + path);
+                        Reply resource = await started.CallAsync("resource", new
+                        {
+                            dict, path,
+                            view = new { baseUrl = "https://xdict.local/", maxBodyBytes = 1 << 20 },
+                        });
+                        Trace("resource: " + (resource.Error is { } resourceError ? resourceError.GetRawText() : "ok"));
+                        JsonElement ok = resource.Ok!.Value;
+                        bool found = ok.GetProperty("type").GetString() == "found";
+                        string? mime = found ? ok.GetProperty("mime").GetString() : null;
+                        SoundChoice choice = SoundSupport.Classify(path, found, mime);
+                        resources.Add(new { path, found, mime, kind = choice.Kind.ToString() });
+                    }
+                    Trace("writing");
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new { links, resources }));
+                    Trace("written");
+                    return true;
+                }
+                int soundLab = Array.IndexOf(arguments, "--sound-lab");
+                if (soundLab >= 0 && soundLab + 1 < arguments.Length)
+                {
+                    await SoundLab.RunAsync(arguments[soundLab + 1]);
+                    return true;
+                }
+                int trailLab = Array.IndexOf(arguments, "--trail-lab");
+                if (trailLab >= 0 && trailLab + 1 < arguments.Length)
+                {
+                    using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[trailLab + 1]));
+                    string output = config.RootElement.GetProperty("output").GetString()!;
+                    string libraryPath = config.RootElement.GetProperty("library").GetString()!;
+                    store = LibraryStore.Load(libraryPath);
+                    session = new SearchSession(started);
+                    await session.OpenAsync(store.Dictionaries);
+                    await SearchAsync("run");
+                    int runRows = hits.Count;
+                    bool openedFirst = false, firstBack = false;
+                    if (hits.Count > 0)
+                    {
+                        await ShowAsync(hits[0].Edition, hits[0].Entry, "run", record: true);
+                        openedFirst = true;
+                        firstBack = trail.CanBack;
+                    }
+                    await SearchAsync("cafe");
+                    int cafeRows = hits.Count;
+                    bool openedSecond = false, secondBack = false, afterBack = false;
+                    if (hits.Count > 0)
+                    {
+                        await ShowAsync(hits[0].Edition, hits[0].Entry, "cafe", record: true);
+                        openedSecond = true;
+                        secondBack = trail.CanBack;
+                        if (trail.Back() is not null)
+                        {
+                            await RestoreAsync();
+                            afterBack = trail.CanBack;
+                        }
+                    }
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
+                    {
+                        runRows, cafeRows, openedFirst, openedSecond, firstBack, secondBack, afterBack,
+                    }));
+                    return true;
+                }
+                int searchLab = Array.IndexOf(arguments, "--search-lab");
+                if (searchLab >= 0 && searchLab + 1 < arguments.Length)
+                {
+                    using JsonDocument config = JsonDocument.Parse(await File.ReadAllTextAsync(arguments[searchLab + 1]));
+                    string output = config.RootElement.GetProperty("output").GetString()!;
+                    string libraryPath = config.RootElement.GetProperty("library").GetString()!;
+                    string query = config.RootElement.GetProperty("query").GetString()!;
+                    store = LibraryStore.Load(libraryPath);
+                    session = new SearchSession(started);
+                    await session.OpenAsync(store.Dictionaries);
+                    await SearchAsync(query);
+                    await File.WriteAllTextAsync(output, JsonSerializer.Serialize(new
+                    {
+                        hits = hits.Count,
+                        first = hits.Count > 0 ? hits[0].Headword : null,
+                        status = StatusText.Text,
+                    }));
+                    return true;
+                }
+                int lab = Array.IndexOf(arguments, "--entry-lab");
+                if (lab >= 0 && lab + 1 < arguments.Length)
+                {
+                    EntryHost.Visibility = Visibility.Visible;
+                    var browser = new Microsoft.UI.Xaml.Controls.WebView2();
+                    EntryHost.Children.Add(browser);
+                    await EntryLab.RunAsync(browser, arguments[lab + 1], started);
+                    return true;
+                }
+        return false;
+    }
+#endif
 
     /// <summary>A lab's failure is otherwise silent: a windowed app has no console, and the harness sees no result.</summary>
     private static void TraceFailure(string text)
@@ -652,17 +648,12 @@ public sealed partial class MainWindow : Window
     {
         if (string.IsNullOrWhiteSpace(text)) return;
         using var synth = new SpeechSynthesizer();
-        (string Name, string Language)[] voices = SpeechSynthesizer.AllVoices
-            .Select(voice => (voice.DisplayName, voice.Language)).ToArray();
+        (string Name, string Language)[] voices = VoicePicker.Voices();
         string language = store?.Dictionaries.FirstOrDefault(item => item.Edition == paneLease.Edition)?.ExplainLanguage ?? "en";
-        string? chosen = SpeechText.ChooseVoice(voices, language, AppSettings.Load().Accent);
-        if (chosen is not null)
-            synth.Voice = SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == chosen);
+        synth.Choose(voices, language, AppSettings.Load().Accent);
         // The entry's own IPA, when it has one, is what the voice should pronounce; the SSML names the voice's tag.
         string? ipa = await CurrentIpaAsync();
-        string tag = chosen is null
-            ? language
-            : SpeechSynthesizer.AllVoices.First(voice => voice.DisplayName == chosen).Language;
+        string tag = synth.Voice?.Language ?? language;
         SpeechSynthesisStream stream = ipa is null
             ? await synth.SynthesizeTextToStreamAsync(text)
             : await synth.SynthesizeSsmlToStreamAsync(SpeechText.Ssml(text, ipa, tag));

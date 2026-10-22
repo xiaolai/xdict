@@ -282,21 +282,29 @@ internal static class CaptureLab
         WordWindow(1500) != IntPtr.Zero ? FirstProcess("WINWORD") : StartWord(document);
 
     /// <summary>Word's own frame is class OpusApp; a first-run dialog is another window and is not the document.</summary>
-    private static IntPtr WordWindow(int milliseconds)
+    /// <summary>The first window any of these processes opens, found by `windowOf`, within the deadline.</summary>
+    private static IntPtr PollWindow(IEnumerable<string> names, Func<uint, IntPtr> windowOf, int milliseconds)
     {
         long deadline = Environment.TickCount64 + milliseconds;
         while (Environment.TickCount64 < deadline)
         {
-            foreach (Process process in Process.GetProcessesByName("WINWORD"))
+            foreach (string name in names)
             {
-                IntPtr window = Win32.WindowOfClass((uint)process.Id, "OpusApp");
-                process.Dispose();
-                if (window != IntPtr.Zero) return window;
+                foreach (Process process in Process.GetProcessesByName(name))
+                {
+                    uint pid = (uint)process.Id;
+                    process.Dispose();
+                    IntPtr window = windowOf(pid);
+                    if (window != IntPtr.Zero) return window;
+                }
             }
             Thread.Sleep(100);
         }
         return IntPtr.Zero;
     }
+
+    private static IntPtr WordWindow(int milliseconds) =>
+        PollWindow(["WINWORD"], pid => Win32.WindowOfClass(pid, "OpusApp"), milliseconds);
 
     private static Process StartWord(string document)
     {
@@ -312,21 +320,8 @@ internal static class CaptureLab
     }
 
     /// <summary>The visible window of any process with this name, waiting while it starts.</summary>
-    private static IntPtr ProcessWindow(string name, int milliseconds)
-    {
-        long deadline = Environment.TickCount64 + milliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            foreach (Process process in Process.GetProcessesByName(name))
-            {
-                IntPtr window = Win32.MainWindowOf((uint)process.Id);
-                process.Dispose();
-                if (window != IntPtr.Zero) return window;
-            }
-            Thread.Sleep(100);
-        }
-        return IntPtr.Zero;
-    }
+    private static IntPtr ProcessWindow(string name, int milliseconds) =>
+        PollWindow([name], Win32.MainWindowOf, milliseconds);
 
     private static Process StartEdge(string htmlFile)
     {
@@ -343,22 +338,8 @@ internal static class CaptureLab
         return Process.Start(new ProcessStartInfo(executable, "\"" + target + "\"") { UseShellExecute = true })!;
     }
 
-    private static IntPtr BrowserWindow(int milliseconds)
-    {
-        long deadline = Environment.TickCount64 + milliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            foreach (string name in new[] { "msedge", "chrome" })
-                foreach (Process process in Process.GetProcessesByName(name))
-                {
-                    IntPtr window = Win32.MainWindowOf((uint)process.Id);
-                    process.Dispose();
-                    if (window != IntPtr.Zero) return window;
-                }
-            Thread.Sleep(100);
-        }
-        return IntPtr.Zero;
-    }
+    private static IntPtr BrowserWindow(int milliseconds) =>
+        PollWindow(["msedge", "chrome"], Win32.MainWindowOf, milliseconds);
 
     /// <summary>Clicks the middle of the client area, so the page holds focus rather than the address bar.</summary>
     private static void ClickCenter(IntPtr window)
@@ -575,21 +556,8 @@ internal static class CaptureLab
     /// <summary>The visible window of any Notepad process, waiting while the app starts its tab host.</summary>
     private static IntPtr ProcessWindow(string name) => ProcessWindow(name, 15000);
 
-    private static IntPtr NotepadWindow(int milliseconds)
-    {
-        long deadline = Environment.TickCount64 + milliseconds;
-        while (Environment.TickCount64 < deadline)
-        {
-            foreach (Process process in Process.GetProcessesByName("notepad"))
-            {
-                IntPtr window = Win32.MainWindowOf((uint)process.Id);
-                process.Dispose();
-                if (window != IntPtr.Zero) return window;
-            }
-            Thread.Sleep(100);
-        }
-        return IntPtr.Zero;
-    }
+    private static IntPtr NotepadWindow(int milliseconds) =>
+        PollWindow(["notepad"], Win32.MainWindowOf, milliseconds);
 
     private static bool Focus(IntPtr window)
     {

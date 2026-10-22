@@ -27,7 +27,7 @@ public sealed class DictionaryEntrySource(ServiceClient client, string dictionar
         }
         return new(reply.Payload ?? [], "text/html; charset=utf-8", reply.Ok!.Value.GetProperty("csp").GetString()!, Display: displayOptions);
     }
-    public async Task<EntryResponse> ResourceAsync(string path, bool sound, CancellationToken cancellation)
+    public async Task<EntryResponse> ResourceAsync(string path, CancellationToken cancellation)
     {
         Reply reply = await client.CallAsync("resource", new { dict = dictionary, path, view = View }, cancellation: cancellation);
         if (reply.Error is { } error) throw new ServiceFailureException(error.GetProperty("type").GetString()!);
