@@ -105,20 +105,19 @@ struct CLIProcess {
         // **A child may exit before reading its prompt.** Without this, the writer thread's `write` raises SIGPIPE and
         // terminates XDict; with it, the write returns EPIPE and the loop below stops. (Audit finding, 2026-10-20.)
         _ = fcntl(stdinFD, F_SETNOSIGPIPE, 1)
-        let output = Mutex(("", ""))
-        let readers = DispatchGroup()
-        readers.enter()
-        DispatchQueue.global().async {
-            let text = Self.drain(stdoutFD, cap: Self.stdoutCap, onLine: onLine)
-            output.withLock { $0.0 = text }
-            readers.leave()
+        // **One dedicated thread reads both pipes without blocking the shared pool** (2026-10-23): the readers used to
+        // be blocking work on `DispatchQueue.global()`, and a starved pool made the reader join time out and leave two
+        // descriptors open per timeout — under 32 concurrent runs, until `posix_spawn` itself failed with EMFILE
+        // (`spawn(24)`), which turned the CLI provider tests red under a loaded suite. The thread polls non-blocking, so
+        // it always ends by itself or on `stop`, and it owns its descriptors to the end.
+        let stdoutText = Mutex("")
+        let stderrText = Mutex("")
+        let stopping = Mutex(false)
+        let reader = Thread {
+            Self.pump(stdout: stdoutFD, stderr: stderrFD, onLine: onLine, stop: stopping,
+                      out: stdoutText, err: stderrText)
         }
-        readers.enter()
-        DispatchQueue.global().async {
-            let text = Self.drain(stderrFD, cap: Self.stderrCap, onLine: nil)
-            output.withLock { $0.1 = text }
-            readers.leave()
-        }
+        reader.start()
         if let input {
             DispatchQueue.global().async {
                 let bytes = Array(input.utf8)
@@ -147,14 +146,13 @@ struct CLIProcess {
         } catch {
             signalGroup(pid, SIGTERM)
             await reap(pid)
-            _ = waitForReaders(readers, timeout: readerJoin)
+            await finish(reader, stop: stopping)
             throw error
         }
-        // **One owner per descriptor**: each reader closes its own pipe when it reaches EOF, and nothing here closes it
-        // too — a second close can hit a descriptor number the system has already reused. (Audit finding, 2026-10-20.)
-        _ = waitForReaders(readers, timeout: readerJoin)
-        let (out, err) = output.withLock { $0 }
-        return Run(status: status, stdout: out, stderr: err)
+        // **One owner per descriptor**: the reader closes both when it reaches EOF, and nothing here closes them too —
+        // a second close can hit a descriptor number the system has already reused. (Audit finding, 2026-10-20.)
+        await finish(reader, stop: stopping)
+        return Run(status: status, stdout: stdoutText.withLock { $0 }, stderr: stderrText.withLock { $0 })
     }
 
     // MARK: - Waiting
@@ -192,15 +190,21 @@ struct CLIProcess {
         }
     }
 
-    private static func waitForReaders(_ group: DispatchGroup, timeout: Duration) -> Bool {
-        let done = Mutex(false)
-        group.notify(queue: .global()) { done.withLock { $0 = true } }
-        let until = ContinuousClock().now + timeout
+    /// The reader's end, waited for without blocking the cooperative pool: EOF ends it by itself, and a pipe a
+    /// descendant left the process group holding is asked to stop, bounded by the poll interval. The stop is set, never
+    /// a second close — the thread owns its descriptors.
+    private static func finish(_ reader: Thread, stop: borrowing Mutex<Bool>) async {
+        let until = ContinuousClock().now + readerJoin
         while ContinuousClock().now < until {
-            if done.withLock({ $0 }) { return true }
-            usleep(5_000)
+            if reader.isFinished { return }
+            try? await Task.sleep(for: .milliseconds(5))
         }
-        return done.withLock { $0 }
+        stop.withLock { $0 = true }
+        let last = ContinuousClock().now + .milliseconds(500)
+        while ContinuousClock().now < last {
+            if reader.isFinished { return }
+            try? await Task.sleep(for: .milliseconds(5))
+        }
     }
 
     private static func signalGroup(_ pid: pid_t, _ signal: Int32) {
@@ -217,36 +221,73 @@ struct CLIProcess {
 
     // MARK: - Reading
 
-    /// Everything `fd` yields up to `cap` bytes, read to EOF; the rest is read and dropped so the child cannot block.
-    private static func drain(_ fd: Int32, cap: Int, onLine: (@Sendable (String) -> Void)?) -> String {
-        defer { close(fd) }
+    /// One pipe the pump reads.
+    private struct Stream {
+        let fd: Int32
+        let cap: Int
         var kept = Data()
+        var open = true
+
+        init(_ fd: Int32, _ cap: Int) {
+            self.fd = fd
+            self.cap = cap
+        }
+    }
+
+    /// **Both pipes, read to EOF on this one thread.** Non-blocking, so a `poll` that said there is something to read is
+    /// always followed by a read that returns at once, and no other thread ever touches these descriptors: the stop
+    /// flag ends the loop, and the thread closes what it still holds. Each stream keeps up to `cap` bytes and reads the
+    /// rest and drops it, so the child can never block on a full pipe.
+    private static func pump(stdout outFD: Int32, stderr errFD: Int32, onLine: (@Sendable (String) -> Void)?,
+                             stop: borrowing Mutex<Bool>, out: borrowing Mutex<String>, err: borrowing Mutex<String>) {
+        var streams = [Stream(outFD, stdoutCap), Stream(errFD, stderrCap)]
+        for stream in streams {
+            _ = fcntl(stream.fd, F_SETFL, O_NONBLOCK)
+        }
         var pending = ""
         var buffer = [UInt8](repeating: 0, count: 65_536)
-        while true {
-            let count = buffer.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
-            if count > 0 {
-                if kept.count < cap {
-                    kept.append(contentsOf: buffer[0..<min(count, cap - kept.count)])
-                }
-                if let onLine {
-                    pending += String(decoding: buffer[0..<count], as: UTF8.self)
-                    // A newline-free stream must not grow the pending buffer without bound (`stdoutCap` bounds only what
-                    // is kept). A partial line past the cap is dropped. (Audit finding, 2026-10-20.)
-                    if pending.utf8.count > 256 << 10 { pending = "" }
-                    while let newline = pending.firstIndex(of: "\n") {
-                        let line = String(pending[..<newline]).trimmingCharacters(in: .whitespacesAndNewlines)
-                        pending.removeSubrange(...newline)
-                        if !line.isEmpty { onLine(line) }
+        while !stop.withLock({ $0 }), streams.contains(where: \.open) {
+            var fds = streams.filter(\.open).map { pollfd(fd: $0.fd, events: Int16(POLLIN), revents: 0) }
+            let ready = fds.withUnsafeMutableBufferPointer { poll($0.baseAddress, nfds_t($0.count), 100) }
+            if ready < 0, errno != EINTR { break }
+            var answer = 0
+            for index in streams.indices where streams[index].open {
+                defer { answer += 1 }
+                guard ready > 0, fds[answer].revents != 0 else { continue }
+                let count = buffer.withUnsafeMutableBytes { read(streams[index].fd, $0.baseAddress, $0.count) }
+                if count > 0 {
+                    if streams[index].kept.count < streams[index].cap {
+                        let room = streams[index].cap - streams[index].kept.count
+                        streams[index].kept.append(contentsOf: buffer[0..<min(count, room)])
                     }
+                    if index == 0, let onLine {
+                        pending += String(decoding: buffer[0..<count], as: UTF8.self)
+                        // A newline-free stream must not grow the pending buffer without bound (`stdoutCap` bounds only
+                        // what is kept). A partial line past the cap is dropped. (Audit finding, 2026-10-20.)
+                        if pending.utf8.count > 256 << 10 { pending = "" }
+                        while let newline = pending.firstIndex(of: "\n") {
+                            let line = String(pending[..<newline]).trimmingCharacters(in: .whitespacesAndNewlines)
+                            pending.removeSubrange(...newline)
+                            if !line.isEmpty { onLine(line) }
+                        }
+                    }
+                    continue
                 }
-                continue
+                if count < 0, errno == EINTR || errno == EAGAIN { continue }
+                close(streams[index].fd)
+                streams[index].open = false
             }
-            if count < 0, errno == EINTR { continue }
-            break
         }
-        if let onLine, !pending.isEmpty { onLine(pending.trimmingCharacters(in: .whitespacesAndNewlines)) }
-        return String(decoding: kept, as: UTF8.self)
+        for index in streams.indices where streams[index].open {
+            close(streams[index].fd)
+            streams[index].open = false
+        }
+        if let onLine, !pending.isEmpty {
+            let line = pending.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !line.isEmpty { onLine(line) }
+        }
+        out.withLock { $0 = String(decoding: streams[0].kept, as: UTF8.self) }
+        err.withLock { $0 = String(decoding: streams[1].kept, as: UTF8.self) }
     }
 
     // MARK: - Files
