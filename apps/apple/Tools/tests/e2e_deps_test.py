@@ -90,12 +90,32 @@ class Matrix(unittest.TestCase):
             self.reaches(apple(path), SUBS, "runs every sub-stage")
 
     def test_the_kit(self):
+        """The kit is built of these; and **a file a sub-stage's own function runs reaches that sub-stage, not every kit
+        sub-stage** (2026-10-23): the derivation reads `$kit/<path>` in `Tools/e2e.sh`'s function bodies, bounded by the
+        run's need for the kit, while a file a helper or the top level runs stays as wide as the kit."""
         kit = needing("kit")
         inputs = {apple("Tools/build-lab.sh")} | referenced("Tools/build-lab.sh", "apps/apple")
         inputs |= under("conformance/fixtures/")   # the core's fixture writer, which build-lab.sh runs, reads them
+        # The files Tools/e2e.sh runs from a `substage_<name>` function, and every sub-stage those functions serve:
+        # the sound group's typing helper is sound.notices' alone, under its `asked sound.notices` guard.
+        scoped = {
+            apple("Tools/lookup/drive.py"): {"lookup.core", "lookup.a11y", "lookup.paging"},
+            apple("Tools/lookup/verdicts.py"): {"hostile.app", "hostile.controls"},
+            apple("Tools/lookup/run-app-hostile.sh"): {"hostile.app", "hostile.controls"},
+            apple("Tools/lookup/keys.swift"): {"setup", "lookup.core", "lookup.a11y", "lookup.paging", "sound.notices"},
+            apple("Tools/anywhere/drive.py"): {"selection.hosts", "services.menu", "panel.expand", "panel.dismiss",
+                                               "panel.deadline", "menubar.item", "shortcut.rebind"},
+            apple("Tools/measure/drive.py"): {"measure.protocol"},
+        }
         self.assertGreater(len(inputs), 20)
-        for path in sorted(inputs):
+        self.assertTrue(set(scoped) <= inputs, f"the audit names what the kit no longer builds: {sorted(set(scoped) - inputs)}")
+        for path in sorted(inputs - set(scoped)):
             self.reaches(path, kit, "the kit is built of it")
+        for path, subs in sorted(scoped.items()):
+            self.assertTrue(subs <= kit, f"{path} is scoped to a sub-stage that needs no kit: {sorted(subs - kit)}")
+            self.reaches(path, subs, "a sub-stage's own function runs it")
+            reached = {s for s in SUBS if path in INPUTS[s]}
+            self.assertEqual(reached & kit, subs, f"{path} reaches a kit sub-stage that does not run it")
 
     def test_the_fixtures(self):
         fixtures = needing("fixtures")
