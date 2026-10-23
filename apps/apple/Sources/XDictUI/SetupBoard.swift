@@ -102,13 +102,16 @@ public struct SetupBoard: Equatable, Sendable {
     public var appleLookUp: AppleLookUp
     /// Whether the reader included the library's headwords in Spotlight (plan-setup-v2 WI-6; ADR-0028).
     public var spotlightEnabled: Bool
+    /// **Whether the last Spotlight run failed** (audit-fix 2026-10-22 finding 7): the switch records it, and the row
+    /// must say so rather than read `done` over a run that achieved nothing.
+    public var spotlightFailed: Bool
     /// Whether a meaning source is set up.
     public var aiConfigured: Bool
 
     /// The new inputs default to the honest unknown: an optional row nobody read says "off"/"check", never "done".
     public init(dictionaries: Int, trusted: Bool, shortcutWorks: Bool, hoverOn: Bool = false, hoverKey: String = "⌥",
                 hoverDoubleTap: Bool = false, services: SystemFact = .unreadable, appleLookUp: AppleLookUp = AppleLookUp(),
-                spotlightEnabled: Bool = false, aiConfigured: Bool = false) {
+                spotlightEnabled: Bool = false, spotlightFailed: Bool = false, aiConfigured: Bool = false) {
         self.dictionaries = dictionaries
         self.trusted = trusted
         self.shortcutWorks = shortcutWorks
@@ -118,6 +121,7 @@ public struct SetupBoard: Equatable, Sendable {
         self.services = services
         self.appleLookUp = appleLookUp
         self.spotlightEnabled = spotlightEnabled
+        self.spotlightFailed = spotlightFailed
         self.aiConfigured = aiConfigured
     }
 
@@ -143,7 +147,11 @@ public struct SetupBoard: Equatable, Sendable {
         case .appleLookUp:
             if appleLookUp.isUnreadable { return .unreadable }
             return appleLookUp.isClear ? .ready : .absent
-        case .spotlight: return spotlightEnabled ? .ready : .absent
+        case .spotlight:
+            // A run that achieved nothing is the row's problem whatever the switch says: a failed deletion still left
+            // the index as it was (audit-fix 2026-10-22 finding 7).
+            if spotlightFailed { return .failed }
+            return spotlightEnabled ? .ready : .absent
         case .ai: return aiConfigured ? .ready : .absent
         }
     }

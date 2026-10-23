@@ -164,4 +164,22 @@ struct SpotlightSettingsTests {
         #expect(settings.setEnabled(false) == .exclude)
         #expect(!SpotlightSettings(defaults: defaults).enabled)
     }
+
+    /// **A failed run is remembered as what it was** (audit-fix 2026-10-22 finding 7): the switch keeps saying what the
+    /// reader chose, the row can read the failure, and a deletion that failed is owed again at the next launch.
+    @Test func aFailedRunIsRememberedAndItsDeletionOwed() {
+        let settings = SpotlightSettings(defaults: Self.suite())
+        #expect(settings.lastRunFailed == nil, "no run yet")
+        settings.setEnabled(true)
+        settings.record(failed: false)
+        #expect(settings.lastRunFailed == false && !settings.cleanupPending)
+        settings.record(failed: true)
+        #expect(settings.lastRunFailed == true && settings.enabled, "a failed run does not undo the reader's choice")
+        #expect(!settings.needsCleanup(), "an inclusion that failed owes no deletion")
+        settings.setEnabled(false)
+        settings.record(failed: true)
+        #expect(settings.needsCleanup(), "a deletion that failed is owed at the next launch")
+        settings.record(failed: false)
+        #expect(!settings.needsCleanup(), "one that succeeded is not owed")
+    }
 }
