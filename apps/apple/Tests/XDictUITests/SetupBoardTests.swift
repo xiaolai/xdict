@@ -131,6 +131,19 @@ struct SetupBoardTests {
         #expect(SetupBoard.Step.spotlight.isRequired == false, "the reader's library is not the system's")
     }
 
+    /// **A run that failed is a problem, not a done row** (audit-fix 2026-10-22 finding 7): the switch records the run,
+    /// and the row says so whether it is on or off — a failed deletion still left the index as it was.
+    @Test func aFailedSpotlightRunIsAProblem() {
+        var board = SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: true, spotlightEnabled: true)
+        #expect(board.state(of: .spotlight) == .done)
+        board.spotlightFailed = true
+        #expect(board.state(of: .spotlight) == .problem)
+        board.spotlightEnabled = false
+        #expect(board.state(of: .spotlight) == .problem, "a failed deletion says nothing about the switch")
+        board.spotlightFailed = false
+        #expect(board.state(of: .spotlight) == .optional)
+    }
+
     /// **The summary says what is verified, what still needs the reader, and what is optional and left** — and
     /// `isComplete` is exactly "nothing needs the reader".
     @Test func theSummarySaysWhatIsLeft() {

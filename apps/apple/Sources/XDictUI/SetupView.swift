@@ -102,7 +102,8 @@ public struct SetupView: View {
                    hoverOn: hover?.isOn ?? false, hoverKey: hover?.keySymbol ?? "⌥",
                    hoverDoubleTap: hover?.isDoubleTap ?? false,
                    services: reading.services, appleLookUp: reading.appleLookUp,
-                   spotlightEnabled: spotlight?.enabled ?? false, aiConfigured: aiIsOn)
+                   spotlightEnabled: spotlight?.enabled ?? false, spotlightFailed: spotlight?.lastRunFailed ?? false,
+                   aiConfigured: aiIsOn)
     }
 
     public var body: some View {
