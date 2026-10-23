@@ -85,9 +85,9 @@
     entries.app.persistence
 
 # The Apple import (ADR-0011, plan WI-5): the real app over its own library and a synthetic AssetsV2 tree written by the
-# run (`--apple-assets`; no Apple content), converted by the signed service in the shared app-group container. Extra
-# until the stage's driver lands (defined 2026-10-18, never run): a run that names it fails loudly on the missing
-# `substage_library_apple`, and no release requires it meanwhile.
+# run (`--apple-import-report`; no Apple content), converted by the signed service in the shared app-group container.
+# Extra, and its driver landed 2026-10-23: run it by name (`make e2e-quick STAGES=library.apple`) until the owner makes
+# it default, which would put it in every release's required set.
 @ library.apple extra kit
     appleImport.listed appleImport.refusedShown appleImport.converted appleImport.reads appleImport.alreadyImported
     appleImport.cancelLeavesNothing appleImport.updateOffered appleImport.convertAgainJoins appleImport.removedStillReads
