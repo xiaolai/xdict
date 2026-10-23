@@ -87,6 +87,8 @@ struct AppleImportSheet: View {
     let done: () -> Void
     @State private var choice = AppleImportChoice()
     @State private var found = false
+    /// **What the reader typed to narrow the list** (owner, 2026-10-23): kept while the sheet is up, cleared with it.
+    @State private var filter = ""
     /// **One scan at a time**: Rescan pressed while the poll's scan is running asks for one more after it, rather than
     /// starting a second walk whose older answer could land last (audit-fix 2026-10-22).
     @State private var isScanning = false
@@ -113,6 +115,7 @@ struct AppleImportSheet: View {
             Text(AppleImportSentences.title).font(.headline)
             Text(AppleImportSentences.intro).foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+            filterField
             list
             availableFooter
             // R3: Cancel (Done once imports have started) left of Import, the default action.
@@ -155,29 +158,46 @@ struct AppleImportSheet: View {
             Text(AppleImportSentences.none).foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            List {
-                if !choice.bundles.isEmpty {
-                    Section {
-                        ForEach(choice.installedRows(steps: importer.steps)) { row in
-                            AppleImportRowView(row: row, toggle: { choice.toggle(row.id, steps: importer.steps) },
-                                               cancel: { Task { await importer.cancel(row.id) } })
+            // The filter narrows both sections; when it keeps nothing, the sheet says so rather than drawing an empty
+            // list, and a filter of spaces is no filter at all (`AppleImportChoice.matching`).
+            let installed = choice.matching(choice.installedRows(steps: importer.steps), filter)
+            let available = choice.matching(choice.availableRows(), filter)
+            if installed.isEmpty, available.isEmpty, !filter.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(AppleImportSentences.noMatches).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    if !installed.isEmpty {
+                        Section {
+                            ForEach(installed) { row in
+                                AppleImportRowView(row: row, toggle: { choice.toggle(row.id, steps: importer.steps) },
+                                                   cancel: { Task { await importer.cancel(row.id) } })
+                            }
+                        }
+                    }
+                    // Only when there is something to list: an empty "Available" section would look like a failure.
+                    if !available.isEmpty {
+                        Section {
+                            ForEach(available) { row in
+                                AppleImportAvailableRowView(row: row, download: openDictionary)
+                            }
+                        } header: {
+                            Text(AppleImportSentences.availableSection)
                         }
                     }
                 }
-                // Only when there is something to list: an empty "Available" section would look like a failure.
-                if let available = choice.available, !available.isEmpty {
-                    Section {
-                        ForEach(choice.availableRows()) { row in
-                            AppleImportAvailableRowView(row: row, download: openDictionary)
-                        }
-                    } header: {
-                        Text(AppleImportSentences.availableSection)
-                    }
-                }
+                .listStyle(.bordered(alternatesRowBackgrounds: true))
+                .accessibilityIdentifier("appleImport.list")
             }
-            .listStyle(.bordered(alternatesRowBackgrounds: true))
-            .accessibilityIdentifier("appleImport.list")
         }
+    }
+
+    /// **The list's filter** (owner, 2026-10-23): a name or a language, matched as it is typed; it narrows the rows and
+    /// changes nothing else about them.
+    private var filterField: some View {
+        TextField(AppleImportSentences.filterPrompt, text: $filter)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityIdentifier("appleImport.filter")
     }
 
     /// The note under the list and **Rescan**; or, when Dictionary.app's list could not be read at all, the sentence

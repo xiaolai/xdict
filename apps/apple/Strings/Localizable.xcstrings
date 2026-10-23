@@ -4006,6 +4006,22 @@
         }
       }
     },
+    "Filter Dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "过滤词典"
+          }
+        }
+      }
+    },
     "Find" : {
       "localizations" : {
         "en" : {
@@ -5772,6 +5788,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "前台没有 App，因此没有可查询的选中内容。"
+          }
+        }
+      }
+    },
+    "No dictionaries match your search." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No dictionaries match your search."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有与你的搜索匹配的词典。"
           }
         }
       }
