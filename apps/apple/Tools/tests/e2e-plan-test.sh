@@ -91,16 +91,26 @@ same "the gallery's code selects nothing" "" \
     "$(bash $affected --paths apps/apple/Sources/XDictEntryLab/Gallery.swift apps/apple/Sources/XDictEntryLab/GalleryInvariants.swift \
         apps/apple/Sources/XDictEntryLab/GalleryPhon.swift apps/apple/Tools/gallery/run.sh apps/apple/Tools/gallery/page.py)"
 # **What the harness executes is derived, and widens** (2026-10-17, replacing the smoke sets of 2026-10-16): Tools/e2e.sh
-# runs every sub-stage, so an edit to it selects them all; a driver the kit carries (Tools/build-lab.sh copies
-# Tools/lookup/drive.py into it) selects every sub-stage that needs the kit. Narrower needs the kit split by product.
+# runs every sub-stage, so an edit to it selects them all. **A file a sub-stage's own function runs reaches that
+# sub-stage** (2026-10-23): the kit builder copies Tools/lookup/drive.py into the kit and only `substage_lookup` runs
+# it, so it selects the lookup group and nothing else. A file a helper or the top level runs still reaches every
+# sub-stage that needs the kit: the builder itself, and analyze.py, which `hostile_runs` runs for its callers.
 got=$(bash $affected --paths apps/apple/Tools/e2e.sh | sort)
 same "a harness edit selects every sub-stage, the extra ones too" "$(bash $plan substages --all | sort)" "$got"
-got=$(bash $affected --paths apps/apple/Tools/lookup/drive.py)
-for sub in lookup.core lookup.a11y lookup.paging hostile.production sound.notices; do
-    case " $(tr '\n' ' ' <<<"$got") " in *" $sub "*) ;; *) bad "a kit driver change missed $sub: $got" ;; esac
+same "a driver one sub-stage function runs reaches that sub-stage only" \
+    "$(lines lookup.core lookup.a11y lookup.paging)" "$(bash $affected --paths apps/apple/Tools/lookup/drive.py)"
+# `control hostile.app hostile.controls`: what reaches the app check reaches its control.
+same "a driver another sub-stage's function runs reaches that sub-stage, and its control" \
+    "$(lines hostile.app hostile.controls)" "$(bash $affected --paths apps/apple/Tools/lookup/verdicts.py)"
+# The sound group's function runs the typing helper for `sound.notices` alone (under `asked sound.notices`), and only
+# sound.notices needs the kit: the other two could not run the file in any run that builds it.
+same "a file several functions run reaches every one of them, and no other" \
+    "$(lines setup lookup.core lookup.a11y lookup.paging sound.notices)" \
+    "$(bash $affected --paths apps/apple/Tools/lookup/keys.swift)"
+got=$(bash $affected --paths apps/apple/Tools/hostile/analyze.py)
+for sub in hostile.controls hostile.production entries.persistence sound.notices; do
+    case " $(tr '\n' ' ' <<<"$got") " in *" $sub "*) ;; *) bad "a helper's tool change missed $sub: $got" ;; esac
 done
-case " $(tr '\n' ' ' <<<"$got") " in *" launch "*|*" library.health "*) bad "a kit driver change selects what needs no kit: $got" ;;
-    *) ok "a kit driver change selects every sub-stage that needs the kit, and none other" ;; esac
 got=$(bash $affected --paths apps/apple/Sources/XDictEntryView/EntryRuleList.swift)
 case " $(tr '\n' ' ' <<<"$got") " in *" hostile.controls "*) ok "a confinement layer's change brings the hostile controls" ;;
     *) bad "a confinement layer's change did not bring hostile.controls: $got" ;; esac

@@ -29,11 +29,15 @@ found shared drivers, kit tools and fixtures reaching only some of the sub-stage
 `Tools/e2e.sh`: a repository path it names inside an `if needs <need>` block reaches every sub-stage with that need;
 one it names anywhere else, and the run's entry chain (`ENTRY`), reach every sub-stage; a script it names is read the
 same way one level down (the kit's `Tools/build-lab.sh`, the fixtures' `Tools/build-fixtures.sh`), so what the kit is
-built of reaches every sub-stage that needs the kit; a cargo `--test`/`--example` it runs is that file. The hand list's
-`reads <node> <pattern>` says what a node reads at run time that no compiler sees (the fixture writer reads
-`conformance/fixtures`). A path's selection is its rule's (or graph's) answer **united** with these. Correct before
-cheap: a kit tool reaches every kit sub-stage, though most run one product of the kit; splitting the kit by product
-(`$kit/<product>` per sub-stage function) would narrow that later.
+built of reaches every sub-stage that needs the kit — **unless a sub-stage's own function runs that file literally**
+(2026-10-23): `$kit/lookup/drive.py` in `substage_lookup` binds the file to the lookup group, and the kit's need bounds
+that again, so `sound.speech` (no kit) never takes the typing helper its group's function asks `sound.notices` alone to
+run. Nothing else narrows: a file a helper or the top level names, one no `$kit/<path>` names, the builder itself and
+the kit's apps and fixtures keep the kit's whole reach, and a path named by no literal site is never narrowed on doubt.
+Splitting the kit by product would narrow the rest; this reads only the sites already written. A cargo
+`--test`/`--example` it runs is that file. The hand list's `reads <node> <pattern>` says what a node reads at run time
+that no compiler sees (the fixture writer reads `conformance/fixtures`). A path's selection is its rule's (or graph's)
+answer **united** with these.
 
 **Recorded coverage** (plan-verification §4.2, third bullet) plugs in at `Graph.recorded_coverage`: once an E2E run
 records which files a sub-stage actually executed, that sub-stage's file set narrows to them there. Today it records
@@ -47,6 +51,7 @@ import html
 import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 
@@ -202,7 +207,91 @@ def _named(text):
     return out
 
 
-def harness_uses(repo, listing_paths, needs, order):
+KIT_BUILDER = "apps/apple/Tools/build-lab.sh"
+_KIT_TARGET = re.compile(r"^\$(?:KIT|kit)/(.*)$")
+_KIT_USE = re.compile(r"\$(?:kit|KIT)/([A-Za-z0-9_./-]+)")
+_FUNCTION = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\(\)\s*\{")
+_FUNCTION_END = re.compile(r"^\}\s*$")
+
+
+def _joined(text):
+    """A shell script's lines with backslash continuations joined: the kit builder's `cp` over two lines is one."""
+    out, pending = [], ""
+    for line in text.splitlines():
+        if line.endswith("\\"):
+            pending += line[:-1] + " "
+        else:
+            out.append(pending + line)
+            pending = ""
+    if pending:
+        out.append(pending)
+    return out
+
+
+def _command(words):
+    """A shell line's words, up to the first `||`, `&&` or `;`."""
+    for at, word in enumerate(words):
+        if word in ("||", "&&", ";"):
+            return words[:at]
+    return words
+
+
+def kit_sources(repo):
+    """The repository file each kit path is built from: source -> {kit path}, from the kit builder's `cp` and
+    `swiftc -o` lines. The apps and the fixtures are no files of the tree: they stay shared with every kit sub-stage."""
+    try:
+        text = open(os.path.join(repo, KIT_BUILDER), encoding="utf-8").read()
+    except OSError:
+        return {}
+    out = {}
+    for line in _joined(text):
+        if line.lstrip().startswith("#"):
+            continue
+        try:
+            words = _command(shlex.split(line, comments=False, posix=True))
+        except ValueError:
+            continue
+        if len(words) < 3:
+            continue
+        if words[0] == "cp":
+            target = _KIT_TARGET.match(words[-1])
+            if target is None:
+                continue
+            dest = target.group(1)
+            # `$KIT/` is the kit's own root: its sources land beside the lab, shared with every kit sub-stage.
+            for source in words[1:-1]:
+                name = os.path.basename(source)
+                kit = dest + name if dest == "" or dest.endswith("/") else dest
+                out.setdefault(_normal(source), set()).add(kit)
+        elif words[0] == "swiftc" and "-o" in words:
+            at = words.index("-o")
+            if at + 2 > len(words):
+                continue
+            target = _KIT_TARGET.match(words[at + 1])
+            sources = [w for w in words[at + 2:] if not w.startswith(("-", "$"))]
+            if target is not None and sources:
+                out.setdefault(_normal(sources[-1]), set()).add(target.group(1))
+    return out
+
+
+def kit_uses(text):
+    """The kit path each function of Tools/e2e.sh runs: kit path -> the functions' names, "" for the top level. A
+    function opened and closed on one line runs at no name's call site and counts as the top level."""
+    out, function = {}, None
+    for line in _joined(text):
+        opened = _FUNCTION.match(line)
+        if opened:
+            function = None if line.count("{") == line.count("}") else opened.group(1)
+            continue
+        if _FUNCTION_END.match(line):
+            function = None
+            continue
+        for kit in _KIT_USE.findall(line):
+            out.setdefault(kit, set()).add(function or "")
+    return out
+
+
+def harness_uses(repo, listing_paths, needs, order, groups=None):
     """path -> the sub-stages that execute it, derived from Tools/e2e.sh (see the module's doc). Empty when the
     repository has no harness (the tests' scratch repositories)."""
     try:
@@ -213,6 +302,39 @@ def harness_uses(repo, listing_paths, needs, order):
 
     def with_need(names):
         return {s for s in order if set(needs[s]) & names}
+
+    # The sub-stages each `substage_<suffix>` function serves: the group of that name, or the sub-stage's own name.
+    members = {}
+    for sub in order:
+        members.setdefault(sub.replace(".", "_"), set()).add(sub)
+    for group, subs in (groups or {}).items():
+        members.setdefault(group, set()).update(subs)
+    scopes = {}   # kit path -> the sub-stages that run it; None when a helper or the top level does
+    for kit, functions in kit_uses(text).items():
+        subs = set()
+        for function in functions:
+            served = members.get(function[len("substage_"):]) if function.startswith("substage_") else None
+            if served is None:
+                subs = None
+                break
+            subs |= served
+        scopes[kit] = subs
+    builder = kit_sources(repo)
+
+    def narrowed(source, subs):
+        """A file the kit builder copies or compiles: the sub-stages whose own functions run it, bounded by the run's
+        need for the kit (a sub-stage that does not need the kit never runs a file only the kit provides). A kit path
+        no function names literally, or one a helper names, keeps the kit's whole reach."""
+        kits = builder.get(source)
+        if not kits:
+            return subs
+        served = set()
+        for kit in kits:
+            if scopes.get(kit) is None:
+                return subs
+            served |= scopes[kit]
+        return served & subs
+
     named = {}   # path or prefix -> sub-stages
     def add(prefix, subs, depth):
         named.setdefault(prefix, set()).update(subs)
@@ -223,7 +345,7 @@ def harness_uses(repo, listing_paths, needs, order):
                 return
             for _, found in _named(inner):
                 for f in found:
-                    add(f, subs, 1)
+                    add(f, narrowed(f, subs) if prefix == KIT_BUILDER else subs, 1)
     stack = []   # (indent, need names) of the open `if needs` blocks
     for line, found in _named(text):
         opened = _NEEDS_IF.match(line)
@@ -271,18 +393,22 @@ def read_map(path):
 
 
 def plan():
-    """Sub-stages in run order, which are default, and each one's needs, from Tools/e2e-plan.sh's table."""
+    """Sub-stages in run order, which are default, each one's needs and its group, from Tools/e2e-plan.sh's table."""
     out = subprocess.run(["bash", os.path.join(HERE, "e2e-plan.sh"), "table"], check=True, capture_output=True,
                          text=True).stdout
-    order, default, needs = [], set(), {}
+    order, default, needs, groups = [], set(), {}, {}
     for row in out.splitlines():
-        sub, kind, need = row.split("\t")[:3]
+        columns = row.split("\t")
+        sub, kind, need = columns[:3]
+        group = columns[3] if len(columns) > 3 else "-"
         if sub not in order:
             order.append(sub)
             needs[sub] = [n for n in need.split(",") if n != "-"]
         if kind == "default":
             default.add(sub)
-    return order, default, needs
+        if group != "-":
+            groups.setdefault(group, set()).add(sub)
+    return order, default, needs, groups
 
 
 # --- the graph ----------------------------------------------------------------------------------------------------------
@@ -301,7 +427,7 @@ class Graph:
         self.map_rules, map_controls = read_map(MAP)
         for sub, extra in map_controls.items():
             self.controls.setdefault(sub, []).extend(c for c in extra if c not in self.controls.get(sub, []))
-        self.order, self.default, self.needs = plan()
+        self.order, self.default, self.needs, self.groups = plan()
         self.stale = self.staleness(listing, repo)
         if self.stale:
             print(f"affected-graph: {self.stale}: the graph is stale, so every path reaches everything "
@@ -331,7 +457,7 @@ class Graph:
         paths = list(listing) if listing is not None else subprocess.run(
             ["git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard"], check=True,
             capture_output=True, text=True).stdout.splitlines()
-        self.uses = harness_uses(root, paths, self.needs, self.order)
+        self.uses = harness_uses(root, paths, self.needs, self.order, self.groups)
         self.target_dirs = sorted(((t["dir"], name) for name, t in self.targets.items()), key=lambda x: -len(x[0]))
 
     def staleness(self, listing, repo):
