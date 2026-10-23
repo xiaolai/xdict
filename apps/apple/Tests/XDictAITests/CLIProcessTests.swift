@@ -33,6 +33,42 @@ struct CLIProcessTests {
         #expect(run.status == 0)
     }
 
+    /// **Concurrency must not exhaust the process's descriptors** (2026-10-23): the readers were blocking work on the
+    /// shared dispatch pool; under 32 concurrent runs the pool starved, the reader join timed out, and each abandoned
+    /// join left two descriptors open until the 2,560-descriptor soft limit — where `posix_spawn` itself starts failing
+    /// with EMFILE (`spawn(24)`). That is how the CLI provider tests went red under a loaded suite: clean at 4
+    /// concurrent, EMFILE by the 43rd iteration at 32.
+    @Test func manyConcurrentRunsKeepTheirDescriptors() async throws {
+        let before = Self.openDescriptors()
+        let failures = await withTaskGroup(of: Int.self) { group in
+            for _ in 0..<32 {
+                group.addTask {
+                    var failed = 0
+                    for _ in 0..<100 {
+                        do {
+                            _ = try await CLIProcess.run(
+                                executable: URL(filePath: "/bin/echo"), arguments: ["x"],
+                                environment: ["PATH": "/usr/bin:/bin"], workingDirectory: URL(filePath: "/tmp"),
+                                deadline: .seconds(10))
+                        } catch {
+                            failed += 1
+                        }
+                    }
+                    return failed
+                }
+            }
+            var total = 0
+            for await failed in group { total += failed }
+            return total
+        }
+        #expect(failures == 0, "\(failures) runs could not start")
+        #expect(Self.openDescriptors() <= before + 8, "descriptors: \(before) → \(Self.openDescriptors())")
+    }
+
+    static func openDescriptors() -> Int {
+        (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? -1
+    }
+
     /// A megabyte with no newline: the pending line is dropped rather than held, and the run still ends.
     @Test func aNewlineFreeStreamDoesNotGrowThePendingLine() async throws {
         let directory = try Self.directory()
