@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 /// **A conversion stops where it is asked to** (ADR-0011 decision 5): the converter asks its checkpoint before every
 /// section of `Body.data` it inflates and before every output block it builds, and a `false` stops it there as

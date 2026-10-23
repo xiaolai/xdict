@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 @Suite struct AppleDictTests {
     func read(_ o: SyntheticAppleBundle.Overrides = .init(), entries: [SyntheticAppleBundle.Entry]? = nil) throws -> ([AppleArticle], [Address: [Lexeme]]) {

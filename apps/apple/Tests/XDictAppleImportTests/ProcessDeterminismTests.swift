@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 /// **The same snapshot writes the same bytes in another process** (ADR-0011 decision 6). Swift seeds its hashing per
 /// process, so an output that followed a `Set` or `Dictionary`'s order would pass every in-process test and still

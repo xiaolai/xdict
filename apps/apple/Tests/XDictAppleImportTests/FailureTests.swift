@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 /// **Refusals are kinds carrying data, never sentences** (ADR-0011 decision 11): the shell words them (ADR-0007), and
 /// no one parses a diagnostic. The human detail goes to the `Report`, apart from the error.

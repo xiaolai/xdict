@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 /// **Every record, in file order, exactly** (plan WI-3 acceptance), read back by the test-only reader: the order the
 /// core's folding gives, each key's bytes, each record's bytes (MDX terminator removed), each resource's bytes. The

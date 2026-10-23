@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 @Suite struct MDictTests {
     func roundTrip(_ items: [MDictItem], isMDD: Bool) throws -> [(String, [UInt8])] {

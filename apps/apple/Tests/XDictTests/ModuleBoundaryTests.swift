@@ -117,7 +117,9 @@ struct ModuleBoundaryTests {
         "XDictService": ["Foundation", "Synchronization", "os"],
         // `Security` reads the process's own signing team, which names the app-group container (`SigningTeam`);
         // `CryptoKit` hashes an Apple dictionary's files for its source revision (`Manifest`, ADR-0011 decision 7).
-        "XDictAppleSource": ["CryptoKit", "Foundation", "Security"],
+        // `zlib`: the synthetic Apple bundles compress their sections as Apple's do (`SyntheticAppleBundle`, written
+        // for a test or the E2E's Apple import instrument, and so in this target rather than the tests').
+        "XDictAppleSource": ["CryptoKit", "Foundation", "Security", "zlib"],
         "XDictAppleSourceTests": ["Foundation", "Testing"],
         // The app's side of the contract: NSXPC, its locks, its log.
         "XDictClient": ["Foundation", "Synchronization", "os"],
@@ -132,8 +134,7 @@ struct ModuleBoundaryTests {
         // blocks' zlib streams (strict about a stream's end, which the Compression framework does not report).
         "XDictAppleImport": ["Foundation", "zlib"],
         "XDictAppleImportTests": ["Foundation", "Testing"],
-        // `zlib`: the synthetic Apple bundles compress their sections as Apple's do (`SyntheticAppleBundle`).
-        "XDictTestSupport": ["Foundation", "zlib"],
+        "XDictTestSupport": ["Foundation"],
         "XDictBaseTests": ["Foundation", "Testing"],
         "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
         // AppKit and SwiftUI: the search field's AppKit coordinator and the menu's key equivalents, tested as they are.

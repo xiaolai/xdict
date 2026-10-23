@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 @Suite struct TransformTests {
     static let ns = "xmlns:d=\"\(SyntheticAppleBundle.dNS)\""
