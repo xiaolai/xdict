@@ -181,4 +181,4 @@ apps/apple/Sources/XDictUI/*                        lookup library.generated lib
 # instruments read every other string through `String(localized:)`, so a reworded line cannot fail them. Audited by
 # Tools/tests/e2e_deps_test.py: every instrument function that renders a catalog string in Chinese (library.generated's
 # refusal sentences among them, 2026-10-17) belongs to a sub-stage named here.
-apps/apple/Strings/*                                setup launch library.generated lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu
+apps/apple/Strings/*                                setup launch library.generated library.apple lookup.core lookup.a11y library.health sound.notices selection.hosts services.menu

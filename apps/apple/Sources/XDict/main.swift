@@ -30,6 +30,9 @@ if arguments.contains(LibraryCorpusReport.flag) {
 if arguments.contains(LibraryDropReport.flag) {
     LibraryDropReport.run(arguments)
 }
+if arguments.contains(AppleImportReport.flag) {
+    AppleImportReport.run(arguments)
+}
 if arguments.contains(AppHostileReport.flag) {
     AppHostileReport.run(arguments)
 }

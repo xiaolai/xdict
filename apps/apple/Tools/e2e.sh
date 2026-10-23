@@ -64,7 +64,7 @@ if [ "${1:-}" = --list-stages ]; then
 fi
 # **Every sub-stage asked for has its driver**: `substage_<name, dots as underscores>`, or `substage_<group>` for a
 # group's one launch, defined in the run script below. Checked before anything is locked, built or shipped, so a
-# sub-stage defined ahead of its driver (hover, library.apple) fails in a second, by name (plan-capture WI-5).
+# sub-stage defined ahead of its driver (hover) fails in a second, by name (plan-capture WI-5).
 # `e2e.sh --drivers [name...]` runs only this check, and runs nothing, so `make test-tools` reads it from an agent's shell.
 check_drivers() {
     local table sub group function_name missing=""
@@ -1129,6 +1129,24 @@ substage_library_health() {
     fi
     library_keep
     rm -rf "$reports/corpus-h"
+}
+
+# **The Apple import (ADR-0011, plan WI-5)**: a synthetic AssetsV2 tree of the run's own (`--apple-import-report`; no
+# Apple content) converted by the app's own signed service in the app-group container; the sheet's rows, a refusal's
+# sentence in both languages, a conversion that reads, a cancel that leaves nothing, an update offered, Convert Again
+# joining the lineage, a bundle removed whose dictionary still reads, and the launch sweep. The instrument removes what
+# it made there, and never sweeps a container holding a conversion this run did not make.
+substage_library_apple() {
+    local work="$reports/apple-import"
+    rm -rf "$work"
+    mkdir -p "$work"
+    if report --apple-import-report 600 --work "$work" >/dev/null; then
+        findings "$reports/apple-import-report.json"
+        echo "      facts: $(plutil -extract facts json -o - "$reports/apple-import-report.json" 2>/dev/null | head -c 400)"
+    else
+        flunk - "$STAGE: the Apple import launch wrote nothing within 600 s ($(head -c 300 "$reports/apple-import-report.err" 2>/dev/null))"
+    fi
+    rm -rf "$work"
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
