@@ -128,6 +128,10 @@ public final class Library {
     /// **A join the reader made**, with the edition it left and the one it joined: the app re-anchors that lineage's notes
     /// (plan-history-and-learning §5.1). The library keeps no study state of its own.
     @ObservationIgnored public var didJoin: (@MainActor (Edition, Edition) -> Void)?
+    /// **The library came to rest after work it did, or a removal or a disable changed what can answer** (audit-fix
+    /// 2026-10-22 finding 13): the app rebuilds the Spotlight index on this. A rename or a language change announces
+    /// nothing — no word changes for them.
+    @ObservationIgnored public var didSettle: (@MainActor () -> Void)?
 
     @ObservationIgnored private let store: LibraryStore
     @ObservationIgnored private let backend: any LibraryBackend
@@ -138,6 +142,8 @@ public final class Library {
     @ObservationIgnored private var queue: [UUID] = []
     @ObservationIgnored private var running: Running?
     @ObservationIgnored private var busy = 0
+    /// Whether the last `wake` found the library at rest: the announcement is the transition into rest, once.
+    @ObservationIgnored private var atRest = true
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
     /// Dictionaries waiting for their health check, and the one being checked.
     @ObservationIgnored private var checks: [UUID] = []
@@ -179,6 +185,7 @@ public final class Library {
     /// again, one never imported is imported, one refused stays refused until the reader retries it.
     public func start() async {
         busy += 1
+        working()
         defer { busy -= 1; wake() }
         do {
             let document = try store.load()
@@ -205,6 +212,7 @@ public final class Library {
     /// Opens every dictionary again, as at launch: how a file rewritten under the library is noticed.
     public func refresh() async {
         busy += 1
+        working()
         defer { busy -= 1; wake() }
         for entry in entries where entry.refusal == nil && entry.edition != nil && running?.id != entry.id
             && !queue.contains(entry.id) {
@@ -228,8 +236,17 @@ public final class Library {
         return true
     }
 
+    /// Work began: the next `wake` that finds nothing running announces that the library settled.
+    private func working() {
+        atRest = false
+    }
+
     private func wake() {
         guard running == nil, queue.isEmpty, busy == 0 else { return }
+        if !atRest {
+            atRest = true
+            didSettle?()
+        }
         wakeEveryWaiter()
     }
 
@@ -289,6 +306,7 @@ public final class Library {
     private func enqueue(_ id: UUID) {
         guard running?.id != id, !queue.contains(id) else { return }
         queue.append(id)
+        working()
         set(id, .waiting)
         pump()
     }
@@ -462,6 +480,7 @@ public final class Library {
     /// Opens a dictionary: ready, or imported again when the service says it must be (a changed file, a lost index).
     private func open(_ id: UUID, package resolved: DictionaryPackage? = nil) async {
         busy += 1
+        working()
         defer { busy -= 1; wake() }
         let package: DictionaryPackage
         if let resolved {
@@ -526,6 +545,10 @@ public final class Library {
         if let dict = handles[id] { _ = await backend.close(dict) }
         forget(id)
         save()
+        // **What can answer changed** (audit-fix 2026-10-22 finding 13): announced now when the library is at rest, or
+        // by the next completion when work was already running.
+        working()
+        wake()
     }
 
     /// A dictionary as it was when removed, and its place in the order: what Undo puts back (UI review L-09).
@@ -757,7 +780,11 @@ public final class Library {
     }
 
     public func setEnabled(_ id: UUID, _ enabled: Bool) {
+        guard let at = index(id), entries[at].enabled != enabled else { return }
         update(id) { $0.enabled = enabled }
+        // A disabled dictionary's words leave the index, and an enabled one's join it (audit-fix 2026-10-22 finding 13).
+        working()
+        wake()
     }
 
     /// The reader's own name; nil or blank gives the header's back.

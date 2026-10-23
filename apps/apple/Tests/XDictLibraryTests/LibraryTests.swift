@@ -44,6 +44,26 @@ struct LibraryTests {
         #expect(reloaded.entries == library.entries)
     }
 
+    /// **The library announces that it settled, and that what can answer changed** (audit-fix 2026-10-22 finding 13):
+    /// the app rebuilds the Spotlight index on this, so a dictionary imported, removed or disabled mid-session is
+    /// included without a relaunch — and a rename, which changes no word, announces nothing.
+    @Test func settlingAndChangingTheAnsweringSetAreAnnounced() async throws {
+        try dir.files("d/a.mdx")
+        let library = library()
+        await library.start()
+        var announced = 0
+        library.didSettle = { announced += 1 }
+        let id = try #require(library.add([dir.url.appending(path: "d")]).first)
+        await library.settle()
+        #expect(announced == 1, "the import settled once")
+        library.rename(id, "Mine")
+        #expect(announced == 1, "a rename changes no word")
+        library.setEnabled(id, false)
+        #expect(announced == 2, "a disable is announced")
+        await library.remove(id)
+        #expect(announced == 3, "a removal is announced")
+    }
+
     /// WI-12: a dictionary that opens is checked in the background, and what the check found is kept for the reader.
     @Test func aDictionaryThatOpensIsCheckedAndItsFindingsKept() async throws {
         try dir.files("a.mdx")

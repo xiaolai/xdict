@@ -40,6 +40,20 @@ struct XDictApp: App {
             spotlightSettings.record(failed: outcome.isFailure)
         }
     }
+
+    /// **The index follows the library during a session too** (audit-fix 2026-10-22 finding 13): an import batch, a
+    /// removal or a disable announces through `library.didSettle`, and a burst of announcements rebuilds the index once.
+    @MainActor private static var spotlightPending: Task<Void, Never>? = nil
+
+    @MainActor static func spotlightReconcile() {
+        guard setup.isReader, spotlightSettings.enabled else { return }
+        spotlightPending?.cancel()
+        spotlightPending = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(2))
+            guard !Task.isCancelled else { return }
+            applySpotlight(true)
+        }
+    }
     @MainActor static var spotlight: SpotlightLibrary {
         SpotlightLibrary(library: library, client: service)
     }
@@ -294,6 +308,9 @@ enum LibraryLaunch {
         guard !started else { return }
         started = true
         await XDictApp.library.start()
+        // **Announcements from here on** (audit-fix 2026-10-22 finding 13): the launch's own settle has been read, and
+        // the index is given its launch run below; a later import, removal or disable is announced through this.
+        XDictApp.library.didSettle = { XDictApp.spotlightReconcile() }
         // ADR-0011 decisions 7 and 9: the launch sweep, then each Apple dictionary compared with its installed bundle.
         if XDictApp.setup.isReader { XDictApp.appleImporter.sweep() }
         // **The index follows the library when the reader asked for it** (audit-fix 2026-10-22): the switch is kept
