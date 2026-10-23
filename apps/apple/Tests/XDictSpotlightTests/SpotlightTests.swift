@@ -16,6 +16,19 @@ struct SpotlightItemTests {
         #expect(SpotlightItem.word(of: "domain/") == nil, "an empty word is no word")
     }
 
+    /// **The identifier gives the dictionary back too** (audit-fix 2026-10-22 finding 15): a result opened while the
+    /// window is scoped elsewhere selects the dictionary it came from, so the domain must come back with the word.
+    @Test func anItemsDomainComesBackWithItsWord() {
+        let domain = "0E1B2C3D-0000-0000-0000-000000000000"
+        for word in ["colour", "a/b", "/", "½"] {
+            let item = SpotlightItem.item(of: SpotlightItem(word: word, domain: domain).identifier)
+            #expect(item == SpotlightItem(word: word, domain: domain), "\(word)")
+        }
+        #expect(SpotlightItem.item(of: "no slash here") == nil)
+        #expect(SpotlightItem.item(of: "/word") == nil, "an empty domain is no item")
+        #expect(SpotlightItem.item(of: "domain/") == nil, "an empty word is no item")
+    }
+
     /// **A word, and nothing about the entry**: the title and the keyword carry it, the domain groups it, and no text
     /// is written (ADR-0028 decision 2 as revised: headwords only).
     @Test func anItemHoldsTheWordAndNoEntry() {

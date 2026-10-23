@@ -268,10 +268,18 @@ struct MainWindow: View {
         // the window looks it up exactly as the reader typing it would.
         .onContinueUserActivity(CSSearchableItemActionType) { activity in
             guard let identifier = activity.userInfo?[CSSearchableItemActivityIdentifier] as? String,
-                  let word = SpotlightLibrary.word(inActivity: identifier) else { return }
+                  let item = SpotlightItem.item(of: identifier) else { return }
             Task {
                 await LibraryLaunch.once()
-                state?.model.submit(word)
+                // **The result's own dictionary is selected first** (audit-fix 2026-10-22 finding 15): the item's domain
+                // is the library entry's id, so a window scoped to another dictionary shows this word instead of
+                // nothing. A dictionary no longer enabled or open leaves the scope as it was.
+                if let domain = UUID(uuidString: item.domain), state?.model.source(domain) != nil,
+                   XDictApp.library.entries.contains(where: { $0.id == domain && $0.enabled }),
+                   XDictApp.library.handle(domain) != nil {
+                    state?.model.setScope(.one(domain))
+                }
+                state?.model.submit(item.word)
             }
         }
     }
