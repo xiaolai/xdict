@@ -122,7 +122,7 @@ func appElement(_ pid: pid_t) -> AXUIElement {
 }
 
 func find(_ root: AXUIElement, _ matches: Set<String>, depth: Int = 0) -> AXUIElement? {
-    for key in [kAXIdentifierAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute] {
+    for key in [kAXIdentifierAttribute, kAXTitleAttribute, kAXDescriptionAttribute, kAXValueAttribute, kAXPlaceholderValueAttribute] {
         if let text = string(root, key), matches.contains(text) { return root }
     }
     guard depth < 60, string(root, kAXRoleAttribute) != "AXWebArea" else { return nil }
@@ -319,11 +319,17 @@ case "size":
     }
     guard let main = windows(app).first(where: { find($0, ["scope.menu"]) != nil }) else { fail("no main window") }
     var size = CGSize(width: width, height: height)
-    guard let value = AXValueCreate(.cgSize, &size),
-          AXUIElementSetAttributeValue(main, kAXSizeAttribute as CFString, value) == .success else {
-        fail("the main window's size could not be set")
+    guard let value = AXValueCreate(.cgSize, &size) else { fail("the requested size is invalid") }
+    let result = AXUIElementSetAttributeValue(main, kAXSizeAttribute as CFString, value)
+    // Presenting a compact sheet may invalidate the setter's AX reply after the resize took effect. Accept an error
+    // only when the native frame proves the exact requested result; a real failure or another size still fails.
+    if result != .success {
+        let actual = frame(main)
+        guard let actual, abs(actual[2] - width) <= 1, abs(actual[3] - height) <= 1 else {
+            fail("the main window's size could not be set: \(result.rawValue), frame \(actual ?? [])")
+        }
     }
-    emit(["size": [width, height]])
+    emit(["size": frame(main).map { [$0[2], $0[3]] } ?? [width, height], "setter": result.rawValue])
 case "extra":
     guard let extras = attribute(app, "AXExtrasMenuBar"),
           let item = children(extras as! AXUIElement).first else { fail("the app shows no menu-bar extra") }

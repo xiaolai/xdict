@@ -108,13 +108,24 @@ public struct SetupView: View {
 
     public var body: some View {
         Form {
-            Section {
-                ForEach(SetupBoard.Step.allCases) { step in
-                    row(step)
+            // **Progressive** (UI37): XDict's own window first, lookup from other apps next, the rest last. Every row
+            // stays drawn — the board is the permanent status destination, and the E2E `setup` stage reads each row's
+            // state through the Accessibility tree, which a collapsed disclosure would hide.
+            ForEach(SetupBoard.Group.allCases) { group in
+                Section {
+                    ForEach(group.steps) { step in
+                        row(step)
+                    }
+                } header: {
+                    VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                        Text(group.title).font(.headline)
+                        Text(group.note).font(.callout).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .accessibilityElement(children: .combine)
+                    .accessibilityAddTraits(.isHeader)
                 }
-            } header: {
-                Text("XDict looks words up in your own MDict dictionaries. Each row below shows what is set up now.")
-                    .font(.callout)
+                .accessibilityIdentifier("setup.group.\(group.rawValue)")
             }
             Section {
                 summary
@@ -122,6 +133,7 @@ public struct SetupView: View {
         }
         // As tall as its rows, at the one width every pane shares (UI review U-01; ADR-0012 d.6).
         .settingsPane()
+        .settingsAnchor(.setupBoard)
         .task {
             while !Task.isCancelled {
                 isTrusted = trusted()
@@ -288,12 +300,20 @@ public struct SetupView: View {
     /// **What is verified, what still needs the reader, and what is optional and left** (plan-setup-v2 WI-2, WI-7).
     private var summary: some View {
         let boardSummary = board.summary
-        let headline = boardSummary.needsUser.isEmpty
-            ? LocalizedStringResource("XDict is set up.")
-            : LocalizedStringResource("Still needs you: \(Self.names(boardSummary.needsUser)).")
+        // **Two readinesses, said apart** (UI38): the window's, then lookup from other apps'.
+        let headline = !boardSummary.needsUser.isEmpty
+            ? LocalizedStringResource("Still needs you: \(Self.names(boardSummary.needsUser)).")
+            : boardSummary.otherAppsNeed.isEmpty
+                ? LocalizedStringResource("XDict is set up.")
+                : LocalizedStringResource("Ready to look words up in XDict’s window.")
         return ActionRow {
             VStack(alignment: .leading, spacing: Tokens.Space.xs) {
                 Text(headline).font(.headline)
+                if !boardSummary.otherAppsNeed.isEmpty {
+                    Text("Lookup from other apps needs: \(Self.names(boardSummary.otherAppsNeed)).")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("setup.summary.otherApps")
+                }
                 if !boardSummary.verified.isEmpty {
                     Text("Verified: \(Self.names(boardSummary.verified)).").foregroundStyle(.secondary)
                 }

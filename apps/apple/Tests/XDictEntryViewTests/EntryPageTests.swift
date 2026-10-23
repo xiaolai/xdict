@@ -56,15 +56,95 @@ struct EntryPageTests {
     }
 
     /// The dividers follow the one text size (parity P15, P29): the name, the band and the triangle scale with it.
+    /// **Quieter than the headword** (HIG audit UI25): the name is the dictionary-name role (13 pt semibold at actual
+    /// size), not Apple's 18 pt.
     @Test func dividersFollowTheTextSize() {
         let divider = EntryPageDivider(name: "Beta", zoom: 2)
-        #expect(divider.label.font?.pointSize == 36)
+        #expect(divider.label.font?.pointSize == 26)
         #expect(divider.fittingSize.height == 64)
         divider.setZoom(1)
-        #expect(divider.label.font?.pointSize == 18)
+        #expect(divider.label.font?.pointSize == 13)
         #expect(divider.fittingSize.height == 32)
-        #expect(EntryPageDivider.metrics(zoom: 1.5) == .init(font: 27, height: 48, triangle: 8.25))
+        #expect(EntryPageDivider.metrics(zoom: 1.5) == .init(font: 19.5, height: 48, triangle: 8.25))
     }
+
+    /// **A quiet source header with a clear disclosure control** (HIG audit UI25): the name leads, just after the
+    /// triangle, in the secondary label colour and the dictionary-name role's weight; the rule runs only after it, in
+    /// the system's separator colour; it stays a disclosure triangle VoiceOver can press, and with full keyboard access
+    /// Space or Return toggles it as a button's would.
+    @Test func theDividerIsAQuietLeadingHeader() throws {
+        let divider = EntryPageDivider(name: "Beta", zoom: 1)
+        #expect(divider.label.alignment == .natural)
+        #expect(divider.label.textColor == .secondaryLabelColor)
+        let weight = try #require(divider.label.font?.fontDescriptor.object(forKey: .traits) as? [NSFontDescriptor.TraitKey: Any])
+        #expect((weight[.weight] as? CGFloat ?? 0) >= NSFont.Weight.semibold.rawValue - 0.01)
+        #expect(EntryPageDivider.ruleColour == .separatorColor)
+        divider.frame = NSRect(x: 0, y: 0, width: 500, height: 32)
+        divider.layoutSubtreeIfNeeded()
+        // Layout places a label's alignment rectangle (where its text starts); its frame reaches 2 pt further out.
+        #expect(divider.label.alignmentRect(forFrame: divider.label.frame).minX == EntryPageDivider.ruleStart,
+                "the name leads, after the triangle")
+        #expect(divider.accessibilityRole() == .disclosureTriangle)
+        var toggles = 0
+        divider.onToggle = { toggles += 1 }
+        #expect(divider.accessibilityPerformPress())
+        let space = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
+                                                  windowNumber: 0, context: nil, characters: " ",
+                                                  charactersIgnoringModifiers: " ", isARepeat: false, keyCode: 49))
+        divider.keyDown(with: space)
+        #expect(toggles == 2, "Space did not toggle the divider")
+    }
+
+    // MARK: - Evidence and orientation (HIG audit UI11, UI24)
+
+    /// **The pinned name is a label, not a control** (UI24): hidden until a name is pinned, read by VoiceOver as the
+    /// current dictionary, and every click passes to the page under it.
+    @Test func thePinnedNameIsQuietAndNotAControl() {
+        let label = EntryPageSourceLabel()
+        #expect(label.isHidden)
+        label.show("Beta")
+        #expect(!label.isHidden && label.label.stringValue == "Beta")
+        #expect(label.accessibilityLabel()?.contains("Beta") == true)
+        #expect(label.accessibilityRole() == .staticText)
+        #expect(label.hitTest(.zero) == nil)
+        label.show(nil)
+        #expect(label.isHidden)
+    }
+
+    /// **Evidence is shown only in the frame it names** (UI11): the frozen target's handle, edition and reference must
+    /// name exactly one frame. Another edition, another occurrence, or two frames claiming the same name reveal nothing.
+    @Test func evidenceIsRevealedOnlyInTheFrameItNames() {
+        let alpha = EntryFrameName(handle: "h-a", edition: "e1", reference: EntryReference(key: "run"))
+        let beta = EntryFrameName(handle: "h-b", edition: "e1", reference: EntryReference(key: "run"))
+        #expect(EntryPagePlan.frame(named: beta, among: [alpha, beta]) == 1)
+        #expect(EntryPagePlan.frame(named: alpha, among: [alpha, beta]) == 0)
+        #expect(EntryPagePlan.frame(named: EntryFrameName(handle: "h-b", edition: "e2", reference: EntryReference(key: "run")),
+                                    among: [alpha, beta]) == nil, "another edition")
+        #expect(EntryPagePlan.frame(named: EntryFrameName(handle: "h-b", edition: "e1",
+                                                          reference: EntryReference(key: "run", occurrence: 1)),
+                                    among: [alpha, beta]) == nil, "another occurrence")
+        #expect(EntryPagePlan.frame(named: beta, among: [beta, beta]) == nil, "an ambiguous name")
+        #expect(EntryPagePlan.frame(named: beta, among: []) == nil)
+    }
+
+    /// **The dictionary being read** (UI24): the last section whose start (its divider, or the first frame's top) is at
+    /// or above the view's top; its name is pinned once its own header has scrolled away, on the window's page of more
+    /// than one dictionary only.
+    @Test func theCurrentSourceFollowsTheScroll() {
+        let starts: [Double] = [0, 300, 900]
+        #expect(EntryPagePlan.current(starts: starts, top: 0) == 0)
+        #expect(EntryPagePlan.current(starts: starts, top: 299) == 0)
+        #expect(EntryPagePlan.current(starts: starts, top: 300) == 1)
+        #expect(EntryPagePlan.current(starts: starts, top: 5_000) == 2)
+        #expect(EntryPagePlan.current(starts: [], top: 0) == nil)
+        #expect(!EntryPagePlan.pinsSource(current: 0, starts: starts, top: 0, style: .window), "the page's top")
+        #expect(EntryPagePlan.pinsSource(current: 0, starts: starts, top: 40, style: .window))
+        #expect(!EntryPagePlan.pinsSource(current: 1, starts: starts, top: 300, style: .window), "its divider shows")
+        #expect(EntryPagePlan.pinsSource(current: 1, starts: starts, top: 340, style: .window))
+        #expect(!EntryPagePlan.pinsSource(current: 1, starts: starts, top: 340, style: .popover))
+        #expect(!EntryPagePlan.pinsSource(current: 0, starts: [0], top: 40, style: .window), "one dictionary")
+    }
+
 
     // MARK: - Print (P44)
 
@@ -307,7 +387,7 @@ struct EntryPageTests {
         divider.setZoom(1)
         #expect(divider.label.font?.pointSize == 13)
         let window = EntryPageDivider(name: "LDOC", zoom: 1)
-        #expect(window.style == .window && window.label.font?.pointSize == 18)
+        #expect(window.style == .window && window.label.font?.pointSize == 13)
     }
 
     /// **The page's height** (the popover sizes to its stack): every shown divider's band and every expanded frame,
@@ -341,5 +421,48 @@ struct EntryPageTests {
             defaults.removePersistentDomain(forName: suite)
         }
         #expect(controller.pageDrawsBackground == true)
+    }
+
+    /// **Show in the Entry reveals only in the frame the answer quoted** (UI11): a target naming no frame shown (here,
+    /// another edition) opens nothing and reports false; the named frame, collapsed, is opened for the reveal, while the
+    /// reader's kept collapse for that dictionary is left as it was.
+    @Test func revealingEvidenceOpensOnlyItsOwnFrame() async throws {
+        let (controller, contents, defaults, suite) = try await page(["alpha", "beta", "gamma"], collapsed: ["beta", "gamma"])
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let beta = contents[1].binding
+        let wrong = EntryFrameName(handle: beta.handle, edition: "another", reference: EntryReference(key: "beta"))
+        #expect(await controller.revealEvidence("Beta", in: wrong).value == false)
+        var sections = try #require(controller.pageSections)
+        #expect(sections.map(\.collapsed) == [false, true, true], "a reveal with no frame opened one")
+        let named = EntryFrameName(handle: beta.handle, edition: beta.edition, reference: EntryReference(key: "beta"))
+        _ = await controller.revealEvidence("Beta", in: named).value
+        sections = try #require(controller.pageSections)
+        #expect(sections.map(\.collapsed) == [false, false, true])
+        #expect(sections[1].pane != nil, "the named frame was not made")
+        #expect(EntryPreferences(defaults: defaults).collapsed(for: "lineage-beta"), "the reader's collapse was overwritten")
+    }
+
+    /// **The page names its dictionaries and the one being read** (UI24): what the window's jump list and pinned name
+    /// show; none for a single entry.
+    @Test func thePageNamesItsSourcesAndTheCurrentOne() async throws {
+        let (controller, _, defaults, suite) = try await page(["alpha", "beta"])
+        defer {
+            controller.closeEntry()
+            defaults.removePersistentDomain(forName: suite)
+        }
+        let sources = try #require(controller.pageSources)
+        let sections = try #require(controller.pageSections)
+        #expect(sources.sources.map(\.name) == ["Alpha", "Beta"])
+        #expect(sources.sources.map(\.id) == sections.map(\.id))
+        #expect(sources.current == sections[0].id)
+        #expect(!sources.pinned)
+        var told: [EntryPageSources?] = []
+        controller.onPageSourcesChanged = { told.append($0) }
+        controller.closeEntry()
+        #expect(controller.pageSources == nil)
+        #expect(told.last == .some(nil), "closing the page did not clear its sources")
     }
 }

@@ -108,4 +108,36 @@ struct SenseClickTests {
         #expect(EntryPane.message(body, fromShellsWorld: false) == .refused)
         #expect(EntryPane.message(["kind": "sense", "id": NSNumber(value: true)], fromShellsWorld: true) == .refused)
     }
+    // MARK: - HIG audit 2026-10-23, UI21–UI22: a visible choice, reachable from the keyboard
+
+    /// **The keyboard steps through the page's senses in reading order** (UI22): from no choice, Next is the first and
+    /// Previous the last; at either end the choice stays; an unknown current starts over.
+    @Test func theKeyboardStepsThroughSensesInReadingOrder() throws {
+        let context = try Self.context()
+        func step(_ ids: String, _ current: String, _ delta: Int) -> Int? {
+            guard let value = context.evaluateScript("XDictSenseCore.step(\(ids), \(current), \(delta))"),
+                  !value.isNull, !value.isUndefined else { return nil }
+            return value.toNumber()?.intValue
+        }
+        #expect(step("[3, 7, 9]", "null", 1) == 3)
+        #expect(step("[3, 7, 9]", "null", -1) == 9)
+        #expect(step("[3, 7, 9]", "3", 1) == 7)
+        #expect(step("[3, 7, 9]", "7", -1) == 3)
+        #expect(step("[3, 7, 9]", "9", 1) == 9, "the last stays chosen")
+        #expect(step("[3, 7, 9]", "3", -1) == 3, "the first stays chosen")
+        #expect(step("[3, 7, 9]", "5", 1) == 3, "an ordinal the page does not hold starts over")
+        #expect(step("[]", "null", 1) == nil, "a page without senses chooses nothing")
+    }
+
+    /// **The chosen sense is marked in its own frame, and the mark is the shell's** (UI21): the DOM script marks the
+    /// one element carrying the ordinal, names it current for VoiceOver, unmarks any other, and the style draws it.
+    @Test func theChosenSenseIsMarkedAndUnmarked() {
+        let dom = EntryScripts.senseClicksDOM
+        #expect(dom.contains("__xdictSense"))
+        #expect(dom.contains("data-xdict-chosen"))
+        #expect(dom.contains("aria-current"))
+        #expect(dom.contains("XDictSenseCore.step("))
+        let css = EntryStyle.bundled.text("marks.css")
+        #expect(css.contains("[data-xdict-chosen]"), "the chosen sense has no visible mark")
+    }
 }

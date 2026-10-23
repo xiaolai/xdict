@@ -27,6 +27,37 @@ public struct EntryPageItem: Sendable {
     }
 }
 
+/// **A frame named by what it shows** (HIG audit UI11): the dictionary's open handle, the edition its documents come
+/// from, and the record. An answer's evidence is revealed only in the one frame its frozen target names.
+public struct EntryFrameName: Hashable, Sendable {
+    public let handle: String
+    public let edition: String
+    public let reference: EntryReference
+
+    public init(handle: String, edition: String, reference: EntryReference) {
+        self.handle = handle
+        self.edition = edition
+        self.reference = reference
+    }
+}
+
+/// One dictionary on the All page, as the window's jump list names it (HIG audit UI24).
+public struct EntryPageSource: Hashable, Sendable {
+    public let id: UUID
+    public let name: String
+}
+
+/// **The All page's dictionaries and the one being read** (HIG audit UI24): every section in the reader's order, the
+/// one at the view's top, and whether its name must be pinned there because its own header has scrolled away.
+public struct EntryPageSources: Equatable, Sendable {
+    public let sources: [EntryPageSource]
+    public let current: UUID?
+    public let pinned: Bool
+
+    /// The current dictionary's name, for the pinned label.
+    public var currentName: String? { sources.first { $0.id == current }?.name }
+}
+
 /// Where the page is shown: the main window (Apple's page: paper, collapsible dividers following the text size), or
 /// the lookup popover (P41; owner, 2026-10-18: "stack every dictionary as a section, like Apple's"): no paper of its
 /// own on the glass, every section named by Apple's compact popover divider, nothing collapsed.
@@ -87,6 +118,26 @@ enum EntryPagePlan {
         let next = global.map { (($0 + (forward ? 1 : -1)) % total + total) % total } ?? (forward ? 0 : total - 1)
         guard let section = counts.indices.last(where: { offsets[$0] <= next && counts[$0] > 0 }) else { return nil }
         return (section, next - offsets[section])
+    }
+
+    /// **The one frame a name picks** (UI11): exactly one frame must carry it; none, or two, reveal nothing, so evidence
+    /// is never shown in a frame it was not quoted from.
+    static func frame(named name: EntryFrameName, among frames: [EntryFrameName]) -> Int? {
+        let matches = frames.indices.filter { frames[$0] == name }
+        return matches.count == 1 ? matches[0] : nil
+    }
+
+    /// **The section being read** (UI24): the last whose start (its divider's top, or the first frame's top) is at or
+    /// above the view's top `top`; nil on an empty page. Half a point of slack: a jump lands exactly on a start.
+    static func current(starts: [Double], top: Double) -> Int? {
+        guard !starts.isEmpty else { return nil }
+        return starts.indices.last { starts[$0] <= top + 0.5 } ?? 0
+    }
+
+    /// Whether the current section's name is pinned at the view's top (UI24): on the window's page of more than one
+    /// dictionary, once that section's own header has scrolled above the view. The popover names every section.
+    static func pinsSource(current: Int, starts: [Double], top: Double, style: EntryPageStyle) -> Bool {
+        style == .window && starts.count > 1 && starts.indices.contains(current) && starts[current] < top - 0.5
     }
 
     /// The 1-based position of `current` among every match of the page, for the find bar.

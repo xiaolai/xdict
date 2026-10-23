@@ -91,6 +91,28 @@ public enum MeaningBudget {
     public static let entryTextBytes: UInt64 = 256 << 10
 }
 
+/// **The sentence a request is about, as the request holds it** (HIG audit 2026-10-23, UI09): the captured term, its
+/// sentence, the term's range and which ends the capture cut — copied from the hand-off when the question is composed,
+/// so the pane shows the context of this request, never a newer capture's.
+public struct MeaningContext: Equatable, Sendable {
+    public let term: String
+    public let sentence: String
+    /// The term's range in the sentence, in UTF-16 units; nil when the capture carried none.
+    public let range: NSRange?
+    public let cut: CutEnds
+
+    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = []) {
+        self.term = term
+        self.sentence = sentence
+        self.range = range
+        self.cut = cut
+    }
+
+    init(_ handoff: MeaningHandoff) {
+        self.init(term: handoff.term, sentence: handoff.sentence, range: handoff.range, cut: handoff.cut)
+    }
+}
+
 /// **The composed question as it was sent** (ADR-0021 d.13): the exact bytes, the mode, and whether the entry was cut
 /// before it went. Kept in memory for the presentation only, so the answer pane's View the prompt shows what was really
 /// sent, never a re-render that may differ.
@@ -105,12 +127,18 @@ public struct MeaningSent: Sendable, Equatable {
     /// **The chosen sense**, in `explainSense` mode only: what the request named, and what the answer is validated
     /// against. Kept with the request so the pane shows the sense that was sent, not the one selected since.
     public let sense: AISense?
-    /// The dictionary the chosen sense was clicked in, as the reader knows it: on the All page the frame's own, never
-    /// the one that happens to be shown (plan-explain-sense WI-5).
+    /// The dictionary the entry was sent from, as the reader knows it: for the chosen sense the frame it was clicked
+    /// in, on the All page never the one that happens to be shown (plan-explain-sense WI-5); for a grounded ask the
+    /// entry the request was composed from (HIG audit UI11). Nil for a sentence-only request.
     public let dictionaryName: String?
+    /// **The sentence this request is about** (UI09); nil only for a value built without one.
+    public let questionContext: MeaningContext?
+    /// **The entry the request sent**, so the pane's evidence reveals the right frame (UI11); nil when no entry went.
+    public let target: MeaningTarget?
 
     public init(text: String, mode: AIMode, source: AIProviderKind?, complete: Bool, cutAt: UInt64,
-                sense: AISense? = nil, dictionaryName: String? = nil) {
+                sense: AISense? = nil, dictionaryName: String? = nil, questionContext: MeaningContext? = nil,
+                target: MeaningTarget? = nil) {
         self.text = text
         self.mode = mode
         self.source = source
@@ -118,6 +146,8 @@ public struct MeaningSent: Sendable, Equatable {
         self.cutAt = cutAt
         self.sense = sense
         self.dictionaryName = dictionaryName
+        self.questionContext = questionContext
+        self.target = target
     }
 }
 
@@ -217,6 +247,9 @@ public final class MeaningSession {
     /// **Where the reader's choices really live** (WI-6): Settings ▸ AI's store, read at each ask so a change applies to
     /// the next one. Nil in tests, which set `settings` directly.
     @ObservationIgnored public var settingsProvider: (@MainActor () -> MeaningSettings)?
+    /// **The dictionary's name as the reader knows it**, for the request's evidence label (HIG audit UI11): read on the
+    /// main actor when an ask or a preview starts, so the name is the request's, fixed with it.
+    @ObservationIgnored public var dictionaryNamer: (@MainActor (DictId) -> String?)?
     /// The question the last ask composed and sent, for View the prompt; nil before one and dropped with the sentence.
     public private(set) var sent: MeaningSent?
     /// The presentation's sentence while one is presented: memory only, replaced by the next presentation and dropped
@@ -320,19 +353,42 @@ public final class MeaningSession {
     /// **The reader selected a sense** (plan-explain-sense WI-5; ADR-0029 d.6): the choice is this presentation's, and
     /// a new one makes the last request and answer about another sense — they are dropped, and an ask in flight is
     /// cancelled, so a late answer to the old one is never shown as this selection's.
+    ///
+    /// **A finished answer stays** (HIG audit 2026-10-23, UI23): a plain click is how a reader reads, and erasing the
+    /// answer on it destroyed useful output. The answer keeps its own request (`sent`), so the pane labels it with the
+    /// sense it was about and says the choice has moved; it is never shown as the new selection's. A preview or an ask
+    /// in flight is about the old choice and not yet output: it ends, as before.
     public func select(_ selection: MeaningSelection) {
         guard held != nil else { return }
         guard self.selection != selection else { return }
+        let finished = Self.isFinished(state)
         abandon()
         // A tap that was still waiting for its entry is the old operation's: a selection is the reader moving on.
         askWhenDrawn = false
         askWhenDrawnOperation = nil
         self.selection = selection
-        sent = nil
         previewSettings = nil
         previewEntry = nil
         previewOperation = nil
+        guard !finished else { return }
+        sent = nil
         state = .idle
+    }
+
+    /// **The reader cleared the chosen sense** (UI21): the mark goes, and Explain This Sense with it; what is shown
+    /// stays, labelled by its own request.
+    public func clearSelection() {
+        guard selection != nil else { return }
+        if case .preview(let previewed) = state, previewed.mode == .explainSense { cancel() }
+        selection = nil
+    }
+
+    /// An answer or a failure the reader can read: everything but idle, asking and a preview.
+    private static func isFinished(_ state: State) -> Bool {
+        switch state {
+        case .idle, .asking, .preview: false
+        case .answer, .template, .invalid, .unavailable, .cancelled: true
+        }
     }
 
     /// **An entry was drawn**: the first one after the hold is the sentence's. Any other drops the sentence, so an ask
@@ -605,9 +661,10 @@ public final class MeaningSession {
         let fetchEntryText = self.fetchEntryText
         let makeProvider = self.makeProvider
         let recheck = Self.consentReader(self)
+        let name = dictionaryName(for: operation, target: target)
         running = Task { [weak self] in
             let outcome = await Self.perform(handoff: handoff, mode: operation.mode, target: target,
-                                             selection: operation.selection, settings: chosen,
+                                             selection: operation.selection, dictionaryName: name, settings: chosen,
                                              fetchEntryText: fetchEntryText, makeProvider: makeProvider,
                                              recheck: recheck)
             guard let self, self.generation == mine else { return }
@@ -671,9 +728,10 @@ public final class MeaningSession {
         previewOperation = nil
         state = .idle
         let fetchEntryText = self.fetchEntryText
+        let name = dictionaryName(for: operation, target: target)
         running = Task { [weak self] in
             let composed = await Self.compose(handoff: handoff, mode: operation.mode, target: target,
-                                              selection: operation.selection, settings: chosen,
+                                              selection: operation.selection, dictionaryName: name, settings: chosen,
                                               fetchEntryText: fetchEntryText)
             guard let self, self.generation == mine else { return }
             self.running = nil
@@ -687,6 +745,11 @@ public final class MeaningSession {
                 self.state = .preview(sent)
             }
         }
+    }
+
+    /// The name the request's evidence is labelled with: the chosen sense's frame, else the target dictionary's.
+    private func dictionaryName(for operation: Operation, target: (DictId, EntryRef)?) -> String? {
+        operation.selection?.dictionaryName ?? target.flatMap { dictionaryNamer?($0.0) }
     }
 
     /// **The switch as it is now**, read on the main actor at each send boundary (plan-explain-sense WI-2): the ask
@@ -727,7 +790,7 @@ public final class MeaningSession {
     /// no send — shared by an ask and a preview, so the prompt a preview shows is byte for byte the prompt an ask sends.
     private nonisolated static func compose(
         handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
-        settings: MeaningSettings,
+        dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>
     ) async -> Composed {
         // A source is required to have come this far (`ask` refuses without one).
@@ -771,7 +834,12 @@ public final class MeaningSession {
         return Composed(failure: nil,
                         sent: MeaningSent(text: composed, mode: mode, source: settings.source,
                                           complete: entry?.complete ?? true, cutAt: entry?.cutAt ?? 0,
-                                          sense: sense, dictionaryName: selection?.dictionaryName),
+                                          sense: sense,
+                                          dictionaryName: mode == .sentenceOnly ? nil : dictionaryName,
+                                          questionContext: MeaningContext(handoff),
+                                          target: mode == .sentenceOnly ? nil : target.map {
+                                              MeaningTarget(dictionary: $0.0, entry: $0.1)
+                                          }),
                         entry: entry, sense: sense)
     }
 
@@ -861,14 +929,15 @@ public final class MeaningSession {
     /// One ask, apart from the session's state so cancellation is decided by `generation` alone.
     private nonisolated static func perform(
         handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
-        settings: MeaningSettings,
+        dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
         makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
         recheck: @Sendable () async -> MeaningSettings
     ) async -> Performed {
         guard settings.source != nil else { return Performed(state: .unavailable(.noSource), sent: nil) }
         let composed = await Self.compose(handoff: handoff, mode: mode, target: target, selection: selection,
-                                          settings: settings, fetchEntryText: fetchEntryText)
+                                          dictionaryName: dictionaryName, settings: settings,
+                                          fetchEntryText: fetchEntryText)
         if let failure = composed.failure { return Performed(state: failure, sent: composed.sent) }
         guard let sent = composed.sent else { return Performed(state: .unavailable(.noEntry), sent: nil) }
         // **After the fetch**: the reader may have turned the switch off while the entry was read.

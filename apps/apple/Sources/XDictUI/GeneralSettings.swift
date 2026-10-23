@@ -30,48 +30,61 @@ public struct GeneralSettings: View {
     }
 
     public var body: some View {
+        // **Named groups, short captions** (UI28, UI29): each section says what it holds, as System Settings' panes do.
         Form {
-            Toggle(isOn: Binding(get: { login.isOn }, set: { login.set($0) })) {
-                Text("Open XDict when you log in")
-                Text(LaunchAtLogin.sentence(login.status))
+            Section {
+                Toggle(isOn: Binding(get: { login.isOn }, set: { login.set($0) })) {
+                    Text("Open XDict when you log in")
+                    Text(LaunchAtLogin.sentence(login.status))
+                }
+                .accessibilityLabel(Text("Open XDict when you log in"))
+                .accessibilityIdentifier("launch-at-login")
+                if login.needsApproval {
+                    LabeledContent {
+                        Button { login.openLoginItems() } label: { Text("Open Login Items Settings…") }  // placement: form-row
+                            .accessibilityIdentifier("launch-at-login.approve")
+                    } label: {
+                        Text("Allow XDict in Login Items")
+                    }
+                }
+                Toggle(isOn: $keepsRunning) {
+                    Text("Keep XDict in the menu bar")
+                    Text("With every window closed, the shortcut, the Service and hover keep working.")
+                }
+                .accessibilityIdentifier("keep-in-menu-bar")
+                if let failure = login.failure {
+                    // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
+                    VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                        Text("The system did not change whether XDict opens when you log in.")
+                        Text(verbatim: failure).font(.caption)
+                    }
+                    .foregroundStyle(.red)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("launch-at-login.failure")
+                }
+            } header: {
+                Text("Startup")
             }
-            .accessibilityLabel(Text("Open XDict when you log in"))
-            .accessibilityIdentifier("launch-at-login")
-            if login.needsApproval {
-                LabeledContent {
-                    Button { login.openLoginItems() } label: { Text("Open Login Items Settings…") }  // placement: form-row
-                        .accessibilityIdentifier("launch-at-login.approve")
+            .settingsAnchor(.startup)
+            Section {
+                Picker(selection: $language) {
+                    ForEach(InterfaceLanguage.allCases) { choice in
+                        Text(choice.name).tag(choice)
+                    }
                 } label: {
-                    Text("Allow XDict in Login Items")
+                    Text("Language")
+                    Text("XDict’s own words, not the dictionaries’. Applies when XDict next opens.")
                 }
-            }
-            Toggle(isOn: $keepsRunning) {
-                Text("Keep XDict in the menu bar")
-                Text("With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window.")
-            }
-            .accessibilityIdentifier("keep-in-menu-bar")
-            if let failure = login.failure {
-                // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
-                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                    Text("The system did not change whether XDict opens when you log in.")
-                    Text(verbatim: failure).font(.caption)
-                }
-                .foregroundStyle(.red)
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("launch-at-login.failure")
-            }
-            Picker(selection: $language) {
-                ForEach(InterfaceLanguage.allCases) { choice in
-                    Text(choice.name).tag(choice)
-                }
-            } label: {
+                .accessibilityIdentifier("interface-language")
+                .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
+            } header: {
                 Text("Language")
-                Text("XDict's own words; dictionaries are never translated. Takes effect when XDict next opens.")
             }
-            .accessibilityIdentifier("interface-language")
-            .onChange(of: language) { _, chosen in chosen.apply(to: defaults) }
-            Section { ShortcutSettings(registrar: registrar) }
-            Section { HoverSettings(hover: hover) }
+            .settingsAnchor(.interfaceLanguage)
+            Section { ShortcutSettings(registrar: registrar) } header: { Text("Lookup Shortcut") }
+                .settingsAnchor(.lookupShortcut)
+            Section { HoverSettings(hover: hover) } header: { Text("Hover") }
+                .settingsAnchor(.hover)
             Section {
                 Picker(selection: $shade) {
                     Text("Follow System").tag(PanelAppearance.Shade.system)
@@ -93,7 +106,10 @@ public struct GeneralSettings: View {
                     Text("Solid")
                 }
                 .accessibilityIdentifier("panel-solidity")
+            } header: {
+                Text("Lookup Popup")
             }
+            .settingsAnchor(.popupAppearance)
         }
         .settingsPane()
         .onAppear { login.refresh() }

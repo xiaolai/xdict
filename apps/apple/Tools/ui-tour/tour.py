@@ -21,6 +21,7 @@ entry and open windows never leak from one route into the next (the review's "le
 import json
 import os
 import plistlib
+import signal
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,9 @@ import time
 here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, here)
 import aim  # noqa: E402
+import demo
+import visibility  # noqa: E402
+from ledger_sandbox import RegistrySandbox, stop_owned_service  # noqa: E402
 from axcheck import checks, dictionaries_table  # noqa: E402
 import parity  # noqa: E402
 from pseudo import pseudo  # noqa: E402
@@ -50,6 +54,7 @@ fixtures = os.path.join(home, "fixtures")
 ax_tool = os.path.join(out, ".bin", "ax")
 DOMAIN = "ai.xdict.app"
 DEADLINE = 6.0
+LEDGER_SANDBOX = None
 
 zh = {}
 strings = os.path.join(app, "Contents", "Resources", "zh-Hans.lproj", "Localizable.strings")
@@ -128,6 +133,8 @@ class Session:
     """One launch of the app over its own library; asked through `<work>/commands` (LookupWindow.swift)."""
 
     def __init__(self, variant, library, preferences=()):
+        if LEDGER_SANDBOX is not None:
+            LEDGER_SANDBOX.reset()
         self.variant, self.library = variant, library
         self.appearance, self.lang = variant.split("-")
         self.app = PSEUDO_APP if self.lang == "pseudo" else app
@@ -174,11 +181,11 @@ class Session:
         except OSError:
             return ""
 
-    def ask(self, op, wait=20):
+    def ask(self, op, wait=20, fields=None):
         self.sequence += 1
         path = os.path.join(self.commands, f"{self.sequence:03d}.json")
         with open(path + ".tmp", "w") as f:
-            json.dump({"op": op}, f)
+            json.dump(dict(fields or {}, op=op), f)
         os.replace(path + ".tmp", path)
         answer = os.path.join(self.commands, f"{self.sequence:03d}.out.json")
         for _ in range(int(wait * 20)):
@@ -232,6 +239,21 @@ class Session:
             names = [n for t in step[1:] for n in translated(t, self.lang).split("|")]
             self.ax(kind, *dict.fromkeys(names))
             time.sleep(0.5)
+        elif kind == "visible":
+            deadline = time.monotonic() + 5
+            while not visibility.visible(self.ax("tree"), step[1], step[2] if len(step) > 2 else None):
+                if time.monotonic() >= deadline:
+                    raise Failed("requested control is not visible: " + step[1])
+                time.sleep(0.1)
+        elif kind == "fills":
+            if not visibility.fills_container(self.ax("tree"), step[1]):
+                raise Failed("pane does not fill its native column: " + step[1])
+        elif kind == "windowSize":
+            windows = self.ax("tree").get("windows", [])
+            main = next((w for w in windows if w.get("identifier", "").startswith("main-")), None)
+            frame = main.get("frame") if main else None
+            if not frame or abs(frame[2] - step[1]) > 1 or abs(frame[3] - step[2]) > 1:
+                raise Failed("main window changed size: " + str(frame) + "; expected " + str(step[1:]))
         elif kind == "size":
             self.ax("size", step[1], step[2])
             time.sleep(0.6)
@@ -245,6 +267,15 @@ class Session:
             time.sleep(0.8)
         elif kind == "drop":
             self.drop(os.path.join(fixtures, "library", step[1]))
+        elif kind == "demo":
+            if step[1] == "meaning":
+                with demo.answer_server() as endpoint:
+                    prepared = self.ask(demo.operation(step[1]), fields={"endpoint": endpoint})
+            else:
+                prepared = self.ask(demo.operation(step[1]))
+            if not prepared.get("prepared"):
+                raise Failed("synthetic demonstration could not be prepared: " + str(prepared))
+            time.sleep(0.6)
         else:
             raise Failed(f"unknown step {step}")
 
@@ -375,6 +406,10 @@ def walk(variant, name, library, route, steps, folder):
         if not running(session.exe):
             record["failure"] = (record.get("failure", "") + " — XDict quit: " + session.stderr()).strip()
     finally:
+        # Keep the native exception reason before the isolated session removes its scratch directory.
+        error_log = os.path.join(session.work, "app.err")
+        if record.get("failure") and os.path.isfile(error_log):
+            shutil.copyfile(error_log, os.path.join(folder, f"{route}.stderr.txt"))
         session.quit()
     print(f"{name} {route}: {record.get('failure', 'ok')}", flush=True)
     for check in record.get("parity", []):
@@ -487,18 +522,27 @@ def main():
         raise SystemExit(f"tour: this session may not drive the window ({access})")
     os.makedirs(os.path.dirname(ax_tool), exist_ok=True)
     run("swiftc", "-O", "-o", ax_tool, os.path.join(here, "ax.swift"), wait=300)
-    backup = os.path.join(out, ".prefs-backup.plist")
-    had = run("defaults", "export", DOMAIN, backup, check=False).returncode == 0
-    try:
-        results = reader() if "--reader" in sys.argv else tour()
-    finally:
-        run("defaults", "delete", DOMAIN, check=False)
-        if had:
-            run("defaults", "import", DOMAIN, backup)
-            os.remove(backup)
-        restored = run("defaults", "export", DOMAIN, "-", check=False).stdout
-        print(f"tour: XDict's preferences {'restored' if had else 'removed (none existed before)'}"
-              f" ({len(restored)} bytes now)", flush=True)
+    global LEDGER_SANDBOX
+    registry = os.path.join(os.path.expanduser("~"), "Library", "Containers", DOMAIN + ".DictionaryService",
+                            "Data", "Library", "Application Support", "registry")
+    def interrupted(*_):
+        raise SystemExit("tour: interrupted; restoring owned state")
+    signal.signal(signal.SIGTERM, interrupted)
+    with RegistrySandbox(registry, os.path.join(home, "ui-tour-state"), lambda: stop_owned_service(app)) as sandbox:
+        LEDGER_SANDBOX = sandbox
+        backup = os.path.join(out, ".prefs-backup.plist")
+        had = run("defaults", "export", DOMAIN, backup, check=False).returncode == 0
+        try:
+            results = reader() if "--reader" in sys.argv else tour()
+        finally:
+            run("defaults", "delete", DOMAIN, check=False)
+            if had:
+                run("defaults", "import", DOMAIN, backup)
+                os.remove(backup)
+            restored = run("defaults", "export", DOMAIN, "-", check=False).stdout
+            print(f"tour: XDict's preferences {'restored' if had else 'removed (none existed before)'}"
+                  f" ({len(restored)} bytes now)", flush=True)
+        LEDGER_SANDBOX = None
     path = os.path.join(out, "results.json")
     if "--reader" in sys.argv and os.path.exists(path):
         results = [r for r in json.load(open(path)) if r["route"] != "reader.firstLaunch"] + results

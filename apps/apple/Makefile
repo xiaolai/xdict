@@ -215,6 +215,9 @@ affected-graph-update:
 # WI-10 measurement's arithmetic; every linked crate and bundled font with its notice (Tools/notices.py, needs cargo).
 test-tools:
 	@Tools/not-on-air.sh
+	@python3 -I Tools/tests/ui_demo_test.py
+	@python3 -I Tools/tests/ui_tour_registry_test.py
+	@python3 -I Tools/tests/ui_tour_visibility_test.py
 	@Tools/tests/e2e-plan-test.sh
 	@Tools/tests/e2e-requested-test.sh
 	@python3 -I Tools/tests/e2e_harness_test.py

@@ -11,7 +11,9 @@ import XDictTokens
 public struct LearningSettings: View {
     @State private var preferences = LearningPreferences.shared
     @State private var status: String?
-    @State private var syncStatus: String?
+    /// The sync pass the pane shows (UI40); nil without a sync to perform.
+    @State private var pass: SyncPass?
+    @State private var confirmingDisconnect = false
     private let declared: @MainActor () -> [String]
     private let study: StudyModel?
     private let reminders: ReviewReminders?
@@ -25,6 +27,15 @@ public struct LearningSettings: View {
         self.study = study
         self.reminders = reminders
         self.performSync = performSync
+        _pass = State(initialValue: performSync.map { SyncPass(perform: $0) })
+    }
+
+    /// **What the history keeps, and where** (UI39): on this Mac by default; with a sync folder, also in that folder.
+    /// AI is its own disclosure, in Settings ▸ AI.
+    static func historyPrivacy(syncing: Bool) -> LocalizedStringResource {
+        syncing
+            ? "The sentence around a looked-up word is kept on this Mac, and copied with your notes and grades to your sync folder for your other devices. Asking AI is separate; see Settings ▸ AI."
+            : "The sentence around a looked-up word is kept on this Mac. Turning the history off stops new readings and keeps the ones already here. Asking AI is separate; see Settings ▸ AI."
     }
 
     public var body: some View {
@@ -33,12 +44,14 @@ public struct LearningSettings: View {
             Section {
                 Toggle("Keep a reading history on this Mac", isOn: $preferences.historyEnabled)
                     .accessibilityIdentifier("learning.history")
-                Text("The sentence around a looked-up word is stored only on this Mac. Nothing is sent anywhere; turning the history off stops new readings and keeps the ones already here.")
+                Text(Self.historyPrivacy(syncing: study != nil && pass != nil && preferences.syncFolder != nil))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("learning.history.privacy")
             } header: {
                 Text("Reading History")
             }
+            .settingsAnchor(.history)
 
             if preferences.historyEnabled {
                 languageSection("Languages to record",
@@ -54,11 +67,17 @@ public struct LearningSettings: View {
                 reminderSection(reminders)
             }
             if let study {
-                if performSync != nil { syncSection }
+                if let pass { syncSection(pass) }
                 dataSection(study)
             }
         }
         .settingsPane()
+        // **A permission granted in System Settings is seen on return** (UI41): the summary already loaded re-plans the
+        // reminder and re-reads the system's answer. Without a summary nothing is re-planned, so nothing is cancelled.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard let reminders, let summary = study?.summary else { return }
+            Task { await reminders.refresh(summary: summary) }
+        }
     }
 
     /// **Review reminders** (plan §5.4): the switch asks the system once; a refusal is said here rather than the reminder
@@ -70,74 +89,97 @@ public struct LearningSettings: View {
                 set: { on in Task { await reminders.setEnabled(on) } }))
                 .accessibilityIdentifier("learning.reminders")
             if reminders.refused {
-                Text("macOS is not allowing XDict's notifications. Allow them in System Settings ▸ Notifications.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                ActionRow {
+                    Text("macOS is not allowing XDict’s notifications.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } actions: {
+                    Button("Open Notification Settings…") { NotificationSettingsLink.open() }  // placement: form-row
+                        .accessibilityIdentifier("learning.reminders.openSettings")
+                }
             }
         } header: {
             Text("Review Reminders")
         }
+        .settingsAnchor(.reviewReminders)
     }
 
-    /// **Sync with the reader's other devices** (plan §2.6): another device's log merges in, then this Mac's whole log is
-    /// written to the folder for them. The folder is the reader's own storage; XDict keeps no server and no account.
-    @ViewBuilder private var syncSection: some View {
+    /// **Sync with the reader's other devices** (plan §2.6; UI40): another device's log merges in, then this Mac's whole
+    /// log is written to the folder for them. The folder is the reader's own storage; XDict keeps no server and no
+    /// account. The section says a pass is running, when one last succeeded, and how to stop syncing.
+    @ViewBuilder private func syncSection(_ pass: SyncPass) -> some View {
         Section {
             if let bookmark = preferences.syncFolder {
                 ActionRow {
                     Text(verbatim: SyncFolder.name(bookmark) ?? "")
                 } actions: {
-                    Button("Sync Now") { syncNow() }
+                    if pass.isRunning {
+                        ProgressView().controlSize(.small)  // placement: spinner
+                            .accessibilityLabel(Text("Syncing"))
+                            .accessibilityIdentifier("learning.sync.running")
+                    }
+                    Button("Sync Now") { Task { await pass.run(preferences.syncFolder) } }  // placement: form-row
+                        .disabled(pass.isRunning)
                         .accessibilityIdentifier("learning.syncNow")
                 }
+                if let line = Self.syncLine(pass.phase) {
+                    Text(line)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("learning.sync.status")
+                }
+                if let last = pass.lastSuccess {
+                    Text("Last synced \(last.formatted(.relative(presentation: .named))).")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("learning.sync.last")
+                }
                 ActionRow {
-                    Text("Another folder can be chosen; what is already here is left alone.")
+                    Text("Disconnecting stops syncing. The folder’s files and this Mac’s history are kept.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } actions: {
-                    Button("Choose Folder…") { chooseSyncFolder() }
+                    Button("Choose Folder…") { chooseSyncFolder(pass) }  // placement: form-row
+                        .disabled(pass.isRunning)
+                    Button("Disconnect…") { confirmingDisconnect = true }  // placement: form-row
+                        .disabled(pass.isRunning)
+                        .accessibilityIdentifier("learning.sync.disconnect")
                 }
             } else {
                 ActionRow {
-                    Text("Choose a folder in your own storage — iCloud Drive, a WebDAV mount — and your readings, notes and grades sync with your other devices through it.")
+                    Text("Choose a folder in your own storage, such as iCloud Drive, and your readings, notes and grades sync with your other devices through it.")
                 } actions: {
-                    Button("Choose Folder…") { chooseSyncFolder() }
+                    Button("Choose Folder…") { chooseSyncFolder(pass) }  // placement: form-row
                         .accessibilityIdentifier("learning.syncChoose")
                 }
-            }
-            if let syncStatus {
-                Text(verbatim: syncStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("learning.sync.status")
             }
         } header: {
             Text("Sync")
         }
+        .settingsAnchor(.syncFolder)
+        .confirmationDialog(Text("Stop syncing with this folder?"), isPresented: $confirmingDisconnect) {
+            Button("Disconnect", role: .destructive) { pass.disconnect(preferences) }  // placement: system-alert
+            Button("Cancel", role: .cancel) {}  // placement: system-alert
+        } message: {
+            Text("The folder’s files and this Mac’s history are kept. You can choose a folder again later.")
+        }
     }
 
-    private func chooseSyncFolder() {
+    static func syncLine(_ phase: SyncPass.Phase) -> LocalizedStringResource? {
+        switch phase {
+        case .idle: nil
+        case .synced(added: _, peers: 0): "No other device’s log is in this folder yet."
+        case .synced(let added, _): "Synced: \(added) new events."
+        case .failed: "The sync could not finish."
+        case .folderUnavailable: "The folder could not be opened. Choose it again."
+        case .noFolder: "No sync folder yet."
+        }
+    }
+
+    private func chooseSyncFolder(_ pass: SyncPass) {
         guard let chosen = SyncFolder.choose() else { return }
         preferences.setSyncFolder(chosen.bookmark)
-        syncStatus = nil
-    }
-
-    private func syncNow() {
-        guard let performSync else { return }
-        guard let bookmark = preferences.syncFolder, let folder = SyncFolder.open(bookmark) else {
-            syncStatus = String(localized: "No sync folder yet.")
-            return
-        }
-        Task {
-            defer { folder.stop() }
-            guard let report = await performSync(folder.path) else {
-                syncStatus = String(localized: "The sync could not finish.")
-                return
-            }
-            syncStatus = report.peers == 0
-                ? String(localized: "No other device's log is in this folder yet.")
-                : String(localized: "Synced: \(report.added) new events.")
-        }
+        pass.folderChanged()
     }
 
     /// **The reader's own data** (plan §5.5): one export, and an erase that names what it cleared and what may remain.

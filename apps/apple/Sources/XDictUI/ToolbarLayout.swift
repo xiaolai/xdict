@@ -36,6 +36,11 @@ public enum ToolbarLayout {
     /// The window's title, always: "XDict", where Apple's says "Dictionary" (P2, the owner's deviation of 2026-10-18).
     public static var windowTitle: LocalizedStringResource { LocalizedStringResource("XDict") }
 
+    /// **A window's title: the word it shows, else "XDict"** (HIG audit 2026-10-23, UI08, revisiting P2 at the owner's
+    /// approval): the Window menu and Mission Control tell two untabbed windows apart by what they show; the title stays
+    /// concise, one word. `windowTitle` above stays the empty window's.
+    public static func windowTitle(word: String?) -> String { tabTitle(word: word) }
+
     /// A tab's label: the word it shows, else the window's title. The window's own title stays "XDict" (above); a
     /// tab with the same text as every other tab tells the reader nothing (owner, 2026-10-18).
     public static func tabTitle(word: String?) -> String {

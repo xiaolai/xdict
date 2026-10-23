@@ -1688,6 +1688,38 @@
         }
       }
     },
+    "AI Settings…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI 设置…"
+          }
+        }
+      }
+    },
+    "AI-generated. It can be wrong; check it against the entry." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "AI-generated. It can be wrong; check it against the entry."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "由 AI 生成，可能有误，请对照词条核实。"
+          }
+        }
+      }
+    },
     "About" : {
       "localizations" : {
         "en" : {
@@ -1817,6 +1849,22 @@
         }
       }
     },
+    "Add Dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add Dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加词典"
+          }
+        }
+      }
+    },
     "Add Dictionaries…" : {
       "localizations" : {
         "en" : {
@@ -1865,6 +1913,22 @@
         }
       }
     },
+    "Add a dictionary, then type a word in XDict’s window. No permission is needed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a dictionary, then type a word in XDict’s window. No permission is needed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加词典后，即可在 XDict 窗口输入单词，无需授予权限。"
+          }
+        }
+      }
+    },
     "Add an App…" : {
       "localizations" : {
         "en" : {
@@ -1877,6 +1941,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "添加应用…"
+          }
+        }
+      }
+    },
+    "Add the MDict dictionaries you already have — .mdx files, with their .mdd resources — or the dictionaries that come with this Mac." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add the MDict dictionaries you already have — .mdx files, with their .mdd resources — or the dictionaries that come with this Mac."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加已有的 MDict 词典（.mdx 文件及其 .mdd 资源），或导入这台 Mac 自带的词典。"
           }
         }
       }
@@ -1909,6 +1989,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "地址"
+          }
+        }
+      }
+    },
+    "Advanced" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Advanced"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "高级"
           }
         }
       }
@@ -2105,6 +2201,22 @@
         }
       }
     },
+    "An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "兼容 OpenAI 的服务地址，例如 Ollama 的 http://127.0.0.1:11434/v1。"
+          }
+        }
+      }
+    },
     "An OpenAI-compatible cloud endpoint. The key lives in your Keychain, and XDict sends it only over https." : {
       "localizations" : {
         "en" : {
@@ -2165,22 +2277,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "另一个 App 已占用此快捷键。"
-          }
-        }
-      }
-    },
-    "Another folder can be chosen; what is already here is left alone." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Another folder can be chosen; what is already here is left alone."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可以另选一个文件夹；这里已有的内容不受影响。"
           }
         }
       }
@@ -2800,6 +2896,22 @@
         }
       }
     },
+    "Cannot be read" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cannot be read"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取"
+          }
+        }
+      }
+    },
     "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence." : {
       "localizations" : {
         "en" : {
@@ -2995,18 +3107,18 @@
         }
       }
     },
-    "Choose a folder in your own storage — iCloud Drive, a WebDAV mount — and your readings, notes and grades sync with your other devices through it." : {
+    "Choose a folder in your own storage, such as iCloud Drive, and your readings, notes and grades sync with your other devices through it." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Choose a folder in your own storage — iCloud Drive, a WebDAV mount — and your readings, notes and grades sync with your other devices through it."
+            "value" : "Choose a folder in your own storage, such as iCloud Drive, and your readings, notes and grades sync with your other devices through it."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "在你自己的存储中选取一个文件夹——iCloud 云盘、WebDAV 挂载点都可以——你的阅读记录、笔记和评分就会通过它与你的其他设备同步。"
+            "value" : "选择自有存储空间中的文件夹（例如 iCloud 云盘），通过它向其他设备同步阅读记录、笔记和评分。"
           }
         }
       }
@@ -3043,6 +3155,22 @@
         }
       }
     },
+    "Chose a sense from the entry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Chose a sense from the entry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从词条中选了一个义项"
+          }
+        }
+      }
+    },
     "Claude" : {
       "localizations" : {
         "en" : {
@@ -3059,6 +3187,118 @@
         }
       }
     },
+    "Clear Choice" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Choice"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除选择"
+          }
+        }
+      }
+    },
+    "Clear Chosen Sense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Chosen Sense"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除所选义项"
+          }
+        }
+      }
+    },
+    "Clear Filter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Filter"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除筛选"
+          }
+        }
+      }
+    },
+    "Clear Note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Note"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清空笔记"
+          }
+        }
+      }
+    },
+    "Clear Note…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear Note…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清空笔记…"
+          }
+        }
+      }
+    },
+    "Clear the filter to drag dictionaries into order." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear the filter to drag dictionaries into order."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "清除筛选后，可拖动词典调整顺序。"
+          }
+        }
+      }
+    },
+    "Clear this note? The word stays in Review, and the earlier wording stays in your exported data until you erase it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Clear this note? The word stays in Review, and the earlier wording stays in your exported data until you erase it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要清空这条笔记吗？单词仍保留在复习中；清除数据之前，导出的数据仍会包含此前的笔记内容。"
+          }
+        }
+      }
+    },
     "Click, then type the combination to use" : {
       "localizations" : {
         "en" : {
@@ -3071,6 +3311,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "点按，然后键入要使用的组合键"
+          }
+        }
+      }
+    },
+    "Code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "验证码"
           }
         }
       }
@@ -3103,6 +3359,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "全部折叠"
+          }
+        }
+      }
+    },
+    "Comfortable reading width" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Comfortable reading width"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "舒适阅读宽度"
           }
         }
       }
@@ -3285,6 +3557,54 @@
         }
       }
     },
+    "Copy Code" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Code"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制验证码"
+          }
+        }
+      }
+    },
+    "Copy Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制详情"
+          }
+        }
+      }
+    },
+    "Copy Request" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Request"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制请求"
+          }
+        }
+      }
+    },
     "Copying…" : {
       "localizations" : {
         "en" : {
@@ -3313,6 +3633,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "无法确定是否已允许录屏。请稍后再次检查。"
+          }
+        }
+      }
+    },
+    "Current dictionary: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Current dictionary: %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前词典：%@"
+          }
+        }
+      }
+    },
+    "Customize the Prompt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Customize the Prompt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义提示词"
           }
         }
       }
@@ -3361,6 +3713,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "简介"
+          }
+        }
+      }
+    },
+    "Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "详情"
           }
         }
       }
@@ -3430,6 +3798,22 @@
         }
       }
     },
+    "Dictionaries on This Page" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionaries on This Page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本页词典"
+          }
+        }
+      }
+    },
     "Dictionaries…" : {
       "localizations" : {
         "en" : {
@@ -3490,6 +3874,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你要找的是不是："
+          }
+        }
+      }
+    },
+    "Disconnect" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断开同步"
+          }
+        }
+      }
+    },
+    "Disconnecting stops syncing. The folder’s files and this Mac’s history are kept." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnecting stops syncing. The folder’s files and this Mac’s history are kept."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断开后停止同步，文件夹中的文件和这台 Mac 上的历史记录都会保留。"
+          }
+        }
+      }
+    },
+    "Disconnect…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "断开同步…"
           }
         }
       }
@@ -3590,6 +4022,22 @@
         }
       }
     },
+    "Each kind has its own prompt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each kind has its own prompt."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "每种问题都有独立的提示词。"
+          }
+        }
+      }
+    },
     "Easy" : {
       "localizations" : {
         "en" : {
@@ -3634,6 +4082,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "版本标识 %@"
+          }
+        }
+      }
+    },
+    "Empty lets the server choose." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty lets the server choose."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "留空则由服务器选择。"
           }
         }
       }
@@ -3846,6 +4310,22 @@
         }
       }
     },
+    "Error Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "错误详情"
+          }
+        }
+      }
+    },
     "Every reading, note and grade on this Mac is erased. This cannot be undone." : {
       "localizations" : {
         "en" : {
@@ -3858,6 +4338,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这台 Mac 上的每一条阅读记录、笔记和评分都会被删除，且无法撤销。"
+          }
+        }
+      }
+    },
+    "Exact Request" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exact Request"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "完整请求"
           }
         }
       }
@@ -3990,6 +4486,22 @@
         }
       }
     },
+    "File missing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "File missing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件缺失"
+          }
+        }
+      }
+    },
     "Files" : {
       "localizations" : {
         "en" : {
@@ -4006,6 +4518,22 @@
         }
       }
     },
+    "Filter" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选"
+          }
+        }
+      }
+    },
     "Filter Dictionaries" : {
       "localizations" : {
         "en" : {
@@ -4018,6 +4546,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "过滤词典"
+          }
+        }
+      }
+    },
+    "Filter dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter dictionaries"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "筛选词典"
           }
         }
       }
@@ -4231,6 +4775,22 @@
         }
       }
     },
+    "From the entry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From the entry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词条依据"
+          }
+        }
+      }
+    },
     "From the sentence alone" : {
       "localizations" : {
         "en" : {
@@ -4437,6 +4997,54 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Hide Meaning in Context" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Meaning in Context"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏语境释义"
+          }
+        }
+      }
+    },
+    "Hide Results" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏结果"
+          }
+        }
+      }
+    },
+    "Hide the meaning of the captured word in its sentence" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide the meaning of the captured word in its sentence"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏捕获单词的语境释义"
           }
         }
       }
@@ -4781,6 +5389,54 @@
         }
       }
     },
+    "Import cancelled" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import cancelled"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入已取消"
+          }
+        }
+      }
+    },
+    "Import failed" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import failed"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入失败"
+          }
+        }
+      }
+    },
+    "Importing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Importing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在导入"
+          }
+        }
+      }
+    },
     "Importing…" : {
       "localizations" : {
         "en" : {
@@ -4793,6 +5449,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在导入…"
+          }
+        }
+      }
+    },
+    "In this sentence" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In this sentence"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "句中语境"
           }
         }
       }
@@ -4938,6 +5610,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "保留"
+          }
+        }
+      }
+    },
+    "Keep Note" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Keep Note"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "保留笔记"
           }
         }
       }
@@ -5199,6 +5887,22 @@
         }
       }
     },
+    "Last synced %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last synced %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上次同步：%@。"
+          }
+        }
+      }
+    },
     "Latin" : {
       "comment" : "A writing system hover looks up: English and most European languages",
       "localizations" : {
@@ -5296,6 +6000,38 @@
         }
       }
     },
+    "Look Up from Other Apps" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up from Other Apps"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从其他 App 查词"
+          }
+        }
+      }
+    },
+    "Look Up in XDict" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up in XDict"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在 XDict 中查词"
+          }
+        }
+      }
+    },
     "Look Up in XDict Service" : {
       "localizations" : {
         "en" : {
@@ -5308,6 +6044,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 查询服务"
+          }
+        }
+      }
+    },
+    "Look Up “%@”" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look Up “%@”"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查找“%@”"
           }
         }
       }
@@ -5372,6 +6124,54 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "查询"
+          }
+        }
+      }
+    },
+    "Lookup Popup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup Popup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词弹窗"
+          }
+        }
+      }
+    },
+    "Lookup Shortcut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup Shortcut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词快捷键"
+          }
+        }
+      }
+    },
+    "Lookup from other apps needs: %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lookup from other apps needs: %@."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从其他 App 查词还需要：%@。"
           }
         }
       }
@@ -5456,22 +6256,6 @@
         }
       }
     },
-    "Matched" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Matched"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "匹配"
-          }
-        }
-      }
-    },
     "Matched ignoring case or punctuation, as this dictionary does" : {
       "localizations" : {
         "en" : {
@@ -5520,6 +6304,22 @@
         }
       }
     },
+    "Meaning in Context" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meaning in Context"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "语境释义"
+          }
+        }
+      }
+    },
     "Model" : {
       "localizations" : {
         "en" : {
@@ -5532,6 +6332,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型"
+          }
+        }
+      }
+    },
+    "More" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "更多"
           }
         }
       }
@@ -5696,6 +6512,22 @@
         }
       }
     },
+    "Next Sense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next Sense"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "下一个义项"
+          }
+        }
+      }
+    },
     "No Answer Yet" : {
       "localizations" : {
         "en" : {
@@ -5804,6 +6636,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "没有与你的搜索匹配的词典。"
+          }
+        }
+      }
+    },
+    "No dictionaries match." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No dictionaries match."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有匹配的词典。"
           }
         }
       }
@@ -5952,18 +6800,18 @@
         }
       }
     },
-    "No other device's log is in this folder yet." : {
+    "No other device’s log is in this folder yet." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "No other device's log is in this folder yet."
+            "value" : "No other device’s log is in this folder yet."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "这个文件夹里还没有其他设备的日志。"
+            "value" : "此文件夹中尚无其他设备的记录。"
           }
         }
       }
@@ -6129,22 +6977,6 @@
         }
       }
     },
-    "Not grounded in an entry" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not grounded in an entry"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未依据词条"
-          }
-        }
-      }
-    },
     "Not in %@." : {
       "localizations" : {
         "en" : {
@@ -6209,6 +7041,22 @@
         }
       }
     },
+    "Not used in lookups" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not used in lookups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "不用于查词"
+          }
+        }
+      }
+    },
     "Note" : {
       "localizations" : {
         "en" : {
@@ -6221,6 +7069,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "笔记"
+          }
+        }
+      }
+    },
+    "Note cleared." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Note cleared."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "笔记已清空。"
           }
         }
       }
@@ -6439,18 +7303,18 @@
         }
       }
     },
-    "Off, only the sentence around the word is sent. One rule for every source: a server on this Mac is not an exception." : {
+    "Off, only the sentence around the word is sent — to every source, one on this Mac included." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Off, only the sentence around the word is sent. One rule for every source: a server on this Mac is not an exception."
+            "value" : "Off, only the sentence around the word is sent — to every source, one on this Mac included."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭时只发送包含该词的句子。所有来源遵循同一条规则：本机上的服务器也不例外。"
+            "value" : "关闭时只发送单词所在的句子；此规则适用于所有来源，包括这台 Mac 上的服务。"
           }
         }
       }
@@ -6583,22 +7447,6 @@
         }
       }
     },
-    "One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "每种问题各有提示词：由模型从词条中选择义项、仅凭句子，或解释你选的义项。"
-          }
-        }
-      }
-    },
     "Only a compact voice is available for this language. macOS offers nothing better for it." : {
       "localizations" : {
         "en" : {
@@ -6647,6 +7495,22 @@
         }
       }
     },
+    "Only the sentence will be sent, not the entry." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only the sentence will be sent, not the entry."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只会发送句子，不会发送词条。"
+          }
+        }
+      }
+    },
     "Open %@ in your browser?" : {
       "localizations" : {
         "en" : {
@@ -6675,6 +7539,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开 AI 设置"
+          }
+        }
+      }
+    },
+    "Open AI Settings…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open AI Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 AI 设置…"
           }
         }
       }
@@ -6743,6 +7623,22 @@
         }
       }
     },
+    "Open Entry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Entry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开词条"
+          }
+        }
+      }
+    },
     "Open General" : {
       "localizations" : {
         "en" : {
@@ -6791,6 +7687,22 @@
         }
       }
     },
+    "Open Notification Settings…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Notification Settings…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开通知设置…"
+          }
+        }
+      }
+    },
     "Open Read & Speak Settings" : {
       "localizations" : {
         "en" : {
@@ -6803,6 +7715,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打开“阅读与朗读”设置"
+          }
+        }
+      }
+    },
+    "Open Sign-In Page" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open Sign-In Page"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开登录页面"
           }
         }
       }
@@ -6996,6 +7924,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "可选，尚未设置：%@。"
+          }
+        }
+      }
+    },
+    "Optional." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选。"
+          }
+        }
+      }
+    },
+    "Optional. To look up a word you select in another app, XDict needs Accessibility and the lookup shortcut." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Optional. To look up a word you select in another app, XDict needs Accessibility and the lookup shortcut."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "可选。要查找其他 App 中选中的单词，XDict 需要辅助功能权限和查词快捷键。"
           }
         }
       }
@@ -7307,6 +8267,22 @@
         }
       }
     },
+    "Previous Sense" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Previous Sense"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "上一个义项"
+          }
+        }
+      }
+    },
     "Print…" : {
       "localizations" : {
         "en" : {
@@ -7335,6 +8311,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问题"
+          }
+        }
+      }
+    },
+    "Prompt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prompt"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示词"
           }
         }
       }
@@ -7547,6 +8539,22 @@
         }
       }
     },
+    "Ready to look words up in XDict’s window." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready to look words up in XDict’s window."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "现在可以在 XDict 窗口中查词。"
+          }
+        }
+      }
+    },
     "Recheck" : {
       "localizations" : {
         "en" : {
@@ -7643,6 +8651,22 @@
         }
       }
     },
+    "Remove from History" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove from History"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从历史记录中移除"
+          }
+        }
+      }
+    },
     "Remove from Library" : {
       "localizations" : {
         "en" : {
@@ -7655,22 +8679,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "从词库中移除"
-          }
-        }
-      }
-    },
-    "Remove from the history" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Remove from the history"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "从阅读历史中删除"
           }
         }
       }
@@ -7703,6 +8711,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "替换"
+          }
+        }
+      }
+    },
+    "Request Details" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Request Details"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请求详情"
           }
         }
       }
@@ -7884,6 +8908,22 @@
         }
       }
     },
+    "Review before sending" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Review before sending"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发送前检查"
+          }
+        }
+      }
+    },
     "Review due" : {
       "localizations" : {
         "en" : {
@@ -7896,6 +8936,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该复习了"
+          }
+        }
+      }
+    },
+    "Run claude in Terminal once to sign in. XDict never reads that sign-in." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Run claude in Terminal once to sign in. XDict never reads that sign-in."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在终端中运行一次 claude 并登录。XDict 不会读取登录凭据。"
           }
         }
       }
@@ -8059,6 +9115,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索范围"
+          }
+        }
+      }
+    },
+    "Search Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索设置"
           }
         }
       }
@@ -8304,6 +9376,22 @@
         }
       }
     },
+    "Shorten long lines in wide windows. Original style and lookup popups keep their own width." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Shorten long lines in wide windows. Original style and lookup popups keep their own width."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在宽窗口中缩短过长的文字行。原始样式和查词弹窗保留各自的宽度。"
+          }
+        }
+      }
+    },
     "Show %llu More" : {
       "localizations" : {
         "en" : {
@@ -8354,6 +9442,22 @@
         }
       }
     },
+    "Show Meaning in Context" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Meaning in Context"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示语境释义"
+          }
+        }
+      }
+    },
     "Show Menu" : {
       "comment" : "VoiceOver action on the menu bar icon",
       "localizations" : {
@@ -8384,6 +9488,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "显示阅读历史"
+          }
+        }
+      }
+    },
+    "Show Results" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Results"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示结果"
           }
         }
       }
@@ -8452,6 +9572,22 @@
         }
       }
     },
+    "Show the XDict menu (also a right-click on the menu bar icon)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show the XDict menu (also a right-click on the menu bar icon)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示 XDict 菜单（也可右键点击菜单栏图标）"
+          }
+        }
+      }
+    },
     "Show the next result" : {
       "localizations" : {
         "en" : {
@@ -8512,22 +9648,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "登录 Codex…"
-          }
-        }
-      }
-    },
-    "Signing in…" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Signing in…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在登录…"
           }
         }
       }
@@ -8660,6 +9780,22 @@
         }
       }
     },
+    "Startup" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Startup"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "启动"
+          }
+        }
+      }
+    },
     "Still needs you: %@." : {
       "localizations" : {
         "en" : {
@@ -8672,6 +9808,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "还需要你完成：%@。"
+          }
+        }
+      }
+    },
+    "Stop syncing with this folder?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stop syncing with this folder?"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "要停止与此文件夹同步吗？"
           }
         }
       }
@@ -8724,6 +9876,22 @@
         }
       }
     },
+    "Sync Folder" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync Folder"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同步文件夹"
+          }
+        }
+      }
+    },
     "Sync Now" : {
       "localizations" : {
         "en" : {
@@ -8770,6 +9938,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Syncing" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Syncing"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在同步"
           }
         }
       }
@@ -8966,6 +10150,22 @@
         }
       }
     },
+    "The answer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The answer"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "回答"
+          }
+        }
+      }
+    },
     "The answer was cut off, so it is not shown." : {
       "localizations" : {
         "en" : {
@@ -8994,6 +10194,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "询问已取消。"
+          }
+        }
+      }
+    },
+    "The card could not be removed." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The card could not be removed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法移除此记录。"
           }
         }
       }
@@ -9174,6 +10390,22 @@
         }
       }
     },
+    "The dictionary edition this was read in is no longer in your library." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The dictionary edition this was read in is no longer in your library."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "阅读此词条时所用的词典版本已不在词典库中。"
+          }
+        }
+      }
+    },
     "The dictionary service answered." : {
       "localizations" : {
         "en" : {
@@ -9318,6 +10550,22 @@
         }
       }
     },
+    "The entry is cut at %llu bytes, so only the part before that will be sent." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The entry is cut at %llu bytes, so only the part before that will be sent."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词条在 %llu 字节处截断，只会发送此前的内容。"
+          }
+        }
+      }
+    },
     "The entry was cut at %llu bytes, so only the part before that was sent." : {
       "localizations" : {
         "en" : {
@@ -9398,18 +10646,34 @@
         }
       }
     },
-    "The language the explanation is written in; the prompt’s default wording follows it." : {
+    "The folder could not be opened. Choose it again." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The language the explanation is written in; the prompt’s default wording follows it."
+            "value" : "The folder could not be opened. Choose it again."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "解释所用的语言；提示词的默认措辞也随之切换。"
+            "value" : "无法打开文件夹，请重新选择。"
+          }
+        }
+      }
+    },
+    "The folder’s files and this Mac’s history are kept. You can choose a folder again later." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The folder’s files and this Mac’s history are kept. You can choose a folder again later."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "文件夹中的文件和这台 Mac 上的历史记录都会保留，你可以稍后重新选择文件夹。"
           }
         }
       }
@@ -9494,18 +10758,34 @@
         }
       }
     },
-    "The model’s name at that server; empty lets the server choose." : {
+    "The note could not be cleared." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The model’s name at that server; empty lets the server choose."
+            "value" : "The note could not be cleared."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "该服务器上的模型名称；留空则由服务器决定。"
+            "value" : "无法清空笔记。"
+          }
+        }
+      }
+    },
+    "The note could not be restored." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The note could not be restored."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法恢复笔记。"
           }
         }
       }
@@ -9526,18 +10806,18 @@
         }
       }
     },
-    "The prompt" : {
+    "The notes could not be read." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The prompt"
+            "value" : "The notes could not be read."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "提示词"
+            "value" : "无法读取笔记。"
           }
         }
       }
@@ -9586,6 +10866,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "提示词使用了 {%@}，XDict 不认识它。"
+          }
+        }
+      }
+    },
+    "The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. XDict appends the response format, which cannot be edited." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. XDict appends the response format, which cannot be edited."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "提示词使用 {term}、{sentence}、{entry}、{sense} 和 {language}；若有缺失或未知占位符，XDict 会在发送前拒绝请求。XDict 会附加不可编辑的回复格式。"
           }
         }
       }
@@ -9650,22 +10946,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求超出了该来源可接受的长度。"
-          }
-        }
-      }
-    },
-    "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "回答格式由 XDict 附加，无法编辑。提示词可使用 {term}、{sentence}、{entry}、{sense} 和 {language}；缺少或出现未知占位符时，会在发送前被拒绝。每种问题各有自己的提示词。"
           }
         }
       }
@@ -9805,18 +11085,50 @@
         }
       }
     },
-    "The sentence around a looked-up word is stored only on this Mac. Nothing is sent anywhere; turning the history off stops new readings and keeps the ones already here." : {
+    "The sentence and this entry’s text will be sent." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The sentence around a looked-up word is stored only on this Mac. Nothing is sent anywhere; turning the history off stops new readings and keeps the ones already here."
+            "value" : "The sentence and this entry’s text will be sent."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "查询单词时周围的句子只保存在这台 Mac 上，不会发送到任何地方；关闭阅读记录后将不再记录新的查询，已有的记录仍然保留。"
+            "value" : "将发送句子和此词条的文本。"
+          }
+        }
+      }
+    },
+    "The sentence around a looked-up word is kept on this Mac, and copied with your notes and grades to your sync folder for your other devices. Asking AI is separate; see Settings ▸ AI." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sentence around a looked-up word is kept on this Mac, and copied with your notes and grades to your sync folder for your other devices. Asking AI is separate; see Settings ▸ AI."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词时的上下文句子保存在这台 Mac 上，并会与笔记和评分一起复制到同步文件夹，供其他设备使用。向 AI 提问另行控制，请参阅“设置”▸“AI”。"
+          }
+        }
+      }
+    },
+    "The sentence around a looked-up word is kept on this Mac. Turning the history off stops new readings and keeps the ones already here. Asking AI is separate; see Settings ▸ AI." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sentence around a looked-up word is kept on this Mac. Turning the history off stops new readings and keeps the ones already here. Asking AI is separate; see Settings ▸ AI."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查词时的上下文句子保存在这台 Mac 上。关闭历史记录后不再新增记录，已有记录仍会保留。向 AI 提问另行控制，请参阅“设置”▸“AI”。"
           }
         }
       }
@@ -9849,22 +11161,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "服务器将请求重定向到别处，XDict 已停止。"
-          }
-        }
-      }
-    },
-    "The server’s OpenAI-compatible base address, such as http://127.0.0.1:11434/v1 for Ollama." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The server’s OpenAI-compatible base address, such as http://127.0.0.1:11434/v1 for Ollama."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务器的 OpenAI 兼容基础地址，例如 Ollama 的 http://127.0.0.1:11434/v1。"
           }
         }
       }
@@ -10639,22 +11935,6 @@
         }
       }
     },
-    "This is what will be sent" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This is what will be sent"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "将要发送的内容"
-          }
-        }
-      }
-    },
     "This link leaves the dictionary for %@. XDict does not load it here; your browser will, if you say so." : {
       "localizations" : {
         "en" : {
@@ -10811,6 +12091,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此快捷键先前未能释放。请退出并重新打开 XDict 以释放它。"
+          }
+        }
+      }
+    },
+    "This text is not on the page shown now." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This text is not on the page shown now."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当前页面中没有这段文字。"
           }
         }
       }
@@ -11089,6 +12385,22 @@
         }
       }
     },
+    "Undo Remove" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Undo Remove"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "撤销移除"
+          }
+        }
+      }
+    },
     "Unknown" : {
       "localizations" : {
         "en" : {
@@ -11169,6 +12481,38 @@
         }
       }
     },
+    "Uses only the sentence" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses only the sentence"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅依据句子"
+          }
+        }
+      }
+    },
+    "Uses this dictionary entry" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uses this dictionary entry"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用此词条"
+          }
+        }
+      }
+    },
     "Verified: %@." : {
       "localizations" : {
         "en" : {
@@ -11181,22 +12525,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已验证：%@。"
-          }
-        }
-      }
-    },
-    "View the Prompt" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View the Prompt"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看提示词"
           }
         }
       }
@@ -11229,6 +12557,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "等待中"
+          }
+        }
+      }
+    },
+    "Waiting for you to sign in…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Waiting for you to sign in…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "等待你登录…"
           }
         }
       }
@@ -11345,18 +12689,18 @@
         }
       }
     },
-    "With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window." : {
+    "With every window closed, the shortcut, the Service and hover keep working." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "With every window closed, XDict stays running: the shortcut, the Service and hover keep working. Off, XDict quits with its last window."
+            "value" : "With every window closed, the shortcut, the Service and hover keep working."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "关闭所有窗口后，XDict 仍在运行：快捷键、服务和悬停查询照常可用。关闭此项时，XDict 随最后一个窗口退出。"
+            "value" : "关闭所有窗口后，快捷键、系统服务和悬停查词仍可使用。"
           }
         }
       }
@@ -11638,34 +12982,18 @@
         }
       }
     },
-    "XDict is the only writer; the key never enters a preferences file." : {
+    "XDict keeps a Codex sign-in of its own, apart from the one in Terminal." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XDict is the only writer; the key never enters a preferences file."
+            "value" : "XDict keeps a Codex sign-in of its own, apart from the one in Terminal."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "只有 XDict 会写入；密钥不会进入偏好设置文件。"
-          }
-        }
-      }
-    },
-    "XDict looks words up in your own MDict dictionaries. Each row below shows what is set up now." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict looks words up in your own MDict dictionaries. Each row below shows what is set up now."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict 用你自己的 MDict 词典查词。下面每一行显示当前的设置状态。"
+            "value" : "XDict 使用独立于终端的 Codex 登录。"
           }
         }
       }
@@ -11750,38 +13078,6 @@
         }
       }
     },
-    "XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict 在自己的设置文件夹里运行 Codex 工具，所以你在终端里已有的登录不会传给它。在这里登录一次即可：它会显示一个网址和需要输入的验证码。"
-          }
-        }
-      }
-    },
-    "XDict runs the claude command with its own configuration folder. Run claude in Terminal once to sign in; Claude Code holds that sign-in and XDict never reads it." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict runs the claude command with its own configuration folder. Run claude in Terminal once to sign in; Claude Code holds that sign-in and XDict never reads it."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict 使用自己的配置文件夹运行 claude 命令。在“终端”中运行一次 claude 即可登录；登录由 Claude Code 保管，XDict 从不读取。"
-          }
-        }
-      }
-    },
     "XDict — click for Reading History, right-click for the menu, press %@ to look up the selection" : {
       "comment" : "The menu bar icon's tooltip, naming both clicks and the registered lookup shortcut",
       "localizations" : {
@@ -11812,22 +13108,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict — 单击查看阅读历史，右键单击显示菜单。未注册查询快捷键。"
-          }
-        }
-      }
-    },
-    "XDict's own words; dictionaries are never translated. Takes effect when XDict next opens." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict's own words; dictionaries are never translated. Takes effect when XDict next opens."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "XDict 界面的语言；词典内容从不翻译。下次打开 XDict 时生效。"
           }
         }
       }
@@ -11864,6 +13144,22 @@
         }
       }
     },
+    "XDict’s own words, not the dictionaries’. Applies when XDict next opens." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict’s own words, not the dictionaries’. Applies when XDict next opens."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "仅更改 XDict 界面的语言，不更改词典内容。下次打开 XDict 时生效。"
+          }
+        }
+      }
+    },
     "Yesterday" : {
       "localizations" : {
         "en" : {
@@ -11876,6 +13172,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "昨天"
+          }
+        }
+      }
+    },
+    "You have chosen another sense since. This answer is about the one shown here." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "You have chosen another sense since. This answer is about the one shown here."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你已选择了其他义项，此回答仍针对这里显示的义项。"
           }
         }
       }
@@ -12040,18 +13352,18 @@
         }
       }
     },
-    "macOS is not allowing XDict's notifications. Allow them in System Settings ▸ Notifications." : {
+    "macOS is not allowing XDict’s notifications." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "macOS is not allowing XDict's notifications. Allow them in System Settings ▸ Notifications."
+            "value" : "macOS is not allowing XDict’s notifications."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "macOS 不允许 XDict 发送通知。请在“系统设置”▸“通知”中允许。"
+            "value" : "macOS 未允许 XDict 发送通知。"
           }
         }
       }
@@ -12234,6 +13546,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "“%@”已不在原处，XDict 也找不到它的新位置。"
+          }
+        }
+      }
+    },
+    "“%@” is turned off in Settings ▸ Dictionaries." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is turned off in Settings ▸ Dictionaries."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@”已在“设置”▸“词典”中关闭。"
           }
         }
       }

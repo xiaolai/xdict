@@ -40,12 +40,17 @@ struct SetupBoardTests {
         #expect(after.state(of: .accessibility) == .done)
         #expect(before.state(of: .dictionaries) == after.state(of: .dictionaries))
         #expect(after.isComplete)
+        #expect(!before.isReadyForOtherApps)
+        #expect(after.isReadyForOtherApps)
     }
 
+    /// **A shortcut that cannot register is a problem of lookup from other apps**, not of XDict's own window (UI38).
     @Test func aShortcutThatCannotRegisterIsAProblem() {
         let board = SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: false)
         #expect(board.state(of: .shortcut) == .problem)
-        #expect(!board.isComplete)
+        #expect(board.isComplete, "the window looks words up without a global shortcut")
+        #expect(!board.isReadyForOtherApps)
+        #expect(board.summary.otherAppsNeed == [.shortcut])
     }
 
     /// **The order is the recommended path** (plan-setup-v2's table), and each row says something of its own in each
@@ -65,11 +70,38 @@ struct SetupBoardTests {
         #expect(String(localized: ready.detail(.dictionaries)) == "Dictionaries answering lookups: 3.")
     }
 
-    /// **The three a working XDict needs, and the five it does not** (plan-setup-v2 "Required vs optional").
-    @Test func theRequiredStepsAreTheThreeXDictCannotWorkWithout() {
-        #expect(SetupBoard.Step.allCases.filter(\.isRequired) == [.dictionaries, .accessibility, .shortcut])
-        #expect(SetupBoard.Step.allCases.filter { !$0.isRequired } == [.screenRecording, .hover, .services, .appleLookUp,
-                                                                      .spotlight, .ai])
+    /// **Only dictionaries are required to look a word up in XDict's window** (UI38, owner-approved 2026-10-23,
+    /// reopening plan-setup-v2's "Required vs optional"): Accessibility and the global shortcut are required for lookup
+    /// from other apps, and only for it.
+    @Test func onlyDictionariesAreRequiredForXDictsOwnWindow() {
+        #expect(SetupBoard.Step.allCases.filter(\.isRequired) == [.dictionaries])
+        #expect(SetupBoard.Step.allCases.filter(\.isRequiredForOtherApps) == [.accessibility, .shortcut])
+        #expect(SetupBoard.Step.allCases.filter { !$0.isRequired && !$0.isRequiredForOtherApps }
+            == [.screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai])
+    }
+
+    /// **Progressive setup** (UI37): the board's rows in three groups, in the recommended order — XDict's own window
+    /// first, lookup from other apps next, the rest last — and each group in the board's order.
+    @Test func theRowsComeInThreeGroups() {
+        #expect(SetupBoard.Group.allCases == [.inXDict, .otherApps, .more])
+        #expect(SetupBoard.Group.inXDict.steps == [.dictionaries])
+        #expect(SetupBoard.Group.otherApps.steps == [.accessibility, .screenRecording, .shortcut, .hover, .services,
+                                                     .appleLookUp])
+        #expect(SetupBoard.Group.more.steps == [.spotlight, .ai])
+        #expect(SetupBoard.Group.allCases.flatMap(\.steps) == SetupBoard.Step.allCases)
+    }
+
+    /// **A reader who uses only the window finishes setup with no permission granted** (UI38 acceptance): dictionaries
+    /// added, Accessibility not granted, and the board is complete — while lookup from other apps says what it needs.
+    @Test func theWindowIsReadyWithoutAccessibility() {
+        let board = SetupBoard(dictionaries: 2, trusted: false, shortcutWorks: true)
+        #expect(board.isComplete)
+        #expect(board.summary.needsUser.isEmpty)
+        #expect(board.summary.otherAppsNeed == [.accessibility])
+        #expect(!board.isReadyForOtherApps)
+        #expect(!board.summary.optionalLeft.contains(.accessibility), "said once, in its own line")
+        // The row itself still says the grant is needed — for the group it belongs to (`setup.accessibility.needed`).
+        #expect(board.state(of: .accessibility) == .needed)
     }
 
     /// **Screen Recording is a row of the board** (owner, 2026-10-23: setup did not include the grant hover's screen
@@ -166,7 +198,8 @@ struct SetupBoardTests {
     @Test func theSummarySaysWhatIsLeft() {
         let fresh = Self.fresh()
         #expect(fresh.summary.verified == [])
-        #expect(fresh.summary.needsUser == [.dictionaries, .accessibility, .shortcut])
+        #expect(fresh.summary.needsUser == [.dictionaries])
+        #expect(fresh.summary.otherAppsNeed == [.accessibility, .shortcut])
         #expect(fresh.summary.optionalLeft == [.screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai])
         #expect(fresh.summary.needsUser.isEmpty == fresh.isComplete)
 
@@ -174,7 +207,9 @@ struct SetupBoardTests {
         #expect(ready.summary.verified == SetupBoard.Step.allCases)
         #expect(ready.summary.needsUser.isEmpty)
         #expect(ready.summary.optionalLeft.isEmpty)
+        #expect(ready.summary.otherAppsNeed.isEmpty)
         #expect(ready.isComplete)
+        #expect(ready.isReadyForOtherApps)
 
         var almost = Self.ready()
         almost.aiConfigured = false

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import XDictContract
+import XDictSearch
 import XDictTokens
 
 /// **How a card marks its word** (plan-history-and-learning §1, "Card layout"): the sentence split by the capture's UTF-16
@@ -36,29 +37,6 @@ public enum HistoryRuns {
     }
 }
 
-/// **A history card's tint** (owner, 2026-10-21): a thin border in one of the system's colours and a soft shadow, the
-/// colour chosen from the card's own identity so a lookup keeps its tint across launches. `hashValue` is seeded per
-/// process and would repaint every card on every launch; this is FNV-1a over the newest reading event's id, which is a
-/// content hash and therefore stable.
-public enum HistoryCardTint {
-    /// Made each time it is asked for: `TokenColour` wraps an `NSColor`, which is not `Sendable`, so a stored static
-    /// would be shared mutable state (and the generator's palette is ten constants, not a cost).
-    public static var palette: [TokenColour] {
-        [Tokens.Tint.red, Tokens.Tint.orange, Tokens.Tint.yellow, Tokens.Tint.green, Tokens.Tint.blue,
-         Tokens.Tint.purple, Tokens.Tint.pink, Tokens.Tint.teal, Tokens.Tint.indigo, Tokens.Tint.brown]
-    }
-
-    public static func colour(for events: [String]) -> TokenColour {
-        guard let id = events.first else { return palette[0] }
-        var hash: UInt64 = 0xcbf2_9ce4_8422_2325
-        for byte in id.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x0000_0100_0000_01b3
-        }
-        return palette[Int(hash % UInt64(palette.count))]
-    }
-}
-
 /// **The reading history's drawer** (plan-history-and-learning §1, WI-4; ported from XiaolaiDict's docked drawer): the
 /// display's right edge, full height, glass — the list scrolling under the header bar the way system panels do, with the
 /// corners against the screen edge square. The core grouped, collapsed and labelled; the drawer draws, and its language
@@ -69,18 +47,32 @@ public struct HistoryView: View {
     private let study: StudyModel?
     private let onReview: (() -> Void)?
     private let presentation: HistoryDrawerPresentation
+    /// Opens the menu-bar item's own menu (UI42): the same menu a right click opens, reachable from the drawer.
+    private let onShowMenu: (() -> Void)?
     /// The card whose note is being written, and what that note says already.
     @State private var noting: LedgerReading?
-    /// The card the pointer is over: its remove control shows while it is there, and not otherwise.
+    /// The card the pointer is over: its controls show while it is there, or while the card has keyboard focus.
     @State private var hovered: LedgerCard?
+    @FocusState private var focused: LedgerCard?
     @State private var initialDraft = ""
+    /// A card whose notes could not be read: its editor stays shut rather than open empty over the reader's words.
+    @State private var notesUnreadable: LedgerReading?
+    /// A card whose entry could not be opened, and why.
+    @State private var unopened: Unopened?
+
+    struct Unopened: Equatable {
+        let reading: LedgerReading
+        let link: HistoryEntryLink
+    }
 
     public init(model: HistoryModel, study: StudyModel? = nil, onReview: (() -> Void)? = nil,
-                presentation: HistoryDrawerPresentation = HistoryDrawerPresentation()) {
+                presentation: HistoryDrawerPresentation = HistoryDrawerPresentation(),
+                onShowMenu: (() -> Void)? = nil) {
         _model = State(initialValue: model)
         self.study = study
         self.onReview = onReview
         self.presentation = presentation
+        self.onShowMenu = onShowMenu
     }
 
     public var body: some View {
@@ -112,25 +104,31 @@ public struct HistoryView: View {
             .safeAreaBar(edge: .top, spacing: 0) {
                 header
             }
-            .overlay(alignment: .bottom) { removalToast }
+            // **A bar, not an overlay** (UI44): the list ends above the notice, so it never covers the last card.
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                removalToast
+            }
     }
 
-    /// **The undo a removal leaves behind** (E4: frequent reversible actions take undo, not a confirmation dialog). It
-    /// goes when its window closes, or when the next removal replaces it.
+    /// **The notice a removal leaves behind** (E4: frequent reversible actions take undo, not a confirmation dialog). It
+    /// goes when its time is up — the undo stays in the header until the next removal — or says the removal failed.
     @ViewBuilder private var removalToast: some View {
-        if let removal = model.lastRemoval {
+        if model.removalNoticeShown {
             ActionRow(.strip) {
-                Text("Removed from the history.")
+                Text(model.removalFailed ? "The card could not be removed." : "Removed from the history.")
             } actions: {
-                Button("Undo") { Task { await model.restoreLast() } }
-                    .accessibilityIdentifier("history.undoRemoval")
+                if model.lastRemoval != nil, !model.removalFailed {
+                    Button("Undo") { Task { await model.restoreLast() } }
+                        .accessibilityIdentifier("history.undoRemoval")
+                }
             }
             .padding(.horizontal, Tokens.Space.l)
             .padding(.vertical, Tokens.Space.s)
+            .accessibilityElement(children: .contain)
             .accessibilityIdentifier("history.removed")
-            .task(id: removal.eventIds) {
+            .task(id: model.lastRemoval?.eventIds) {
                 try? await Task.sleep(for: .seconds(Tokens.Motion.removalUndoSeconds))
-                model.clearRemoval()
+                model.dismissRemovalNotice()
             }
         }
     }
@@ -140,10 +138,26 @@ public struct HistoryView: View {
             Text("History")
                 .font(Tokens.TextRole.headline.font)
         } actions: {
+            // **Undo outlives its notice** (UI44): a reader who looks for it later still finds it here.
+            if model.lastRemoval != nil, !model.removalNoticeShown {
+                Button("Undo Remove") { Task { await model.restoreLast() } }
+                    .accessibilityIdentifier("history.undoRemovalLater")
+            }
             if let onReview {
                 Button("Review") { onReview() }
             }
             languageMenu
+            if let onShowMenu {
+                // **The menu bar item's menu, from where the reader already is** (UI42): a primary click on the icon opens
+                // this drawer and a secondary click the menu; this button is the visible way to the second.
+                Button(action: onShowMenu) {  // placement: glyph
+                    Label("Show Menu", systemImage: "ellipsis.circle")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.borderless)
+                .help("Show the XDict menu (also a right-click on the menu bar icon)")
+                .accessibilityIdentifier("history.showMenu")
+            }
         }
         .padding(.horizontal, Tokens.Space.l)
         .padding(.vertical, Tokens.Space.m)
@@ -175,10 +189,25 @@ public struct HistoryView: View {
     }
 
     @ViewBuilder private var content: some View {
-        switch model.state {
-        case .off:
-            notice("The reading history is off. Turn it on in Settings ▸ Learning.")
-        case .loading:
+        if let notice = HistoryNotice.of(model.state, isEmpty: model.days.isEmpty) {
+            VStack(spacing: Tokens.Space.m) {
+                Spacer()
+                Text(notice.text)
+                    .font(Tokens.TextRole.callout.font)
+                    .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                    .multilineTextAlignment(.center)
+                if notice.offersRetry {
+                    // **A failed read is not an empty history** (UI50): it says so and offers the read again.
+                    EmptyStateActions {
+                        Button("Try Again") { Task { await model.refresh() } }
+                            .accessibilityIdentifier("history.retry")
+                    }
+                }
+                Spacer()
+            }
+            .padding(Tokens.Space.xl)
+            .frame(maxWidth: .infinity)
+        } else if case .loading = model.state {
             VStack {
                 Spacer()
                 ProgressView()
@@ -186,14 +215,8 @@ public struct HistoryView: View {
                 Spacer()
                 Spacer()
             }
-        case .failed:
-            notice("The reading history could not be read.")
-        case .loaded:
-            if model.days.isEmpty {
-                notice("Nothing yet. A word you look up is kept here, with its sentence.")
-            } else {
-                days
-            }
+        } else {
+            days
         }
     }
 
@@ -220,6 +243,7 @@ public struct HistoryView: View {
 
     @ViewBuilder private func cardView(_ card: LedgerCard) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+            // Selectable text, and only that: copying the sentence never navigates (UI46).
             sentence(card.reading)
                 .font(Tokens.TextRole.body.font)
                 .fixedSize(horizontal: false, vertical: true)
@@ -235,60 +259,117 @@ public struct HistoryView: View {
             }
             .font(Tokens.TextRole.caption.font)
             .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            if let unopened, unopened.reading == card.reading, let why = unopened.link.explanation {
+                unavailable(why, key: card.reading.entryKey)
+            }
+            if notesUnreadable == card.reading {
+                ActionRow {
+                    Text("The notes could not be read.")
+                        .font(Tokens.TextRole.caption.font)
+                        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                } actions: {
+                    Button("Try Again") { perform(.note, on: card) }
+                }
+            }
             // **A card's note** (plan §5.1): the reader's own words about the entry, written where they met it.
             if let study, noting == card.reading {
-                StudyNoteEditor(study: study, entry: reference(card.reading),
+                StudyNoteEditor(study: study, entry: EntryRef(reading: card.reading),
                                 name: card.reading.dictionaryName, initial: initialDraft) { noting = nil }
             }
         }
         .padding(Tokens.Space.m)
         .frame(maxWidth: .infinity, alignment: .leading)
         .overlay {
+            // **Neutral** (UI45): a colour per card meant nothing and could be read as a category or a status.
             RoundedRectangle(cornerRadius: Tokens.Radius.cardShadow, style: .continuous)
-                .stroke(HistoryCardTint.colour(for: card.events).color.opacity(Tokens.Opacity.cardBorder),
-                        lineWidth: Tokens.Line.hairline)
+                .stroke(HistoryCardStyle.border.color, lineWidth: Tokens.Line.hairline)
         }
         .shadow(color: Tokens.Colour.shadow.color.opacity(Tokens.Opacity.cardShadow),
                 radius: Tokens.Card.shadowRadius, y: Tokens.Card.shadowOffsetY)
         .overlay(alignment: .topTrailing) {
-            // **A misread word must be removable** (owner, 2026-10-21); the control appears where the pointer is, so a
-            // card at rest stays only its sentence.
-            if hovered == card {
-                Button {  // placement: glyph
-                    Task { await model.remove(card) }
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+            // **The card's own controls** (owner, 2026-10-21: a misread word must be removable): shown where the pointer
+            // is or where the keyboard is (UI43), so a card at rest stays only its sentence.
+            if hovered == card || focused == card {
+                HStack(spacing: Tokens.Space.xs) {
+                    if model.entryLinks != nil {
+                        glyph("arrow.up.forward.app", .openEntry, card: card, id: "history.open")
+                    }
+                    glyph("xmark.circle.fill", .remove, card: card, id: "history.remove")
                 }
-                .buttonStyle(.plain)
-                .help("Remove from the history")
                 .padding(Tokens.Space.xs)
-                .accessibilityIdentifier("history.remove")
             }
         }
         .onHover { inside in
             hovered = inside ? card : (hovered == card ? nil : hovered)
         }
+        .focusable()
+        .focused($focused, equals: card)
+        // Delete removes the focused card, as in a list; the undo stays reachable (UI43, UI44).
+        .onDeleteCommand { perform(.remove, on: card) }
         // The card reads as one element; its note editor is its own, so a combined card would hide the field.
         .accessibilityElement(children: noting == card.reading ? .contain : .combine)
+        .accessibilityActions {
+            ForEach(actions, id: \.self) { action in
+                Button(String(localized: action.title)) { perform(action, on: card) }  // placement: history-menu
+            }
+        }
         .accessibilityIdentifier("history.card")
         .contextMenu {
-            if let study {
-                Button("Note…") {  // placement: history-menu
-                    let entry = reference(card.reading)
-                    Task {
-                        await study.loadNotes()
-                        initialDraft = study.note(for: entry)?.text ?? ""
-                        noting = card.reading
-                    }
-                }
+            ForEach(actions, id: \.self) { action in
+                if action == .remove { Divider() }
+                Button(String(localized: action.title)) { perform(action, on: card) }  // placement: history-menu
             }
         }
     }
 
-    private func reference(_ reading: LedgerReading) -> EntryRef {
-        EntryRef(edition: Edition(rawValue: reading.edition), key: reading.entryKey,
-                 occurrence: reading.occurrence)
+    /// The actions this drawer can offer: Remove always; Note and Open Entry where the app wired them.
+    private var actions: [HistoryCardAction] {
+        HistoryCardAction.actions(canNote: study != nil, canOpen: model.entryLinks != nil)
+    }
+
+    private func glyph(_ symbol: String, _ action: HistoryCardAction, card: LedgerCard, id: String) -> some View {
+        Button { perform(action, on: card) } label: {  // placement: glyph
+            Image(systemName: symbol)
+                .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: action.title))
+        .accessibilityLabel(Text(action.title))
+        .accessibilityIdentifier(id)
+    }
+
+    private func perform(_ action: HistoryCardAction, on card: LedgerCard) {
+        switch action {
+        case .remove:
+            Task { await model.remove(card) }
+        case .openEntry:
+            guard let links = model.entryLinks else { return }
+            let link = links.resolve(EntryRef(reading: card.reading))
+            if case .entry(let result) = link {
+                unopened = nil
+                links.open(HistoryEntryLink.visit(opening: result))
+            } else {
+                unopened = Unopened(reading: card.reading, link: link)
+            }
+        case .note:
+            guard let study else { return }
+            let entry = EntryRef(reading: card.reading)
+            Task {
+                guard await study.loadNotes() else {
+                    notesUnreadable = card.reading
+                    return
+                }
+                notesUnreadable = nil
+                initialDraft = study.note(for: entry)?.text ?? ""
+                noting = card.reading
+            }
+        }
+    }
+
+    /// **Why the entry did not open** (UI46), and the one thing the reader may choose instead: the recorded key looked up
+    /// in every dictionary. Never a guess at another edition.
+    private func unavailable(_ why: LocalizedStringResource, key: String) -> some View {
+        EntryLinkFallback(why: why, key: key, links: model.entryLinks) { unopened = nil }
     }
 
     /// The sentence as one attributed run, the word in bold: `Text` concatenation is deprecated on macOS 26, and its
@@ -308,19 +389,6 @@ public struct HistoryView: View {
         return Text(text)
     }
 
-    private func notice(_ text: LocalizedStringResource) -> some View {
-        VStack {
-            Spacer()
-            Text(text)
-                .font(Tokens.TextRole.callout.font)
-                .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
-                .multilineTextAlignment(.center)
-                .padding(Tokens.Space.xl)
-            Spacer()
-        }
-        .frame(maxWidth: .infinity)
-    }
-
     private func dayName(_ day: LedgerDay) -> String {
         let date = Date(timeIntervalSince1970: day.start)
         switch day.label {
@@ -328,6 +396,32 @@ public struct HistoryView: View {
         case .yesterday: return String(localized: "Yesterday")
         case .weekday: return date.formatted(.dateTime.weekday(.wide))
         case .date: return date.formatted(.dateTime.year().month(.wide).day())
+        }
+    }
+}
+
+/// **Why a recorded entry did not open** (UI46, UI48), and the one thing the reader may choose instead: the recorded key
+/// looked up in every dictionary. Never a guess at another edition. Shared by a history card and the review window.
+struct EntryLinkFallback: View {
+    let why: LocalizedStringResource
+    let key: String
+    let links: HistoryEntryLinks?
+    let opened: () -> Void
+
+    var body: some View {
+        ActionRow {
+            Text(why)
+                .font(Tokens.TextRole.caption.font)
+                .foregroundStyle(Color(nsColor: Tokens.Colour.secondaryLabel.nsColor))
+                .fixedSize(horizontal: false, vertical: true)
+        } actions: {
+            if let visit = HistoryEntryLink.lookUp(key: key), let links {
+                Button(String(localized: "Look Up “\(visit.query)”")) {
+                    opened()
+                    links.open(visit)
+                }
+                .accessibilityIdentifier("entry.lookUpKey")
+            }
         }
     }
 }

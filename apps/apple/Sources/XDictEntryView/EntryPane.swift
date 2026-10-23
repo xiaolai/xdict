@@ -341,6 +341,23 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         _ = await callFind("return window.__xdictFind.clear()", [:])
     }
 
+    /// **The chosen sense marked in this frame, or the mark cleared** (HIG audit UI21): `sense-clicks.js` draws it.
+    func markSense(_ id: UInt32?) async {
+        guard !closed else { return }
+        let argument: Any = id.map { NSNumber(value: $0) } ?? NSNull()
+        _ = try? await view.callAsyncJavaScript("return window.__xdictSense ? window.__xdictSense.mark(i) : null",
+                                                arguments: ["i": argument], in: nil, contentWorld: Self.world)
+    }
+
+    /// The ordinal one sense after (or before) the chosen one in this frame, or nil when it has none (UI22).
+    func stepSense(_ delta: Int) async -> UInt32? {
+        guard !closed, let answer = try? await view.callAsyncJavaScript(
+            "return window.__xdictSense ? window.__xdictSense.step(d) : null", arguments: ["d": delta], in: nil,
+            contentWorld: Self.world), let number = answer as? NSNumber else { return nil }
+        // The same bounds as a click's message: the page's answer is untrusted.
+        return EntrySenseClick(message: ["kind": "sense", "id": number])?.id
+    }
+
     /// The entry's selected text, for Use Selection for Find.
     func selectedText() async -> String? {
         guard !closed else { return nil }

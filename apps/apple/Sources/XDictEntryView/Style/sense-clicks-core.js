@@ -21,5 +21,14 @@ var XDictSenseCore = (function () {
     return !!e && e.isTrusted === true && e.button === 0 && e.detail === 1 && !e.metaKey && !e.altKey
       && !e.ctrlKey && !e.shiftKey && !e.defaultPrevented && !selected;
   }
-  return { valid: valid, unique: unique, allowed: allowed, MAX: MAX };
+  // **The next or previous sense from the keyboard** (HIG audit UI22): the page's ordinals in document order, the one
+  // chosen now and a step of +1 or -1. Nothing chosen (or an ordinal the page does not hold) starts at the first going
+  // forward and the last going back; the ends hold; a page without senses chooses nothing.
+  function step(ids, current, delta) {
+    if (!ids || ids.length === 0) return null;
+    var at = current === null || current === undefined ? -1 : ids.indexOf(current);
+    if (at < 0) return delta < 0 ? ids[ids.length - 1] : ids[0];
+    return ids[Math.min(Math.max(at + (delta < 0 ? -1 : 1), 0), ids.length - 1)];
+  }
+  return { valid: valid, unique: unique, allowed: allowed, step: step, MAX: MAX };
 })();

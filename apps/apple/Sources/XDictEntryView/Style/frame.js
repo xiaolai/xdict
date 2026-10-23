@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  var THEME = '{{theme}}', FACE = '{{face}}', HUE = '{{hue}}', DENSITY = '{{density}}', SHEETS = [['xdict-frame-tokens', {{sheet-tokens}}],
+  var THEME = '{{theme}}', FACE = '{{face}}', HUE = '{{hue}}', DENSITY = '{{density}}', MEASURE = '{{measure}}', SHEETS = [['xdict-frame-tokens', {{sheet-tokens}}],
     ['xdict-frame-column', {{sheet-column}}], ['xdict-frame-type', {{sheet-type}}],
     ['xdict-frame-minimal', {{sheet-minimal}}]];
   var ID = /^xdict-frame-/;
@@ -22,6 +22,7 @@
     if (root.getAttribute('data-xdict-face') !== FACE) root.setAttribute('data-xdict-face', FACE);
     if (root.getAttribute('data-xdict-hue') !== HUE) root.setAttribute('data-xdict-hue', HUE);
     if (root.getAttribute('data-xdict-density') !== DENSITY) root.setAttribute('data-xdict-density', DENSITY);
+    if (root.getAttribute('data-xdict-measure') !== MEASURE) root.setAttribute('data-xdict-measure', MEASURE);
     SHEETS.forEach(function (s) { if (s[1]) sheet(s[0], s[1]); });
   }
   // §5.2: each speaker the core marked is a button with a name, set here in the shell's world.
@@ -733,6 +734,6 @@
       Array.prototype.forEach.call(r.addedNodes, function (n) { if (n.nodeType === 1) name(n.parentNode || n); });
     });
   }).observe(document.documentElement, { childList: true, subtree: true, characterData: true, attributes: true,
-                                          attributeFilter: ['media', 'disabled', 'id', 'data-xdict-theme', 'data-xdict-face', 'data-xdict-hue', 'data-xdict-density'] });
+                                          attributeFilter: ['media', 'disabled', 'id', 'data-xdict-theme', 'data-xdict-face', 'data-xdict-hue', 'data-xdict-density', 'data-xdict-measure'] });
   window.__xdictFrame = { measure: measure };
 })();

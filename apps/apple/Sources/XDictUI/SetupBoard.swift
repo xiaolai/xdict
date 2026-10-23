@@ -63,12 +63,59 @@ public struct SetupBoard: Equatable, Sendable {
 
         public var id: String { rawValue }
 
-        /// **The three a working XDict needs** (plan-setup-v2 "Required vs optional"). The rest are recommended or
+        /// **What XDict's own window needs: dictionaries** (UI38, owner-approved 2026-10-23, refining plan-setup-v2
+        /// "Required vs optional"). Typing a word into the window needs no permission; the rest are for other apps or
         /// optional, and a reader who leaves them alone has a working XDict and a board that says so.
-        public var isRequired: Bool {
+        public var isRequired: Bool { self == .dictionaries }
+
+        /// **What lookup from other apps needs** (UI38): the selection is read through Accessibility, and the global
+        /// shortcut is the way to ask. Required for that integration, and only for it.
+        public var isRequiredForOtherApps: Bool {
             switch self {
-            case .dictionaries, .accessibility, .shortcut: true
-            case .screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai: false
+            case .accessibility, .shortcut: true
+            case .dictionaries, .screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai: false
+            }
+        }
+
+        /// The group the row is drawn in.
+        public var group: Group {
+            switch self {
+            case .dictionaries: .inXDict
+            case .accessibility, .screenRecording, .shortcut, .hover, .services, .appleLookUp: .otherApps
+            case .spotlight, .ai: .more
+            }
+        }
+    }
+
+    /// **Progressive setup** (UI37): the board as three groups in the recommended order — what a first lookup in XDict's
+    /// window needs, then lookup from other apps, then the rest — so a first-time reader reaches a lookup without
+    /// learning hover, Services, Spotlight, AI and Apple's triggers at once. Every row stays on the board: it is the
+    /// permanent status destination, and the E2E `setup` stage reads every row's state.
+    public enum Group: String, CaseIterable, Identifiable, Sendable {
+        case inXDict, otherApps, more
+
+        public var id: String { rawValue }
+
+        /// The group's rows, in the board's order.
+        public var steps: [Step] { Step.allCases.filter { $0.group == self } }
+
+        public var title: LocalizedStringResource {
+            switch self {
+            case .inXDict: LocalizedStringResource("Look Up in XDict")
+            case .otherApps: LocalizedStringResource("Look Up from Other Apps")
+            case .more: LocalizedStringResource("More")
+            }
+        }
+
+        public var note: LocalizedStringResource {
+            switch self {
+            case .inXDict:
+                LocalizedStringResource("Add a dictionary, then type a word in XDict’s window. No permission is needed.")
+            case .otherApps:
+                LocalizedStringResource("""
+                    Optional. To look up a word you select in another app, XDict needs Accessibility and the lookup shortcut.
+                    """)
+            case .more: LocalizedStringResource("Optional.")
             }
         }
     }
@@ -136,7 +183,9 @@ public struct SetupBoard: Equatable, Sendable {
         case .ready: return .done
         case .failed: return .problem
         case .unreadable: return .needsCheck
-        case .absent: return step.isRequired ? .needed : .optional
+        // A row its group requires is `needed` there: Accessibility is needed for lookup from other apps, which its
+        // group's heading says, and the board's completeness below counts only what XDict's own window needs.
+        case .absent: return step.isRequired || step.isRequiredForOtherApps ? .needed : .optional
         }
     }
 
@@ -177,32 +226,42 @@ public struct SetupBoard: Equatable, Sendable {
         }
     }
 
-    /// **Every required row is done** — not every row: a reader who leaves hover, the Service, Apple's triggers and AI
-    /// alone has a working XDict (`Summary.needsUser` is empty).
+    /// **XDict's own window is ready** — every required row done, not every row: a reader who uses only the window, and
+    /// leaves Accessibility, the shortcut, hover, the Service, Apple's triggers and AI alone, has a working XDict
+    /// (`Summary.needsUser` is empty; UI38).
     public var isComplete: Bool {
         summary.needsUser.isEmpty
     }
 
-    /// What the footer says, as steps, in the board's order: what is verified, what still needs the reader, and what
-    /// is optional and left undone.
+    /// **Lookup from other apps is ready**: the window is, and Accessibility and the shortcut are done.
+    public var isReadyForOtherApps: Bool {
+        isComplete && summary.otherAppsNeed.isEmpty
+    }
+
+    /// What the footer says, as steps, in the board's order: what is verified, what XDict's window still needs, what
+    /// lookup from other apps still needs, and what is optional and left undone. Each step is in exactly one list.
     public struct Summary: Equatable, Sendable {
         public let verified: [Step]
         public let needsUser: [Step]
+        public let otherAppsNeed: [Step]
         public let optionalLeft: [Step]
     }
 
     public var summary: Summary {
-        var verified: [Step] = [], needsUser: [Step] = [], optionalLeft: [Step] = []
+        var verified: [Step] = [], needsUser: [Step] = [], otherAppsNeed: [Step] = [], optionalLeft: [Step] = []
         for step in Step.allCases {
             if state(of: step) == .done {
                 verified.append(step)
             } else if step.isRequired {
                 needsUser.append(step)
+            } else if step.isRequiredForOtherApps {
+                otherAppsNeed.append(step)
             } else {
                 optionalLeft.append(step)
             }
         }
-        return Summary(verified: verified, needsUser: needsUser, optionalLeft: optionalLeft)
+        return Summary(verified: verified, needsUser: needsUser, otherAppsNeed: otherAppsNeed,
+                       optionalLeft: optionalLeft)
     }
 
     public static func title(_ step: Step) -> LocalizedStringResource {

@@ -78,6 +78,11 @@ public final class SearchWindowState {
         // **The reader's choices are Settings ▸ AI's** (plan-ai-meaning WI-6): read at each ask, and only then, so the
         // store is not touched by a window that never asks (and a test never reads the Keychain).
         meaning.settingsProvider = { MeaningPreferences.shared.settings }
+        // **The evidence names its dictionary** (HIG audit UI11): a grounded ask records the name its target's
+        // dictionary has in the library now, in the request's own snapshot.
+        meaning.dictionaryNamer = { [library] handle in
+            library.searchSources.first { $0.handle == handle }?.name
+        }
         pronunciation = Pronunciation(backend: backend, output: speech, preferences: speechPreferences)
         model.scrollReader = { [weak entry] in await entry?.scrollOffset() }
         entry.onLookup = { [weak self] query, anchor in self?.follow(query, anchor: anchor) }
@@ -89,7 +94,18 @@ public final class SearchWindowState {
         entry.onSelectSense = { [weak self] handle, edition, reference, id in
             self?.selectSense(handle: handle, edition: edition, reference: reference, id: id)
         }
+        entry.onPageSourcesChanged = { [weak self] sources in self?.pageSources = sources }
     }
+
+    /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists
+    /// them, and the current one's name is pinned over the page once its divider has scrolled away. Nil off the page.
+    public private(set) var pageSources: EntryPageSources?
+
+    /// Go ▸ Dictionaries on This Page: the page scrolled to that dictionary.
+    public func jumpToSource(_ id: UUID) { entry.jumpToPageSource(id) }
+
+    /// **Which panes the reader chose to see** (HIG audit UI02, UI05, UI07): the answer pane and the results list.
+    var panes = SearchPanes()
 
     public func focusSearch() { searchFocus += 1 }
     public func focusResults() { resultsFocus += 1 }
@@ -107,6 +123,43 @@ public final class SearchWindowState {
                   among: presentedResults.map { (result: $0, source: model.source($0.dictionary)) })
         else { return }
         meaning.select(selection)
+    }
+
+    /// **The chosen sense, marked in its frame** (HIG audit UI21): what the session holds, drawn where the reader chose
+    /// it; no selection clears every mark.
+    public func markSelection() {
+        let selection = meaning.selection
+        entry.markSense(handle: selection?.dictionary.rawValue,
+                        reference: selection.map { EntryReference(key: $0.entry.key, occurrence: $0.entry.occurrence) },
+                        id: selection?.sense)
+    }
+
+    /// Go ▸ Next/Previous Sense (UI22): the keyboard's way to choose a sense, only while a captured sentence is held.
+    public func stepSense(_ delta: Int) {
+        guard meaning.held != nil else { return }
+        entry.stepSense(delta)
+    }
+
+    /// Go ▸ Clear Chosen Sense (UI23): the choice goes; a finished answer stays.
+    public func clearSense() { meaning.clearSelection() }
+
+    /// The results list shows: there is a listing and the reader has not hidden it (UI07).
+    var resultsShown: Bool { panes.resultsVisible(listed: model.listing != nil) }
+
+    /// **Show in the Entry** (HIG audit UI11): the quoted text revealed only in the frame the answer was about, named
+    /// by its frozen target (the dictionary's handle, the edition, the record); never a search of the page at large,
+    /// where another dictionary's similar wording could be found instead. False when the answer has no target or no
+    /// frame shown carries it, or the text is not visible there: the pane says so rather than doing nothing.
+    @discardableResult
+    public func revealEvidence(_ quote: String, target: MeaningTarget?) -> Task<Bool, Never> {
+        guard let target else { return Task { false } }
+        return entry.revealEvidence(quote, in: Self.evidenceFrame(target))
+    }
+
+    /// The frame a frozen target names: its dictionary's handle, its edition and its edition-qualified record.
+    nonisolated public static func evidenceFrame(_ target: MeaningTarget) -> EntryFrameName {
+        EntryFrameName(handle: target.dictionary.rawValue, edition: target.entry.edition.rawValue,
+                       reference: EntryReference(key: target.entry.key, occurrence: target.entry.occurrence))
     }
 
     /// The entries this presentation offers: the All page's frames while one is shown, else the shown entry.

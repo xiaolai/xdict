@@ -117,7 +117,11 @@ padding-inline-end:0 !important}
 /* A bullet the dictionary wrote as text with nothing after it in its block marks nothing (`loneBullets`). */
 [data-xdict-lone-bullet]{display:none !important}
 /* A graphic the core turned into a label stays hidden, whatever display the dictionary gives images. */
-[data-xdict-labelled]{display:none !important}}
+[data-xdict-labelled]{display:none !important}
+/* The sense the reader chose (HIG audit UI21): the shell's ring, in the link colour at the focus ring's width; an */
+/* outline takes no room, so marking a sense never moves the text. In the layer, so a dictionary cannot hide it. */
+[data-xdict-chosen]{outline:var(--xdict-focus-ring) solid var(--xdict-link) !important;
+outline-offset:var(--xdict-focus-ring) !important;border-radius:var(--xdict-radius) !important}}
 /* 8. Labels: one style, plain text in the secondary colour, no box (R11). */
 [data-xdict-role=label]{font-family:var(--xdict-font);font-style:normal;font-size:var(--xdict-fs-xs);line-height:var(--xdict-leading);
 font-weight:var(--xdict-weight-bold);letter-spacing:var(--xdict-label-tracking);

@@ -123,7 +123,7 @@ let package = Package(
         .target(name: "XDictAppleSource", dependencies: ["XDictContract"]),
 
         // The app: not sandboxed, Developer ID, hardened runtime. **It never links the core** — it asks the service.
-        .executableTarget(name: "XDict", dependencies: ["XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
+        .executableTarget(name: "XDict", dependencies: ["XDictAI", "XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient", "XDictContract", "XDictEntryView",
                                                         "XDictInstruments", "XDictLibrary", "XDictSearch", "XDictSpeech",
                                                         "XDictSpotlight", "XDictTokens", "XDictUI"]),
 

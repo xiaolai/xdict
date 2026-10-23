@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import XDictEntryView
 import XDictSearch
@@ -52,6 +53,26 @@ public struct SearchCommands: Commands {
             Button("Return to Original Word") { window?.model.returnToOrigin() }
                 .keyboardShortcut("[", modifiers: [.command, .option])
                 .disabled(window?.model.canReturnToOrigin != true)
+            // **A sense chosen from the keyboard** (HIG audit UI21, UI22): only while a captured sentence is held, as a
+            // click is.
+            Divider()
+            Button("Next Sense") { window?.stepSense(1) }
+                .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                .disabled(window?.meaning.canAsk != true)
+            Button("Previous Sense") { window?.stepSense(-1) }
+                .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                .disabled(window?.meaning.canAsk != true)
+            Button("Clear Chosen Sense") { window?.clearSense() }
+                .disabled(window?.meaning.hasSenseSelection != true)
+            // **The All page's dictionaries** (HIG audit UI24): the one being read is checked; choosing another jumps
+            // the page to it, so a long page is never only scrolled through. Not a second list to manage them in.
+            Divider()
+            Menu("Dictionaries on This Page") {
+                ForEach(window?.pageSources?.sources ?? [], id: \.id) { source in
+                    Toggle(isOn: onPage(source.id)) { Text(verbatim: source.name) }
+                }
+            }
+            .disabled((window?.pageSources?.sources.count ?? 0) < 2)
         }
         CommandMenu("Search") {  // placement: P36
             Toggle(isOn: scoped(.all)) { Text(SearchSentences.allDictionaries) }
@@ -77,6 +98,20 @@ public struct SearchCommands: Commands {
                 .disabled(window == nil)
         }
         CommandGroup(after: .toolbar) {  // placement: P34
+            // **Each pane has a command** (HIG audit UI02, UI07): the results list after a search, the answer pane
+            // always, so a closed pane comes back without a new ask.
+            Button(window?.resultsShown == true ? LocalizedStringKey("Hide Results") : LocalizedStringKey("Show Results")) {
+                window?.panes.toggleResults()
+            }
+                .keyboardShortcut("s", modifiers: [.command, .control])
+                .disabled(window?.model.listing == nil)
+            Button(window?.panes.meaningShown == true ? LocalizedStringKey("Hide Meaning in Context")
+                   : LocalizedStringKey("Show Meaning in Context")) {
+                window?.panes.toggleMeaning()
+            }
+            .keyboardShortcut("i", modifiers: [.command, .control])
+            .disabled(window == nil)
+            Divider()
             Button("Bigger Text") { window?.entry.zoomIn() }
                 .keyboardShortcut("+")
                 .disabled(window == nil)
@@ -111,6 +146,10 @@ public struct SearchCommands: Commands {
     }
 
     /// A menu item's check for a scope, which choosing sets.
+    private func onPage(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { window?.pageSources?.current == id }, set: { chosen in if chosen { window?.jumpToSource(id) } })
+    }
+
     private func scoped(_ scope: SearchScope) -> Binding<Bool> {
         Binding(get: { window?.model.scope == scope }, set: { chosen in if chosen { window?.model.setScope(scope) } })
     }

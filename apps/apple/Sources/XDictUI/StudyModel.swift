@@ -56,6 +56,9 @@ public final class StudyModel {
 
     /// Called after every load of the summary, so the shell can plan its reminder (§5.4) without the view knowing it.
     @ObservationIgnored public var summaryChanged: (@MainActor (ReviewSummary?) -> Void)?
+    /// What the review window opens the card's entry through (UI48): the shell's library and main window, wired by the
+    /// app. Nil offers no Open Entry.
+    @ObservationIgnored public var entryLinks: HistoryEntryLinks?
 
     @ObservationIgnored private let service: any StudyService
     @ObservationIgnored private let now: @Sendable () -> Date
@@ -223,10 +226,37 @@ public final class StudyModel {
     }
 
     /// Loads every note the ledger holds; an editor opened from a card uses it to fill in what is already written.
-    public func loadNotes() async {
+    /// **False when they could not be read** (UI49, UI50): an editor must not open empty over a note it could not read,
+    /// where saving would replace the reader's words without their knowing.
+    @discardableResult
+    public func loadNotes() async -> Bool {
         let result = await service.call(.studyNotes)
-        guard case .success(let delivered) = result, case .studyNotes(let loaded) = delivered.answer else { return }
+        guard case .success(let delivered) = result, case .studyNotes(let loaded) = delivered.answer else { return false }
         notes = loaded
+        return true
+    }
+
+    /// What clearing a note did.
+    public enum NoteClearing: Equatable, Sendable {
+        /// The note's text was revised to empty; `previous` is what Undo saves back.
+        case cleared(previous: String)
+        /// There was no note with words to clear: nothing was sent, so no review card was made.
+        case nothingToClear
+        /// The notes could not be read, or the revision was refused: nothing is known to have changed.
+        case failed
+    }
+
+    /// **Clears a note's words, deliberately** (UI49). The core has no note deletion (its ledger records a note saved or
+    /// revised, never withdrawn); `Ledger::save_note` accepts exactly empty text only as a revision of a note the target
+    /// already has, and refuses a first empty note and whitespace. So this is that revision: the word stays enrolled in
+    /// Review, and the earlier wording stays in the ledger's events — the export — until the reader erases their data.
+    /// The editor's confirmation says exactly that. Only a note with words is revised, so a clear is never sent for a
+    /// target the core would refuse.
+    public func clearNote(entry: EntryRef, name: String) async -> NoteClearing {
+        guard await loadNotes() else { return .failed }
+        guard let existing = note(for: entry), !existing.text.isEmpty else { return .nothingToClear }
+        guard await saveNote(entry: entry, text: "", name: name) != nil else { return .failed }
+        return .cleared(previous: existing.text)
     }
 
     private func graded(_ card: StudyCard, _ grade: StudyGrade) async -> StudyOutcome? {

@@ -13,6 +13,9 @@ dictionary). Every route starts from the main window alone, the search field hol
     ("press", match...)            AXPress on an element by identifier, title, description or value
     ("click", match...)            a real click at its centre
     ("extra",)                     the menu-bar extra opened
+    ("fills", identifier)           assert the pane spans its native inspector or sheet column
+    ("visible", identifier, role)    assert the requested control is inside its window and scrolling viewport
+    ("windowSize", width, height)    assert the main window retained the requested frame size
     ("size", width, height)        the main window set to that size, in points (Apple's 400 × 300 pt minimum)
     ("drop", fixture)              a file of fixtures/library dragged from a source window onto the window in front (Settings ▸ Dictionaries)
     ("wait", seconds)
@@ -190,6 +193,41 @@ ROUTES = [
     ("history.drawer", "full", "Click XDict's menu-bar item (plan-history-and-learning §4, the tray's behaviour ported "
      "from XiaolaiDict)", "The reading-history drawer docked to the display's right edge, full height, glass — empty over "
      "an empty ledger; the click shows it and never toggles it", [("extra",), ("wait", 1)]),
+    ("main.meaningAnswer", "full", "Open a synthetic sentence and request an explanation in the isolated tour library",
+     "The native explanation inspector with context, explanation, source evidence and secondary request details; "
+     "the provider is a deterministic demonstration and no external AI service is called",
+     [("demo", "clean"), ("size", 1180, 760)] + look_up("apple") + [("demo", "meaning"), ("wait", 1), ("fills", "meaning.pane")]),
+    ("main.meaningAnswerNarrow", "full", "Open the synthetic explanation and resize to the supported minimum",
+     "The real compact layout keeps reading and explanation actions reachable",
+     look_up("apple") + [("demo", "meaning"), ("key", "cmd+opt+down"), ("wait", 0.5), ("demo", "senseSelected"), NARROW, ("wait", 1), ("windowSize", 400, 300)]),
+    ("main.meaningCompactReopened", "full", "Open an explanation at the minimum, close Done, and reopen with View's command",
+     "The native compact sheet reopens without growing the window or losing the finished answer",
+     [("demo", "clean"), NARROW] + look_up("apple") + [("demo", "meaning"), ("wait", 1),
+      ("press", "Done"), ("wait", 0.6), ("windowSize", 400, 300),
+      ("key", "ctrl+cmd+i"), ("wait", 1), ("windowSize", 400, 300)]),
+    ("main.meaningChosen", "full", "Choose a synthetic entry sense with the native keyboard command",
+     "One sense is visibly marked and Explain This Sense is reachable beside the primary action",
+     [("demo", "clean"), ("size", 1180, 760)] + look_up("apple") + [("demo", "meaning"), ("key", "cmd+opt+down"), ("wait", 1), ("demo", "senseSelected"), ("fills", "meaning.pane")]),
+    ("main.meaningReveal", "full", "Reveal the synthetic quotation in its exact dictionary frame",
+     "The quoted text is highlighted in Alpha; a missing reveal would show feedback in the explanation pane",
+     [("demo", "clean"), ("size", 1180, 760)] + look_up("apple") + [("demo", "meaning"), ("click", "meaning.show-in-entry"), ("wait", 1)]),
+    ("history.populated", "full", "Open reading history populated with the tour's own synthetic readings",
+     "History cards with accessible open, note and removal actions, drawn by the production view",
+     [("demo", "clean")] + look_up("apple") + [("demo", "history"), ("extra",), ("wait", 1)]),
+    ("review.populated", "full", "Review a note created from the tour's own synthetic dictionary",
+     "A populated production review window, with entry continuation and reachable grading controls",
+     [("demo", "clean")] + look_up("apple") + [("demo", "review"), ("extraMenu",), ("press", "Review"), ("wait", 1)]),
+    ("review.noteCleared", "full", "Clear an existing synthetic review note with the explicit confirmation",
+     "The production editor confirms an empty revision and offers Undo after the service persists it",
+     [("demo", "clean")] + look_up("apple") + [("demo", "review"), ("extraMenu",), ("press", "Review"),
+      ("wait", 1), ("press", "Note…"), ("click", "note.clear"), ("click", "note.confirmClear"),
+      ("wait", 0.8), ("visible", "note.undoClear", "AXButton")]),
+    ("review.noteRestored", "full", "Undo the explicit clearing of an existing synthetic review note",
+     "The restored note remains in the production Review window",
+     [("demo", "clean")] + look_up("apple") + [("demo", "review"), ("extraMenu",), ("press", "Review"),
+      ("wait", 1), ("press", "Note…"), ("click", "note.clear"), ("click", "note.confirmClear"),
+      ("wait", 0.8), ("visible", "note.undoClear", "AXButton"), ("click", "note.undoClear"), ("wait", 0.8),
+      ("click", "Save"), ("wait", 0.8)]),
     ("about", "full", "XDict ▸ About XDict", "The About panel: icon, version, copyright", [("menu", 1, "#0")]),
     ("acknowledgments", "full", "XDict ▸ Acknowledgments", "Every third-party notice, readable",
      [("menu", 1, "Acknowledgments")]),
@@ -285,6 +323,17 @@ ROUTES = [
      "off with its one-rule sentence, and the prompt: answer language, question kind, the grounded template in its "
      "editor, Preview the request, What XDict adds to every request (ADR-0021 d.12, d.13)",
      [SETTINGS, ("wait", 1), ("click", "AI"), ("wait", 1)]),
+    ("settings.learning", "full", "Open Learning Settings",
+     "Accurate local-history and opt-in sync language, notification recovery and sync controls",
+     [SETTINGS, ("wait", 1), ("click", "Learning"), ("wait", 1)]),
+    ("settings.searchPrompt", "full", "Search Settings for prompt customization and reveal the result",
+     "The advanced prompt disclosure is opened and the requested control is scrolled into view",
+     [SETTINGS, ("wait", 1), ("click", "Search Settings"), ("type", "prompt"),
+      ("click", "settings.search.aiPrompt"), ("wait", 1), ("visible", "ai.prompt.advanced", "AXTextArea")]),
+    ("settings.searchHistory", "full", "Search Settings for history and reveal the result",
+     "Learning is selected and the reading-history controls are visible",
+     [SETTINGS, ("wait", 1), ("click", "Search Settings"), ("type", "history"),
+      ("click", "settings.search.history"), ("wait", 1), ("visible", "learning.history", "AXCheckBox")]),
     ("settings.dictionaries", "full", "⌘, ▸ Dictionaries", "Apple's table with every dictionary in order, + and − "
      "under it, the options box below (P39, P40); the strip above it holds the fixtures' notice: no 'locked' row, as "
      "the fixtures' registration-code file is refused at import, the notice naming why (ADR-0005 decision 4, "

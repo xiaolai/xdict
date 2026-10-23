@@ -52,7 +52,9 @@ import XDictContract
         return (session, provider, fetcher)
     }
 
-    static func waitUntil(_ predicate: @MainActor () -> Bool, timeout: Duration = .seconds(3)) async -> Bool {
+    /// Shares the async overload's 10-second budget: at full-suite startup the main actor can stall about 3 seconds,
+    /// enough to use up the old 3-second deadline on its own.
+    static func waitUntil(_ predicate: @MainActor () -> Bool, timeout: Duration = .seconds(10)) async -> Bool {
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
             if predicate() { return true }

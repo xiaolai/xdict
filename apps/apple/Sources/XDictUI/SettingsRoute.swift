@@ -21,8 +21,10 @@ public enum SettingsPresentation: Equatable, Sendable {
 public final class SettingsRoute {
     public static let shared = SettingsRoute()
 
-    /// The pane in front; `TabView(selection:)` reads and writes it.
-    public var pane: SettingsTab = .dictionaries
+    /// The pane in front; `TabView(selection:)` reads and writes it. Leaving a revealed row's pane drops that reveal.
+    public var pane: SettingsTab = .dictionaries {
+        didSet { if pane != revealedPane { revealed = nil } }
+    }
     /// The dictionary to select when the pane next resolves; taken once.
     public private(set) var pendingSelection: UUID?
     /// Whether the dictionary last asked for had gone by the time the pane looked (said in the strip).
@@ -61,6 +63,29 @@ public final class SettingsRoute {
     public func showPane(_ pane: SettingsTab) {
         self.pane = pane
         open?()
+    }
+
+    /// The row a Settings search last revealed (UI30); the pane holding it scrolls to it, and opens the disclosure it
+    /// sits in.
+    public private(set) var revealed: SettingsSearch.Anchor?
+    /// Each reveal is an action, even when its target is the same as last time.
+    public private(set) var revealSerial = 0
+    @ObservationIgnored private var revealedPane: SettingsTab?
+
+    /// **A search result, revealed** (UI30): its pane in front and its row marked for the row's own marker
+    /// (`settingsAnchor(_:)`) to scroll to once it is drawn.
+    public func reveal(_ item: SettingsSearch.Item) {
+        revealedPane = item.pane
+        revealed = item.anchor
+        pane = item.pane
+        revealSerial += 1
+        open?()
+    }
+
+    /// Completes one scroll request; an older one must never consume a newer request.
+    public func didReveal(serial: Int) {
+        guard serial == revealSerial else { return }
+        revealed = nil
     }
 
     /// **Add Apple Dictionaries… from the setup board** (plan-setup-v2 WI-2): the sheet belongs to the Dictionaries pane

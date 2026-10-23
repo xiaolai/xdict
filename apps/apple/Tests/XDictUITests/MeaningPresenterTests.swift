@@ -28,12 +28,12 @@ struct MeaningPresenterTests {
         let presentation = shown ?? Self.missing()
         #expect(Self.text(presentation.source ?? "none") == "Claude")
         #expect(presentation.grounding == .grounded)
-        #expect(Self.text(presentation.outcome ?? "none") == "Matched")
+        #expect(Self.text(presentation.outcome ?? "none") == "Chose a sense from the entry")
         #expect(presentation.quotes == ["to keep"])
         #expect(presentation.explanation == "It means that here.")
         #expect(presentation.coverage == nil)
         #expect(presentation.problem == nil)
-        #expect(Self.text(Self.grounding(presentation) ?? "") == "Grounded in the entry")
+        #expect(Self.text(Self.grounding(presentation) ?? "") == "Uses this dictionary entry")
     }
 
     @Test func anUngroundedAnswerSaysSo() {
@@ -41,7 +41,7 @@ struct MeaningPresenterTests {
             AIAnswer(outcome: .explanationOnly, quotes: [], explanation: "It likely means to keep."), mode: .sentenceOnly)
         let presentation = MeaningPresenter.present(sentenceOnly, settings: Self.settings, sent: Self.sent()) ?? Self.missing()
         #expect(presentation.grounding == .ungrounded)
-        #expect(Self.text(Self.grounding(presentation) ?? "") == "Not grounded in an entry")
+        #expect(Self.text(Self.grounding(presentation) ?? "") == "Uses only the sentence")
         #expect(Self.text(presentation.outcome ?? "none") == "From the sentence alone")
         // A sentence-only ask has no entry, so nothing to be partial about.
         #expect(presentation.coverage == nil)
@@ -124,8 +124,8 @@ struct MeaningPresenterTests {
     @Test func thePaneSaysItInChinese() {
         let presentation = MeaningPresenter.present(Self.answer(.matched, ["to keep"]), settings: Self.settings,
                                                     sent: Self.sent()) ?? Self.missing()
-        #expect(Self.text(presentation.outcome ?? "", "zh-Hans") == "匹配")
-        #expect(Self.text(Self.grounding(presentation) ?? "", "zh-Hans") == "依据词条")
+        #expect(Self.text(presentation.outcome ?? "", "zh-Hans") == "从词条中选了一个义项")
+        #expect(Self.text(Self.grounding(presentation) ?? "", "zh-Hans") == "使用此词条")
     }
 
     /// The grounding label as one resource; the view shows it beside the outcome.

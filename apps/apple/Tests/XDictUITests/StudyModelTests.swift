@@ -50,9 +50,8 @@ actor FakeStudyService: StudyService {
             let card = queue.first ?? fakeStudyCard()
             let outcome = outcomes.isEmpty ? StudyOutcome(outcome: .recorded, card: card) : outcomes.removeFirst()
             return .success(Delivered(answer: .reviewOutcome(outcome), payload: nil))
-        case .studyNote, .studyNoteAt:
-            let note = notes.first ?? StudyNote(target: fakeStudyCard().target, text: "", at: 0, device: "d")
-            return .success(Delivered(answer: .studyNote(note), payload: nil))
+        case .studyNote(_, let entry, let text, _, _, _), .studyNoteAt(let entry, let text, _, _, _):
+            return write(entry: entry, text: text)
         case .studyNotes:
             return .success(Delivered(answer: .studyNotes(notes), payload: nil))
         case .exportData:
@@ -75,6 +74,25 @@ actor FakeStudyService: StudyService {
     }
 
     func recorded() -> [ServiceOperation] { operations }
+
+    /// **The core's note-write contract** (`Ledger::save_note`): whitespace-only text is refused; exactly empty text is a
+    /// revision of an existing note (a clear) and refused as a first note; anything else saves or revises the note.
+    private func write(entry: EntryRef, text: String) -> ClientOutcome {
+        let index = notes.firstIndex {
+            $0.target.edition == entry.edition.rawValue && $0.target.entryKey == entry.key
+                && $0.target.occurrence == entry.occurrence
+        }
+        let blank = text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if blank && (!text.isEmpty || index == nil) {
+            return .failure(.wire(.refused(.unsupportedOperation)))
+        }
+        let target = index.map { notes[$0].target }
+            ?? StudyTarget(lineage: "lineage", entryKey: entry.key, occurrence: entry.occurrence, kind: .entry,
+                           edition: entry.edition.rawValue, definitionHash: "ab")
+        let note = StudyNote(target: target, text: text, at: 1_790_640_000, device: "d")
+        if let index { notes[index] = note } else { notes.append(note) }
+        return .success(Delivered(answer: .studyNote(note), payload: nil))
+    }
 
     func setReanchor(_ report: ReanchorReport) { reanchorReport = report }
     func setConflicts(_ conflicts: [CardConflict]) { conflictList = conflicts }

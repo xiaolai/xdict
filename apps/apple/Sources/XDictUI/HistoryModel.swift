@@ -51,8 +51,18 @@ public final class HistoryModel {
     }
 
     /// **The removal the drawer can undo** (owner, 2026-10-21: a misread word must be removable, and undo rather than a
-    /// confirmation dialog — `E4` in XiaolaiDict's UX ledger): what was hidden, until the toast goes or the next removal.
+    /// confirmation dialog — `E4` in XiaolaiDict's UX ledger): what was hidden, until it is undone or the next removal
+    /// replaces it. **The notice's time running out does not spend it** (UI44): the header keeps Undo Remove for a reader
+    /// who takes longer to find it.
     public private(set) var lastRemoval: Removal?
+    /// Whether the removal's notice is up: it goes after its token-defined time, and the undo stays.
+    public private(set) var removalNoticeShown = false
+    /// The last removal the service refused: said in the notice, never a silent no-op.
+    public private(set) var removalFailed = false
+
+    /// What the drawer and the review window open a recorded entry through (UI46, UI48): the shell's library and main
+    /// window. Nil until the app wires it; then the cards offer Open Entry.
+    @ObservationIgnored public var entryLinks: HistoryEntryLinks?
 
     /// **Hides a card's readings behind a tombstone that carries no content** (ADR-0024): the card's own event ids, the
     /// stamp, and nothing of the sentence.
@@ -61,9 +71,13 @@ public final class HistoryModel {
         let removal = Removal(eventIds: card.events, at: now().timeIntervalSince1970.rounded(.down), device: device())
         let result = await service.call(.ledgerRemove(removal: removal, operation: UUID().uuidString))
         guard case .success(let delivered) = result, case .ledgerRecord(let outcome) = delivered.answer else {
+            removalFailed = true
+            removalNoticeShown = true
             return nil
         }
         lastRemoval = removal
+        removalFailed = false
+        removalNoticeShown = true
         await refresh()
         return outcome
     }
@@ -77,13 +91,15 @@ public final class HistoryModel {
             return nil
         }
         lastRemoval = nil
+        removalNoticeShown = false
         await refresh()
         return outcome
     }
 
-    /// The undo window closed: the toast goes and the removal stays.
-    public func clearRemoval() {
-        lastRemoval = nil
+    /// The notice's time is up: it goes, and the undo stays reachable from the header.
+    public func dismissRemovalNotice() {
+        removalNoticeShown = false
+        removalFailed = false
     }
 
     /// The days the drawer shows after its language filter; a day with no card left is not shown.

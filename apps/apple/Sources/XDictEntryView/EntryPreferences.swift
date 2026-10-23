@@ -39,6 +39,10 @@ public struct EntryPreferences: @unchecked Sendable {
     }
 
     static let zoomKey = "entry.textSize"
+    public static let comfortableWidthKey = "entry.comfortableWidth"
+
+    /// Optional prose measure on wide main reading columns; full width remains the default.
+    public func comfortableWidth() -> Bool { defaults.bool(forKey: Self.comfortableWidthKey) }
     static func themeKey(_ dictionary: String) -> String { "entry.theme.\(dictionary)" }
     public static func originalStyleKey(_ dictionary: String) -> String { "entry.originalStyle.\(dictionary)" }
     /// The reading style's accent, for every dictionary (Settings ▸ Reading).
