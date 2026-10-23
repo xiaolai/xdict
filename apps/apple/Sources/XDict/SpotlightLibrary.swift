@@ -121,10 +121,4 @@ final class SpotlightLibrary {
         case service
         case editionChanged
     }
-
-    /// **The word a Spotlight result names** (ADR-0028 decision 4): the item's identifier is the dictionary's id, a
-    /// `/`, and the word, so an activity's identifier gives the word back however it is spelled.
-    static func word(inActivity identifier: String) -> String? {
-        SpotlightItem.word(of: identifier)
-    }
 }

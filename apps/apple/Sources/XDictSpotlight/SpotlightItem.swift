@@ -20,12 +20,18 @@ public struct SpotlightItem: Hashable, Sendable {
     /// never contains `/`, so splitting at the first one gives the word back whatever the word holds.
     public var identifier: String { "\(domain)/\(word)" }
 
-    /// The word an identifier names, or nil when it is not one of ours.
-    public static func word(of identifier: String) -> String? {
+    /// The item an identifier names, or nil when it is not one of ours: the domain is what the library minted, and
+    /// everything after the first `/` — a `/` of its own included — is the word.
+    public static func item(of identifier: String) -> SpotlightItem? {
         guard let slash = identifier.firstIndex(of: "/") else { return nil }
-        let word = identifier[identifier.index(after: slash)...]
-        return word.isEmpty ? nil : String(word)
+        let domain = String(identifier[identifier.startIndex..<slash])
+        let word = String(identifier[identifier.index(after: slash)...])
+        guard !domain.isEmpty, !word.isEmpty else { return nil }
+        return SpotlightItem(word: word, domain: domain)
     }
+
+    /// The word an identifier names, or nil when it is not one of ours.
+    public static func word(of identifier: String) -> String? { item(of: identifier)?.word }
 }
 
 /// **What a word becomes in the index** (ADR-0028 decision 2, as revised 2026-10-22): `title` is the word, `keywords`
