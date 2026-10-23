@@ -69,6 +69,7 @@ conformance/fixtures/twin-*                         check:hostile.binding
 conformance/*                                       check:service.conformance
 
 # --- The harness: what runs the checks ------------------------------------------------------------------------------
+apps/apple/Tools/hover/*                            hover.accessibility hover.ocr hover.exclusions hover.permission hover.popover
 apps/apple/Tools/hostile/analyze.py                 check:hostile.production hostile.faults hostile.binding reader entries.full entries.persistence entries.lab
 apps/apple/Tools/hostile/battery.py                 check:hostile.production hostile.app
 apps/apple/Tools/hostile/reader.py                  check:reader

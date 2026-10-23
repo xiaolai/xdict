@@ -14,13 +14,10 @@ bad() { echo "FAIL  $*"; failures=$((failures + 1)); }
 # --- the preflight -------------------------------------------------------------------------------------------------
 if out=$(./e2e.sh --drivers launch setup lookup 2>&1); then ok "drivers: sub-stages with their functions pass ($out)"
 else bad "drivers: launch, setup and lookup failed: $out"; fi
+# Hover's driver landed 2026-10-23: its sub-stages pass the preflight as every other sub-stage's do.
 if out=$(./e2e.sh --drivers launch hover.accessibility hover.popover 2>&1); then
-    bad "drivers: hover, which has no driver, passed: $out"
-else
-    case $out in *"hover.accessibility"*"substage_hover"*"hover.popover"*"substage_hover"*) ok "drivers: each hover sub-stage named with the missing substage_hover" ;;
-        *) bad "drivers: failed without naming every hover sub-stage: $out" ;; esac
-    case $out in *"launch"*substage_launch*) bad "drivers: named launch, which has its driver: $out" ;; *) ;; esac
-fi
+    ok "drivers: hover's sub-stages have their substage_hover ($out)"
+else bad "drivers: hover failed the preflight: $out"; fi
 # Its control: a copy of e2e.sh without substage_setup goes red on setup.
 mkdir -p "$scratch/control/Tools"
 sed 's/^substage_setup() {/substage_setup_gone() {/' e2e.sh >"$scratch/control/Tools/e2e.sh"
