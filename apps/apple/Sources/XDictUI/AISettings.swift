@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XDictAI
 import XDictTokens
@@ -7,8 +8,13 @@ import XDictTokens
 /// prompt — shown, editable, previewed byte for byte, and resettable. The response contract is the app's, never edited.
 public struct AISettings: View {
     @State private var model = AISettingsModel(preferences: .shared)
+    /// The advanced prompt group: closed by default, opened by the reader or by a Settings search that found a row in it.
+    @State private var advancedShown = false
+    private let route: SettingsRoute
 
-    public init() {}
+    public init(route: SettingsRoute = .shared) {
+        self.route = route
+    }
 
     /// Everything a live check depends on: a corrected address, model or key re-runs it (audit finding, 2026-10-20).
     private struct StatusKey: Hashable {
@@ -28,12 +34,22 @@ public struct AISettings: View {
                         .foregroundStyle(.secondary)
                         .accessibilityIdentifier("ai.no-source")
                 }
-                sourceRow(nil, title: LocalizedStringResource("Off"), identifier: "off")
-                sourceRow(.appleOnDevice, identifier: "apple")
-                sourceRow(.http, title: LocalizedStringResource("A local endpoint"), identifier: "local")
-                sourceRow(.http, cloud: true, title: LocalizedStringResource("A cloud endpoint"), identifier: "cloud")
-                sourceRow(.codexCLI, identifier: "codex")
-                sourceRow(.claudeCLI, identifier: "claude")
+                // **One native single choice** (UI32): a radio group announces the group, the chosen source and each
+                // change to VoiceOver, and moves with the arrow keys, as a row of look-alike buttons did not.
+                Picker(selection: $model.choice) {
+                    ForEach(AISourceChoice.allCases, id: \.self) { choice in
+                        sourceLabel(choice)
+                            .tag(choice)
+                            .accessibilityIdentifier("ai.source.\(choice.identifier)")
+                    }
+                } label: {
+                    Text("Where answers come from")
+                }
+                .pickerStyle(.radioGroup)
+                .labelsHidden()
+                .accessibilityLabel(Text("Where answers come from"))
+                .accessibilityIdentifier("ai.source")
+                .settingsAnchor(.aiSource)
                 if model.preferences.settings.source != nil {
                     statusRow
                 }
@@ -64,49 +80,43 @@ public struct AISettings: View {
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
         .onChange(of: model.promptKind) { model.loadDraft() }
         .onChange(of: model.draft) { model.draftChanged() }
+        // **A pending sign-in does not outlive the pane that shows its code** (UI33).
+        .onDisappear { model.cancelSignIn() }
+        // A Settings search that found a row inside Advanced opens it (UI30).
+        .onAppear { revealIfAsked() }
+        .onChange(of: route.revealSerial) { revealIfAsked() }
+    }
+
+    private func revealIfAsked() {
+        if route.revealed == SettingsSearch.Anchor.aiPrompt { advancedShown = true }
     }
 
     // MARK: - Sources
 
-    private func selected(_ kind: AIProviderKind?, cloud: Bool = false) -> Bool {
-        guard model.preferences.settings.source == kind else { return false }
-        if kind != .http { return true }
-        return model.preferences.httpCloud == cloud
-    }
-
-    private func sourceRow(_ kind: AIProviderKind?, cloud: Bool = false, title: LocalizedStringResource? = nil,
-                           identifier: String) -> some View {
-        Button {  // placement: form-pane
-            model.select(kind, cloud: cloud)
-        } label: {
-            HStack(alignment: .top, spacing: Tokens.Space.s) {
-                Image(systemName: selected(kind, cloud: cloud) ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(selected(kind, cloud: cloud) ? Color.accentColor : Color.secondary)
-                    .accessibilityHidden(true)
-                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                    if let title {
-                        Text(title)
-                    } else if let name = MeaningSentences.source(kind) {
-                        Text(name)
-                    }
-                    if let kind {
-                        Text(kind == .http && cloud ? MeaningSentences.cloudCaveat : MeaningSentences.caveat(kind))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    // **A floor is named where the reader would choose it** (ADR-0026): never a row silently absent.
-                    if kind == .appleOnDevice, let notice = model.appleSystemNotice {
-                        Text(notice)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("ai.apple.system")
-                    }
-                }
+    /// One choice's label: its name, its caveat, and — for Apple's — the system it needs when this Mac is older.
+    private func sourceLabel(_ choice: AISourceChoice) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            switch choice {
+            case .off: Text("Off")
+            case .local: Text("A local endpoint")
+            case .cloud: Text("A cloud endpoint")
+            case .apple, .codex, .claude:
+                if let name = MeaningSentences.source(choice.kind) { Text(name) }
             }
-            .contentShape(Rectangle())
+            if let kind = choice.kind {
+                Text(choice.cloud ? MeaningSentences.cloudCaveat : MeaningSentences.caveat(kind))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            // **A floor is named where the reader would choose it** (ADR-0026): never a row silently absent.
+            if choice == .apple, let notice = model.appleSystemNotice {
+                Text(notice)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ai.apple.system")
+            }
         }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("ai.source.\(identifier)")
     }
 
     @ViewBuilder private var statusRow: some View {
@@ -152,7 +162,7 @@ public struct AISettings: View {
                     Text("Address")
                 }
                 .accessibilityIdentifier("ai.endpoint")
-                Text("The server’s OpenAI-compatible base address, such as http://127.0.0.1:11434/v1 for Ollama.")
+                Text("An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -162,7 +172,7 @@ public struct AISettings: View {
                     Text("Model")
                 }
                 .accessibilityIdentifier("ai.model")
-                Text("The model’s name at that server; empty lets the server choose.")
+                Text("Empty lets the server choose.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -189,7 +199,6 @@ public struct AISettings: View {
         case .stored:
             Label {
                 Text("Stored in the Keychain")
-                Text("XDict is the only writer; the key never enters a preferences file.")
             } icon: {
                 Image(systemName: "checkmark.seal")
             }
@@ -228,21 +237,60 @@ public struct AISettings: View {
 
     // MARK: - The command-line sources
 
+    /// **The Codex sign-in, structured** (UI33): the page to open and the code to enter as their own controls, progress
+    /// and Cancel beside them, and the login's raw lines under Details. Leaving the pane cancels it (`onDisappear`).
     private func codexSection(model: AISettingsModel) -> some View {
         Section {
             if model.signingIn {
-                HStack(spacing: Tokens.Space.xs) {
-                    ProgressView().controlSize(.small)  // placement: spinner
-                    Text("Signing in…")
+                let login = model.login
+                ActionRow {
+                    HStack(spacing: Tokens.Space.xs) {
+                        ProgressView().controlSize(.small)  // placement: spinner
+                        Text("Waiting for you to sign in…")
+                    }
+                } actions: {
+                    Button("Cancel") { model.cancelSignIn() }  // placement: form-pane
+                        .accessibilityIdentifier("ai.codex.cancel")
                 }
-                // The login's own lines: the address and the code the reader needs. Data, shown verbatim.
-                ForEach(model.loginLines, id: \.self) { line in
-                    Text(verbatim: line).font(.caption.monospaced()).textSelection(.enabled)
+                if let url = login.url {
+                    ActionRow {
+                        Text(verbatim: url.host() ?? url.absoluteString).foregroundStyle(.secondary)
+                    } actions: {
+                        Button("Open Sign-In Page") { _ = NSWorkspace.shared.open(url) }  // placement: form-pane
+                            .accessibilityIdentifier("ai.codex.open")
+                    }
+                }
+                if let code = login.code {
+                    ActionRow {
+                        LabeledContent {
+                            Text(verbatim: code).font(.title3.monospaced()).textSelection(.enabled)
+                                .accessibilityIdentifier("ai.codex.code")
+                        } label: {
+                            Text("Code")
+                        }
+                    } actions: {
+                        Button("Copy Code") {  // placement: form-pane
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(code, forType: .string)
+                        }
+                        .accessibilityIdentifier("ai.codex.copy")
+                    }
+                }
+                if !model.loginLines.isEmpty {
+                    DisclosureGroup {
+                        // The login's own lines, verbatim. Data, never translated.
+                        ForEach(Array(model.loginLines.enumerated()), id: \.offset) { _, line in
+                            Text(verbatim: CodexLogin.stripEscapes(line)).font(.caption.monospaced())
+                                .textSelection(.enabled)
+                        }
+                    } label: {
+                        Text("Details")
+                    }
                 }
             } else {
-                Button("Sign In with Codex…") { Task { await model.signIn() } }  // placement: form-pane
+                Button("Sign In with Codex…") { model.startSignIn() }  // placement: form-pane
                     .accessibilityIdentifier("ai.codex.signin")
-                Text("XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there.")
+                Text("XDict keeps a Codex sign-in of its own, apart from the one in Terminal.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -253,7 +301,7 @@ public struct AISettings: View {
 
     private var claudeSection: some View {
         Section {
-            Text("XDict runs the claude command with its own configuration folder. Run claude in Terminal once to sign in; Claude Code holds that sign-in and XDict never reads it.")
+            Text("Run claude in Terminal once to sign in. XDict never reads that sign-in.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } header: {
@@ -268,81 +316,117 @@ public struct AISettings: View {
             Toggle(isOn: Binding(get: { model.preferences.settings.sendEntryText },
                                  set: { on in model.preferences.update { $0.sendEntryText = on } })) {
                 Text("Send the entry’s text with the question")
-                Text("Off, only the sentence around the word is sent. One rule for every source: a server on this Mac is not an exception.")
+                Text("Off, only the sentence around the word is sent — to every source, one on this Mac included.")
             }
             .accessibilityIdentifier("ai.send-entry")
         } header: {
             Text("What leaves XDict")
         }
+        .settingsAnchor(.aiEntryText)
     }
 
     // MARK: - The prompt
 
+    /// **The answer's language, in the ordinary flow; the prompt, under Advanced** (UI18): a reader configures an
+    /// ordinary explanation without meeting template variables or the response contract. An edit stays saved and
+    /// labelled *your wording, not measured* (ADR-0021), on the closed disclosure's label too.
     private func promptSection(model: AISettingsModel) -> some View {
         @Bindable var model = model
-        return Section {
-            Picker(selection: Binding(get: { model.preferences.settings.language },
-                                      set: { language in
-                                          model.preferences.update { $0.language = language }
-                                          model.loadDraft()
-                                      })) {
-                Text("English").tag("en")
-                Text("Simplified Chinese").tag("zh-Hans")
-            } label: {
-                Text("Answer language")
-                Text("The language the explanation is written in; the prompt’s default wording follows it.")
-            }
-            .accessibilityIdentifier("ai.language")
-            Picker(selection: $model.promptKind) {
-                Text("Grounded in the entry").tag(AIMode.grounded)
-                Text("From the sentence alone").tag(AIMode.sentenceOnly)
-                Text("Explaining a chosen sense").tag(AIMode.explainSense)
-            } label: {
-                Text("Question kind")
-                Text("One prompt for each kind: the model chooses a sense from the entry, the sentence alone, or the sense you chose.")
-            }
-            .pickerStyle(.radioGroup)
-            .accessibilityIdentifier("ai.prompt.kind")
-            TextEditor(text: $model.draft)
-                .font(.body.monospaced())
-                .frame(minHeight: Tokens.Control.promptEditor)
-                .accessibilityIdentifier("ai.prompt.editor")
-            if model.preferences.isEdited(language: model.language, mode: model.promptKind) {
-                Label {
-                    Text("Your wording, not measured")
-                } icon: {
-                    Image(systemName: "pencil")
+        return Group {
+            Section {
+                Picker(selection: Binding(get: { model.preferences.settings.language },
+                                          set: { language in
+                                              model.preferences.update { $0.language = language }
+                                              model.loadDraft()
+                                          })) {
+                    Text("English").tag("en")
+                    Text("Simplified Chinese").tag("zh-Hans")
+                } label: {
+                    Text("Answer language")
                 }
+                .accessibilityIdentifier("ai.language")
+                .settingsAnchor(.aiLanguage)
+            } header: {
+                Text("The answer")
+            }
+            Section {
+                DisclosureGroup(isExpanded: $advancedShown) {
+                    advancedPrompt(model: model)
+                } label: {
+                    HStack(spacing: Tokens.Space.s) {
+                        Text("Customize the Prompt")
+                        if model.hasEditedPrompt {
+                            Label {
+                                Text("Your wording, not measured")
+                            } icon: {
+                                Image(systemName: "pencil")
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("ai.prompt.edited.any")
+                        }
+                    }
+                }
+                .accessibilityIdentifier("ai.prompt.advanced")
+                .settingsAnchor(.aiPrompt)
+            } header: {
+                Text("Advanced")
+            }
+        }
+    }
+
+    @ViewBuilder private func advancedPrompt(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        Picker(selection: $model.promptKind) {
+            Text("Grounded in the entry").tag(AIMode.grounded)
+            Text("From the sentence alone").tag(AIMode.sentenceOnly)
+            Text("Explaining a chosen sense").tag(AIMode.explainSense)
+        } label: {
+            Text("Question kind")
+            Text("Each kind has its own prompt.")
+        }
+        .pickerStyle(.radioGroup)
+        .accessibilityIdentifier("ai.prompt.kind")
+        TextEditor(text: $model.draft)
+            .font(.body.monospaced())
+            .frame(minHeight: Tokens.Control.promptEditor)
+            .accessibilityLabel(Text("Prompt"))
+            .accessibilityIdentifier("ai.prompt.editor")
+        if model.preferences.isEdited(language: model.language, mode: model.promptKind) {
+            Label {
+                Text("Your wording, not measured")
+            } icon: {
+                Image(systemName: "pencil")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("ai.prompt.edited")
+        }
+        Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
+            .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
+            .accessibilityIdentifier("ai.prompt.reset")
+        Text("The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+        DisclosureGroup {
+            previewText(model: model)
+            Text("This is a sample: the sentence you capture and the entry you see are sent instead.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .accessibilityIdentifier("ai.prompt.edited")
-            }
-            Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
-                .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
-                .accessibilityIdentifier("ai.prompt.reset")
-            DisclosureGroup {
-                previewText(model: model)
-                Text("This is a sample: the sentence you capture and the entry you see are sent instead.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            } label: {
-                Text("Preview the request")
-            }
-            .accessibilityIdentifier("ai.prompt.preview")
-            DisclosureGroup {
-                // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would
-                // describe an answer this ask never accepts.
-                Text(verbatim: model.promptKind == .explainSense ? AIComposer.explainResponseContract
-                                                                 : AIComposer.responseContract)
-                    .font(.caption.monospaced())
-                    .textSelection(.enabled)
-            } label: {
-                Text("What XDict adds to every request")
-            }
-        } header: {
-            Text("The prompt")
-        } footer: {
-            Text("The response format is appended by XDict and cannot be edited. The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. Each kind has its own prompt.")
+        } label: {
+            Text("Preview the request")
+        }
+        .accessibilityIdentifier("ai.prompt.preview")
+        DisclosureGroup {
+            // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would
+            // describe an answer this ask never accepts.
+            Text(verbatim: model.promptKind == .explainSense ? AIComposer.explainResponseContract
+                                                             : AIComposer.responseContract)
+                .font(.caption.monospaced())
+                .textSelection(.enabled)
+        } label: {
+            Text("What XDict adds to every request")
         }
     }
 

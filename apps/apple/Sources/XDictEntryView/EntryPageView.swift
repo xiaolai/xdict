@@ -3,10 +3,13 @@ import WebKit
 import os
 import XDictTokens
 
-/// **Apple's divider between two dictionaries** (parity P15, measured on Dictionary.app): a disclosure triangle at the
-/// leading edge, a 1 pt grey rule across the pane, and the dictionary's name centred in it in the secondary label colour,
-/// at the system's `large` size. A click anywhere on it, or VoiceOver's press, collapses or expands that dictionary.
-/// Its name, band and triangle follow the one text size, as Apple's do (P15, P29).
+/// **The divider between two dictionaries** (parity P15; quieter after HIG audit UI25, owner-approved 2026-10-23): a
+/// disclosure triangle at the leading edge, the dictionary's name just after it in the secondary label colour and the
+/// dictionary-name role (13 pt semibold at actual size, under the headword rather than competing with it), then a
+/// hairline in the system's separator colour to the trailing inset. Apple's centred 18 pt name between two grey rules
+/// read as a heading that interrupted the entry. A click anywhere on it, VoiceOver's press, or (with full keyboard
+/// access) Space or Return collapses or expands that dictionary. Its name, band and triangle follow the one text size,
+/// as Apple's do (P15, P29).
 /// **In the lookup popover, Apple's compact one** (P41; `popover.png`, `popover.dark.png`): the name leading, as the
 /// popover's title is, then a hairline to the trailing inset; no triangle, no collapse, a fixed size.
 @MainActor
@@ -32,10 +35,14 @@ final class EntryPageDivider: NSView {
 
     static func metrics(zoom: Double) -> Metrics {
         let scale = CGFloat(zoom)
-        return Metrics(font: Tokens.PageDivider.font * scale, height: height * scale, triangle: Tokens.PageDivider.triangle * scale)
+        return Metrics(font: nameFont.pointSize * scale, height: height * scale, triangle: Tokens.PageDivider.triangle * scale)
     }
-    /// The rule: #929292 measured on Apple's page in light; its dark twin keeps the same contrast with #1e1e1e.
-    static var ruleColour: NSColor { Tokens.Colour.entryRule.nsColor }
+    /// The name's role at actual size: the one the popover's divider names its dictionaries in (UI25).
+    static var nameFont: NSFont { Tokens.TextRole.panelDictionaryName.nsFont }
+    /// The name's font at a size: the role's face and weight, the text size's points.
+    static func nameFont(size: CGFloat) -> NSFont { NSFont(descriptor: nameFont.fontDescriptor, size: size) ?? nameFont }
+    /// The rule: the system's separator, a hairline that marks the boundary without drawing the eye (UI25).
+    static var ruleColour: NSColor { Tokens.Colour.separator.nsColor }
 
     let name: String
     let style: EntryPageStyle
@@ -68,16 +75,17 @@ final class EntryPageDivider: NSView {
         setAccessibilityIdentifier("page.divider.\(name)")
         switch style {
         case .window:
-            label.font = .systemFont(ofSize: metrics.font)
+            label.font = Self.nameFont(size: metrics.font)
             label.textColor = .secondaryLabelColor
-            label.alignment = .center
+            label.alignment = .natural
+            label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             let height = heightAnchor.constraint(equalToConstant: metrics.height)
             heightConstraint = height
             NSLayoutConstraint.activate([
                 height,
-                label.centerXAnchor.constraint(equalTo: centerXAnchor, constant: (Self.ruleStart - Self.trailing) / 2),
+                label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Self.ruleStart),
                 label.centerYAnchor.constraint(equalTo: centerYAnchor),
-                label.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -(Self.ruleStart + Self.trailing + 48)),
+                label.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -(Self.trailing + Self.gap)),
             ])
             setAccessibilityRole(.disclosureTriangle)
             setAccessibilityValue(1)
@@ -109,13 +117,13 @@ final class EntryPageDivider: NSView {
         let next = Self.metrics(zoom: zoom)
         guard next != metrics else { return }
         metrics = next
-        label.font = .systemFont(ofSize: next.font)
+        label.font = Self.nameFont(size: next.font)
         heightConstraint?.constant = next.height
         needsDisplay = true
     }
 
-    /// Apple's geometry, in points from the pane's leading edge: the triangle centred at 29, the rule from 45 to 16
-    /// short of the trailing edge, a 12 pt gap each side of the name.
+    /// Apple's geometry, in points from the pane's leading edge: the triangle centred at 29, the name from 45, the rule
+    /// from 12 after the name to 16 short of the trailing edge.
     static let triangleCentre: CGFloat = Tokens.PageDivider.triangleCentre
     static let ruleStart: CGFloat = Tokens.PageDivider.ruleStart
     static let trailing: CGFloat = Tokens.PageDivider.trailing
@@ -137,16 +145,15 @@ final class EntryPageDivider: NSView {
             rule.stroke()
             return
         }
-        let colour = Self.ruleColour
-        colour.setStroke()
-        let text = label.frame.insetBy(dx: -Self.gap, dy: 0)
-        let rule = NSBezierPath()
-        rule.lineWidth = 1
-        rule.move(to: NSPoint(x: Self.ruleStart, y: mid))
-        rule.line(to: NSPoint(x: max(Self.ruleStart, text.minX), y: mid))
-        rule.move(to: NSPoint(x: min(bounds.maxX - Self.trailing, text.maxX), y: mid))
-        rule.line(to: NSPoint(x: bounds.maxX - Self.trailing, y: mid))
-        rule.stroke()
+        let start = label.frame.maxX + Self.gap, end = bounds.maxX - Self.trailing
+        if end > start {
+            Self.ruleColour.setStroke()
+            let rule = NSBezierPath()
+            rule.lineWidth = 1
+            rule.move(to: NSPoint(x: start, y: mid))
+            rule.line(to: NSPoint(x: end, y: mid))
+            rule.stroke()
+        }
         // ▼ expanded, ▶ collapsed, in the label colour at Apple's size (about 11 pt across).
         let c = NSPoint(x: Self.triangleCentre, y: bounds.height / 2), r = metrics.triangle
         let triangle = NSBezierPath()
@@ -165,6 +172,23 @@ final class EntryPageDivider: NSView {
     }
 
     override func mouseDown(with event: NSEvent) { toggle() }
+
+    /// **Reachable from the keyboard as a disclosure button is** (UI25): with full keyboard access on, Tab can focus it
+    /// and Space or Return toggles it; otherwise a click never takes the focus from the entry.
+    override var acceptsFirstResponder: Bool { style == .window && NSApp?.isFullKeyboardAccessEnabled == true }
+    override var canBecomeKeyView: Bool { acceptsFirstResponder && !isHiddenOrHasHiddenAncestor }
+
+    override func keyDown(with event: NSEvent) {
+        guard style == .window, event.modifierFlags.intersection([.command, .control, .option]).isEmpty,
+              [" ", "\r", "\u{3}"].contains(event.charactersIgnoringModifiers ?? "") else {
+            super.keyDown(with: event)
+            return
+        }
+        toggle()
+    }
+
+    override var focusRingMaskBounds: NSRect { bounds }
+    override func drawFocusRingMask() { NSBezierPath(rect: bounds).fill() }
     override func accessibilityPerformPress() -> Bool {
         guard style == .window else { return false }
         toggle()
@@ -176,6 +200,59 @@ final class EntryPageDivider: NSView {
         guard style == .window else { return }
         onToggle?()
     }
+}
+
+/// **The dictionary being read, pinned over the page** (HIG audit UI24): once the current section's own divider has
+/// scrolled above the view, its name stays at the page's top, quiet, in the divider's role on the header material, so
+/// the reader always knows whose entry they are reading. It is not a control: every click passes to the page under it;
+/// Go ▸ Dictionaries on This Page jumps to another.
+@MainActor
+final class EntryPageSourceLabel: NSVisualEffectView {
+    let label = NSTextField(labelWithString: "")
+
+    init() {
+        super.init(frame: .zero)
+        material = .headerView
+        blendingMode = .withinWindow
+        state = .followsWindowActiveState
+        wantsLayer = true
+        layer?.masksToBounds = true
+        translatesAutoresizingMaskIntoConstraints = false
+        label.font = EntryPageDivider.nameFont
+        label.textColor = .secondaryLabelColor
+        label.lineBreakMode = .byTruncatingTail
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.setAccessibilityElement(false)
+        addSubview(label)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: leadingAnchor, constant: Tokens.Space.sm),
+            label.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -Tokens.Space.sm),
+            label.topAnchor.constraint(equalTo: topAnchor, constant: Tokens.Space.xs),
+            label.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -Tokens.Space.xs),
+        ])
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        setAccessibilityIdentifier("page.current-source")
+        isHidden = true
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { nil }
+
+    override func layout() {
+        super.layout()
+        layer?.cornerRadius = bounds.height / 2
+    }
+
+    /// Shows the name, or hides the label when none is pinned.
+    func show(_ name: String?) {
+        isHidden = name == nil
+        label.stringValue = name ?? ""
+        setAccessibilityLabel(name.map { String(localized: EntrySentences.currentDictionary($0)) })
+    }
+
+    /// Not a control: the page under it takes every click.
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// **One dictionary's part of the page**: its divider, and its frame — a pane of its own (`EntryPane`), made when it is
@@ -328,6 +405,16 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         scroll.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrolled), name: NSView.frameDidChangeNotification,
                                                object: scroll)
+        // The pinned name (UI24), over the page and under its scroller; the popover names every section already.
+        if style == .window {
+            scroll.addSubview(sourceLabel, positioned: .above, relativeTo: clip)
+            NSLayoutConstraint.activate([
+                sourceLabel.centerXAnchor.constraint(equalTo: scroll.centerXAnchor),
+                sourceLabel.topAnchor.constraint(equalTo: scroll.topAnchor, constant: Tokens.Space.xs),
+                sourceLabel.widthAnchor.constraint(lessThanOrEqualTo: scroll.widthAnchor,
+                                                   constant: -2 * EntryPageDivider.ruleStart),
+            ])
+        }
     }
 
     var panes: [EntryPane] { sections.compactMap(\.pane) }
@@ -371,7 +458,10 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 guard let self, let section else { return }
                 self.toggle(section)
             }
-            section.onHeightChange = { [weak self] in self?.onContentHeightChanged?() }
+            section.onHeightChange = { [weak self] in
+                self?.onContentHeightChanged?()
+                self?.reportSources()
+            }
         }
         let views = next.flatMap { [$0.divider as NSView, $0.holder] }
         if stack.arrangedSubviews != views {
@@ -405,9 +495,10 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
 
     /// Makes the frames the viewport wants (or every frame, for find); the first refusal stops it.
     @discardableResult
-    func materialize(all: Bool = false) -> EntryRefusal? {
+    func materialize(all: Bool = false, including wanted: Int? = nil) -> EntryRefusal? {
+        defer { reportSources() }
         document.layoutSubtreeIfNeeded()
-        let indices: [Int]
+        var indices: [Int]
         if all {
             indices = Array(sections.indices)
         } else {
@@ -418,6 +509,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             indices = EntryPagePlan.wanted(tops: tops, heights: heights, collapsed: sections.map(\.collapsed),
                                            top: Double(visible.minY), height: max(height, 1)).sorted()
         }
+        if let wanted, sections.indices.contains(wanted), !indices.contains(wanted) { indices.append(wanted) }
         for index in indices where sections[index].pane == nil {
             let section = sections[index]
             switch make(section) {
@@ -540,6 +632,93 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         document.layoutSubtreeIfNeeded()
         let y = Double(section.holder.frame.minY) + documentY * zoom
         scrollTo(y - Double(scroll.contentView.bounds.height) / 2)
+    }
+
+    // MARK: - Orientation (HIG audit UI24)
+
+    /// Told when the page's dictionaries, the one being read, or whether its name is pinned changed.
+    var onSourcesChanged: ((EntryPageSources) -> Void)?
+    private var reportedSources: EntryPageSources?
+    /// The current dictionary's name, pinned at the view's top while its divider is scrolled away.
+    let sourceLabel = EntryPageSourceLabel()
+
+    /// Each section's start in the page: its divider's top when it shows one, else its frame's (only the first
+    /// section, expanded, goes without a divider, so a start is never a detached, hidden view's).
+    private var starts: [Double] {
+        sections.map { Double(($0.hasDivider ? $0.divider : $0.holder).frame.minY) }
+    }
+
+    /// The page's dictionaries in the reader's order, the one at the view's top, and whether its name is pinned.
+    var sources: EntryPageSources {
+        let starts = starts, top = offset
+        let current = EntryPagePlan.current(starts: starts, top: top)
+        return EntryPageSources(
+            sources: sections.map { EntryPageSource(id: $0.id, name: $0.name) },
+            current: current.map { sections[$0].id },
+            pinned: current.map { EntryPagePlan.pinsSource(current: $0, starts: starts, top: top, style: style) } ?? false)
+    }
+
+    private func reportSources() {
+        document.layoutSubtreeIfNeeded()
+        let next = sources
+        guard next != reportedSources else { return }
+        reportedSources = next
+        sourceLabel.show(next.pinned ? next.currentName : nil)
+        onSourcesChanged?(next)
+    }
+
+    /// **Jumps to a dictionary** (UI24): its divider (the page's top, for the first) at the view's top; a collapsed
+    /// dictionary stays collapsed, its divider showing where it is.
+    func jump(to id: UUID) {
+        guard let index = sections.firstIndex(where: { $0.id == id }) else { return }
+        pendingOffset = nil
+        document.layoutSubtreeIfNeeded()
+        scrollTo(starts[index])
+        if let refusal = materialize() { onRefusal?(refusal) }
+    }
+
+    // MARK: - Evidence (HIG audit UI11)
+
+    /// The name each section's frame answers to: its dictionary's handle and edition, and its record.
+    private var frameNames: [EntryFrameName] {
+        sections.map {
+            EntryFrameName(handle: $0.item.content.binding.handle, edition: $0.item.content.binding.edition,
+                           reference: $0.item.reference)
+        }
+    }
+
+    /// **An answer's evidence, shown in the one frame its frozen target names** (UI11): never the page at large, so two
+    /// dictionaries with similar wording cannot be confused. That frame is opened for the reveal if collapsed (the
+    /// reader's kept collapse for the dictionary is left as it is), made and loaded, and searched alone; its match is
+    /// brought to the middle of the view. False when no single frame carries the name, or its text has no visible match.
+    func revealEvidence(_ text: String, in name: EntryFrameName) async -> Bool {
+        guard let index = EntryPagePlan.frame(named: name, among: frameNames) else { return false }
+        let section = sections[index]
+        if section.collapsed {
+            section.collapsed = false
+            section.hasDivider = EntryPagePlan.hasDivider(at: index, collapsed: false, style: style)
+            onContentHeightChanged?()
+        }
+        pendingOffset = nil
+        document.layoutSubtreeIfNeeded()
+        scrollTo(Double(section.holder.frame.minY))
+        if let refusal = materialize(including: index) {
+            onRefusal?(refusal)
+            return false
+        }
+        await loaded()
+        // The page may have been shown again while it loaded: the section must still be this page's.
+        guard sections.contains(where: { $0 === section }), let pane = section.pane else { return false }
+        await clearFind()
+        guard let result = await pane.find(text), result.visible > 0 else {
+            await pane.clearFind()
+            return false
+        }
+        if let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
+                                                             contentWorld: EntryPane.world) as? Double {
+            reveal(section, documentY: y)
+        }
+        return true
     }
 
     // MARK: - Find, across frames (R3, P30)

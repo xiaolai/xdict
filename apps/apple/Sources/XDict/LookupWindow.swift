@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import XDictAI
 import XDictClient
 import XDictContract
 import XDictEntryView
@@ -84,6 +85,66 @@ final class LookupWindowRun: LookupStage {
     private var timeline: [String] = []
     private let began = ContinuousClock.now
 
+    /// Populated captures use the production models over this instrument's synthetic library. The answer endpoint is
+    /// a short-lived loopback server owned by the tour, never a reader's configured source or an external AI service.
+    private func prepareUIDemo(_ operation: String, endpoint: String?) async -> [String: Any] {
+        guard !XDictApp.setup.isReader, let state else { return ["prepared": false] }
+        if operation == "uiDemo.clean" {
+            // Only this instrument's synthetic library is changed; the reader's library is never opened here.
+            guard corpus == nil, state.library.entries.contains(where: { $0.displayName == "Alpha" }),
+                  state.library.entries.contains(where: { $0.displayName == "Beta" }) else { return ["prepared": false] }
+            let problems = state.library.entries.filter { ["damaged", "gone"].contains($0.displayName.lowercased()) }
+            for entry in problems { await state.library.remove(entry.id) }
+            return ["prepared": true, "synthetic": true]
+        }
+        guard let shown = state.model.shown,
+              let source = state.model.source(shown.result.dictionary), let handle = source.handle,
+              source.name == "Alpha", shown.result.entry.key == "apple" else {
+            return ["prepared": false, "reason": "Look up apple in the synthetic Alpha dictionary first."]
+        }
+        if operation == "uiDemo.senseSelected" {
+            return ["prepared": state.meaning.hasSenseSelection, "synthetic": true]
+        }
+        let sentence = "I brought an apple for lunch."
+        let handoff = MeaningHandoff(term: "apple", sentence: sentence, range: NSRange(location: 13, length: 5),
+                                     origin: MeaningOrigin(request: 1, generation: 1))
+        if operation == "uiDemo.meaning" {
+            guard let endpoint, let url = URL(string: endpoint), url.scheme == "http", url.host == "127.0.0.1",
+                  url.port != nil, url.path == "/v1", url.user == nil, url.password == nil,
+                  url.query == nil, url.fragment == nil else {
+                return ["prepared": false, "reason": "A tour-owned loopback endpoint is required."]
+            }
+            let settings = MeaningSettings(source: .http, endpoint: url, model: "synthetic-ui-demo", sendEntryText: true)
+            state.meaning.settingsProvider = { settings }
+            state.holdMeaning(handoff)
+            state.meaning.drawn(MeaningSession.Subject(dictionary: shown.result.dictionary, key: "apple", occurrence: 0),
+                                target: (handle, shown.result.entry), lookup: shown.lookup)
+            state.meaning.ask()
+            let deadline = ContinuousClock.now + .seconds(10)
+            while state.meaning.isAsking, ContinuousClock.now < deadline {
+                try? await Task.sleep(for: .milliseconds(25))
+            }
+            if case .answer = state.meaning.state { return ["prepared": true, "synthetic": true] }
+            return ["prepared": false, "reason": "The synthetic answer did not pass the production answer path."]
+        }
+        LearningPreferences.shared.historyEnabled = true
+        let dictionary = state.library.entries.first { $0.id == source.id }
+        let reading = ReadingCapture.reading(handoff: handoff, entry: shown.result.entry, dictionary: dictionary,
+                                             at: Date(), device: "ui-tour-demo")
+        guard await XDictApp.history.record(reading) != nil else {
+            return ["prepared": false, "reason": "The synthetic reading could not be recorded."]
+        }
+        if operation == "uiDemo.review" {
+            guard await XDictApp.study.saveNote(entry: shown.result.entry,
+                                                text: "Remember the word in its sentence: I brought an apple for lunch.",
+                                                name: source.name) != nil else {
+                return ["prepared": false, "reason": "The synthetic review note could not be saved."]
+            }
+        }
+        await XDictApp.history.refresh()
+        return ["prepared": true, "synthetic": true]
+    }
+
     init(work: URL, fixtures: URL, corpus: URL?, paging: LookupScenario.Paging) {
         self.work = work
         self.fixtures = fixtures
@@ -152,6 +213,8 @@ final class LookupWindowRun: LookupStage {
                   let op = asked["op"] as? String else { continue }
             let out = commands.appending(path: name.replacingOccurrences(of: ".json", with: ".out.json"))
             switch op {
+            case "uiDemo.meaning", "uiDemo.history", "uiDemo.review", "uiDemo.clean", "uiDemo.senseSelected":
+                Task { self.write(await self.prepareUIDemo(op, endpoint: asked["endpoint"] as? String), to: out) }
             case "state":
                 write(snapshot(), to: out)
             case "pageFocus":

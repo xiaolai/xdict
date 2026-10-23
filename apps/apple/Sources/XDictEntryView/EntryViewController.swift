@@ -271,6 +271,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         page.onRefusal = { [weak self] why in self?.refuse(why) }
         page.onContentHeightChanged = { [weak self] in self?.onContentHeightChanged?() }
         page.onFramesChanged = { [weak self] in self?.relinkKeyViews() }
+        page.onSourcesChanged = { [weak self] sources in self?.setPageSources(sources) }
         container.addSubview(page.scroll)
         NSLayoutConstraint.activate([
             page.scroll.topAnchor.constraint(equalTo: container.topAnchor),
@@ -287,6 +288,45 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         page?.close()
         page = nil
         primaryItem = nil
+        setPageSources(nil)
+    }
+
+    // MARK: - Orientation on the All page (HIG audit UI24)
+
+    /// The All page's dictionaries, the one being read and whether its name is pinned; nil while no page is shown.
+    public private(set) var pageSources: EntryPageSources?
+    /// Told whenever `pageSources` changes: the window's jump list and pinned name follow it.
+    public var onPageSourcesChanged: ((EntryPageSources?) -> Void)?
+
+    private func setPageSources(_ sources: EntryPageSources?) {
+        guard sources != pageSources else { return }
+        pageSources = sources
+        onPageSourcesChanged?(sources)
+    }
+
+    /// Go ▸ Dictionaries on This Page: the page scrolled to that dictionary's divider; collapsed, it stays collapsed.
+    public func jumpToPageSource(_ id: UUID) { page?.jump(to: id) }
+
+    // MARK: - Evidence (HIG audit UI11)
+
+    /// **Show in the Entry, in the frame named** (UI11): the answer's quoted `text` found only in the frame whose
+    /// dictionary handle, edition and record are `name` (on the All page, opened for the reveal if collapsed), and
+    /// brought into view. False, with nothing else searched, when no frame shown carries that name or the text has no
+    /// visible match there.
+    @discardableResult
+    public func revealEvidence(_ text: String, in name: EntryFrameName) -> Task<Bool, Never> {
+        Task { @MainActor in
+            if let page { return await page.revealEvidence(text, in: name) }
+            guard let pane, let reference = pane.documentReference,
+                  EntryFrameName(handle: pane.binding.handle, edition: pane.binding.edition, reference: reference) == name
+            else { return false }
+            await pane.clearFind()
+            guard let result = await pane.find(text), result.visible > 0 else {
+                await pane.clearFind()
+                return false
+            }
+            return true
+        }
     }
 
     private func compileRuleList() async {
@@ -441,6 +481,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private func currentFrame(for dictionary: String) -> EntryReadingFrame {
         environment.readingFrame.applied(originalStyle: environment.preferences.originalStyle(for: dictionary))
             .with(accent: environment.preferences.accent())
+            .with(comfortableWidth: environment.preferences.comfortableWidth())
     }
 
     private func currentScheme(for dictionary: String) -> EntryColourScheme {
@@ -552,6 +593,28 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         // pane has begun replacing is refused by the pane's URL guard; this one is the document left on screen.
         guard owns(pane), let reference = pane.documentReference else { return }
         onSelectSense?(pane.binding.handle, pane.binding.edition, reference, click.id)
+    }
+
+    /// **The chosen sense marked in the frame it was chosen in** (HIG audit UI21), and every other frame's mark cleared;
+    /// nil clears them all. The frame is named by its own binding and reference, as a click names it.
+    public func markSense(handle: String?, reference: EntryReference?, id: UInt32?) {
+        let panes = allPanes
+        Task { @MainActor in
+            for candidate in panes {
+                let chosen = id != nil && candidate.binding.handle == handle && candidate.documentReference == reference
+                await candidate.markSense(chosen ? id : nil)
+            }
+        }
+    }
+
+    /// **The next or previous sense from the keyboard** (HIG audit UI22): in the frame in focus, selected exactly as a
+    /// click on it would be.
+    public func stepSense(_ delta: Int) {
+        guard let pane = focusPane else { return }
+        Task { @MainActor in
+            guard owns(pane), let reference = pane.documentReference, let id = await pane.stepSense(delta) else { return }
+            onSelectSense?(pane.binding.handle, pane.binding.edition, reference, id)
+        }
     }
 
     func askReader(_ url: URL, from pane: EntryPane) {

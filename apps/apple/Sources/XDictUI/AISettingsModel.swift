@@ -28,11 +28,32 @@ public final class AISettingsModel {
     /// The Codex login's own output, verbatim: the web address and code the reader needs. Data, never translated.
     public private(set) var loginLines: [String] = []
     public private(set) var signingIn = false
+    /// What the login's lines say, structured (UI33): the address to open and the code to enter.
+    public var login: CodexLogin { CodexLogin.parse(loginLines) }
 
-    public init(preferences: MeaningPreferences) {
+    /// **How a sign-in runs**: the Codex login by default; a test hands in its own. Lines arrive on the main actor.
+    public typealias Login = @MainActor (_ onLine: @escaping @MainActor (String) -> Void) async throws -> Void
+    @ObservationIgnored private let runLogin: Login?
+    @ObservationIgnored private var signInTask: Task<Void, Never>?
+    @ObservationIgnored private var signInGeneration = 0
+
+    public init(preferences: MeaningPreferences, login: Login? = nil) {
         self.preferences = preferences
+        runLogin = login
         keyState = preferences.hasKey ? .stored : .absent
         draft = preferences.effectiveTemplate(language: preferences.settings.language, mode: promptKind)
+    }
+
+    /// **The source, as the pane's one single-choice control selects it** (UI32).
+    public var choice: AISourceChoice {
+        get { AISourceChoice.of(kind: preferences.settings.source, cloud: preferences.httpCloud) }
+        set { select(newValue.kind, cloud: newValue.cloud) }
+    }
+
+    /// **Whether any kind's prompt in the answer language is the reader's wording** (UI18; ADR-0021): said on the
+    /// advanced disclosure's label, so a closed disclosure never hides an edit.
+    public var hasEditedPrompt: Bool {
+        AIMode.allCases.contains { preferences.isEdited(language: language, mode: $0) }
     }
 
     public var language: String { preferences.settings.language }
@@ -149,18 +170,57 @@ public final class AISettingsModel {
 
     // MARK: - The command-line sources
 
-    public func signIn() async {
+    /// **Sign In with Codex…** (UI33): one login at a time, owned here so the pane can cancel it. Cancelling ends the
+    /// login's process group (`CLIProcess`) and is not the source's failure.
+    public func startSignIn() {
+        guard signInTask == nil else { return }
+        signInGeneration += 1
+        let mine = signInGeneration
         signingIn = true
         loginLines = []
-        defer { signingIn = false }
+        signInTask = Task { [weak self] in
+            await self?.signIn(mine)
+            // A sign-in cancelled and started again meanwhile is the new one's to finish.
+            guard let self, mine == self.signInGeneration else { return }
+            self.signInTask = nil
+            self.signingIn = false
+        }
+    }
+
+    /// **Cancel** — the button, and leaving the pane (`onDisappear`): a pending sign-in does not outlive the place that
+    /// shows its code.
+    public func cancelSignIn() {
+        signInGeneration += 1
+        signInTask?.cancel()
+        signInTask = nil
+        signingIn = false
+        loginLines = []
+    }
+
+    /// The login itself; `startSignIn` owns its task and its end.
+    func signIn(_ mine: Int) async {
+        // A line from a sign-in already cancelled is not shown under the current one.
+        let append: @MainActor @Sendable (String) -> Void = { [weak self] line in
+            guard let self, mine == self.signInGeneration else { return }
+            self.loginLines.append(line)
+        }
         do {
-            guard let codex = try MeaningProviders.make(preferences.settings) as? CodexCLIProvider else { return }
-            _ = try await codex.login { line in
-                Task { @MainActor in self.loginLines.append(line) }
+            if let runLogin {
+                try await runLogin(append)
+            } else {
+                guard let codex = try MeaningProviders.make(preferences.settings) as? CodexCLIProvider else { return }
+                _ = try await codex.login { line in
+                    Task { @MainActor in append(line) }
+                }
             }
+            guard !Task.isCancelled, mine == signInGeneration else { return }
+            loginLines = []
             await refreshStatus()
         } catch {
-            status = .failed(error)
+            // A cancelled login is the reader's choice, not the source's failure; a superseded one says nothing.
+            guard mine == signInGeneration, !Task.isCancelled, !(error is CancellationError),
+                  (error as? AIProviderError) != .cancelled else { return }
+            status = .failed((error as? AIProviderError) ?? .framework("codex"))
         }
     }
 

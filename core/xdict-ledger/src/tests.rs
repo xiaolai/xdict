@@ -558,6 +558,77 @@ fn a_note_keeps_a_definition_hash_and_never_the_definition() {
     assert!(!exported.contains(definition), "the definition itself never enters the log");
 }
 
+/// **Clearing a note** (UI49): an existing note may be revised to exactly empty text, through the same `NoteRevised`
+/// write as any revision. The card stays enrolled, the earlier wording stays in the log and its export, a retry is one
+/// event, and the cleared state survives a reopen.
+#[test]
+fn an_existing_note_revised_to_empty_keeps_its_card_and_its_history() {
+    let store = Arc::new(MemoryStore::default());
+    let mut ledger = Ledger::open(store.clone()).unwrap();
+    let at = 1_790_640_000.0;
+    ledger.save_note(note("earlier", at, 0), "note-1").unwrap();
+    let first = ledger.entries.last().unwrap().id.clone();
+    assert_eq!(ledger.save_note(note("", at + 60.0, 0), "clear-1"), Ok(RecordOutcome::Recorded));
+    let cleared = ledger.entries.last().unwrap();
+    assert!(matches!(cleared.stored.event, Event::NoteRevised(_)), "a clear is a revision, not a new event kind");
+    assert_eq!(cleared.stored.parent.as_deref(), Some(first.as_str()), "it names the note it revises");
+    let cleared_id = cleared.id.clone();
+    assert_eq!(
+        ledger.save_note(note("", at + 60.0, 0), "clear-1"),
+        Ok(RecordOutcome::Duplicate),
+        "a retry is one event"
+    );
+    assert_eq!(ledger.event_count(), 2);
+    let notes = ledger.notes();
+    assert_eq!(notes.len(), 1);
+    assert_eq!(notes[0].text, "");
+    let card = ledger.card(&target(0).key()).expect("the word stays in Review");
+    assert_eq!(card.note_head, cleared_id);
+    let exported = serde_json::to_string(&ledger.export()).unwrap();
+    assert!(exported.contains("earlier"), "the earlier wording stays in the export until an erase");
+
+    let mut reopened = Ledger::open(store).unwrap();
+    assert_eq!(reopened.notes()[0].text, "", "the clear survives a reopen");
+    assert!(reopened.card(&target(0).key()).is_some());
+    // Undo of a clear: the earlier wording saved again, as one more revision.
+    assert_eq!(reopened.save_note(note("earlier", at + 120.0, 0), "restore-1"), Ok(RecordOutcome::Recorded));
+    assert_eq!(reopened.notes()[0].text, "earlier");
+    assert_eq!(reopened.event_count(), 3);
+}
+
+/// A clear made on one device reaches another through the ordinary merge.
+#[test]
+fn an_empty_revision_merges_to_a_peer() {
+    let mut a = ledger();
+    let at = 1_790_640_000.0;
+    a.save_note(note("earlier", at, 0), "note-1").unwrap();
+    let mut b = peer(&a);
+    a.save_note(note("", at + 60.0, 0), "clear-1").unwrap();
+    assert_eq!(b.merge(&a.log_bytes().unwrap()).unwrap(), MergeReport { added: 1, skipped: 1 });
+    assert_eq!(b.notes()[0].text, "", "the peer sees the cleared note");
+    assert!(b.card(&target(0).key()).is_some(), "and still reviews the word");
+}
+
+/// **Only an existing note may be emptied**: a first empty note would enrol a card the reader never wrote anything
+/// for, and whitespace is never a deliberate clear. Both write nothing.
+#[test]
+fn a_first_empty_note_and_whitespace_text_are_refused() {
+    let mut ledger = ledger();
+    let at = 1_790_640_000.0;
+    assert_eq!(ledger.save_note(note("", at, 0), "first-empty"), Err(LedgerError::InvalidEvent));
+    assert_eq!(ledger.save_note(note("  \n", at, 0), "first-blank"), Err(LedgerError::InvalidEvent));
+    assert_eq!(ledger.event_count(), 0);
+    assert!(ledger.card(&target(0).key()).is_none(), "no card was enrolled");
+    ledger.save_note(note("mine", at, 0), "note-1").unwrap();
+    assert_eq!(ledger.save_note(note(" \t\n", at + 60.0, 0), "blank"), Err(LedgerError::InvalidEvent));
+    // Another target's existing note does not make this one's first empty note acceptable.
+    assert_eq!(ledger.save_note(note("", at + 60.0, 1), "other-empty"), Err(LedgerError::InvalidEvent));
+    // The ordinary checks still hold for an empty revision.
+    assert_eq!(ledger.save_note(note("", f64::NAN, 0), "bad-time"), Err(LedgerError::InvalidEvent));
+    assert_eq!(ledger.event_count(), 1);
+    assert_eq!(ledger.notes()[0].text, "mine");
+}
+
 // MARK: - Sync and conflicts (plan §2.6, ADR-0027)
 
 /// A second device: a log of its own that starts as a copy of `from`, the way a sync makes one.

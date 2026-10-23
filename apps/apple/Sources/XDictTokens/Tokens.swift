@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "733d565cb65e9b67616797c2b4985c43886f4bd138119b75b0bc696a5ed76f11"
+    public static let sourceDigest = "091c36c31e3fd61b87c47d97d87ce5f2efb1eaae3fe7de9a622f4efaf9edad51"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -100,6 +100,8 @@ public enum Tokens {
         public static let siteField: CGFloat = 140
         /// The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form.
         public static let promptEditor: CGFloat = 140
+        /// The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row.
+        public static let filterField: CGFloat = 140
     }
 
     /// Timings the shell runs itself: the drawer's springs and how long an undo stays offered.
@@ -242,6 +244,8 @@ public enum Tokens {
         public static let reviewHeight: CGFloat = 560
         /// The review window's lowest: the word, the note and the answers, with the note scrolling past it.
         public static let reviewMinHeight: CGFloat = 420
+        /// A compact Meaning in Context sheet keeps its scrollable answer and fixed Done footer reachable while preserving the reading window's size.
+        public static let meaningSheetHeight: CGFloat = 480
     }
 
     /// Corner radii.
@@ -567,6 +571,7 @@ public enum Tokens {
             ("icon-image-height", "1.25em"),
             ("icon-image-baseline", "-0.2em"),
             ("icon-image-gap", "0.125em"),
+            ("comfortable-measure", "42em"),
         ]
         /// The palette: name, light, dark.
         public static let palette: [(String, String, String)] = [

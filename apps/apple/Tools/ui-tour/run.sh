@@ -19,11 +19,15 @@ cd "$(dirname "$0")/../.."
 common=$(Tools/main-checkout.sh "$PWD") || exit 2
 host=$(sed -n 's/^E2E_HOST_MACOS *= *//p' "$common/local.mk" 2>/dev/null | head -1)
 [ -n "$host" ] || { echo "run.sh: E2E_HOST_MACOS is not set in $common/local.mk" >&2; exit 1; }
+# A batch may use another SSH route to the same Mac (for example its overlay alias). The lock stays on the configured
+# host's identity, so using a different transport can never run a second tour against the same console.
+lock_host=$host
+host=${XDICT_UI_TOUR_HOST:-$host}
 # The host's run lock (Tools/host-lock.sh): E2E, the gates, the gallery and the lab take it too, and since 2026-10-17
 # that Mac also builds, so the tour waits for them, and they for it.
 . Tools/host-lock.sh
-host_lock "$host" ui-tour || exit 3
-trap 'host_unlock "$host"' EXIT
+host_lock "$lock_host" ui-tour || exit 3
+trap 'host_unlock "$lock_host"' EXIT
 out="$(dirname "$common")/dev-docs/artifacts/ui-tour"
 mkdir -p "$out"
 

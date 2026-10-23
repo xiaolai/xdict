@@ -136,6 +136,8 @@ public struct SettingsDictionaries: View {
     private let study: StudyModel?
     @State private var selection: UUID?
     @State private var paneHeight: CGFloat = 0
+    /// The list's filter (UI35); empty shows the whole library.
+    @State private var query = ""
     @Environment(\.undoManager) private var undoManager
 
     /// `study` says what a join did to the reader's notes; nil leaves the sentence out.
@@ -150,12 +152,24 @@ public struct SettingsDictionaries: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.sm) {
             SettingsLibraryStrip(library: library, route: route)
-            Text(Self.instruction)
+            HStack(spacing: Tokens.Space.sm) {
+                // Reordering needs the whole list: while filtered the line says how to get it back.
+                Text(DictionaryFilter.isFiltering(query) ? Self.clearToReorder : Self.instruction)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !library.entries.isEmpty {
+                    TextField(text: $query, prompt: Text("Filter")) { Text("Filter dictionaries") }
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: Tokens.Control.filterField)
+                        .accessibilityIdentifier("settings.dictionaries.filter")
+                }
+            }
             table
                 .frame(minHeight: Self.tableMinHeight)
                 .overlay { emptyState }
+                .settingsAnchor(.dictionaryList)
             SettingsAddRemoveBar(canAdd: library.unreadable == nil, canRemove: selection != nil,
                                  add: { item in add(item) }, remove: { removeSelected() })
+                .settingsAnchor(.dictionaryImport)
             options
         }
         .padding(.horizontal, Tokens.Space.xl)
@@ -188,18 +202,33 @@ public struct SettingsDictionaries: View {
 
     /// An AppKit table, as Apple's is: SwiftUI's `Table` is an outline to Accessibility and its rows are 24 pt
     /// (the tour's capture of 2026-10-17), where Apple's are an AXTable's, 20 pt.
-    private var table: some View {
-        let rows = library.entries.map { entry in
+    private var allRows: [DictionaryTable.Row] {
+        library.entries.map { entry in
             DictionaryTable.Row(id: entry.id, name: entry.displayName,
                                 language: Self.language(entry.languages.pair, in: .current), enabled: entry.enabled,
                                 // Not offered where it cannot work (UI review L-08).
-                                usable: !(library.phases[entry.id].map(LibraryRowAction.isTrouble) ?? false))
+                                usable: !(library.phases[entry.id].map(LibraryRowAction.isTrouble) ?? false),
+                                status: DictionaryRowStatus.of(enabled: entry.enabled, phase: library.phases[entry.id]))
         }
+    }
+
+    /// The rows the filter leaves, in the library's order (UI35).
+    private var shownRows: [DictionaryTable.Row] {
+        let rows = allRows
+        guard DictionaryFilter.isFiltering(query) else { return rows }
+        let items = rows.map { DictionaryFilter.Item(id: $0.id, name: $0.name, language: $0.language, status: $0.status) }
+        let shown = Set(DictionaryFilter.visible(items, query: query, selection: selection))
+        return rows.filter { shown.contains($0.id) }
+    }
+
+    private var table: some View {
+        let filtering = DictionaryFilter.isFiltering(query)
         return DictionaryTable(
-            rows: rows, selection: $selection,
+            rows: shownRows, selection: $selection,
             name: String(localized: Self.tableName), checkboxName: String(localized: "Use in lookups"),
             setEnabled: { library.setEnabled($0, $1) },
-            move: { dragged, index in
+            // A drop's index is the shown list's; while filtered it is not the library's, so no reorder then.
+            move: filtering ? nil : { dragged, index in
                 if let move = Self.move(dragged: dragged, to: index, in: library.entries.map(\.id)) {
                     library.move(fromOffsets: move.offsets, toOffset: move.destination)
                 }
@@ -211,8 +240,8 @@ public struct SettingsDictionaries: View {
     private func key(_ action: DictionaryTable.KeyAction, _ id: UUID) {
         switch action {
         case .remove: removeSelected()
-        case .moveUp: library.moveUp(id)
-        case .moveDown: library.moveDown(id)
+        case .moveUp: if !DictionaryFilter.isFiltering(query) { library.moveUp(id) }
+        case .moveDown: if !DictionaryFilter.isFiltering(query) { library.moveDown(id) }
         case .toggle:
             guard let entry = library.entries.first(where: { $0.id == id }),
                   !(library.phases[id].map(LibraryRowAction.isTrouble) ?? false) else { return }
@@ -220,24 +249,46 @@ public struct SettingsDictionaries: View {
         }
     }
 
-    /// No dictionaries yet: what XDict reads, and the way to add some (hidden while the library is unreadable, whose
-    /// sentence the strip says instead).
+    /// No dictionaries yet: what XDict reads, and both ways to add some (UI36) — the reader's MDict files, and the
+    /// dictionaries already on this Mac (hidden while the library is unreadable, whose sentence the strip says
+    /// instead). A filter that matches nothing says so, apart from an empty library.
     @ViewBuilder private var emptyState: some View {
         if library.entries.isEmpty, library.unreadable == nil {
             VStack(spacing: Tokens.Space.sm) {
-                Text("No Dictionaries Yet").font(.headline)
-                Text("""
-                    XDict reads the MDict dictionaries you already have: .mdx files, with their .mdd resources. \
-                    Add files or a folder, or drop them here.
-                    """)
+                Text(DictionaryFilter.emptyLibrary).font(.headline)
+                Text(appleImport == nil ? Self.emptyMDXOnly : Self.emptyBoth)
                     .font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
                 EmptyStateActions {
                     Button { add(.mdxFiles) } label: { Text(AddItem.mdxFiles.title) }
+                        .accessibilityIdentifier("settings.dictionaries.empty.mdx")
+                    if appleImport != nil {
+                        Button { add(.appleDictionaries) } label: { Text(AddItem.appleDictionaries.title) }
+                            .accessibilityIdentifier("settings.dictionaries.empty.apple")
+                    }
+                }
+            }
+            .padding(Tokens.Space.xxl)
+        } else if DictionaryFilter.isFiltering(query), shownRows.isEmpty {
+            VStack(spacing: Tokens.Space.sm) {
+                Text(DictionaryFilter.noMatch).font(.headline)
+                EmptyStateActions {
+                    Button { query = "" } label: { Text("Clear Filter") }
+                        .accessibilityIdentifier("settings.dictionaries.filter.clear")
                 }
             }
             .padding(Tokens.Space.xxl)
         }
     }
+
+    nonisolated static let clearToReorder = LocalizedStringResource("Clear the filter to drag dictionaries into order.")
+    nonisolated static let emptyMDXOnly = LocalizedStringResource("""
+        XDict reads the MDict dictionaries you already have: .mdx files, with their .mdd resources. \
+        Add files or a folder, or drop them here.
+        """)
+    nonisolated static let emptyBoth = LocalizedStringResource("""
+        Add the MDict dictionaries you already have — .mdx files, with their .mdd resources — or the dictionaries \
+        that come with this Mac.
+        """)
 
     // MARK: - Beneath the table
 

@@ -95,8 +95,11 @@ struct XDictApp: App {
     var body: some Scene {
         WindowGroup(id: Self.mainWindow) {
             MainWindow()
-                // Apple's Dictionary's minimum (parity P1): AX asked for 100 × 100 and took 400 × 300.
-                .frame(minWidth: ToolbarLayout.minimumWindow.width, minHeight: ToolbarLayout.minimumContentHeight)
+                // Apple's Dictionary's minimum (parity P1): AX asked for 100 × 100 and took 400 × 300. The window's, not
+                // a SwiftUI frame's: around the split view that became the entry column's least, and the first search's
+                // results list widened a 400 pt window to 584 pt (`WindowMinimum`). Zero removes the content minimum.
+                .frame(minWidth: 0, minHeight: 0)
+                .background(WindowMinimum(ToolbarLayout.minimumWindow))
                 .task { await LibraryLaunch.once() }
         }
         .defaultSize(width: 1_000, height: 700)
@@ -443,29 +446,65 @@ struct SettingsContent: View {
         Binding(get: { route.pane }, set: { if let pane = $0 { route.pane = pane } })
     }
 
+    /// The sidebar's search (UI30): while it holds words the sidebar lists matching rows; cleared, the six panes.
+    @State private var query = ""
+
     var body: some View {
         NavigationSplitView {
-            List(SettingsTab.allCases, id: \.self, selection: selection) { pane in
-                Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
-                    .tag(pane)
-            }
-            .listStyle(.sidebar)
-            .toolbar(removing: .sidebarToggle)
-            .navigationSplitViewColumnWidth(min: Tokens.Window.settingsSidebar, ideal: Tokens.Window.settingsSidebar,
-                                            max: Tokens.Window.settingsSidebar)
+            sidebar
+                .searchable(text: $query, placement: .sidebar, prompt: Text("Search Settings"))
+                .listStyle(.sidebar)
+                .toolbar(removing: .sidebarToggle)
+                .navigationSplitViewColumnWidth(min: Tokens.Window.settingsSidebar, ideal: Tokens.Window.settingsSidebar,
+                                                max: Tokens.Window.settingsSidebar)
         } detail: {
             // The chosen pane at the top of the detail, scrolling inside it when it is taller than the window: a pane
             // never stretches its controls to fill, and switching panes never resizes the window.
-            ScrollView {
+            // A revealed row is scrolled to once its pane has drawn it (UI30).
+            SettingsRevealScroll(route: route) {
                 XDictApp.settings(route.pane)
-                    .frame(maxWidth: .infinity, alignment: .top)
             }
+            // **The selected pane's name over it** (UI31), as System Settings titles its detail.
+            .navigationTitle(Text(route.pane.paneTitle))
         }
         // **A fixed sidebar with no toggle**: the panes are the window's whole navigation, and hiding it would leave no
         // way to switch (Apple's Settings has no such button). One window size for every pane (ADR-0012 d.6).
         .toolbar(removing: .sidebarToggle)
         .frame(width: SettingsDictionaries.paneWidth + Tokens.Window.settingsSidebar,
                height: Tokens.Window.settingsHeight)
+    }
+
+    /// The six panes, or — while searching — the rows that match, each naming its pane; choosing one reveals it.
+    @ViewBuilder private var sidebar: some View {
+        if !SettingsSearch.isSearching(query) {
+            List(SettingsTab.allCases, id: \.self, selection: selection) { pane in
+                Label { Text(pane.title) } icon: { Image(systemName: pane.symbol) }
+                    .tag(pane)
+            }
+        } else {
+            let results = SettingsSearch.results(query)
+            List {
+                ForEach(results) { item in
+                    Button { route.reveal(item) } label: {  // placement: settings-search-result
+                        Label {
+                            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                                Text(item.title)
+                                Text(item.pane.title).font(.caption).foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: item.pane.symbol)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.search.\(item.anchor.rawValue)")
+                }
+            }
+            .overlay {
+                if results.isEmpty {
+                    ContentUnavailableView.search(text: query)
+                }
+            }
+        }
     }
 }
 

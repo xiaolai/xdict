@@ -234,22 +234,6 @@ struct HistoryRemovalTests {
     }
 }
 
-/// **A history card's tint** (owner, 2026-10-21): chosen from the card's own identity, so a lookup keeps its colour across
-/// launches while the drawer is not one colour.
-struct HistoryCardTintTests {
-    @Test func theColourIsTheCardsOwnAndDoesNotMoveBetweenLaunches() {
-        let one = HistoryCardTint.colour(for: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"]).nsColor
-        #expect(one == HistoryCardTint.colour(for: ["0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"]).nsColor)
-        #expect(HistoryCardTint.colour(for: []).nsColor == HistoryCardTint.palette[0].nsColor)
-    }
-
-    @Test func manyCardsUseMostOfThePalette() {
-        let cards = (0..<200).map { "event-\($0)" }
-        let used = Set(cards.map { HistoryCardTint.colour(for: [$0]).nsColor })
-        #expect(used.count >= HistoryCardTint.palette.count - 1, "\(used.count) of \(HistoryCardTint.palette.count) tints")
-    }
-}
-
 /// **The learning settings** (ADR-0023): on for a new reader, every language by default, and both language sets survive a
 /// relaunch. The recording filter's core-side rule is the ledger's test; this is what the panes store.
 @MainActor

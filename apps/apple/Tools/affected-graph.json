@@ -113,8 +113,8 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "d5edcde60b8bf651dd8ed5d8a1e3e26bf7057ed1",
-  "core/Cargo.toml": "574d77d85225cf28a6b6d6a3c6c5c75d3dde3ded",
+  "apps/apple/Package.swift": "f3823fa636aaa1fe5538f398e81df668ba3ae657",
+  "core/Cargo.toml": "557666a1aa5e0a87de49425ab3f3cbf8ede5c110",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "dd46ce67179487585a134a2b9fde19091887befa",
   "core/xdict-entry/Cargo.toml": "5fa0ce384f3e608b8fa0bfce529fa15ca4e9dff9",
@@ -133,6 +133,7 @@
  "targets": {
   "XDict": {
    "deps": [
+    "XDictAI",
     "XDictAnywhere",
     "XDictAppleSource",
     "XDictBase",

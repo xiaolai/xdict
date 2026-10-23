@@ -20,6 +20,11 @@ public enum EntrySentences {
         }
     }
 
+    /// The All page's pinned name, as VoiceOver reads it (HIG audit UI24): which dictionary's entry is being read.
+    public static func currentDictionary(_ name: String) -> LocalizedStringResource {
+        LocalizedStringResource("Current dictionary: \(name)")
+    }
+
     /// A speaker's VoiceOver name (reading-style §5.2): verb first, the same whatever the playing state.
     public static let speakerUK = LocalizedStringResource("Play British pronunciation")
     public static let speakerUS = LocalizedStringResource("Play American pronunciation")

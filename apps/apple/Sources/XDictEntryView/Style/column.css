@@ -31,6 +31,8 @@ min-width:0 !important;box-sizing:border-box !important;overflow-wrap:break-word
 contain:layout !important;display:block !important;visibility:visible !important;opacity:1 !important;
 filter:none !important;transform:none !important;zoom:1 !important;position:static !important;
 float:none !important;writing-mode:horizontal-tb !important}
+/* Optional main-window reading measure (UI27). The default, popup and Original style retain their own width. */
+:root[data-xdict-measure=comfortable] body{max-width:calc(var(--xdict-comfortable-measure) + 2 * var(--xdict-pad-inline)) !important}
 table{font:inherit;line-height:inherit;color:inherit;white-space:inherit;text-align:inherit;
 border-collapse:collapse}
 [data-xdict-scroll]{overflow-x:auto;max-width:100%;margin-block:var(--xdict-gap)}

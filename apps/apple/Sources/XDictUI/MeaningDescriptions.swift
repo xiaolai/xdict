@@ -51,3 +51,17 @@ extension MeaningSession: CustomStringConvertible, CustomDebugStringConvertible,
         }
     }
 }
+
+extension MeaningContext: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    /// The displayed question is still reader context: diagnostics name its size, never its words.
+    public var description: String { "MeaningContext(\(sentence.utf16.count) UTF-16 units)" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: [:]) }
+}
+
+extension MeaningPresentation: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    /// The presentation carries the request sentence, source quotations and generated text, all excluded from logs.
+    public var description: String { "MeaningPresentation(answer: \(!explanation.isEmpty), problem: \(problem != nil))" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: [:]) }
+}

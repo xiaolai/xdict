@@ -26,6 +26,26 @@ import XDictUI
         #expect(String(describing: handoff).contains("hold"), "the term is not context: it names the value")
     }
 
+    @Test func aDisplayedQuestionIsNotInAnyDescription() {
+        let question = MeaningContext(term: "hold", sentence: Self.sentence, range: NSRange(location: 5, length: 4))
+        for line in [String(describing: question), String(reflecting: question)] {
+            #expect(!line.contains("quiet river"))
+        }
+        #expect(Mirror(reflecting: question).children.isEmpty)
+    }
+
+    @Test func aPresentationDoesNotDescribeItsSentenceOrAnswer() {
+        let presentation = MeaningPresentation(source: nil, grounding: .grounded, outcome: nil,
+            coverage: nil, quotes: ["private dictionary quotation"], explanation: "private generated explanation",
+            problem: nil, code: nil, questionContext: MeaningContext(term: "hold", sentence: Self.sentence, range: NSRange(location: 5, length: 4)))
+        for line in [String(describing: presentation), String(reflecting: presentation)] {
+            #expect(!line.contains("quiet river"))
+            #expect(!line.contains("private dictionary quotation"))
+            #expect(!line.contains("private generated explanation"))
+        }
+        #expect(Mirror(reflecting: presentation).children.isEmpty)
+    }
+
     @Test func aKeyIsNotInTheSettingsDescription() {
         let settings = MeaningSettings(source: .http, endpoint: URL(string: "http://127.0.0.1:1/v1"), model: "m",
                                        key: "sk-a-secret-value", sendEntryText: true, language: "en")

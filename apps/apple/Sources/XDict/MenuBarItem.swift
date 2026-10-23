@@ -57,6 +57,15 @@ final class MenuBarItem: NSObject, NSMenuDelegate {
         item.button?.toolTip = Self.tooltip(shortcut: registrar.isRegistered
                                             ? registrar.current.label(keyName: Shortcut.currentLayoutName) : nil)
         offerBothSurfacesToAssistiveTechnology(on: item.button)
+        // **The menu, findable from the drawer** (UI42): a primary click stays the history, and the drawer's own Show Menu
+        // button opens this menu a turn later, as VoiceOver's action does, since the menu's tracking loop holds the caller.
+        XDictApp.historyDrawer.onShowMenu = { [weak self] in
+            XDictApp.historyDrawer.hide()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.showMenu() }
+            }
+        }
+        HistoryRoutes.install()
         menu.delegate = self
         log.notice("menu bar: left click opens the reading history, right click opens the menu")
     }

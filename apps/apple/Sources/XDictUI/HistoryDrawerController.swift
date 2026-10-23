@@ -84,6 +84,9 @@ public final class HistoryDrawerController {
     public var onVisibilityChange: (@MainActor (Bool) -> Void)?
     /// The owned menu-bar button's frame on screen: the drawer opens on that display. Nil falls back to the pointer's.
     public var statusItemFrame: (@MainActor () -> CGRect?)?
+    /// Opens the menu-bar item's menu (UI42): the drawer's way to the menu a primary click no longer shows. Set before the
+    /// drawer is first shown; nil offers no Show Menu button.
+    public var onShowMenu: (@MainActor () -> Void)?
     private let study: StudyModel?
     private let onReview: (() -> Void)?
     private var monitors: [Any] = []
@@ -189,7 +192,8 @@ public final class HistoryDrawerController {
         panel.isReleasedWhenClosed = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
         panel.contentView = NSHostingView(rootView: HistoryView(model: model, study: study, onReview: onReview,
-                                                               presentation: presentation))
+                                                               presentation: presentation,
+                                                               onShowMenu: onShowMenu.map { show in { show() } }))
         panel.setAccessibilityIdentifier("history.drawer")
         return panel
     }

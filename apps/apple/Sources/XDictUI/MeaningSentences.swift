@@ -37,7 +37,8 @@ public enum MeaningSentences {
     /// The outcome word over an answer: what the model says it found.
     public static func outcome(_ outcome: AIOutcome) -> LocalizedStringResource {
         switch outcome {
-        case .matched: LocalizedStringResource("Matched")
+        // **What the model did, not a verdict on it** (HIG audit 2026-10-23, UI12): "Matched" read as validation.
+        case .matched: LocalizedStringResource("Chose a sense from the entry")
         case .ambiguous: LocalizedStringResource("More than one sense")
         case .noMatchingSense: LocalizedStringResource("No matching sense")
         case .insufficientContext: LocalizedStringResource("Not enough context")
@@ -50,13 +51,50 @@ public enum MeaningSentences {
         }
     }
 
-    /// Whether the answer is tied to the entry, and how the pane says so.
+    /// **What the request used, never that the answer is right** (UI12): "Grounded" implied a guarantee the pipeline
+    /// does not give — a quote found in the entry links the answer to a source; it does not validate the explanation.
     public static func grounding(_ grounding: MeaningPresentation.Grounding) -> LocalizedStringResource? {
         switch grounding {
         case .none: nil
-        case .grounded: LocalizedStringResource("Grounded in the entry")
-        case .ungrounded: LocalizedStringResource("Not grounded in an entry")
+        case .grounded: LocalizedStringResource("Uses this dictionary entry")
+        case .ungrounded: LocalizedStringResource("Uses only the sentence")
         }
+    }
+
+    /// **The pane's task title** (UI17), stable in every state: the feature, not the provider.
+    public static let title = LocalizedStringResource("Meaning in Context")
+
+    /// **Generated content says so, once, beside it** (UI12; HIG Generative AI): its limit, without a warning per line.
+    public static let generated = LocalizedStringResource("AI-generated. It can be wrong; check it against the entry.")
+
+    /// The context section's label (UI09): the sentence the request is about.
+    public static let contextHeading = LocalizedStringResource("In this sentence")
+
+    /// The evidence section's label (UI10, UI11): the dictionary text the answer quotes.
+    public static let evidence = LocalizedStringResource("From the entry")
+
+    /// The quoted text could not be found on the page shown now (UI11): the reveal says so rather than doing nothing.
+    public static let revealFailed = LocalizedStringResource("This text is not on the page shown now.")
+
+    /// **The shown answer is about the sense chosen before** (UI23): the reader's later click kept it, not replaced it.
+    public static let selectionMoved =
+        LocalizedStringResource("You have chosen another sense since. This answer is about the one shown here.")
+
+    /// **The cut, in the tense of the request** (UI19): a preview's entry *will be* cut; a sent one *was*.
+    public static func cut(at bytes: UInt64, sent: Bool) -> LocalizedStringResource {
+        sent ? LocalizedStringResource("The entry was cut at \(bytes) bytes, so only the part before that was sent.")
+            : LocalizedStringResource("The entry is cut at \(bytes) bytes, so only the part before that will be sent.")
+    }
+
+    /// **What a preview will send, in one line each** (UI14): the recipient, and whether the entry goes with the sentence.
+    public static func previewEntry(included: Bool) -> LocalizedStringResource {
+        included ? LocalizedStringResource("The sentence and this entry’s text will be sent.")
+            : LocalizedStringResource("Only the sentence will be sent, not the entry.")
+    }
+
+    /// **The text Copy Details puts on the pasteboard** (UI20): the stable code, for support; never the request.
+    public static func errorDetails(code: String) -> String {
+        "XDict meaning-in-context error: \(code)"
     }
 
     /// The entry was cut by the ask's budget; the answer may be missing what was not sent.

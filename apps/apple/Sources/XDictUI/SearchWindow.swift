@@ -13,12 +13,11 @@ import XDictTokens
 /// Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
-    @State private var columns = NavigationSplitViewVisibility.detailOnly
     /// The content column's width: the title over it yields when it is narrow (P8).
     @State private var column: CGFloat = Tokens.Window.initialColumn
-    /// **The answer pane** (plan-ai-meaning WI-6): shown when an ask starts, closable, and never modal — the entry stays
-    /// readable beside it.
-    @State private var meaningShown = false
+    /// The window's content width, which decides where the answer is shown (`MeaningPlacement`); nil until the first
+    /// layout measures it.
+    @State private var width: CGFloat?
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -31,16 +30,22 @@ public struct SearchWindow: View {
             // **Open on the reader's action, not on every state change**: an answer arriving after the reader closed the
             // pane must not reopen it. The first transition out of idle is the action's; a preview always opens.
             .onChange(of: state.meaning.state) { old, new in
-                if old == .idle { meaningShown = true }
-                if case .preview = new { meaningShown = true }
+                if old == .idle { state.panes.meaningAsked() }
+                if case .preview = new { state.panes.meaningAsked() }
             }
             // A lookup the reader typed or followed replaces the presentation: its captured sentence is dropped.
             .onChange(of: state.model.lookup) { state.lookupDidChange() }
+            // The chosen sense is marked in its frame, and unmarked when the choice goes (UI21).
+            .onChange(of: state.meaning.selection) { state.markSelection() }
             .onDisappear { state.clearMeaning() }
     }
 
     private var pane: some View {
-        NavigationSplitView(columnVisibility: $columns) {
+        // **Where the answer is shown** (`MeaningPlacement`): beside the entry where it fits, else in a sheet; the
+        // window's width and the results list stay the reader's.
+        let listed = state.model.listing != nil
+        let shown = presentation
+        return NavigationSplitView(columnVisibility: columns(listed: listed)) {
             SearchSidebar(state: state)
                 // Apple's window has no sidebar button: the sidebar comes with a search (P3, P9).
                 .toolbar(removing: .sidebarToggle)
@@ -48,22 +53,46 @@ public struct SearchWindow: View {
                 .navigationSplitViewColumnWidth(min: ToolbarLayout.sidebar.min, ideal: ToolbarLayout.sidebar.ideal,
                                                 max: ToolbarLayout.sidebar.max)
         } detail: {
-            EntryDetail(state: state, openMeaning: { meaningShown = true })
-                .frame(minWidth: ToolbarLayout.minimumWindow.width / 2)
+            // The entry claims none of the window's least: it takes what the panes leave. Its content's own
+            // ideal — the meaning row's controls on one line — held a 400 pt window at over 1000 pt (measured,
+            // `MeaningPaneFitTests`).
+            EntryDetail(state: state, openMeaning: { state.panes.meaningAsked() })
+                .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
+                // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader. On the detail, not the
+                // split view: there its least was counted twice, the pane's column's and the split view's, so a 400 pt
+                // window opening it grew and aborted in a recursive constraint update (`MeaningPaneFitTests`).
+                .inspector(isPresented: meaningShown(in: .inspector, now: shown)) {
+                    MeaningAnswerPane(state: state)
+                        // **The inspector's toggle** (HIG audit UI05): at the toolbar's trailing end, where a Mac
+                        // window's inspector button is, after Apple's items in their order (P3, P8). The pane on the
+                        // detail has no toolbar section of its own, so the whole toolbar's width is the field's (P5);
+                        // View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
+                        .toolbar { MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() } }
+                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
+                                              max: Tokens.Window.meaningPaneMax)
+                }
+        }
+        // **The answer in a sheet** where the pane does not fit beside the entry and the list the reader shows: the
+        // pane's own scrolling body over Done (R3), Escape closing it too. Modal, so the window's search is back after
+        // Done.
+        .sheet(isPresented: meaningShown(in: .sheet, now: shown)) {
+            let done = { state.panes.meaningClosed(by: .sheet, current: .sheet) }
+            VStack(spacing: 0) {
+                MeaningAnswerPane(state: state)
+                Divider()
+                SheetFooter([FooterAction(.primary, title: Text("Done"), perform: done)], closeOnEscape: done)
+                    .padding(Tokens.Space.m)
+            }
+            .frame(width: Tokens.Window.meaningPaneIdeal, height: Tokens.Window.meaningSheetHeight)
         }
         .toolbar { toolbar }
-        // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader; the entry keeps its width's room.
-        .inspector(isPresented: $meaningShown) {
-            MeaningAnswerPane(state: state)
-                .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
-                                      max: Tokens.Window.meaningPaneMax)
-        }
         // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
         // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
         // the title back over a 400 pt column (UI tour `main.narrow`, 2026-10-18).
         .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
-        .navigationTitle(Text(ToolbarLayout.windowTitle))
+        // A window is titled by the word it shows (UI08): Mission Control and the Window menu tell windows apart.
+        .navigationTitle(Text(verbatim: ToolbarLayout.windowTitle(word: state.shownWord)))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)
         .background(TabTitle(title: ToolbarLayout.tabTitle(word: state.shownWord)))
@@ -75,9 +104,33 @@ public struct SearchWindow: View {
         // The All page grows as each dictionary answers (P15).
         .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
-        // No sidebar before a search; the first search brings it (P9).
-        .onChange(of: state.model.listing != nil, initial: true) { _, listed in
-            columns = listed ? .all : .detailOnly
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+    }
+
+    /// **The results list, as the reader left it** (P9; HIG audit UI07): none before a search, the first search brings
+    /// it, and a reader who hid it keeps it hidden across searches until View ▸ Show Results. Nothing else shows or
+    /// hides it.
+    private func columns(listed: Bool) -> Binding<NavigationSplitViewVisibility> {
+        Binding {
+            state.panes.resultsVisible(listed: listed) ? .all : .detailOnly
+        } set: { visibility in
+            state.panes.setResults(visible: visibility != .detailOnly, listed: listed)
+        }
+    }
+
+    /// Where the answer is shown now, from the reader's choices and the window's width (`MeaningPlacement`).
+    private var presentation: MeaningPlacement {
+        MeaningPlacement.at(width: width, results: state.panes.resultsVisible(listed: state.model.listing != nil),
+                               meaning: state.panes.meaningShown)
+    }
+
+    /// The answer pane (plan-ai-meaning WI-6) in one of its presentations: opened by an ask, by View ▸ Show Meaning in
+    /// Context and by the toolbar's toggle; closed by the reader (UI02, UI05). A dismissal is weighed against where the
+    /// answer is shown when it arrives, so the one a resize just left does not close the answer (`meaningClosed`).
+    private func meaningShown(in place: MeaningPlacement, now: MeaningPlacement) -> Binding<Bool> {
+        Binding { now == place } set: { shown in
+            guard !shown else { return }
+            state.panes.meaningClosed(by: place, current: presentation)
         }
     }
 
@@ -106,6 +159,26 @@ public struct SearchWindow: View {
     }
 }
 
+/// **The answer pane's toggle** (HIG audit UI05), declared by the pane, shown at the toolbar's trailing end whether the
+/// answer is beside the entry, in its sheet or closed (a collapsed inspector keeps its content's toolbar items). It
+/// says what it will do, as View ▸ Show/Hide Meaning in Context does.
+struct MeaningPaneToggle: ToolbarContent {
+    /// The reader asked for the answer: beside the entry or in its sheet.
+    let shown: Bool
+    let toggle: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItem(placement: .primaryAction) {
+            Button(action: toggle) {  // placement: P3
+                Label(shown ? LocalizedStringKey("Hide Meaning in Context") : LocalizedStringKey("Show Meaning in Context"),
+                      systemImage: "sidebar.trailing")
+            }
+            .help(shown ? Text("Hide the meaning of the captured word in its sentence") : Text("Show Meaning in Context"))
+            .accessibilityIdentifier("toolbar.meaning")
+        }
+    }
+}
+
 /// The entry pane: the page's notices over the entry view, and a placeholder while there is nothing to read. The entry
 /// starts right under the toolbar: the scope is the search field's menu (P6), not a row of its own.
 struct EntryDetail: View {
@@ -121,42 +194,76 @@ struct EntryDetail: View {
             // a typed lookup has nothing to ask about. A row of its own, not an overlay: over the notices it drew on
             // top of "Show in Settings" and both read as one smear (tour `panel.expand`, 2026-10-20).
             if state.meaning.canAsk {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    Button("Preview the Request…") {  // placement: meaning-chip
-                        openMeaning()
-                        state.meaning.preview()
+                // **One quiet primary action, the rest secondary** (HIG audit UI06, UI13, UI16): Meaning Here leads;
+                // Preview is a plain secondary button; a chosen sense adds Explain This Sense and Clear Choice. When the
+                // window is narrow the row stacks rather than clipping (UI03).
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: Tokens.Space.sm) {
+                        Spacer(minLength: 0)
+                        chips
                     }
-                    .accessibilityIdentifier("meaning.preview")
-                    MeaningAskButton(enabled: true) {
-                        openMeaning()
-                        state.meaning.ask()
+                    VStack(alignment: .trailing, spacing: Tokens.Space.xs) {
+                        chips
                     }
-                    // **The sense the reader picked can be the question** (plan-explain-sense WI-5): shown while a
-                    // sentence is held and a sense is selected; without the switch it stays visible, disabled, with
-                    // the reason — never silently absent (ADR-0021 d.4).
-                    if state.meaning.hasSenseSelection {
-                        Button("Explain This Sense") {  // placement: meaning-chip
-                            openMeaning()
-                            state.meaning.explain()
-                        }
-                        .disabled(!state.meaning.senseExplainAllowed)
-                        .help(state.meaning.senseExplainAllowed
-                              ? String(localized: "Ask what the sense you chose means in this sentence.")
-                              : String(localized: MeaningSentences.explainNeedsEntryText))
-                        .accessibilityIdentifier("meaning.explain")
-                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 .padding(.horizontal, Tokens.Inset.entryLeading)
                 .padding(.vertical, Tokens.Space.xs)
                 .background(.background)
                 .overlay(alignment: .bottom) { Divider() }
+                if state.meaning.hasSenseSelection, !state.meaning.senseExplainAllowed {
+                    // **The reason, visible, with the way to change it** (UI16; ADR-0021 d.4): a disabled control's
+                    // tooltip alone was the only explanation. The button opens Settings; it changes nothing itself.
+                    ActionRow(.strip) {
+                        Text(MeaningSentences.explainNeedsEntryText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } actions: {
+                        Button("AI Settings…") { SettingsRoute.shared.showPane(.ai) }
+                            .accessibilityIdentifier("meaning.explain.settings")
+                    }
+                    .padding(.horizontal, Tokens.Inset.entryLeading)
+                    .padding(.vertical, Tokens.Space.xs)
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("meaning.explain.reason")
+                }
             }
             EntryHost(controller: state.entry)
                 .overlay { placeholder }
                 .overlay(alignment: .bottom) { PronunciationBanner(pronunciation: state.pronunciation) }
         }
         .background { FindKeys(state: state) }
+    }
+
+    /// The meaning row's controls, in reading order: the primary ask, its preview, then the chosen sense's.
+    @ViewBuilder private var chips: some View {
+        MeaningAskButton(enabled: true) {
+            openMeaning()
+            state.meaning.ask()
+        }
+        Button("Preview the Request…") {  // placement: meaning-chip
+            openMeaning()
+            state.meaning.preview()
+        }
+        .buttonStyle(.borderless)
+        .accessibilityIdentifier("meaning.preview")
+        // **The sense the reader picked can be the question** (plan-explain-sense WI-5): shown while a sentence is held
+        // and a sense is selected; without the switch it stays visible, disabled, its reason in the row below.
+        if state.meaning.hasSenseSelection {
+            Button("Explain This Sense") {  // placement: meaning-chip
+                openMeaning()
+                state.meaning.explain()
+            }
+            .disabled(!state.meaning.senseExplainAllowed)
+            .help(state.meaning.senseExplainAllowed
+                  ? String(localized: "Ask what the sense you chose means in this sentence.")
+                  : String(localized: MeaningSentences.explainNeedsEntryText))
+            .accessibilityIdentifier("meaning.explain")
+            Button("Clear Choice") { state.clearSense() }  // placement: meaning-chip
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("meaning.clear-sense")
+        }
     }
 
     @ViewBuilder private var placeholder: some View {

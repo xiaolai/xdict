@@ -50,6 +50,8 @@ struct DictionaryTable: NSViewRepresentable {
         let language: String
         let enabled: Bool
         let usable: Bool
+        /// Said beside the name, by symbol and words, unless ready (UI34).
+        var status: DictionaryRowStatus = .ready
     }
 
     let rows: [Row]
@@ -57,7 +59,8 @@ struct DictionaryTable: NSViewRepresentable {
     let name: String
     let checkboxName: String
     let setEnabled: (UUID, Bool) -> Void
-    let move: ([String], Int) -> Void
+    /// Nil while the list is filtered (UI35): a drop's index would not be the library's.
+    let move: (([String], Int) -> Void)?
     /// Files and folders dropped from elsewhere; nil while the library takes none (unreadable).
     let importFiles: (([URL]) -> Void)?
     let key: (KeyAction, UUID) -> Void
@@ -156,10 +159,32 @@ struct DictionaryTable: NSViewRepresentable {
                 box.toolTip = parent.checkboxName
                 return centred(box)
             case "name":
-                return label(item.name, color: .labelColor)
+                return nameCell(item)
             default:
                 return label(item.language, color: .secondaryLabelColor)
             }
+        }
+
+        /// The name, after the status's symbol when there is one; the symbol is announced and has a tooltip, and the
+        /// row's own label carries the status too, so it is never colour or shape alone.
+        private func nameCell(_ item: Row) -> NSView {
+            guard let symbol = item.status.symbol else { return label(item.name, color: .labelColor) }
+            let words = String(localized: item.status.label)
+            let image = NSImageView(image: NSImage(systemSymbolName: symbol, accessibilityDescription: words) ?? NSImage())
+            image.symbolConfiguration = NSImage.SymbolConfiguration(textStyle: .body, scale: .small)
+            image.contentTintColor = .secondaryLabelColor
+            image.toolTip = words
+            image.setAccessibilityLabel(words)
+            image.setAccessibilityIdentifier("settings.dictionaries.status")
+            let field = NSTextField(labelWithString: item.name)
+            field.font = Tokens.TextRole.tableCell.nsFont
+            field.lineBreakMode = .byTruncatingTail
+            field.setAccessibilityLabel("\(item.name), \(words)")
+            let stack = NSStackView(views: [image, field])
+            stack.orientation = .horizontal
+            stack.spacing = Tokens.Space.xs
+            stack.toolTip = words
+            return centred(stack)
         }
 
         private func label(_ text: String, color: NSColor) -> NSView {
@@ -196,7 +221,7 @@ struct DictionaryTable: NSViewRepresentable {
         }
 
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
-            guard parent.rows.indices.contains(row) else { return nil }
+            guard parent.rows.indices.contains(row), parent.move != nil else { return nil }
             let item = NSPasteboardItem()
             item.setString(parent.rows[row].id.uuidString, forType: DictionaryTable.dragType)
             return item
@@ -210,6 +235,7 @@ struct DictionaryTable: NSViewRepresentable {
             let drop = DictionaryTable.classify(fromTable: info.draggingSource as? NSTableView === tableView, rows: rows,
                                                 urls: urls)
             if case .importFiles = drop, parent.importFiles == nil { return .refuse }
+            if case .reorder = drop, parent.move == nil { return .refuse }
             return drop
         }
 
@@ -232,7 +258,7 @@ struct DictionaryTable: NSViewRepresentable {
                        dropOperation: NSTableView.DropOperation) -> Bool {
             switch drop(info, on: tableView) {
             case .refuse: return false
-            case .reorder(let dragged): parent.move(dragged, row)
+            case .reorder(let dragged): parent.move?(dragged, row)
             case .importFiles(let urls): parent.importFiles?(urls)
             }
             return true

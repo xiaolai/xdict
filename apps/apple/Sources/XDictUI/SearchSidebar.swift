@@ -59,6 +59,8 @@ struct HeadwordTable: NSViewRepresentable {
         table.dataSource = context.coordinator
         table.delegate = context.coordinator
         let scroll = NSScrollView()
+        // The list scrolls vertically only: its headwords' first letters are never scrolled out of view (UI01).
+        scroll.contentView = HeadwordClipView()
         scroll.documentView = table
         scroll.hasVerticalScroller = true
         scroll.drawsBackground = false
@@ -142,6 +144,27 @@ final class HeadwordTableView: NSTableView {
     override var nextValidKeyView: NSView? {
         if let entry = entryKeyView?(), entry.canBecomeKeyView { return entry }
         return super.nextValidKeyView
+    }
+}
+
+/// **The results list's clip view, held at its leading edge** (HIG audit 2026-10-23, UI01): the table is one column the
+/// width of the sidebar, so a horizontal offset (a trackpad's sideways swipe, a scroll-to-visible after a resize) only
+/// cut off the headwords' first letters. Vertical scrolling is untouched.
+final class HeadwordClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var bounds = super.constrainBoundsRect(proposedBounds)
+        bounds.origin.x = 0
+        return bounds
+    }
+
+    /// A scroll's own primitive (a swipe, a scroll-to-visible): held at the leading edge too.
+    override func scroll(to newOrigin: NSPoint) {
+        super.scroll(to: NSPoint(x: 0, y: newOrigin.y))
+    }
+
+    /// Every other way the origin moves; held at the leading edge too.
+    override func setBoundsOrigin(_ newOrigin: NSPoint) {
+        super.setBoundsOrigin(NSPoint(x: 0, y: newOrigin.y))
     }
 }
 

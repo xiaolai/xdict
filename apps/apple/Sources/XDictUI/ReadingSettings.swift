@@ -6,11 +6,18 @@ import XDictEntryView
 /// (`SpeechSettings`), in one form.
 public struct ReadingSettings: View {
     @AppStorage(EntryPreferences.accentKey) private var accent: EntryReadingFrame.Accent = .teal
+    @AppStorage(EntryPreferences.comfortableWidthKey) private var comfortableWidth = false
 
     public init() {}
 
     public var body: some View {
         Form {
+            Toggle(isOn: $comfortableWidth) {
+                Text("Comfortable reading width")
+                Text("Shorten long lines in wide windows. Original style and lookup popups keep their own width.")
+            }
+            .accessibilityIdentifier("reading.comfortable-width")
+            .settingsAnchor(.readingWidth)
             Picker(selection: $accent) {
                 // Each choice shows its colour: the swatch is the content (UI review S-03).
                 ForEach(EntryReadingFrame.Accent.allCases, id: \.self) { accent in
@@ -27,7 +34,9 @@ public struct ReadingSettings: View {
             }
             .pickerStyle(.radioGroup)
             .accessibilityIdentifier("accent-colour")
+            .settingsAnchor(.readingAccent)
             Section { SpeechSettings() }
+                .settingsAnchor(.speechVoice)
         }
         // As tall as its rows: a grouped form scrolls and would take the window's height, leaving it mostly empty.
         .settingsPane()

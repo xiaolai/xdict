@@ -87,6 +87,7 @@ shortcutFieldMin = { value = 140, why = "The shortcut recorder's one width, reco
 popoverChrome = { value = 26, why = "What NSPopover draws around its content (its arrow and edge), measured on macOS 27 so the body is Apple's 390 pt." }
 siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
 promptEditor = { value = 140, why = "The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form." }
+filterField = { value = 140, why = "The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
@@ -130,6 +131,7 @@ drawerShadowMargin = { value = 48, why = "Slack around the drawer for the glass'
 reviewWidth = { value = 480, why = "The review window's width: a card's word, the reader's note and four answers read without wrapping the buttons." }
 reviewHeight = { value = 560, why = "The review window's opening height: the card, its note and the two answer rows with the outcome line under them." }
 reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling past it." }
+meaningSheetHeight = { value = 480, why = "A compact Meaning in Context sheet keeps its scrollable answer and fixed Done footer reachable while preserving the reading window's size." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }
@@ -345,6 +347,7 @@ badge-gap = { value = "0.25em", why = "Between a heading's text and the badge af
 icon-image-height = { value = "1.25em", why = "A small image in text: R16's small rule." }
 icon-image-baseline = { value = "-0.2em", why = "A small image's drop, centred on the text (R16)." }
 icon-image-gap = { value = "0.125em", why = "Either side of a small image in text (R16)." }
+comfortable-measure = { value = "42em", why = "Optional comfortable reading width for prose in wide main windows, chosen to shorten long lines while retaining full-width and Original style as alternatives." }
 
 [palette]
 bg = { light = "#ffffff", dark = "#1e1e1e", source = "P27" }

@@ -48,7 +48,20 @@ fn write_all(out: &Path) -> Result<(), String> {
     let mut alpha = vec![
         Entry::text(
             "apple",
-            "<style>body{margin:0}</style><b>apple</b> in Alpha. See <a href=\"entry://banana\">banana</a>.",
+            concat!(
+                "<style>body{margin:0}.chwd{display:block}.collobox{display:block}.pos{display:inline}",
+                ".sense{display:block}.example{display:block;font-style:italic}</style><div><h1 class=\"chwd\">apple</h1>",
+                "<p><span class=\"pos\">noun</span> /ˈæpəl/</p>",
+                "<p><span class=\"sense\"><span class=\"sensenum\">1</span> A round fruit with firm flesh, ",
+                "a thin skin and small seeds in its centre. <span class=\"example\">She packed an apple for lunch.</span></span></p>",
+                "<p>The word can name the whole fruit or the flesh used in cooking: a slice of apple, ",
+                "apple pie, or baked apples.</p>",
+                "<p><span class=\"sense\"><span class=\"sensenum\">2</span> The tree that bears this fruit. ",
+                "<span class=\"example\">They planted an apple by the garden wall.</span></span></p>",
+                "<div class=\"collobox\"><h3>Usage</h3><p>Use <i>an</i> before the word: an apple. The plural is <i>apples</i>.</p></div>",
+                "<p><small>Demonstration entry in Alpha, written for XDict's own tests. ",
+                "See <a href=\"entry://banana\">banana</a>.</small></p></div>",
+            ),
         ),
         Entry::text("banana", "<b>banana</b> in Alpha, reached from apple."),
         Entry::text("abbe", "<b>abbe</b>, written without its accent."),

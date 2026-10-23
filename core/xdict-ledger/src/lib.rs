@@ -669,14 +669,23 @@ impl Ledger {
 
     /// **Saves the reader's note** and enrols its target for review: a first note is `NoteSaved`, a later one
     /// `NoteRevised` with the previous note as its parent (plan §5.1). The threshold is the operation id, as everywhere.
+    ///
+    /// **Clearing is a revision** (UI49): exactly empty text is accepted only as a `NoteRevised` of a note the target
+    /// already has. The card stays enrolled and the earlier wording stays in the log until an erase. A first note may
+    /// not be empty, and whitespace-only text is never a note.
     pub fn save_note(&mut self, note: Note, operation_id: &str) -> Result<RecordOutcome, LedgerError> {
         valid_target(&note.target)?;
-        if note.text.trim().is_empty() || !valid_instant(note.at) {
+        if !valid_instant(note.at) {
             return Err(LedgerError::InvalidEvent);
         }
         let key = note.target.key();
-        let (event, parent) = match self.projection.study.notes.get(&key) {
-            Some(existing) => (Event::NoteRevised(note), Some(existing.head.clone())),
+        let existing = self.projection.study.notes.get(&key).map(|existing| existing.head.clone());
+        let clears = note.text.is_empty() && existing.is_some();
+        if note.text.trim().is_empty() && !clears {
+            return Err(LedgerError::InvalidEvent);
+        }
+        let (event, parent) = match existing {
+            Some(head) => (Event::NoteRevised(note), Some(head)),
             None => (Event::NoteSaved(note), None),
         };
         self.append(operation_id, parent, event, true)

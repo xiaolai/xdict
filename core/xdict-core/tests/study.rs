@@ -216,3 +216,33 @@ fn a_note_named_by_edition_and_an_export_without_the_definition() {
     assert_eq!(report.cleared_notes, 1);
     assert!(core.study_notes().unwrap().is_empty());
 }
+
+/// **Clear Note through the shell's own call** (UI49): `study_note_at` with exactly empty text revises an existing note
+/// and keeps the word in Review; a first empty note and whitespace are refused, as before.
+#[test]
+fn a_note_cleared_through_study_note_at_stays_reviewable_and_can_be_restored() {
+    let dir = Scratch::new("clear");
+    let (core, _dict, edition) = opened(&dir, "noad.mdx", "Test Dictionary", &[W::text("run", RUN)]);
+    let at = 1_790_640_000.0;
+    let name = || "Test Dictionary".to_string();
+    assert!(
+        core.study_note_at(reference(&edition, "run", 0), String::new(), name(), stamp(at), "first-empty".into())
+            .is_err()
+    );
+    assert!(core.study_notes().unwrap().is_empty(), "a first empty note is refused");
+    core.study_note_at(reference(&edition, "run", 0), "mine".into(), name(), stamp(at), "note".into()).unwrap();
+    assert!(
+        core.study_note_at(reference(&edition, "run", 0), " \n".into(), name(), stamp(at + 30.0), "blank".into())
+            .is_err()
+    );
+    let cleared = core
+        .study_note_at(reference(&edition, "run", 0), String::new(), name(), stamp(at + 60.0), "clear".into())
+        .unwrap();
+    assert_eq!(cleared.text, "");
+    assert_eq!(core.study_notes().unwrap()[0].text, "");
+    assert!(core.ledger_export_json().unwrap().contains("mine"), "the earlier wording stays in the export");
+    let restored = core
+        .study_note_at(reference(&edition, "run", 0), "mine".into(), name(), stamp(at + 120.0), "restore".into())
+        .unwrap();
+    assert_eq!(restored.text, "mine");
+}

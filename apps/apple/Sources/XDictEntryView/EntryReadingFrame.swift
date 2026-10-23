@@ -30,6 +30,15 @@ public struct EntryReadingFrame: OptionSet, Sendable, Hashable {
     /// default, B. A presentation attribute the shell sets for the panel, never inferred from the pane's width.
     public static let panel = EntryReadingFrame(rawValue: 1 << 6)
 
+    /// A reader-chosen prose measure in a main reading column. Popup and Original style keep their own layout.
+    public static let comfortable = EntryReadingFrame(rawValue: 1 << 7)
+
+    public func with(comfortableWidth: Bool) -> EntryReadingFrame {
+        let base = subtracting(.comfortable)
+        guard comfortableWidth, contains(.column), contains(.type), !contains(.panel) else { return base }
+        return base.union(.comfortable)
+    }
+
     /// The page's insets (the reading style's padding tokens), `contain: layout` (R13: nothing pins itself over the
     /// pane), and the paper: the page colour in light, `--xdict-paper` in dark, with `--xdict-paper-text` where the
     /// dictionary sets none. The dictionary's own margins and colours stay its own. XDict's marks draw with the palette;
@@ -199,6 +208,7 @@ extension EntryScripts {
             "label": frame.contains(.type) ? "[data-xdict-role=label]" : "",
             "pictures": jsString(String(localized: EntrySentences.pictures)),
             "density": frame.contains(.panel) ? "panel" : "main",
+            "measure": frame.contains(.comfortable) ? "comfortable" : "full",
         ])
     }
 
