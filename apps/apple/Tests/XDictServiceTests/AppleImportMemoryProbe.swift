@@ -4,6 +4,7 @@ import XDictAppleImport
 import XDictContract
 @testable import XDictService
 import XDictTestSupport
+import XDictAppleSource
 
 /// **The peak memory of one conversion, for `Tools/measure-apple-import-memory.sh`** (ADR-0011 decision 5; plan WI-4),
 /// which holds it to a budget. Two steps, each in its own process so each peak is that step's alone:

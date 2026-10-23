@@ -173,7 +173,7 @@ let package = Package(
 
         // What the test targets share, and nothing ships: a source walk that cannot skip silently, a directory that
         // removes itself, and the manifest as SwiftPM reads it.
-        .target(name: "XDictTestSupport", path: "Tests/Support"),
+        .target(name: "XDictTestSupport", dependencies: ["XDictAppleSource"], path: "Tests/Support"),
         .testTarget(name: "XDictBaseTests", dependencies: ["XDictBase"]),
         // The tokens against their source: the generated file made of today's tokens.toml, and both faces of a role.
         .testTarget(name: "XDictTokensTests", dependencies: ["XDictTokens"]),
@@ -225,7 +225,7 @@ let package = Package(
         // The converter over synthetic bundles the tests write themselves (no Apple content, ADR-0011): the bundle's
         // structure, the entry transform, the writer, its bounds, refusals and determinism, read back by a reader that
         // lives here and never ships (ADR-0011 decision 3).
-        .testTarget(name: "XDictAppleImportTests", dependencies: ["XDictAppleImport", "XDictTestSupport"]),
+        .testTarget(name: "XDictAppleImportTests", dependencies: ["XDictAppleImport", "XDictAppleSource", "XDictTestSupport"]),
         // The harness's own rules, read off the tree: module boundaries, test floors, the string catalog, the floor.
         .testTarget(name: "XDictTests", dependencies: ["XDict", "XDictAnywhere", "XDictCapture", "XDictCaptureMac",
                                                     "XDictTestSupport"]),

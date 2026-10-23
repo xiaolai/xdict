@@ -1,4 +1,5 @@
 import Foundation
+import XDictAppleSource
 
 /// **The acceptance bundle and what converting it must write, record by record** (plan WI-3 acceptance), shared by the
 /// converter's tests (read back by the test-only reader, in file order) and the service's (read back through the core's

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 @testable import XDictAppleImport
 import XDictTestSupport
+import XDictAppleSource
 
 /// The MDD key of a UTF-16LE key as the reader returns it.
 func utf16Key(_ k: [UInt8]) -> String {

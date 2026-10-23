@@ -1,7 +1,8 @@
 import Foundation
 import zlib
 
-/// **Tiny Apple dictionary bundles, written by the tests themselves** (ADR-0011: no Apple content in a fixture). The
+/// **Tiny Apple dictionary bundles, written by a test or the E2E's Apple import instrument** (ADR-0011: no Apple content
+/// in a fixture). The
 /// layout is the one `XDictAppleImport` reads, as observed in Apple's bundles: a 0x40-byte header, the data window's
 /// limit and its (0, -1) marker, then `Body.data`'s zlib sections of length-prefixed `<d:entry>` XML, and `KeyText.data`'s
 /// records of UTF-16 lexemes pointing at them. Adopted from the dict2mdx spike's `SyntheticBundle.swift` (itself

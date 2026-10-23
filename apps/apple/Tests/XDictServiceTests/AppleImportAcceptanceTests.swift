@@ -3,6 +3,7 @@ import Testing
 @testable import XDictAppleImport
 import XDictCore
 import XDictTestSupport
+import XDictAppleSource
 
 /// **The converter's output, read back by the core** (ADR-0011 decisions 2 and 3; plan WI-3 acceptance): the spike's
 /// reader does not ship, so a conversion is accepted as the core's binding reads it. Every record the converter meant to
