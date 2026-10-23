@@ -22,9 +22,15 @@ struct ReadPointArgumentTests {
                       ["--read-point", "120", "340", "extra"],
                       ["--read-point", "x", "340"], ["--read-point", "120", "nan"],
                       // XDict's own: nothing at all, and a command this lab does not have.
-                      [], ["--read-selection", "com.apple.TextEdit"]])
+                      [], ["--read-selection", "com.apple.TextEdit"], ["--access", "x"]])
     func anythingElseIsRefused(arguments: [String]) {
         #expect(throws: (any Error).self) { try LabCommand.parse(arguments).get() }
+    }
+
+    /// **`--access` says what this lab is granted** (plan-capture WI-5; the hover stages' `*.access` checks): asked of
+    /// the APIs that never prompt, and it takes no argument.
+    @Test func theAccessCommandTakesNothing() {
+        #expect(LabCommand.parse(["--access"]) == .success(.access))
     }
 }
 

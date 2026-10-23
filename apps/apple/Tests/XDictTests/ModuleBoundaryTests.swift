@@ -111,7 +111,8 @@ struct ModuleBoundaryTests {
         // it; Foundation writes the report. A leaf, never in the bundle, printing sizes and timings only.
         "XDictAIMeasure": ["Foundation", "FoundationModels"],
         // The capture lab (plan-capture WI-4): hover's reader at one point, its report as JSON. Nothing that draws.
-        "XDictCaptureLab": ["CoreGraphics", "Foundation"],
+        // `ApplicationServices`: `--access` asks `AXIsProcessTrusted`, the API that never prompts (plan-capture WI-5).
+        "XDictCaptureLab": ["ApplicationServices", "CoreGraphics", "Foundation"],
         "XDictCaptureLabTests": ["ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // Its signature and an Apple snapshot's hash come from `XDictAppleSource` (`SigningTeam`, `Manifest`).
         "XDictService": ["Foundation", "Synchronization", "os"],

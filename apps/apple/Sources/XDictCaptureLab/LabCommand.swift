@@ -5,15 +5,20 @@ import CoreGraphics
 /// command that accepted a typo would report success for something nobody asked for, so anything else is refused.
 enum LabCommand: Equatable {
     case readPoint(CGPoint)
+    /// What this lab is granted: Accessibility and Screen Recording, asked of the APIs that never prompt.
+    case access
 
     static let readPointFlag = "--read-point"
+    static let accessFlag = "--access"
     static let usage = "usage: XDictCaptureLab --read-point X Y   (a global point in points, y down)"
+        + " | XDictCaptureLab --access"
 
     struct UsageError: Error, Equatable {
         let message: String
     }
 
     static func parse(_ arguments: [String]) -> Result<LabCommand, UsageError> {
+        if arguments == [accessFlag] { return .success(.access) }
         guard arguments.first == readPointFlag else { return .failure(UsageError(message: usage)) }
         let numbers = arguments.dropFirst()
         guard numbers.count == 2, let first = numbers.first, let last = numbers.last else {

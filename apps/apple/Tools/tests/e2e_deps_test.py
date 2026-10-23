@@ -106,6 +106,8 @@ class Matrix(unittest.TestCase):
             apple("Tools/anywhere/drive.py"): {"selection.hosts", "services.menu", "panel.expand", "panel.dismiss",
                                                "panel.deadline", "menubar.item", "shortcut.rebind"},
             apple("Tools/measure/drive.py"): {"measure.protocol"},
+            apple("Tools/hover/drive.py"): {"hover.accessibility", "hover.ocr", "hover.exclusions", "hover.permission",
+                                            "hover.popover"},
         }
         self.assertGreater(len(inputs), 20)
         self.assertTrue(set(scoped) <= inputs, f"the audit names what the kit no longer builds: {sorted(set(scoped) - inputs)}")

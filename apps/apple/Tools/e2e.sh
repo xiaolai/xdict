@@ -1393,6 +1393,34 @@ substage_measure_protocol() {
 }
 
 # ---------------------------------------------------------------------------------------------------------------------
+# **Hover (plan-capture WI-5)**: one group, the capture lab (`kit/XDictCaptureLab.app`, built with the kit) reading points
+# of fixture windows the run opens (`Tools/hover/drive.py`): a word TextEdit and a Safari page hold, read through
+# Accessibility with its box and its sentence (`hover.accessibility`), and a point of Passwords, whose app the shipped
+# policy excludes, staying quiet without a capture (`hover.exclusions`). The lab's grants are its own, by its signature:
+# Accessibility and Screen Recording, given by hand on the E2E Mac, and a missing one fails its `*.access` check by name.
+# The OCR and app-side sub-stages (`hover.ocr`, `hover.ax.ownWindowRead`, `hover.permission`, `hover.popover`) report
+# their checks as the driver's legs for them land; a run asking for one now fails by the missing check's name.
+substage_hover() {
+    local results="$home/results/hover" work="$reports/hover" member asked_subs=()
+    rm -rf "$results" "$work"
+    mkdir -p "$results" "$work"
+    for member in "${members[@]}"; do asked "$member" && asked_subs+=("$member"); done
+    if python3 -I "$kit/hover/drive.py" "$kit" "$work" "$work/driver.json" ${asked_subs[@]+"${asked_subs[@]}"} \
+        >"$results/drive.log" 2>&1; then
+        echo "      driven: $(grep -c '^PASS' "$results/drive.log") passed, $(grep -c '^FAIL' "$results/drive.log") failed"
+    else
+        flunk - "hover: the driver stopped: $(tail -3 "$results/drive.log" | tr '\n' ' ')"
+    fi
+    if [ -s "$work/driver.json" ]; then
+        findings "$work/driver.json"
+        echo "      facts: $(plutil -extract facts json -o - "$work/driver.json" 2>/dev/null | head -c 400)"
+    else
+        flunk - "hover: the driver wrote no findings ($(tail -c 300 "$results/drive.log" 2>/dev/null))"
+    fi
+    cp "$work"/*.json "$results/" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------------------------------------------------
 # **The run**: each sub-stage asked for, in the plan's order; a group's launch once, for all of its sub-stages asked.
 # Each is timed (`TIME` lines, for the recorder), and each fails by name for a check it never reported.
 ran_groups=" "

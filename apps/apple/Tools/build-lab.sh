@@ -114,4 +114,7 @@ cp Tools/anywhere/drive.py Tools/anywhere/front.py Tools/anywhere/hostcondition.
 # The WI-10 measurement's driver and its arithmetic.
 mkdir -p "$KIT/measure"
 cp Tools/measure/drive.py Tools/measure/stats.py "$KIT/measure/"
+
+mkdir -p "$KIT/hover"
+cp Tools/hover/drive.py "$KIT/hover/"
 echo "build-lab: $KIT ($(du -sh "$KIT" | cut -f1)): $LAB.app and $CAPTURE_LAB.app signed by $identity, $(ls "$KIT/fixtures" | wc -l | tr -d ' ') fixtures"

@@ -1,3 +1,6 @@
+import ApplicationServices
+import CoreGraphics
+import Foundation
 import XDictCaptureMac
 
 /// How the lab's process ends.
@@ -20,6 +23,16 @@ enum LabMain {
         case .failure(let usage):
             err(usage.message)
             return .usage
+        case .success(.access):
+            // The APIs that never prompt: `AXIsProcessTrusted` and `CGPreflightScreenCaptureAccess`.
+            let report = ["accessibility": AXIsProcessTrusted(),
+                          "screenRecording": CGPreflightScreenCaptureAccess()] as [String: Bool]
+            guard let data = try? JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]) else {
+                err("the access report could not be written")
+                return .failure
+            }
+            out(String(decoding: data, as: UTF8.self))
+            return .success
         case .success(.readPoint(let point)):
             switch await ReadPoint.run(at: point, source: source()) {
             case .success(let report):
