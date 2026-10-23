@@ -1,4 +1,5 @@
 import Foundation
+import XDictAnywhere
 
 /// **One system fact a row depends on, as XDict could read it** (plan-setup-v2 WI-1, WI-5): three-valued, because
 /// "XDict could not read this" is not "off" and must never draw as a finished row. Every probe that fills one of these
@@ -58,7 +59,7 @@ public struct AppleLookUp: Equatable, Sendable {
 /// pane. The order is the recommended path; nothing is remembered.
 public struct SetupBoard: Equatable, Sendable {
     public enum Step: String, CaseIterable, Identifiable, Sendable {
-        case dictionaries, accessibility, shortcut, hover, services, appleLookUp, spotlight, ai
+        case dictionaries, accessibility, screenRecording, shortcut, hover, services, appleLookUp, spotlight, ai
 
         public var id: String { rawValue }
 
@@ -67,7 +68,7 @@ public struct SetupBoard: Equatable, Sendable {
         public var isRequired: Bool {
             switch self {
             case .dictionaries, .accessibility, .shortcut: true
-            case .hover, .services, .appleLookUp, .spotlight, .ai: false
+            case .screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai: false
             }
         }
     }
@@ -90,6 +91,9 @@ public struct SetupBoard: Equatable, Sendable {
     public var trusted: Bool
     /// Whether the lookup shortcut is registered.
     public var shortcutWorks: Bool
+    /// **XDict's own Screen Recording grant** (owner, 2026-10-23: the board did not include it, so the grant hover's
+    /// screen reading needs was found only inside the hover pane): the one row that asks, read without prompting.
+    public var screenRecording: ScreenRecordingRow
     /// Whether the reader has hover on.
     public var hoverOn: Bool
     /// The lookup shortcut's own symbol, as `HoverModifier.symbol` writes it ("⌥"): what the reader holds or taps.
@@ -110,11 +114,13 @@ public struct SetupBoard: Equatable, Sendable {
 
     /// The new inputs default to the honest unknown: an optional row nobody read says "off"/"check", never "done".
     public init(dictionaries: Int, trusted: Bool, shortcutWorks: Bool, hoverOn: Bool = false, hoverKey: String = "⌥",
-                hoverDoubleTap: Bool = false, services: SystemFact = .unreadable, appleLookUp: AppleLookUp = AppleLookUp(),
+                hoverDoubleTap: Bool = false, screenRecording: ScreenRecordingRow = .notSetUp,
+                services: SystemFact = .unreadable, appleLookUp: AppleLookUp = AppleLookUp(),
                 spotlightEnabled: Bool = false, spotlightFailed: Bool = false, aiConfigured: Bool = false) {
         self.dictionaries = dictionaries
         self.trusted = trusted
         self.shortcutWorks = shortcutWorks
+        self.screenRecording = screenRecording
         self.hoverOn = hoverOn
         self.hoverKey = hoverKey
         self.hoverDoubleTap = hoverDoubleTap
@@ -141,6 +147,13 @@ public struct SetupBoard: Equatable, Sendable {
         switch step {
         case .dictionaries: return dictionaries > 0 ? .ready : .absent
         case .accessibility: return trusted ? .ready : .absent
+        case .screenRecording:
+            switch screenRecording {
+            case .allowed: return .ready
+            case .notSetUp: return .absent
+            case .notAllowed: return .failed
+            case .couldNotTell: return .unreadable
+            }
         case .shortcut: return shortcutWorks ? .ready : .failed
         case .hover: return hoverOn ? .ready : .absent
         case .services: return Self.reading(services)
@@ -196,6 +209,7 @@ public struct SetupBoard: Equatable, Sendable {
         switch step {
         case .dictionaries: LocalizedStringResource("Dictionaries")
         case .accessibility: LocalizedStringResource("Accessibility")
+        case .screenRecording: LocalizedStringResource("Screen Recording")
         case .shortcut: LocalizedStringResource("Lookup shortcut")
         case .hover: LocalizedStringResource("Pointer gesture")
         case .services: LocalizedStringResource("Look Up in XDict Service")
@@ -220,6 +234,9 @@ public struct SetupBoard: Equatable, Sendable {
             return state == .done
                 ? LocalizedStringResource("Dictionaries answering lookups: \(dictionaries).")
                 : LocalizedStringResource("XDict comes with no dictionaries. Add your own MDict files (.mdx and .mdd).")
+        case .screenRecording:
+            // One source for these words: the hover pane's row says the same, so the two can never disagree.
+            return HoverSentences.screenRecording(screenRecording)
         case .accessibility:
             return state == .done
                 ? LocalizedStringResource("Granted. The shortcut can read the selection in any app.")

@@ -100,7 +100,7 @@ public struct SetupView: View {
         SetupBoard(dictionaries: library.answering.count, trusted: isTrusted,
                    shortcutWorks: registrar.isRegistered || registrar.isSuspended,
                    hoverOn: hover?.isOn ?? false, hoverKey: hover?.keySymbol ?? "⌥",
-                   hoverDoubleTap: hover?.isDoubleTap ?? false,
+                   hoverDoubleTap: hover?.isDoubleTap ?? false, screenRecording: hover?.screenRecording ?? .notSetUp,
                    services: reading.services, appleLookUp: reading.appleLookUp,
                    spotlightEnabled: spotlight?.enabled ?? false, spotlightFailed: spotlight?.lastRunFailed ?? false,
                    aiConfigured: aiIsOn)
@@ -170,6 +170,26 @@ public struct SetupView: View {
                 if state != .done {
                     Button { actions.openSettings(.accessibility) } label: { Text("Open System Settings") }
                         .accessibilityIdentifier("setup.accessibility.action")
+                }
+            case .screenRecording:
+                // **The board's own place to grant it** (owner, 2026-10-23): the same two actions as the hover pane's
+                // row, through the one `ScreenRecordingAccess` — `Allow…` is the only call that can prompt.
+                if let hover {
+                    Group {
+                        switch hover.screenRecording {
+                        case .notSetUp:
+                            Button { Task { await hover.setUpScreenRecording() } } label: { Text("Allow…") }
+                                .accessibilityIdentifier("setup.screenRecording.allow")
+                        case .allowed:
+                            EmptyView()
+                        case .notAllowed, .couldNotTell:
+                            Button { Task { await hover.refreshScreenRecording() } } label: { Text("Check Again") }
+                                .accessibilityIdentifier("setup.screenRecording.check")
+                        }
+                    }
+                    // **Read, never ask**: showing the row reads the standing grant without calling anything that could
+                    // prompt (`ScreenRecordingAccess`); the button is the only thing that asks.
+                    .task { await hover.refreshScreenRecording() }
                 }
             case .shortcut:
                 ShortcutRecorder(registrar: registrar)

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictAnywhere
 import XDictUI
 
 /// **The setup board reads live state, every time** (plan-macos-v1 WI-9; adapted from XiaolaiDict's `SetupBoardTests`;
@@ -10,7 +11,8 @@ struct SetupBoardTests {
     /// Every fact read and ready: what a fully set-up account's board says.
     static func ready(dictionaries: Int = 3) -> SetupBoard {
         SetupBoard(dictionaries: dictionaries, trusted: true, shortcutWorks: true, hoverOn: true,
-                   services: .ready, appleLookUp: AppleLookUp(shortcut: .ready, trackpad: .ready, dictionaries: .ready),
+                   screenRecording: .allowed, services: .ready,
+                   appleLookUp: AppleLookUp(shortcut: .ready, trackpad: .ready, dictionaries: .ready),
                    spotlightEnabled: true, aiConfigured: true)
     }
 
@@ -49,8 +51,8 @@ struct SetupBoardTests {
     /// **The order is the recommended path** (plan-setup-v2's table), and each row says something of its own in each
     /// state it can be in.
     @Test func eachRowSaysItsOwnState() {
-        #expect(SetupBoard.Step.allCases == [.dictionaries, .accessibility, .shortcut, .hover, .services, .appleLookUp,
-                                             .spotlight, .ai])
+        #expect(SetupBoard.Step.allCases == [.dictionaries, .accessibility, .screenRecording, .shortcut, .hover,
+                                             .services, .appleLookUp, .spotlight, .ai])
         let fresh = Self.fresh()
         let ready = Self.ready()
         var sentences: [String] = []
@@ -66,8 +68,23 @@ struct SetupBoardTests {
     /// **The three a working XDict needs, and the five it does not** (plan-setup-v2 "Required vs optional").
     @Test func theRequiredStepsAreTheThreeXDictCannotWorkWithout() {
         #expect(SetupBoard.Step.allCases.filter(\.isRequired) == [.dictionaries, .accessibility, .shortcut])
-        #expect(SetupBoard.Step.allCases.filter { !$0.isRequired } == [.hover, .services, .appleLookUp, .spotlight,
-                                                                      .ai])
+        #expect(SetupBoard.Step.allCases.filter { !$0.isRequired } == [.screenRecording, .hover, .services, .appleLookUp,
+                                                                      .spotlight, .ai])
+    }
+
+    /// **Screen Recording is a row of the board** (owner, 2026-10-23: setup did not include the grant hover's screen
+    /// reading needs, so the reader had to find it elsewhere): allowed is done, a refusal is a problem with its own
+    /// sentence, a grant nobody could read is "check", and leaving it unset is optional — as a working XDict is.
+    @Test func theScreenRecordingRowFollowsTheGrant() {
+        var board = SetupBoard(dictionaries: 1, trusted: true, shortcutWorks: true)
+        #expect(board.state(of: .screenRecording) == .optional, "unset is not a failure")
+        #expect(!SetupBoard.Step.screenRecording.isRequired)
+        board.screenRecording = .allowed
+        #expect(board.state(of: .screenRecording) == .done)
+        board.screenRecording = .notAllowed
+        #expect(board.state(of: .screenRecording) == .problem)
+        board.screenRecording = .couldNotTell
+        #expect(board.state(of: .screenRecording) == .needsCheck)
     }
 
     /// **An optional row's switch off is `.optional`, not a failure**, and the board is complete regardless.
@@ -150,7 +167,7 @@ struct SetupBoardTests {
         let fresh = Self.fresh()
         #expect(fresh.summary.verified == [])
         #expect(fresh.summary.needsUser == [.dictionaries, .accessibility, .shortcut])
-        #expect(fresh.summary.optionalLeft == [.hover, .services, .appleLookUp, .spotlight, .ai])
+        #expect(fresh.summary.optionalLeft == [.screenRecording, .hover, .services, .appleLookUp, .spotlight, .ai])
         #expect(fresh.summary.needsUser.isEmpty == fresh.isComplete)
 
         let ready = Self.ready()
