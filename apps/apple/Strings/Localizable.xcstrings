@@ -11750,18 +11750,18 @@
         }
       }
     },
-    "XDict runs its own copy of the Codex tool in its own folder. If you have never signed in, this prints a web address and a code to enter there." : {
+    "XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XDict runs its own copy of the Codex tool in its own folder. If you have never signed in, this prints a web address and a code to enter there."
+            "value" : "XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "XDict 在自己的文件夹里运行自己的 Codex 工具副本。如果从未登录，这里会显示一个网址和一个需要在该网页输入的代码。"
+            "value" : "XDict 在自己的设置文件夹里运行 Codex 工具，所以你在终端里已有的登录不会传给它。在这里登录一次即可：它会显示一个网址和需要输入的验证码。"
           }
         }
       }

@@ -242,7 +242,7 @@ public struct AISettings: View {
             } else {
                 Button("Sign In with Codex…") { Task { await model.signIn() } }  // placement: form-pane
                     .accessibilityIdentifier("ai.codex.signin")
-                Text("XDict runs its own copy of the Codex tool in its own folder. If you have never signed in, this prints a web address and a code to enter there.")
+                Text("XDict runs the Codex tool in a settings folder of its own, so the sign-in you already have in Terminal does not reach it. Sign in once here: this prints a web address and a code to enter there.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
