@@ -170,8 +170,12 @@ codesign --verify --strict --deep "$APP" || fail "stapling broke the app's signa
 # `release` mode, keyed by the bundle's own provenance.
 rm -rf "$BUILT"
 ditto "$APP" "$BUILT"
+# **The smoke is the release's own gate, so it is permitted here** (2026-10-23: an agent's `make release` notarised the
+# app and then stopped, because `Tools/e2e.sh` refuses an agent's run without `E2E_REQUESTED=1` — and the release's
+# required smoke is not an agent's spare run: `make release` is the owner's request by construction, and this line is
+# the only place the permission is given).
 # shellcheck disable=SC2046 # the smoke's names, split on purpose
-XDICT_E2E_TREE="$tree" Tools/e2e.sh "$XDICT_E2E_HOST" $(Tools/e2e-status.sh smoke) \
+E2E_REQUESTED=1 XDICT_E2E_TREE="$tree" Tools/e2e.sh "$XDICT_E2E_HOST" $(Tools/e2e-status.sh smoke) \
     || fail "the release smoke ($(Tools/e2e-status.sh smoke)) failed on the release-signed bundle"
 
 # 3. The disk image, from the stapled app, with the usual Applications link to drag it onto.

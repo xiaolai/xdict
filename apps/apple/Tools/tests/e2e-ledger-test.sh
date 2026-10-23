@@ -286,7 +286,9 @@ two=$(python3 -I "$tools/gate-cache.py" corpus-id "$scratch/corpus")
 # **Static contracts of the release and the run**, each held to a copy without it (the positive control).
 # The smoke runs on the stapled release bundle, unconditionally.
 smoke_runs() {
-    awk '/^XDICT_E2E_TREE=.*Tools\/e2e\.sh "\$XDICT_E2E_HOST" \$\(Tools\/e2e-status\.sh smoke\)/ { found = NR }
+    # An environment prefix before XDICT_E2E_TREE is allowed: the release's smoke carries `E2E_REQUESTED=1`, the run's
+    # own permission (2026-10-23). What is held is the order, on the stapled bundle.
+    awk '/XDICT_E2E_TREE=.*Tools\/e2e\.sh "\$XDICT_E2E_HOST" \$\(Tools\/e2e-status\.sh smoke\)/ { found = NR }
          /^staple "\$APP"$/ { stapled = NR }
          END { exit !(found && stapled && found > stapled) }' "$1"
 }
