@@ -80,8 +80,18 @@ public struct AppleImportChoice: Equatable, Sendable {
     }
 
     /// Every row the sheet draws: the installed bundles first, then the ones Dictionary.app knows.
-    public func rows(steps: [String: AppleImportStep], locale: Locale = .current) -> [Row] {
-        installedRows(steps: steps, locale: locale) + availableRows()
+    public func rows(steps: [String: AppleImportStep], locale: Locale = .current, filter: String = "") -> [Row] {
+        matching(installedRows(steps: steps, locale: locale) + availableRows(), filter)
+    }
+
+    /// **What the reader's filter keeps** (owner, 2026-10-23: the list had none): a row whose name or languages hold
+    /// what they typed, case- and diacritic-insensitively; a filter of nothing — or spaces — keeps every row.
+    public func matching(_ rows: [Row], _ text: String) -> [Row] {
+        let needle = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !needle.isEmpty else { return rows }
+        return rows.filter {
+            $0.name.localizedStandardContains(needle) || $0.language.localizedStandardContains(needle)
+        }
     }
 
     /// The bundles on this Mac, in the order they were found.

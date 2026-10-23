@@ -65,6 +65,11 @@ public enum AppleImportSentences {
     public static let finding = LocalizedStringResource("Finding the dictionaries installed on this Mac…")
     public static let alreadyImported = LocalizedStringResource("Already imported")
     public static let importButton = LocalizedStringResource("Import")
+    /// **The list's filter** (owner, 2026-10-23: a list of every bundle, with no way to narrow it): what the field is
+    /// for, in its placeholder.
+    public static let filterPrompt = LocalizedStringResource("Filter Dictionaries")
+    /// Where a filter keeps nothing: there are rows, and none of them matches what was typed.
+    public static let noMatches = LocalizedStringResource("No dictionaries match your search.")
 
     // MARK: - Available in Dictionary.app (plan-setup-v2 WI-3)
 

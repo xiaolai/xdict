@@ -26,6 +26,26 @@ struct AppleImportChoiceTests {
         (try? CompiledCatalog.text(resource, in: language)) ?? "the catalog did not compile"
     }
 
+    /// **The reader's filter keeps what it names** (owner, 2026-10-23: the list had no filter): the name or the
+    /// languages, case- and diacritic-insensitively; a filter of spaces keeps every row.
+    @Test func aFilterKeepsRowsByNameOrLanguage() {
+        let café = Self.bundle("cafe", "Café Dictionary")
+        let choice = AppleImportChoice(bundles: [Self.oxford, Self.chinese, Self.apple, Self.thesaurus, café],
+                                       imported: ["oawt"])
+        let locale = Locale(identifier: "en")
+        #expect(choice.rows(steps: [:], locale: locale).count == 5, "no filter, every row")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "   ").count == 5, "spaces filter nothing")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "oxford").map(\.name)
+                == ["Oxford Dictionary of English", "Oxford Thesaurus"])
+        #expect(choice.rows(steps: [:], locale: locale, filter: "OXFORD").map(\.name)
+                == ["Oxford Dictionary of English", "Oxford Thesaurus"], "case-insensitive")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "cafe").map(\.name) == ["Café Dictionary"],
+                "diacritic-insensitive")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "chinese").map(\.name) == ["Chinese–English"], "by name")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "english").count == 5, "the language column counts")
+        #expect(choice.rows(steps: [:], locale: locale, filter: "zzz").isEmpty)
+    }
+
     @Test func eachBundleIsARowWithItsAvailability() {
         let choice = AppleImportChoice(bundles: [Self.oxford, Self.chinese, Self.apple, Self.thesaurus],
                                        imported: ["oawt"])
