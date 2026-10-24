@@ -147,6 +147,11 @@ done
 # build would otherwise be released unnamed.
 tree=$(Tools/source-tree.sh)
 [ "$tree" = "$start_tree" ] || fail "the source tree moved during the build; nothing is released"
+# **No personal path or internal host ships** (2026-10-24): a Rust panic location embeds its source file's path, and
+# the service binary of 0.3.1–0.3.2 carried /Users/<user>/.cargo/... into every DMG. Tools/build-core.sh remaps the
+# build's roots; this refuses a bundle that still names one, before anything is notarised or published.
+personal=$(grep -a -r -l -E '/Users/[A-Za-z0-9._-]+|/home/[A-Za-z0-9._-]+|mbp16|MacMini-[0-9]+|legio\.internal' "$BUILT" 2>/dev/null || true)
+[ -z "$personal" ] || fail "the bundle names a personal path or internal host: $(echo "$personal" | head -3 | tr '\n' ' ')"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"

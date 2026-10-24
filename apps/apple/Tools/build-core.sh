@@ -33,6 +33,13 @@ fail() { echo "build-core: $*" >&2; exit 1; }
 command -v cargo >/dev/null || fail "cargo is not on PATH"
 command -v xcodebuild >/dev/null || fail "xcodebuild is not on PATH: the XCFramework needs Xcode"
 
+# **No build path of this machine ships** (2026-10-24): a Rust panic location embeds its source file's path, and the
+# service binary in every DMG through 0.3.2 carried /Users/<user>/.cargo/registry/... and the build checkout's path.
+# The cargo home and the build user's home are remapped to neutral roots; the more specific prefix is listed first.
+if [ -z "${XDICT_KEEP_BUILD_PATHS:-}" ]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} --remap-path-prefix=${CARGO_HOME:-$HOME/.cargo}=/cargo --remap-path-prefix=$HOME=/build"
+fi
+
 rm -rf "$stage"
 mkdir -p "$stage/headers" "$stage/XDictCore" "$stage/binding" "$stage/probe"
 
