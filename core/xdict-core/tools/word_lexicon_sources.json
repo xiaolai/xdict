@@ -1,0 +1,97 @@
+{
+  "format": "xdict-word-lexicon-sources",
+  "version": 2,
+  "sources": [
+    {
+      "id": "cmu",
+      "provider": "cmudict",
+      "name": "The CMU Pronouncing Dictionary",
+      "url": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/cmudict.dict",
+      "file": "cmudict.dict",
+      "version": "cmusphinx/cmudict@74790861f652b15e4ac49015a90074ad62a27690",
+      "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22",
+      "bytes": 3618488,
+      "licence": "BSD-2-Clause",
+      "attribution": "The Carnegie Mellon Pronouncing Dictionary, Carnegie Mellon University Speech Group.",
+      "coverage": "North American English pronunciations in stressed ARPAbet, every listed variant; no part of speech.",
+      "notice": "Copyright (C) 1993-2015 Carnegie Mellon University. All rights reserved.\n\nRedistribution and use in source and binary forms, with or without\nmodification, are permitted provided that the following conditions\nare met:\n\n1. Redistributions of source code must retain the above copyright\n   notice, this list of conditions and the following disclaimer.\n   The contents of this file are deemed to be source code.\n\n2. Redistributions in binary form must reproduce the above copyright\n   notice, this list of conditions and the following disclaimer in\n   the documentation and/or other materials provided with the\n   distribution.\n\nThis work was supported in part by funding from the Defense Advanced\nResearch Projects Agency, the Office of Naval Research and the National\nScience Foundation of the United States of America, and by member\ncompanies of the Carnegie Mellon Sphinx Speech Consortium. We acknowledge\nthe contributions of many volunteers to the expansion and improvement of\nthis dictionary.\n\nTHIS SOFTWARE IS PROVIDED BY CARNEGIE MELLON UNIVERSITY ``AS IS'' AND\nANY EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,\nTHE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR\nPURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL CARNEGIE MELLON UNIVERSITY\nNOR ITS EMPLOYEES BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,\nSPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT\nLIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,\nDATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY\nTHEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT\n(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE\nOF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.\n"
+    },
+    {
+      "id": "oewn",
+      "provider": "oewn",
+      "name": "Open English Wordnet 2025 (JSON)",
+      "url": "https://github.com/globalwordnet/english-wordnet/releases/download/2025-edition/english-wordnet-2025-json.zip",
+      "file": "oewn-2025-json.zip",
+      "version": "2025-edition",
+      "sha256": "7d749f6e2c39e6970e4997839dcf6e42fd281f3c2fae0171d2192bae8cfa4b51",
+      "bytes": 9986555,
+      "licence": "CC-BY-4.0 AND LicenseRef-WordNet-3.0",
+      "attribution": "Open English Wordnet 2025, the Open English Wordnet team (McCrae et al.), derived from Princeton WordNet 3.1, Princeton University.",
+      "coverage": "POS-tagged IPA (GB/US variety as dialect) and sense-level derivational links. OEWN links have no direction: endpoints of kind other are unoriented, written alphabetically, claiming nothing about which word comes from which.",
+      "notice_files": [
+        {
+          "file": "oewn-WNDB_License.txt",
+          "marker": "Princeton University",
+          "sha256": "df30ec18fbabcdaf031b79ea026d3e6b959010cffe6dd7be9ac137822175b904"
+        },
+        {
+          "file": "globalwordnet-english-wordnet-LICENSE.md",
+          "marker": "Princeton WordNet",
+          "sha256": "672cc8b5663e8dc74c4b07a9dcf477193853575b119908fd3dc0aeeb60a9dbbb"
+        }
+      ]
+    },
+    {
+      "id": "ety",
+      "provider": "etymology-db",
+      "name": "etymology-db (Wiktionary etymologies)",
+      "url": "https://github.com/droher/etymology-db/releases/download/2023-12/etymology.csv.gz",
+      "file": "etymology-2023-12.csv.gz",
+      "version": "2023-12",
+      "sha256": "e36eba331b73075fd74c8281b96eb3b31bebc510dad091ddeb815453a49d594d",
+      "bytes": 143436769,
+      "licence": "CC-BY-SA-3.0",
+      "attribution": "etymology-db by Daniel Roher (droher), parsed from Wiktionary; Wiktionary contributors.",
+      "coverage": "Explicit ancestry edges reachable from English terms (chains in source order; has_root as relation unknown) and English *_with_root derivations. The source records no uncertainty, so uncertain is false throughout.",
+      "notice": "The etymology-db dataset (https://github.com/droher/etymology-db) is derived from Wiktionary (https://www.wiktionary.org/), whose text is the work of Wiktionary contributors and is available under the Creative Commons Attribution-ShareAlike 3.0 Unported licence, https://creativecommons.org/licenses/by-sa/3.0/. The dataset is distributed under the same licence. The etymology-db code is licensed separately under the Apache License 2.0 and is not part of this pack.\n"
+    },
+    {
+      "id": "morphynet-infl",
+      "provider": "morphynet-inflection",
+      "name": "MorphyNet English inflectional morphology",
+      "url": "https://raw.githubusercontent.com/kbatsuren/MorphyNet/378144f64df58c78db5245af19d16a511ccecf3a/eng/eng.inflectional.v1.tsv",
+      "file": "eng.inflectional.v1.tsv",
+      "version": "kbatsuren/MorphyNet@378144f64df58c78db5245af19d16a511ccecf3a",
+      "sha256": "6295cd9a0e72e260298d8d80dc1e512e5d37ea44617dd2df6fbeef02f50bcc3f",
+      "bytes": 21455254,
+      "licence": "CC-BY-SA-3.0",
+      "attribution": "MorphyNet, Khuyagbaatar Batsuren, Gábor Bella and Fausto Giunchiglia (SIGMORPHON 2021); from Wiktionary contributors.",
+      "coverage": "Inflected forms with their UniMorph feature tags, verbatim.",
+      "notice": "MorphyNet: a Large Multilingual Database of Derivational and Inflectional Morphology. Khuyagbaatar Batsuren, Gábor Bella and Fausto Giunchiglia. Proceedings of the 18th SIGMORPHON Workshop, 2021. https://github.com/kbatsuren/MorphyNet\n\nMorphyNet is distributed under the Creative Commons Attribution-ShareAlike 3.0 licence, https://creativecommons.org/licenses/by-sa/3.0/.\n"
+    },
+    {
+      "id": "morphynet-deri",
+      "provider": "morphynet-derivation",
+      "name": "MorphyNet English derivational morphology",
+      "url": "https://raw.githubusercontent.com/kbatsuren/MorphyNet/378144f64df58c78db5245af19d16a511ccecf3a/eng/eng.derivational.v1.tsv",
+      "file": "eng.derivational.v1.tsv",
+      "version": "kbatsuren/MorphyNet@378144f64df58c78db5245af19d16a511ccecf3a",
+      "sha256": "5920edacc1888b14464fc5cd96beea0a721221d56d1dc0e49de22f4c7c537c50",
+      "bytes": 8169109,
+      "licence": "CC-BY-SA-3.0",
+      "attribution": "MorphyNet, Khuyagbaatar Batsuren, Gábor Bella and Fausto Giunchiglia (SIGMORPHON 2021); from Wiktionary contributors.",
+      "coverage": "Prefix and suffix derivations with both POS and the affix, kept only where the affix attaches to the base by the documented spelling rules; other rows (POS U, empty or non-attaching affix) are skipped and counted in the report.",
+      "notice": "MorphyNet: a Large Multilingual Database of Derivational and Inflectional Morphology. Khuyagbaatar Batsuren, Gábor Bella and Fausto Giunchiglia. Proceedings of the 18th SIGMORPHON Workshop, 2021. https://github.com/kbatsuren/MorphyNet\n\nMorphyNet is distributed under the Creative Commons Attribution-ShareAlike 3.0 licence, https://creativecommons.org/licenses/by-sa/3.0/.\n"
+    },
+    {
+      "id": "kaikki",
+      "provider": "kaikki",
+      "name": "Kaikki.org English (Wiktextract)",
+      "url_prefix": "https://kaikki.org/dictionary/English/",
+      "licence": "CC-BY-SA-4.0",
+      "attribution": "Kaikki.org / Wiktextract by Tatu Ylonen, extracted from English Wiktionary; Wiktionary contributors.",
+      "coverage": "One verified per-word file each: POS-tagged IPA, tagged forms, linked form-of lemmas and morphology-template derivations.",
+      "notice": "Data extracted by Wiktextract (Tatu Ylonen, https://github.com/tatuylonen/wiktextract) and published at https://kaikki.org/, from English Wiktionary (https://en.wiktionary.org/). Wiktionary text is the work of Wiktionary contributors and is available under the Creative Commons Attribution-ShareAlike 4.0 International licence, https://creativecommons.org/licenses/by-sa/4.0/.\n"
+    }
+  ]
+}
