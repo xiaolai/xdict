@@ -27,6 +27,10 @@
 #   XDICT_NOTARY_PROFILE  a notarytool keychain profile (`chase-notary`): a name, never a credential
 #   XDICT_E2E_HOST        the E2E Mac's SSH name, where Gatekeeper is asked last
 #   XDICT_SIGN_ID         optional; `Tools/build-bundle.sh identity` otherwise
+#   XDICT_RELEASE_WAIVER  optional, and only with the owner's word: the reason this one release skips the E2E Mac's
+#                         two checks (its smoke, and Gatekeeper there). It is printed here, written beside the disk
+#                         image and named in the release notes — never silent (2026-10-25: the E2E Mac refused SSH and
+#                         the owner waived them for 0.4.1).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -50,7 +54,10 @@ readonly REMOTE_DIR=XDictE2E/release
 
 [ -n "${XDICT_BUILD_NUMBER:-}" ] || fail "a release needs a number from the release counter: BUILD_NUMBER=<n>"
 [ -n "${XDICT_NOTARY_PROFILE:-}" ] || fail "XDICT_NOTARY_PROFILE is not set"
-[ -n "${XDICT_E2E_HOST:-}" ] || fail "XDICT_E2E_HOST is not set: Gatekeeper is asked on the E2E Mac last (E2E_HOST_MACOS in local.mk)"
+readonly waiver=${XDICT_RELEASE_WAIVER:-}
+[ -n "${XDICT_E2E_HOST:-}" ] || [ -n "$waiver" ] \
+    || fail "XDICT_E2E_HOST is not set: Gatekeeper is asked on the E2E Mac last (E2E_HOST_MACOS in local.mk)"
+[ -z "$waiver" ] || note "WAIVED by the owner, for this release: $waiver"
 XDICT_SIGN_ID=$(Tools/build-bundle.sh identity) || fail "no signing identity"
 export XDICT_SIGN_ID
 
@@ -166,16 +173,20 @@ codesign --verify --strict --deep "$APP" || fail "stapling broke the app's signa
 
 # 2a. The release smoke: the stapled, release-signed bundle on the E2E Mac, whatever the ledger carries. Tools/e2e.sh
 # ships .build/XDict.app, so the stapled copy takes its place (the same bundle plus its ticket); its rows are filed as
-# `release` mode, keyed by the bundle's own provenance.
-rm -rf "$BUILT"
-ditto "$APP" "$BUILT"
-# **The smoke is the release's own gate, so it is permitted here** (2026-10-23: an agent's `make release` notarised the
-# app and then stopped, because `Tools/e2e.sh` refuses an agent's run without `E2E_REQUESTED=1` — and the release's
-# required smoke is not an agent's spare run: `make release` is the owner's request by construction, and this line is
-# the only place the permission is given).
-# shellcheck disable=SC2046 # the smoke's names, split on purpose
-E2E_REQUESTED=1 XDICT_E2E_TREE="$tree" Tools/e2e.sh "$XDICT_E2E_HOST" $(Tools/e2e-status.sh smoke) \
-    || fail "the release smoke ($(Tools/e2e-status.sh smoke)) failed on the release-signed bundle"
+# `release` mode, keyed by the bundle's own provenance. A release the owner waived this check for says so and goes on.
+if [ -n "$waiver" ]; then
+    note "2a waived: the release smoke on the E2E Mac — $waiver"
+else
+    rm -rf "$BUILT"
+    ditto "$APP" "$BUILT"
+    # **The smoke is the release's own gate, so it is permitted here** (2026-10-23: an agent's `make release` notarised
+    # the app and then stopped, because `Tools/e2e.sh` refuses an agent's run without `E2E_REQUESTED=1` — and the
+    # release's required smoke is not an agent's spare run: `make release` is the owner's request by construction, and
+    # this line is the only place the permission is given).
+    # shellcheck disable=SC2046 # the smoke's names, split on purpose
+    E2E_REQUESTED=1 XDICT_E2E_TREE="$tree" Tools/e2e.sh "$XDICT_E2E_HOST" $(Tools/e2e-status.sh smoke) \
+        || fail "the release smoke ($(Tools/e2e-status.sh smoke)) failed on the release-signed bundle"
+fi
 
 # 3. The disk image, from the stapled app, with the usual Applications link to drag it onto.
 dmg=$OUT/XDict-$version-$build.dmg
@@ -209,7 +220,11 @@ hdiutil detach -quiet "$mount" || fail "could not detach $mount"
 rmdir "$mount" 2>/dev/null || true
 mount=""
 
-# And on the E2E Mac, which never built it: the image copied there, mounted read-only, both assessed.
+# And on the E2E Mac, which never built it: the image copied there, mounted read-only, both assessed. A waived release
+# skips this too, and says so on the same line as the smoke it skipped.
+if [ -n "$waiver" ]; then
+    note "E2E Mac Gatekeeper waived: the disk image and the app inside it were assessed here only — $waiver"
+else
 ssh_e2e() { ssh -o BatchMode=yes -o ConnectTimeout=15 "$XDICT_E2E_HOST" "$@"; }
 ssh_e2e "mkdir -p '$REMOTE_DIR'" || fail "cannot reach the E2E Mac"
 rsync -a "$dmg" "$XDICT_E2E_HOST:$REMOTE_DIR/" || fail "could not copy $(basename "$dmg") to the E2E Mac"
@@ -230,9 +245,16 @@ hdiutil attach -quiet -readonly -nobrowse -mountpoint "$mount" "$dmg"
 codesign --verify --strict --deep "$mount/XDict.app"
 assess "the app inside it" "$mount/XDict.app"
 SH
+fi
+
+# The waiver is the release's record, not a comment: it lives beside the disk image.
+if [ -n "$waiver" ]; then
+    printf '%s\n' "$waiver" > "$OUT/waiver.txt"
+fi
 
 note ""
 note "released XDict $version ($build), $mode release, source tree $tree — not published"
 note "  $dmg"
 note "  size   $(du -h "$dmg" | cut -f1)"
 note "  sha256 $(shasum -a 256 "$dmg" | cut -d' ' -f1)"
+[ -z "$waiver" ] || note "  waived: $waiver"
