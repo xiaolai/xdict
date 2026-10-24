@@ -6,8 +6,9 @@ import XDictSearch
 import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
-/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the Smaller/Bigger Text pair and the
-/// search field at its trailing edge, whose magnifier holds the scope menu (P6, XDict's own); the sidebar of matching
+/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the search field and then the
+/// Smaller/Bigger Text pair at its trailing edge (the owner's order, 2026-10-24), whose magnifier holds the scope menu
+/// (P6, XDict's own); the sidebar of matching
 /// headwords appears only after a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep
 /// their contract. The menus (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word,
 /// Pronounce.
@@ -15,9 +16,9 @@ public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     /// The content column's width: the title over it yields when it is narrow (P8).
     @State private var column: CGFloat = Tokens.Window.initialColumn
-    /// The window's content width, which decides where the answer is shown (`MeaningPlacement`); nil until the first
-    /// layout measures it.
-    @State private var width: CGFloat?
+    /// The native window grows before the inspector opens; no reading space is taken for the answer.
+    @State private var presentation: MeaningPlacement = .hidden
+    @State private var paneWidth = Tokens.Window.meaningPaneIdeal
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -41,8 +42,7 @@ public struct SearchWindow: View {
     }
 
     private var pane: some View {
-        // **Where the answer is shown** (`MeaningPlacement`): beside the entry where it fits, else in a sheet; the
-        // window's width and the results list stay the reader's.
+        // The answer opens outside the existing reading area; a screen with no room uses the sheet.
         let listed = state.model.listing != nil
         let shown = presentation
         return NavigationSplitView(columnVisibility: columns(listed: listed)) {
@@ -60,15 +60,18 @@ public struct SearchWindow: View {
                 .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
                 // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader. On the detail, not the
-                // split view: there its least was counted twice, the pane's column's and the split view's, so a 400 pt
-                // window opening it grew and aborted in a recursive constraint update (`MeaningPaneFitTests`).
+                // split view: there its least was counted twice. `OutwardPane` reserves the room before opening it.
                 // Nested in the navigation's detail, the inspector sits under the window's shared toolbar, level with
                 // the reading area (WWDC23 10161). Its content is the pane alone: toolbar content declared inside an
                 // inspector gives it a toolbar section of its own, so its toggle is the window's (`toolbar`).
                 .inspector(isPresented: paneShown(in: .inspector, now: shown)) {
                     MeaningAnswerPane(state: state)
-                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
+                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: paneWidth,
                                               max: Tokens.Window.meaningPaneMax)
+                        .background(VisibleWidth {
+                            if presentation == .inspector, state.panes.meaningShown || state.panes.examplesShown,
+                               $0 >= Tokens.Window.meaningPaneMin { paneWidth = $0 }
+                        })
                 }
         }
         // **The answer in a sheet** where the pane does not fit beside the entry and the list the reader shows: the
@@ -113,7 +116,8 @@ public struct SearchWindow: View {
         // The All page grows as each dictionary answers (P15).
         .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+        .background(OutwardPane(shown: state.panes.meaningShown || state.panes.examplesShown,
+                                width: paneWidth, presentation: $presentation))
     }
 
     /// **The results list, as the reader left it** (P9; HIG audit UI07): none before a search, the first search brings
@@ -127,19 +131,12 @@ public struct SearchWindow: View {
         }
     }
 
-    /// Where the right pane is shown now, from the reader's choices and the window's width (`MeaningPlacement`): the
-    /// Meaning answer and the Examples section share it (ADR-0031's owner decision: a section in the existing pane).
-    private var presentation: MeaningPlacement {
-        MeaningPlacement.at(width: width, results: state.panes.resultsVisible(listed: state.model.listing != nil),
-                               meaning: state.panes.meaningShown || state.panes.examplesShown)
-    }
-
     /// The right pane in one of its presentations: opened by an ask, by a Chinese query's examples, by View ▸ Show
     /// Meaning in Context and by the toolbar's toggle; closed by the reader (UI02, UI05). A dismissal is weighed
     /// against where the pane is shown when it arrives, so the one a resize just left does not close it.
     private func paneShown(in place: MeaningPlacement, now: MeaningPlacement) -> Binding<Bool> {
         Binding { now == place } set: { shown in
-            guard !shown else { return }
+            guard !shown, presentation == place else { return }
             state.panes.meaningClosed(by: place, current: presentation)
             state.panes.examplesClosed()
         }
@@ -162,15 +159,15 @@ public struct SearchWindow: View {
         MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() }
     }
 
-    /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the
-    /// scope menu's lines, which also set the magnifier (P6).
+    /// The toolbar's search item for the model's scope: the idle SwiftUI magnifier button, and the editor behind it with
+    /// its placeholder ("Search", or "Search in <name>") and the scope menu's lines, which also set the magnifier (P6).
     static func searchField(text: String, known: [SearchSource], scope: SearchScope, focus: Int,
                             onScope: @escaping (SearchScope) -> Void, onChange: @escaping (String) -> Void,
                             onSubmit: @escaping () -> Void, onMove: @escaping (Int) -> Bool,
-                            onCancel: @escaping () -> Bool) -> SearchField {
-        SearchField(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
-                    scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
-                    onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
+                            onCancel: @escaping () -> Bool) -> ToolbarSearchItem {
+        ToolbarSearchItem(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
+                          scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
+                          onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
     }
 }
 

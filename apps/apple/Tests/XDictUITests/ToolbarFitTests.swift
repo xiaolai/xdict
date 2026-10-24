@@ -26,6 +26,7 @@ struct ToolbarFitTests {
     struct Frame: View {
         let sidebar: Bool
         let subtitle: String
+        var query = "sample"
         // Wide until the first layout measures it, as the main window's (`Tokens.Window.initialColumn`): the title shows.
         @State private var column = CGFloat.infinity
 
@@ -43,7 +44,7 @@ struct ToolbarFitTests {
             .toolbar {
                 SearchToolbar(canGoBack: true, canGoForward: true, canPronounce: true, back: {}, forward: {},
                               smaller: {}, bigger: {}, pronounce: {},
-                              field: SearchWindow.searchField(text: "", known: [], scope: .all, focus: 0,
+                              field: SearchWindow.searchField(text: query, known: [], scope: .all, focus: 0,
                                                               onScope: { _ in }, onChange: { _ in }, onSubmit: {},
                                                               onMove: { _ in false }, onCancel: { false }))
             }
@@ -110,8 +111,9 @@ struct ToolbarFitTests {
         return window(sidebar: test.sidebar, subtitle: count, style: Case.styles[test.style].1)
     }
 
-    static func window(sidebar: Bool, subtitle: String, style: NSWindow.ToolbarStyle = .unified) -> NSWindow {
-        let host = NSHostingController(rootView: Frame(sidebar: sidebar, subtitle: subtitle))
+    static func window(sidebar: Bool, subtitle: String, style: NSWindow.ToolbarStyle = .unified,
+                       query: String = "sample") -> NSWindow {
+        let host = NSHostingController(rootView: Frame(sidebar: sidebar, subtitle: subtitle, query: query))
         host.sceneBridgingOptions = [.toolbars, .title]
         let window = NSWindow(contentViewController: host)
         window.styleMask = [.titled, .resizable, .closable, .miniaturizable]
@@ -184,8 +186,9 @@ struct ToolbarFitTests {
         }
         #expect(box.minX >= field.frame.minX - tolerance && box.maxX <= field.frame.maxX + tolerance,
                 "the search field spills out of its item at \(at): \(box) in \(field.frame)")
-        #expect(box.width >= ToolbarLayout.searchWidth.min - tolerance
-                    && box.width <= ToolbarLayout.searchWidth.max + tolerance,
+        let least = (ToolbarLayout.searchWidth.min * 2 / 3).rounded()
+        let most = (ToolbarLayout.searchWidth.max * 2 / 3).rounded()
+        #expect(box.width >= least - tolerance && box.width <= most + tolerance,
                 "the search field is \(box.width) pt at \(at)")
         if hidden == 0 {
             #expect(abs(box.width - ToolbarLayout.searchFieldWidth(window: width)) <= tolerance,
@@ -342,7 +345,7 @@ struct ToolbarFitTests {
         let priorities = (window.toolbar?.items ?? []).filter { $0.view != nil }.map { "\($0.label)=\($0.visibilityPriority.rawValue)" }
         let user = NSToolbarItem.VisibilityPriority.user.rawValue, high = NSToolbarItem.VisibilityPriority.high.rawValue
         let low = NSToolbarItem.VisibilityPriority.low.rawValue
-        #expect(priorities == ["Back/Forward=\(low)", "Pronounce=\(high)", "Text Size=\(low)", "Search=\(user)"])
+        #expect(priorities == ["Back/Forward=\(low)", "Pronounce=\(high)", "Search=\(user)", "Text Size=\(low)"])
     }
 
     @Test func everyToolbarItemHasAName() async throws {
@@ -350,7 +353,7 @@ struct ToolbarFitTests {
         defer { window.close() }
         try await Self.resize(window, to: 1200)
         let labels = (window.toolbar?.items ?? []).filter { $0.view != nil }.map(\.label)
-        #expect(labels == ["Back/Forward", "Pronounce", "Text Size", "Search"])
+        #expect(labels == ["Back/Forward", "Pronounce", "Search", "Text Size"])
         for key in ["Back/Forward", "Text Size", "Search"] {
             let chinese = try CompiledCatalog.text(LocalizedStringResource(stringLiteral: key), in: "zh-Hans")
             #expect(!chinese.isEmpty && chinese != key, "\(key) has no Chinese name: \(chinese)")

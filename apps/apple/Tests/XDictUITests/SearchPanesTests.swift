@@ -75,30 +75,18 @@ struct SearchPanesTests {
         #expect(ToolbarLayout.windowTitle(word: nil) == String(localized: ToolbarLayout.windowTitle))
     }
 
-    /// **The answer beside the entry, or in a sheet** (native capture, 2026-10-23: 400 pt with the answer pane aborted;
-    /// root's policy, 2026-10-23): the inspector only where the entry keeps half the least window beside the pane at its
-    /// ideal, and the results list at its ideal when the reader shows it; narrower, a sheet. Nothing is presented before
-    /// the window's width is known, and without an ask nothing at all.
-    @Test func theAnswerOpensBesideTheEntryOrInASheet() {
-        let room = ToolbarLayout.minimumWindow.width / 2, pane = Tokens.Window.meaningPaneIdeal
-        let list = ToolbarLayout.sidebar.ideal
-        #expect(MeaningPlacement.at(width: nil, results: false, meaning: true) == .hidden, "deferred until measured")
-        #expect(MeaningPlacement.at(width: nil, results: true, meaning: true) == .hidden, "deferred until measured")
-        #expect(MeaningPlacement.at(width: room + pane, results: false, meaning: true) == .inspector)
-        #expect(MeaningPlacement.at(width: room + pane - 1, results: false, meaning: true) == .sheet)
-        #expect(MeaningPlacement.at(width: room + pane + list, results: true, meaning: true) == .inspector)
-        #expect(MeaningPlacement.at(width: room + pane + list - 1, results: true, meaning: true) == .sheet,
-                "the reader's results list is never hidden for the pane: the answer goes to a sheet")
-        #expect(MeaningPlacement.at(width: 400, results: false, meaning: true) == .sheet)
-        #expect(MeaningPlacement.at(width: 1180, results: true, meaning: true) == .inspector)
-        for width in stride(from: CGFloat(400), through: 2400, by: 10) {
-            for results in [false, true] {
-                #expect(MeaningPlacement.at(width: width, results: results, meaning: false) == .hidden)
-                let beside = width >= room + pane + (results ? list : 0)
-                #expect(MeaningPlacement.at(width: width, results: results, meaning: true) == (beside ? .inspector : .sheet),
-                        "at \(width) pt, results \(results)")
-            }
-        }
+    /// The answer adds its width to the frame; screen limits never make it take space from the entry.
+    @Test func theAnswerExpandsOutsideTheExistingFrameWhenTheScreenCanFitIt() throws {
+        let visible = NSRect(x: -1600, y: 40, width: 1600, height: 1000)
+        let frame = NSRect(x: -1500, y: 100, width: 800, height: 600)
+        let width = Tokens.Window.meaningPaneIdeal
+        let expansion = try #require(OutwardPane.Expansion(frame: frame, visible: visible, width: width))
+        #expect(expansion.expanded.width == frame.width + width)
+        #expect(expansion.expanded.origin == frame.origin)
+        #expect(expansion.expanded.height == frame.height)
+        #expect(expansion.closing(expansion.expanded) == frame)
+        let full = NSRect(x: visible.minX, y: frame.minY, width: visible.width, height: frame.height)
+        #expect(OutwardPane.Expansion(frame: full, visible: visible, width: width) == nil)
     }
 
     /// **Only the reader closes the answer** (root's policy, 2026-10-23): a resize that moves it between the sheet and

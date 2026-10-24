@@ -25,12 +25,14 @@ public enum ToolbarLayout {
     public static func titleYields(window: CGFloat, sidebar: CGFloat) -> Bool { titleYields(width: window - sidebar) }
 
     /// The search field's width in a window `window` points wide (P5): Apple's 327 pt at its 859 pt window, in proportion
-    /// to the window between the field's least and most. A range alone left it near its least (owner, 2026-10-18: "search
-    /// field's width is too short"), and a SwiftUI width the toolbar measures once overflowed when the window was
-    /// stretched (2026-10-19), so `ToolbarFieldWidth` gives it to the toolbar's item as a preferred width.
+    /// to the window between the field's least and most, and now **two-thirds of that** (owner, 2026-10-24: "shrink
+    /// search input width to current 2/3"). A range alone left it near its least (owner, 2026-10-18: "search field's
+    /// width is too short"), and a SwiftUI width the toolbar measures once overflowed when the window was stretched
+    /// (2026-10-19), so `ToolbarFieldWidth` gives it to the toolbar's item as a preferred width.
     public static func searchFieldWidth(window: CGFloat) -> CGFloat {
-        let scaled = (searchWidth.ideal * window / Tokens.Window.searchFieldAtWindow).rounded()
-        return min(max(scaled, searchWidth.min), searchWidth.max)
+        let measured = min(max((searchWidth.ideal * window / Tokens.Window.searchFieldAtWindow).rounded(),
+                               searchWidth.min), searchWidth.max)
+        return (measured * 2 / 3).rounded()
     }
 
     /// The window's title, always: "XDict", where Apple's says "Dictionary" (P2, the owner's deviation of 2026-10-18).

@@ -5,16 +5,8 @@ import XDictSearch
 import XDictTokens
 @testable import XDictUI
 
-/// **The main window with the answer asked for** (native capture, 2026-10-23: at 1180 × 760 pt with the pane open the
-/// toolbar showed only the speaker and the title and sent Back/Forward, Text Size and the search field to the overflow;
-/// at 400 × 300 pt opening the pane aborted in a recursive constraint update). `SearchToolbar`'s own items with the
-/// real search field, in the frame `SearchWindow` and its scene put around them, checked as the window lays them out:
-///
-/// - where the answer opens beside the entry (`MeaningPlacement.inspector`): the pane is shown, every toolbar item
-///   is in its own place with no neighbour over it, the field is shown (P8) and, with room for every item, P5's width;
-/// - where it does not (`.sheet`): no inspector is laid out, so nothing widens the window. The sheet itself is modal and
-///   is checked on screen (an offscreen window presents none);
-/// - no width, no opening or closing and no crossing between the two moves the window's width or the results list.
+/// The production outward-resize bridge with the native inspector and toolbar in an offscreen AppKit window.
+/// Opening preserves the entry, repeated closes restore the frame, and a screen with no room uses a sheet.
 @MainActor
 struct MeaningPaneFitTests {
     /// What the reader asked for, and what the window laid out, measured by SwiftUI in the window's coordinates.
@@ -54,10 +46,10 @@ struct MeaningPaneFitTests {
     struct Frame: View {
         let measured: Measured
         @State private var column = CGFloat.infinity
-        @State private var width: CGFloat?
+        @State private var shown: MeaningPlacement = .hidden
+        @State private var paneWidth = Tokens.Window.meaningPaneIdeal
 
         var body: some View {
-            let shown = MeaningPlacement.at(width: width, results: measured.results, meaning: measured.open)
             NavigationSplitView(columnVisibility: .constant(measured.results ? .all : .detailOnly)) {
                 List(0..<20, id: \.self) { Text(verbatim: "headword \($0)") }
                     .toolbar(removing: .sidebarToggle)
@@ -76,14 +68,17 @@ struct MeaningPaneFitTests {
                 }
                 .inspector(isPresented: .constant(shown == .inspector)) {
                     Marker(view: measured.pane)
-                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
+                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: paneWidth,
                                               max: Tokens.Window.meaningPaneMax)
+                        .background(VisibleWidth {
+                            if measured.open, shown == .inspector, $0 >= Tokens.Window.meaningPaneMin { paneWidth = $0 }
+                        })
                 }
             }
             .toolbar {
                 SearchToolbar(canGoBack: true, canGoForward: true, canPronounce: true, back: {}, forward: {},
                               smaller: {}, bigger: {}, pronounce: {},
-                              field: SearchWindow.searchField(text: "", known: [], scope: .all, focus: 0,
+                              field: SearchWindow.searchField(text: "sample", known: [], scope: .all, focus: 0,
                                                               onScope: { _ in }, onChange: { _ in }, onSubmit: {},
                                                               onMove: { _ in false }, onCancel: { false }))
                 MeaningPaneToggle(shown: measured.open, toggle: {})
@@ -91,7 +86,7 @@ struct MeaningPaneFitTests {
             .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
             .navigationTitle(Text(verbatim: "apple"))
             .navigationSubtitle(Text(verbatim: "1 found"))
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+            .background(OutwardPane(shown: measured.open, width: paneWidth, presentation: $shown))
             .onChange(of: shown, initial: true) { measured.presentation = shown }
             // `XDictApp`'s window minimum around `MainWindow` (parity P1): AppKit's, not a SwiftUI frame's.
             .frame(minWidth: 0, minHeight: 0)
@@ -107,7 +102,7 @@ struct MeaningPaneFitTests {
     }
 
     static func window(_ measured: Measured, width: CGFloat, open: Bool, results: Bool) async throws -> NSWindow {
-        measured.open = open
+        measured.open = false
         measured.results = results
         let host = NSHostingController(rootView: Frame(measured: measured))
         host.sceneBridgingOptions = [.toolbars, .title]
@@ -117,155 +112,279 @@ struct MeaningPaneFitTests {
         window.isReleasedWhenClosed = false
         try await ToolbarFitTests.resize(window, to: width)
         try await settled(window)
+        if open {
+            measured.open = true
+            try await settled(window)
+        }
         return window
     }
 
     static let tolerance = ToolbarFitTests.tolerance
-    static let room = ToolbarLayout.minimumWindow.width / 2
     static let pane = Tokens.Window.meaningPaneIdeal
-    static let list = ToolbarLayout.sidebar.ideal
 
-    /// The window's width is the one asked for, the presentation the policy's for it, the inspector laid out exactly
-    /// when it is the policy's, and the search field in the toolbar with no neighbour over it.
-    static func check(_ window: NSWindow, _ measured: Measured, width: CGFloat, at: String) {
-        #expect(abs(window.frame.width - width) <= tolerance, "the window is \(window.frame.width) pt at \(at)")
-        let expected = MeaningPlacement.at(width: window.frame.width, results: measured.results, meaning: measured.open)
-        #expect(measured.presentation == expected, "presented \(measured.presentation), not \(expected), at \(at)")
-        let inspector = paneShown(window, measured)
-        let frame = measured.pane.convert(measured.pane.bounds, to: nil)
-        #expect(inspector == (expected == .inspector),
-                "the inspector is \(inspector ? "shown" : "not shown") (\(frame), hidden \(measured.pane.isHiddenOrHasHiddenAncestor)) at \(at)")
-        #expect(measured.entry.width > 0, "the entry column is gone at \(at)")
-        let (shown, overflow) = ToolbarFitTests.items(window)
-        guard let field = shown.lazy.compactMap(\.field).first else {
-            Issue.record("the search field went to the overflow at \(at): \(shown.count) shown, overflow \(overflow)")
-            return
-        }
-        #expect(field.minX >= 0 && field.maxX <= window.frame.width + tolerance, "the field \(field) leaves the window at \(at)")
-        // The toggle stays where the reader reaches it, the answer beside the entry, in a sheet or closed (UI05).
-        #expect(toggleShown(window), "the answer's toggle left the toolbar at \(at)")
-        let title = measured.open ? "Hide Meaning in Context" : "Show Meaning in Context"
-        #expect(toggleLabels(window) == [title], "the toggle reads \(toggleLabels(window)), not \(title), at \(at)")
-        let frames = shown.map(\.frame)
-        for (i, a) in frames.enumerated() {
-            for b in frames[(i + 1)...] {
-                #expect(a.intersection(b).width <= tolerance, "toolbar items \(a) and \(b) overlap at \(at)")
-            }
-        }
-    }
-
-    /// The answer's toggle is a shown toolbar item of this window, found by its label (Show or Hide Meaning in
-    /// Context: SwiftUI keeps its identifier in its own accessibility elements, not on the item's view).
-    static func toggleShown(_ window: NSWindow) -> Bool {
-        guard let toolbar = window.toolbar else { return false }
-        let visible = Set((toolbar.visibleItems ?? []).map(ObjectIdentifier.init))
-        return toolbar.items.contains { item in
-            visible.contains(ObjectIdentifier(item)) && item.view?.window === window
-                && item.label.hasSuffix("Meaning in Context")
-        }
-    }
-
-    /// The labels of the answer's toggles in the toolbar.
-    static func toggleLabels(_ window: NSWindow) -> [String] {
-        (window.toolbar?.items ?? []).map(\.label).filter { $0.hasSuffix("Meaning in Context") }
-    }
-
-    /// **The first search's results list keeps the reader's width** (native capture `main.meaningCompactReopened`,
-    /// 2026-10-23: a 400 pt window before its first lookup was 584 pt once the lookup brought the list): the list comes
-    /// at 400 pt and the window stays 400 pt, and so it does as the reader hides and restores it, with the answer
-    /// closed and in its sheet.
-    @Test func theFirstResultsListKeepsTheWindowsWidth() async throws {
-        let width = ToolbarLayout.minimumWindow.width
-        let measured = Measured()
-        let window = try await Self.window(measured, width: width, open: false, results: false)
-        defer { window.close() }
-        Self.check(window, measured, width: width, at: "400 pt before the first search")
-        try await Self.clamped(window, at: "before the first search")
-        for (step, results) in [true, false, true, false, true].enumerated() {
-            measured.results = results
-            try await Self.settled(window)
-            Self.check(window, measured, width: width, at: "400 pt, step \(step), the list \(results ? "shown" : "hidden")")
-        }
-        for open in [true, false, true] {
-            measured.open = open
-            try await Self.settled(window)
-            Self.check(window, measured, width: width, at: "400 pt beside the list, the answer \(open ? "opened" : "closed")")
-        }
-        for (step, results) in [false, true].enumerated() {
-            measured.results = results
-            try await Self.settled(window)
-            Self.check(window, measured, width: width, at: "400 pt with the sheet, step \(step), the list \(results ? "shown" : "hidden")")
-        }
-        try await Self.clamped(window, at: "with the list and the sheet")
-        measured.open = false
-        try await Self.settled(window)
-        try await Self.clamped(window, at: "with the list")
-        Self.check(window, measured, width: width, at: "400 pt with the list, after asking for 100 × 100")
-    }
-
-    /// **The window's least is Apple's 400 × 300 pt** (parity P1: asked for 100 × 100, Apple's took 400 × 300), a frame
-    /// including its title bar and toolbar, kept whatever the panes ask.
-    static func clamped(_ window: NSWindow, at: String) async throws {
-        window.setContentSize(NSSize(width: 100, height: 100))
-        try await settled(window)
-        let least = ToolbarLayout.minimumWindow
-        #expect(abs(window.frame.width - least.width) <= tolerance && abs(window.frame.height - least.height) <= tolerance,
-                "asked for 100 × 100 \(at), the window is \(window.frame.size), not \(least.width) × \(least.height)")
-    }
-
-    /// **Beside the entry, the toolbar keeps every item in its place**: the pane's toggle at the trailing end, the field
-    /// before it at P5's width when everything fits, and at the capture's 1180 pt and wider nothing in the overflow.
-    @Test(arguments: [false, true])
-    func theInspectorLeavesTheToolbarItsPlaces(results: Bool) async throws {
-        let least = Self.room + Self.pane + (results ? Self.list : 0)
-        let measured = Measured()
-        let window = try await Self.window(measured, width: 1180, open: true, results: results)
-        defer { window.close() }
-        for width: CGFloat in [least, 800, 1000, 1180, 1400, 2400, 1180, 800, least] {
-            try await ToolbarFitTests.resize(window, to: width)
-            try await Self.settled(window)
-            let at = "\(Int(width)) pt with the answer beside the entry" + (results ? " and the results" : "")
-            Self.check(window, measured, width: width, at: at)
-            let (shown, overflow) = ToolbarFitTests.items(window)
-            if width >= 1180 {
-                #expect(overflow.isEmpty, "with room for every item, \(overflow) went to the overflow at \(at)")
-            }
-            if overflow.isEmpty, let field = shown.lazy.compactMap(\.field).first {
-                #expect(abs(field.width - ToolbarLayout.searchFieldWidth(window: window.frame.width)) <= Self.tolerance,
-                        "the field is \(field.width) pt, not P5's width for the \(window.frame.width) pt window, at \(at)")
-            }
-        }
-    }
-
-    /// **Every width, back and forth across the sheet's edge, keeps the window's width** (the 400 × 300 pt abort; the
-    /// earlier policy's 400 → 583 → 843 pt growth): the reader's results list stays as they left it throughout.
-    @Test(arguments: [false, true])
-    func noWidthGrowsTheWindow(results: Bool) async throws {
-        let least = Self.room + Self.pane + (results ? Self.list : 0)
-        let measured = Measured()
-        let window = try await Self.window(measured, width: ToolbarLayout.minimumWindow.width, open: true, results: results)
-        defer { window.close() }
-        for (step, width): (Int, CGFloat) in [400, 450, least - 1, least, 1180, least - 1, 600, 400, 2400, 400].enumerated() {
-            try await ToolbarFitTests.resize(window, to: width)
-            try await Self.settled(window)
-            Self.check(window, measured, width: width,
-                       at: "\(Int(width)) pt with the answer asked for" + (results ? " beside the results" : "") + ", step \(step)")
-        }
-    }
-
-    /// **Opening and closing the answer keeps the window's width** (native capture `main.meaningAnswerNarrow`: ⌘⌥↓ at
-    /// 400 × 300 pt aborted), in the sheet's width and in the inspector's, with and without the results list.
-    @Test(arguments: [false, true], [CGFloat(400), 1180])
-    func openingAndClosingTheAnswerKeepsTheWindowsWidth(results: Bool, width: CGFloat) async throws {
+    @Test(arguments: [false, true], [CGFloat(400), 800])
+    func openingTheAnswerAddsRoomWithoutTakingItFromTheEntry(results: Bool, width: CGFloat) async throws {
         let measured = Measured()
         let window = try await Self.window(measured, width: width, open: false, results: results)
         defer { window.close() }
-        #expect(abs(window.frame.width - width) <= Self.tolerance, "the window opened at \(window.frame.width) pt")
-        for open in [true, false, true, false] {
-            measured.open = open
-            try await Self.settled(window)
-            Self.check(window, measured, width: width, at: "\(Int(width)) pt with the answer \(open ? "opened" : "closed")"
-                       + (results ? " beside the results" : ""))
+        if let screen = window.screen {
+            window.setFrameOrigin(NSPoint(x: screen.visibleFrame.minX, y: window.frame.minY))
         }
+        let original = window.frame
+        let entry = measured.entry.width
+        for _ in 0..<3 {
+            measured.open = true
+            try await Self.settled(window)
+            #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+            #expect(abs(measured.entry.width - entry) <= Self.tolerance,
+                    "opening took room from the entry: \(entry) → \(measured.entry.width)")
+            #expect(abs(window.frame.minX - original.minX) <= Self.tolerance)
+            #expect(abs(window.frame.height - original.height) <= Self.tolerance)
+            #expect(Self.paneShown(window, measured))
+            measured.open = false
+            try await Self.settled(window)
+            #expect(abs(window.frame.width - original.width) <= Self.tolerance)
+            #expect(abs(measured.entry.width - entry) <= Self.tolerance)
+        }
+    }
+
+    @Test(arguments: [false, true])
+    func resultsVisibilityDoesNotResizeTheWindow(open: Bool) async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 400, open: open, results: false)
+        defer { window.close() }
+        let width = window.frame.width
+        for results in [true, false, true, false, true] {
+            measured.results = results
+            try await Self.settled(window)
+            #expect(abs(window.frame.width - width) <= Self.tolerance)
+            #expect(measured.results == results)
+            #expect(Self.paneShown(window, measured) == open)
+        }
+    }
+
+    @Test func aScreenFillingWindowUsesTheSheetWithoutCompressingTheEntry() async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 800, open: false, results: true)
+        defer { window.close() }
+        let screen = try #require(window.screen)
+        try await ToolbarFitTests.resize(window, to: screen.visibleFrame.width)
+        try await Self.settled(window)
+        let original = window.frame
+        let entry = measured.entry.width
+        measured.open = true
+        try await Self.settled(window)
+        #expect(measured.presentation == .sheet)
+        #expect(!Self.paneShown(window, measured))
+        #expect(window.frame == original)
+        #expect(abs(measured.entry.width - entry) <= Self.tolerance)
+        measured.open = false
+        try await Self.settled(window)
+        #expect(window.frame == original)
+    }
+
+    @Test func openingAtTheScreenEdgeMovesOnlyAsFarAsNeededAndClosingRestoresIt() async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 800, open: false, results: true)
+        defer { window.close() }
+        let screen = try #require(window.screen)
+        window.setFrameOrigin(NSPoint(x: screen.visibleFrame.maxX - window.frame.width, y: window.frame.minY))
+        let original = window.frame
+        let entry = measured.entry.width
+        measured.open = true
+        try await Self.settled(window)
+        #expect(abs(window.frame.maxX - original.maxX) <= Self.tolerance)
+        #expect(abs(window.frame.minX - original.minX + Self.pane) <= Self.tolerance)
+        #expect(abs(measured.entry.width - entry) <= Self.tolerance)
+        measured.open = false
+        try await Self.settled(window)
+        #expect(window.frame == original)
+    }
+
+    @Test func closingKeepsAReadersLaterResizeAndMove() async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 800, open: true, results: true)
+        defer { window.close() }
+        try await ToolbarFitTests.resize(window, to: 900 + Self.pane)
+        window.setFrameOrigin(NSPoint(x: window.frame.minX + 10, y: window.frame.minY))
+        try await Self.settled(window)
+        let entry = measured.entry.width
+        let origin = window.frame.origin
+        measured.open = false
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - 900) <= Self.tolerance)
+        #expect(window.frame.origin == origin)
+        #expect(abs(measured.entry.width - entry) <= Self.tolerance)
+    }
+
+    @Test func resizingBelowTheInspectorsMinimumUsesTheSheetAtTheRequestedWidth() async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 800, open: true, results: true)
+        defer { window.close() }
+        try await ToolbarFitTests.resize(window, to: 400)
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - 400) <= Self.tolerance)
+        #expect(measured.presentation == .sheet)
+        #expect(!Self.paneShown(window, measured))
+        measured.open = false
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - 400) <= Self.tolerance)
+    }
+
+    /// Reopening from the dismissal callback precedes the deferred contraction; the reserved room is reused.
+    @Test func reopeningBeforeTheDeferredContractionDoesNotAddThePaneTwice() async throws {
+        let probe = OutwardPane.Probe()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 100, width: 800, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = probe
+        defer { window.close() }
+        let original = window.frame
+        probe.shown = true
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+        probe.changed = { presentation in
+            if presentation == .hidden {
+                probe.shown = true
+                probe.schedule()
+            }
+        }
+        defer { probe.changed = nil }
+        probe.shown = false
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+        probe.changed = nil
+        probe.shown = false
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width) <= Self.tolerance)
+    }
+
+    @Test(arguments: [false, true])
+    func theInspectorLeavesTheToolbarItsPlaces(results: Bool) async throws {
+        let measured = Measured()
+        let window = try await Self.window(measured, width: 800, open: true, results: results)
+        defer { window.close() }
+        for width: CGFloat in [800, 1000, 1180, 1400, 1180, 800] {
+            try await ToolbarFitTests.resize(window, to: width)
+            try await Self.settled(window)
+            #expect(abs(window.frame.width - width) <= Self.tolerance)
+            #expect(Self.paneShown(window, measured))
+            #expect(measured.entry.width > 0)
+            let (shown, overflow) = ToolbarFitTests.items(window)
+            let field = try #require(shown.lazy.compactMap(\.field).first, "the search field went to overflow: \(overflow)")
+            #expect(field.minX >= 0 && field.maxX <= width + Self.tolerance)
+            let labels = (window.toolbar?.visibleItems ?? []).map(\.label)
+            #expect(labels.contains("Hide Meaning in Context"))
+            if width >= 1180 { #expect(overflow.isEmpty) }
+            for (index, first) in shown.enumerated() {
+                for second in shown[(index + 1)...] {
+                    #expect(first.frame.intersection(second.frame).width <= Self.tolerance)
+                }
+            }
+        }
+    }
+
+    @Test(arguments: [CGFloat(260), 460])
+    func changingThePaneWidthKeepsTheReservationAndRestoresTheOriginalWindow(paneWidth: CGFloat) async throws {
+        let probe = OutwardPane.Probe()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 100, width: 400, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = probe
+        defer { window.close() }
+        let original = window.frame
+        probe.shown = true
+        probe.schedule()
+        try await Self.settled(window)
+        probe.paneWidth = paneWidth
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width - paneWidth) <= Self.tolerance)
+        probe.shown = false
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(window.frame == original)
+    }
+
+    @Test func aFailedFullScreenEntryDoesNotLeaveThePaneDisabled() async throws {
+        let probe = OutwardPane.Probe()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 100, width: 800, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = probe
+        defer { window.close() }
+        let original = window.frame
+        NotificationCenter.default.post(name: NSWindow.willEnterFullScreenNotification, object: window)
+        probe.shown = true
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+    }
+
+    @Test func aPaneThatOutgrowsTheScreenRestoresTheBaseFrameBeforeUsingTheSheet() async throws {
+        let probe = OutwardPane.Probe()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 100, width: 400, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = probe
+        defer { window.close() }
+        let screen = try #require(window.screen)
+        var frame = window.frame
+        frame.size.width = screen.visibleFrame.width - Self.pane
+        frame.origin.x = screen.visibleFrame.minX
+        window.setFrame(frame, display: true)
+        let original = window.frame
+        var presentation: MeaningPlacement = .hidden
+        probe.changed = { presentation = $0 }
+        probe.shown = true
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(presentation == .inspector)
+        probe.paneWidth = Tokens.Window.meaningPaneMax
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(presentation == .sheet)
+        #expect(window.frame == original)
+        probe.shown = false
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(window.frame == original)
+    }
+
+    /// Notification-level lifecycle coverage; this deliberately does not claim a real fullscreen/Spaces transition.
+    @Test func leavingFullScreenReconsidersTheSheetAndRestoresTheReservation() async throws {
+        let probe = OutwardPane.Probe()
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 100, width: 800, height: 300),
+                              styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = probe
+        defer { window.close() }
+        let original = window.frame
+        var presentation: MeaningPlacement = .hidden
+        probe.changed = { presentation = $0 }
+        NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: window)
+        probe.shown = true
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(presentation == .sheet)
+        #expect(window.frame == original)
+        NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: window)
+        try await Self.settled(window)
+        #expect(presentation == .inspector)
+        #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+        NotificationCenter.default.post(name: NSWindow.didEnterFullScreenNotification, object: window)
+        try await Self.settled(window)
+        #expect(presentation == .sheet)
+        probe.shown = false
+        probe.schedule()
+        try await Self.settled(window)
+        #expect(abs(window.frame.width - original.width - Self.pane) <= Self.tolerance)
+        NotificationCenter.default.post(name: NSWindow.didExitFullScreenNotification, object: window)
+        try await Self.settled(window)
+        #expect(window.frame == original)
+        #expect(presentation == .hidden)
     }
 }

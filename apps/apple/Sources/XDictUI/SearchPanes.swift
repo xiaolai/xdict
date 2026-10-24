@@ -1,6 +1,3 @@
-import Foundation
-import XDictTokens
-
 /// **Which of the window's panes the reader chose to see** (HIG audit 2026-10-23, UI02, UI05, UI07): the answer pane and
 /// the results list. Each has a command and a control that hide and restore it; an ask opens the answer pane; a search
 /// brings the results list (P9) unless the reader hid it, and that choice holds across searches until they restore it.
@@ -68,30 +65,15 @@ struct SearchPanes: Equatable {
     }
 }
 
-/// **Where the answer the reader asked for is shown** (native capture, 2026-10-23: a 400 pt window opening the answer
-/// pane aborted in a recursive constraint update; root's policy, 2026-10-23): beside the entry, as the inspector, where
-/// the window holds the entry's room — half the least window (P1) — the pane at its ideal, and the results list at its
-/// ideal when the reader shows it; narrower, in a sheet over the window. Neither changes the window's width or the
-/// results list, which stay the reader's.
-///
-/// Nothing is presented before the window's width is known, so the first layout never opens the one it then leaves.
+/// Where the answer is shown (ADR-0030, owner's outward-expansion clarification, 2026-10-24). `OutwardPane`
+/// enlarges the native frame before opening the inspector. Without screen room, or after a deliberate resize below
+/// the inspector's least, the same answer uses a sheet. The results list remains the reader's choice.
 enum MeaningPlacement: Equatable {
-    /// Not asked for, or the window's width not known yet.
+    /// Not asked for, or the native window is not attached yet.
     case hidden
     /// The trailing inspector beside the entry.
     case inspector
     /// A sheet over the window, with Done.
     case sheet
 
-    static func at(width: CGFloat?, results: Bool, meaning: Bool) -> MeaningPlacement {
-        guard meaning, let width else { return .hidden }
-        return width >= beside(results: results) ? .inspector : .sheet
-    }
-
-    /// The least window that holds the inspector: the entry's room, the pane at its ideal, and the list at its ideal
-    /// when shown. Ideals, not leasts: SwiftUI counts the list's ideal in the entry column's least (measured), so a
-    /// window sized to the leasts was widened by AppKit when the pane opened.
-    static func beside(results: Bool) -> CGFloat {
-        ToolbarLayout.minimumWindow.width / 2 + Tokens.Window.meaningPaneIdeal + (results ? ToolbarLayout.sidebar.ideal : 0)
-    }
 }

@@ -22,9 +22,14 @@ final class ToolbarFieldWidth: NSObject {
     /// measured); below required, so SwiftUI's bounds on the field win, and below the window's own drag, so the
     /// preferred width never holds the window open.
     static let priority = NSLayoutConstraint.Priority.dragThatCannotResizeWindow
+    /// **The expand/collapse animation** (owner, 2026-10-24: 200 ms): the item's width moves over this, the field's
+    /// frame following it inside the item.
+    static let expandDuration: TimeInterval = 0.2
 
     private weak var field: NSView?
     private weak var window: NSWindow?
+    /// The item's view, which this watcher last widened, so a collapse can give the item its natural width back.
+    private weak var itemView: NSView?
 
     private init(field: NSView, window: NSWindow) {
         self.field = field
@@ -58,19 +63,50 @@ final class ToolbarFieldWidth: NSObject {
     }
 
     /// The item holding the field gets the window's width for it, whether the field is shown or in the overflow.
+    /// Collapsed, the field has left the toolbar and its item is the SwiftUI button again: the item takes itself back
+    /// to its natural width.
     func update() {
         guard let field, let window, let toolbar = window.toolbar else { return }
         ToolbarPriority.apply(field, in: toolbar)
         ToolbarLabels.apply(field, in: toolbar)
         guard let item = toolbar.items.lazy.compactMap(\.view).first(where: { field.isDescendant(of: $0) }) else { return }
-        let width = ToolbarLayout.searchFieldWidth(window: window.frame.width)
-        if let preferred = item.constraints.first(where: { $0.identifier == Self.identifier }) {
-            if preferred.constant != width { preferred.constant = width }
+        itemView = item
+        guard (field as? KeyboardSearchField)?.searchControl?.expanded == true else {
+            releaseWidth()
             return
         }
-        let preferred = item.widthAnchor.constraint(equalToConstant: width)
-        preferred.priority = Self.priority
-        preferred.identifier = Self.identifier
-        preferred.isActive = true
+        widen(item, to: ToolbarLayout.searchFieldWidth(window: window.frame.width))
+    }
+
+    /// The editor was removed from its item: deactivate the width it asked for so the button sizes naturally.
+    static func release(_ field: NSView) {
+        guard let window = field.window, let watcher = watcher(of: window) else { return }
+        watcher.releaseWidth()
+    }
+
+    private func releaseWidth() {
+        guard let itemView else { return }
+        for constraint in itemView.constraints where constraint.identifier == Self.identifier && constraint.isActive {
+            constraint.isActive = false
+        }
+        self.itemView = nil
+    }
+
+    /// The item view's preferred width, set (or restored) over `expandDuration` (owner, 2026-10-24).
+    private func widen(_ itemView: NSView, to width: CGFloat) {
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = Self.expandDuration
+            context.allowsImplicitAnimation = true
+            if let preferred = itemView.constraints.first(where: { $0.identifier == Self.identifier }) {
+                preferred.constant = width
+                if !preferred.isActive { preferred.isActive = true }
+            } else {
+                let preferred = itemView.widthAnchor.constraint(equalToConstant: width)
+                preferred.priority = Self.priority
+                preferred.identifier = Self.identifier
+                preferred.isActive = true
+            }
+            itemView.superview?.layoutSubtreeIfNeeded()
+        }
     }
 }

@@ -73,15 +73,17 @@ struct ParityWindowTests {
         #expect(ToolbarLayout.subtitle(found: nil) == nil)
     }
 
-    /// **P5**: the search field is Apple's 327 pt at an 859 pt window, wider in a wider window up to its most, narrower
-    /// only in a narrower one, never under its least (owner, 2026-10-18: "search field's width is too short").
-    @Test func theSearchFieldIsApplesWidthAndFollowsTheWindow() {
-        #expect(ToolbarLayout.searchFieldWidth(window: 859) == 327)
-        #expect(ToolbarLayout.searchFieldWidth(window: 1000) > 327)
-        #expect(ToolbarLayout.searchFieldWidth(window: 2000) == ToolbarLayout.searchWidth.max)
-        #expect(ToolbarLayout.searchFieldWidth(window: 700) < 327)
-        #expect(ToolbarLayout.searchFieldWidth(window: 400) >= ToolbarLayout.searchWidth.min)
-        #expect(ToolbarLayout.searchFieldWidth(window: 100) == ToolbarLayout.searchWidth.min)
+    /// **P5, narrowed by the owner** (2026-10-24: "shrink search input width to current 2/3"): two-thirds of Apple's
+    /// 327 pt at an 859 pt window, wider in a wider window up to two-thirds of its most, narrower only in a narrower one,
+    /// never under two-thirds of its least (owner, 2026-10-18: "search field's width is too short").
+    @Test func theSearchFieldIsTwoThirdsOfApplesWidthAndFollowsTheWindow() {
+        let measured = ToolbarLayout.searchWidth
+        #expect(ToolbarLayout.searchFieldWidth(window: 859) == (measured.ideal * 2 / 3).rounded())
+        #expect(ToolbarLayout.searchFieldWidth(window: 1000) > (measured.ideal * 2 / 3).rounded())
+        #expect(ToolbarLayout.searchFieldWidth(window: 2000) == (measured.max * 2 / 3).rounded())
+        #expect(ToolbarLayout.searchFieldWidth(window: 700) < (measured.ideal * 2 / 3).rounded())
+        #expect(ToolbarLayout.searchFieldWidth(window: 400) >= (measured.min * 2 / 3).rounded())
+        #expect(ToolbarLayout.searchFieldWidth(window: 100) == (measured.min * 2 / 3).rounded())
         let widths = stride(from: CGFloat(400), through: 2000, by: 50).map { ToolbarLayout.searchFieldWidth(window: $0) }
         #expect(widths == widths.sorted(), "the field never narrows as the window widens")
     }

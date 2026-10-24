@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | Smaller/Bigger Text | search. At
-/// the 400 pt minimum the toolbar's items go to the overflow before the search field does (P8). Its own type, so a test lays
-/// out these very items in a window (`ToolbarFitTests`).
+/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | search | Smaller/Bigger Text. The
+/// owner put the search before the text-size pair (2026-10-24: "move search before font-size changers"), which also
+/// keeps the pair between the field and the answer pane's toggle, so the two show as separate buttons. At the 400 pt
+/// minimum the toolbar's items go to the overflow before the search field does (P8). Its own type, so a test lays out
+/// these very items in a window (`ToolbarFitTests`).
 struct SearchToolbar<Field: View>: ToolbarContent {
     let canGoBack: Bool
     let canGoForward: Bool
@@ -40,6 +42,10 @@ struct SearchToolbar<Field: View>: ToolbarContent {
         }
         .visibilityPriority(.high)
         ToolbarItem(placement: .primaryAction) {
+            field
+        }
+        .visibilityPriority(.high)
+        ToolbarItem(placement: .primaryAction) {
             ControlGroup {
                 Button(action: smaller) { Label("Smaller Text", systemImage: "textformat.size.smaller") }
                     .help(Text("Decrease font size"))
@@ -53,13 +59,5 @@ struct SearchToolbar<Field: View>: ToolbarContent {
             .controlGroupStyle(.navigation)
         }
         .visibilityPriority(.low)
-        ToolbarItem(placement: .primaryAction) {
-            field
-                // Bounds only: the width within them follows the window (P5: 327 pt at 859 pt), set on the toolbar's
-                // item by `ToolbarFieldWidth`. A width here is measured once by the toolbar and kept, so a window-
-                // following one overflowed its slot when the window was stretched (owner, 2026-10-19).
-                .frame(minWidth: ToolbarLayout.searchWidth.min, maxWidth: ToolbarLayout.searchWidth.max)
-        }
-        .visibilityPriority(.high)
     }
 }

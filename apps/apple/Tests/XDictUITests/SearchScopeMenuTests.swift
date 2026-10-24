@@ -136,7 +136,7 @@ struct SearchScopeMenuTests {
     /// The window's own wiring (`SearchWindow.searchField`, what its toolbar shows): the placeholder, the menu and
     /// so the magnifier follow the model's scope, never a constant.
     @Test func theWindowWiresTheFieldToTheScope() {
-        func field(_ scope: SearchScope) -> SearchField {
+        func field(_ scope: SearchScope) -> ToolbarSearchItem {
             SearchWindow.searchField(text: "", known: Self.known, scope: scope, focus: 0, onScope: { _ in },
                                      onChange: { _ in }, onSubmit: {}, onMove: { _ in false }, onCancel: { false })
         }
