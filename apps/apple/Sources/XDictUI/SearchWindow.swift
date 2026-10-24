@@ -5,12 +5,13 @@ import XDictLibrary
 import XDictSearch
 import XDictTokens
 
-/// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
-/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the search field, the Smaller/Bigger Text
-/// pair and the answer pane's toggle; the sidebar of matching headwords appears only after a search. **The search field
-/// is SwiftUI's `.searchable`** (owner, 2026-10-24): the system places it at the trailing end, collapses it in a narrow
-/// window, and draws its focus ring; its scopes (P6, P7) are the picker below the toolbar. The menus (`SearchCommands`)
-/// carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
+/// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17, with the
+/// 2026-10-24 changes): the toolbar holds Back/Forward, the title "XDict" with "N found" under it and the search field;
+/// the text-size pair and the answer pane's toggle left it (View menu and ⌘I). The sidebar of matching headwords
+/// appears only after a search. **The search field is SwiftUI's `.searchable`**: the system places it at the trailing
+/// end, collapses it in a narrow window, and draws its focus ring; its scopes (P6, P7) are the picker below the
+/// toolbar. The answer pane is its own window beside this one. The menus (`SearchCommands`) carry every toolbar
+/// command, and XDict's own: Return to Original Word, Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     /// The content column's width: the title over it yields when it is narrow (P8).
@@ -60,20 +61,6 @@ public struct SearchWindow: View {
             EntryDetail(state: state, openMeaning: { state.panes.meaningAsked() })
                 .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity)
                 .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { column = $0 }
-                // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader. On the detail, not the
-                // split view: there its least was counted twice. `OutwardPane` reserves the room before opening it.
-                // Nested in the navigation's detail, the inspector sits under the window's shared toolbar, level with
-                // the reading area (WWDC23 10161). Its content is the pane alone: toolbar content declared inside an
-                // inspector gives it a toolbar section of its own, so its toggle is the window's (`toolbar`).
-                .inspector(isPresented: paneShown(in: .inspector, now: shown)) {
-                    MeaningAnswerPane(state: state)
-                        .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: paneWidth,
-                                              max: Tokens.Window.meaningPaneMax)
-                        .background(VisibleWidth {
-                            if presentation == .inspector, state.panes.meaningShown || state.panes.examplesShown,
-                               $0 >= Tokens.Window.meaningPaneMin { paneWidth = $0 }
-                        })
-                }
         }
         // **The answer in a sheet** where the pane does not fit beside the entry and the list the reader shows: the
         // pane's own scrolling body over Done (R3), Escape closing it too. Modal, so the window's search is back after
@@ -130,8 +117,11 @@ public struct SearchWindow: View {
         // The All page grows as each dictionary answers (P15).
         .onChange(of: state.pageResults) { state.pageResultsChanged() }
         .onChange(of: state.placeholder) { state.placeholderChanged() }
-        .background(OutwardPane(shown: state.panes.meaningShown || state.panes.examplesShown,
-                                width: paneWidth, presentation: $presentation))
+        // **The answer pane is its own window** (owner, 2026-10-24): full height, its toggle at its top-left, beside
+        // the main window — which keeps its frame, its reading width and SwiftUI's `.searchable` at its own trailing
+        // edge. A screen with no room beside it uses the sheet below.
+        .background(MeaningPaneWindow(shown: state.panes.meaningShown || state.panes.examplesShown,
+                                      width: paneWidth, presentation: $presentation, state: state))
     }
 
     /// **The results list, as the reader left it** (P9; HIG audit UI07): none before a search, the first search brings
@@ -156,16 +146,14 @@ public struct SearchWindow: View {
         }
     }
 
-    /// The window's one shared toolbar (P3, `SearchToolbar`), wired to this window's entry and speaker, then
-    /// **the inspector's toggle** (HIG audit UI05): at the toolbar's trailing end, where a Mac window's inspector button
-    /// is, after Apple's items in their order (P3, P8). The search field is SwiftUI's `.searchable`, not an item here;
-    /// View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
+    /// The window's one shared toolbar (P3, `SearchToolbar`), wired to this window's entry and speaker. **The answer
+    /// pane's toggle left the toolbar** (owner, 2026-10-24): ⌘I (View ▸ Show/Hide Meaning in Context) toggles it, and an
+    /// open pane carries the same toggle at its own top-left. The search field is SwiftUI's `.searchable`, placed by the
+    /// system.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
                       canPronounce: state.canPronounce, back: { state.model.back() },
-                      forward: { state.model.forward() }, smaller: { state.entry.zoomOut() },
-                      bigger: { state.entry.zoomIn() }, pronounce: { state.pronounceSelectionOrShown() })
-        MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() }
+                      forward: { state.model.forward() }, pronounce: { state.pronounceSelectionOrShown() })
     }
 
     /// The searchable field's text, through the window's typing path (a search starts as the reader types).
@@ -183,26 +171,6 @@ public struct SearchWindow: View {
         String(localized: SearchScopeMenu.prompt(known: state.model.known, scope: state.model.scope))
     }
 
-}
-
-/// **The answer pane's toggle** (HIG audit UI05), owned by the shared window toolbar and shown at its trailing end
-/// whether the answer is beside the entry, in its sheet or closed. It says what it will do, as View ▸ Show/Hide Meaning
-/// in Context does.
-struct MeaningPaneToggle: ToolbarContent {
-    /// The reader asked for the answer: beside the entry or in its sheet.
-    let shown: Bool
-    let toggle: () -> Void
-
-    var body: some ToolbarContent {
-        ToolbarItem(placement: .primaryAction) {
-            Button(action: toggle) {  // placement: P3
-                Label(shown ? LocalizedStringKey("Hide Meaning in Context") : LocalizedStringKey("Show Meaning in Context"),
-                      systemImage: "sidebar.trailing")
-            }
-            .help(shown ? Text("Hide the meaning of the captured word in its sentence") : Text("Show Meaning in Context"))
-            .accessibilityIdentifier("toolbar.meaning")
-        }
-    }
 }
 
 /// The entry pane: the page's notices over the entry view, and a placeholder while there is nothing to read. The entry

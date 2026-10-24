@@ -12,7 +12,7 @@ public enum SettingsSearch {
         case dictionaryList, dictionaryImport
         case readingWidth, readingAccent, speechVoice
         case history, reviewReminders, syncFolder
-        case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance
+        case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
         case aiSource, aiEntryText, aiLanguage, aiPrompt
         case setupBoard
     }
@@ -53,6 +53,7 @@ public enum SettingsSearch {
         .lookupShortcut: ["快捷键", "键盘"],
         .hover: ["悬停", "鼠标", "手势", "屏幕录制"],
         .popupAppearance: ["弹窗", "背景", "玻璃"],
+        .meaningPaneGap: ["面板", "间隔", "间距", "右侧"],
         .aiSource: ["人工智能", "模型", "来源", "登录", "本地", "云端"],
         .aiEntryText: ["隐私", "发送", "词条"],
         .aiLanguage: ["回答语言", "中文", "英文"],
@@ -87,6 +88,8 @@ public enum SettingsSearch {
              keywords: ["hover", "pointer", "mouse", "rest", "time", "gesture", "screen", "recording", "never"]),
         Item(.general, .popupAppearance, "Lookup popup",
              keywords: ["popup", "panel", "appearance", "dark", "light", "glass", "background"]),
+        Item(.general, .meaningPaneGap, "Answer Pane",
+             keywords: ["pane", "panel", "gap", "space", "margin", "separation", "right"]),
         Item(.ai, .aiSource, "Where answers come from",
              keywords: ["ai", "source", "provider", "apple", "local", "cloud", "codex", "claude", "endpoint", "model",
                         "key", "sign", "in"]),

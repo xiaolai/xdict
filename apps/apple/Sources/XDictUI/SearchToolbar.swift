@@ -1,16 +1,15 @@
 import SwiftUI
 
-/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | Smaller/Bigger Text. **The search
-/// is SwiftUI's `.searchable`** (owner, 2026-10-24), a toolbar item the system places itself at the trailing end; the
-/// custom AppKit field this type once carried is gone with it.
+/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | search. **The search is SwiftUI's
+/// `.searchable`** (owner, 2026-10-24), a toolbar item the system places at the trailing end. **The text-size pair left
+/// the toolbar** (owner, 2026-10-24): View ▸ Bigger/Smaller Text still carries it, with keys. So did the answer pane's
+/// toggle, which now lives in the pane's own window and on ⌘I.
 struct SearchToolbar: ToolbarContent {
     let canGoBack: Bool
     let canGoForward: Bool
     let canPronounce: Bool
     let back: @MainActor () -> Void
     let forward: @MainActor () -> Void
-    let smaller: @MainActor () -> Void
-    let bigger: @MainActor () -> Void
     let pronounce: @MainActor () -> Void
 
     var body: some ToolbarContent {  // placement: P3
@@ -38,19 +37,5 @@ struct SearchToolbar: ToolbarContent {
                 .accessibilityIdentifier("toolbar.pronounce")
         }
         .visibilityPriority(.high)
-        ToolbarItem(placement: .primaryAction) {
-            ControlGroup {
-                Button(action: smaller) { Label("Smaller Text", systemImage: "textformat.size.smaller") }
-                    .help(Text("Decrease font size"))
-                Button(action: bigger) { Label("Bigger Text", systemImage: "textformat.size.larger") }
-                    .help(Text("Increase font size"))
-            } label: {
-                Label("Text Size", systemImage: "textformat.size")
-            }
-            // One two-segment control, as Apple's (P3), not two round buttons (owner, 2026-10-18): the same style
-            // that joins Back and Forward.
-            .controlGroupStyle(.navigation)
-        }
-        .visibilityPriority(.low)
     }
 }

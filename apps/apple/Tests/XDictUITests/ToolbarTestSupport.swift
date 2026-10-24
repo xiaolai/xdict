@@ -30,7 +30,7 @@ struct ToolbarTestSupport {
             }
             .toolbar {
                 SearchToolbar(canGoBack: true, canGoForward: true, canPronounce: true, back: {}, forward: {},
-                              smaller: {}, bigger: {}, pronounce: {})
+                              pronounce: {})
             }
             .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
             .navigationTitle(Text(ToolbarLayout.windowTitle))
@@ -99,7 +99,7 @@ struct ToolbarTestSupport {
         defer { window.close() }
         try await Self.resize(window, to: 900)
         let (shown, _) = Self.items(window)
-        #expect(shown.count == 3, "Back/Forward, Pronounce and Text Size")
+        #expect(shown.count == 2, "Back/Forward and Pronounce")
         for (index, item) in shown.enumerated() {
             for other in shown[(index + 1)...] {
                 #expect(item.frame.intersection(other.frame).width <= Self.tolerance,

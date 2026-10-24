@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "7dca2d588a46088cacb0f1a91ff1c2d37c042ad60a4d7a559dd2baa1afa4d5b7"
+    public static let sourceDigest = "29263c8ed6e3b5ac1aaba2c7be6e07fbb6147c7cc3f87921601f330985897e69"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -238,6 +238,12 @@ public enum Tokens {
         public static let reviewMinHeight: CGFloat = 420
         /// A compact Meaning in Context sheet keeps its scrollable answer and fixed Done footer reachable while preserving the reading window's size.
         public static let meaningSheetHeight: CGFloat = 480
+        /// The air between the main window and the answer pane, so the pane reads as its own surface (owner, 2026-10-24).
+        public static let paneGap: CGFloat = 8
+        /// The answer pane's height before its first frame is set; its real height follows the main window.
+        public static let paneInitialHeight: CGFloat = 600
+        /// The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer).
+        public static let drawerShutWidth: CGFloat = 1
     }
 
     /// Corner radii.

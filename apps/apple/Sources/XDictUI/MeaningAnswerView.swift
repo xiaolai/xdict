@@ -11,6 +11,9 @@ import XDictTokens
 /// model's words are never rendered as markup.
 public struct MeaningAnswerPane: View {
     let state: SearchWindowState
+    /// The sheet shows the pane's title and source above the answer; the pane window does not (owner, 2026-10-24:
+    /// its own top area is redundant — ⌘I toggles it).
+    let showsHeader: Bool
     @State private var promptShown = false
     @State private var detailsShown = false
     /// The visible column's width, measured (UI04); nil until the first measurement.
@@ -18,8 +21,9 @@ public struct MeaningAnswerPane: View {
     /// A reveal that found nothing on the page shown now (UI11).
     @State private var revealFailed: String?
 
-    public init(state: SearchWindowState) {
+    public init(state: SearchWindowState, showsHeader: Bool = true) {
         self.state = state
+        self.showsHeader = showsHeader
     }
 
     public var body: some View {
@@ -36,7 +40,7 @@ public struct MeaningAnswerPane: View {
                     ExamplesSection(state: state)
                 }
                 if state.panes.meaningShown || !state.panes.examplesShown {
-                    header
+                    if showsHeader { header }
                     content
                 }
             }
@@ -416,8 +420,20 @@ struct VisibleWidth: NSViewRepresentable {
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            NotificationCenter.default.removeObserver(self)
+            if let window {
+                // **The window's own resizes count** (owner, 2026-10-24): the drawer grows the pane window after this
+                // view's layout, and without this the last width measured was a narrow intermediate one — the content
+                // then sat at its minimum with a wide empty margin beside it.
+                for name in [NSWindow.didResizeNotification, NSWindow.didEndLiveResizeNotification] {
+                    NotificationCenter.default.addObserver(self, selector: #selector(windowChanged),
+                                                           name: name, object: window)
+                }
+            }
             scheduleMeasurement()
         }
+
+        @objc private func windowChanged(_ notification: Notification) { scheduleMeasurement() }
 
         private func scheduleMeasurement() {
             guard !pending else { return }

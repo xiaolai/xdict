@@ -65,15 +65,14 @@ struct SearchPanes: Equatable {
     }
 }
 
-/// Where the answer is shown (ADR-0030, owner's outward-expansion clarification, 2026-10-24). `OutwardPane`
-/// enlarges the native frame before opening the inspector. Without screen room, or after a deliberate resize below
-/// the inspector's least, the same answer uses a sheet. The results list remains the reader's choice.
+/// Where the answer is shown (ADR-0030 as revised 2026-10-24: the pane is its own window beside the main one, so the
+/// main window keeps its search at the trailing edge and its reading width). Without screen room beside the main
+/// window, or in full screen, the same answer uses a sheet. The results list remains the reader's choice.
 enum MeaningPlacement: Equatable {
     /// Not asked for, or the native window is not attached yet.
     case hidden
-    /// The trailing inspector beside the entry.
-    case inspector
+    /// The pane window beside the reading area: full height, its toggle at its top-left.
+    case window
     /// A sheet over the window, with Done.
     case sheet
-
 }

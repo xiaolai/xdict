@@ -109,7 +109,7 @@ public struct SearchCommands: Commands {
                    : LocalizedStringKey("Show Meaning in Context")) {
                 window?.panes.toggleMeaning()
             }
-            .keyboardShortcut("i", modifiers: [.command, .control])
+            .keyboardShortcut("i", modifiers: [.command])
             .disabled(window == nil)
             Divider()
             Button("Bigger Text") { window?.entry.zoomIn() }

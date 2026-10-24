@@ -15,6 +15,8 @@ public struct GeneralSettings: View {
     @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
     /// The app delegate reads the same key of the same suite (`MenuBarResidence`); on for a reader who never chose.
     @AppStorage(MenuBarResidence.key) private var keepsRunning = true
+    /// The air between the main window and the answer pane, in points (owner, 2026-10-24).
+    @AppStorage(MeaningPanePreferences.gapKey) private var paneGap = MeaningPanePreferences.defaultGap
     private let registrar: ShortcutRegistrar
     private let hover: HoverControl
 
@@ -110,6 +112,20 @@ public struct GeneralSettings: View {
                 Text("Lookup Popup")
             }
             .settingsAnchor(.popupAppearance)
+            Section {
+                Slider(value: $paneGap, in: MeaningPanePreferences.gapRange) {
+                    Text("Gap beside the answer pane")
+                    Text("The air between XDict’s window and the pane that opens beside it.")
+                } minimumValueLabel: {
+                    Text(verbatim: "\(Int(MeaningPanePreferences.gapRange.lowerBound))")
+                } maximumValueLabel: {
+                    Text(verbatim: "\(Int(MeaningPanePreferences.gapRange.upperBound))")
+                }
+                .accessibilityIdentifier("meaning-pane-gap")
+            } header: {
+                Text("Answer Pane")
+            }
+            .settingsAnchor(.meaningPaneGap)
         }
         .settingsPane()
         .onAppear { login.refresh() }

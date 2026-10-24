@@ -128,6 +128,9 @@ reviewWidth = { value = 480, why = "The review window's width: a card's word, th
 reviewHeight = { value = 560, why = "The review window's opening height: the card, its note and the two answer rows with the outcome line under them." }
 reviewMinHeight = { value = 420, why = "The review window's lowest: the word, the note and the answers, with the note scrolling past it." }
 meaningSheetHeight = { value = 480, why = "A compact Meaning in Context sheet keeps its scrollable answer and fixed Done footer reachable while preserving the reading window's size." }
+paneGap = { value = 8, why = "The air between the main window and the answer pane, so the pane reads as its own surface (owner, 2026-10-24)." }
+paneInitialHeight = { value = 600, why = "The answer pane's height before its first frame is set; its real height follows the main window." }
+drawerShutWidth = { value = 1, why = "The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer)." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }

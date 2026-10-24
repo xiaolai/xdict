@@ -19,7 +19,7 @@ struct SearchPanesTests {
         #expect(!panes.meaningShown)
         // The inspector's own close (the system's binding) is the reader's too.
         panes.meaningAsked()
-        panes.meaningClosed(by: .inspector, current: .inspector)
+        panes.meaningClosed(by: .window, current: .window)
         #expect(!panes.meaningShown)
     }
 
@@ -75,36 +75,22 @@ struct SearchPanesTests {
         #expect(ToolbarLayout.windowTitle(word: nil) == String(localized: ToolbarLayout.windowTitle))
     }
 
-    /// The answer adds its width to the frame; screen limits never make it take space from the entry.
-    @Test func theAnswerExpandsOutsideTheExistingFrameWhenTheScreenCanFitIt() throws {
-        let visible = NSRect(x: -1600, y: 40, width: 1600, height: 1000)
-        let frame = NSRect(x: -1500, y: 100, width: 800, height: 600)
-        let width = Tokens.Window.meaningPaneIdeal
-        let expansion = try #require(OutwardPane.Expansion(frame: frame, visible: visible, width: width))
-        #expect(expansion.expanded.width == frame.width + width)
-        #expect(expansion.expanded.origin == frame.origin)
-        #expect(expansion.expanded.height == frame.height)
-        #expect(expansion.closing(expansion.expanded) == frame)
-        let full = NSRect(x: visible.minX, y: frame.minY, width: visible.width, height: frame.height)
-        #expect(OutwardPane.Expansion(frame: full, visible: visible, width: width) == nil)
-    }
-
     /// **Only the reader closes the answer** (root's policy, 2026-10-23): a resize that moves it between the sheet and
     /// the inspector dismisses the one it leaves, and that dismissal is not the reader's close; Done in the sheet or the
     /// inspector's own close is. The results list is never touched.
     @Test func aPresentationChangeIsNotTheReadersClose() {
         var panes = SearchPanes()
         panes.meaningAsked()
-        panes.meaningClosed(by: .sheet, current: .inspector)
+        panes.meaningClosed(by: .sheet, current: .window)
         #expect(panes.meaningShown, "the window widened: the sheet went, the inspector holds the same answer")
-        panes.meaningClosed(by: .inspector, current: .sheet)
+        panes.meaningClosed(by: .window, current: .sheet)
         #expect(panes.meaningShown, "the window narrowed: the inspector went, the sheet holds the same answer")
         panes.meaningClosed(by: .sheet, current: .hidden)
         #expect(panes.meaningShown, "the width is not known yet")
         panes.meaningClosed(by: .sheet, current: .sheet)
         #expect(!panes.meaningShown, "Done")
         panes.meaningAsked()
-        panes.meaningClosed(by: .inspector, current: .inspector)
+        panes.meaningClosed(by: .window, current: .window)
         #expect(!panes.meaningShown, "the inspector's own close")
         #expect(panes.resultsVisible(listed: true), "no presentation of the answer moves the results list")
     }
