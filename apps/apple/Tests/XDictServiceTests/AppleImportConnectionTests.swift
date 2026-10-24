@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 import XDictClient
 import XDictContract
 @testable import XDictService
@@ -41,7 +42,7 @@ struct AppleImportConnectionTests {
         let first = await client.submitConvertApple(staging: try staging.stage())
         #expect(await hold.waitUntilHeld())
         let second = await client.submitConvertApple(staging: try staging.stage())
-        #expect(await eventually { harness.context.conversions.load == (running: 1, waiting: 1) },
+        #expect(await eventuallyOffMain(10) { harness.context.conversions.load == (running: 1, waiting: 1) },
                 "the second waits for the first: \(harness.context.conversions.load)")
         hold.letGo()
         let one = try #require(Self.converted(await first.outcome()))
@@ -61,7 +62,7 @@ struct AppleImportConnectionTests {
         #expect(await hold.waitUntilHeld())
         let reports = ReportLog()
         let second = await client.submitConvertApple(staging: try staging.stage()) { reports.add($0, $1) }
-        #expect(await eventually { reports.all.count >= 3 }, "heard while waiting: \(reports.all)")
+        #expect(await eventuallyOffMain(10) { reports.all.count >= 3 }, "heard while waiting: \(reports.all)")
         #expect(harness.context.conversions.load.waiting == 1, "and still waiting")
         hold.letGo()
         let one = await first.outcome(), two = await second.outcome()
@@ -110,7 +111,7 @@ struct AppleImportConnectionTests {
             Issue.record("the conversion was not cancelled")
             return
         }
-        #expect(await eventually { staging.leftovers.isEmpty }, "\(staging.leftovers)")
+        #expect(await eventuallyOffMain(10) { staging.leftovers.isEmpty }, "\(staging.leftovers)")
     }
 
     // MARK: - A client that goes
@@ -132,7 +133,7 @@ struct AppleImportConnectionTests {
         // The service hears the invalidation on NSXPC's queue; the conversion is held until then and some time after.
         try await Task.sleep(for: .seconds(1))
         hold.letGo()
-        #expect(await eventually { harness.context.conversions.load == (running: 0, waiting: 0) && staging.leftovers.isEmpty },
+        #expect(await eventuallyOffMain(10) { harness.context.conversions.load == (running: 0, waiting: 0) && staging.leftovers.isEmpty },
                 "cancelled, and nothing left: \(staging.leftovers)")
     }
 
@@ -145,12 +146,12 @@ struct AppleImportConnectionTests {
         #expect(await hold.waitUntilHeld())
         let waiting = try staging.stage()
         let connection = try Self.send(.convertApple(staging: waiting), on: harness)
-        #expect(await eventually { harness.context.conversions.load.waiting == 1 })
+        #expect(await eventuallyOffMain(10) { harness.context.conversions.load.waiting == 1 })
         connection.invalidate()
-        #expect(await eventually { harness.context.conversions.load.waiting == 0 && !staging.leftovers.contains("staging/\(waiting.uuidString)") },
+        #expect(await eventuallyOffMain(10) { harness.context.conversions.load.waiting == 0 && !staging.leftovers.contains("staging/\(waiting.uuidString)") },
                 "dropped, its staging removed: \(staging.leftovers)")
         hold.letGo()
         let converted = try #require(Self.converted(await first.outcome()))
-        #expect(await eventually { staging.leftovers == [converted.conversion.uuidString] }, "\(staging.leftovers)")
+        #expect(await eventuallyOffMain(10) { staging.leftovers == [converted.conversion.uuidString] }, "\(staging.leftovers)")
     }
 }

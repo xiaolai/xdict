@@ -113,7 +113,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "f3823fa636aaa1fe5538f398e81df668ba3ae657",
+  "apps/apple/Package.swift": "e8a0073e61957bcdce6237b2fe2bf4afae593772",
   "core/Cargo.toml": "557666a1aa5e0a87de49425ab3f3cbf8ede5c110",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "dd46ce67179487585a134a2b9fde19091887befa",
@@ -168,7 +168,8 @@
   },
   "XDictAITests": {
    "deps": [
-    "XDictAI"
+    "XDictAI",
+    "XDictTestSupport"
    ],
    "dir": "apps/apple/Tests/XDictAITests/",
    "type": "test"
@@ -293,7 +294,8 @@
    "deps": [
     "XDictBase",
     "XDictClient",
-    "XDictContract"
+    "XDictContract",
+    "XDictTestSupport"
    ],
    "dir": "apps/apple/Tests/XDictClientTests/",
    "type": "test"
@@ -389,7 +391,8 @@
     "XDictEntryView",
     "XDictLibrary",
     "XDictSearch",
-    "XDictSpeech"
+    "XDictSpeech",
+    "XDictTestSupport"
    ],
    "dir": "apps/apple/Tests/XDictSearchTests/",
    "type": "test"

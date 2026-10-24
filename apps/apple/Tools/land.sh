@@ -153,35 +153,7 @@ done
 
 # Each gate to a fit host, the most constrained first; a host taken once, unless no fit host is free (then queued
 # behind another gate there). The E2E bundle's build Mac is the last choice for `make test`.
-plan=$(python3 -I - "$OUT/todo" "$OUT/hosts" "$E2E_BUILD_HOST" <<'PY'
-import sys
-todo = [l.split("\t")[0] for l in open(sys.argv[1]).read().splitlines() if l]
-hosts = {}
-for line in open(sys.argv[2]).read().splitlines():
-    h, caps = line.split("\t")
-    hosts[h] = set(c.split("=")[0] for c in caps.split(","))
-e2e_build = sys.argv[3]
-need = {"core": {"rust"}, "apple-test": {"rust", "xcode"}, "entries": {"rust", "corpus"},
-        "lookup-corpus": {"rust", "corpus"}, "mdx-v3": {"rust"}, "bindings": {"rust", "run1"},
-        "memory": {"rust", "run1"}}
-fit = {g: [h for h in hosts if need[g] <= hosts[h]] for g in todo}
-jobs = {}
-for g in sorted(todo, key=lambda g: len(fit[g])):
-    if not fit[g]:
-        print(f"{g}\t-")
-        continue
-    # Prefer a free host with the fewest capabilities, so the rare ones stay free; the E2E build Mac last.
-    free = sorted(fit[g], key=lambda h: (len(jobs.get(h, [])), h == e2e_build, len(hosts[h])))
-    h = free[0]
-    jobs.setdefault(h, []).append(g)
-# Two lanes a host, each in a copy of its own: `make test` beside the cargo gates, which run in turn (they share one
-# target folder, whose cargo lock would only queue them). One Mac runs every gate since 2026-10-17.
-for h, gs in jobs.items():
-    for lane, part in (("swift", [g for g in gs if g == "apple-test"]), ("cargo", [g for g in gs if g != "apple-test"])):
-        if part:
-            print(f"{' '.join(part)}\t{h}\t{lane}")
-PY
-) || fail "could not place the gates"
+plan=$(python3 -I Tools/land_plan.py "$OUT/todo" "$OUT/hosts" "$E2E_BUILD_HOST") || fail "could not place the gates"
 
 # --- The gates -------------------------------------------------------------------------------------------------------
 # A green run that measured nothing is not a pass: each corpus test must print the line only a measured run prints

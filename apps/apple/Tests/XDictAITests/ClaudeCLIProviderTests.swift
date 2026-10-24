@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 @testable import XDictAI
 
 /// **The reader's Claude CLI as a boxed one-shot** (ADR-0021 d.3, d.8, d.9): the argument vector, the environment, the
@@ -106,7 +107,7 @@ struct ClaudeCLIProviderTests {
         await expect(.timeout) { () async throws(AIProviderError) -> String in
             try await provider.answer(to: "q") }
         let pid = try stub.invocation(2).pid
-        #expect(await eventually { isGone(pid) }, "the child outlived its timeout (pid \(pid))")
+        #expect(await eventuallyOffMain { isGone(pid) }, "the child outlived its timeout (pid \(pid))")
     }
 
     @Test func cancellationEndsTheChild() async throws {
@@ -130,7 +131,7 @@ struct ClaudeCLIProviderTests {
                 Issue.record("unexpected error \(error)")
             }
         }
-        #expect(await eventually { isGone(pid) }, "the child outlived its cancellation (pid \(pid))")
+        #expect(await eventuallyOffMain { isGone(pid) }, "the child outlived its cancellation (pid \(pid))")
     }
 
     @Test func aSecretInStderrNeverEntersADescription() async throws {

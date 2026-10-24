@@ -2,6 +2,7 @@ import CodexAuth
 import Foundation
 import Synchronization
 import Testing
+import XDictTestSupport
 @testable import XDictAI
 
 /// **The reader's Codex CLI as a boxed one-shot** (ADR-0021 d.3, d.8, d.9): sayso's auth states map to typed errors, the
@@ -100,7 +101,7 @@ struct CodexCLIProviderTests {
             #expect(error == .timeout)
         }
         let pid = try stub.invocation(1).pid
-        #expect(await eventually { isGone(pid) }, "the child outlived its timeout (pid \(pid))")
+        #expect(await eventuallyOffMain { isGone(pid) }, "the child outlived its timeout (pid \(pid))")
     }
 
     @Test func cancellationEndsTheChild() async throws {
@@ -124,7 +125,7 @@ struct CodexCLIProviderTests {
                 Issue.record("unexpected error \(error)")
             }
         }
-        #expect(await eventually { isGone(pid) }, "the child outlived its cancellation (pid \(pid))")
+        #expect(await eventuallyOffMain { isGone(pid) }, "the child outlived its cancellation (pid \(pid))")
     }
 
     @Test func loginSurfacesTheDocumentedURL() async throws {

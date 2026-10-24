@@ -87,12 +87,3 @@ final class StepHold: Sendable {
     }
 }
 
-/// Polls `condition` until it holds or `seconds` pass.
-func eventually(seconds: Double = 10, _ condition: () -> Bool) async -> Bool {
-    let deadline = ContinuousClock.now + .milliseconds(Int(seconds * 1000))
-    while ContinuousClock.now < deadline {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
-}

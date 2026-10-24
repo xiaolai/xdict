@@ -101,12 +101,3 @@ func isGone(_ pid: pid_t) -> Bool {
     return kill(pid, 0) == -1 && errno == ESRCH
 }
 
-/// Polls `condition` for up to `seconds`.
-func eventually(_ seconds: Double = 3, _ condition: () -> Bool) async -> Bool {
-    let deadline = Date().addingTimeInterval(seconds)
-    while Date() < deadline {
-        if condition() { return true }
-        try? await Task.sleep(for: .milliseconds(20))
-    }
-    return condition()
-}

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 import XDictContract
 @testable import XDictClient
 
@@ -137,7 +138,7 @@ struct ServiceClientRecoveryTests {
         }
         let client = ServiceClient(connect: service.connect, options: Fixture.options())
         #expect(await client.importPackage(package) == .failure(.wire(.timedOut(deadline: .milliseconds(60)))))
-        let cancelled = await Self.waitUntil { service.sent.contains { $0.request.operation == .cancel(request: 1) } }
+        let cancelled = await eventuallyOffMain { service.sent.contains { $0.request.operation == .cancel(request: 1) } }
         #expect(cancelled, "the silent import was not cancelled")
     }
 
@@ -152,7 +153,7 @@ struct ServiceClientRecoveryTests {
         let dict = DictId(rawValue: "0000000100000001")
         let ticket = await client.submitHealth(dict, progress: nil)
         #expect(await ticket.outcome() == .failure(.wire(.timedOut(deadline: .milliseconds(60)))))
-        let cancelled = await Self.waitUntil { service.sent.contains { $0.request.operation == .cancel(request: 1) } }
+        let cancelled = await eventuallyOffMain { service.sent.contains { $0.request.operation == .cancel(request: 1) } }
         #expect(cancelled, "the silent health check was not cancelled")
     }
 
@@ -174,12 +175,4 @@ struct ServiceClientRecoveryTests {
         #expect(await client.versions() == .failure(.wire(.invalidated)))
     }
 
-    static func waitUntil(_ timeout: Duration = .seconds(2), _ condition: () -> Bool) async -> Bool {
-        let end = ContinuousClock.now + timeout
-        while ContinuousClock.now < end {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(2))
-        }
-        return condition()
-    }
 }

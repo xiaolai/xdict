@@ -219,6 +219,7 @@ test-tools:
 	@python3 -I Tools/tests/ui_tour_registry_test.py
 	@python3 -I Tools/tests/ui_tour_visibility_test.py
 	@Tools/tests/e2e-plan-test.sh
+	@python3 -I Tools/tests/land_plan_test.py
 	@Tools/tests/e2e-requested-test.sh
 	@python3 -I Tools/tests/e2e_harness_test.py
 	@Tools/tests/not-on-air-test.sh
