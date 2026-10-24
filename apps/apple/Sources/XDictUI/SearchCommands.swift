@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import XDictEntryView
@@ -12,8 +13,32 @@ import XDictSearch
 /// Actual Size on ⌥⌘0 since ⌘0 is All Dictionaries. Each acts on the focused main window.
 public struct SearchCommands: Commands {
     @FocusedValue(\.searchWindow) private var window
+    /// The answer pane's toggle keys, as Settings ▸ General recorded them (owner, 2026-10-24).
+    @AppStorage(MeaningPanePreferences.shortcutKey) private var paneShortcutKey = MeaningPanePreferences.defaultShortcutKey
+    @AppStorage(MeaningPanePreferences.shortcutModifiersKey)
+    private var paneShortcutModifiers = MeaningPanePreferences.defaultShortcutModifiers
 
     public init() {}
+
+    /// The shortcut's one character, and the modifiers held with it — **through the one decoder** (owner, 2026-10-24):
+    /// a corrupted preference reads back as the default rather than trapping on a negative integer.
+    private var paneBinding: (key: String, modifiers: NSEvent.ModifierFlags) {
+        MeaningPanePreferences.shortcut(key: paneShortcutKey, modifiersRaw: paneShortcutModifiers)
+    }
+
+    private var paneShortcut: KeyEquivalent {
+        KeyEquivalent(paneBinding.key.first ?? Character(MeaningPanePreferences.defaultShortcutKey))
+    }
+
+    private var paneModifiers: EventModifiers {
+        let flags = paneBinding.modifiers
+        var modifiers: EventModifiers = []
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.option) { modifiers.insert(.option) }
+        if flags.contains(.control) { modifiers.insert(.control) }
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        return modifiers
+    }
 
     public var body: some Commands {
         CommandGroup(replacing: .textEditing) {  // placement: P33
@@ -109,7 +134,7 @@ public struct SearchCommands: Commands {
                    : LocalizedStringKey("Show Meaning in Context")) {
                 window?.panes.toggleMeaning()
             }
-            .keyboardShortcut("i", modifiers: [.command])
+            .keyboardShortcut(paneShortcut, modifiers: paneModifiers)
             .disabled(window == nil)
             Divider()
             Button("Bigger Text") { window?.entry.zoomIn() }

@@ -18,7 +18,9 @@ public struct SearchWindow: View {
     @State private var column: CGFloat = Tokens.Window.initialColumn
     /// The native window grows before the inspector opens; no reading space is taken for the answer.
     @State private var presentation: MeaningPlacement = .hidden
-    @State private var paneWidth = Tokens.Window.meaningPaneIdeal
+    /// **The pane's width, observed, not read once** (owner, 2026-10-24): `@AppStorage` so a change in Settings reaches
+    /// an open window, and the stored value held to the range before it becomes geometry.
+    @AppStorage(MeaningPanePreferences.widthKey) private var paneWidthStored = MeaningPanePreferences.defaultWidth
     /// **SwiftUI's own search field** (owner, 2026-10-24: try `.searchable`): the system draws and focuses it.
     @FocusState private var searchFocused: Bool
 
@@ -154,6 +156,12 @@ public struct SearchWindow: View {
         SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
                       canPronounce: state.canPronounce, back: { state.model.back() },
                       forward: { state.model.forward() }, pronounce: { state.pronounceSelectionOrShown() })
+    }
+
+    /// The pane's width now, clamped: Settings may hold any number, geometry takes only these.
+    private var paneWidth: CGFloat {
+        CGFloat(MeaningPanePreferences.clamped(paneWidthStored, in: MeaningPanePreferences.widthRange,
+                                               fallback: MeaningPanePreferences.defaultWidth))
     }
 
     /// The searchable field's text, through the window's typing path (a search starts as the reader types).

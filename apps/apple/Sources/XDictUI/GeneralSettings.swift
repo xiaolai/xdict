@@ -15,8 +15,16 @@ public struct GeneralSettings: View {
     @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
     /// The app delegate reads the same key of the same suite (`MenuBarResidence`); on for a reader who never chose.
     @AppStorage(MenuBarResidence.key) private var keepsRunning = true
-    /// The air between the main window and the answer pane, in points (owner, 2026-10-24).
+    /// The answer pane's own options (owner, 2026-10-24): its gap from the window, its width, its opening time and the
+    /// keys that toggle it.
     @AppStorage(MeaningPanePreferences.gapKey) private var paneGap = MeaningPanePreferences.defaultGap
+    @AppStorage(MeaningPanePreferences.widthKey) private var paneWidth = MeaningPanePreferences.defaultWidth
+    @AppStorage(MeaningPanePreferences.animationKey) private var paneAnimation = MeaningPanePreferences.defaultAnimation
+    @AppStorage(MeaningPanePreferences.shortcutKey) private var paneShortcutKey = MeaningPanePreferences.defaultShortcutKey
+    @AppStorage(MeaningPanePreferences.shortcutModifiersKey)
+    private var paneShortcutModifiers = MeaningPanePreferences.defaultShortcutModifiers
+    /// Why the last combination was refused, said under the row; cleared when one is taken.
+    @State private var shortcutRejection: MeaningPanePreferences.ShortcutRejection?
     private let registrar: ShortcutRegistrar
     private let hover: HoverControl
 
@@ -122,6 +130,37 @@ public struct GeneralSettings: View {
                     Text(verbatim: "\(Int(MeaningPanePreferences.gapRange.upperBound))")
                 }
                 .accessibilityIdentifier("meaning-pane-gap")
+                Slider(value: $paneWidth, in: MeaningPanePreferences.widthRange) {
+                    Text("Width")
+                    Text("How wide the pane opens beside the window.")
+                } minimumValueLabel: {
+                    Text(verbatim: "\(Int(MeaningPanePreferences.widthRange.lowerBound))")
+                } maximumValueLabel: {
+                    Text(verbatim: "\(Int(MeaningPanePreferences.widthRange.upperBound))")
+                }
+                .accessibilityIdentifier("meaning-pane-width")
+                Slider(value: $paneAnimation, in: MeaningPanePreferences.animationRange, step: 0.05) {
+                    Text("Opening")
+                    Text("How long the pane takes to slide out. Off shows it at once.")
+                } minimumValueLabel: {
+                    Text("Off")
+                } maximumValueLabel: {
+                    Text(verbatim: "\(MeaningPanePreferences.animationRange.upperBound) s")
+                }
+                .accessibilityIdentifier("meaning-pane-animation")
+                LabeledContent {
+                    PaneShortcutRecorder(key: $paneShortcutKey, modifiers: $paneShortcutModifiers,
+                                         suspend: { registrar.suspend($0) }, rejection: $shortcutRejection)
+                } label: {
+                    Text("Toggle the pane")
+                    Text("The keys that show or hide the answer pane.")
+                }
+                if let shortcutRejection {
+                    // A combination XDict cannot take says why (HIG: a control that refuses explains itself).
+                    Text(verbatim: MeaningPanePreferences.sentence(shortcutRejection))
+                        .foregroundStyle(.red)
+                        .accessibilityIdentifier("meaning-pane-shortcut.problem")
+                }
             } header: {
                 Text("Answer Pane")
             }

@@ -59,6 +59,14 @@ struct SettingsSearchTests {
         #expect(Self.panes("ai").first == .ai)
     }
 
+    /// **The answer pane's toggle is findable by what it does** (2026-10-24): the row's label is "Toggle the pane", and
+    /// a reader searching "toggle" must land on it.
+    @Test func theAnswerPanesToggleIsFound() {
+        #expect(SettingsSearch.results("toggle").first?.anchor == SettingsSearch.Anchor.meaningPaneGap)
+        #expect(SettingsSearch.results("animation").first?.anchor == SettingsSearch.Anchor.meaningPaneGap)
+        #expect(SettingsSearch.results("width").contains { $0.anchor == SettingsSearch.Anchor.meaningPaneGap })
+    }
+
     @MainActor @Test func aRevealIsConsumedWithoutEatingANewerRequest() throws {
         let route = SettingsRoute()
         let prompt = try #require(SettingsSearch.results("prompt").first)

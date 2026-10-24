@@ -2349,6 +2349,22 @@
         }
       }
     },
+    "Answer Pane" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer Pane"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "释义面板"
+          }
+        }
+      }
+    },
     "Answer language" : {
       "localizations" : {
         "en" : {
@@ -2361,6 +2377,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "答案语言"
+          }
+        }
+      }
+    },
+    "Answer pane shortcut, %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Answer pane shortcut, %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "释义面板快捷键：%@"
           }
         }
       }
@@ -3399,6 +3431,22 @@
         }
       }
     },
+    "Close" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭"
+          }
+        }
+      }
+    },
     "Code" : {
       "localizations" : {
         "en" : {
@@ -3753,6 +3801,22 @@
         }
       }
     },
+    "Cut" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cut"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "剪切"
+          }
+        }
+      }
+    },
     "Dark" : {
       "localizations" : {
         "en" : {
@@ -3765,22 +3829,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "深色"
-          }
-        }
-      }
-    },
-    "Decrease font size" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Decrease font size"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "减小字号"
           }
         }
       }
@@ -3926,6 +3974,150 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "词典"
+          }
+        }
+      }
+    },
+    "Dictionary 1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 1"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 1"
+          }
+        }
+      }
+    },
+    "Dictionary 2" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 2"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 2"
+          }
+        }
+      }
+    },
+    "Dictionary 3" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 3"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 3"
+          }
+        }
+      }
+    },
+    "Dictionary 4" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 4"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 4"
+          }
+        }
+      }
+    },
+    "Dictionary 5" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 5"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 5"
+          }
+        }
+      }
+    },
+    "Dictionary 6" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 6"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 6"
+          }
+        }
+      }
+    },
+    "Dictionary 7" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 7"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 7"
+          }
+        }
+      }
+    },
+    "Dictionary 8" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 8"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 8"
+          }
+        }
+      }
+    },
+    "Dictionary 9" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dictionary 9"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "词典 9"
           }
         }
       }
@@ -4907,6 +5099,22 @@
         }
       }
     },
+    "Gap beside the answer pane" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Gap beside the answer pane"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "释义面板旁的间隔"
+          }
+        }
+      }
+    },
     "General" : {
       "localizations" : {
         "en" : {
@@ -5133,6 +5341,22 @@
         }
       }
     },
+    "Hide Others" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Others"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏其他"
+          }
+        }
+      }
+    },
     "Hide Results" : {
       "localizations" : {
         "en" : {
@@ -5149,18 +5373,18 @@
         }
       }
     },
-    "Hide the meaning of the captured word in its sentence" : {
+    "Hide XDict" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Hide the meaning of the captured word in its sentence"
+            "value" : "Hide XDict"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "隐藏捕获单词的语境释义"
+            "value" : "隐藏 XDict"
           }
         }
       }
@@ -5210,6 +5434,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "按住 %@，把指针停在任意 App 中的单词上。可在“通用”中更改按键。"
+          }
+        }
+      }
+    },
+    "Hold ⌘, ⌃ or ⌥ with the key, or it would fire while you type." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold ⌘, ⌃ or ⌥ with the key, or it would fire while you type."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请同时按住 ⌘、⌃ 或 ⌥，否则它会在您输入时触发。"
           }
         }
       }
@@ -5377,6 +5617,22 @@
         }
       }
     },
+    "How long the pane takes to slide out. Off shows it at once." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How long the pane takes to slide out. Off shows it at once."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "面板滑出所需的时间。选择“关闭”会立即显示。"
+          }
+        }
+      }
+    },
     "How long the pointer rests on a word before hover looks it up." : {
       "localizations" : {
         "en" : {
@@ -5405,6 +5661,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "你记得怎么样？"
+          }
+        }
+      }
+    },
+    "How wide the pane opens beside the window." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "How wide the pane opens beside the window."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "面板在窗口旁打开时的宽度。"
           }
         }
       }
@@ -5613,22 +5885,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "已在 Spotlight 中收录：搜索词头即可找到，按 Return 在 XDict 中打开。索引只含词头，保存在这台 Mac 上。"
-          }
-        }
-      }
-    },
-    "Increase font size" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Increase font size"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "增大字号"
           }
         }
       }
@@ -6436,6 +6692,22 @@
         }
       }
     },
+    "Minimize" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Minimize"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "最小化"
+          }
+        }
+      }
+    },
     "Model" : {
       "localizations" : {
         "en" : {
@@ -6642,6 +6914,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "新建标签页"
+          }
+        }
+      }
+    },
+    "New Window" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New Window"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新建窗口"
           }
         }
       }
@@ -8013,6 +8301,22 @@
         }
       }
     },
+    "Opening" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opening"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开时长"
+          }
+        }
+      }
+    },
     "Opening…" : {
       "localizations" : {
         "en" : {
@@ -8238,6 +8542,22 @@
         }
       }
     },
+    "Paste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paste"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "粘贴"
+          }
+        }
+      }
+    },
     "Pause Hover" : {
       "comment" : "Menu bar item, parent of the pause lengths",
       "localizations" : {
@@ -8449,6 +8769,22 @@
         }
       }
     },
+    "Print" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打印"
+          }
+        }
+      }
+    },
     "Print…" : {
       "localizations" : {
         "en" : {
@@ -8541,6 +8877,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "问题类型"
+          }
+        }
+      }
+    },
+    "Quit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quit"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "退出"
           }
         }
       }
@@ -8765,6 +9117,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "红色"
+          }
+        }
+      }
+    },
+    "Redo" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Redo"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "重做"
           }
         }
       }
@@ -9253,6 +9621,22 @@
         }
       }
     },
+    "Search For a New Word" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search For a New Word"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索新词"
+          }
+        }
+      }
+    },
     "Search For a New Word…" : {
       "localizations" : {
         "en" : {
@@ -9345,6 +9729,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "正在查询…"
+          }
+        }
+      }
+    },
+    "Select All" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select All"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全选"
           }
         }
       }
@@ -9473,6 +9873,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "设置向导…"
+          }
+        }
+      }
+    },
+    "Settings" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "设置"
           }
         }
       }
@@ -10188,22 +10604,6 @@
         }
       }
     },
-    "Text Size" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Text Size"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "文字大小"
-          }
-        }
-      }
-    },
     "Text size %@ px: %@ of a sample of its entries are set in it." : {
       "localizations" : {
         "en" : {
@@ -10248,6 +10648,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这不是网站。请输入 example.com 这样的名称，或粘贴网址。"
+          }
+        }
+      }
+    },
+    "That key cannot be a menu shortcut. Use a letter, a number or a symbol." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "That key cannot be a menu shortcut. Use a letter, a number or a symbol."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "这个键不能用作菜单快捷键。请使用字母、数字或符号。"
           }
         }
       }
@@ -10312,6 +10728,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该地址不是安全的 https 地址。XDict 只通过 https 发送密钥。"
+          }
+        }
+      }
+    },
+    "The air between XDict’s window and the pane that opens beside it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The air between XDict’s window and the pane that opens beside it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 窗口与在其旁边打开的面板之间的空隙。"
           }
         }
       }
@@ -10856,6 +11288,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "文件夹中的文件和这台 Mac 上的历史记录都会保留，你可以稍后重新选择文件夹。"
+          }
+        }
+      }
+    },
+    "The keys that show or hide the answer pane." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The keys that show or hide the answer pane."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "用于显示或隐藏释义面板的按键。"
           }
         }
       }
@@ -12437,6 +12885,22 @@
         }
       }
     },
+    "Toggle the pane" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Toggle the pane"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示或隐藏面板"
+          }
+        }
+      }
+    },
     "Trackpad" : {
       "localizations" : {
         "en" : {
@@ -12871,6 +13335,22 @@
         }
       }
     },
+    "Width" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Width"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "宽度"
+          }
+        }
+      }
+    },
     "With every window closed, the shortcut, the Service and hover keep working." : {
       "localizations" : {
         "en" : {
@@ -12982,6 +13462,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 帮助"
+          }
+        }
+      }
+    },
+    "XDict already uses this combination for %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict already uses this combination for %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 已将这个组合用于“%@”"
           }
         }
       }

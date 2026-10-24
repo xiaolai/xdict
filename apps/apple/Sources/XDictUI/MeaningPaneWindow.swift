@@ -135,11 +135,10 @@ final class PaneWindow: NSWindow {
 }
 
 /// The pane window: a titleless child window beside the main one, its answer with no top area of its own. It opens like
-/// a drawer — the width grows out of the main window's trailing edge over `drawerDuration` (owner, 2026-10-24: 0.5 s),
-/// or instantly when the reader has reduce motion on — and **closing is immediate** (owner, 2026-10-24).
+/// a drawer — the width grows out of the main window's trailing edge over the reader's opening time (Settings ▸ General,
+/// 0.5 s by default; Off opens it at once, and so does Reduce Motion) — and **closing is immediate** (owner, 2026-10-24).
 @MainActor
 final class PaneController: NSWindowController, NSWindowDelegate {
-    static let drawerDuration: TimeInterval = 0.5
     private let onClose: () -> Void
     private var closingProgrammatically = false
     /// An opening animation is running: later layout passes must not set the frame and cancel it.
@@ -208,22 +207,36 @@ final class PaneController: NSWindowController, NSWindowDelegate {
         window.orderFront(nil)
         window.invalidateShadow()
         opening = true
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        // The opening time is the reader's (owner, 2026-10-24); zero opens it at once, and Reduce Motion does too.
+        let duration = MeaningPanePreferences.animation()
+        guard duration > 0.01,
+              !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion else {
+            window.setFrame(target, display: true)
+            finishOpening(window)
+            return
+        }
         NSAnimationContext.runAnimationGroup { context in
-            context.duration = reduced ? 0 : Self.drawerDuration
+            context.duration = duration
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
             window.animator().setFrame(target, display: true)
         } completionHandler: { [weak self] in
-            guard let self else { return }
-            self.opening = false
-            self.hostView.frame = window.contentView?.bounds ?? self.hostView.frame
-            self.hostView.autoresizingMask = [.width, .height]
-            // **The pane's content measures its final width now** (owner, 2026-10-24): the drawer's last frame must be
-            // a layout, or the content stays at the width it held mid-animation and leaves the right side empty.
-            self.hostView.needsLayout = true
-            window.contentView?.layoutSubtreeIfNeeded()
-            window.invalidateShadow()
+            // AppKit calls this completion on the main thread; the hop is what the isolation checker needs.
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.finishOpening(window)
+            }
         }
+    }
+
+    /// **The pane's content measures its final width now** (owner, 2026-10-24): the drawer's last frame must be a
+    /// layout, or the content stays at the width it held mid-animation and leaves the right side empty.
+    private func finishOpening(_ window: NSWindow) {
+        opening = false
+        hostView.frame = window.contentView?.bounds ?? hostView.frame
+        hostView.autoresizingMask = [.width, .height]
+        hostView.needsLayout = true
+        window.contentView?.layoutSubtreeIfNeeded()
+        window.invalidateShadow()
     }
 
     /// Closing is immediate (owner, 2026-10-24): the pane simply goes.
