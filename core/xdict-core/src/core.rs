@@ -125,6 +125,14 @@ const EXAMPLES_TEXT_BYTES: usize = 16 << 20;
 const EXAMPLES_SAMPLE: usize = 64;
 /// Records between progress reports in the examples pass: a check of the cancellation flag and one event.
 const EXAMPLES_REPORT: usize = 1024;
+/// The most text one word catalog keeps: every headword once, and each source's handle, edition and key. A budget
+/// of the catalog's text, not a cap on peak memory: while it is built, the maps that place headwords and count
+/// occurrences, and the allocations around them, come on top, bounded by the key entries counted. The scratch maps
+/// (every distinct key, internal ones included) are held to this same bound, so they cannot grow unbudgeted (audit,
+/// 2026-10-24).
+const CATALOG_BYTES: u64 = crate::words::MAX_CATALOG_TEXT_BYTES;
+/// Key entries read between two of a word catalog's progress reports, so one huge dictionary is still paced.
+const CATALOG_PROGRESS_STEP: usize = 4_096;
 
 /// An edition's reading style and the sheets it was read from.
 #[derive(Debug, Clone)]
@@ -458,6 +466,164 @@ impl Core {
             }
             Ok(Words { edition: opened.edition.clone(), words, total, next: i as u64 })
         })
+    }
+
+    /// **The word catalog** (2026-10-24, word exploration): every public headword of `dicts`, each with every place
+    /// it is keyed, as an immutable, edition-qualified [`crate::words::WordExplorer`]. Read from the indexes alone.
+    ///
+    /// **One headword per exact spelling** (`Alpha` is not `alpha`), its sources in the order `dicts` names the
+    /// dictionaries and then in key-block order. A source's occurrence is its place among the keys spelt exactly as
+    /// it is, in file order, as [`Core::entry`] counts it, wherever in the key block the repeats are. A handle named
+    /// twice is read once, at its first place; two handles to one edition are two dictionaries.
+    ///
+    /// **Refused whole, never truncated**: a handle that does not resolve, one closed while a callback ran, a file
+    /// changed meanwhile, or more than [`crate::words::MAX_CATALOG_ENTRIES`] key entries in all or
+    /// `CATALOG_BYTES` of text, which is `TooLarge` with [`Limit::File`]. A public key longer than 4 KiB in UTF-8 is
+    /// not refused: the explorer skips it with its sources and counts it in
+    /// [`crate::words::WordStats::skipped_headwords`], its text still counted toward the byte bound.
+    ///
+    /// **Progress counts key entries**, internal ones included, of each dictionary once: a report every
+    /// `CATALOG_PROGRESS_STEP` entries and at the end of each dictionary, the last one `(total, total)`. No lock is
+    /// held while a callback runs, so it may call the core, closing a dictionary included.
+    pub fn word_explorer(
+        &self,
+        dicts: Vec<String>,
+        progress: &dyn Progress,
+    ) -> Result<crate::words::WordExplorer, CoreError> {
+        guard(|| self.word_explorer_within(&dicts, progress, CatalogLimits::DEFAULT))
+    }
+
+    /// [`Self::word_explorer`], holding no more than `limits` allows.
+    fn word_explorer_within(
+        &self,
+        dicts: &[String],
+        progress: &dyn Progress,
+        limits: CatalogLimits,
+    ) -> Result<crate::words::WordExplorer, CoreError> {
+        use crate::words::{WordCatalogEntry, WordExplorer, WordSource};
+        // Every handle resolved before anything is read, each once and in its canonical spelling: the dictionaries
+        // are held by `Arc`, so no lock is held while they are read.
+        let mut named = HashSet::new();
+        let mut snapshot: Vec<(String, Arc<Dict>)> = Vec::new();
+        for dict in dicts {
+            let handle = self.parse_handle(dict)?;
+            if named.insert(handle) {
+                snapshot.push((self.handle(handle), self.dict(dict)?));
+            }
+        }
+        let mut total: u64 = 0;
+        for (dict, opened) in &snapshot {
+            let keys = opened.mdx.len() as u64;
+            total = total.checked_add(keys).filter(|&t| t <= limits.entries).ok_or_else(|| {
+                catalog_too_large(format!(
+                    "{dict} brings the catalog's key entries past {}; a word catalog holds no more",
+                    limits.entries
+                ))
+            })?;
+        }
+        let report = |done: u64| {
+            if progress.progress(done, total) {
+                Ok(())
+            } else {
+                Err(CoreError::Cancelled { detail: "the word catalog was cancelled".into() })
+            }
+        };
+        let mut catalog: Vec<WordCatalogEntry> = Vec::new();
+        let mut placed: HashMap<String, usize> = HashMap::new();
+        let mut bytes: u64 = 0;
+        let mut scratch: u64 = 0;
+        let mut done: u64 = 0;
+        for (position, (dict, opened)) in snapshot.iter().enumerate() {
+            let last = position + 1 == snapshot.len();
+            opened.mdx_source.unchanged()?;
+            let mdx = &opened.mdx;
+            // Every key counted, internal ones too, so an occurrence is the one `render` finds.
+            let mut counted: HashMap<String, u32> = HashMap::new();
+            let mut until_report = CATALOG_PROGRESS_STEP;
+            for i in 0..mdx.len() {
+                let key = mdx.key(i)?;
+                let occurrence = match counted.get_mut(&*key) {
+                    Some(n) => {
+                        let at = *n;
+                        *n = n.checked_add(1).ok_or_else(|| {
+                            catalog_too_large(format!("{dict} has more than {} records under one key", u32::MAX))
+                        })?;
+                        at
+                    }
+                    None => {
+                        // **Every distinct key's text is bounded**, internal ones included: they are held in the scratch
+                        // map even when no public key uses them (audit, 2026-10-24).
+                        scratch = scratch.checked_add(key.len() as u64).filter(|&b| b <= limits.bytes).ok_or_else(|| {
+                            catalog_too_large(format!(
+                                "{dict} brings the catalog's scratch text past {} bytes; a word catalog holds no more",
+                                limits.bytes
+                            ))
+                        })?;
+                        counted.insert(key.clone().into_owned(), 1);
+                        0
+                    }
+                };
+                if mdx.is_public(i)? {
+                    let at = placed.get(&*key).copied();
+                    let headword = if at.is_some() { 0 } else { key.len() };
+                    let grown = (dict.len() + opened.edition.len() + key.len() + headword) as u64;
+                    bytes = bytes.checked_add(grown).filter(|&b| b <= limits.bytes).ok_or_else(|| {
+                        catalog_too_large(format!(
+                            "{dict} brings the catalog's text past {} bytes; a word catalog holds no more",
+                            limits.bytes
+                        ))
+                    })?;
+                    let entry = EntryRef { edition: opened.edition.clone(), key: key.clone().into_owned(), occurrence };
+                    let source = WordSource { dict: dict.clone(), entry };
+                    match at {
+                        Some(at) => catalog
+                            .get_mut(at)
+                            .ok_or_else(|| CoreError::internal("a placed headword is not in the catalog"))?
+                            .sources
+                            .push(source),
+                        None => {
+                            placed.insert(key.clone().into_owned(), catalog.len());
+                            catalog.push(WordCatalogEntry { headword: key.into_owned(), sources: vec![source] });
+                        }
+                    }
+                }
+                done += 1;
+                until_report -= 1;
+                if until_report == 0 && i + 1 < mdx.len() {
+                    until_report = CATALOG_PROGRESS_STEP;
+                    report(done)?;
+                }
+            }
+            opened.mdx_source.unchanged()?;
+            // **The last dictionary's (total, total) is reported after the explorer is built**, so no caller reads it as
+            // completion before the explorer can answer; the other dictionaries report at their own end (audit,
+            // 2026-10-24).
+            if !last {
+                report(done)?;
+            }
+        }
+        // After the last callback, which may have closed a dictionary or rewritten any file already read: a catalog
+        // naming a closed one is refused, never answered from the `Arc`, and one read from a file since changed is
+        // not an answer about the file.
+        for (dict, opened) in &snapshot {
+            if !Arc::ptr_eq(&self.dict(dict)?, opened) {
+                return Err(CoreError::stale(format!("{dict} was reopened while its words were read")));
+            }
+            opened.mdx_source.unchanged()?;
+        }
+        let explorer = WordExplorer::new(catalog, None).map_err(word_error)?;
+        // **The last report comes after the explorer's indexes are built**, so a caller that shows completion at the
+        // callback does not show it before the explorer can answer; a cancel here discards it (audit, 2026-10-24).
+        report(done)?;
+        // **The completion callback runs code too**: one that closes a dictionary or rewrites a file since read is
+        // caught here, as the per-dictionary reports are (audit, 2026-10-24).
+        for (dict, opened) in &snapshot {
+            if !Arc::ptr_eq(&self.dict(dict)?, opened) {
+                return Err(CoreError::stale(format!("{dict} was reopened while its words were read")));
+            }
+            opened.mdx_source.unchanged()?;
+        }
+        Ok(explorer)
     }
 
     /// [`Self::lookup`], reading no more records than `budget` allows across every dictionary and redirect.
@@ -1878,6 +2044,39 @@ fn guard<T>(call: impl FnOnce() -> Result<T, CoreError>) -> Result<T, CoreError>
     })
 }
 
+/// What one word catalog may hold: key entries in all the dictionaries read, and bytes of text kept.
+#[derive(Debug, Clone, Copy)]
+struct CatalogLimits {
+    entries: u64,
+    bytes: u64,
+}
+
+impl CatalogLimits {
+    const DEFAULT: Self = Self { entries: crate::words::MAX_CATALOG_ENTRIES, bytes: CATALOG_BYTES };
+}
+
+/// A word catalog over its limits: a limit of what the core holds of a file's index, as the reader's own are.
+fn catalog_too_large(detail: String) -> CoreError {
+    CoreError::TooLarge { limit: Limit::File, detail }
+}
+
+/// The explorer's constructor errors in the core's terms, each kind kept: its limits are the catalog's, its damage
+/// the file's. Building a catalog asks no query, so an `InvalidQuery` here breaks an invariant and is `Internal`.
+fn word_error(error: crate::words::WordError) -> CoreError {
+    use crate::words::WordError as W;
+    match error {
+        W::TooLarge { limit, detail } => catalog_too_large(format!("the word explorer's {limit:?} limit: {detail}")),
+        W::InvalidQuery { detail, .. } => CoreError::internal(format!(
+            "the word explorer refused a query while building a catalog, which asks none: {detail}"
+        )),
+        W::Corrupt { detail, .. } | W::UnsupportedVersion { detail, .. } => {
+            CoreError::Malformed { detail: format!("the word explorer: {detail}") }
+        }
+        W::Io { detail } => CoreError::Io { kind: crate::error::IoKind::Other, detail },
+        W::Internal { detail } => CoreError::internal(format!("the word explorer: {detail}")),
+    }
+}
+
 fn info(file: &File) -> DictInfo {
     let header = file.header();
     let format_version = match header.version {
@@ -3116,5 +3315,100 @@ mod tests {
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's read was not counted: {refused:?}");
         let refused = page_of(&core, &dict, "a", Budget::new(100, 10));
         assert!(matches!(refused, Err(CoreError::TooLarge { .. })), "the target's bytes were not counted: {refused:?}");
+    }
+
+    /// Progress that keeps every report and answers `go` to the first `go_for` of them.
+    struct Kept {
+        reports: Mutex<Vec<(u64, u64)>>,
+        go_for: usize,
+    }
+
+    impl Progress for Kept {
+        fn progress(&self, done: u64, total: u64) -> bool {
+            let mut reports = self.reports.lock().unwrap();
+            reports.push((done, total));
+            reports.len() <= self.go_for
+        }
+    }
+
+    fn kept(go_for: usize) -> Kept {
+        Kept { reports: Mutex::new(Vec::new()), go_for }
+    }
+
+    fn catalog_of(
+        core: &Core,
+        dicts: &[String],
+        progress: &dyn Progress,
+        entries: u64,
+        bytes: u64,
+    ) -> Result<(), CoreError> {
+        core.word_explorer_within(dicts, progress, CatalogLimits { entries, bytes }).map(drop)
+    }
+
+    /// The catalog's key entries are bounded before any is read, a dictionary named twice counted once: one over is
+    /// refused whole as a file limit, with no report and no byte read, never a catalog cut short.
+    #[test]
+    fn a_word_catalog_over_its_entries_is_refused_before_it_is_read() {
+        use xdict_mdx_writer::Entry as W;
+        let (core, dict, read) = counted(&[W::text("aa", "1"), W::text("bb", "2"), W::text("aa", "3")]);
+        let twice = [dict.clone(), dict.clone()];
+        let progress = kept(usize::MAX);
+        let held = catalog_of(&core, &twice, &progress, 3, u64::MAX);
+        assert_eq!(held, Ok(()), "a dictionary named twice is counted once");
+        let progress = kept(usize::MAX);
+        let refused = catalog_of(&core, &twice, &progress, 2, u64::MAX);
+        assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::File, .. })), "{refused:?}");
+        assert!(progress.reports.lock().unwrap().is_empty(), "reported before the refusal");
+        assert_eq!(read.load(Ordering::SeqCst), 0, "bytes were read for a catalog");
+    }
+
+    /// The text a catalog keeps is bounded to the byte: each source's handle, edition and key, and each headword
+    /// once. At the bound it is held; one byte under, refused whole.
+    #[test]
+    fn a_word_catalog_over_its_bytes_is_refused_whole() {
+        use xdict_mdx_writer::Entry as W;
+        let (core, dict, _) = counted(&[W::text("aa", "1"), W::text("bb", "2"), W::text("aa", "3")]);
+        let edition = core_edition(&core, &dict).len() as u64;
+        let source = dict.len() as u64 + edition + 2;
+        let needed = 3 * source + 2 + 2;
+        let one = [dict];
+        assert_eq!(catalog_of(&core, &one, &NoProgress, u64::MAX, needed), Ok(()));
+        let refused = catalog_of(&core, &one, &NoProgress, u64::MAX, needed - 1);
+        assert!(matches!(refused, Err(CoreError::TooLarge { limit: Limit::File, .. })), "{refused:?}");
+    }
+
+    /// One dictionary larger than a step is reported on while it is read, not only once it is done, and its
+    /// cancellation is honoured there.
+    #[test]
+    fn one_large_dictionary_is_reported_on_while_it_is_read() {
+        use xdict_mdx_writer::Entry as W;
+        let count = CATALOG_PROGRESS_STEP + 904;
+        let keys: Vec<String> = (0..count).map(|i| format!("w{i:05}")).collect();
+        let entries: Vec<W> = keys.iter().map(|k| W::text(k, "x")).collect();
+        let (core, dict, _) = counted(&entries);
+        let (step, total) = (CATALOG_PROGRESS_STEP as u64, count as u64);
+        let progress = kept(usize::MAX);
+        assert_eq!(catalog_of(&core, std::slice::from_ref(&dict), &progress, u64::MAX, u64::MAX), Ok(()));
+        // **The last (total, total) is after the explorer's indexes are built** (audit, 2026-10-24): the caller that
+        // shows completion at it does not show it before the explorer can answer.
+        assert_eq!(*progress.reports.lock().unwrap(), vec![(step, total), (total, total)]);
+        let progress = kept(0);
+        let got = catalog_of(&core, &[dict], &progress, u64::MAX, u64::MAX);
+        assert!(matches!(got, Err(CoreError::Cancelled { .. })), "{got:?}");
+        assert_eq!(*progress.reports.lock().unwrap(), vec![(step, total)], "a report after the cancellation");
+    }
+
+    /// The explorer's errors keep their kind: a limit stays a limit, damage stays damage, and a refused query, which
+    /// building a catalog never asks, is an internal fault.
+    #[test]
+    fn the_explorers_errors_keep_their_kind() {
+        use crate::words::{QueryProblem, WordError as E, WordLimit};
+        let too_large = word_error(E::TooLarge { limit: WordLimit::CatalogEntries, detail: "x".into() });
+        assert!(matches!(too_large, CoreError::TooLarge { limit: Limit::File, .. }), "{too_large:?}");
+        assert!(matches!(word_error(E::Corrupt { line: 1, detail: "x".into() }), CoreError::Malformed { .. }));
+        assert!(matches!(word_error(E::Io { detail: "x".into() }), CoreError::Io { .. }));
+        assert!(matches!(word_error(E::Internal { detail: "x".into() }), CoreError::Internal { .. }));
+        let query = word_error(E::InvalidQuery { problem: QueryProblem::Empty, detail: "x".into() });
+        assert!(matches!(query, CoreError::Internal { .. }), "{query:?}");
     }
 }

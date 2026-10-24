@@ -10,8 +10,8 @@
 #                            bundle of another tree than <tree> is refused; with no tree, the rows are filed unkeyed
 #   e2e-status.sh show       the ledger's last rows (Tools/e2e-ledger.py show; E2E_LEDGER_LAST, E2E_LEDGER_STAGE)
 #   e2e-status.sh required [--bootstrap]
-#                            the sub-stages a release needs evidence of: every default one and RELEASE_EXTRAS; with
-#                            --bootstrap, BOOTSTRAP_STAGES
+#                            the sub-stages an on-demand release plan counts: every default one and RELEASE_EXTRAS;
+#                            with --bootstrap, BOOTSTRAP_STAGES
 #   e2e-status.sh smoke      RELEASE_SMOKE: what a release runs on its own signed bundle whatever the ledger says
 #   e2e-status.sh plan [--bootstrap]
 #                            per required sub-stage, `carried <date> <host> <key>` or `run — <why>`, and the minutes the
@@ -19,19 +19,20 @@
 #   e2e-status.sh run-set [--bootstrap]
 #                            the plan's `run` sub-stages, one a line (`make e2e RELEASE_NEEDED=1`)
 #   e2e-status.sh require-fresh [--bootstrap]
-#                            exit 1 unless the plan carries every required sub-stage. What a release asks before it
-#                            builds and again before it uploads anything
+#                            exit 1 unless the plan carries every required sub-stage. **On demand only** (`make
+#                            e2e-evidence`): no step of a release or of a landing asks it (owner, 2026-10-24)
 #
 # **Release evidence is by key, not by tree** (owner, 2026-10-17): a sub-stage whose inputs and facts are what they were
 # when it last passed is not run again for a release. The key holds the files that reach it, the build host's Xcode,
 # Swift and Rust, the E2E Mac's macOS build, the corpus and the graph; a carried pass must be younger than
-# E2E_EVIDENCE_MAX_DAYS (default 14). What no key can see, the release's signature and notarisation, is RELEASE_SMOKE on
-# the release-signed bundle and Gatekeeper on the disk image, both in Tools/release.sh, always.
+# E2E_EVIDENCE_MAX_DAYS (default 14). **The ledger is a record, never a gate** (owner, 2026-10-24: "e2e，不应该成为任何
+# 一步的 gate，它就应该是 on demand 的"): a release is cut from a committed tree and always runs RELEASE_SMOKE on its
+# release-signed bundle and Gatekeeper on the disk image, whatever the ledger carries.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # The stage the skeleton's bootstrap release rests on (plan-macos-v1 WI-2).
 readonly BOOTSTRAP_STAGES="launch"
-# Extra sub-stages the ordinary release needs too: the WI-10 measurement (warm p95 within 1 s is part of done).
+# Extra sub-stages the ordinary release plan counts too: the WI-10 measurement (warm p95 within 1 s is part of done).
 readonly RELEASE_EXTRAS="measure.protocol"
 # Run on the release-signed, notarised bundle by every release, carried or not: keys cannot see signing.
 readonly RELEASE_SMOKE="launch"

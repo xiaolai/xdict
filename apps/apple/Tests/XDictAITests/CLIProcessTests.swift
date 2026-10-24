@@ -39,7 +39,7 @@ struct CLIProcessTests {
     /// with EMFILE (`spawn(24)`). That is how the CLI provider tests went red under a loaded suite: clean at 4
     /// concurrent, EMFILE by the 43rd iteration at 32.
     @Test func manyConcurrentRunsKeepTheirDescriptors() async throws {
-        let before = Self.openDescriptors()
+        let before = Self.openPipes()
         let failures = await withTaskGroup(of: Int.self) { group in
             for _ in 0..<32 {
                 group.addTask {
@@ -62,11 +62,29 @@ struct CLIProcessTests {
             return total
         }
         #expect(failures == 0, "\(failures) runs could not start")
-        #expect(Self.openDescriptors() <= before + 8, "descriptors: \(before) → \(Self.openDescriptors())")
+        // **Only pipes are counted, and a sibling suite's pipes are given a bounded moment to close** (2026-10-24: the
+        // process-wide count read 12 → 47 while an HTTP suite's sockets were open). This test's leak is a pipe pair per
+        // abandoned child, held for good; a sibling's pipes are transient. The bound is unchanged.
+        let settle = ContinuousClock.now + .seconds(2)
+        while Self.openPipes() > before + 8, ContinuousClock.now < settle {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(Self.openPipes() <= before + 8, "pipes: \(before) → \(Self.openPipes())")
     }
 
-    static func openDescriptors() -> Int {
-        (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? -1
+    /// **The descriptors this test can leak are pipes** — one pair per child's stdin and stdout (`CLIProcess`). Counting
+    /// pipes keeps another suite's sockets and files out of a count that is the whole process's; counting every
+    /// descriptor measured the HTTP suite beside this one (12 → 47, 2026-10-24).
+    static func openPipes() -> Int {
+        let stride = MemoryLayout<proc_fdinfo>.stride
+        let needed = proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, nil, 0)
+        guard needed > 0 else { return -1 }
+        var entries = [proc_fdinfo](repeating: proc_fdinfo(), count: Int(needed) / stride)
+        let got = entries.withUnsafeMutableBytes { buffer in
+            proc_pidinfo(getpid(), PROC_PIDLISTFDS, 0, buffer.baseAddress, Int32(buffer.count))
+        }
+        guard got > 0 else { return -1 }
+        return entries.prefix(Int(got) / stride).filter { $0.proc_fdtype == UInt32(PROX_FDTYPE_PIPE) }.count
     }
 
     /// A megabyte with no newline: the pending line is dropped rather than held, and the run still ends.

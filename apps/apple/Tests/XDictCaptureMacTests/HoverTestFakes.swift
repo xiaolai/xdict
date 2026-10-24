@@ -168,8 +168,10 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     private(set) var ownTargets = 0
     private(set) var ownReads = 0
     private(set) var ownWorkOffTheMainThread = 0
-    /// What the recogniser answers (plan-capture WI-4), and whether it hangs until `finishCapture`.
+    /// What the recogniser answers (plan-capture WI-4), and whether it hangs until `finishCapture`. A window named here
+    /// answers with its own result — the look-through reads XDict's window and then the app behind it in one hover.
     var recognition: Result<Recognition, RecognitionError> = .failure(.nothingUnderPointer)
+    var recognitionsByWindow: [UInt32: Result<Recognition, RecognitionError>] = [:]
     var hangs = false
     private(set) var recognitions = 0
     private(set) var recognisedWindows: [ListedWindow] = []
@@ -182,6 +184,15 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
     ) async -> PointerWordReader.TargetOutcome {
         laneTargets += 1
         return targetOutcome
+    }
+
+    /// The look-through's own hit test: the app behind one of XDict's windows (`target(of:at:refusesOwner:)`).
+    var behindTargetOutcome: PointerWordReader.TargetOutcome = .none(.nothingAtPointer)
+    private(set) var behindTargets: [pid_t] = []
+
+    func target(of owner: pid_t, at point: CGPoint) async -> PointerWordReader.TargetOutcome {
+        behindTargets.append(owner)
+        return behindTargetOutcome
     }
 
     func readUnlessRefused(
@@ -221,7 +232,7 @@ final class ScriptedPointerWords: PointerWordSource, @unchecked Sendable {
         recognitions += 1
         recognisedWindows.append(window)
         if hangs { await withCheckedContinuation { continuation in hung.withLock { $0.append(continuation) } } }
-        return try recognition.get()
+        return try (recognitionsByWindow[window.windowID] ?? recognition).get()
     }
 
     /// Lets every hung capture return.

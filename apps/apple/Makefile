@@ -53,11 +53,11 @@
 #   make e2e-status   the same as make e2e-ledger
 #   make release BUILD_NUMBER=<n>
 #                     a notarised, stapled DMG in .build/release, Gatekeeper-checked here and on the E2E Mac. Refuses
-#                     unless the ledger carries every default sub-stage and RELEASE_EXTRAS by its key for this tree
-#                     (passed last on that key, within E2E_EVIDENCE_MAX_DAYS, default 14), and unless the tree is
-#                     committed; then runs RELEASE_SMOKE (Tools/e2e-status.sh) on the release-signed bundle whatever
+#                     unless the tree is committed; runs RELEASE_SMOKE (Tools/e2e-status.sh) on the release-signed
+#                     bundle whatever the ledger carries. **E2E is never a gate** (2026-10-24): the ledger records what
+#                     was run on demand, and `make release-plan` says what would cover this tree.
 #   make release-bootstrap BUILD_NUMBER=<n>
-#                     the same, requiring evidence of the `launch` stage only (the skeleton's; plan-macos-v1 WI-2)
+#                     the same, the skeleton's mode (plan-macos-v1 WI-2), which does not require a committed tree
 #   make clean        remove the bundle and its stage (not SwiftPM's or cargo's caches)
 #   make clean-dev [APPLY=1] [ARGS="--air|--build-host --into <branch> --min-age-hours <n>"]
 #                     what agents left on this Mac (merged git worktrees) and on BUILD_HOST (~/xdict-build copies):

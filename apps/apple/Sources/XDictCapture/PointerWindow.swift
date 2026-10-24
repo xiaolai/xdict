@@ -47,12 +47,33 @@ public enum PointerWindow {
     /// Refusing every hover over any window of ours at any depth, the rule before this one, made hover
     /// silent wherever XDict had a window behind the reader's app (owner's report, 2026-10-19: in System
     /// Settings, only the one word of its title outside XDict's two windows behind it was read).
+    /// **The highest window level that is still an app's own panel**: `NSModalPanelWindowLevel` (8). A window at or below
+    /// it — an ordinary window (0) or a floating palette (3) — is one the reader sees and can click, so it names its app;
+    /// above it sit the desktop's overlays: the Dock at 20, Notification Center at 21, the menu bar at 24 (measured
+    /// 2026-10-24, macOS 27.0.1).
+    private static let panelLevelMaximum = 8
+
     public static func ownership(at point: CGPoint, in windows: [ListedWindow], ours: Int32) -> PointerOwnership {
         let here = windows.filter { $0.bounds.contains(point) }
         guard here.contains(where: { $0.pid == ours }) else { return .notOurs }
         // Front to back: ours counts even while invisible (one fading in is still serviced in-process); another app's
         // window counts only where it can be seen, as no pixel of an invisible one is under the pointer.
-        guard let front = here.first(where: { $0.pid == ours || $0.alpha > 0 }), front.pid != ours else { return .ours }
+        //
+        // **An app's own window decides, not a screen-spanning overlay that cannot be clicked** (measured 2026-10-24 on
+        // macOS 27.0.1): Notification Center lists a full-screen layer-21 window and the Dock a full-screen layer-20 one,
+        // both at alpha 1 over every point, and Notification Center's own hit test answers with its menu bar wherever it is
+        // asked. A window at or below panel level — an ordinary window, or a floating palette the reader can see and
+        // click — names its app; a window above it counts only where that app also has a **visible** ordinary window at
+        // the point, as a real panel above its own document does.
+        let front = here.first { window in
+            if window.pid == ours { return true }
+            guard window.alpha > 0 else { return false }
+            if window.layer <= Self.panelLevelMaximum { return true }
+            return here.contains { other in
+                other.pid == window.pid && other.layer == 0 && other.alpha > 0
+            }
+        }
+        guard let front, front.pid != ours else { return .ours }
         return .coveringOurs(owner: front.pid)
     }
 }

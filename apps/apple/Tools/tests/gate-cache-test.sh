@@ -214,15 +214,15 @@ for path in apps/apple/Sources/XDictSpeech/s.swift apps/apple/Tools/lookup/x.py 
     [ "$want" = "$got" ] && ok "same as e2e-affected for $path" || bad "$path: e2e-affected [$want], gate-cache [$got]"
 done
 
-# **The release reads only the E2E ledger, by key** (2026-10-17; this replaces "a release never reads the gate cache"). The
-# old rule kept release evidence apart from a cache of development skips; now one ledger of every run is both, and what
-# keeps a release honest is that its evidence is a pass under the very key (content and facts) of the tree it ships,
-# not that it ignores recorded passes. So: the release path may not read this cache's record (passes.tsv), and it must
-# reach the ledger. Its own behaviour is Tools/tests/e2e-ledger-test.sh's.
+# **The release reads neither cache nor ledger** (owner, 2026-10-24: E2E is on demand, never a gate of any step; before
+# that, 2026-10-17 had made a fresh pass under the tree's key a shipping condition). The ledger is the record of what
+# was run, asked by `make e2e` and `make release-plan`; the release's own smoke on the stapled bundle is its gate. So:
+# the release path may not read this cache's record (passes.tsv), and it must not reach the E2E ledger either — its
+# `e2e-status.sh smoke` call only names the smoke's stages.
 if grep -l 'passes\.tsv\|XDICT_GATE_CACHE\|gate-cache\.py status\|gate-cache\.py record' release.sh e2e-status.sh e2e-ledger.py \
     >/dev/null 2>&1; then bad "the release path reads the gate cache's record"
 else ok "the release path does not read the gate cache's record"; fi
-grep -q 'e2e-ledger.py' e2e-status.sh && grep -q 'require-fresh' release.sh \
-    && ok "the release path asks the ledger (e2e-status.sh require-fresh)" || bad "the release path does not reach the ledger"
+if grep -q 'require-fresh\|e2e-ledger\.py' release.sh; then bad "the release path reaches the E2E ledger"
+else ok "the release path does not reach the E2E ledger"; fi
 
 [ "$failures" -eq 0 ] && echo "gate-cache: all passed" || { echo "gate-cache: $failures failed"; exit 1; }

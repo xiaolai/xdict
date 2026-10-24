@@ -12,6 +12,7 @@ mod health;
 mod source;
 mod store;
 mod types;
+pub mod words;
 
 pub use crate::core::{
     Core, DISPLAY_OPTIONS, EDITION_SCHEME, EditionStyle, INDEX_FORMAT, MAX_PAGE, MAX_RESOURCE_BYTES, MAX_SUGGEST,
