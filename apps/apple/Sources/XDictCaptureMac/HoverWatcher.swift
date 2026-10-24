@@ -248,12 +248,13 @@ public final class HoverWatcher {
             end = .word
         case .nothing(let why):
             // **A miss is told, as a notice, for a hover that still stands** (owner's report, 2026-10-19: nothing visible
-            // happened). A capture past its deadline is the stuck capture, not "nothing here".
+            // happened). A capture past its deadline is the stuck capture, not "nothing here": the reader's own window,
+            // and the first app behind it, were read before a miss is reported (owner, 2026-10-24).
             // Metadata only: the kind of miss, the app's name and the element's role (ADR-0014 decision 9).
             log.info("hover: nothing read (\(String(describing: why), privacy: .public))")
             if let asked = origins[intent.origin] {
-                found[intent.serial] = .notice(why == .captureTimedOut ? .captureStuck : .nothingUnderPointer,
-                                               request: asked.request)
+                let notice: CaptureNotice = why == .captureTimedOut ? .captureStuck : .nothingUnderPointer
+                found[intent.serial] = .notice(notice, request: asked.request)
                 end = .word
             } else {
                 end = .nothing

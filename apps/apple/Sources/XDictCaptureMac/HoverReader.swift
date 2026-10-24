@@ -126,7 +126,8 @@ public final class HoverReader: HoverReading {
         case recognised(Recognition, request: CaptureRequest, key: String, context: PendingContext?)
         /// The gate, or a refusal after the read. Ordinary, and not worth showing.
         case quiet(HoverRefusal)
-        /// The gate said yes and nothing could be read.
+        /// The gate said yes and nothing could be read: not in XDict's own window (its script, controls and pixels), not
+        /// in the first app behind it, and nowhere else the point reaches.
         case nothing(Nothing)
         /// Only the pixels could answer, and Screen Recording is not set up or is off. **Nothing was asked of the system**:
         /// the consumer tells the reader where to allow it.
@@ -163,60 +164,219 @@ public final class HoverReader: HoverReading {
         if policy.readingMode == .screenOnly {
             return await readScreenOnly(at: point, windows: windows, request: request, policy: policy)
         }
-        let targeted: PointerWordReader.OwnTargetOutcome
-        let inOwnWindow: Bool
         switch await resolve(at: point, windows: windows, policy: policy) {
         case nil: return .quiet(.excludedApp)
-        case .ownView(let reading)?: return await readOwnView(reading, at: point, request: request, policy: policy)
-        case .target(let found, let own)?: (targeted, inOwnWindow) = (found, own)
-        }
-        switch targeted {
-        case .none(let why):
-            guard !Task.isCancelled else { return .quiet(.cancelled) }
-            // **No element, so no page to name**: while the reader excludes any site, an unnamed page is refused rather
-            // than read as pixels — the rule the text read applies to an unreadable page.
-            if let refusal = CaptureAuthorization.refusal(host: .unreadable, policy: policy) { return .quiet(refusal) }
-            // In XDict's own window the compositor named the owner: its pixels, never the window behind it.
-            return await readThePixels(at: point, owner: inOwnWindow ? ours : nil, windows: windows, request: request,
-                                       policy: policy, otherwise: .noTarget(why))
-        case .found(let found):
-            if let refusal = CaptureAuthorization.refusal(bundleID: found.bundleID, policy: policy) { return .quiet(refusal) }
-            guard !Task.isCancelled else { return .quiet(.cancelled) }
-            // **An element of this process is read on the main actor, by its pid** (`AXUIElementGetPid`), whichever hit
-            // test found it: a lane job run there, never on the lane's own thread, where it would be serviced off it.
-            let gated: PointerWordReader.GatedOutcome
-            if found.pid == ours {
-                gated = await source.readOwnUnlessRefused(at: point, in: found, refuses: { policy.refuses($0) },
-                                                          budget: budget)
-            } else {
-                gated = await source.readUnlessRefused(at: point, in: found, refuses: { policy.refuses($0) }, budget: budget)
+        case .ownView(let reading)?:
+            // **XDict's own window is read completely before anything behind it**: the view's own answer, then its
+            // visible pixels, then the first app behind.
+            let outcome = await readOwnView(reading, at: point, request: request, policy: policy)
+            return await lookThrough(after: outcome, at: point, windows: windows, request: request, policy: policy)
+        case .target(let found, let own)?:
+            let outcome: Outcome
+            switch found {
+            case .none(let why):
+                // **No element, so no page to name**: for another app, read as pixels only while the reader excludes no
+                // site — the rule the text read applies to an unreadable page. XDict's own window holds no site.
+                if !own, let refusal = CaptureAuthorization.refusal(host: .unreadable, policy: policy) {
+                    return .quiet(refusal)
+                }
+                // XDict's own window's pixels are `lookThrough`'s first step, once — never read twice.
+                outcome = own ? .nothing(.noTarget(why))
+                              : await pixels(at: point, owner: nil, windows: windows, otherwise: .noTarget(why),
+                                             request: request, policy: policy)
+            case .found(let target):
+                outcome = await readTarget(target, ownerIsOurs: own, at: point, windows: windows, request: request,
+                                           policy: policy)
             }
-            noteLane()
-            switch gated {
-            case .refused:
-                return .quiet(.excludedSite)
-            case .read(.hit(let hit)):
-                return accept(hit, request: request, policy: policy, point: point)
-            case .read(.cancelled):
-                return .quiet(.cancelled)
-            case .read(.miss(.secure(let app))):
-                // **A secure field is not read as pixels either.**
-                return .nothing(.miss(.secure(app: app)))
-            case .read(.miss(let miss)):
-                // **The site was decided in the same job and not refused**: the pixels of the app Accessibility named.
-                log.info("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
-                return await readThePixels(at: point, owner: found.pid, windows: windows, request: request, policy: policy,
-                                           otherwise: .miss(miss))
-            }
+            guard own else { return outcome }
+            return await lookThrough(after: outcome, at: point, windows: windows, request: request, policy: policy)
         }
     }
 
+    /// What one app's element read decided, before any pixels: an answer to return, or a miss whose window is read as
+    /// pixels next.
+    private enum GatedRead {
+        case answer(Outcome)
+        case miss(Nothing)
+    }
+
+    /// **The one place a named app's element is read** — the front path and the look-through alike: the app's refusal, the
+    /// gated read (on the main actor where the element is XDict's), the word, and a secure field's answer. The lane's
+    /// health is noted after the read, as it is after the hit test (`resolve`), so a wedge during either is reported.
+    private func gatedRead(
+        _ target: PointerWordReader.Target, ownerIsOurs own: Bool, at point: CGPoint, request: CaptureRequest,
+        policy: HoverPolicy
+    ) async -> GatedRead {
+        if let refusal = CaptureAuthorization.refusal(bundleID: target.bundleID, policy: policy) {
+            return .answer(.quiet(refusal))
+        }
+        guard !Task.isCancelled else { return .answer(.quiet(.cancelled)) }
+        // **An element of this process is read on the main actor, by its pid** (`AXUIElementGetPid`), whichever hit test
+        // found it: a lane job run there, never on the lane's own thread, where it would be serviced off it.
+        let gated: PointerWordReader.GatedOutcome
+        if own || target.pid == getpid() {
+            gated = await source.readOwnUnlessRefused(at: point, in: target, refuses: { policy.refuses($0) },
+                                                      budget: budget)
+        } else {
+            gated = await source.readUnlessRefused(at: point, in: target, refuses: { policy.refuses($0) },
+                                                   budget: budget)
+        }
+        noteLane()
+        switch gated {
+        case .refused:
+            return .answer(.quiet(.excludedSite))
+        case .read(.hit(let hit)):
+            return .answer(accept(hit, request: request, policy: policy, point: point))
+        case .read(.cancelled):
+            return .answer(.quiet(.cancelled))
+        case .read(.miss(.secure(let app))):
+            return .answer(.nothing(.miss(.secure(app: app))))
+        case .read(.miss(let miss)):
+            log.info("hover: accessibility found no word (\(String(describing: miss), privacy: .public))")
+            return .miss(.miss(miss))
+        }
+    }
+
+    /// The front path once `resolve` named an element: the gated read, then **that window's pixels** where it found no
+    /// word — except XDict's own window, whose pixels `lookThrough` reads once. A secure field is read neither as pixels
+    /// nor through: it is the window's answer at this point.
+    private func readTarget(
+        _ found: PointerWordReader.Target, ownerIsOurs own: Bool, at point: CGPoint, windows: [ListedWindow],
+        request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        switch await gatedRead(found, ownerIsOurs: own, at: point, request: request, policy: policy) {
+        case .answer(let outcome):
+            return outcome
+        case .miss(let why):
+            guard !own else { return .nothing(why) }
+            return await pixels(at: point, owner: found.pid, windows: windows, otherwise: why,
+                                request: request, policy: policy)
+        }
+    }
+
+    /// **XDict's window is transparent to hover where it holds no word** (owner, 2026-10-24: "哪怕它与其他窗口重叠或者当前
+    /// frontmost 的时候也不能鼠标取词，这就不对了"). The surface the reader sees is read completely first — its pixels, so
+    /// text in an image is found — and then the first ordinary window of another app behind it, through that app's own
+    /// Accessibility and then its pixels. **A word the screen shows is never answered "no word"**; only when every window
+    /// at the point has been read is the miss reported, and a pixel read that needed Screen Recording says so. Each read
+    /// keeps the program it was made in: a capture names its window's owner.
+    private func lookThrough(
+        after outcome: Outcome, at point: CGPoint, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        let ownWhy: Nothing
+        switch outcome {
+        case .nothing(.miss(.secure)): return outcome  // a secure field is nobody's to read: not pierced
+        case .nothing(let why): ownWhy = why
+        default: return outcome
+        }
+        var permission: Outcome?
+        var reasons: [Nothing] = [ownWhy]
+        // Every ending passes here: a timeout recorded by any window is never lost to a later quiet or blander outcome.
+        func ended(_ outcome: Outcome) -> Outcome {
+            settle(outcome, timedOut: reasons.contains(.captureTimedOut), permission: permission)
+        }
+        if let own = frontOwnWindow(at: point, in: windows) {
+            switch await readThePixels(of: own, at: point, request: request, policy: policy) {
+            case .nothing(let why): reasons.append(why)
+            case .needsScreenRecording: permission = .needsScreenRecording(request: request)
+            case let found: return ended(found)
+            }
+        }
+        guard let behind = behindWindow(at: point, in: windows) else {
+            return ended(.nothing(Self.telling(reasons, fallback: ownWhy)))
+        }
+        if let refusal = CaptureAuthorization.refusal(bundleID: bundleIDOf(behind.pid), policy: policy) {
+            return ended(.quiet(refusal))
+        }
+        let behindWhy: Nothing
+        switch await source.target(of: behind.pid, at: point) {
+        case .found(let target):
+            noteLane()
+            if let refusal = CaptureAuthorization.refusal(bundleID: target.bundleID, policy: policy) {
+                return ended(.quiet(refusal))
+            }
+            switch await gatedRead(target, ownerIsOurs: false, at: point, request: request, policy: policy) {
+            case .answer(let answer):
+                return ended(answer)
+            case .miss(let why):
+                behindWhy = why
+            }
+        case .none(let why):
+            noteLane()
+            // No element, so no page to name: where the reader excludes a site, the app behind is not read as pixels
+            // either — the same rule the front path applies to an unreadable page.
+            if let refusal = CaptureAuthorization.refusal(host: .unreadable, policy: policy) {
+                return ended(.quiet(refusal))
+            }
+            behindWhy = .noTarget(why)
+        case .ownWindow:
+            noteLane()
+            behindWhy = .noTarget(.nothingAtPointer)
+        }
+        switch await readThePixels(of: behind, at: point, request: request, policy: policy) {
+        case .nothing(let why):
+            return ended(.nothing(Self.telling(reasons + [behindWhy, why], fallback: behindWhy)))
+        case .needsScreenRecording:
+            return ended(.needsScreenRecording(request: request))
+        case let found:
+            return ended(found)
+        }
+    }
+
+    /// **The most telling of the reasons the windows gave**: a capture past its deadline outranks a pixel read that failed
+    /// for a reason (the window closed, its owner cannot be named), which outranks a wordless element, which outranks a
+    /// pixel read that simply found no word, which outranks no element at all. The consumer words `.captureTimedOut` as
+    /// the stuck capture, so no later, blander miss may hide it; and a view's own wordless answer is not buried under
+    /// "nothing under pointer" from the pixels that followed it.
+    private static func telling(_ reasons: [Nothing], fallback: Nothing) -> Nothing {
+        func rank(_ reason: Nothing) -> Int {
+            switch reason {
+            case .captureTimedOut: return 5
+            case .recognition(.nothingUnderPointer): return 2
+            case .recognition: return 4
+            case .miss: return 3
+            case .noTarget: return 1
+            }
+        }
+        return (reasons + [fallback]).max { rank($0) < rank($1) } ?? fallback
+    }
+
+    /// **The one ending of a look-through**: a word, a cancellation or the grant notice stands as it is; otherwise a
+    /// capture past its deadline anywhere is the stuck capture the reader can act on — not a later, blander miss or a
+    /// silent refusal — and a grant the read needed stands over a silent refusal (the reader's own list refuses the
+    /// behind app, but the pixels of XDict's window were left unread for want of the grant).
+    private func settle(_ outcome: Outcome, timedOut: Bool, permission: Outcome?) -> Outcome {
+        switch outcome {
+        case .word, .recognised, .needsScreenRecording, .quiet(.cancelled):
+            return outcome
+        default:
+            break
+        }
+        if let permission { return permission }
+        if timedOut { return .nothing(.captureTimedOut) }
+        return outcome
+    }
+
+    /// **The first ordinary window of another app at the point** — the app the reader would see were XDict's window not
+    /// there. A window at a layer above the ordinary ones is not that app's content at the point: Notification Center
+    /// lists a full-screen layer-21 window on macOS 27.0.1 whose own hit test answers with its menu bar at any point
+    /// (measured 2026-10-24), so only layer 0 names the app behind.
+    private func behindWindow(at point: CGPoint, in windows: [ListedWindow]) -> ListedWindow? {
+        windows.first { $0.pid != getpid() && $0.alpha > 0 && $0.layer == 0 && $0.bounds.contains(point) }
+    }
+
+    /// **The frontmost visible window of XDict's at the point** — the surface its own pixels are read from.
+    private func frontOwnWindow(at point: CGPoint, in windows: [ListedWindow]) -> ListedWindow? {
+        windows.first { $0.pid == getpid() && $0.alpha > 0 && $0.bounds.contains(point) }
+    }
+
     /// **Read text with: Screen Only** (owner, 2026-10-19): Accessibility is never asked — no hit test, no site walk, no
-    /// text, none of XDict's own views — and the pixels are read under the rules they already keep. With no element, no
-    /// page can be named, so while the reader excludes any site it is refused, as the pixel path refuses an unnamed page;
-    /// XDict excluded by the reader refuses its own front window here, another app's exclusion is the recogniser's, by the
-    /// window's owner, before a pixel; the window is the compositor's front one at the point (XDict's when it is in
-    /// front); and without Screen Recording the reader is told so (`needsScreenRecording`).
+    /// text, none of XDict's own views — and the pixels are read under the rules they already keep. **XDict's front window
+    /// is read first, then the first app behind it** (owner, 2026-10-24: a word on screen is never answered "no word"):
+    /// both as pixels, since this mode has no other means. With no element, no page can be named, so while the reader
+    /// excludes any site a window that may hold one is refused, as the pixel path refuses an unnamed page; XDict excluded
+    /// by the reader refuses its own front window here, another app's exclusion is the recogniser's, by the window's
+    /// owner, before a pixel; and without Screen Recording the reader is told so (`needsScreenRecording`).
     private func readScreenOnly(
         at point: CGPoint, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy
     ) async -> Outcome {
@@ -226,17 +386,44 @@ public final class HoverReader: HoverReading {
         if inOwnWindow, let refusal = CaptureAuthorization.refusal(bundleID: ownBundleID, policy: policy) {
             return .quiet(refusal)
         }
-        // **No page can be named without Accessibility**: while a site is listed, the window the capture would read is
-        // refused where it may hold one — a known browser's, or one whose owner cannot be named (`refusesUnnamedPage`).
-        // XDict's own window holds XDict's pages, never a site.
-        if !inOwnWindow, policy.refuses(.unreadable),
-           case .window(let chosen, _) = PointerTarget(point: point, windows: windows, accessibilityOwner: nil)
-               .captureWindow(excludingProcess: ours),
-           policy.refusesUnnamedPage(in: bundleIDOf(chosen.pid)) {
-            return .quiet(.excludedSite)
+        guard inOwnWindow else {
+            // **No page can be named without Accessibility**: while a site is listed, the window the capture would read is
+            // refused where it may hold one — a known browser's, or one whose owner cannot be named (`refusesUnnamedPage`).
+            if policy.refuses(.unreadable),
+               case .window(let chosen, _) = PointerTarget(point: point, windows: windows, accessibilityOwner: nil)
+                   .captureWindow(excludingProcess: ours),
+               policy.refusesUnnamedPage(in: bundleIDOf(chosen.pid)) {
+                return .quiet(.excludedSite)
+            }
+            return await pixels(at: point, owner: nil, windows: windows, otherwise: .noTarget(.nothingAtPointer),
+                                request: request, policy: policy)
         }
-        return await readThePixels(at: point, owner: inOwnWindow ? ours : nil, windows: windows, request: request,
-                                   policy: policy, otherwise: .noTarget(.nothingAtPointer))
+        var permission: Outcome?
+        var reasons: [Nothing] = []
+        func ended(_ outcome: Outcome) -> Outcome {
+            settle(outcome, timedOut: reasons.contains(.captureTimedOut), permission: permission)
+        }
+        // **The surface the reader sees, then the app behind it**: XDict's window holds XDict's pages, never a site, so
+        // the site rule is asked of the window behind only.
+        if let own = frontOwnWindow(at: point, in: windows) {
+            switch await readThePixels(of: own, at: point, request: request, policy: policy) {
+            case .nothing(let why): reasons.append(why)
+            case .needsScreenRecording: permission = .needsScreenRecording(request: request)
+            case let found: return ended(found)
+            }
+        }
+        guard let behind = behindWindow(at: point, in: windows) else {
+            return ended(.nothing(Self.telling(reasons, fallback: .noTarget(.nothingAtPointer))))
+        }
+        if policy.refuses(.unreadable), policy.refusesUnnamedPage(in: bundleIDOf(behind.pid)) {
+            return ended(.quiet(.excludedSite))
+        }
+        switch await readThePixels(of: behind, at: point, request: request, policy: policy) {
+        case .nothing(let why):
+            return ended(.nothing(Self.telling(reasons + [why], fallback: .noTarget(.nothingAtPointer))))
+        case .needsScreenRecording: return ended(.needsScreenRecording(request: request))
+        case let found: return ended(found)
+        }
     }
 
     /// Who owns the point, as `resolve` found it: an Accessibility target (true where it is XDict's own window), or one
@@ -299,10 +486,10 @@ public final class HoverReader: HoverReading {
     }
 
     /// **One of XDict's own web views, read by its own means**, under the hover budget and asked for at most
-    /// `limits.contextUTF16` units; its answer was checked before it arrived (`OwnViewText`). A view nothing reads is
-    /// asked nothing; a view that does not answer within the budget is given up, as past the deadline. Neither goes on to
-    /// Accessibility or the pixels: Accessibility over the view would wait on WebKit, and the pixels hold no word the
-    /// view itself could not find.
+    /// `limits.contextUTF16` units; its answer was checked before it arrived (`OwnViewText`). A view nothing reads, or one
+    /// that does not answer within the budget, is a miss — and a miss over XDict's own window is not the end: the window's
+    /// pixels and then the app behind it are read (`lookThrough`), so a word on screen is never answered "no word".
+    /// Accessibility over the view is never asked: it would wait on WebKit.
     private func readOwnView(
         _ reading: OwnViewReading?, at point: CGPoint, request: CaptureRequest, policy: HoverPolicy
     ) async -> Outcome {
@@ -336,10 +523,11 @@ public final class HoverReader: HoverReading {
     }
 
     /// **The capture path, once Accessibility had no word.** The window read is the one the app Accessibility named, where
-    /// it named one; the capture is one at a time and bounded.
-    private func readThePixels(
-        at point: CGPoint, owner: pid_t?, windows: [ListedWindow], request: CaptureRequest, policy: HoverPolicy,
-        otherwise: Nothing
+    /// it named one; else the frontmost ordinary window not this process's. Every read is of one named window, so the
+    /// word keeps its owner — the program it belongs to.
+    private func pixels(
+        at point: CGPoint, owner: pid_t?, windows: [ListedWindow], otherwise: Nothing, request: CaptureRequest,
+        policy: HoverPolicy
     ) async -> Outcome {
         guard !Task.isCancelled else { return .quiet(.cancelled) }
         let window: ListedWindow
@@ -350,6 +538,16 @@ public final class HoverReader: HoverReading {
             // No window a capture may read: what Accessibility found is the answer.
             return .nothing(otherwise)
         }
+        return await readThePixels(of: window, at: point, request: request, policy: policy)
+    }
+
+    /// **One window's pixels, read**: one capture at a time, bounded, and its word attributed to the window's owner. A
+    /// miss carries its own reason — the recognition's failure, or a capture past its deadline, which the consumer words
+    /// as the stuck capture; a capture that could not run for lack of Screen Recording says so rather than "no word".
+    private func readThePixels(
+        of window: ListedWindow, at point: CGPoint, request: CaptureRequest, policy: HoverPolicy
+    ) async -> Outcome {
+        guard !Task.isCancelled else { return .quiet(.cancelled) }
         let abandoning = capturing.holdsAbandoned
         guard let ticket = capturing.claim() else {
             reportIfStuck()

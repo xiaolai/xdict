@@ -24,6 +24,10 @@ final class SilentPointerWords: PointerWordSource, @unchecked Sendable {
         reads += 1
         return .read(.miss(.noText(app: "", role: nil)))
     }
+    func target(of owner: pid_t, at point: CGPoint) async -> PointerWordReader.TargetOutcome {
+        .none(.nothingAtPointer)
+    }
+
     func ownView(at point: CGPoint) -> OwnView { .controls }
     func ownTarget(at point: CGPoint) async -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
     func readOwnUnlessRefused(

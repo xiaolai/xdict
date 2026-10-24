@@ -445,14 +445,16 @@ struct SiteHostRoundTwoTests {
 }
 
 struct PointerWindowRoundTwoTests {
-    /// **Our panel under another app's window is still named**, so the system-wide hit test is not used there — a
-    /// click-through overlay can sit above our panel while that hit test goes through to it. The overlay's app is the one
-    /// asked instead (`PointerWordReader.target`); with no window of ours under it, nothing changes.
-    @Test func ourPanelUnderAnotherAppsWindowIsStillNamed() {
+    /// **An overlay of another app that owns no ordinary window at the point is not the pixel's owner** (measured
+    /// 2026-10-24, macOS 27.0.1: Notification Center lists a full-screen layer-21 window over every point and the Dock a
+    /// layer-20 one, and the system-wide hit test goes through both while Notification Center's own hit test answers with
+    /// its menu bar). Our panel under it is read on the main actor instead — still never the system-wide hit test, which
+    /// could land in this process. With no window of ours under it, nothing changes.
+    @Test func aScreenSpanningOverlayOverOurPanelIsNotNamed() {
         let point = CGPoint(x: 10, y: 10)
         let overlay = ListedWindow(pid: 50, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), layer: 20)
         let panel = ListedWindow(pid: 99, bounds: CGRect(x: 0, y: 0, width: 100, height: 100), layer: 3)
-        #expect(PointerWindow.ownership(at: point, in: [overlay, panel], ours: 99) == .coveringOurs(owner: 50))
+        #expect(PointerWindow.ownership(at: point, in: [overlay, panel], ours: 99) == .ours)
         #expect(PointerWindow.ownership(at: point, in: [overlay], ours: 99) == .notOurs)
     }
 }

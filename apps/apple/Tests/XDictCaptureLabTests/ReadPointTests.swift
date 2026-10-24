@@ -134,6 +134,10 @@ final class LabScreen: PointerWordSource, Sendable {
     ) async -> PointerWordReader.GatedOutcome {
         .read(readOutcome)
     }
+    func target(of owner: pid_t, at point: CGPoint) async -> PointerWordReader.TargetOutcome {
+        .none(.nothingAtPointer)
+    }
+
     func ownView(at point: CGPoint) -> OwnView { .controls }
     func ownTarget(at point: CGPoint) async -> PointerWordReader.OwnTargetOutcome { .none(.nothingAtPointer) }
     func readOwnUnlessRefused(

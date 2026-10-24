@@ -54,9 +54,10 @@ struct OwnViewRouteTests {
         #expect(asked.withLock { $0 } == [CaptureLimits.shipped.contextUTF16])
     }
 
-    /// **A web view of XDict's that nothing reads is asked nothing** — not Accessibility, not the pixels. Red where it
-    /// falls back to the Accessibility hit test that waits on WebKit.
-    @Test func aWebViewNothingReadsIsAskedNothing() async {
+    /// **A web view of XDict's that nothing reads is read as pixels, never through Accessibility** (owner, 2026-10-24: a
+    /// word on screen is never answered "no word"); the hover notice comes only after that. Red where it falls back to
+    /// the Accessibility hit test that waits on WebKit.
+    @Test func aWebViewNothingReadsIsReadAsItsOwnPixels() async {
         let screen = ScriptedPointerWords()
         screen.ownView = .webView(nil)
         screen.ownTargetOutcome = .found(HoverFixtures.ownTarget())
@@ -65,7 +66,8 @@ struct OwnViewRouteTests {
             Issue.record("got \(outcome)")
             return
         }
-        #expect(screen.ownTargets == 0 && screen.ownReads == 0 && screen.recognitions == 0)
+        #expect(screen.ownTargets == 0 && screen.ownReads == 0)
+        #expect(screen.recognitions == 1 && screen.recognisedWindows == [Self.ours])
     }
 
     /// **A view that does not answer is given up at the hover budget**, as past its deadline. Red where the own view's

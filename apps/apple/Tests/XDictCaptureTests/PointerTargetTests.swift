@@ -66,6 +66,75 @@ struct PointerTargetTests {
     }
 }
 
+/// **Who owns the pixel when one of XDict's windows is under the point** — the safety rule that keeps the system-wide hit
+/// test away from this process, and the layer rule that keeps an overlay of another app from naming it (measured
+/// 2026-10-24, macOS 27.0.1: Notification Center's full-screen layer-21 window and the Dock's layer-20 one sit over every
+/// point, and Notification Center's own hit test answers with its menu bar wherever it is asked).
+struct PointerOwnershipTests {
+    private static let point = CGPoint(x: 100, y: 100)
+    private static let full = CGRect(x: 0, y: 0, width: 800, height: 600)
+    private static let ours: Int32 = 1
+
+    private static func window(_ pid: Int32, _ id: UInt32, layer: Int = 0, alpha: Double = 1) -> ListedWindow {
+        ListedWindow(pid: pid, bounds: full, windowID: id, layer: layer, alpha: alpha)
+    }
+
+    private static func ownership(_ windows: [ListedWindow]) -> PointerOwnership {
+        PointerWindow.ownership(at: point, in: windows, ours: ours)
+    }
+
+    /// **A screen-spanning overlay of another app does not cover ours**: Notification Center's or the Dock's full-screen
+    /// window has no ordinary window at the point, so ours still owns it.
+    @Test func aScreenSpanningOverlayDoesNotCoverOurs() {
+        let notificationCentre = Self.window(30, 300, layer: 21)
+        let dock = Self.window(40, 400, layer: 20)
+        let mine = Self.window(Self.ours, 100)
+        #expect(Self.ownership([notificationCentre, dock, mine]) == .ours)
+        #expect(Self.ownership([dock, mine]) == .ours)
+    }
+
+    /// **A panel of another app above ours covers it where that app also has an ordinary window there** — a real panel
+    /// over its own document, not a screen-spanning overlay.
+    @Test func aPanelOverItsOwnDocumentCoversOurs() {
+        let panel = Self.window(30, 301, layer: 3)
+        let document = Self.window(30, 300)
+        let mine = Self.window(Self.ours, 100)
+        #expect(Self.ownership([panel, document, mine]) == .coveringOurs(owner: 30))
+    }
+
+    /// **A floating panel of another app above ours covers it even with no document of that app at the point**: it is a
+    /// window the reader can see and click (found by the audit, 2026-10-24).
+    @Test func aStandaloneFloatingPanelCoversOurs() {
+        let panel = Self.window(30, 301, layer: 3)
+        let mine = Self.window(Self.ours, 100)
+        #expect(Self.ownership([panel, mine]) == .coveringOurs(owner: 30))
+    }
+
+    /// **An overlay whose only ordinary window at the point is invisible does not cover ours**: the visibility rule
+    /// applies to the supporting window too (found by the audit, 2026-10-24).
+    @Test func anOverlayWhoseOnlyDocumentIsInvisibleDoesNotCoverOurs() {
+        let overlay = Self.window(30, 302, layer: 21)
+        let invisibleDocument = Self.window(30, 300, layer: 0, alpha: 0)
+        let mine = Self.window(Self.ours, 100)
+        #expect(Self.ownership([overlay, invisibleDocument, mine]) == .ours)
+    }
+
+    /// Another app's ordinary window in front of ours is the one read; ours in front is ours.
+    @Test func ordinaryWindowsDecideInOrder() {
+        let mine = Self.window(Self.ours, 100)
+        let theirs = Self.window(30, 300)
+        #expect(Self.ownership([mine, theirs]) == .ours)
+        #expect(Self.ownership([theirs, mine]) == .coveringOurs(owner: 30))
+    }
+
+    /// No window of ours at the point: the system-wide hit test may be used, whatever overlays are listed.
+    @Test func withoutOneOfOursNothingIsOurs() {
+        let notificationCentre = Self.window(30, 300, layer: 21)
+        let theirs = Self.window(40, 400)
+        #expect(Self.ownership([notificationCentre, theirs]) == .notOurs)
+    }
+}
+
 /// **One rule for whether hover may read an app**, asked at all three places that check.
 struct CaptureAuthorizationTests {
     @Test func anExcludedAppIsRefused() {

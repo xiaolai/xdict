@@ -217,17 +217,19 @@ struct HoverReaderSourceTests {
         #expect(screen.reads == 0)
     }
 
-    /// **Nothing at the point in XDict's own window: the pixels of XDict's window there**, never the window behind it —
-    /// the compositor named XDict's window as the one in front, so it is the owner the capture reads. Red if the capture
-    /// falls back to the frontmost ordinary window of another app.
-    @Test func ourOwnWindowWithNoElementReadsItsOwnPixels() async {
+    /// **Nothing at the point in XDict's own window: its pixels there first, then the ordinary window behind it** (owner,
+    /// 2026-10-24: a word on screen is never answered "no word"): the compositor named XDict's window as the one in front,
+    /// and the app behind is read only after XDict's own surface has been read and found wordless. Red if the capture
+    /// stops at XDict's window, or reads a higher-layer window of another app instead of the ordinary one behind.
+    @Test func ourOwnWindowWithNoElementReadsItsOwnPixelsThenTheAppBehind() async {
         let screen = ScriptedPointerWords()
         let ours = ListedWindow(pid: getpid(), bounds: CGRect(x: 0, y: 0, width: 100, height: 100), windowID: 3, layer: 3)
         let behind = ListedWindow(pid: getpid() + 1, bounds: CGRect(x: 0, y: 0, width: 500, height: 500), windowID: 5)
         screen.windows = [ours, behind]
         screen.ownTargetOutcome = .none(.nothingAtPointer)
         _ = await read(reader(screen))
-        #expect(screen.recognisedWindows == [ours])
+        #expect(screen.recognisedWindows == [ours, behind])
+        #expect(screen.behindTargets == [getpid() + 1], "the app behind was not hit-tested by its own process")
         #expect(screen.laneTargets == 0)
     }
 }

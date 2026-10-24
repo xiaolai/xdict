@@ -142,10 +142,19 @@ public enum PointerWordReader {
     public static func ownTarget(
         at point: CGPoint, access: AccessibilityAccess, ownProcess: pid_t, with ax: some AccessibilityReading
     ) -> OwnTargetOutcome {
+        hitTestApplication(ownProcess, at: point, access: access, with: ax)
+    }
+
+    /// **One application's own hit test, descended to the element under the point** — XDict's own application
+    /// (`ownTarget`) and a named app behind one of its windows (`target(of:at:access:with:)`) alike. An unanswered or
+    /// failed request is the typed miss both report.
+    private static func hitTestApplication(
+        _ pid: pid_t, at point: CGPoint, access: AccessibilityAccess, with ax: some AccessibilityReading
+    ) -> OwnTargetOutcome {
         guard access.granted() else { return .none(.accessibilityOff) }
         let element: AXUIElement
         do throws(CaptureError) {
-            guard let found = try ax.hitTest(AXUIElementCreateApplication(ownProcess), at: point) else {
+            guard let found = try ax.hitTest(AXUIElementCreateApplication(pid), at: point) else {
                 return .none(.nothingAtPointer)
             }
             element = try descend(from: found, to: point, with: ax)
@@ -202,6 +211,22 @@ public enum PointerWordReader {
         }
         let target = Target(of: element)
         return target.pid == ownProcess ? .ownWindow : .found(target)
+    }
+
+    /// **One named app's own hit test — the look-through.** Where XDict's own window is in front and holds no word, the
+    /// app behind it is asked through its own application element, never the system-wide one: the request is scoped to
+    /// that process, so it can neither land in this one (the in-process hazard above) nor be diverted by a click-through
+    /// overlay. **Measured 2026-10-24 (macOS 27.0.1): an app's own hit test answers for its window even when another
+    /// app's window covers the point** — TextEdit's text area, Safari's static text and Chrome's static text all answered
+    /// with their covering window present, and `AXRangeForPosition`/`AXStringForRange` read the word there. The answer is
+    /// descended as any app's own hit test is, since an app names only a coarse group.
+    public static func target(
+        of owner: pid_t, at point: CGPoint, access: AccessibilityAccess, with ax: some AccessibilityReading
+    ) -> TargetOutcome {
+        switch hitTestApplication(owner, at: point, access: access, with: ax) {
+        case .found(let target): return .found(target)
+        case .none(let why): return .none(why)
+        }
     }
 
     /// Levels descended from an app's own hit test, and the children weighed at one level: past either, the element

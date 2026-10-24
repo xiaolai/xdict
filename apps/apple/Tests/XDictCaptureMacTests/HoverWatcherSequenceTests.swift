@@ -562,6 +562,8 @@ struct HoverWatcherSequenceTests {
         #expect(rig.requests.terminal(of: rig.reader.asks[0].request)?.outcome == .cancelled)
     }
 
+    /// **A miss over XDict's own window is said where the pointer is** (owner's question, 2026-10-24): the word may be
+    /// in the app behind XDict, so the notice is not the generic "nothing here".
     /// A capture that did not answer in time is not "nothing here": it is told as the stuck capture it is.
     @Test func aCaptureThatTimedOutIsToldAsStuck() async {
         let rig = Rig()

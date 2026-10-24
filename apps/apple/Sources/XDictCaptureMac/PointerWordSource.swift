@@ -14,6 +14,9 @@ public protocol PointerWordSource: Sendable {
         at point: CGPoint, windows: @escaping @Sendable () -> [ListedWindow],
         refusesOwner: @escaping @Sendable (pid_t) -> Bool
     ) async -> PointerWordReader.TargetOutcome
+    /// **One named app's own hit test**, on the lane — the look-through: XDict's window holds no word, so the app behind
+    /// it is asked through its own application element, scoped to that process and so unable to land in this one.
+    func target(of owner: pid_t, at point: CGPoint) async -> PointerWordReader.TargetOutcome
     /// **The site check and the text read as one lane job** — the only way to read another app's hover text, so no page
     /// can navigate between a check and a read. The text is read only where `refuses` does not refuse the site.
     func readUnlessRefused(
@@ -93,11 +96,28 @@ public struct SystemPointerWords: PointerWordSource {
         refusesOwner: @escaping @Sendable (pid_t) -> Bool
     ) async -> PointerWordReader.TargetOutcome {
         let access = access
-        let client = client
-        let budget = PointerWordReader.budget
-        return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
+        return await targetOnLane { ax in
             PointerWordReader.target(at: point, access: access, windows: windows, ownProcess: getpid(),
-                                     refusesOwner: refusesOwner, with: client(budget))
+                                     refusesOwner: refusesOwner, with: ax)
+        }
+    }
+
+    public func target(of owner: pid_t, at point: CGPoint) async -> PointerWordReader.TargetOutcome {
+        let access = access
+        return await targetOnLane { ax in
+            PointerWordReader.target(of: owner, at: point, access: access, with: ax)
+        }
+    }
+
+    /// **One target hit test on the lane**: the hover timeout and budget, its own session, and the lane's refusal as a
+    /// failed target. The two entry points differ only in what is asked.
+    private func targetOnLane(
+        _ work: @escaping @Sendable (any AccessibilityReading) -> PointerWordReader.TargetOutcome
+    ) async -> PointerWordReader.TargetOutcome {
+        let budget = PointerWordReader.budget
+        let client = client
+        return await lane.run(.hover, timeout: PointerWordReader.messagingTimeout, budget: budget, {
+            work(client(budget))
         }, refused: { .none(.failed(Self.failure(for: $0))) })
     }
 
