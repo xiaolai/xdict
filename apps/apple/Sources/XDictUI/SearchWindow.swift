@@ -65,7 +65,7 @@ public struct SearchWindow: View {
                 // Nested in the navigation's detail, the inspector sits under the window's shared toolbar, level with
                 // the reading area (WWDC23 10161). Its content is the pane alone: toolbar content declared inside an
                 // inspector gives it a toolbar section of its own, so its toggle is the window's (`toolbar`).
-                .inspector(isPresented: meaningShown(in: .inspector, now: shown)) {
+                .inspector(isPresented: paneShown(in: .inspector, now: shown)) {
                     MeaningAnswerPane(state: state)
                         .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
                                               max: Tokens.Window.meaningPaneMax)
@@ -74,8 +74,11 @@ public struct SearchWindow: View {
         // **The answer in a sheet** where the pane does not fit beside the entry and the list the reader shows: the
         // pane's own scrolling body over Done (R3), Escape closing it too. Modal, so the window's search is back after
         // Done.
-        .sheet(isPresented: meaningShown(in: .sheet, now: shown)) {
-            let done = { state.panes.meaningClosed(by: .sheet, current: .sheet) }
+        .sheet(isPresented: paneShown(in: .sheet, now: shown)) {
+            let done = {
+                state.panes.meaningClosed(by: .sheet, current: .sheet)
+                state.panes.examplesClosed()
+            }
             VStack(spacing: 0) {
                 MeaningAnswerPane(state: state)
                 Divider()
@@ -94,7 +97,15 @@ public struct SearchWindow: View {
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
         .focusedSceneValue(\.searchWindow, state)
         .background(TabTitle(title: ToolbarLayout.tabTitle(word: state.shownWord)))
-        .onChange(of: state.library.searchSources, initial: true) { state.model.sourcesDidChange() }
+        .onChange(of: state.library.searchSources, initial: true) {
+            state.model.sourcesDidChange()
+            state.lookupDidChange()
+        }
+        // The examples section (ADR-0031): opens when a Chinese query's pairs arrive, and asks again when a
+        // dictionary's store finishes building. The revision, not `hasContent`: two queries that both found pairs
+        // leave `hasContent` true, and the second one's section must still open (audit, 2026-10-24).
+        .onChange(of: state.examples.revision) { state.examplesContentChanged() }
+        .onChange(of: state.library.examples) { state.examplesLibraryChanged() }
         .onChange(of: state.model.shown) { _, shown in
             guard let shown else { return }
             Task { await state.present(shown) }
@@ -116,19 +127,21 @@ public struct SearchWindow: View {
         }
     }
 
-    /// Where the answer is shown now, from the reader's choices and the window's width (`MeaningPlacement`).
+    /// Where the right pane is shown now, from the reader's choices and the window's width (`MeaningPlacement`): the
+    /// Meaning answer and the Examples section share it (ADR-0031's owner decision: a section in the existing pane).
     private var presentation: MeaningPlacement {
         MeaningPlacement.at(width: width, results: state.panes.resultsVisible(listed: state.model.listing != nil),
-                               meaning: state.panes.meaningShown)
+                               meaning: state.panes.meaningShown || state.panes.examplesShown)
     }
 
-    /// The answer pane (plan-ai-meaning WI-6) in one of its presentations: opened by an ask, by View ▸ Show Meaning in
-    /// Context and by the toolbar's toggle; closed by the reader (UI02, UI05). A dismissal is weighed against where the
-    /// answer is shown when it arrives, so the one a resize just left does not close the answer (`meaningClosed`).
-    private func meaningShown(in place: MeaningPlacement, now: MeaningPlacement) -> Binding<Bool> {
+    /// The right pane in one of its presentations: opened by an ask, by a Chinese query's examples, by View ▸ Show
+    /// Meaning in Context and by the toolbar's toggle; closed by the reader (UI02, UI05). A dismissal is weighed
+    /// against where the pane is shown when it arrives, so the one a resize just left does not close it.
+    private func paneShown(in place: MeaningPlacement, now: MeaningPlacement) -> Binding<Bool> {
         Binding { now == place } set: { shown in
             guard !shown else { return }
             state.panes.meaningClosed(by: place, current: presentation)
+            state.panes.examplesClosed()
         }
     }
 

@@ -135,6 +135,44 @@ actor FakeBackend: LibraryBackend {
         heldChecks.removeAll { $0.0 == dict }
     }
 
+    // MARK: - Examples (ADR-0031)
+
+    /// Every dictionary whose store was built, in order, and every build cancelled.
+    private(set) var exampleBuilds: [DictId] = []
+    private(set) var exampleBuildsCancelled: [DictId] = []
+    /// What a build answers; held builds wait until `releaseExampleBuilds`.
+    var examplesAnswer = ExamplesBuilt(edition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "0", count: 64)),
+                                      pairs: 1, roles: 1, fallback: 0, entries: 1, failed: 0, noChinese: false,
+                                      cached: false)
+    var holdingExampleBuilds = false
+    private var heldExampleBuilds: [(DictId, CheckedContinuation<Bool, Never>)] = []
+
+    func setExamplesAnswer(_ built: ExamplesBuilt) { examplesAnswer = built }
+    func holdExampleBuilds() { holdingExampleBuilds = true }
+    var heldExampleBuildCount: Int { heldExampleBuilds.count }
+
+    func beginExamplesBuild(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async
+        -> ExamplesJob {
+        exampleBuilds.append(dict)
+        progress(0, 1)
+        return ExamplesJob(outcome: { await self.buildExamples(dict) }, cancel: { await self.cancelExampleBuild(dict) })
+    }
+
+    private func buildExamples(_ dict: DictId) async -> Result<ExamplesBuilt, ClientFailure> {
+        if holdingExampleBuilds, !exampleBuildsCancelled.contains(dict) {
+            let released = await withCheckedContinuation { heldExampleBuilds.append((dict, $0)) }
+            guard released else { return .failure(.wire(.core(.cancelled(detail: "cancelled")))) }
+        }
+        return exampleBuildsCancelled.contains(dict)
+            ? .failure(.wire(.core(.cancelled(detail: "cancelled")))) : .success(examplesAnswer)
+    }
+
+    private func cancelExampleBuild(_ dict: DictId) {
+        exampleBuildsCancelled.append(dict)
+        for (held, waiting) in heldExampleBuilds where held == dict { waiting.resume(returning: false) }
+        heldExampleBuilds.removeAll { $0.0 == dict }
+    }
+
     // MARK: - Reading style (ADR-0010)
 
     /// Every dictionary whose reading style was asked, in order; what it answers.

@@ -119,6 +119,12 @@ const CALIBRATION_ENTRIES: usize = 64;
 const CALIBRATION_BYTES: u64 = 256 << 10;
 /// The most a sampled entry's read may decompress: a short entry in a block shared with a huge one is passed over.
 const CALIBRATION_BLOCK_BYTES: u64 = 8 << 20;
+/// The ceiling on one entry the examples pass renders, and the text budget its projection reads (ADR-0031 d.3, d.6).
+const EXAMPLES_TEXT_BYTES: usize = 16 << 20;
+/// Entries read for the "does this edition carry Chinese at all" test, evenly spaced (ADR-0031 d.6).
+const EXAMPLES_SAMPLE: usize = 64;
+/// Records between progress reports in the examples pass: a check of the cancellation flag and one event.
+const EXAMPLES_REPORT: usize = 1024;
 
 /// An edition's reading style and the sheets it was read from.
 #[derive(Debug, Clone)]
@@ -568,18 +574,7 @@ impl Core {
             Ok(EntryText {
                 entry,
                 text: projection.text,
-                spans: projection
-                    .runs
-                    .into_iter()
-                    .map(|run| TextSpan {
-                        start: run.start as u64,
-                        len: run.len as u64,
-                        role: run.role,
-                        label: run.label,
-                        section: run.section,
-                        sense: run.sense,
-                    })
-                    .collect(),
+                spans: text_spans(projection.runs),
                 senses: projection
                     .senses
                     .into_iter()
@@ -633,41 +628,53 @@ impl Core {
             }
             let record = opened.mdx.record(i)?;
             opened.mdx_source.unchanged()?;
-            // The record's bytes become the text, not a copy of them.
-            let lossy = record.lossy;
-            let text =
-                String::from_utf8(record.data).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
-            // Expanded and rewritten within the view's ceiling: a small record of many style markers, or of many
-            // short links, would otherwise be written whole before it could be refused.
-            let max = usize::try_from(view.max_body_bytes).unwrap_or(usize::MAX);
-            let too_large = |_| CoreError::TooLarge {
-                limit: Limit::Body,
-                detail: format!("the entry passes {} bytes expanded and rewritten, the view's ceiling", max),
-            };
-            let expanded = opened.sheet.apply_within(&text, max).map_err(too_large)?;
-            let style = self.edition_style(&opened)?;
-            // The key finds the headword (the roles, element-sweep §2.1); the package says which images it holds (S13).
-            let holds = |path: &str| self.holds(&opened, path);
-            // A transcription candidate that is a key is a headword written with stress (ADR-0010 Phonetics).
-            let is_key = |key: &str| opened.mdx.find(key).is_ok_and(|found| !found.is_empty());
-            let context = xdict_entry::Entry {
-                key: &entry.key,
-                resource: Some(&holds),
-                is_key: Some(&is_key),
-                strip_off_for_tests: self.strip_off_for_tests,
-                original: view.original_style,
-            };
-            // Given owned (the record's text, or its expansion), it is freed once it is read.
-            let body = match expanded {
-                std::borrow::Cow::Owned(expanded) => expanded,
-                std::borrow::Cow::Borrowed(_) => text,
-            };
-            let (html, _) = xdict_entry::entry_normalized_within(body, &view.base_url, "", &style.style, &context, max)
-                .map_err(too_large)?;
-            // Q6 (ADR-0010, the owner's answers): every entry renders in standards mode.
-            let html = with_doctype(html, max).map_err(too_large)?;
+            let (html, lossy) = self.render_record(&opened, &entry.key, record.data, record.lossy, view)?;
             Ok((entry, html, lossy))
         }
+    }
+
+    /// **A record's bytes to what the entry view draws**, which both [`Core::entry`] and [`Core::entry_text`] use, and
+    /// the examples pass reads once per record without looking its occurrence up again.
+    fn render_record(
+        &self,
+        opened: &Dict,
+        key: &str,
+        data: Vec<u8>,
+        lossy: u64,
+        view: &View,
+    ) -> Result<(String, u64), CoreError> {
+        // The record's bytes become the text, not a copy of them.
+        let text = String::from_utf8(data).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned());
+        // Expanded and rewritten within the view's ceiling: a small record of many style markers, or of many
+        // short links, would otherwise be written whole before it could be refused.
+        let max = usize::try_from(view.max_body_bytes).unwrap_or(usize::MAX);
+        let too_large = |_| CoreError::TooLarge {
+            limit: Limit::Body,
+            detail: format!("the entry passes {} bytes expanded and rewritten, the view's ceiling", max),
+        };
+        let expanded = opened.sheet.apply_within(&text, max).map_err(too_large)?;
+        let style = self.edition_style(opened)?;
+        // The key finds the headword (the roles, element-sweep §2.1); the package says which images it holds (S13).
+        let holds = |path: &str| self.holds(opened, path);
+        // A transcription candidate that is a key is a headword written with stress (ADR-0010 Phonetics).
+        let is_key = |word: &str| opened.mdx.find(word).is_ok_and(|found| !found.is_empty());
+        let context = xdict_entry::Entry {
+            key,
+            resource: Some(&holds),
+            is_key: Some(&is_key),
+            strip_off_for_tests: self.strip_off_for_tests,
+            original: view.original_style,
+        };
+        // Given owned (the record's text, or its expansion), it is freed once it is read.
+        let body = match expanded {
+            std::borrow::Cow::Owned(expanded) => expanded,
+            std::borrow::Cow::Borrowed(_) => text,
+        };
+        let (html, _) = xdict_entry::entry_normalized_within(body, &view.base_url, "", &style.style, &context, max)
+            .map_err(too_large)?;
+        // Q6 (ADR-0010, the owner's answers): every entry renders in standards mode.
+        let html = with_doctype(html, max).map_err(too_large)?;
+        Ok((html, lossy))
     }
 
     /// What a URL an entry or its script produced means. Takes the URL raw, `.tts` and all.
@@ -906,6 +913,271 @@ impl Core {
             self.indexes.put(&name, &crate::health::encode(&health))?;
             Ok(health)
         })
+    }
+
+    /// **The reverse-example query** (ADR-0031 d.4, d.9; plan WI-4): every pair in `dicts`, in that order, whose
+    /// normalised Chinese contains the normalised query. The scan is a substring match, so a one-character query and a
+    /// string that is not a word answer alike. A dictionary with no store is reported in `not_ready`, never an error;
+    /// identical pairs from several dictionaries are one hit with every source. At most `limit` hits, ranked by the
+    /// dictionary order and then by shorter Chinese; `total` counts the distinct pairs found, and `capped` says the
+    /// scan stopped at its own bound.
+    pub fn examples(&self, query: String, dicts: Vec<String>, limit: u32) -> Result<Examples, CoreError> {
+        guard(|| {
+            if limit > MAX_PAGE {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Page,
+                    detail: format!("a page holds at most {MAX_PAGE} examples, {limit} were asked"),
+                });
+            }
+            let needle = crate::examples::normalize(&query);
+            let mut ranked: Vec<(usize, ExampleHit)> = Vec::new();
+            let mut seen: HashMap<(String, String), usize> = HashMap::new();
+            let mut not_ready = Vec::new();
+            let mut scanned = 0usize;
+            let mut capped = false;
+            if !needle.trim().is_empty() {
+                for (rank, id) in dicts.iter().enumerate() {
+                    let opened = self.dict(id)?;
+                    let Some(store) = self.examples_store(&opened)? else {
+                        not_ready.push(id.clone());
+                        continue;
+                    };
+                    let found = store.scan(&needle, crate::examples::MAX_HITS - scanned);
+                    scanned += found.len();
+                    let ordinals: Vec<usize> = found.iter().map(|found| found.ordinal as usize).collect();
+                    let occurrences = xdict_lookup::occurrences(&opened.mdx, &ordinals)?;
+                    for found in found {
+                        let i = found.ordinal as usize;
+                        let key = opened.mdx.key(i)?.into_owned();
+                        let occurrence = occurrences.get(&i).copied().unwrap_or(0);
+                        let source = ExampleSource {
+                            dict: id.clone(),
+                            entry: EntryRef { edition: opened.edition.clone(), key: key.clone(), occurrence },
+                            headword: key,
+                        };
+                        let pair = (found.english.clone(), found.chinese.clone());
+                        if let Some(&at) = seen.get(&pair) {
+                            if let Some((_, hit)) = ranked.get_mut(at) {
+                                hit.sources.push(source);
+                            }
+                            continue;
+                        }
+                        seen.insert(pair, ranked.len());
+                        ranked.push((
+                            rank,
+                            ExampleHit {
+                                english: found.english,
+                                chinese: found.chinese,
+                                start: found.start,
+                                len: found.len,
+                                sentence: found.sentence,
+                                sources: vec![source],
+                            },
+                        ));
+                    }
+                    if scanned >= crate::examples::MAX_HITS {
+                        capped = true;
+                        break;
+                    }
+                }
+            }
+            // Dictionary order, then sentences before phrases (the owner's decision 3), then shorter Chinese; the
+            // sort is stable, so the arena's order breaks a tie.
+            ranked.sort_by(|a, b| {
+                a.0.cmp(&b.0)
+                    .then_with(|| b.1.sentence.cmp(&a.1.sentence))
+                    .then_with(|| a.1.chinese.chars().count().cmp(&b.1.chinese.chars().count()))
+            });
+            let total = ranked.len() as u64;
+            let hits = ranked.into_iter().take(limit as usize).map(|(_, hit)| hit).collect();
+            Ok(Examples { hits, total, not_ready, capped })
+        })
+    }
+
+    /// **A page of one dictionary's stored pairs**, in store order (ADR-0031 d.8): the per-dictionary audit reads an
+    /// evenly spaced sample through this, never through a query, which can only show pairs a word matches. A shell
+    /// never calls it. `from` past the end answers an empty page, as paging does.
+    pub fn examples_page(&self, dict: String, from: u64, limit: u32) -> Result<ExamplePairs, CoreError> {
+        guard(|| {
+            if limit > MAX_PAGE {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Page,
+                    detail: format!("a page holds at most {MAX_PAGE} pairs, {limit} were asked"),
+                });
+            }
+            let opened = self.dict(&dict)?;
+            let Some(store) = self.examples_store(&opened)? else {
+                return Ok(ExamplePairs { edition: opened.edition.clone(), total: 0, pairs: Vec::new() });
+            };
+            let total = store.len() as u64;
+            let start = usize::try_from(from).unwrap_or(usize::MAX);
+            let end = start.saturating_add(limit as usize).min(store.len());
+            let mut pairs = Vec::new();
+            let mut ordinals = Vec::new();
+            for i in start..end {
+                let (english, chinese, sentence, ordinal) = store
+                    .pair(i)
+                    .ok_or_else(|| CoreError::internal("an examples record does not read after its checksums held"))?;
+                let key = opened.mdx.key(ordinal as usize)?.into_owned();
+                ordinals.push(ordinal as usize);
+                pairs.push(ExamplePair {
+                    english,
+                    chinese,
+                    sentence,
+                    entry: EntryRef { edition: opened.edition.clone(), key, occurrence: 0 },
+                });
+            }
+            let occurrences = xdict_lookup::occurrences(&opened.mdx, &ordinals)?;
+            for (pair, ordinal) in pairs.iter_mut().zip(&ordinals) {
+                pair.entry.occurrence = occurrences.get(ordinal).copied().unwrap_or(0);
+            }
+            Ok(ExamplePairs { edition: opened.edition.clone(), total, pairs })
+        })
+    }
+
+    /// **Builds one dictionary's example store in the background** (ADR-0031 d.3, d.6; plan WI-3): every record read
+    /// once through the entry view's own render, `progress` hearing records done and answering `false` to cancel, in
+    /// which case nothing is written. A current store is answered from itself; a truncated, foreign or out-of-date one
+    /// is built again. An edition whose sample carries no Chinese is read raw, every record, to confirm it; one that
+    /// truly has none keeps an empty store and pays no render pass. Never at launch, never in a query: the shell
+    /// schedules it (plan WI-1 decision 2).
+    pub fn examples_build(&self, dict: String, progress: &dyn Progress) -> Result<ExamplesBuilt, CoreError> {
+        guard(|| {
+            let opened = self.dict(&dict)?;
+            let digest = edition_digest(&opened.edition)?;
+            let name = examples_name(&opened.edition);
+            if let Some(region) = self.indexes.get(&name)?
+                && let Some(store) = crate::examples::Store::decode(&*region, &digest)
+            {
+                return Ok(ExamplesBuilt {
+                    edition: opened.edition.clone(),
+                    pairs: store.len() as u64,
+                    roles: store.roles,
+                    fallback: store.fallback,
+                    entries: store.entries,
+                    failed: store.failed,
+                    no_chinese: store.no_chinese,
+                    cached: true,
+                });
+            }
+            if opened.mdx.len() > u32::MAX as usize {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::File,
+                    detail: format!("the edition has {} records; a pair's ordinal is a u32", opened.mdx.len()),
+                });
+            }
+            let total = opened.mdx.len() as u64;
+            if !self.sample_has_chinese(&opened, progress)? {
+                // The empty store is a result like any other: the source must not have changed under the sample,
+                // and a cancelled pass writes nothing (audit, 2026-10-24).
+                opened.mdx_source.unchanged()?;
+                if !progress.progress(total, total) {
+                    return Err(CoreError::Cancelled { detail: "the examples pass was cancelled".into() });
+                }
+                let bytes = crate::examples::Builder::new().finish(digest, 0, 0, true)?;
+                self.indexes.put(&name, &bytes)?;
+                return Ok(ExamplesBuilt {
+                    edition: opened.edition.clone(),
+                    pairs: 0,
+                    roles: 0,
+                    fallback: 0,
+                    entries: 0,
+                    failed: 0,
+                    no_chinese: true,
+                    cached: false,
+                });
+            }
+            let view =
+                View { base_url: "xdict://d/".into(), max_body_bytes: MAX_RESOURCE_BYTES, original_style: false };
+            let mut builder = crate::examples::Builder::new();
+            let mut failed = 0u64;
+            let mut read = 0u64;
+            for i in 0..opened.mdx.len() {
+                if i % EXAMPLES_REPORT == 0 && !progress.progress(i as u64, total) {
+                    return Err(CoreError::Cancelled { detail: "the examples pass was cancelled".into() });
+                }
+                let key = opened.mdx.key(i)?.into_owned();
+                let raw = opened.mdx.record(i)?;
+                if String::from_utf8_lossy(&raw.data).trim_start().starts_with("@@@LINK=") {
+                    continue;
+                }
+                read += 1;
+                let (html, _lossy) = match self.render_record(&opened, &key, raw.data, raw.lossy, &view) {
+                    Ok(rendered) => rendered,
+                    Err(CoreError::TooLarge { limit: Limit::Body, .. }) => {
+                        failed += 1;
+                        continue;
+                    }
+                    Err(error) => return Err(error),
+                };
+                let projection = xdict_entry::entry_text_from_html(&html, EXAMPLES_TEXT_BYTES);
+                if !projection.complete {
+                    failed += 1;
+                    continue;
+                }
+                let spans = text_spans(projection.runs);
+                for pair in crate::examples::extract(&projection.text, &spans) {
+                    if crate::examples::is_expansion(&key, &pair.english) {
+                        continue;
+                    }
+                    builder.push(i as u32, &pair)?;
+                }
+            }
+            opened.mdx_source.unchanged()?;
+            if !progress.progress(total, total) {
+                return Err(CoreError::Cancelled { detail: "the examples pass was cancelled".into() });
+            }
+            let pairs = builder.len() as u64;
+            let builder_roles = builder.roles();
+            let builder_fallback = builder.fallback();
+            let bytes = builder.finish(digest, read, failed, false)?;
+            self.indexes.put(&name, &bytes)?;
+            Ok(ExamplesBuilt {
+                edition: opened.edition.clone(),
+                pairs,
+                roles: builder_roles,
+                fallback: builder_fallback,
+                entries: read,
+                failed,
+                no_chinese: false,
+                cached: false,
+            })
+        })
+    }
+
+    /// One edition's store, decoded, or `None` when it is absent or does not decode: both mean "build it".
+    fn examples_store(&self, opened: &Dict) -> Result<Option<crate::examples::Store>, CoreError> {
+        let Some(region) = self.indexes.get(&examples_name(&opened.edition))? else { return Ok(None) };
+        let digest = edition_digest(&opened.edition)?;
+        Ok(crate::examples::Store::decode(&*region, &digest))
+    }
+
+    /// Whether the edition carries Chinese anywhere (ADR-0031 d.6): a monolingual dictionary contributes no pairs
+    /// and is not rendered. A spread sample comes first, cheap; when it finds none, every record is read raw, so a
+    /// negative is confirmed rather than guessed — an empty store is cached, and a sampled negative could keep a
+    /// dictionary with Chinese out of the feature forever (audit-fix, 2026-10-24).
+    fn sample_has_chinese(&self, opened: &Dict, progress: &dyn Progress) -> Result<bool, CoreError> {
+        let count = opened.mdx.len();
+        if count == 0 {
+            return Ok(false);
+        }
+        let asked = EXAMPLES_SAMPLE.min(count);
+        for k in 0..asked {
+            // Both ends are sampled, and every pair of neighbours spans the edition evenly.
+            let i = if asked == 1 { 0 } else { (count - 1) * k / (asked - 1) };
+            if has_chinese_record(opened, i)? {
+                return Ok(true);
+            }
+        }
+        for i in 0..count {
+            if i % EXAMPLES_REPORT == 0 && !progress.progress(i as u64, count as u64) {
+                return Err(CoreError::Cancelled { detail: "the examples pass was cancelled".into() });
+            }
+            if has_chinese_record(opened, i)? {
+                return Ok(true);
+            }
+        }
+        Ok(false)
     }
 
     /// The package's resource names as the health check compares them: each volume's keys and each sidecar's name
@@ -1640,6 +1912,49 @@ fn health_name(edition: &str, resources: &HashSet<String>, sidecars: &HashSet<St
 fn index_name(identity: &[u8; 32], kind: Kind) -> String {
     let kind = if kind == Kind::Mdd { "mdd" } else { "mdx" };
     format!("{}.{kind}.xdidx", xdict_identity::hex(identity))
+}
+
+/// An example store's name: the edition, the extractor and the normaliser (ADR-0031 d.3), so any of the three
+/// changing rebuilds it. The format is in the name too, so an old format is never mistaken for a current store.
+fn examples_name(edition: &str) -> String {
+    let digest = edition.strip_prefix(EDITION_SCHEME).unwrap_or(edition);
+    format!(
+        "examples-v{}-e{}-n{}-{digest}.xdex",
+        crate::examples::FORMAT,
+        crate::examples::EXTRACTOR,
+        crate::examples::NORMALIZER
+    )
+}
+
+/// Whether one record's raw bytes carry Chinese and are not a cross-reference. Read decoded, never rendered: the
+/// sample and its confirmation only decide whether the edition is worth the render pass (ADR-0031 d.6).
+fn has_chinese_record(opened: &Dict, i: usize) -> Result<bool, CoreError> {
+    let record = opened.mdx.record(i)?;
+    let text = String::from_utf8_lossy(&record.data);
+    Ok(!text.trim_start().starts_with("@@@LINK=") && crate::examples::has_cjk(&text))
+}
+
+/// The projection's runs as the API's spans; one conversion, so `entry_text` and the examples pass can never
+/// disagree about what a span is (audit, 2026-10-24).
+fn text_spans(runs: Vec<xdict_entry::TextRun>) -> Vec<TextSpan> {
+    runs.into_iter()
+        .map(|run| TextSpan {
+            start: run.start as u64,
+            len: run.len as u64,
+            role: run.role,
+            label: run.label,
+            section: run.section,
+            sense: run.sense,
+        })
+        .collect()
+}
+
+/// The edition's digest, from the one form an edition has (`mdx-sha256-v1:<hex>`).
+fn edition_digest(edition: &str) -> Result<[u8; 32], CoreError> {
+    let hex = edition
+        .strip_prefix(EDITION_SCHEME)
+        .ok_or_else(|| CoreError::internal(format!("{edition:?} is not an edition")))?;
+    unhex(hex)
 }
 
 fn registry_error(error: xdict_identity::RegistryError) -> CoreError {

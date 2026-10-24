@@ -1084,6 +1084,40 @@
         }
       }
     },
+    "%llu found" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu found"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu found"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "找到 %llu 个"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%llu grades erased." : {
       "localizations" : {
         "en" : {
@@ -1553,6 +1587,40 @@
                 "stringUnit" : {
                   "state" : "translated",
                   "value" : "去掉了 %llu 处“!important”标记"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%llu+ found" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu+ found"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "%llu+ found"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "找到 %llu 个以上"
                 }
               }
             }
@@ -2828,6 +2896,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "英式英语"
+          }
+        }
+      }
+    },
+    "Building examples…" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Building examples…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在建立例句…"
           }
         }
       }
@@ -4374,6 +4458,22 @@
         }
       }
     },
+    "Examples" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Examples"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "例句"
+          }
+        }
+      }
+    },
     "Expand All" : {
       "localizations" : {
         "en" : {
@@ -4997,6 +5097,22 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "Hide Examples" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hide Examples"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "隐藏例句"
           }
         }
       }
@@ -6352,6 +6468,40 @@
         }
       }
     },
+    "More pairs were found; these are the first %u." : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "More pairs were found; these are the first %u."
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "More pairs were found; these are the first %u."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "还有更多配对；这里显示前 %u 条。"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "More than one sense" : {
       "localizations" : {
         "en" : {
@@ -6732,6 +6882,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "屏幕上没有与这个句子对应的词条。"
+          }
+        }
+      }
+    },
+    "No examples were found." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No examples were found."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "没有找到例句。"
           }
         }
       }
@@ -10598,6 +10764,22 @@
         }
       }
     },
+    "The examples could not be read." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The examples could not be read."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法读取例句。"
+          }
+        }
+      }
+    },
     "The file changed while XDict was reading it. Try again." : {
       "localizations" : {
         "en" : {
@@ -13396,6 +13578,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "搜索结果"
+          }
+        }
+      }
+    },
+    "· %lld dictionaries" : {
+      "localizations" : {
+        "en" : {
+          "variations" : {
+            "plural" : {
+              "one" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "· %lld dictionary"
+                }
+              },
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "· %lld dictionaries"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans" : {
+          "variations" : {
+            "plural" : {
+              "other" : {
+                "stringUnit" : {
+                  "state" : "translated",
+                  "value" : "· %lld 部词典"
+                }
+              }
+            }
           }
         }
       }

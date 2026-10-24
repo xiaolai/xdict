@@ -59,6 +59,8 @@ struct LimitsTests {
                                  Fixtures.index(.suggest(prefix: "", dicts: [], limit: 1)),
                                  // `words` searches the index too, and reads no body: the lookup class's four credits.
                                  Fixtures.index(.words(dict: Fixtures.dict, from: 0, limit: 1_000)),
+                                 // An example query scans a store: light, and never a body.
+                                 Fixtures.index(.examples(query: "", dicts: [], limit: 1)),
                                  Fixtures.index(.link(dict: Fixtures.dict, url: "", origin: .resource(path: ""), render: .reader))])
         for operation in Fixtures.operations {
             #expect((operation.creditClass == .bulk) == operation.isBulk, "\(operation)")

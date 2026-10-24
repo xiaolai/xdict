@@ -205,6 +205,96 @@ public struct Words: Codable, Hashable, Sendable {
     }
 }
 
+// MARK: - Reverse examples (ADR-0031; contract 14)
+
+/// **The reverse-example query's answer**: the pairs whose Chinese carries the query, deduplicated across
+/// dictionaries, ranked by the reader's dictionary order and then by shorter Chinese.
+public struct Examples: Codable, Hashable, Sendable {
+    /// At most the call's `limit`, in rank order.
+    public let hits: [ExampleHit]
+    /// Every distinct pair found before the limit.
+    public let total: UInt64
+    /// Dictionaries asked that have no store yet: still building, or never built. Never an error.
+    public let notReady: [DictId]
+    /// The scan reached its own bound before it ran out of pairs; `total` is then a floor.
+    public let capped: Bool
+
+    public init(hits: [ExampleHit], total: UInt64, notReady: [DictId], capped: Bool) {
+        self.hits = hits
+        self.total = total
+        self.notReady = notReady
+        self.capped = capped
+    }
+}
+
+/// One example pair: the English as printed and the Chinese with the match's UTF-8 byte offsets in that printed
+/// Chinese, so the pane underlines exactly what the reader typed.
+public struct ExampleHit: Codable, Hashable, Sendable {
+    public let english: String
+    public let chinese: String
+    /// The match's start, in UTF-8 bytes of `chinese` as printed.
+    public let start: UInt64
+    /// The match's length, in UTF-8 bytes of `chinese` as printed.
+    public let len: UInt64
+    /// A full sentence rather than a phrase: sentences rank first.
+    public let sentence: Bool
+    /// Every place the pair is printed, the first in the reader's dictionary order.
+    public let sources: [ExampleSource]
+
+    public init(english: String, chinese: String, start: UInt64, len: UInt64, sentence: Bool,
+                sources: [ExampleSource]) {
+        self.english = english
+        self.chinese = chinese
+        self.start = start
+        self.len = len
+        self.sentence = sentence
+        self.sources = sources
+    }
+}
+
+/// Where one pair is printed: a dictionary, its entry, and the headword the dictionary gives it.
+public struct ExampleSource: Codable, Hashable, Sendable {
+    public let dict: DictId
+    public let entry: EntryRef
+    public let headword: String
+
+    public init(dict: DictId, entry: EntryRef, headword: String) {
+        self.dict = dict
+        self.entry = entry
+        self.headword = headword
+    }
+}
+
+/// **What building one dictionary's example store did** (contract 14): what the pass found, or that the store was
+/// already current.
+public struct ExamplesBuilt: Codable, Hashable, Sendable {
+    public let edition: Edition
+    public let pairs: UInt64
+    /// Pairs each tier found (ADR-0031 d.2).
+    public let roles: UInt64
+    public let fallback: UInt64
+    /// Entries read; none when the sample found no Chinese.
+    public let entries: UInt64
+    /// Entries passed over: a render over its ceiling, or a text the projection cut.
+    public let failed: UInt64
+    /// The edition has no Chinese in an evenly spaced sample: its empty store is kept and the pass skipped.
+    public let noChinese: Bool
+    /// The store was already there and current; nothing was read.
+    public let cached: Bool
+
+    public init(edition: Edition, pairs: UInt64, roles: UInt64, fallback: UInt64, entries: UInt64, failed: UInt64,
+                noChinese: Bool, cached: Bool) {
+        self.edition = edition
+        self.pairs = pairs
+        self.roles = roles
+        self.fallback = fallback
+        self.entries = entries
+        self.failed = failed
+        self.noChinese = noChinese
+        self.cached = cached
+    }
+}
+
 // MARK: - Rendering
 
 /// The render context of `entry`, `link` and `resource` (the core's `View`, ADR-0007 decision 6), **less its base**:

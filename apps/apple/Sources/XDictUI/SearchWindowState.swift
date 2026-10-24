@@ -54,6 +54,10 @@ public final class SearchWindowState {
     /// the AI pane's (WI-6).
     public let meaning: MeaningSession
 
+    /// **The reverse-example results** (ADR-0031, plan-reverse-examples WI-5): asked for a Chinese lookup in scope,
+    /// shown in the right pane's Examples section.
+    public let examples: ExamplesModel
+
     @ObservationIgnored private let backend: any SearchBackend
 
     /// `window` names the window's callers in the service client, so two windows never supersede each other. `speech`
@@ -69,6 +73,7 @@ public final class SearchWindowState {
             library.searchSources
         }
         self.model = model
+        examples = ExamplesModel(backend: backend, window: window)
         meaning = MeaningSession(
             fetchEntryText: { [backend] dict, entry, budget in
                 await backend.entryText(dict, entry: entry, maxTextBytes: budget)
@@ -203,9 +208,93 @@ public final class SearchWindowState {
 
     /// **A lookup replaced the presentation**: a query other than the held sentence's word means the reader moved on, and
     /// the captured sentence is dropped — including a lookup that draws no entry at all, which `drawn` never sees.
+    /// **The examples belong to the lookup shown** (ADR-0031 d.9): a new query resets them, and one with no Chinese
+    /// leaves the section closed.
     public func lookupDidChange() {
-        guard let held = meaning.held, let lookup = model.lookup else { return }
-        if lookup.query != held.term { clearMeaning() }
+        let lookup = model.lookup
+        if let held = meaning.held, let lookup, lookup.query != held.term { clearMeaning() }
+        panes.examplesSearched()
+        let kept = examples.update(query: lookup?.query ?? "", handles: exampleHandles,
+                                  unavailable: exampleUnavailable)
+        if lookup == nil || !ExamplesModel.hasCJK(lookup?.query ?? "") {
+            panes.examplesCleared()
+        } else if kept {
+            // The same query over the same dictionaries: its pairs are still current, so the pane reopens on them
+            // rather than waiting for a revision that will not come (audit, 2026-10-24).
+            examplesContentChanged()
+        }
+    }
+
+    // MARK: - The examples section (ADR-0031, plan-reverse-examples WI-5)
+
+    /// The dictionaries in the lookup's scope, in the reader's order: the handles the examples query asks.
+    public var exampleHandles: [DictId] {
+        exampleSources.compactMap { source in
+            switch model.lookup?.scope ?? model.scope {
+            case .all:
+                return source.handle
+            case .one(let id):
+                return source.id == id ? source.handle : nil
+            }
+        }
+    }
+
+    /// The dictionaries whose example build failed this session: a missing store there is a failure, not a build
+    /// still running.
+    public var exampleUnavailable: [DictId] {
+        exampleSources.compactMap { source in
+            guard case .unavailable = library.examples[source.id] else { return nil }
+            return source.handle
+        }
+    }
+
+    /// The enabled dictionaries with an open handle, in the reader's order.
+    private var exampleSources: [(id: UUID, handle: DictId)] {
+        library.searchSources.compactMap { source in
+            guard source.enabled, let handle = source.handle else { return nil }
+            return (source.id, handle)
+        }
+    }
+
+    /// The query's examples arrived: the pane opens, unless the reader closed it for this query.
+    public func examplesContentChanged() {
+        if examples.hasContent { panes.examplesAsked() }
+    }
+
+    /// **A dictionary's store changed state** (ADR-0031 d.6): once a dictionary that was still building is ready, the
+    /// model asks again — never before, and never in the query itself.
+    public func examplesLibraryChanged() {
+        var ready: [DictId] = []
+        var unavailable: [DictId] = []
+        for source in library.searchSources {
+            guard source.enabled, let handle = source.handle else { continue }
+            switch library.examples[source.id] {
+            case .ready: ready.append(handle)
+            case .unavailable: unavailable.append(handle)
+            case .building, nil: break
+            }
+        }
+        examples.buildStateChanged(ready: ready, unavailable: unavailable)
+    }
+
+    /// The reader closed the Examples section: the Meaning answer, if shown, stays.
+    public func closeExamples() {
+        panes.examplesClosed()
+    }
+
+    /// The library's dictionary for a service handle, as the reader knows it.
+    public func source(for handle: DictId) -> SearchSource? {
+        library.searchSources.first { $0.handle == handle }
+    }
+
+    /// **An example row chosen**: its entry opens in the dictionary that printed it — the first of its sources this
+    /// library still has. The entry is shown in place, so Back returns to the word that found it.
+    public func openExample(_ hit: ExampleHit) {
+        for candidate in hit.sources {
+            guard let source = source(for: candidate.dict) else { continue }
+            model.open(ResultID(dictionary: source.id, entry: candidate.entry))
+            return
+        }
     }
 
     /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.

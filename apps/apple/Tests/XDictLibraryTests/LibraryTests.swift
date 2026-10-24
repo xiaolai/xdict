@@ -96,6 +96,39 @@ struct LibraryTests {
         #expect(library.health[id] == nil)
     }
 
+    /// ADR-0031 d.3, d.6: a dictionary that opens has its example store built in the background, once, and what the
+    /// build found is kept for the reader.
+    @Test func aDictionaryThatOpensBuildsItsExamplesAndKeepsThem() async throws {
+        try dir.files("a.mdx")
+        let built = ExamplesBuilt(edition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "ab", count: 32)),
+                                  pairs: 3, roles: 2, fallback: 1, entries: 1, failed: 0, noChinese: false, cached: false)
+        await backend.setExamplesAnswer(built)
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        for _ in 0..<500 where library.examples[id] != .ready(built) { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(library.examples[id] == .ready(built))
+        #expect(await backend.exampleBuilds == [dict])
+    }
+
+    /// A dictionary removed while its example store builds has the build cancelled, and nothing is kept for it.
+    @Test func removingADictionaryCancelsItsExamplesBuild() async throws {
+        try dir.files("a.mdx")
+        await backend.holdExampleBuilds()
+        let library = library()
+        await library.start()
+        let id = try #require(library.add([dir.url.appending(path: "a.mdx")]).first)
+        await library.settle()
+        let dict = try #require(library.handle(id))
+        for _ in 0..<500 where await backend.heldExampleBuildCount == 0 { try? await Task.sleep(for: .milliseconds(10)) }
+        #expect(library.examples[id].map { if case .building = $0 { true } else { false } } == true)
+        await library.remove(id)
+        #expect(await backend.exampleBuildsCancelled == [dict])
+        #expect(library.examples[id] == nil)
+    }
+
     /// ADR-0010 (owner's decision of 2026-10-17): the details pane asks the service for an open dictionary's reading
     /// style once and keeps the report this session; a failed ask is told and asked again next time.
     @Test func aDictionarysReadingStyleIsAskedOnceAndKept() async throws {

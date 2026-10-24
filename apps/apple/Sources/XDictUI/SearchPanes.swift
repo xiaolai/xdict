@@ -7,6 +7,11 @@ import XDictTokens
 struct SearchPanes: Equatable {
     /// The answer pane (plan-ai-meaning WI-6) is shown.
     private(set) var meaningShown = false
+    /// **The examples section** (ADR-0031, plan-reverse-examples WI-5): opened by a Chinese query that found pairs, or
+    /// by dictionaries still preparing them; closed by the reader.
+    private(set) var examplesShown = false
+    /// The reader closed the examples for the lookup shown: a build finishing does not reopen them. A new query does.
+    private(set) var examplesDismissed = false
     /// The reader hid the results list while it had results: no search brings it back until they restore it.
     private(set) var resultsHidden = false
 
@@ -26,6 +31,31 @@ struct SearchPanes: Equatable {
 
     /// Whether the results list shows: only once there is a listing (P9), and only if the reader has not hidden it.
     func resultsVisible(listed: Bool) -> Bool { listed && !resultsHidden }
+
+    /// A lookup started: the examples belong to the last query until this one's answer comes; a reader's close of the
+    /// previous query's examples does not carry over.
+    mutating func examplesSearched() {
+        examplesShown = false
+        examplesDismissed = false
+    }
+
+    /// The query's examples arrived: the pane opens unless the reader closed it for this query.
+    mutating func examplesAsked() {
+        guard !examplesDismissed else { return }
+        examplesShown = true
+    }
+
+    /// The reader closed the examples section.
+    mutating func examplesClosed() {
+        examplesShown = false
+        examplesDismissed = true
+    }
+
+    /// The lookup is not Chinese, or it changed: there is no examples section to show.
+    mutating func examplesCleared() {
+        examplesShown = false
+        examplesDismissed = false
+    }
 
     /// View ▸ Show/Hide Results.
     mutating func toggleResults() { resultsHidden.toggle() }

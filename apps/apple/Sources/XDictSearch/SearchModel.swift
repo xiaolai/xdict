@@ -441,6 +441,13 @@ public final class SearchModel {
         choose(id, landing: .top)
     }
 
+    /// **An entry opened from outside the list** (an example row, ADR-0031 d.7): a new place in the trail carrying the
+    /// exact dictionary and entry reference, so Back returns to the lookup that found it. The visit is restored as a
+    /// handover's is, with the entry shown at once rather than waiting for the lookup's list.
+    public func open(_ id: ResultID) {
+        adopt(Visit(query: id.entry.key, mode: .reader, scope: .one(id.dictionary), result: id, isOrigin: false))
+    }
+
     /// A link in the entry of `dictionary` named `query`: looked up in link mode in that dictionary (ADR-0007
     /// decision 7), as a new place in the trail.
     public func follow(_ query: String, anchor: String?, from dictionary: UUID) {
