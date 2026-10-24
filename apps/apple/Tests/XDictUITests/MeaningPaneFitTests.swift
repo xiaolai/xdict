@@ -76,7 +76,6 @@ struct MeaningPaneFitTests {
                 }
                 .inspector(isPresented: .constant(shown == .inspector)) {
                     Marker(view: measured.pane)
-                        .toolbar { MeaningPaneToggle(shown: measured.open, toggle: {}) }
                         .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
                                               max: Tokens.Window.meaningPaneMax)
                 }
@@ -87,6 +86,7 @@ struct MeaningPaneFitTests {
                               field: SearchWindow.searchField(text: "", known: [], scope: .all, focus: 0,
                                                               onScope: { _ in }, onChange: { _ in }, onSubmit: {},
                                                               onMove: { _ in false }, onCancel: { false }))
+                MeaningPaneToggle(shown: measured.open, toggle: {})
             }
             .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
             .navigationTitle(Text(verbatim: "apple"))

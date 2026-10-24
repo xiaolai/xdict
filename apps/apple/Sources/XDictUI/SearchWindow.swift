@@ -62,13 +62,11 @@ public struct SearchWindow: View {
                 // **The answer pane** (ADR-0021 d.1): opened by an ask, closed by the reader. On the detail, not the
                 // split view: there its least was counted twice, the pane's column's and the split view's, so a 400 pt
                 // window opening it grew and aborted in a recursive constraint update (`MeaningPaneFitTests`).
+                // Nested in the navigation's detail, the inspector sits under the window's shared toolbar, level with
+                // the reading area (WWDC23 10161). Its content is the pane alone: toolbar content declared inside an
+                // inspector gives it a toolbar section of its own, so its toggle is the window's (`toolbar`).
                 .inspector(isPresented: meaningShown(in: .inspector, now: shown)) {
                     MeaningAnswerPane(state: state)
-                        // **The inspector's toggle** (HIG audit UI05): at the toolbar's trailing end, where a Mac
-                        // window's inspector button is, after Apple's items in their order (P3, P8). The pane on the
-                        // detail has no toolbar section of its own, so the whole toolbar's width is the field's (P5);
-                        // View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
-                        .toolbar { MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() } }
                         .inspectorColumnWidth(min: Tokens.Window.meaningPaneMin, ideal: Tokens.Window.meaningPaneIdeal,
                                               max: Tokens.Window.meaningPaneMax)
                 }
@@ -134,8 +132,11 @@ public struct SearchWindow: View {
         }
     }
 
-    /// The toolbar (P3, `SearchToolbar`), wired to this window's search, entry and speaker.
-    private var toolbar: some ToolbarContent {
+    /// The window's one shared toolbar (P3, `SearchToolbar`), wired to this window's search, entry and speaker, then
+    /// **the inspector's toggle** (HIG audit UI05): at the toolbar's trailing end, where a Mac window's inspector button
+    /// is, after Apple's items in their order (P3, P8). The inspector owns no toolbar section, so the whole toolbar's
+    /// width is the field's (P5); View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
+    @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
                       canPronounce: state.canPronounce, back: { state.model.back() },
                       forward: { state.model.forward() }, smaller: { state.entry.zoomOut() },
@@ -145,6 +146,7 @@ public struct SearchWindow: View {
                                               onScope: { state.model.setScope($0) },
                                               onChange: { state.typedText($0) }, onSubmit: { state.submit() },
                                               onMove: { state.move($0) }, onCancel: { state.cancel() }))
+        MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() }
     }
 
     /// The toolbar's search field for the model's scope: its placeholder ("Search", or "Search in <name>"), and the
@@ -159,9 +161,9 @@ public struct SearchWindow: View {
     }
 }
 
-/// **The answer pane's toggle** (HIG audit UI05), declared by the pane, shown at the toolbar's trailing end whether the
-/// answer is beside the entry, in its sheet or closed (a collapsed inspector keeps its content's toolbar items). It
-/// says what it will do, as View ▸ Show/Hide Meaning in Context does.
+/// **The answer pane's toggle** (HIG audit UI05), owned by the shared window toolbar and shown at its trailing end
+/// whether the answer is beside the entry, in its sheet or closed. It says what it will do, as View ▸ Show/Hide Meaning
+/// in Context does.
 struct MeaningPaneToggle: ToolbarContent {
     /// The reader asked for the answer: beside the entry or in its sheet.
     let shown: Bool
