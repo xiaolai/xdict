@@ -1,7 +1,6 @@
 import AppKit
 import SwiftUI
 import XDictAnywhere
-import XDictTokens
 
 /// **Lookup from anywhere, in Settings** (plan-macos-v1 WI-8): the lookup shortcut — shown, rebindable by a recorder,
 /// what went wrong said under it — and how else a selection reaches XDict (the Service, the menu bar). Rows, not a
@@ -36,58 +35,24 @@ public struct ShortcutSettings: View {
     }
 }
 
-/// **A shortcut recorder**: a button showing the shortcut; clicked, it waits for the next combination typed — the
-/// shortcut stood down meanwhile, so typing the one in use reaches the field — Escape or a click elsewhere cancels.
-/// Every way recording ends puts the shortcut back (`ShortcutRegistrar.suspend`), once.
+/// **The lookup shortcut's row** (owner, 2026-10-24): the shared recorder (`ShortcutRecorderControl`) with the lookup
+/// registrar's rules — it stands the hot key down while recording, and refuses what is unusable, reserved or already
+/// taken, saying why under the row.
 struct ShortcutRecorder: View {
     let registrar: ShortcutRegistrar
-    @State private var monitor: Any?
 
     var body: some View {
-        Button {  // placement: shortcut-field
-            recording ? stop() : start()
-        } label: {
-            if recording {
-                Text("Type Shortcut")
-            } else {
-                Text(verbatim: registrar.current.label())
-            }
-        }
-        // One width either way, and a name VoiceOver can say (UI review S-06).
-        .frame(minWidth: Tokens.Control.shortcutFieldMin)
-        .accessibilityLabel(recording ? Text("Type Shortcut")
-                            : Text("Lookup shortcut, \(ShortcutDisplay.spoken(registrar.current))"))
-        .accessibilityIdentifier("shortcut.recorder")
-        .help(Text("Click, then type the combination to use"))
-        .onDisappear { stop() }
+        ShortcutRecorderControl(title: registrar.current.label(),
+                                spoken: Text("Lookup shortcut, \(ShortcutDisplay.spoken(registrar.current))"),
+                                identifier: "shortcut.recorder",
+                                suspend: { registrar.suspend($0) },
+                                take: take)
     }
 
-    private var recording: Bool { monitor != nil }
-
-    private func start() {
-        registrar.suspend(true)
-        monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .leftMouseDown]) { event in
-            guard event.type == .keyDown else {
-                stop()
-                return event
-            }
-            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-            if event.keyCode == 53, flags.isEmpty {  // Escape alone: cancel
-                stop()
-                return nil
-            }
-            let chosen = Shortcut(keyCode: event.keyCode, command: flags.contains(.command), option: flags.contains(.option),
-                                  control: flags.contains(.control), shift: flags.contains(.shift))
-            stop()
-            registrar.choose(chosen)
-            return nil
-        }
-    }
-
-    private func stop() {
-        guard let monitor else { return }
-        NSEvent.removeMonitor(monitor)
-        self.monitor = nil
-        registrar.suspend(false)
+    private func take(_ event: NSEvent) {
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        registrar.choose(Shortcut(keyCode: event.keyCode, command: flags.contains(.command),
+                                  option: flags.contains(.option), control: flags.contains(.control),
+                                  shift: flags.contains(.shift)))
     }
 }
