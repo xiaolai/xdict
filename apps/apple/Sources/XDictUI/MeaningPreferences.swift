@@ -62,6 +62,18 @@ public final class MeaningPreferences {
         persist()
     }
 
+    /// **An address the reader typed or pasted** (2026-10-25): the space or newline around a pasted URL is not part of
+    /// it, and text that is not yet a URL leaves the last good address stored — a stray space must never erase the
+    /// server the reader configured. An empty field is the reader asking for no address.
+    public func setEndpoint(_ text: String) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            update { $0.endpoint = nil }
+        } else if let url = URL(string: trimmed) {
+            update { $0.endpoint = url }
+        }
+    }
+
     /// **The cloud key**: saved to the Keychain, or removed with nil. Never written to defaults.
     public func setKey(_ key: String?) throws {
         if let key {

@@ -115,6 +115,23 @@ struct MeaningPreferencesTests {
         #expect(MeaningProviders.apiKey(preferences.settings) == nil, "a CLI source gets no HTTP key")
     }
 
+    /// **A pasted address keeps its server** (2026-10-25): whitespace around it is not part of it, text that is not a
+    /// URL yet cannot erase the stored address, and an emptied field is the reader asking for none.
+    @Test func anAddressIsTrimmedAndAStrayWhitespaceCannotEraseIt() {
+        let defaults = Self.defaults()
+        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        preferences.setEndpoint("  https://api.example.com/v1\n")
+        #expect(preferences.settings.endpoint?.absoluteString == "https://api.example.com/v1")
+        #expect(MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+            .settings.endpoint?.absoluteString == "https://api.example.com/v1", "the address was not persisted")
+        // A field mid-edit, or text that is not a URL, leaves the last good address alone.
+        preferences.setEndpoint("https://%zz")
+        #expect(preferences.settings.endpoint?.absoluteString == "https://api.example.com/v1")
+        // Emptying the field is the reader asking for no address.
+        preferences.setEndpoint("  ")
+        #expect(preferences.settings.endpoint == nil)
+    }
+
     @Test func theLanguageTheSessionSendsComesFromThePreferences() {
         let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
         preferences.update { $0.language = "zh-Hans" }

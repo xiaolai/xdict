@@ -16,6 +16,12 @@ public struct AISettings: View {
         self.route = route
     }
 
+    /// A model of its own: a test must not read the reader's Keychain or write their preferences.
+    init(model: AISettingsModel, route: SettingsRoute) {
+        _model = State(initialValue: model)
+        self.route = route
+    }
+
     /// Everything a live check depends on: a corrected address, model or key re-runs it (audit finding, 2026-10-20).
     private struct StatusKey: Hashable {
         let source: AIProviderKind?
@@ -157,7 +163,7 @@ public struct AISettings: View {
             // (`RepeatedLabelTests`), with its sentence under it.
             VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                 TextField(text: Binding(get: { model.preferences.settings.endpoint?.absoluteString ?? "" },
-                                        set: { text in model.preferences.update { $0.endpoint = URL(string: text) } }),
+                                        set: { text in model.preferences.setEndpoint(text) }),
                           prompt: Text(verbatim: "http://127.0.0.1:11434/v1")) {
                     Text("Address")
                 }
