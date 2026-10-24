@@ -438,6 +438,11 @@ assemble() {
     mkdir -p "$contents/MacOS" "$contents/Resources" "$xpc/Contents/MacOS"
     cp "$products/$APP_NAME" "$contents/MacOS/$APP_NAME"
     cp "$products/$SERVICE" "$xpc/Contents/MacOS/$SERVICE"
+    # **No build path ships** (2026-10-24): a linked SwiftPM dependency's object paths stay in the debug map, and
+    # 0.2.0–0.3.2's DMGs named the builder's home from sayso's objects as well as from Rust's panic locations. The
+    # core build remaps Rust's roots; the debug info that names Swift objects is stripped here, before signing, since
+    # no dSYM ships.
+    strip -S -x "$contents/MacOS/$APP_NAME" "$xpc/Contents/MacOS/$SERVICE" || fail "strip failed"
     cp Resources/Info.plist "$contents/Info.plist"
     cp Resources/DictionaryService-Info.plist "$xpc/Contents/Info.plist"
     cp "$CORE_VERSIONS" "$STAGE/$SHIPPED_VERSIONS"
