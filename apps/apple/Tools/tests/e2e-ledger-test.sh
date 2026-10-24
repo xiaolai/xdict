@@ -1,9 +1,10 @@
 #!/bin/bash
-# Tests of Tools/e2e-ledger.py, the one record of E2E runs, and of the release's contract with it: a sub-stage is
-# carried only by a pass under its current key (content, modes and facts), filed of the very bundle that was tested,
-# not revoked by a later failure, in order, not from the future, recorded with a graph that was not stale and, for a
-# release, young enough; a ledger that cannot be trusted (corrupt, cut short, rolled back) carries nothing; the release
-# smoke runs whatever the ledger says. Built in a scratch repository with a graph, a hand list and a catalog of its
+# Tests of Tools/e2e-ledger.py, the one record of E2E runs: a sub-stage is carried only by a pass under its current key
+# (content, modes and facts), filed of the very bundle that was tested, not revoked by a later failure, in order, not
+# from the future, recorded with a graph that was not stale; a ledger that cannot be trusted (corrupt, cut short,
+# rolled back) carries nothing. **The release reads none of it** (owner, 2026-10-24: E2E is on demand, never a gate of
+# any step): release.sh's contract, held below, is the smoke on the stapled bundle and the source tree asked again
+# after the disk image's notarisation. Built in a scratch repository with a graph, a hand list and a catalog of its
 # own; reaches no host and launches nothing.
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -292,9 +293,11 @@ smoke_runs() {
          /^staple "\$APP"$/ { stapled = NR }
          END { exit !(found && stapled && found > stapled) }' "$1"
 }
-# The evidence is asked again after the disk image is notarised, before it is accepted.
-evidence_last() {
-    awk '/^staple "\$dmg"$/ { dmg = NR } /^evidence \|\| fail/ { last = NR } /^note "released XDict/ { done = NR }
+# **The release asks the tree again after the disk image is notarised** (owner, 2026-10-24: E2E is never a gate of any
+# step; a release names its source tree): an edit during notarisation still stops it, before anything is announced.
+tree_last() {
+    awk '/^staple "\$dmg"$/ { dmg = NR } /Tools\/source-tree\.sh\)" = "\$tree"/ { last = NR }
+         /^note "released XDict/ { done = NR }
          END { exit !(dmg && last > dmg && done > last) }' "$1"
 }
 contract() {  # contract <what> <check> <file> <line pattern to drop for the control>
@@ -303,8 +306,8 @@ contract() {  # contract <what> <check> <file> <line pattern to drop for the con
     "$2" "$scratch/control" && bad "the check of '$1' passes without it" || ok "the check of '$1' fails without it"
 }
 contract "release.sh runs the smoke after stapling" smoke_runs "$tools/release.sh" 'e2e-status.sh smoke) \\$'
-contract "release.sh asks the evidence after the disk image's notarisation" evidence_last "$tools/release.sh" \
-    '^evidence || fail "the evidence changed'
+contract "release.sh checks the source tree after the disk image's notarisation" tree_last "$tools/release.sh" \
+    'Tools/source-tree.sh)" = "\$tree"'
 # The sample and the editions are reused only for the same corpus content (its id), not its path.
 corpus_keyed() { [ "$(grep -c 'cat "\$sample.corpus".*= "\$corpus_id"\|cat "\$editions.corpus".*= "\$corpus_id"' "$1")" = 2 ]; }
 contract "e2e.sh reuses the sample and editions only for the same corpus id" corpus_keyed "$tools/e2e.sh" 'cat "\$sample.corpus"'

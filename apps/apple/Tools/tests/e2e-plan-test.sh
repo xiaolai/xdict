@@ -202,7 +202,7 @@ has hostile.production "$got" && ok "control: the map's answer is the one taken 
     || bad "control: the map's rule was not taken: $got"
 
 # --- the harness lists what the plan says ----------------------------------------------------------------------------
-same "e2e.sh --list-stages is the plan's default sub-stages (what a release requires)" "$(bash $plan substages)" \
+same "e2e.sh --list-stages is the plan's default sub-stages (what a release plan counts)" "$(bash $plan substages)" \
     "$(./e2e.sh --list-stages)"
 
 echo
