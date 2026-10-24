@@ -3,6 +3,7 @@ import Testing
 import XDictClient
 import XDictContract
 import XDictSearch
+import XDictTestSupport
 
 private enum ExamplesFixture {
     static let hit = ExampleHit(

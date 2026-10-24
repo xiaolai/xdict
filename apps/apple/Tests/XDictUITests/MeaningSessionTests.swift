@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 import XDictAI
 import XDictClient
 import XDictContract
@@ -55,12 +56,7 @@ import XDictContract
     /// Shares the async overload's 10-second budget: at full-suite startup the main actor can stall about 3 seconds,
     /// enough to use up the old 3-second deadline on its own.
     static func waitUntil(_ predicate: @MainActor () -> Bool, timeout: Duration = .seconds(10)) async -> Bool {
-        let deadline = ContinuousClock.now + timeout
-        while ContinuousClock.now < deadline {
-            if predicate() { return true }
-            try? await Task.sleep(for: .milliseconds(5))
-        }
-        return predicate()
+        await eventually(for: timeout, predicate)
     }
 
     /// **Waits on what a stub says from its own actor**, with a deadline a loaded build host cannot outrun. The
@@ -68,6 +64,8 @@ import XDictContract
     /// Unshown` out of it (2026-10-21): the provider never got its question, and the session was not in `.asking` when
     /// Escape arrived. The wait is the check — its failure names the sentence the test meant.
     static func waitUntil(_ predicate: @escaping () async -> Bool, timeout: Duration = .seconds(10)) async -> Bool {
+        // The one wait whose answer is itself asynchronous: the shared `eventually` takes a main-actor condition,
+        // and a sending closure cannot carry this suite's main-actor state (2026-10-24).
         let deadline = ContinuousClock.now + timeout
         while ContinuousClock.now < deadline {
             if await predicate() { return true }

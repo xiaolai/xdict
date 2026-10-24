@@ -165,13 +165,3 @@ enum Fixture {
     }
 }
 
-/// Waits, a little at a time, for `condition`; false after `seconds`.
-@MainActor
-func eventually(_ seconds: Double = 2, _ condition: @MainActor () -> Bool) async -> Bool {
-    let deadline = Date().addingTimeInterval(seconds)
-    while !condition() {
-        guard Date() < deadline else { return false }
-        try? await Task.sleep(for: .milliseconds(5))
-    }
-    return true
-}

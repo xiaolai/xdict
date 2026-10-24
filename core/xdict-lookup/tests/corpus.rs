@@ -244,8 +244,11 @@ fn lookup_on_the_corpus() {
         total.unreachable += r.unreachable;
         total.stressed_unreachable += r.stressed_unreachable;
     }
+    // The leading newline is the gate's marker: `Tools/land.sh` counts a corpus run as measured only when this line
+    // starts a line of the log, and the harness's result line is written without a trailing newline before stderr is
+    // flushed (2026-10-24: "…143.52s24 files:…", a green run the gate refused as unmeasured).
     eprintln!(
-        "{} files: {} marked keys, {} public and reached typed plainly, {} internal; {} found nothing at tier 1 typed \
+        "\n{} files: {} marked keys, {} public and reached typed plainly, {} internal; {} found nothing at tier 1 typed \
          plainly ({} with stress marks)",
         files.len(),
         total.marked,

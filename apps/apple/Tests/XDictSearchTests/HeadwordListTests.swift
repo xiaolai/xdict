@@ -5,6 +5,7 @@ import XDictClient
 import XDictContract
 import XDictLibrary
 import XDictSearch
+import XDictTestSupport
 
 /// **The sidebar as Apple's Dictionary has it** (parity ledger P9, P10, P13; owner's decisions of 2026-10-17): one flat
 /// list of matching headwords across the dictionaries in scope, the first match shown while the reader types, Return

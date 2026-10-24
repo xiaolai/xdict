@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import XDictContract
 import XDictSearch
+import XDictTestSupport
 
 /// **The panel expands into the main window keeping query, dictionary and scroll** (plan-macos-v1 WI-8, I5): the place
 /// the panel's model is at — with how far down its entry the reader is — handed to another window's model, which shows

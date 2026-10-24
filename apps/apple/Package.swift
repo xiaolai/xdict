@@ -178,7 +178,7 @@ let package = Package(
         // The tokens against their source: the generated file made of today's tokens.toml, and both faces of a role.
         .testTarget(name: "XDictTokensTests", dependencies: ["XDictTokens"]),
         // The client against services of the tests' own: fakes of the transport, and NSXPC listeners in this process.
-        .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract"]),
+        .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictTestSupport"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictSpotlightTests", dependencies: ["XDictSpotlight"]),
@@ -195,7 +195,7 @@ let package = Package(
         // The main window's model against a fake of the service: scope, order, painting as each answers, paging,
         // unavailable dictionaries, suggestions, the trail, and the entry view's content over the contract.
         .testTarget(name: "XDictSearchTests", dependencies: ["XDictClient", "XDictContract", "XDictEntryView",
-                                                             "XDictLibrary", "XDictSearch", "XDictSpeech"]),
+                                                             "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTestSupport"]),
         // The voices this Mac lists and the choice among them, the accent kept, and recordings opened as macOS opens them
         // — never played and never spoken: the build Mac makes no sound (the E2E `sound` stage plays and speaks).
         .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech"]),
@@ -203,7 +203,7 @@ let package = Package(
         .testTarget(name: "XDictCaptureTests", dependencies: ["XDictCapture"]),
         // The AI contract's fixtures (`conformance/ai/`): marking, composition and validation through the production
         // types, and the two guards that hold the suffix and the defaults to the contract's bytes.
-        .testTarget(name: "XDictAITests", dependencies: ["XDictAI"]),
+        .testTarget(name: "XDictAITests", dependencies: ["XDictAI", "XDictTestSupport"]),
         // Capture on macOS against scripted Accessibility trees and a fake lane clock: never a window, never the real
         // Accessibility API, never this Mac's grant. The recogniser's reading replays recorded Vision observations of
         // synthetic text (`Fixtures/recognition`, read by path), never a screen capture.

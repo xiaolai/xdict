@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 import XDictAI
 @testable import XDictUI
 
@@ -117,11 +118,4 @@ struct AISettingsChoiceTests {
         func add() { value += 1 }
     }
 
-    func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<200 {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
-    }
 }

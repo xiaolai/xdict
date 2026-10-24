@@ -4,6 +4,7 @@ import XDictClient
 import XDictContract
 import XDictLibrary
 import XDictSearch
+import XDictTestSupport
 
 /// **The main window's search** (plan-macos-v1 WI-6) against a fake of the service: who is asked and in what order, what
 /// paints when, which answers are refused as stale, scope and order, paging to every record, and the dictionaries that

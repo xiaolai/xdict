@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import XDictTestSupport
 import XDictContract
 @testable import XDictUI
 
@@ -108,13 +109,6 @@ struct SyncPassTests {
         #expect(synced.contains("folder"))
     }
 
-    func eventually(_ condition: @MainActor () -> Bool) async -> Bool {
-        for _ in 0..<200 {
-            if condition() { return true }
-            try? await Task.sleep(for: .milliseconds(10))
-        }
-        return condition()
-    }
 }
 
 /// A value a main-actor closure reads after the test changes it (such a closure is Sendable, so it cannot capture a
