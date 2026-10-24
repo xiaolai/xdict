@@ -1,4 +1,3 @@
-import AppKit
 import ApplicationServices
 import Foundation
 import XDictCapture

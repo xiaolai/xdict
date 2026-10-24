@@ -1,4 +1,3 @@
-import AppKit
 import WebKit
 
 /// **The word under a hover point of the entry, as the entry's own script answers it** (`hover-word.js`, in the shell's

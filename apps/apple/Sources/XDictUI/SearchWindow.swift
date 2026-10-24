@@ -6,12 +6,11 @@ import XDictSearch
 import XDictTokens
 
 /// **The main window, as Apple's Dictionary has it** (parity ledger P1–P14; owner's decisions of 2026-10-17): the
-/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the search field and then the
-/// Smaller/Bigger Text pair at its trailing edge (the owner's order, 2026-10-24), whose magnifier holds the scope menu
-/// (P6, XDict's own); the sidebar of matching
-/// headwords appears only after a search. The field is the AppKit one, so focus, Return, the arrows and Escape keep
-/// their contract. The menus (`SearchCommands`) carry every toolbar command, and XDict's own: Return to Original Word,
-/// Pronounce.
+/// toolbar holds Back/Forward, the title "XDict" with "N found" under it, the search field, the Smaller/Bigger Text
+/// pair and the answer pane's toggle; the sidebar of matching headwords appears only after a search. **The search field
+/// is SwiftUI's `.searchable`** (owner, 2026-10-24): the system places it at the trailing end, collapses it in a narrow
+/// window, and draws its focus ring; its scopes (P6, P7) are the picker below the toolbar. The menus (`SearchCommands`)
+/// carry every toolbar command, and XDict's own: Return to Original Word, Pronounce.
 public struct SearchWindow: View {
     @Bindable private var state: SearchWindowState
     /// The content column's width: the title over it yields when it is narrow (P8).
@@ -19,6 +18,8 @@ public struct SearchWindow: View {
     /// The native window grows before the inspector opens; no reading space is taken for the answer.
     @State private var presentation: MeaningPlacement = .hidden
     @State private var paneWidth = Tokens.Window.meaningPaneIdeal
+    /// **SwiftUI's own search field** (owner, 2026-10-24: try `.searchable`): the system draws and focuses it.
+    @FocusState private var searchFocused: Bool
 
     public init(state: SearchWindowState) {
         self.state = state
@@ -98,6 +99,19 @@ public struct SearchWindow: View {
         // A window is titled by the word it shows (UI08): Mission Control and the Window menu tell windows apart.
         .navigationTitle(Text(verbatim: ToolbarLayout.windowTitle(word: state.shownWord)))
         .navigationSubtitle(ToolbarLayout.subtitle(found: state.model.found).map { Text($0) } ?? Text(verbatim: ""))
+        // **The search field, SwiftUI's** (owner, 2026-10-24): the system's toolbar search field, its own focus ring.
+        .searchable(text: searchText, placement: .toolbar, prompt: Text(verbatim: searchPrompt))
+        // **Scopes, SwiftUI's way**: the only scope UI `.searchable` has — a picker below the field, not the
+        // magnifier's menu (P6); with 24 dictionaries it is the experiment, not the design yet.
+        .searchScopes(searchScope) {
+            Text(verbatim: String(localized: SearchSentences.allDictionaries)).tag(SearchScope.all)
+            ForEach(state.model.known.filter(\.enabled)) { source in
+                Text(verbatim: source.name).tag(SearchScope.one(source.id))
+            }
+        }
+        .searchFocused($searchFocused)
+        .onSubmit(of: .search) { state.submit() }
+        .onChange(of: state.searchFocus) { searchFocused = true }
         .focusedSceneValue(\.searchWindow, state)
         .background(TabTitle(title: ToolbarLayout.tabTitle(word: state.shownWord)))
         .onChange(of: state.library.searchSources, initial: true) {
@@ -142,33 +156,33 @@ public struct SearchWindow: View {
         }
     }
 
-    /// The window's one shared toolbar (P3, `SearchToolbar`), wired to this window's search, entry and speaker, then
+    /// The window's one shared toolbar (P3, `SearchToolbar`), wired to this window's entry and speaker, then
     /// **the inspector's toggle** (HIG audit UI05): at the toolbar's trailing end, where a Mac window's inspector button
-    /// is, after Apple's items in their order (P3, P8). The inspector owns no toolbar section, so the whole toolbar's
-    /// width is the field's (P5); View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
+    /// is, after Apple's items in their order (P3, P8). The search field is SwiftUI's `.searchable`, not an item here;
+    /// View ▸ Show Meaning in Context (⌃⌘I) brings a closed pane back.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
         SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
                       canPronounce: state.canPronounce, back: { state.model.back() },
                       forward: { state.model.forward() }, smaller: { state.entry.zoomOut() },
-                      bigger: { state.entry.zoomIn() }, pronounce: { state.pronounceSelectionOrShown() },
-                      field: Self.searchField(text: state.model.text, known: state.model.known,
-                                              scope: state.model.scope, focus: state.searchFocus,
-                                              onScope: { state.model.setScope($0) },
-                                              onChange: { state.typedText($0) }, onSubmit: { state.submit() },
-                                              onMove: { state.move($0) }, onCancel: { state.cancel() }))
+                      bigger: { state.entry.zoomIn() }, pronounce: { state.pronounceSelectionOrShown() })
         MeaningPaneToggle(shown: state.panes.meaningShown) { state.panes.toggleMeaning() }
     }
 
-    /// The toolbar's search item for the model's scope: the idle SwiftUI magnifier button, and the editor behind it with
-    /// its placeholder ("Search", or "Search in <name>") and the scope menu's lines, which also set the magnifier (P6).
-    static func searchField(text: String, known: [SearchSource], scope: SearchScope, focus: Int,
-                            onScope: @escaping (SearchScope) -> Void, onChange: @escaping (String) -> Void,
-                            onSubmit: @escaping () -> Void, onMove: @escaping (Int) -> Bool,
-                            onCancel: @escaping () -> Bool) -> ToolbarSearchItem {
-        ToolbarSearchItem(text: text, prompt: String(localized: SearchScopeMenu.prompt(known: known, scope: scope)),
-                          scopes: SearchScopeMenu.items(known: known, scope: scope), onScope: onScope, focus: focus,
-                          onChange: onChange, onSubmit: onSubmit, onMove: onMove, onCancel: onCancel)
+    /// The searchable field's text, through the window's typing path (a search starts as the reader types).
+    private var searchText: Binding<String> {
+        Binding { state.model.text } set: { state.typedText($0) }
     }
+
+    /// The searchable field's scope, through the model's scope (P6, P7).
+    private var searchScope: Binding<SearchScope> {
+        Binding { state.model.scope } set: { state.model.setScope($0) }
+    }
+
+    /// Its placeholder: "Search", or "Search in <name>" for the chosen scope (P6).
+    private var searchPrompt: String {
+        String(localized: SearchScopeMenu.prompt(known: state.model.known, scope: state.model.scope))
+    }
+
 }
 
 /// **The answer pane's toggle** (HIG audit UI05), owned by the shared window toolbar and shown at its trailing end

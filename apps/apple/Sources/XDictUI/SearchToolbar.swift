@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | search | Smaller/Bigger Text. The
-/// owner put the search before the text-size pair (2026-10-24: "move search before font-size changers"), which also
-/// keeps the pair between the field and the answer pane's toggle, so the two show as separate buttons. At the 400 pt
-/// minimum the toolbar's items go to the overflow before the search field does (P8). Its own type, so a test lays out
-/// these very items in a window (`ToolbarFitTests`).
-struct SearchToolbar<Field: View>: ToolbarContent {
+/// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | Smaller/Bigger Text. **The search
+/// is SwiftUI's `.searchable`** (owner, 2026-10-24), a toolbar item the system places itself at the trailing end; the
+/// custom AppKit field this type once carried is gone with it.
+struct SearchToolbar: ToolbarContent {
     let canGoBack: Bool
     let canGoForward: Bool
     let canPronounce: Bool
@@ -14,7 +12,6 @@ struct SearchToolbar<Field: View>: ToolbarContent {
     let smaller: @MainActor () -> Void
     let bigger: @MainActor () -> Void
     let pronounce: @MainActor () -> Void
-    let field: Field
 
     var body: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
@@ -39,10 +36,6 @@ struct SearchToolbar<Field: View>: ToolbarContent {
                 .disabled(!canPronounce)
                 .help(Text("Read the selection aloud, or the entry’s word when nothing is selected"))
                 .accessibilityIdentifier("toolbar.pronounce")
-        }
-        .visibilityPriority(.high)
-        ToolbarItem(placement: .primaryAction) {
-            field
         }
         .visibilityPriority(.high)
         ToolbarItem(placement: .primaryAction) {

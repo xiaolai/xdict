@@ -1,18 +1,16 @@
 import Foundation
 import XDictTokens
 
-/// **The main window's measures, as Apple's Dictionary has them** (parity ledger P1, P2, P5, P9; owner's decisions of
-/// 2026-10-17, which replace Codex's 640 pt toolbar of the same day): a 400 × 300 pt minimum, the title "XDict" (P2, XDict's own) with
-/// "N found" under it after a search, a search field that grows to Apple's 327 pt, and a sidebar about 183 pt wide that
-/// appears only after a search. At the minimum the toolbar's Back/Forward and text-size pairs go to its overflow before
-/// the search field does (P8).
+/// **The main window's measures, as Apple's Dictionary has them** (parity ledger P1, P2, P9; owner's decisions of
+/// 2026-10-17, which replace Codex's 640 pt toolbar of the same day): a 400 × 300 pt minimum, the title "XDict" (P2,
+/// XDict's own) with "N found" under it after a search, and a sidebar about 183 pt wide that appears only after a
+/// search. The search field is SwiftUI's `.searchable` (owner, 2026-10-24): the system owns its width, its collapse and
+/// its place in the toolbar's overflow.
 public enum ToolbarLayout {
     public static let minimumWindow: (width: CGFloat, height: CGFloat) = (Tokens.Window.mainMinimumWidth,
                                                                          Tokens.Window.mainMinimumHeight)
     /// The content's minimum height: the window's less the 52 pt toolbar (measured: 300 pt content made a 352 pt window).
     public static let minimumContentHeight: CGFloat = minimumWindow.height - Tokens.Control.toolbar
-    public static let searchWidth: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (
-        Tokens.Window.searchFieldMin, Tokens.Window.searchFieldIdeal, Tokens.Window.searchFieldMax)
     public static let sidebar: (min: CGFloat, ideal: CGFloat, max: CGFloat) = (
         Tokens.Window.sidebarMin, Tokens.Window.sidebarIdeal, Tokens.Window.sidebarMax)
 
@@ -23,17 +21,6 @@ public enum ToolbarLayout {
     /// sidebar, is narrow. A 583 pt window with the 183 pt sidebar a search brings leaves a 400 pt column; Apple's
     /// 444 pt window with its sidebar shows no title.
     public static func titleYields(window: CGFloat, sidebar: CGFloat) -> Bool { titleYields(width: window - sidebar) }
-
-    /// The search field's width in a window `window` points wide (P5): Apple's 327 pt at its 859 pt window, in proportion
-    /// to the window between the field's least and most, and now **two-thirds of that** (owner, 2026-10-24: "shrink
-    /// search input width to current 2/3"). A range alone left it near its least (owner, 2026-10-18: "search field's
-    /// width is too short"), and a SwiftUI width the toolbar measures once overflowed when the window was stretched
-    /// (2026-10-19), so `ToolbarFieldWidth` gives it to the toolbar's item as a preferred width.
-    public static func searchFieldWidth(window: CGFloat) -> CGFloat {
-        let measured = min(max((searchWidth.ideal * window / Tokens.Window.searchFieldAtWindow).rounded(),
-                               searchWidth.min), searchWidth.max)
-        return (measured * 2 / 3).rounded()
-    }
 
     /// The window's title, always: "XDict", where Apple's says "Dictionary" (P2, the owner's deviation of 2026-10-18).
     public static var windowTitle: LocalizedStringResource { LocalizedStringResource("XDict") }

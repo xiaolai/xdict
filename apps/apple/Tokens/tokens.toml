@@ -92,9 +92,6 @@ filterField = { value = 140, why = "The Dictionaries filter field width: room fo
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
 mainMinimumHeight = { value = 300, source = "P1" }
-searchFieldMin = { value = 110, why = "The search field's narrowest, where the toolbar's overflow takes everything else first (P8)." }
-searchFieldIdeal = { value = 327, source = "P5" }
-searchFieldMax = { value = 420, why = "The search field stops growing here in a wide window, so the title keeps its room." }
 sidebarMin = { value = 150, why = "The narrowest sidebar that still shows a long headword's start." }
 sidebarIdeal = { value = 183, source = "P9" }
 sidebarMax = { value = 320, why = "The widest sidebar, so the entry column keeps most of the window." }
@@ -118,7 +115,6 @@ noticesPopoverWidth = { value = 360, why = "The library notices' popover: a sent
 noticesPopoverMaxHeight = { value = 320, why = "The library notices' popover's tallest; more scrolls." }
 fallbackScreenHeight = { value = 800, why = "The visible screen height assumed when AppKit names no main screen (none attached yet), so Settings still bounds its height." }
 initialColumn = { value = 1000, why = "The content column's width before the first layout measures it: wide, so the title shows until then (P8)." }
-searchFieldAtWindow = { value = 859, source = "P5" }
 settingsSidebar = { value = 200, why = "The Settings sidebar's width: 'Reading & Speech' with its icon and the list's margin, at Apple's sidebar proportions." }
 settingsHeight = { value = 560, why = "The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do." }
 meaningPaneMin = { value = 260, why = "The answer pane's narrowest: the shortest sense quote wraps to about four lines; below it the entry column keeps its room." }

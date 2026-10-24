@@ -89,9 +89,9 @@ struct SettingsRevealTests {
     }
 
     static func settled(_ window: NSWindow) async throws {
-        try await ToolbarFitTests.settle(window)
+        try await ToolbarTestSupport.settle(window)
         try await Task.sleep(for: .milliseconds(500))
-        try await ToolbarFitTests.settle(window)
+        try await ToolbarTestSupport.settle(window)
     }
 
     /// The whole row is drawn inside the window.
@@ -101,8 +101,8 @@ struct SettingsRevealTests {
         let visible = target.visibleRect
         let inWindow = target.convert(target.bounds, to: nil)
         let contentRect = content.convert(content.bounds, to: nil)
-        return visible.height >= target.bounds.height - ToolbarFitTests.tolerance
-            && contentRect.insetBy(dx: -ToolbarFitTests.tolerance, dy: -ToolbarFitTests.tolerance).contains(inWindow)
+        return visible.height >= target.bounds.height - ToolbarTestSupport.tolerance
+            && contentRect.insetBy(dx: -ToolbarTestSupport.tolerance, dy: -ToolbarTestSupport.tolerance).contains(inWindow)
     }
 
     @Test(arguments: [SettingsSearch.Anchor.aiPrompt, .syncFolder, .history])

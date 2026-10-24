@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 /// **One size rule for every Settings pane and the setup board** (UI review X2, S-01, U-01): a grouped form as tall as

@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "091c36c31e3fd61b87c47d97d87ce5f2efb1eaae3fe7de9a622f4efaf9edad51"
+    public static let sourceDigest = "7dca2d588a46088cacb0f1a91ff1c2d37c042ad60a4d7a559dd2baa1afa4d5b7"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -166,12 +166,6 @@ public enum Tokens {
         public static let mainMinimumWidth: CGFloat = 400
         /// Apple-measured (P1, `Tools/parity/apple-dictionary.tsv`): fixed.
         public static let mainMinimumHeight: CGFloat = 300
-        /// The search field's narrowest, where the toolbar's overflow takes everything else first (P8).
-        public static let searchFieldMin: CGFloat = 110
-        /// Apple-measured (P5, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let searchFieldIdeal: CGFloat = 327
-        /// The search field stops growing here in a wide window, so the title keeps its room.
-        public static let searchFieldMax: CGFloat = 420
         /// The narrowest sidebar that still shows a long headword's start.
         public static let sidebarMin: CGFloat = 150
         /// Apple-measured (P9, `Tools/parity/apple-dictionary.tsv`): fixed.
@@ -218,8 +212,6 @@ public enum Tokens {
         public static let fallbackScreenHeight: CGFloat = 800
         /// The content column's width before the first layout measures it: wide, so the title shows until then (P8).
         public static let initialColumn: CGFloat = 1000
-        /// Apple-measured (P5, `Tools/parity/apple-dictionary.tsv`): fixed.
-        public static let searchFieldAtWindow: CGFloat = 859
         /// The Settings sidebar's width: 'Reading & Speech' with its icon and the list's margin, at Apple's sidebar proportions.
         public static let settingsSidebar: CGFloat = 200
         /// The Settings window's height: room for Apple's table and a dictionary's options, with the longer panes scrolling inside it as Apple's own Settings do.

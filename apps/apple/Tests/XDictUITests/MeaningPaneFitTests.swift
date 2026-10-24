@@ -37,9 +37,9 @@ struct MeaningPaneFitTests {
 
     /// Layout settled and the inspector's slide finished, so a width or a pane is read after AppKit's last move.
     static func settled(_ window: NSWindow) async throws {
-        try await ToolbarFitTests.settle(window)
+        try await ToolbarTestSupport.settle(window)
         try await Task.sleep(for: .milliseconds(500))
-        try await ToolbarFitTests.settle(window)
+        try await ToolbarTestSupport.settle(window)
     }
 
     /// `SearchWindow`'s frame around the toolbar, inside `XDictApp`'s scene frame.
@@ -77,10 +77,7 @@ struct MeaningPaneFitTests {
             }
             .toolbar {
                 SearchToolbar(canGoBack: true, canGoForward: true, canPronounce: true, back: {}, forward: {},
-                              smaller: {}, bigger: {}, pronounce: {},
-                              field: SearchWindow.searchField(text: "sample", known: [], scope: .all, focus: 0,
-                                                              onScope: { _ in }, onChange: { _ in }, onSubmit: {},
-                                                              onMove: { _ in false }, onCancel: { false }))
+                              smaller: {}, bigger: {}, pronounce: {})
                 MeaningPaneToggle(shown: measured.open, toggle: {})
             }
             .toolbar(removing: ToolbarLayout.titleYields(width: column) ? .title : nil)
@@ -110,7 +107,7 @@ struct MeaningPaneFitTests {
         window.styleMask = [.titled, .resizable, .closable, .miniaturizable]
         window.toolbarStyle = .unified
         window.isReleasedWhenClosed = false
-        try await ToolbarFitTests.resize(window, to: width)
+        try await ToolbarTestSupport.resize(window, to: width)
         try await settled(window)
         if open {
             measured.open = true
@@ -119,7 +116,7 @@ struct MeaningPaneFitTests {
         return window
     }
 
-    static let tolerance = ToolbarFitTests.tolerance
+    static let tolerance = ToolbarTestSupport.tolerance
     static let pane = Tokens.Window.meaningPaneIdeal
 
     @Test(arguments: [false, true], [CGFloat(400), 800])
@@ -168,7 +165,7 @@ struct MeaningPaneFitTests {
         let window = try await Self.window(measured, width: 800, open: false, results: true)
         defer { window.close() }
         let screen = try #require(window.screen)
-        try await ToolbarFitTests.resize(window, to: screen.visibleFrame.width)
+        try await ToolbarTestSupport.resize(window, to: screen.visibleFrame.width)
         try await Self.settled(window)
         let original = window.frame
         let entry = measured.entry.width
@@ -205,7 +202,7 @@ struct MeaningPaneFitTests {
         let measured = Measured()
         let window = try await Self.window(measured, width: 800, open: true, results: true)
         defer { window.close() }
-        try await ToolbarFitTests.resize(window, to: 900 + Self.pane)
+        try await ToolbarTestSupport.resize(window, to: 900 + Self.pane)
         window.setFrameOrigin(NSPoint(x: window.frame.minX + 10, y: window.frame.minY))
         try await Self.settled(window)
         let entry = measured.entry.width
@@ -221,7 +218,7 @@ struct MeaningPaneFitTests {
         let measured = Measured()
         let window = try await Self.window(measured, width: 800, open: true, results: true)
         defer { window.close() }
-        try await ToolbarFitTests.resize(window, to: 400)
+        try await ToolbarTestSupport.resize(window, to: 400)
         try await Self.settled(window)
         #expect(abs(window.frame.width - 400) <= Self.tolerance)
         #expect(measured.presentation == .sheet)
@@ -268,14 +265,12 @@ struct MeaningPaneFitTests {
         let window = try await Self.window(measured, width: 800, open: true, results: results)
         defer { window.close() }
         for width: CGFloat in [800, 1000, 1180, 1400, 1180, 800] {
-            try await ToolbarFitTests.resize(window, to: width)
+            try await ToolbarTestSupport.resize(window, to: width)
             try await Self.settled(window)
             #expect(abs(window.frame.width - width) <= Self.tolerance)
             #expect(Self.paneShown(window, measured))
             #expect(measured.entry.width > 0)
-            let (shown, overflow) = ToolbarFitTests.items(window)
-            let field = try #require(shown.lazy.compactMap(\.field).first, "the search field went to overflow: \(overflow)")
-            #expect(field.minX >= 0 && field.maxX <= width + Self.tolerance)
+            let (shown, overflow) = ToolbarTestSupport.items(window)
             let labels = (window.toolbar?.visibleItems ?? []).map(\.label)
             #expect(labels.contains("Hide Meaning in Context"))
             if width >= 1180 { #expect(overflow.isEmpty) }

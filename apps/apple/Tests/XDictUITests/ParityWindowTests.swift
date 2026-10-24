@@ -24,15 +24,9 @@ struct ParityWindowTests {
     /// **P1**: Apple's 400 × 300 pt minimum, which replaces the 640 × 420 pt one.
     @Test func theWindowsMinimumIsApplesFourHundredByThreeHundred() {
         #expect(ToolbarLayout.minimumWindow == (width: 400, height: 300))
-        // Apple's search field is 327 pt at an 859 pt window (P5).
-        #expect(ToolbarLayout.searchWidth.ideal == 327)
         // Apple's sidebar is 183 pt at an 859 pt window (P9).
         #expect(ToolbarLayout.sidebar.ideal == 183)
         // P8: at the 400 pt minimum the title yields to the search field; at Apple's 859 pt it shows.
-        // P8: the search field's toolbar item outlasts every other; P48: the speaker outlasts both pairs.
-        #expect(ToolbarPriority.priority(.searchField) == .user)
-        #expect(ToolbarPriority.priority(.speaker) == .high)
-        #expect(ToolbarPriority.priority(.pair) == .low)
         #expect(ToolbarLayout.titleYields(width: 400) && !ToolbarLayout.titleYields(width: 859))
     }
 
@@ -71,21 +65,6 @@ struct ParityWindowTests {
         #expect(Self.text(ToolbarLayout.subtitle(found: 45)) == "45 found")
         #expect(Self.text(ToolbarLayout.subtitle(found: 1)) == "1 found")
         #expect(ToolbarLayout.subtitle(found: nil) == nil)
-    }
-
-    /// **P5, narrowed by the owner** (2026-10-24: "shrink search input width to current 2/3"): two-thirds of Apple's
-    /// 327 pt at an 859 pt window, wider in a wider window up to two-thirds of its most, narrower only in a narrower one,
-    /// never under two-thirds of its least (owner, 2026-10-18: "search field's width is too short").
-    @Test func theSearchFieldIsTwoThirdsOfApplesWidthAndFollowsTheWindow() {
-        let measured = ToolbarLayout.searchWidth
-        #expect(ToolbarLayout.searchFieldWidth(window: 859) == (measured.ideal * 2 / 3).rounded())
-        #expect(ToolbarLayout.searchFieldWidth(window: 1000) > (measured.ideal * 2 / 3).rounded())
-        #expect(ToolbarLayout.searchFieldWidth(window: 2000) == (measured.max * 2 / 3).rounded())
-        #expect(ToolbarLayout.searchFieldWidth(window: 700) < (measured.ideal * 2 / 3).rounded())
-        #expect(ToolbarLayout.searchFieldWidth(window: 400) >= (measured.min * 2 / 3).rounded())
-        #expect(ToolbarLayout.searchFieldWidth(window: 100) == (measured.min * 2 / 3).rounded())
-        let widths = stride(from: CGFloat(400), through: 2000, by: 50).map { ToolbarLayout.searchFieldWidth(window: $0) }
-        #expect(widths == widths.sorted(), "the field never narrows as the window widens")
     }
 
     /// **P7**: ⌘0 every dictionary, ⌘1–⌘9 the first nine, ⌘} and ⌘{ to step; Actual Size moved to ⌥⌘0.

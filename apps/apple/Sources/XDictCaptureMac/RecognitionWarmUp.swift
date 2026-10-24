@@ -1,5 +1,5 @@
-import AppKit
 import Foundation
+import CoreText
 import Synchronization
 import Vision
 import XDictCapture
