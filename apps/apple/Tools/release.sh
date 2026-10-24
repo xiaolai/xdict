@@ -5,14 +5,11 @@
 #   make release BUILD_NUMBER=<n>            the ordinary release
 #   make release-bootstrap BUILD_NUMBER=<n>  the skeleton's (plan-macos-v1 WI-2)
 #
-# **No upload without end-to-end evidence of this very content** (XiaolaiDict ADR-0024, addendum of 2026-10-11; by key
-# since 2026-10-17): the ordinary release needs, for **every default sub-stage** and RELEASE_EXTRAS, a pass in the E2E
-# ledger under the key that sub-stage has for this tree, the build host's toolchain, the E2E Mac's macOS build and the
-# corpus, not failed since and within E2E_EVIDENCE_MAX_DAYS (`Tools/e2e-status.sh require-fresh`), and the tree
-# committed, so what ships names a commit. **The bootstrap release needs that of the `launch` stage alone**: the
-# skeleton has no other stage that means anything yet. It may be cut from a tree not yet committed; it names that tree
-# (`Tools/source-tree.sh`), whose objects are in the repository's store. **Whatever the ledger carries, RELEASE_SMOKE
-# runs on the stapled release bundle** (step 2a): no key sees a signature, an entitlement or a ticket.
+# **E2E is never a gate of the release** (owner, 2026-10-24: "e2e，不应该成为任何一步的 gate，它就应该是 on demand 的";
+# before that, 0.3.2 shipped on a one-release waiver of the other 30 stages). A release is cut from a committed tree, so
+# what ships names a commit; the build's own lint and tests ran on the build Mac when the bundle was made, and the
+# release smoke runs on the stapled release bundle (step 2a): no ledger key sees a signature, an entitlement or a
+# ticket. The E2E ledger remains the record of what was run on demand (`Tools/e2e-status.sh plan`, `make e2e`).
 #
 #   1. build, signed with a secure timestamp        (the notary refuses a signature without one)
 #   2. notarise the app, staple its ticket          (so a first launch works offline)
@@ -20,7 +17,6 @@
 #   3. build the disk image from the stapled app
 #   4. sign the disk image                          (a ticket alone is not enough for a .dmg)
 #   5. notarise the disk image, staple its ticket
-#  5a. ask for the evidence once more                (a failure filed during notarisation revokes)
 #   6. ask Gatekeeper, here and on the E2E Mac, and fail unless it says "Notarized Developer ID"
 #
 # The order is load-bearing: each step consumes the one before it, and an image built before its app was stapled
@@ -44,8 +40,6 @@ case "${1:-}" in
     *) fail "usage: $0 [--bootstrap]" ;;
 esac
 readonly mode
-evidence() { if [ "$mode" = bootstrap ]; then Tools/e2e-status.sh require-fresh --bootstrap; else Tools/e2e-status.sh require-fresh; fi; }
-
 readonly BUILT=.build/XDict.app
 readonly OUT=.build/release
 # Released from a copy, so stapling never touches the bundle development builds are published to.
@@ -64,9 +58,9 @@ export XDICT_SIGN_ID
 xcrun notarytool history --keychain-profile "$XDICT_NOTARY_PROFILE" >/dev/null 2>&1 \
     || fail "notarytool cannot use the keychain profile '$XDICT_NOTARY_PROFILE' (made once per Mac with xcrun notarytool store-credentials)"
 if [ "$mode" = full ]; then
-    Tools/source-tree.sh --clean >/dev/null || fail "an ordinary release is cut from a committed tree: commit, run make e2e, then release"
+    Tools/source-tree.sh --clean >/dev/null || fail "an ordinary release is cut from a committed tree: commit, then release"
 fi
-evidence || fail "no fresh end-to-end evidence of this source tree for the $mode release"
+start_tree=$(Tools/source-tree.sh)
 
 # Uploads, then waits — as two calls, because they fail differently: a single `submit --wait` that times out while
 # polling reports failure for an upload that went through, and running it again uploads twice. A verdict ends the wait
@@ -150,9 +144,9 @@ for part in "$BUILT" "$BUILT/Contents/XPCServices/ai.xdict.app.DictionaryService
     ! grep -q "get-task-allow" <<<"$entitlements" || fail "get-task-allow is set on $part; the notary would refuse it"
 done
 # **Asked again after the build and before any upload**, because the tree is read again now: an edit made during the
-# build would otherwise be released without the evidence.
+# build would otherwise be released unnamed.
 tree=$(Tools/source-tree.sh)
-evidence || fail "the source tree moved during the build; no evidence covers what was built"
+[ "$tree" = "$start_tree" ] || fail "the source tree moved during the build; nothing is released"
 
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -195,10 +189,9 @@ hdiutil create -quiet -volname "XDict $version" -srcfolder "$staging" -ov -forma
 sign_with_timestamp "$dmg"
 notarize "$dmg"
 staple "$dmg"
-# **Asked once more, after the notarisations and before the image is accepted**: a run filed meanwhile may have revoked
-# a carried pass (a failure under the same key), and that must stop the release here.
+# **Asked once more, after the notarisations and before the image is accepted**: the tree is what a release names, so
+# an edit during notarisation stops it here.
 [ "$(Tools/source-tree.sh)" = "$tree" ] || fail "the source tree moved during the release"
-evidence || fail "the evidence changed during notarisation; nothing is released"
 
 # 6. As a reader meets them: the disk image, and the app inside it — not the copy the image was built from.
 gatekeeper "$dmg" -t open --context context:primary-signature

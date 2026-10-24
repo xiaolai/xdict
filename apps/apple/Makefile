@@ -272,8 +272,8 @@ e2e-status e2e-ledger:
 release-plan:
 	@Tools/e2e-status.sh plan
 
-# The evidence a release needs, asked before its tests so a missing run costs seconds; Tools/release.sh asks again
-# after its build, before anything is uploaded.
+# An on-demand read of the E2E evidence a release would carry. **No step requires it**: E2E is on demand (owner,
+# 2026-10-24), and a release's own gate is the smoke on its stapled bundle in Tools/release.sh.
 e2e-evidence:
 	@Tools/e2e-status.sh require-fresh
 
@@ -283,10 +283,10 @@ e2e-evidence-bootstrap:
 # **Built where `app` builds** (BUILD_HOST: Tools/remote-build.sh, whose products Tools/build-bundle.sh requires to be of
 # this very tree), never compiled on this Mac when a build host is set; without one, here, with the notices check too.
 RELEASE_BUILD := $(if $(BUILD_HOST),remote-build,lint test-tools test-swift)
-release: e2e-evidence $(RELEASE_BUILD)
+release: $(RELEASE_BUILD)
 	@Tools/release.sh
 
-release-bootstrap: e2e-evidence-bootstrap $(RELEASE_BUILD)
+release-bootstrap: $(RELEASE_BUILD)
 	@Tools/release.sh --bootstrap
 
 clean:
