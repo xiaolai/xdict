@@ -90,10 +90,12 @@ struct ModuleBoundaryTests {
         // Capture's macOS target (ADR-0014 decisions 5 to 7; plan-capture WI-2): the Accessibility session and its one
         // lane, the readers, the never-prompting probe; since WI-4 the recogniser, ScreenCaptureKit's capture and
         // Vision's reading, behind the Screen Recording setup row (`ScreenCaptureUseTests` holds where ScreenCaptureKit
-        // is named). Nothing that draws. What it binds today, inside `captureMacMayBind`, the ceiling
+        // is named). **CoreText since 2026-10-24**: the label under a control is laid out in its face (`ElementTitle`),
+        // which used to arrive through AppKit and is imported for itself now that the target reaches AppKit only where it
+        // needs it. Nothing that draws. What it binds today, inside `captureMacMayBind`, the ceiling
         // `captureReachesNothingOfThisPackage` holds.
-        "XDictCaptureMac": ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit", "Synchronization", "Vision",
-                            "os"],
+        "XDictCaptureMac": ["AppKit", "ApplicationServices", "CoreText", "Foundation", "ScreenCaptureKit",
+                            "Synchronization", "Vision", "os"],
         "XDictCaptureMacTests": ["AppKit", "ApplicationServices", "Foundation", "Synchronization", "Testing"],
         // The entry view: the web view, its delegates and the consent prompt; its log.
         "XDictEntryView": ["AppKit", "Foundation", "WebKit", "os"],
@@ -426,15 +428,15 @@ struct ModuleBoundaryTests {
     /// or through another — so neither lookup, search, the client, the contract, the tokens (AppKit and SwiftUI) nor any
     /// view can arrive by a dependency — and binds nothing beyond its own set. The pure target reaches nothing; the macOS
     /// target reaches the pure one and the identities, and binds AppKit, Accessibility, and since the recogniser
-    /// (plan-capture WI-4) ScreenCaptureKit and Vision — never SwiftUI, WebKit or a view.
+    /// (plan-capture WI-4) ScreenCaptureKit, Vision and CoreText — never SwiftUI, WebKit or a view.
     static let captureRules: [String: (reach: Set<String>, bind: Set<String>)] = [
         "XDictCapture": (reach: [], bind: captureMayBind),
         "XDictCaptureMac": (reach: ["XDictBase", "XDictCapture"], bind: captureMacMayBind),
     ]
     static var captureTargets: Set<String> { Set(captureRules.keys) }
     static let captureMayBind: Set<String> = ["CoreGraphics", "Foundation", "NaturalLanguage", "Synchronization", "os"]
-    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "Foundation", "ScreenCaptureKit",
-                                                 "Synchronization", "Vision", "os"]
+    static let captureMacMayBind: Set<String> = ["AppKit", "ApplicationServices", "CoreText", "Foundation",
+                                                 "ScreenCaptureKit", "Synchronization", "Vision", "os"]
 
     @Test func captureReachesNothingOfThisPackage() throws {
         let targets = try Manifest.dump().targets
