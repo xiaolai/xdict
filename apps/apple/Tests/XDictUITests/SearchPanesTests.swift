@@ -23,6 +23,25 @@ struct SearchPanesTests {
         #expect(!panes.meaningShown)
     }
 
+    /// **The Examples section** (ADR-0031, plan-reverse-examples WI-5): a query's pairs open it, the reader's close
+    /// holds for that query, and a later query asks again.
+    @Test func theExamplesPaneOpensForAQueryAndHoldsTheReadersClose() {
+        var panes = SearchPanes()
+        #expect(!panes.examplesShown && !panes.examplesDismissed)
+        panes.examplesSearched()
+        panes.examplesAsked()
+        #expect(panes.examplesShown)
+        panes.examplesClosed()
+        #expect(!panes.examplesShown && panes.examplesDismissed)
+        panes.examplesAsked()
+        #expect(!panes.examplesShown, "a build finishing does not reopen what the reader closed")
+        panes.examplesSearched()
+        panes.examplesAsked()
+        #expect(panes.examplesShown, "a new query asks again")
+        panes.examplesCleared()
+        #expect(!panes.examplesShown && !panes.examplesDismissed)
+    }
+
     @Test func hiddenResultsStayHiddenAcrossSearches() {
         var panes = SearchPanes()
         #expect(!panes.resultsVisible(listed: false), "no sidebar before a search (P9)")

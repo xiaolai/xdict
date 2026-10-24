@@ -111,8 +111,9 @@ extension ServiceOperation {
         switch self {
         case .close(let dict), .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _),
              .health(let dict), .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
-             .words(let dict, _, _), .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _): [dict]
-        case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts
+             .examplesBuild(let dict), .words(let dict, _, _), .studyNote(let dict, _, _, _, _, _),
+             .definitionHash(let dict, _): [dict]
+        case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
@@ -131,6 +132,9 @@ extension ServiceOperation {
         case .readingStyle(let dict): .readingStyle(dict: rename(dict))
         case .displayOptions(let dict): .displayOptions(dict: rename(dict))
         case .entryText(let dict, let entry, let text): .entryText(dict: rename(dict), entry: entry, text: text)
+        case .examples(let query, let dicts, let limit):
+            .examples(query: query, dicts: dicts.map(rename), limit: limit)
+        case .examplesBuild(let dict): .examplesBuild(dict: rename(dict))
         case .studyNote(let dict, let entry, let text, let name, let stamp, let operation):
             .studyNote(dict: rename(dict), entry: entry, text: text, name: name, stamp: stamp, operation: operation)
         case .definitionHash(let dict, let entry): .definitionHash(dict: rename(dict), entry: entry)
@@ -148,9 +152,23 @@ extension ServiceOperation {
 extension Answer {
     /// The same answer naming `rename(dict)` for each dictionary in it.
     func renamingDicts(_ rename: (DictId) -> DictId) -> Answer {
-        guard case .page(let page) = self else { return self }
-        return .page(Page(hits: page.hits.map { Hit(dict: rename($0.dict), entry: $0.entry, headword: $0.headword, how: $0.how,
-                                                    problems: $0.problems) },
-                          total: page.total, generation: page.generation, problems: page.problems))
+        switch self {
+        case .page(let page):
+            return .page(Page(hits: page.hits.map { Hit(dict: rename($0.dict), entry: $0.entry, headword: $0.headword,
+                                                         how: $0.how, problems: $0.problems) },
+                              total: page.total, generation: page.generation, problems: page.problems))
+        case .examples(let examples):
+            return .examples(Examples(
+                hits: examples.hits.map { hit in
+                    ExampleHit(english: hit.english, chinese: hit.chinese, start: hit.start, len: hit.len,
+                               sentence: hit.sentence,
+                               sources: hit.sources.map {
+                                   ExampleSource(dict: rename($0.dict), entry: $0.entry, headword: $0.headword)
+                               })
+                },
+                total: examples.total, notReady: examples.notReady.map(rename), capped: examples.capped))
+        default:
+            return self
+        }
     }
 }

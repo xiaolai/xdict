@@ -123,12 +123,14 @@ enum Fixtures {
         .ledgerRemove(removal: removal, operation: "op-remove"),
         .ledgerRestore(removal: removal, operation: "op-restore"),
         .words(dict: dict, from: 0, limit: 1_000),
+        .examples(query: "居然", dicts: [dict, other], limit: 100),
+        .examplesBuild(dict: dict),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 38
+    static let operationCases = 40
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -169,6 +171,8 @@ enum Fixtures {
         case .ledgerRemove: 35
         case .ledgerRestore: 36
         case .words: 37
+        case .examples: 38
+        case .examplesBuild: 39
         }
     }
 
@@ -242,6 +246,13 @@ enum Fixtures {
         .conflicts([cardConflict]),
         .synced(SyncReport(exported: 4_096, peers: 1, added: 3, skipped: 41)),
         .words(words),
+        .examples(Examples(hits: [
+            ExampleHit(english: "Who could have considered such a possibility?", chinese: "谁居然会想到这种可能性？",
+                       start: 3, len: 6, sentence: true,
+                       sources: [ExampleSource(dict: dict, entry: entryRef, headword: "consider")]),
+        ], total: 1, notReady: [other], capped: false)),
+        .examplesBuilt(ExamplesBuilt(edition: edition, pairs: 1, roles: 1, fallback: 0, entries: 1, failed: 0,
+                                     noChinese: false, cached: false)),
     ]
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
@@ -272,7 +283,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 30
+    static let answerCases = 32
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -305,6 +316,8 @@ enum Fixtures {
         case .conflicts: 27
         case .synced: 28
         case .words: 29
+        case .examples: 30
+        case .examplesBuilt: 31
         }
     }
 

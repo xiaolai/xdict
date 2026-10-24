@@ -423,8 +423,36 @@ fn at_tag(html: &str, at: usize, frames: &mut Vec<Frame>, state: &mut State) -> 
     }
     let parent = frames.last();
     let is_pre = lower == "pre";
-    // The nearest ancestor's value unless this element writes its own: cached here, never walked again.
-    let role = attribute(&attrs, "data-xdict-role").or_else(|| parent.and_then(|f| f.role.clone()));
+    // The nearest ancestor's value unless this element writes its own: cached here, never walked again. **Inside an
+    // example or a translation, a nested role that is part of its text — a link, a label, a subhead — takes the
+    // example's or the translation's role** (the audit, 2026-10-24): the renderer's links inside COBUILD's and OALECD's
+    // examples carried their own roles, so the example's span began at the first link's end and paired a sentence's
+    // tail with its whole translation. A gloss (`keep`) and a translation inside an example stay themselves.
+    // The sure mark is the renderer's own (`roles.rs`): `keep` says the element keeps the dictionary's look inside a
+    // sure example and is apparatus, not the example's text; `trans` names a Chinese block. It is not a role value
+    // and the projection must not read it as one (audit, 2026-10-24): a kept gloss with no role stayed out of the
+    // inherited example role instead of joining its English.
+    let sure = attribute(&attrs, "data-xdict-sure");
+    let kept = sure.as_deref() == Some("keep");
+    let own = attribute(&attrs, "data-xdict-role").or_else(|| match sure.as_deref() {
+        Some("keep") | None => None,
+        Some(mark) => Some(mark.to_owned()),
+    });
+    let inherited = parent.and_then(|f| f.role.clone());
+    let role = if kept {
+        own
+    } else {
+        match own {
+            Some(own)
+                if matches!(inherited.as_deref(), Some("example" | "example-trans" | "trans"))
+                    && !matches!(own.as_str(), "trans" | "example-trans" | "example") =>
+            {
+                inherited
+            }
+            Some(own) => Some(own),
+            None => inherited,
+        }
+    };
     let label = attribute(&attrs, "data-xdict-label").or_else(|| parent.and_then(|f| f.label.clone()));
     let section = attribute(&attrs, "data-xdict-section").or_else(|| parent.and_then(|f| f.section.clone()));
     let pre = parent.is_some_and(|f| f.pre) || is_pre;
@@ -632,6 +660,30 @@ mod tests {
         assert_eq!(p.text, "1 a body of water");
         assert_eq!(runs(&p), vec![(0, 1, Some("sensenum"), None, None), (2, 15, Some("sense"), None, None)]);
         assert!(p.complete);
+    }
+
+    #[test]
+    fn a_nested_role_inside_an_example_takes_the_examples_role() {
+        let p = entry_text_from_html(
+            r#"<span data-xdict-role="example">You <a data-xdict-role="label">can</a> bet that he will come. <span data-xdict-sure="keep">(a gloss)</span><span data-xdict-role="example-trans">他肯定会来。</span></span>"#,
+            usize::MAX,
+        );
+        let roles: Vec<Option<&str>> = p.runs.iter().map(|r| r.role.as_deref()).collect();
+        assert_eq!(roles, vec![Some("example"), Some("example"), Some("example"), None, Some("example-trans")]);
+        assert_eq!(p.text, "You can bet that he will come. (a gloss)他肯定会来。");
+        let p = entry_text_from_html(
+            r#"<span data-xdict-role="trans">中文 <a data-xdict-role="headword">链接</a></span>"#,
+            usize::MAX,
+        );
+        let roles: Vec<Option<&str>> = p.runs.iter().map(|r| r.role.as_deref()).collect();
+        assert_eq!(roles, vec![Some("trans"), Some("trans")]);
+        // The renderer's other sure mark names the Chinese block, which the example must not swallow.
+        let p = entry_text_from_html(
+            r#"<span data-xdict-role="example">He came. <span data-xdict-sure="trans">他来了。</span></span>"#,
+            usize::MAX,
+        );
+        let roles: Vec<Option<&str>> = p.runs.iter().map(|r| r.role.as_deref()).collect();
+        assert_eq!(roles, vec![Some("example"), Some("trans")]);
     }
 
     #[test]

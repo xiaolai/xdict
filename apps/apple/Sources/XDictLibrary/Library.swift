@@ -37,6 +37,16 @@ public enum HealthState: Hashable, Sendable {
     case unavailable
 }
 
+/// Where one dictionary's example store is (ADR-0031 d.3, d.6), this session: built in the background after it opens,
+/// below the reader's calls. The core keeps the store per edition, so a relaunch is answered from it at once.
+public enum ExamplesState: Hashable, Sendable {
+    /// Records read of all.
+    case building(done: UInt64, total: UInt64)
+    case ready(ExamplesBuilt)
+    /// The build could not finish (the service failed, or the file changed); asked again at the next open.
+    case unavailable
+}
+
 /// Where one dictionary's reading-style report is (ADR-0010), this session: asked when its details are shown.
 public enum StyleState: Hashable, Sendable {
     case reading
@@ -112,6 +122,8 @@ public final class Library {
     public private(set) var notices: [LibraryNotice] = []
     /// Each open dictionary's health check (WI-12), run one at a time after it opens, below the reader's own calls.
     public private(set) var health: [UUID: HealthState] = [:]
+    /// Each open dictionary's example store (ADR-0031), built one at a time after it opens, below the reader's calls.
+    public private(set) var examples: [UUID: ExamplesState] = [:]
     /// Each open dictionary's reading-style report (ADR-0010), asked by its details pane and kept this session.
     public private(set) var readingStyles: [UUID: StyleState] = [:]
     /// Each open dictionary's display options (ADR-0013), asked by Settings and kept this session, per edition.
@@ -148,6 +160,19 @@ public final class Library {
     /// Dictionaries waiting for their health check, and the one being checked.
     @ObservationIgnored private var checks: [UUID] = []
     @ObservationIgnored private var checking: (id: UUID, dict: DictId, job: HealthJob?)?
+    /// Dictionaries waiting for their example store, and the one being built.
+    @ObservationIgnored private var exampleBuilds: [UUID] = []
+    /// One build's own identity: a dictionary's build can be stopped and started again, and an old completion must
+    /// never be taken for the new one's (audit, 2026-10-24).
+    private struct RunningExampleBuild {
+        let id: UUID
+        let dict: DictId
+        let generation: UInt64
+        var job: ExamplesJob?
+        var stopping = false
+    }
+    @ObservationIgnored private var buildingExamples: RunningExampleBuild?
+    @ObservationIgnored private var exampleGeneration: UInt64 = 0
     /// Apple dictionaries the reader asked to Convert Again: the new edition their import makes is joined to the
     /// dictionary's lineage, as one recorded join the reader can undo (ADR-0011 decision 8).
     @ObservationIgnored private var convertingAgain: Set<UUID> = []
@@ -503,6 +528,7 @@ public final class Library {
             }
             set(id, .ready)
             check(id)
+            buildExamples(id)
         case .success(.needsImport(let reason)):
             log.notice("dictionary \(id, privacy: .public) needs an import: \(reason.rawValue, privacy: .public)")
             if let old = handles.removeValue(forKey: id) { _ = await backend.close(old) }
@@ -541,6 +567,7 @@ public final class Library {
         guard index(id) != nil else { return }
         await cancelImport(id)
         await stopCheck(id)
+        await stopExampleBuild(id)
         queue.removeAll { $0 == id }
         if let dict = handles[id] { _ = await backend.close(dict) }
         forget(id)
@@ -579,6 +606,7 @@ public final class Library {
         handles[id] = nil
         phases[id] = nil
         health[id] = nil
+        examples[id] = nil
         readingStyles[id] = nil
         displayOptions[id] = nil
         appleStatus[id] = nil
@@ -757,6 +785,93 @@ public final class Library {
         runChecks()
     }
 
+    // MARK: - Examples (ADR-0031)
+
+    /// Queues a build of the dictionary's example store, open now: an enabled dictionary only, and one whose store
+    /// this session holds for the edition it has now is not asked again.
+    private func buildExamples(_ id: UUID) {
+        guard let at = index(id), entries[at].enabled, handle(id) != nil else { return }
+        if case .ready(let built) = examples[id], entries[at].edition == built.edition { return }
+        // The same dictionary at the same handle, queued or running, is this very request. A running build of another
+        // edition is not: the new edition waits its turn in the queue rather than being lost (audit, 2026-10-24).
+        // A build still stopping is not this request's answer: the re-enable is queued and starts when that slot
+        // clears (audit, 2026-10-24).
+        if let running = buildingExamples, running.id == id, running.dict == handle(id), !running.stopping { return }
+        guard !exampleBuilds.contains(id) else { return }
+        exampleBuilds.append(id)
+        examples[id] = .building(done: 0, total: 0)
+        runExampleBuilds()
+    }
+
+    private func runExampleBuilds() {
+        guard buildingExamples == nil else { return }
+        while let id = exampleBuilds.first {
+            exampleBuilds.removeFirst()
+            guard let dict = handle(id), entries.first(where: { $0.id == id })?.enabled == true else {
+                examples[id] = nil
+                continue
+            }
+            exampleGeneration &+= 1
+            let running = RunningExampleBuild(id: id, dict: dict, generation: exampleGeneration)
+            buildingExamples = running
+            Task { await runExampleBuild(running) }
+            return
+        }
+    }
+
+    private func runExampleBuild(_ running: RunningExampleBuild) async {
+        let (id, dict, generation) = (running.id, running.dict, running.generation)
+        let job = await backend.beginExamplesBuild(dict) { [weak self] done, total in
+            Task { @MainActor in
+                guard let self, let current = self.buildingExamples, current.generation == generation,
+                      current.dict == dict, self.handle(id) == dict, case .building = self.examples[id] else { return }
+                self.examples[id] = .building(done: done, total: total)
+            }
+        }
+        guard buildingExamples?.generation == generation else { return await job.cancel() }
+        buildingExamples?.job = job
+        // A stop that arrived before the job did: cancel it here, now that there is one.
+        if buildingExamples?.stopping == true { await job.cancel() }
+        let outcome = await job.outcome()
+        if let current = buildingExamples, current.generation == generation {
+            // A result for an edition this dictionary has left is not its result; the queued build of the new
+            // edition starts as soon as this slot clears (audit, 2026-10-24).
+            if !current.stopping, index(id) != nil, handle(id) == dict {
+                switch outcome {
+                case .success(let built):
+                    examples[id] = .ready(built)
+                case .failure(let failure):
+                    log.error(
+                        "the examples build of \(id, privacy: .public) did not finish: \(String(describing: failure), privacy: .public)"
+                    )
+                    examples[id] = .unavailable
+                }
+            }
+            buildingExamples = nil
+        }
+        runExampleBuilds()
+    }
+
+    /// Stops the dictionary's build, queued or running, and forgets it.
+    /// Stops a build. `keepIfEnabled` is the disable path's: a re-enable after the disable superseded this stop,
+    /// and its newly queued request must not be removed. A removal always stops (audit, 2026-10-24).
+    private func stopExampleBuild(_ id: UUID, keepIfEnabled: Bool = false) async {
+        if keepIfEnabled, entries.first(where: { $0.id == id })?.enabled == true {
+            runExampleBuilds()
+            return
+        }
+        exampleBuilds.removeAll { $0 == id }
+        examples[id] = nil
+        guard let current = buildingExamples, current.id == id else {
+            runExampleBuilds()
+            return
+        }
+        // The slot stays until this job's outcome arrives: a new build of the same dictionary must not start while
+        // the old one is still stopping, and its completion must not be read as the new one's (audit, 2026-10-24).
+        buildingExamples?.stopping = true
+        await buildingExamples?.job?.cancel()
+    }
+
     /// Moves dictionaries as a list's drag does: `offsets` taken out, put back before `toOffset`.
     public func move(fromOffsets offsets: IndexSet, toOffset: Int) {
         let moving = offsets.compactMap { entries.indices.contains($0) ? entries[$0] : nil }
@@ -783,6 +898,15 @@ public final class Library {
         guard let at = index(id), entries[at].enabled != enabled else { return }
         update(id) { $0.enabled = enabled }
         // A disabled dictionary's words leave the index, and an enabled one's join it (audit-fix 2026-10-22 finding 13).
+        if enabled {
+            buildExamples(id)
+        } else {
+            // Synchronously, before the cancellation task can run: a disable and re-enable in one turn of the run
+            // loop must not leave the store cleared by the old stop (audit, 2026-10-24).
+            exampleBuilds.removeAll { $0 == id }
+            examples[id] = nil
+            Task { await stopExampleBuild(id, keepIfEnabled: true) }
+        }
         working()
         wake()
     }

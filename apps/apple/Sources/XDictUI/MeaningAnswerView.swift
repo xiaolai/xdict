@@ -30,8 +30,15 @@ public struct MeaningAnswerPane: View {
         // held within the inspector's declared bounds.
         ScrollView {
             VStack(alignment: .leading, spacing: Tokens.Space.l) {
-                header
-                content
+                // **The Examples section lives in this pane** (ADR-0031's owner decision, plan-reverse-examples
+                // WI-5): above the Meaning answer when both are shown, alone when only a Chinese query opened it.
+                if state.panes.examplesShown {
+                    ExamplesSection(state: state)
+                }
+                if state.panes.meaningShown || !state.panes.examplesShown {
+                    header
+                    content
+                }
             }
             .padding(Tokens.Space.l)
             .frame(width: MeaningPaneWidth.content(visible: visible), alignment: .leading)

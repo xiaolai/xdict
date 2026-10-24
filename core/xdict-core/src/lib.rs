@@ -7,6 +7,7 @@
 
 mod core;
 mod error;
+mod examples;
 mod health;
 mod source;
 mod store;
@@ -17,6 +18,10 @@ pub use crate::core::{
     NORMALIZATION, PROTOCOL, STYLE, StyleReport,
 };
 pub use error::{CoreError, Feature, IoKind, Limit, Missing};
+pub use examples::{
+    EXTRACTOR as EXAMPLES_EXTRACTOR, FORMAT as EXAMPLES_FORMAT, MAX_HITS as MAX_EXAMPLE_HITS,
+    NORMALIZER as EXAMPLES_NORMALIZATION,
+};
 pub use health::HEALTH;
 pub use source::{ByteSource, MAX_TRANSFER};
 pub use store::IndexStorage;

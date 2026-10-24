@@ -90,6 +90,13 @@ final class Dictionaries: Sendable {
             case .words(let dict, let from, let limit):
                 return (.answer(.words(XDictContract.Words(try core.words(dict: dict.rawValue, from: from, limit: limit)))),
                         nil)
+            // ADR-0031: the reverse-example query, and the per-edition store built in the background.
+            case .examples(let query, let dicts, let limit):
+                let examples = try core.examples(query: query, dicts: dicts.map(\.rawValue), limit: limit)
+                return (.answer(.examples(XDictContract.Examples(examples))), nil)
+            case .examplesBuild(let dict):
+                let built = try core.examplesBuild(dict: dict.rawValue, progress: progress)
+                return (.answer(.examplesBuilt(XDictContract.ExamplesBuilt(built))), nil)
             case .entry(let dict, let entry, let render):
                 let (answer, payload) = Answer.of(try core.entry(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                                  view: XDictCore.View(render)))

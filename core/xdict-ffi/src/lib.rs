@@ -13,13 +13,13 @@ use std::sync::Arc;
 use xdict_core as core;
 use xdict_core::{
     BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Day, DayLabel,
-    DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport, Feature, FileIdentity,
-    FindingKind, FontReason, Health, HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How,
-    ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened,
-    Page, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome,
-    Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary, Sense, SkipReason, SkippedSheet,
-    Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView,
-    Versions, View, Words,
+    DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport, ExampleHit, ExampleSource,
+    Examples, ExamplesBuilt, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample,
+    HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin,
+    LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle,
+    ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome,
+    ReviewPolicy, ReviewSummary, Sense, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase,
+    StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -352,6 +352,45 @@ pub struct Words {
     pub words: Vec<String>,
     pub total: u64,
     pub next: u64,
+}
+
+/// **The reverse-example query's answer** (ADR-0031, plan-reverse-examples WI-4).
+#[uniffi::remote(Record)]
+pub struct Examples {
+    pub hits: Vec<ExampleHit>,
+    pub total: u64,
+    pub not_ready: Vec<String>,
+    pub capped: bool,
+}
+
+#[uniffi::remote(Record)]
+pub struct ExampleHit {
+    pub english: String,
+    pub chinese: String,
+    pub start: u64,
+    pub len: u64,
+    pub sentence: bool,
+    pub sources: Vec<ExampleSource>,
+}
+
+#[uniffi::remote(Record)]
+pub struct ExampleSource {
+    pub dict: String,
+    pub entry: EntryRef,
+    pub headword: String,
+}
+
+/// **What building one dictionary's store did** (ADR-0031 d.3, d.6).
+#[uniffi::remote(Record)]
+pub struct ExamplesBuilt {
+    pub edition: String,
+    pub pairs: u64,
+    pub roles: u64,
+    pub fallback: u64,
+    pub entries: u64,
+    pub failed: u64,
+    pub no_chinese: bool,
+    pub cached: bool,
 }
 
 #[uniffi::remote(Record)]
@@ -744,6 +783,25 @@ impl Core {
     /// Spotlight is macOS's, so `xdict-wasm`, the Web binding, does not carry it.
     pub fn words(&self, dict: String, from: u64, limit: u32) -> Result<Words, CoreError> {
         self.0.words(dict, from, limit)
+    }
+
+    /// **The reverse-example query** (ADR-0031, plan-reverse-examples WI-4): the pairs whose Chinese carries the
+    /// query, from the dictionaries with a store; one without is `not_ready`, never an error.
+    pub fn examples(&self, query: String, dicts: Vec<String>, limit: u32) -> Result<Examples, CoreError> {
+        self.0.examples(query, dicts, limit)
+    }
+
+    /// **Builds one dictionary's example store in the background** (ADR-0031 d.3, d.6): `progress` reports records
+    /// done and answers `false` to cancel, in which case nothing is written.
+    pub fn examples_build(
+        &self,
+        dict: String,
+        progress: Option<Arc<dyn Progress>>,
+    ) -> Result<ExamplesBuilt, CoreError> {
+        match progress {
+            Some(progress) => self.0.examples_build(dict, &Watcher(progress)),
+            None => self.0.examples_build(dict, &core::NoProgress),
+        }
     }
 
     pub fn entry(&self, dict: String, entry: EntryRef, view: View) -> Result<Entry, CoreError> {

@@ -55,7 +55,9 @@ public enum Contract {
     /// names, their canonical ranges, and the rendering revision the ordinals belong to (ADR-0029 d.2, d.3); and the
     /// operation `words` with its answer, a page of one dictionary's public keys for Core Spotlight (plan-setup-v2
     /// WI-6, ADR-0028: headwords only).
-    public static let version: UInt32 = 13
+    /// 14 (2026-10-24): the operations `examples` and `examplesBuild` and their answers, the reverse-example query
+    /// and the per-edition store's background build (ADR-0031, plan-reverse-examples WI-3–WI-5).
+    public static let version: UInt32 = 14
 }
 
 // MARK: - The request
@@ -194,6 +196,12 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// **A page of one dictionary's words** (plan-setup-v2 WI-6, ADR-0028): the public keys from key position
     /// `from`, for Core Spotlight. No body is read; the words come from the edition's index.
     case words(dict: DictId, from: UInt64, limit: UInt32)
+    /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese contains `query`, from the
+    /// dictionaries with a store, in their order. One without a store is answered in `notReady`, never as an error.
+    case examples(query: String, dicts: [DictId], limit: UInt32)
+    /// **Builds one dictionary's example store** (ADR-0031 d.3, d.6), in the background: like `health` it reports
+    /// progress, has no deadline and stops by `cancel`; the reader's calls never wait for it.
+    case examplesBuild(dict: DictId)
     /// An entry rendered for `render`; its HTML is the reply's payload.
     case entry(dict: DictId, entry: EntryRef, render: RenderContext)
     case link(dict: DictId, url: String, origin: LinkOrigin, render: RenderContext)
@@ -289,7 +297,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .importPackage(let spec), .openPackage(let spec): spec
         case .versions, .cancel, .close, .lookup, .suggest, .words, .entry, .link, .resource, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .entryText,
+             .entryText, .examples, .examplesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
@@ -302,7 +310,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry(_, _, let render), .link(_, _, _, let render), .resource(_, _, let render): render
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .entryText,
+             .entryText, .examples, .examplesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
@@ -324,6 +332,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: true
         case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .link, .joinLineage,
              .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
+             .examples, .examplesBuild,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove,
              .ledgerRestore: false
@@ -335,11 +344,11 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     public var creditClass: CreditClass? {
         switch self {
         case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: .bulk
-        case .openPackage, .lookup, .suggest, .words, .link: .lookup
+        case .openPackage, .lookup, .suggest, .words, .link, .examples: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
-             .readingStyle, .convertApple, .cancelConversion, .displayOptions, .ledgerRecord, .ledgerHistory,
-             .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor, .exportData,
-             .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
+             .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .ledgerRecord,
+             .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor,
+             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
         }
     }
 
@@ -350,9 +359,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
         case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
              .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
-             .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _):
+             .examplesBuild(let dict), .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _):
             filesOf[dict] ?? []
-        case .lookup(_, let dicts, _), .suggest(_, let dicts, _): dicts.flatMap { filesOf[$0] ?? [] }
+        case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _):
+            dicts.flatMap { filesOf[$0] ?? [] }
         case .words(let dict, _, _): filesOf[dict] ?? []
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
@@ -380,6 +390,8 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .convertApple: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .examples: .examples
+        case .examplesBuild: .examplesBuilt
         case .ledgerRecord, .ledgerRemove, .ledgerRestore: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
         case .studyNote, .studyNoteAt: .studyNote
@@ -401,10 +413,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// deadline (`Deadlines.importSilence`), and stopped by `cancel`.
     public var reportsProgress: Bool {
         switch self {
-        case .importPackage, .health, .convertApple: true
+        case .importPackage, .health, .convertApple, .examplesBuild: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .words, .entry, .link, .resource,
              .joinLineage, .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText,
-             .ledgerRecord,
+             .examples, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
              .ledgerSync, .ledgerRemove, .ledgerRestore: false
@@ -542,6 +554,10 @@ public enum Answer: Codable, Hashable, Sendable {
     case displayOptions(DisplayOptions)
     /// An entry as plain text, its spans and its cut report (contract 8).
     case entryText(EntryText)
+    /// The reverse-example query's hits (contract 14).
+    case examples(Examples)
+    /// What building one dictionary's example store did (contract 14).
+    case examplesBuilt(ExamplesBuilt)
     /// What recording one reading did (contract 9).
     case ledgerRecord(LedgerRecordOutcome)
     /// The days the drawer shows (contract 9).
@@ -573,7 +589,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .entry, .resource(.found): true
         case .versions, .imported, .cancellation, .opened, .closed, .page, .suggestions, .words, .link,
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
-             .ledgerRecord,
+             .examples, .examplesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
              .reanchored, .exported, .erased, .conflicts, .synced: false
         }
@@ -607,6 +623,8 @@ public enum Answer: Codable, Hashable, Sendable {
         case .converted: .converted
         case .displayOptions: .displayOptions
         case .entryText: .entryText
+        case .examples: .examples
+        case .examplesBuilt: .examplesBuilt
         case .ledgerRecord: .ledgerRecord
         case .ledgerHistory: .ledgerHistory
         case .studyNote: .studyNote
@@ -637,7 +655,7 @@ public enum Cancellation: String, Codable, Hashable, Sendable {
 /// Which answer an operation has: the pairing `Response.read` checks.
 enum AnswerKind: String, Sendable {
     case versions, imported, cancellation, opened, closed, page, suggestions, words, entry, link, resource, lineage, health
-    case readingStyle, converted, displayOptions, entryText, ledgerRecord, ledgerHistory
+    case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, ledgerRecord, ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
     case exported, erased, conflicts, synced
 }

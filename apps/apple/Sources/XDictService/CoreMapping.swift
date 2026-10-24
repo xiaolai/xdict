@@ -174,6 +174,35 @@ extension XDictContract.Words {
     }
 }
 
+extension XDictContract.ExampleSource {
+    init(_ source: XDictCore.ExampleSource) {
+        self.init(dict: DictId(rawValue: source.dict), entry: XDictContract.EntryRef(source.entry),
+                  headword: source.headword)
+    }
+}
+
+extension XDictContract.ExampleHit {
+    init(_ hit: XDictCore.ExampleHit) {
+        self.init(english: hit.english, chinese: hit.chinese, start: hit.start, len: hit.len, sentence: hit.sentence,
+                  sources: hit.sources.map(XDictContract.ExampleSource.init))
+    }
+}
+
+extension XDictContract.Examples {
+    init(_ examples: XDictCore.Examples) {
+        self.init(hits: examples.hits.map(XDictContract.ExampleHit.init), total: examples.total,
+                  notReady: examples.notReady.map { DictId(rawValue: $0) }, capped: examples.capped)
+    }
+}
+
+extension XDictContract.ExamplesBuilt {
+    init(_ built: XDictCore.ExamplesBuilt) {
+        self.init(edition: Edition(rawValue: built.edition), pairs: built.pairs, roles: built.roles,
+                  fallback: built.fallback, entries: built.entries, failed: built.failed, noChinese: built.noChinese,
+                  cached: built.cached)
+    }
+}
+
 extension XDictContract.Page {
     init(_ page: XDictCore.Page) {
         self.init(hits: page.hits.map(XDictContract.Hit.init), total: page.total, generation: page.generation,

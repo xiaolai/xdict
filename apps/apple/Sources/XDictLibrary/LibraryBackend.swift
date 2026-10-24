@@ -41,6 +41,18 @@ public struct HealthJob: Sendable {
     }
 }
 
+/// An examples build under way (ADR-0031 d.3): its outcome, awaited, and how to stop it.
+public struct ExamplesJob: Sendable {
+    public let outcome: @Sendable () async -> Result<ExamplesBuilt, ClientFailure>
+    public let cancel: @Sendable () async -> Void
+
+    public init(outcome: @escaping @Sendable () async -> Result<ExamplesBuilt, ClientFailure>,
+                cancel: @escaping @Sendable () async -> Void) {
+        self.outcome = outcome
+        self.cancel = cancel
+    }
+}
+
 /// **What the library asks of the dictionary service**: `ServiceClient` in the app, a fake in the library's own tests.
 public protocol LibraryBackend: Sendable {
     func beginImport(_ package: DictionaryPackage, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async
@@ -51,6 +63,8 @@ public protocol LibraryBackend: Sendable {
     func lineage(_ operation: LineageOperation) async -> Result<LineageId?, ClientFailure>
     /// Checks an open dictionary's edition (WI-12); `progress` hears records checked of all.
     func beginHealth(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> HealthJob
+    /// Builds an open dictionary's example store (ADR-0031 d.3); `progress` hears records read of all.
+    func beginExamplesBuild(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void) async -> ExamplesJob
     /// What the reading style does to an open dictionary (ADR-0010), as the service computed it.
     func readingStyle(_ dict: DictId) async -> Result<ReadingStyle, ClientFailure>
     /// The display options an open dictionary's edition declares (ADR-0013), as the core read them in the service.
@@ -79,6 +93,19 @@ extension ServiceClient: LibraryBackend {
                     return .failure(.wire(.undecodable(detail: "not a health report")))
                 }
                 return .success(health)
+            }
+        }, cancel: { [self] in _ = await cancelImport(ticket) })
+    }
+
+    public func beginExamplesBuild(_ dict: DictId, progress: @escaping @Sendable (UInt64, UInt64) -> Void)
+        -> ExamplesJob {
+        let ticket = submitExamplesBuild(dict, progress: progress)
+        return ExamplesJob(outcome: {
+            await ticket.outcome().flatMap { delivered in
+                guard case .examplesBuilt(let built) = delivered.answer else {
+                    return .failure(.wire(.undecodable(detail: "not an examples build")))
+                }
+                return .success(built)
             }
         }, cancel: { [self] in _ = await cancelImport(ticket) })
     }

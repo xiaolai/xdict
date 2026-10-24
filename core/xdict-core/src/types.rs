@@ -143,6 +143,82 @@ record! {
         pub next: u64,
     }
 
+    /// **What [`crate::Core::examples`] answers** (ADR-0031, plan-reverse-examples WI-4): the pairs whose Chinese
+    /// carries the query, deduplicated across dictionaries, ranked by the reader's dictionary order and then by
+    /// shorter Chinese.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct Examples {
+        /// At most the call's `limit`, in rank order.
+        pub hits: Vec<ExampleHit>,
+        /// Every distinct pair found before the limit, capped by the scan's own bound.
+        pub total: u64,
+        /// Dictionaries asked that have no store yet: still building, or never built. Never an error.
+        pub not_ready: Vec<String>,
+        /// The scan reached its own bound before it ran out of pairs; `total` is then a floor.
+        pub capped: bool,
+    }
+
+    /// One example pair: the English as printed and the Chinese with the match's UTF-8 byte offsets in that printed
+    /// Chinese, so a shell underlines exactly what the reader typed.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ExampleHit {
+        pub english: String,
+        pub chinese: String,
+        /// The match's start, in UTF-8 bytes of `chinese` as printed.
+        pub start: u64,
+        /// The match's length, in UTF-8 bytes of `chinese` as printed.
+        pub len: u64,
+        /// A full sentence rather than a phrase: sentences rank first (owner decision 3).
+        pub sentence: bool,
+        /// Every place the pair is printed, the first in the reader's dictionary order.
+        pub sources: Vec<ExampleSource>,
+    }
+
+    /// Where one pair is printed: a dictionary, its entry, and the headword the dictionary gives it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ExampleSource {
+        pub dict: String,
+        pub entry: EntryRef,
+        pub headword: String,
+    }
+
+    /// **A page of one dictionary's pairs, in store order** (ADR-0031 d.8): how the per-dictionary audit reads an
+    /// evenly spaced sample. Never shown by a shell; the plan's audit and measurement use it.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ExamplePairs {
+        pub edition: String,
+        /// Pairs in the store.
+        pub total: u64,
+        pub pairs: Vec<ExamplePair>,
+    }
+
+    /// One pair as the store holds it, with the entry it was read from.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ExamplePair {
+        pub english: String,
+        pub chinese: String,
+        pub sentence: bool,
+        pub entry: EntryRef,
+    }
+
+    /// **What [`crate::Core::examples_build`] answers**: what the pass found, or that the store was already current.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct ExamplesBuilt {
+        pub edition: String,
+        /// Pairs in the store, and how many each tier found (ADR-0031 d.2's measurement).
+        pub pairs: u64,
+        pub roles: u64,
+        pub fallback: u64,
+        /// Entries read (none when the sample found no Chinese).
+        pub entries: u64,
+        /// Entries passed over: a render over its ceiling, or a text the projection cut.
+        pub failed: u64,
+        /// The edition has no Chinese in an evenly spaced sample: its empty store is kept and the pass skipped.
+        pub no_chinese: bool,
+        /// The store was already there and current; nothing was read.
+        pub cached: bool,
+    }
+
     /// The render context, passed to everything that produces something a view shows (ADR-0007 decision 6).
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct View {

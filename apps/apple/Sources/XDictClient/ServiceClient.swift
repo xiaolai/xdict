@@ -212,6 +212,25 @@ public actor ServiceClient {
         return CallTicket(number: call.number, promise: call.promise)
     }
 
+    /// **Builds one dictionary's example store in the background** (ADR-0031 d.3, d.6); `progress` hears records done.
+    /// Like a health check it has no deadline, ends after `importSilence` without a report, and stops by `cancelImport`.
+    public func submitExamplesBuild(_ dict: DictId, progress: (@Sendable (UInt64, UInt64) -> Void)? = nil) -> CallTicket {
+        let call = makeCall(.examplesBuild(dict: dict), caller: nil, package: nil, progress: progress)
+        enqueue(call)
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
+    /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese carries `query`, from `dicts`, at
+    /// most `limit`. A dictionary without a store comes back in `notReady`, never as a failure.
+    public func examples(_ query: String, dicts: [DictId], limit: UInt32) async -> Result<Examples, ClientFailure> {
+        await call(.examples(query: query, dicts: dicts, limit: limit)).flatMap { delivered in
+            guard case .examples(let examples) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not examples")))
+            }
+            return .success(examples)
+        }
+    }
+
     /// Stops the import or health check `ticket` names: one not yet sent never is; one running stops at its next
     /// progress report and answers `cancelled`.
     public func cancelImport(_ ticket: CallTicket) async -> Result<Cancellation, ClientFailure> {
