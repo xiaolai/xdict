@@ -158,21 +158,9 @@ public final class Library {
     @ObservationIgnored private var atRest = true
     @ObservationIgnored private var waiters: [CheckedContinuation<Void, Never>] = []
     /// Dictionaries waiting for their health check, and the one being checked.
-    @ObservationIgnored private var checks: [UUID] = []
-    @ObservationIgnored private var checking: (id: UUID, dict: DictId, job: HealthJob?)?
+    @ObservationIgnored private var healthJobs = JobSlot<UUID, DictId>()
     /// Dictionaries waiting for their example store, and the one being built.
-    @ObservationIgnored private var exampleBuilds: [UUID] = []
-    /// One build's own identity: a dictionary's build can be stopped and started again, and an old completion must
-    /// never be taken for the new one's (audit, 2026-10-24).
-    private struct RunningExampleBuild {
-        let id: UUID
-        let dict: DictId
-        let generation: UInt64
-        var job: ExamplesJob?
-        var stopping = false
-    }
-    @ObservationIgnored private var buildingExamples: RunningExampleBuild?
-    @ObservationIgnored private var exampleGeneration: UInt64 = 0
+    @ObservationIgnored private var exampleJobs = JobSlot<UUID, DictId>()
     /// Apple dictionaries the reader asked to Convert Again: the new edition their import makes is joined to the
     /// dictionary's lineage, as one recorded join the reader can undo (ADR-0011 decision 8).
     @ObservationIgnored private var convertingAgain: Set<UUID> = []
@@ -733,56 +721,67 @@ public final class Library {
     /// Queues a check of the dictionary `id`, open now; one already checked this session is not asked again.
     private func check(_ id: UUID) {
         if case .checked = health[id] { return }
-        guard !checks.contains(id), checking?.id != id else { return }
-        checks.append(id)
+        // The same dictionary at the same handle is this very request. Another handle (a reopened edition) or a
+        // check still stopping is not: the request waits in the queue for the slot to clear (audit, 2026-10-24).
+        if let running = healthJobs.running, running.id == id, running.context == handle(id), !running.stopping {
+            return
+        }
+        healthJobs.enqueue(id)
         health[id] = .checking(done: 0, total: 0)
         runChecks()
     }
 
     private func runChecks() {
-        guard checking == nil else { return }
-        while let id = checks.first {
-            checks.removeFirst()
+        while let id = healthJobs.takeNext() {
             guard let dict = handle(id) else {
                 health[id] = nil
                 continue
             }
-            checking = (id, dict, nil)
-            Task { await runCheck(id, dict) }
+            let running = healthJobs.start(id, dict)
+            Task { await runCheck(running) }
             return
         }
     }
 
-    private func runCheck(_ id: UUID, _ dict: DictId) async {
+    private func runCheck(_ running: JobSlot<UUID, DictId>.Running) async {
+        let (id, dict, generation) = (running.id, running.context, running.generation)
         let job = await backend.beginHealth(dict) { [weak self] done, total in
             Task { @MainActor in
-                guard let self, self.checking?.id == id, case .checking = self.health[id] else { return }
+                guard let self, self.healthJobs.current(generation)?.id == id, self.handle(id) == dict,
+                      case .checking = self.health[id] else { return }
                 self.health[id] = .checking(done: done, total: total)
             }
         }
-        guard checking?.id == id else { return await job.cancel() }
-        checking?.job = job
+        guard healthJobs.install(generation, cancel: { await job.cancel() }) else { return await job.cancel() }
+        // A stop that arrived before the job did: cancel it here, now that there is one.
+        if healthJobs.current(generation)?.stopping == true { await job.cancel() }
         let outcome = await job.outcome()
-        if checking?.id == id, index(id) != nil {
-            switch outcome {
-            case .success(let report): health[id] = .checked(report)
-            case .failure(let failure):
-                log.error("the health check of \(id, privacy: .public) did not finish: \(String(describing: failure), privacy: .public)")
-                health[id] = .unavailable
+        if let current = healthJobs.current(generation) {
+            // A check of an edition this dictionary has left is not its check; a queued one starts when the slot
+            // clears (audit, 2026-10-24).
+            if !current.stopping, index(id) != nil, handle(id) == dict {
+                switch outcome {
+                case .success(let report): health[id] = .checked(report)
+                case .failure(let failure):
+                    log.error("the health check of \(id, privacy: .public) did not finish: \(String(describing: failure), privacy: .public)")
+                    health[id] = .unavailable
+                }
             }
+            healthJobs.settle(generation)
         }
-        if checking?.id == id { checking = nil }
         runChecks()
     }
 
-    /// Stops the dictionary's check, queued or running, and forgets it.
+    /// Stops the dictionary's check, queued or running, and forgets it. The slot stays until the job's outcome
+    /// arrives, as a build's does.
     private func stopCheck(_ id: UUID) async {
-        checks.removeAll { $0 == id }
+        healthJobs.remove(id)
         health[id] = nil
-        guard let running = checking, running.id == id else { return }
-        checking = nil
-        await running.job?.cancel()
-        runChecks()
+        if let cancel = healthJobs.stop(id) {
+            await cancel()
+        } else {
+            runChecks()
+        }
     }
 
     // MARK: - Examples (ADR-0031)
@@ -790,50 +789,43 @@ public final class Library {
     /// Queues a build of the dictionary's example store, open now: an enabled dictionary only, and one whose store
     /// this session holds for the edition it has now is not asked again.
     private func buildExamples(_ id: UUID) {
-        guard let at = index(id), entries[at].enabled, handle(id) != nil else { return }
+        guard let at = index(id), entries[at].enabled, let dict = handle(id) else { return }
         if case .ready(let built) = examples[id], entries[at].edition == built.edition { return }
         // The same dictionary at the same handle, queued or running, is this very request. A running build of another
-        // edition is not: the new edition waits its turn in the queue rather than being lost (audit, 2026-10-24).
-        // A build still stopping is not this request's answer: the re-enable is queued and starts when that slot
-        // clears (audit, 2026-10-24).
-        if let running = buildingExamples, running.id == id, running.dict == handle(id), !running.stopping { return }
-        guard !exampleBuilds.contains(id) else { return }
-        exampleBuilds.append(id)
+        // edition is not: the new edition waits its turn in the queue rather than being lost. A build still stopping
+        // is not this request's answer: the re-enable is queued and starts when that slot clears (audit, 2026-10-24).
+        if let running = exampleJobs.running, running.id == id, running.context == dict, !running.stopping { return }
+        exampleJobs.enqueue(id)
         examples[id] = .building(done: 0, total: 0)
         runExampleBuilds()
     }
 
     private func runExampleBuilds() {
-        guard buildingExamples == nil else { return }
-        while let id = exampleBuilds.first {
-            exampleBuilds.removeFirst()
+        while let id = exampleJobs.takeNext() {
             guard let dict = handle(id), entries.first(where: { $0.id == id })?.enabled == true else {
                 examples[id] = nil
                 continue
             }
-            exampleGeneration &+= 1
-            let running = RunningExampleBuild(id: id, dict: dict, generation: exampleGeneration)
-            buildingExamples = running
+            let running = exampleJobs.start(id, dict)
             Task { await runExampleBuild(running) }
             return
         }
     }
 
-    private func runExampleBuild(_ running: RunningExampleBuild) async {
-        let (id, dict, generation) = (running.id, running.dict, running.generation)
+    private func runExampleBuild(_ running: JobSlot<UUID, DictId>.Running) async {
+        let (id, dict, generation) = (running.id, running.context, running.generation)
         let job = await backend.beginExamplesBuild(dict) { [weak self] done, total in
             Task { @MainActor in
-                guard let self, let current = self.buildingExamples, current.generation == generation,
-                      current.dict == dict, self.handle(id) == dict, case .building = self.examples[id] else { return }
+                guard let self, let current = self.exampleJobs.current(generation), current.context == dict,
+                      self.handle(id) == dict, case .building = self.examples[id] else { return }
                 self.examples[id] = .building(done: done, total: total)
             }
         }
-        guard buildingExamples?.generation == generation else { return await job.cancel() }
-        buildingExamples?.job = job
+        guard exampleJobs.install(generation, cancel: { await job.cancel() }) else { return await job.cancel() }
         // A stop that arrived before the job did: cancel it here, now that there is one.
-        if buildingExamples?.stopping == true { await job.cancel() }
+        if exampleJobs.current(generation)?.stopping == true { await job.cancel() }
         let outcome = await job.outcome()
-        if let current = buildingExamples, current.generation == generation {
+        if let current = exampleJobs.current(generation) {
             // A result for an edition this dictionary has left is not its result; the queued build of the new
             // edition starts as soon as this slot clears (audit, 2026-10-24).
             if !current.stopping, index(id) != nil, handle(id) == dict {
@@ -847,29 +839,26 @@ public final class Library {
                     examples[id] = .unavailable
                 }
             }
-            buildingExamples = nil
+            exampleJobs.settle(generation)
         }
         runExampleBuilds()
     }
 
-    /// Stops the dictionary's build, queued or running, and forgets it.
     /// Stops a build. `keepIfEnabled` is the disable path's: a re-enable after the disable superseded this stop,
-    /// and its newly queued request must not be removed. A removal always stops (audit, 2026-10-24).
+    /// and its newly queued request must not be removed. A removal always stops (audit, 2026-10-24). The slot stays
+    /// until the job's outcome arrives, as a health check's does.
     private func stopExampleBuild(_ id: UUID, keepIfEnabled: Bool = false) async {
         if keepIfEnabled, entries.first(where: { $0.id == id })?.enabled == true {
             runExampleBuilds()
             return
         }
-        exampleBuilds.removeAll { $0 == id }
+        exampleJobs.remove(id)
         examples[id] = nil
-        guard let current = buildingExamples, current.id == id else {
+        if let cancel = exampleJobs.stop(id) {
+            await cancel()
+        } else {
             runExampleBuilds()
-            return
         }
-        // The slot stays until this job's outcome arrives: a new build of the same dictionary must not start while
-        // the old one is still stopping, and its completion must not be read as the new one's (audit, 2026-10-24).
-        buildingExamples?.stopping = true
-        await buildingExamples?.job?.cancel()
     }
 
     /// Moves dictionaries as a list's drag does: `offsets` taken out, put back before `toOffset`.
@@ -903,7 +892,7 @@ public final class Library {
         } else {
             // Synchronously, before the cancellation task can run: a disable and re-enable in one turn of the run
             // loop must not leave the store cleared by the old stop (audit, 2026-10-24).
-            exampleBuilds.removeAll { $0 == id }
+            exampleJobs.remove(id)
             examples[id] = nil
             Task { await stopExampleBuild(id, keepIfEnabled: true) }
         }
@@ -1012,4 +1001,74 @@ public final class Library {
 /// A dictionary whose package could not be put together, and the phase that says why.
 struct Unresolved: Error {
     let phase: EntryPhase
+}
+
+/// **One background-job queue, one job at a time** (audit, 2026-10-24): the health check and the example build share
+/// this lifecycle — enqueue by id, start the next with its own generation, hear progress, stop by id, settle once.
+/// A completion is accepted only for the generation it began under, so a stopped, superseded or restarted job's
+/// result is never taken for the current one's, and a stop keeps the slot until the job's outcome arrives.
+private struct JobSlot<ID: Hashable, Context> {
+    struct Running {
+        let id: ID
+        let context: Context
+        let generation: UInt64
+        var stopping = false
+        var cancel: (() async -> Void)?
+    }
+
+    private(set) var running: Running?
+    private var queued: [ID] = []
+    private var generation: UInt64 = 0
+
+    mutating func enqueue(_ id: ID) {
+        guard !queued.contains(id) else { return }
+        queued.append(id)
+    }
+
+    mutating func remove(_ id: ID) { queued.removeAll { $0 == id } }
+
+    /// The first queued id, taken; nil while a job runs or nothing is queued.
+    mutating func takeNext() -> ID? {
+        guard running == nil, !queued.isEmpty else { return nil }
+        return queued.removeFirst()
+    }
+
+    /// Owns `id` for a run, with its own generation; called once `takeNext` has taken it.
+    mutating func start(_ id: ID, _ context: Context) -> Running {
+        generation &+= 1
+        let next = Running(id: id, context: context, generation: generation)
+        running = next
+        return next
+    }
+
+    /// The running job when its generation is the one asked for.
+    func current(_ generation: UInt64) -> Running? {
+        guard let running, running.generation == generation else { return nil }
+        return running
+    }
+
+    /// Installs the job's cancel handle; false when this generation is no longer current.
+    mutating func install(_ generation: UInt64, cancel: @escaping () async -> Void) -> Bool {
+        guard var current = running, current.generation == generation else { return false }
+        current.cancel = cancel
+        running = current
+        return true
+    }
+
+    /// Marks the running job of `id` stopping and hands back its cancel handle, if it has one yet. The slot stays
+    /// until the job's outcome arrives.
+    mutating func stop(_ id: ID) -> (() async -> Void)? {
+        guard var current = running, current.id == id else { return nil }
+        current.stopping = true
+        running = current
+        return current.cancel
+    }
+
+    /// Clears the slot when `generation` is still the one in it; true when it was the current one.
+    @discardableResult
+    mutating func settle(_ generation: UInt64) -> Bool {
+        guard running?.generation == generation else { return false }
+        running = nil
+        return true
+    }
 }
