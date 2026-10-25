@@ -87,6 +87,17 @@ fun j(k: FindingKind): String = k.name.lowercase().split('_').mapIndexed { n, w 
 fun j(f: HealthFinding) = mapOf("kind" to j(f.kind), "count" to f.count, "name" to f.name, "examples" to f.examples.map { mapOf("key" to it.key, "text" to it.text) })
 fun j(o: DisplayOption) = mapOf("id" to o.id, "attribute" to o.attribute, "values" to o.values, "defaultValue" to o.defaultValue)
 fun j(d: DisplayOptions) = mapOf("version" to d.version, "options" to d.options.map { j(it) }, "css" to d.css)
+fun j(c: Coverage): String = camel(c.name)
+fun j(s: PhraseState): String = camel(s.name)
+fun j(s: Separation): Map<String, Any?> = when (s) {
+    is Separation.None -> mapOf("type" to "none")
+    is Separation.Marked -> mapOf("type" to "marked", "words" to s.words)
+    is Separation.Inferred -> mapOf("type" to "inferred", "words" to s.words)
+}
+fun j(m: PhraseMatch) = mapOf("dict" to m.dict, "phrase" to m.phrase, "location" to m.location, "length" to m.length, "separation" to j(m.separation), "gap" to m.gap)
+fun j(e: CoverageEntry) = mapOf("dict" to e.dict, "state" to j(e.state))
+fun j(a: PhraseAnswer) = mapOf("state" to j(a.state), "matches" to a.matches.map { j(it) }, "coverage" to a.coverage.map { j(it) }, "capped" to a.capped)
+fun j(b: PhraseBuilt) = mapOf("edition" to b.edition, "phrases" to b.phrases, "cached" to b.cached)
 fun j(h: Health) = mapOf("version" to h.version, "entries" to h.entries, "findings" to h.findings.map { j(it) }, "classes" to h.classes.map { mapOf("name" to it.name, "count" to it.count) })
 fun j(r: Reading): Map<String, Any?> = mapOf(
     "surface" to r.surface, "lemma" to r.lemma, "sentence" to r.sentence,
@@ -175,7 +186,7 @@ class Moving(val bytes: ByteArray, @Volatile var ident: FileIdentity) : ByteSour
 }
 
 fun main(args: Array<String>) {
-    if (args.size != 5) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json>"); exitProcess(2) }
+    if (args.size != 7) { println("usage: Conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json> <phrase dir> <phrase vectors.jsonl>"); exitProcess(2) }
     val dir = File(args[0])
     val x = Json(File(args[1]).readText()).parse() as Map<String, Any?>
     val failures = ArrayList<String>()
@@ -335,6 +346,43 @@ fun main(args: Array<String>) {
     check("ledger.history", when0["expect"], outcome {
         j(ledgerCore.ledgerHistory((when0["now"] as java.math.BigDecimal).toDouble(), (when0["utcOffsetSeconds"] as java.math.BigDecimal).toInt()))
     })
+
+    // Phrase recognition (conformance/phrase/CONTRACT.md; plan-phrase-recognition WI-6).
+    val phraseDir = File(args[5])
+    val phraseVectors = File(args[6]).readText()
+    val phraseCore = Core(config(protocolVersion()))
+    val phrasePkg = Package(Location.Path(File(phraseDir, "phrase.mdx").path), listOf(), listOf())
+    phraseCore.`import`(phrasePkg, null)
+    val phraseDict = (phraseCore.open(phrasePkg) as Opened.Ready).dict
+    fun labelled(v: Any?): Any? {
+        val m = v as? Map<*, *> ?: return v
+        if (!m.containsKey("state")) return v
+        fun relabel(key: String) = (m[key] as? List<*>)?.map { item -> (item as Map<*, *>).toMutableMap().also { it["dict"] = "phrase" } }
+        return m + mapOf("matches" to relabel("matches"), "coverage" to relabel("coverage"))
+    }
+    phraseVectors.lines().forEachIndexed { number, line ->
+        if (line.isBlank()) return@forEachIndexed
+        val c = Json(line).parse() as Map<String, Any?>
+        val name = "phrase." + ((c["name"] as String?) ?: "case")
+        when (c["kind"]) {
+            "build" -> check("$name.build", c["expect"], outcome { j(phraseCore.phrasesBuild(phraseDict, null)) })
+            "vector" -> {
+                val term = obj(c["term"])
+                val answer = outcome {
+                    j(phraseCore.phrases(c["sentence"] as String, uint(term["location"])!!.toULong(), uint(term["length"])!!.toULong(), listOf(phraseDict)))
+                }
+                val got = labelled(answer)
+                var expected = if (c.containsKey("error")) mapOf("error" to c["error"]) else obj(c["expect"])
+                val count = expected["matchCount"]
+                if (count != null) {
+                    expected = expected - "matchCount"
+                    check("$name.matchCount", count, ((got as? Map<*, *>)?.get("matches") as? List<*>)?.size)
+                }
+                check(name, expected, got)
+            }
+            else -> failures.add("vectors.jsonl line ${number + 1}: no kind ${c["kind"]}")
+        }
+    }
 
     // The matrix: every variant imported, opened and asked the same questions.
     val matrixDir = File(args[2])

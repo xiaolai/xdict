@@ -100,6 +100,10 @@ CI runs all four, with the core's gate, on every push (`.github/workflows/confor
 the others on Linux. The three binding scripts share `core/binding-env.sh`, and find their build output where Cargo
 put it (`CARGO_TARGET_DIR` or a configured `build.target-dir` included).
 
+All four also run `phrase/vectors.jsonl` against the `phrase` fixture — phrase recognition's behaviour, its states and
+its UTF-16 spans, through each binding (`phrase/CONTRACT.md`; added 2026-10-25). The Rust suite runs it in
+`xdict-conformance/tests/phrase.rs`, so a wrong vector costs the core gate before it costs three binding runs.
+
 ## The shells' capture contract (`capture/`)
 
 Not a binding suite, and never run through one: each shell runs `capture/vectors.jsonl` through its own **production**
@@ -112,9 +116,10 @@ capture constructor and `capture/lifecycle.md` with its own native tests (`captu
 A change under `conformance/capture/` reaches `apple-test` only (`Tools/affected_graph.py`'s `GATES`), so it reruns the
 capture runner and leaves the core-binding gates' passes intact.
 
-Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json` and
-`XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json` (a relative path is read from where
-the script is started), so a deliberately wrong expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
+Every one takes `XDICT_CONFORMANCE_EXPECTED=<file>` in place of `tiny/expected.json`,
+`XDICT_CONFORMANCE_MATRIX_EXPECTED=<file>` in place of `matrix/expected.json` and `XDICT_CONFORMANCE_PHRASE=<file>` in
+place of `phrase/vectors.jsonl` (a relative path is read from where the script is started), so a deliberately wrong
+expectation can be shown to fail. 2026-10-13: the first lookup's total changed from 3 to 4 failed all four, each
 naming `lookups[0].total`. 2026-10-14: the matrix's `formatVersion` and both entries' `lossyBytes` altered failed
 all four, 96 failures each (32 variants × 3). 2026-10-14: the 14 `lineages` expectations altered (the labels swapped, the
 split's lineage in capitals, the null a label, each refusal's `what` or `type` changed) failed all four, 14 failures

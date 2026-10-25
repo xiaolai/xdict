@@ -2,8 +2,9 @@
 # The conformance scenario through the Kotlin binding on the JVM: writes the fixtures, builds the core as a
 # library, generates the binding, compiles tests/kotlin/Conformance.kt against it and runs it.
 # Needs kotlinc, a JDK, and JNA (JNA_JAR; defaults to the Maven cache's 5.12.1).
-# XDICT_CONFORMANCE_EXPECTED replaces tiny/expected.json and XDICT_CONFORMANCE_MATRIX_EXPECTED matrix/expected.json,
-# to show a wrong expectation failing; a relative path, JNA_JAR's too, is read from where the script is started.
+# XDICT_CONFORMANCE_EXPECTED replaces tiny/expected.json, XDICT_CONFORMANCE_MATRIX_EXPECTED matrix/expected.json and
+# XDICT_CONFORMANCE_PHRASE phrase/vectors.jsonl, to show a wrong expectation failing; a relative path, JNA_JAR's too,
+# is read from where the script is started.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 core=$(cd "$here/.." && pwd)
@@ -11,6 +12,7 @@ core=$(cd "$here/.." && pwd)
 expected=$(absolute "${XDICT_CONFORMANCE_EXPECTED:-$core/../conformance/fixtures/tiny/expected.json}")
 matrix=$(absolute "${XDICT_CONFORMANCE_MATRIX_EXPECTED:-$core/../conformance/fixtures/matrix/expected.json}")
 ledger=$(absolute "${XDICT_CONFORMANCE_LEDGER:-$core/../conformance/ledger/cases.json}")
+phrase=$(absolute "${XDICT_CONFORMANCE_PHRASE:-$core/../conformance/phrase/vectors.jsonl}")
 jna=$(absolute "${JNA_JAR:-$HOME/.m2/repository/net/java/dev/jna/jna/5.12.1/jna-5.12.1.jar}")
 [ -f "$jna" ] || { echo "JNA not found at $jna: set JNA_JAR" >&2; exit 2; }
 work=$(mktemp -d)
@@ -26,4 +28,5 @@ kotlinc -nowarn -include-runtime -cp "$jna" -d "$work/conformance.jar" \
 grep -v '^warning:' "$work/kotlinc.log" >&2 || true
 [ "$status" -eq 0 ] || { echo "kotlinc failed (exit $status)" >&2; exit 1; }
 java --enable-native-access=ALL-UNNAMED -Djna.library.path="$release" \
-    -cp "$work/conformance.jar:$jna" ConformanceKt "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix" "$ledger"
+    -cp "$work/conformance.jar:$jna" ConformanceKt "$work/fixtures/tiny" "$expected" "$work/fixtures/matrix" "$matrix" "$ledger" \
+    "$work/fixtures/phrase" "$phrase"

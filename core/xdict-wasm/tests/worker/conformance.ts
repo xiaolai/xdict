@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { XDict, XDictError, type ByteSource, type FileIdentity, type Location, type Package, type View } from '../../ts/xdict.ts';
 
-const { pkg, fixtures, expected, matrix, matrixExpected, ledger } =
-  workerData as { pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string; ledger: string };
+const { pkg, fixtures, expected, matrix, matrixExpected, ledger, phrase } =
+  workerData as {
+    pkg: string; fixtures: string; expected: string; matrix: string; matrixExpected: string; ledger: string; phrase: string;
+  };
 const x = JSON.parse(readFileSync(expected, 'utf8'));
 const failures: string[] = [];
 
@@ -265,6 +267,45 @@ for (const v of variants) {
     const ref = { edition: imp.edition, key: e.entry.key, occurrence: e.entry.occurrence };
     check(`${v.name}.entries[${i}]`, e.result, outcome(() => c.entry(opn.dict, ref, matrixView)));
   });
+}
+
+// Phrase recognition (conformance/phrase/CONTRACT.md; plan-phrase-recognition WI-6): the vectors every binding runs.
+{
+  const phraseDir = join(fixtures, '..', 'phrase');
+  const phrasePackage = { mdx: file('phrase.mdx', phraseDir), mdd: [], sidecars: [] };
+  const pc = fresh.core(config(fresh.protocolVersion()));
+  pc.import(phrasePackage);
+  const popened = pc.open(phrasePackage);
+  if (popened.type !== 'ready') throw new Error('the phrase fixture did not open');
+  const pdict = popened.dict;
+  /** A handle is the shell's, not the core's: the vectors name the one dictionary they ask. */
+  const labelled = (v: unknown): unknown => {
+    const o = v as Record<string, unknown> | null;
+    if (!o || typeof o !== 'object' || !('state' in o)) return v;
+    const relabel = (items: unknown) => (items as Record<string, unknown>[]).map((m) => ({ ...m, dict: 'phrase' }));
+    return { ...o, matches: relabel(o.matches), coverage: relabel(o.coverage) };
+  };
+  readFileSync(phrase, 'utf8').split('\n').forEach((line, number) => {
+    if (!line.trim()) return;
+    const c = JSON.parse(line);
+    const name = `phrase.${c.name ?? 'case'}`;
+    if (c.kind === 'build') {
+      check(`${name}.build`, c.expect, outcome(() => pc.phrasesBuild(pdict)));
+    } else if (c.kind === 'vector') {
+      const got = labelled(outcome(() => pc.phrases(c.sentence, c.term.location, c.term.length, [pdict])));
+      let expected = c.error ? { error: c.error } : c.expect;
+      if (expected && typeof expected === 'object' && 'matchCount' in expected) {
+        const { matchCount, ...rest } = expected as Record<string, unknown>;
+        const matches = ((got as { matches?: unknown[] } | null)?.matches ?? []).length;
+        check(`${name}.matchCount`, matchCount, matches);
+        expected = rest;
+      }
+      check(name, expected, got);
+    } else {
+      failures.push(`vectors.jsonl line ${number + 1}: no kind ${c.kind}`);
+    }
+  });
+  pc.close(pdict);
 }
 
 // The binding's own contract, on a third instance (audit-fix 2026-10-14): a throwing callback is a typed error

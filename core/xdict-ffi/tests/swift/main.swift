@@ -152,6 +152,7 @@ func j(_ l: Limit) -> String {
     case .file: return "file"
     case .page: return "page"
     case .body: return "body"
+    case .sentence: return "sentence"
     }
 }
 
@@ -276,8 +277,8 @@ final class Moving: ByteSource, @unchecked Sendable {
 // MARK: - The scenario
 
 let args = CommandLine.arguments
-guard args.count == 6 else {
-    print("usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json>")
+guard args.count == 8 else {
+    print("usage: conformance <tiny dir> <tiny expected.json> <matrix dir> <matrix expected.json> <ledger cases.json> <phrase dir> <phrase vectors.jsonl>")
     exit(2)
 }
 let dir = URL(fileURLWithPath: args[1])
@@ -498,6 +499,101 @@ check("ledger.history", when["expect"], outcome {
     j(try ledgerCore.ledgerHistory(now: (when["now"] as! NSNumber).doubleValue,
                                    utcOffsetSeconds: Int32((when["utcOffsetSeconds"] as! NSNumber).intValue)))
 })
+
+// MARK: - Phrase recognition (conformance/phrase/CONTRACT.md; plan-phrase-recognition WI-6)
+
+func j(_ c: Coverage) -> String {
+    switch c {
+    case .ready: return "ready"
+    case .building: return "building"
+    case .unavailable: return "unavailable"
+    }
+}
+
+func j(_ s: PhraseState) -> String {
+    switch s {
+    case .notAsked: return "notAsked"
+    case .building: return "building"
+    case .unavailable: return "unavailable"
+    case .none: return "none"
+    case .found: return "found"
+    }
+}
+
+func j(_ s: Separation) -> [String: Any] {
+    switch s {
+    case .none: return ["type": "none"]
+    case let .marked(words): return ["type": "marked", "words": words]
+    case let .inferred(words): return ["type": "inferred", "words": words]
+    }
+}
+
+func j(_ m: PhraseMatch) -> [String: Any] {
+    ["dict": m.dict, "phrase": m.phrase, "location": m.location, "length": m.length,
+     "separation": j(m.separation), "gap": m.gap]
+}
+
+func j(_ e: CoverageEntry) -> [String: Any] { ["dict": e.dict, "state": j(e.state)] }
+
+func j(_ a: PhraseAnswer) -> [String: Any] {
+    ["state": j(a.state), "matches": a.matches.map(j), "coverage": a.coverage.map(j), "capped": a.capped]
+}
+
+func j(_ b: PhraseBuilt) -> [String: Any] { ["edition": b.edition, "phrases": b.phrases, "cached": b.cached] }
+
+/// A handle is the shell's, not the core's: the vectors name the one dictionary they ask.
+func labelled(_ answer: Any) -> Any {
+    guard var object = answer as? [String: Any] else { return answer }
+    for field in ["matches", "coverage"] {
+        if let items = object[field] as? [[String: Any]] {
+            object[field] = items.map { item -> [String: Any] in
+                var item = item
+                item["dict"] = "phrase"
+                return item
+            }
+        }
+    }
+    return object
+}
+
+let phraseDir = URL(fileURLWithPath: args[6])
+let phraseVectors = try String(contentsOf: URL(fileURLWithPath: args[7]), encoding: .utf8)
+let phraseCore = try Core(config: config(protocolVersion()))
+let phrasePackage = Package(mdx: .path(path: phraseDir.appendingPathComponent("phrase.mdx").path), mdd: [], sidecars: [])
+_ = try phraseCore.import(package: phrasePackage, progress: nil)
+guard case let .ready(phraseDict, _, _) = try phraseCore.open(package: phrasePackage) else {
+    fatalError("the phrase fixture did not open")
+}
+for (number, line) in phraseVectors.split(separator: "\n").enumerated() {
+    let text = String(line).trimmingCharacters(in: .whitespaces)
+    if text.isEmpty { continue }
+    let c = try JSONSerialization.jsonObject(with: Data(text.utf8)) as! [String: Any]
+    let name = "phrase.\((c["name"] as? String) ?? "case")"
+    switch c["kind"] as! String {
+    case "build":
+        check("\(name).build", c["expect"], outcome {
+            j(try phraseCore.phrasesBuild(dict: phraseDict, progress: nil))
+        })
+    case "vector":
+        let term = c["term"] as! [String: Any]
+        let answer = outcome {
+            j(try phraseCore.phrases(sentence: c["sentence"] as! String,
+                                     termLocation: (term["location"] as! NSNumber).uint64Value,
+                                     termLength: (term["length"] as! NSNumber).uint64Value,
+                                     dicts: [phraseDict]))
+        }
+        let got = labelled(answer)
+        var expected = c["error"].map { ["error": $0] } ?? c["expect"]!
+        if var object = expected as? [String: Any], let count = object.removeValue(forKey: "matchCount") {
+            let matches = ((got as? [String: Any])?["matches"] as? [Any])?.count ?? 0
+            check("\(name).matchCount", count, matches)
+            expected = object
+        }
+        check(name, expected, got)
+    default:
+        failures.append("vectors.jsonl line \(number + 1): no kind \(c["kind"]!)")
+    }
+}
 
 // MARK: - The matrix: every variant imported, opened and asked the same questions
 
