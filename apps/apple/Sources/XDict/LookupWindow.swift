@@ -117,8 +117,8 @@ final class LookupWindowRun: LookupStage {
             let settings = MeaningSettings(source: .http, endpoint: url, model: "synthetic-ui-demo", sendEntryText: true)
             state.meaning.settingsProvider = { settings }
             state.holdMeaning(handoff)
-            state.meaning.drawn(MeaningSession.Subject(dictionary: shown.result.dictionary, key: "apple", occurrence: 0),
-                                target: (handle, shown.result.entry), lookup: shown.lookup)
+            state.entryDrew(MeaningSession.Subject(dictionary: shown.result.dictionary, key: "apple", occurrence: 0),
+                            target: (handle, shown.result.entry), lookup: shown.lookup)
             state.meaning.ask()
             let deadline = ContinuousClock.now + .seconds(10)
             while state.meaning.isAsking, ContinuousClock.now < deadline {

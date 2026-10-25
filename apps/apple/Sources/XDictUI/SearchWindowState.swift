@@ -199,6 +199,15 @@ public final class SearchWindowState {
                                 dictionaryName: match.source?.name)
     }
 
+    /// **A draw that ends the sentence ends the phrase row with it** (audit round 3, 2026-10-26): `MeaningSession` drops
+    /// the sentence when a different entry draws, and the row asks about that very sentence — only `holdMeaning` and
+    /// `clearMeaning` used to keep the two together.
+    public func entryDrew(_ subject: MeaningSession.Subject, target: (DictId, EntryRef)?, lookup: Int?) {
+        let hadSentence = meaning.held != nil
+        meaning.drawn(subject, target: target, lookup: lookup)
+        if hadSentence, meaning.held == nil { phrases.clear() }
+    }
+
     /// The entry drawn now, as an ask's target: its dictionary's handle and its edition-qualified reference.
     static func drawnEntry(_ model: SearchModel) -> (DictId, EntryRef)? {
         guard let shown = model.shown, let source = model.source(shown.result.dictionary), let handle = source.handle
@@ -549,9 +558,9 @@ public final class SearchWindowState {
         let target = model.source(shown.result.dictionary).flatMap { source in
             source.handle.map { ($0, shown.result.entry) }
         }
-        meaning.drawn(MeaningSession.Subject(dictionary: shown.result.dictionary, key: shown.result.entry.key,
-                                             occurrence: shown.result.entry.occurrence), target: target,
-                      lookup: shown.lookup)
+        entryDrew(MeaningSession.Subject(dictionary: shown.result.dictionary, key: shown.result.entry.key,
+                                         occurrence: shown.result.entry.occurrence), target: target,
+                  lookup: shown.lookup)
         if let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode) {
             await presentPage(shown)
             return
