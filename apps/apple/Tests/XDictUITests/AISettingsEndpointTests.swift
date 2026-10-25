@@ -3,6 +3,7 @@ import Foundation
 import SwiftUI
 import Testing
 import XDictAI
+import XDictTestSupport
 @testable import XDictUI
 
 /// **An address the reader pastes survives the Test button's redraw** (2026-10-25): the Address field was bound to an

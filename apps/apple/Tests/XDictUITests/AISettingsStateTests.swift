@@ -28,17 +28,23 @@ struct AISettingsStateTests {
     @Test func switchingTheSourceEndsTheSignInAndItsFailure() async throws {
         let gate = Flag()
         let model = AISettingsModel(preferences: try preferences(), login: { _ in
-            while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+            while !gate.isSet {
+                if Task.isCancelled { throw AIProviderError.cancelled }
+                try? await Task.sleep(for: .milliseconds(10))
+            }
             throw AIProviderError.notSignedIn
-        })
+        }, checkStatus: { _ in .ready("codex") })
         model.select(.codexCLI)
+        // A published status first, so "the failure did not land" is distinguishable from "nothing ever ran".
+        await model.refreshStatus()
+        #expect(model.status == .ready("codex"))
         model.startSignIn()
         #expect(model.signingIn)
         model.select(.appleOnDevice)
         #expect(!model.signingIn, "the sign-in outlived the source")
         gate.set()
         try await Task.sleep(for: .milliseconds(100))
-        #expect(model.status != .failed(.notSignedIn), "the old sign-in's failure landed on the new source")
+        #expect(model.status == .ready("codex"), "the old sign-in's failure landed on the new source")
     }
 
     // MARK: - The live check
@@ -75,7 +81,8 @@ struct AISettingsStateTests {
         try await Task.sleep(for: .milliseconds(10))
         task.cancel()
         await task.value
-        #expect(model.status == .checking, "a cancelled check published its result")
+        #expect(model.status != .ready("from a cancelled check"), "a cancelled check published its result")
+        #expect(model.status == .checking, "the pane is left where the cancelled check began")
     }
 
     // MARK: - The key's verdict
@@ -112,8 +119,10 @@ struct AISettingsStateTests {
 
     // MARK: - The login's lines
 
-    /// **The lines keep the login's order** (audit finding, 2026-10-25): delivered from the CLI's own thread, they reach
-    /// the main actor in the order the tool printed them.
+    /// **The lines keep the login's order** (audit finding, 2026-10-25): delivered from the tool's own thread, they reach
+    /// the main actor through one FIFO queue, in the order the tool printed them. This is a delivery check, not a
+    /// red-green control: the old per-line `Task` would usually pass it too, and the mechanism — `DispatchQueue.main`
+    /// is first-in, first-out — is what the fix rests on.
     @Test func loginLinesKeepTheToolsOrder() async {
         let received = LockedStrings()
         await Task.detached {
@@ -162,6 +171,26 @@ struct AISettingsStateTests {
         await model.loadModels()
         #expect(model.keyState == .absent, "Test spoke for the stored address while the field held another")
         #expect(model.modelsShown == .idle)
+    }
+
+    /// **A change the check does not read leaves its answer standing** (verification finding, 2026-10-25): the prompt's
+    /// switch is not what a live check reads, so moving it must not discard the check's result and strand the pane at
+    /// "Checking…" — the guard and the task's own trigger read one projection.
+    @Test func aChangeTheCheckDoesNotReadKeepsItsResult() async throws {
+        let started = Flag()
+        let gate = Flag()
+        let model = AISettingsModel(preferences: try preferences(), checkStatus: { _ in
+            started.set()
+            while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+            return .ready("found")
+        })
+        defer { gate.set() }
+        let task = Task { await model.refreshStatus() }
+        #expect(await eventually(2) { started.isSet }, "the check never ran")
+        model.preferences.setSendEntryText(true)
+        gate.set()
+        await task.value
+        #expect(model.status == .ready("found"), "a setting the check does not read stranded the pane")
     }
 
     /// **Choosing a service fills the field with the service's address** (audit finding, 2026-10-25): the draft follows the

@@ -4,6 +4,7 @@ import XDictClient
 import XDictContract
 import XDictSearch
 import XDictSpeech
+import XDictTestSupport
 
 /// **Where sound leaves the app, faked**: what was played and spoken, and every stop. No sound is made.
 @MainActor
@@ -74,8 +75,15 @@ struct PronunciationTests {
     nonisolated static let bytes = Data("a recording".utf8)
 
     let output = FakeOutput()
-    let preferences = SpeechPreferences(defaults: UserDefaults(suiteName: "ai.xdict.tests.pronunciation.\(UUID())")
-                                            ?? .standard)
+    /// **The suite and the preferences this test uses**, held as long as the test's own instance (audit findings,
+    /// 2026-10-25: a generated suite name that the system refused fell back to the reader's own defaults).
+    let fixture: TestDefaults
+    let preferences: SpeechPreferences
+
+    init() throws {
+        fixture = try TestDefaults(prefix: "ai.xdict.tests.pronunciation")
+        preferences = SpeechPreferences(defaults: fixture.database)
+    }
 
     /// The recordings' tests below are the reader's "Use the dictionary's recordings" turned on; off is the default.
     func pronunciation(_ backend: any SearchBackend, recordings: Bool = true,
@@ -107,9 +115,10 @@ struct PronunciationTests {
     // MARK: - The system voice by default (ADR-0010 Q5)
 
     /// The default: a sound link is spoken by the system voice, and no recording is asked for.
-    @Test func soundLinksSpeakWithTheSystemVoiceAndFetchNothingByDefault() async {
-        #expect(SpeechPreferences(defaults: UserDefaults(suiteName: "ai.xdict.tests.default.\(UUID())") ?? .standard)
-                    .useRecordings == false, "the dictionary's recordings are the reader's choice, not the default")
+    @Test func soundLinksSpeakWithTheSystemVoiceAndFetchNothingByDefault() async throws {
+        let fresh = try TestDefaults(prefix: "ai.xdict.tests.default")
+        #expect(SpeechPreferences(defaults: fresh.database).useRecordings == false,
+                "the dictionary's recordings are the reader's choice, not the default")
         let backend = await Self.backend { _ in Self.found("us/run.mp3", "audio/mpeg") }
         let speech = pronunciation(backend, recordings: false)
         await speech.playRecording("us/run.mp3", from: Self.handle, word: "run", language: "en")
@@ -120,12 +129,10 @@ struct PronunciationTests {
     }
 
     /// The setting is kept across launches.
-    @Test func theRecordingsSettingIsKept() {
-        let suite = "ai.xdict.tests.recordings.\(UUID())"
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defer { defaults.removePersistentDomain(forName: suite) }
-        SpeechPreferences(defaults: defaults).useRecordings = true
-        #expect(SpeechPreferences(defaults: defaults).useRecordings)
+    @Test func theRecordingsSettingIsKept() throws {
+        let kept = try TestDefaults(prefix: "ai.xdict.tests.recordings")
+        SpeechPreferences(defaults: kept.database).useRecordings = true
+        #expect(SpeechPreferences(defaults: kept.database).useRecordings)
     }
 
     /// A one-time tip: the first time a compact voice speaks, the reader is told a better one can be downloaded; never

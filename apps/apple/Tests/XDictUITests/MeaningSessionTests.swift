@@ -807,6 +807,18 @@ import XDictContract
         #expect(session.state == .idle, "the cleared sense's preview appeared")
     }
 
+    /// **The reader's answer language reaches the question** (audit finding, 2026-10-25): the session composes from the
+    /// language and templates the settings carry, so a reader who chose Chinese reads a Chinese prompt.
+    @Test func theQuestionIsComposedInTheChosenLanguage() async {
+        let settings = MeaningSettings(source: .http, model: "m", sendEntryText: false, language: "zh-Hans")
+        let (session, provider, _) = Self.session(settings: settings)
+        session.ask()
+        #expect(await Self.waitUntil { session.state != .asking })
+        let question = await provider.questions.first ?? ""
+        #expect(question.hasPrefix("单词「hold」在这个句子里是什么意思？"),
+                "the question is not in the language the reader chose: \(question.prefix(40))")
+    }
+
     /// **The selection ask follows the answer shown, not a later selection** (audit finding, 2026-10-25): the button
     /// follows up a `doesNotFit` verdict about the frame's own entry, wherever the reader's next click lands.
     @Test func aSelectionAskKeepsTheFrameOfTheAnswerShown() async {

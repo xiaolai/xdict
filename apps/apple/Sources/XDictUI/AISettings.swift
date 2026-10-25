@@ -85,7 +85,7 @@ public struct AISettings: View {
                             profile: MeaningProviders.profile(model.preferences.settings).id,
                             model: model.preferences.settings.model,
                             usesKey: model.preferences.settings.usesKey,
-                            key: model.preferences.settings.key ?? "")) {
+                            key: MeaningProviders.apiKey(model.preferences.settings) ?? "")) {
             await model.refreshStatus()
         }
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
@@ -138,58 +138,74 @@ public struct AISettings: View {
 
     @ViewBuilder private var statusRow: some View {
         switch model.status {
-        case .checking:
-            HStack(spacing: Tokens.Space.xs) {
-                ProgressView().controlSize(.small)  // placement: spinner
-                Text("Checking…").foregroundStyle(.secondary)
+        case .checking: checkingRow
+        case .notConfigured: Text("Not set up yet.").foregroundStyle(.secondary)
+        case .ready(let detail): readyRow(detail)
+        case .configured(let detail): configuredRow(detail)
+        case .failed(let error): failedRow(error)
+        }
+    }
+
+    private var checkingRow: some View {
+        HStack(spacing: Tokens.Space.xs) {
+            ProgressView().controlSize(.small)  // placement: spinner
+            Text("Checking…").foregroundStyle(.secondary)
+        }
+    }
+
+    private func readyRow(_ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+            Label { Text("Ready") } icon: { Image(systemName: "checkmark.circle") }
+                .foregroundStyle(.secondary)
+            if !detail.isEmpty {
+                Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
             }
-        case .notConfigured:
-            Text("Not set up yet.").foregroundStyle(.secondary)
-        case .ready(let detail):
+        }
+        .accessibilityIdentifier("ai.status.ready")
+    }
+
+    /// **Configured, not Ready** (audit finding, 2026-10-25): the check proves what is installed or built, not that the
+    /// key or sign-in works. A word that promised more would be believed.
+    private func configuredRow(_ detail: String) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
             HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
-                Label { Text("Ready") } icon: { Image(systemName: "checkmark.circle") }
+                Label { Text("Configured") } icon: { Image(systemName: "checkmark.circle") }
                     .foregroundStyle(.secondary)
                 if !detail.isEmpty {
                     Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
                 }
             }
-            .accessibilityIdentifier("ai.status.ready")
-        case .configured(let detail):
-            // **Configured, not Ready** (audit finding, 2026-10-25): the check proves what is installed or built, not
-            // that the key or sign-in works. A word that promised more would be believed.
-            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
-                    Label { Text("Configured") } icon: { Image(systemName: "checkmark.circle") }
-                        .foregroundStyle(.secondary)
-                    if !detail.isEmpty {
-                        Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if model.preferences.settings.source == .http {
-                    Text("Test checks the key; a question will say if it does not work.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("Claude Code is installed. Whether it is signed in is checked by the first question.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+            configuredCaption
+        }
+        .accessibilityIdentifier("ai.status.configured")
+    }
+
+    /// What the check did not prove, by the source it could not prove it for.
+    @ViewBuilder private var configuredCaption: some View {
+        if model.preferences.settings.source == .http {
+            Text("Test checks the key; a question will say if it does not work.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } else {
+            Text("Claude Code is installed. Whether it is signed in is checked by the first question.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func failedRow(_ error: AIProviderError) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+            Label {
+                Text(MeaningSentences.provider(error))
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
             }
-            .accessibilityIdentifier("ai.status.configured")
-        case .failed(let error):
-            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
-                Label {
-                    Text(MeaningSentences.provider(error))
-                } icon: {
-                    Image(systemName: "exclamationmark.triangle")
-                }
-                .foregroundStyle(.orange)
-                .accessibilityIdentifier("ai.status.failure")
-                // **A failure is not the last word** (audit finding, 2026-10-25): installing the tool or switching a
-                // capability on happens outside this pane, so the reader can ask for the check again.
-                Button("Check Again") { model.startStatusCheck() }  // placement: form-pane
-                    .accessibilityIdentifier("ai.status.check")
-            }
+            .foregroundStyle(.orange)
+            .accessibilityIdentifier("ai.status.failure")
+            // **A failure is not the last word** (audit finding, 2026-10-25): installing the tool or switching a
+            // capability on happens outside this pane, so the reader can ask for the check again.
+            Button("Check Again") { model.startStatusCheck() }  // placement: form-pane
+                .accessibilityIdentifier("ai.status.check")
         }
     }
 
@@ -269,28 +285,32 @@ public struct AISettings: View {
             Text("The model the service answers with. A service that requires one refuses the question without it.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            // **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers it
-            // (or the service's few known names before a fetch); typing above remains the final word.
-            HStack(spacing: Tokens.Space.s) {
-                Button("Load Models") { model.startModelLoad() }  // placement: form-pane
-                    .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil
-                              || model.endpointInvalid)
-                    .accessibilityIdentifier("ai.models.load")
-                if model.modelsShown == .loading {
-                    ProgressView().controlSize(.small)  // placement: spinner
-                }
-                if !model.modelChoices.isEmpty {
-                    Menu {  // placement: form-pane
-                        ForEach(model.modelChoices, id: \.self) { id in
-                            Button { model.chooseModel(id) } label: { Text(verbatim: id) }
-                        }
-                    } label: {
-                        Text("Choose a Model")
-                    }
-                    .accessibilityIdentifier("ai.models.menu")
-                }
-            }
+            modelListControls(model: model)
             modelsNote(model: model)
+        }
+    }
+
+    /// **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers it (or the
+    /// service's few known names before a fetch); typing above remains the final word.
+    private func modelListControls(model: AISettingsModel) -> some View {
+        HStack(spacing: Tokens.Space.s) {
+            Button("Load Models") { model.startModelLoad() }  // placement: form-pane
+                .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil
+                          || model.endpointInvalid)
+                .accessibilityIdentifier("ai.models.load")
+            if model.modelsShown == .loading {
+                ProgressView().controlSize(.small)  // placement: spinner
+            }
+            if !model.modelChoices.isEmpty {
+                Menu {  // placement: form-pane
+                    ForEach(model.modelChoices, id: \.self) { id in
+                        Button { model.chooseModel(id) } label: { Text(verbatim: id) }
+                    }
+                } label: {
+                    Text("Choose a Model")
+                }
+                .accessibilityIdentifier("ai.models.menu")
+            }
         }
     }
 
@@ -323,28 +343,49 @@ public struct AISettings: View {
     /// **The cloud key's four states** (ADR-0021 d.3): paste once, then Test, Replace or Remove. The Keychain holds it;
     /// nothing here writes it anywhere else.
     @ViewBuilder private func keyRows(model: AISettingsModel) -> some View {
-        @Bindable var model = model
         switch model.keyState {
-        case .absent:
+        case .absent: keyEntry(model: model)
+        case .stored: keyStored(model: model)
+        case .testing: keyTesting
+        case .failed(let error): keyRefused(model: model, error: error)
+        }
+        if let failure = model.keyFailure {
+            Text(failure).foregroundStyle(.red).font(.caption)
+        }
+    }
+
+    private func keyEntry(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        return Group {
             SecureField(text: $model.draftKey) { Text("Key") }
                 .textFieldStyle(.roundedBorder)
                 .accessibilityIdentifier("ai.key")
             Button("Save Key") { model.saveKey() }  // placement: form-pane
                 .disabled(model.draftKey.isEmpty)
                 .accessibilityIdentifier("ai.key.save")
-        case .stored:
+        }
+    }
+
+    private func keyStored(model: AISettingsModel) -> some View {
+        Group {
             Label {
                 Text("Stored in the Keychain")
             } icon: {
                 Image(systemName: "checkmark.seal")
             }
             keyButtons(model: model)
-        case .testing:
-            HStack(spacing: Tokens.Space.xs) {
-                ProgressView().controlSize(.small)  // placement: spinner
-                Text("Testing…").foregroundStyle(.secondary)
-            }
-        case .failed(let error):
+        }
+    }
+
+    private var keyTesting: some View {
+        HStack(spacing: Tokens.Space.xs) {
+            ProgressView().controlSize(.small)  // placement: spinner
+            Text("Testing…").foregroundStyle(.secondary)
+        }
+    }
+
+    private func keyRefused(model: AISettingsModel, error: AIProviderError) -> some View {
+        Group {
             Label {
                 Text(MeaningSentences.provider(error))
             } icon: {
@@ -352,9 +393,6 @@ public struct AISettings: View {
             }
             .foregroundStyle(.orange)
             keyButtons(model: model)
-        }
-        if let failure = model.keyFailure {
-            Text(failure).foregroundStyle(.red).font(.caption)
         }
     }
 
@@ -396,6 +434,13 @@ public struct AISettings: View {
 
     /// A running login's rows: progress, the page, the code, and the tool's own lines.
     @ViewBuilder private func codexSignIn(model: AISettingsModel, login: CodexLogin) -> some View {
+        codexWaiting(model: model)
+        if let url = login.url { codexPage(url) }
+        if let code = login.code { codexCode(code) }
+        if !model.loginLines.isEmpty { codexDetails(model: model) }
+    }
+
+    private func codexWaiting(model: AISettingsModel) -> some View {
         ActionRow {
             HStack(spacing: Tokens.Space.xs) {
                 ProgressView().controlSize(.small)  // placement: spinner
@@ -405,15 +450,18 @@ public struct AISettings: View {
             Button("Cancel") { model.cancelSignIn() }  // placement: form-pane
                 .accessibilityIdentifier("ai.codex.cancel")
         }
-        if let url = login.url {
+    }
+
+    /// The sign-in page, opened by the system, and its refusal said rather than swallowed — the address stays on screen
+    /// to copy, because the sign-in cannot finish without it (audit finding, 2026-10-25).
+    private func codexPage(_ url: URL) -> some View {
+        Group {
             ActionRow {
                 Text(verbatim: url.host() ?? url.absoluteString).foregroundStyle(.secondary)
             } actions: {
                 Button("Open Sign-In Page") { open(url) }  // placement: form-pane
                     .accessibilityIdentifier("ai.codex.open")
             }
-            // **A page the system would not open is said, not swallowed** (audit finding, 2026-10-25): the address
-            // stays on screen to copy, because the sign-in cannot finish without it.
             if unopenedURL == url {
                 Text("The sign-in page could not be opened. Copy its address and open it in your browser.")
                     .font(.caption)
@@ -427,29 +475,31 @@ public struct AISettings: View {
                 }
             }
         }
-        if let code = login.code {
-            ActionRow {
-                LabeledContent {
-                    Text(verbatim: code).font(.title3.monospaced()).textSelection(.enabled)
-                        .accessibilityIdentifier("ai.codex.code")
-                } label: {
-                    Text("Code")
-                }
-            } actions: {
-                Button("Copy Code") { copy(code) }  // placement: form-pane
-                    .accessibilityIdentifier("ai.codex.copy")
-            }
-        }
-        if !model.loginLines.isEmpty {
-            DisclosureGroup {
-                // The login's own lines, verbatim. Data, never translated.
-                ForEach(Array(model.loginLines.enumerated()), id: \.offset) { _, line in
-                    Text(verbatim: CodexLogin.stripEscapes(line)).font(.caption.monospaced())
-                        .textSelection(.enabled)
-                }
+    }
+
+    private func codexCode(_ code: String) -> some View {
+        ActionRow {
+            LabeledContent {
+                Text(verbatim: code).font(.title3.monospaced()).textSelection(.enabled)
+                    .accessibilityIdentifier("ai.codex.code")
             } label: {
-                Text("Details")
+                Text("Code")
             }
+        } actions: {
+            Button("Copy Code") { copy(code) }  // placement: form-pane
+                .accessibilityIdentifier("ai.codex.copy")
+        }
+    }
+
+    private func codexDetails(model: AISettingsModel) -> some View {
+        DisclosureGroup {
+            // The login's own lines, verbatim. Data, never translated.
+            ForEach(Array(model.loginLines.enumerated()), id: \.offset) { _, line in
+                Text(verbatim: CodexLogin.stripEscapes(line)).font(.caption.monospaced())
+                    .textSelection(.enabled)
+            }
+        } label: {
+            Text("Details")
         }
     }
 

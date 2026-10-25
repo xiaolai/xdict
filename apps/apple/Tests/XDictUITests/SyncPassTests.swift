@@ -7,20 +7,23 @@ import XDictContract
 /// **Sync's running state, its last success and disconnect** (UI40), and the notification refusal's way out (UI41).
 @MainActor
 struct SyncPassTests {
-    static func defaults() -> UserDefaults {
-        let suite = "ai.xdict.tests.sync-pass." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
+    /// **The suite this test writes to**, held until the test's own instance goes (audit findings, 2026-10-25: a
+    /// generated suite name that the system refused fell back to the reader's own defaults).
+    let held = HeldDefaults()
+
+    func defaults() throws -> UserDefaults {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.sync-pass")
+        held.fixture = fixture
+        return fixture.database
     }
 
     static let folder = Data("bookmark".utf8)
 
     /// While a pass runs the pane says so, and a second Sync Now starts nothing.
-    @Test func aRunningPassIsSaidAndNotRepeated() async {
+    @Test func aRunningPassIsSaidAndNotRepeated() async throws {
         let gate = AsyncStream<Void>.makeStream()
         var runs = 0
-        let pass = SyncPass(defaults: Self.defaults(), now: { Date(timeIntervalSince1970: 100) },
+        let pass = SyncPass(defaults: try defaults(), now: { Date(timeIntervalSince1970: 100) },
                             open: { _ in ("/tmp/folder", {}) },
                             perform: { _ in
                                 runs += 1
@@ -40,8 +43,8 @@ struct SyncPassTests {
     }
 
     /// A pass that cannot finish is said, and the last success it did not replace stays.
-    @Test func aFailedPassKeepsTheLastSuccess() async {
-        let defaults = Self.defaults()
+    @Test func aFailedPassKeepsTheLastSuccess() async throws {
+        let defaults = try defaults()
         let report = Box<SyncReport?>(SyncReport(exported: 1, peers: 0, added: 0, skipped: 0))
         let pass = SyncPass(defaults: defaults, now: { Date(timeIntervalSince1970: 50) },
                             open: { _ in ("/tmp/folder", {}) }, perform: { _ in report.value })
@@ -57,8 +60,8 @@ struct SyncPassTests {
     }
 
     /// A folder that no longer opens is its own sentence, not a failed sync.
-    @Test func aFolderThatDoesNotOpenIsSaid() async {
-        let pass = SyncPass(defaults: Self.defaults(), open: { _ in nil }, perform: { _ in nil })
+    @Test func aFolderThatDoesNotOpenIsSaid() async throws {
+        let pass = SyncPass(defaults: try defaults(), open: { _ in nil }, perform: { _ in nil })
         await pass.run(Self.folder)
         #expect(pass.phase == .folderUnavailable)
         await pass.run(nil)
@@ -67,8 +70,8 @@ struct SyncPassTests {
 
     /// **Disconnect stops future sync** and forgets only the bookmark and the last success: the folder's files and this
     /// Mac's history are not touched (nothing here can reach them).
-    @Test func disconnectForgetsTheFolder() async {
-        let defaults = Self.defaults()
+    @Test func disconnectForgetsTheFolder() async throws {
+        let defaults = try defaults()
         let preferences = LearningPreferences(defaults: defaults)
         preferences.setSyncFolder(Self.folder)
         let pass = SyncPass(defaults: defaults, open: { _ in ("/tmp/folder", {}) },
@@ -82,9 +85,9 @@ struct SyncPassTests {
     }
 
     /// The access to the folder is handed back after every pass.
-    @Test func theFolderAccessIsHandedBack() async {
+    @Test func theFolderAccessIsHandedBack() async throws {
         var stopped = 0
-        let pass = SyncPass(defaults: Self.defaults(), open: { _ in ("/tmp/folder", { stopped += 1 }) },
+        let pass = SyncPass(defaults: try defaults(), open: { _ in ("/tmp/folder", { stopped += 1 }) },
                             perform: { _ in nil })
         await pass.run(Self.folder)
         #expect(stopped == 1)

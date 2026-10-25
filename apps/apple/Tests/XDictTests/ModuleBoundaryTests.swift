@@ -139,7 +139,9 @@ struct ModuleBoundaryTests {
         // blocks' zlib streams (strict about a stream's end, which the Compression framework does not report).
         "XDictAppleImport": ["Foundation", "zlib"],
         "XDictAppleImportTests": ["Foundation", "Testing"],
-        "XDictTestSupport": ["Foundation"],
+        // `Testing`: the shared defaults fixture (`TestDefaults`) requires a generated suite rather than falling back to the
+        // reader's own defaults (audit findings, 2026-10-25); every test target that uses it depends on this one.
+        "XDictTestSupport": ["Foundation", "Testing"],
         "XDictBaseTests": ["Foundation", "Testing"],
         "XDictContractTests": ["Foundation", "Synchronization", "Testing"],
         // AppKit and SwiftUI: the search field's AppKit coordinator and the menu's key equivalents, tested as they are.

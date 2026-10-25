@@ -1,6 +1,7 @@
 import Foundation
 import Testing
 import XDictAI
+import XDictTestSupport
 @testable import XDictUI
 
 /// **What Settings ▸ AI remembers, and where** (plan-ai-meaning WI-6; ADR-0021 d.3, d.13): the source and its address
@@ -359,29 +360,6 @@ struct MeaningPreferencesTests {
         second.setLanguage("zh-Hans")
         #expect(second.settings.template(for: .grounded) == shipped)
     }
-}
-
-/// **A preferences suite of this test's own, removed when the test's fixture goes** (audit findings, 2026-10-25): a
-/// generated name keeps one test out of another's values, and the removal keeps the test process from filling with
-/// domains. A `?? .standard` fallback would silently write the reader's own defaults instead.
-final class TestDefaults {
-    let suite: String
-    let database: UserDefaults
-
-    init(prefix: String = "ai.xdict.tests.meaning") throws {
-        suite = prefix + "." + UUID().uuidString
-        database = try #require(UserDefaults(suiteName: suite), "a generated suite name was refused")
-        database.removePersistentDomain(forName: suite)
-    }
-
-    deinit { database.removePersistentDomain(forName: suite) }
-}
-
-/// **A test's own defaults suite, held where a helper can keep it**: a struct's test methods cannot assign their own
-/// properties, and the fixture must outlive the helper that made it, so the test holds this reference and the helper
-/// fills it.
-final class HeldDefaults {
-    var fixture: TestDefaults?
 }
 
 /// Every string, data and nested value in a defaults database, flattened: a key stored as `Data` or inside a nested

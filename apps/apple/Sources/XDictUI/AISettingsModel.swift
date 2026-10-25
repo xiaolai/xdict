@@ -207,11 +207,15 @@ public final class AISettingsModel {
         status = found
     }
 
-    /// **What a live check and a key probe depend on**, as one question: the source, its address, service and model, and
-    /// the key it actually uses. Any other setting moving (a prompt edit, the switch) leaves their answers true.
+    /// **What a live check and a key probe depend on**, as one question: the source, its address, the service the
+    /// source actually uses, its model, and the key it actually sends. Any other setting moving (a prompt edit, the
+    /// switch) leaves their answers true. **The effective service, not the stored id** (verification finding,
+    /// 2026-10-25): `StatusKey` decides when to start a check from `MeaningProviders.profile`, so a stored profile the
+    /// chosen row does not use must not make a check stale — the guard would drop its result and nothing would ask again.
     private static func sameSource(_ captured: MeaningSettings, _ now: MeaningSettings) -> Bool {
         now.source == captured.source && now.endpoint == captured.endpoint && now.model == captured.model
-            && now.profile == captured.profile && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
+            && MeaningProviders.profile(now).id == MeaningProviders.profile(captured).id
+            && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
     }
 
     // MARK: - The model list (2026-10-25)

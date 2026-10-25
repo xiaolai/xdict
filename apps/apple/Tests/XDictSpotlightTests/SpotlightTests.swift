@@ -2,6 +2,7 @@ import CoreSpotlight
 import Foundation
 import Testing
 import XDictSpotlight
+import XDictTestSupport
 
 /// **What actually reaches Core Spotlight, and what comes back out** (plan-setup-v2 WI-6; ADR-0028, headwords only): the
 /// item's fields, the identifier's round trip, the batches, the domains, and the switch. Core Spotlight itself is behind
@@ -148,13 +149,19 @@ struct SpotlightIndexerTests {
 
 @MainActor
 struct SpotlightSettingsTests {
-    static func suite() -> UserDefaults {
-        UserDefaults(suiteName: "ai.xdict.tests.spotlight.\(UUID().uuidString)") ?? .standard
+    /// **The suite this test writes to**, held until the test's own instance goes (audit findings, 2026-10-25: a
+    /// generated suite name that the system refused fell back to the reader's own defaults).
+    let held = HeldDefaults()
+
+    func suite() throws -> UserDefaults {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.spotlight")
+        held.fixture = fixture
+        return fixture.database
     }
 
     /// **Off until the reader says otherwise**, kept across launches, and every change says what the index must do.
-    @Test func theSwitchIsOffUntilTheReaderTurnsItOn() {
-        let defaults = Self.suite()
+    @Test func theSwitchIsOffUntilTheReaderTurnsItOn() throws {
+        let defaults = try suite()
         let settings = SpotlightSettings(defaults: defaults)
         #expect(!settings.enabled, "opt-in, never opt-out")
         #expect(settings.setEnabled(true) == .include)
@@ -167,8 +174,8 @@ struct SpotlightSettingsTests {
 
     /// **A failed run is remembered as what it was** (audit-fix 2026-10-22 finding 7): the switch keeps saying what the
     /// reader chose, the row can read the failure, and a deletion that failed is owed again at the next launch.
-    @Test func aFailedRunIsRememberedAndItsDeletionOwed() {
-        let settings = SpotlightSettings(defaults: Self.suite())
+    @Test func aFailedRunIsRememberedAndItsDeletionOwed() throws {
+        let settings = SpotlightSettings(defaults: try suite())
         #expect(settings.lastRunFailed == nil, "no run yet")
         settings.setEnabled(true)
         settings.record(failed: false)

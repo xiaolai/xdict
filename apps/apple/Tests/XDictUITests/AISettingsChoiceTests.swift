@@ -8,11 +8,14 @@ import XDictAI
 /// Codex sign-in is structured and cancellable (UI33): the decisions, without a window.
 @MainActor
 struct AISettingsChoiceTests {
-    static func preferences() -> MeaningPreferences {
-        let suite = "ai.xdict.tests.ai-choice." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        return MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    /// **The suite this test writes to**, held until the test's own instance goes (audit findings, 2026-10-25: a
+    /// generated suite name that the system refused fell back to the reader's own defaults).
+    let held = HeldDefaults()
+
+    func preferences() throws -> MeaningPreferences {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.ai-choice")
+        held.fixture = fixture
+        return MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
     }
 
     /// Six choices, in the order of what each costs to set up; each maps to exactly one stored source.
@@ -23,8 +26,8 @@ struct AISettingsChoiceTests {
     }
 
     /// The picker reads what is stored, and writing a choice stores it: the two endpoint rows stay distinct.
-    @Test func theChoiceRoundTripsThroughThePreferences() {
-        let model = AISettingsModel(preferences: Self.preferences())
+    @Test func theChoiceRoundTripsThroughThePreferences() throws {
+        let model = AISettingsModel(preferences: try preferences())
         #expect(model.choice == .off)
         for choice in AISourceChoice.allCases {
             model.choice = choice
@@ -36,8 +39,8 @@ struct AISettingsChoiceTests {
 
     /// **An edited prompt is visible from outside the disclosure** (UI18; ADR-0021: *your wording, not measured*): the
     /// advanced group says so while closed, for any kind in the answer language.
-    @Test func anEditedPromptIsSaidOutsideTheDisclosure() {
-        let model = AISettingsModel(preferences: Self.preferences())
+    @Test func anEditedPromptIsSaidOutsideTheDisclosure() throws {
+        let model = AISettingsModel(preferences: try preferences())
         #expect(!model.hasEditedPrompt)
         model.promptKind = .sentenceOnly
         model.loadDraft()
@@ -79,9 +82,9 @@ struct AISettingsChoiceTests {
 
     /// **Cancel ends the sign-in** (UI33): the login task is cancelled, the pane is no longer signing in, and a cancelled
     /// login is not reported as a failure of the source.
-    @Test func cancelEndsTheSignIn() async {
+    @Test func cancelEndsTheSignIn() async throws {
         let started = AsyncStream<Void>.makeStream()
-        let model = AISettingsModel(preferences: Self.preferences(), login: { onLine in
+        let model = AISettingsModel(preferences: try preferences(), login: { onLine in
             onLine("Open https://example.invalid/device and enter the code ABCD-1234")
             started.continuation.yield()
             try await Task.sleep(for: .seconds(30))
@@ -99,9 +102,9 @@ struct AISettingsChoiceTests {
     }
 
     /// Starting twice runs one login.
-    @Test func aSecondStartDoesNotRunASecondLogin() async {
+    @Test func aSecondStartDoesNotRunASecondLogin() async throws {
         let runs = Counter()
-        let model = AISettingsModel(preferences: Self.preferences(), login: { _ in
+        let model = AISettingsModel(preferences: try preferences(), login: { _ in
             runs.add()
             try await Task.sleep(for: .seconds(30))
         })

@@ -52,9 +52,10 @@ struct TestInventoryTests {
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
-        // 34 → 42 (2026-10-25): the popover suite moved back in when its own target proved no isolation (SwiftPM runs
-        // every target in one process), and its focus reading was narrowed to XDict's own state, which a concurrent
-        // suite cannot move — the full-run flake's cause. Serialized, so its popover tests never overlap each other.
+        // 34 → 42 (2026-10-25): LookupPopoverTests' eight tests are counted here. A separate test target was tried for
+        // them in the same change and discarded: SwiftPM runs every test target in one process, so it isolated nothing.
+        // Their focus reading is now XDict's own state, which a concurrent suite cannot move — the full-run flake's
+        // cause — and the suite is serialized, so its own popover tests never overlap each other.
         "XDictUITests": 42,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.

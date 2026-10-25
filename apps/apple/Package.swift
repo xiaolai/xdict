@@ -189,7 +189,7 @@ let package = Package(
         .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictTestSupport"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
-        .testTarget(name: "XDictSpotlightTests", dependencies: ["XDictSpotlight"]),
+        .testTarget(name: "XDictSpotlightTests", dependencies: ["XDictSpotlight", "XDictTestSupport"]),
         .testTarget(name: "XDictUITests", dependencies: ["XDictAI", "XDictAnywhere", "XDictCapture", "XDictCaptureMac", "XDictAppleSource", "XDictBase", "XDictClient",
                                                         "XDictContract", "XDictEntryView", "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTestSupport",
                                                         "XDictTokens", "XDictUI"]),
@@ -206,7 +206,7 @@ let package = Package(
                                                              "XDictLibrary", "XDictSearch", "XDictSpeech", "XDictTestSupport"]),
         // The voices this Mac lists and the choice among them, the accent kept, and recordings opened as macOS opens them
         // — never played and never spoken: the build Mac makes no sound (the E2E `sound` stage plays and speaks).
-        .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech"]),
+        .testTarget(name: "XDictSpeechTests", dependencies: ["XDictSpeech", "XDictTestSupport"]),
         // Capture without a window server: the ported XiaolaiDict tests by name, and ADR-0014's objection checks.
         .testTarget(name: "XDictCaptureTests", dependencies: ["XDictCapture"]),
         // The AI contract's fixtures (`conformance/ai/`): marking, composition and validation through the production
