@@ -249,7 +249,10 @@ record! {
         pub state: PhraseState,
         pub matches: Vec<PhraseMatch>,
         pub coverage: Vec<CoverageEntry>,
-        /// True when the match list stopped at its cap; the shell says so.
+        /// Every match the ready dictionaries found, before the cap: what `matches` holds is `total` when it is at
+        /// or under the cap, and the shell says how many were left out when it is not.
+        pub total: u64,
+        /// True when the match list stopped at its cap.
         pub capped: bool,
     }
 

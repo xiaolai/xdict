@@ -1,6 +1,6 @@
 # The AI contract
 
-**ai-contract: 4** · 2026-10-25 · Normative. A shell asks a language model what a captured word means in its sentence,
+**ai-contract: 5** · 2026-10-26 · Normative. A shell asks a language model what a captured word means in its sentence,
 and shows the answer beside the reader's entry. Every shell implements this natively; none of it is in the core, and the
 core never sees a prompt, a key or an answer (ADR-0021; ADR-0003 d.1). The fixtures in this folder are the executable
 form of this text. Where they disagree, this text is corrected first and the fixtures follow.
@@ -8,6 +8,13 @@ form of this text. Where they disagree, this text is corrected first and the fix
 **Contract 3 adds a third question kind, `explainSense`** (ADR-0029): the reader names the sense they are reading, and
 the model explains *that sense* in the sentence or says it does not fit. Two outcomes are new — `explained` and
 `doesNotFit` — and an empty quote is refused in every mode.
+
+**Contract 5 adds the phrase ask** (owner, 2026-10-26; `dev-docs/plan-phrase-recognition.md` D12): the reader may ask
+about a phrase the sentence holds, and the question's `term` is then **the words the reader met** — `sentence`'s own
+range, `took the delay into account` — never the dictionary's template. The template that found it (`take something into
+account`) travels in `phrase` (§2), which is the lookup key and provenance, never substituted for `{term}` and never a
+placeholder: it does not enter the composed question's bytes at all (§4). The marking (§3) marks `termRange` as it
+always did, over however many words the range holds.
 
 ## 1. Scope and authority
 
@@ -27,8 +34,9 @@ The composer builds one question from these fields:
 
 | Field | Meaning |
 |---|---|
-| `term` | the captured word, exactly |
-| `termRange` | `{start, length}`, zero-based UTF-16 units of `sentence`, or `not-found` when the capture carried no range. It is the range `conformance/capture/` validated against the term |
+| `term` | the captured word, exactly; in a phrase ask (§ “Contract 5”), the words the phrase covers in the sentence, exactly — `sentence[termRange]`, e.g. `took the delay into account` |
+| `termRange` | `{start, length}`, zero-based UTF-16 units of `sentence`, or `not-found` when the capture carried no range. It is the range `conformance/capture/` validated against the term; in a phrase ask it is the matched span's range |
+| `phrase` | **The dictionary's spelling of the phrase a phrase ask is about** (contract 5), slots and all — `take something into account`. The lookup key and provenance, never the term, never a placeholder: it is not in the composed question (§4). Absent for a word ask |
 | `sentence` | the sentence around the word, exactly as the capture session holds it |
 | `entry` | `{text, complete, cutAt, ref}` — `text` is `entry_text`'s whole-entry projection (UTF-8 bytes; `complete` and `cutAt` are its cut report), `ref` is `{edition, key, occurrence}`. **Absent in sentence-only mode** |
 | `sense` | **The chosen sense** (`explainSense` only; ADR-0029 d.2, d.6): `{id, start, len, text, label, section, whole}`. `start` and `len` are UTF-8 bytes of `entry.text`; `text` is the slice they name, carried so the validator binds an answer to the target; `whole` says whether the sent text holds all of it |

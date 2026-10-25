@@ -260,7 +260,7 @@ enum Fixtures {
                                      noChinese: false, cached: false)),
         .phrases(phrases),
         .phrases(PhraseAnswer(state: .building, matches: [],
-                              coverage: [PhraseCoverage(dict: other, state: .building)], capped: false)),
+                              coverage: [PhraseCoverage(dict: other, state: .building)], total: 0, capped: false)),
         .phrasesBuilt(phrasesBuilt),
     ]
 
@@ -275,7 +275,7 @@ enum Fixtures {
                         separation: .inferred(words: 2), gap: 2),
         ],
         coverage: [PhraseCoverage(dict: dict, state: .ready), PhraseCoverage(dict: other, state: .unavailable)],
-        capped: true)
+        total: 3, capped: true)
 
     static let phrasesBuilt = PhrasesBuilt(edition: edition, phrases: 1_026_973, cached: false)
 

@@ -96,7 +96,7 @@ fun j(s: Separation): Map<String, Any?> = when (s) {
 }
 fun j(m: PhraseMatch) = mapOf("dict" to m.dict, "phrase" to m.phrase, "location" to m.location, "length" to m.length, "separation" to j(m.separation), "gap" to m.gap)
 fun j(e: CoverageEntry) = mapOf("dict" to e.dict, "state" to j(e.state))
-fun j(a: PhraseAnswer) = mapOf("state" to j(a.state), "matches" to a.matches.map { j(it) }, "coverage" to a.coverage.map { j(it) }, "capped" to a.capped)
+fun j(a: PhraseAnswer) = mapOf("state" to j(a.state), "matches" to a.matches.map { j(it) }, "coverage" to a.coverage.map { j(it) }, "total" to a.total, "capped" to a.capped)
 fun j(b: PhraseBuilt) = mapOf("edition" to b.edition, "phrases" to b.phrases, "cached" to b.cached)
 fun j(h: Health) = mapOf("version" to h.version, "entries" to h.entries, "findings" to h.findings.map { j(it) }, "classes" to h.classes.map { mapOf("name" to it.name, "count" to it.count) })
 fun j(r: Reading): Map<String, Any?> = mapOf(

@@ -54,6 +54,7 @@ extension XDictContract.Limit {
         case .file: self = .file
         case .page: self = .page
         case .body: self = .body
+        case .sentence: self = .sentence
         }
     }
 }
@@ -209,7 +210,8 @@ extension XDictContract.PhraseAnswer {
     init(_ answer: XDictCore.PhraseAnswer) {
         self.init(state: XDictContract.PhraseState(answer.state),
                   matches: answer.matches.map(XDictContract.PhraseMatch.init),
-                  coverage: answer.coverage.map(XDictContract.PhraseCoverage.init), capped: answer.capped)
+                  coverage: answer.coverage.map(XDictContract.PhraseCoverage.init), total: answer.total,
+                  capped: answer.capped)
     }
 }
 

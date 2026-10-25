@@ -36,6 +36,7 @@ its comparison:
  "matches":[{"dict":"phrase","phrase":"purple passage","location":23,"length":14,
              "separation":{"type":"none"},"gap":0}],
  "coverage":[{"dict":"phrase","state":"ready"}],
+ "total":1,
  "capped":false}
 ```
 
@@ -48,8 +49,10 @@ its comparison:
 - **`separation`** is `{"type":"none"}`, `{"type":"marked","words":n}` (the publisher wrote a slot) or
   `{"type":"inferred","words":n}` (the matcher broke a bare two-word phrasal verb). `gap` is the same number, written
   plainly.
-- **`capped`** says the match list stopped at the answer's cap; a vector may write `matchCount` instead of listing
-  every match, and the suite checks the count and removes the key before comparing.
+- **`total`** is every match the ready dictionaries found, before the cap; `matches` holds `total` when it is at or
+  under the cap, and the shell says how many were left out when it is not.
+- **`capped`** says the match list stopped at the answer's cap (64). The `cap` vector writes `matchCount` instead of
+  listing every match, and the suite checks the length and removes the key before comparing.
 
 ## The dictionary's label
 

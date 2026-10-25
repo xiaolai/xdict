@@ -77,13 +77,18 @@ public struct MeaningHandoff: Sendable {
     /// The ends of the sentence the capture may have cut — the history's own `cut` bits (ADR-0023).
     public let cut: CutEnds
     public let origin: MeaningOrigin
+    /// **The dictionary's spelling of the phrase this hand-off asks about** (AI contract 5; plan-phrase-recognition
+    /// WI-9), when the reader chose a phrase: the lookup key and provenance, never the term. Nil for a word ask.
+    public let phrase: String?
 
-    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = [], origin: MeaningOrigin) {
+    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = [], origin: MeaningOrigin,
+                phrase: String? = nil) {
         self.term = term
         self.sentence = sentence
         self.range = range
         self.cut = cut
         self.origin = origin
+        self.phrase = phrase
     }
 }
 
@@ -103,16 +108,20 @@ public struct MeaningContext: Equatable, Sendable {
     /// The term's range in the sentence, in UTF-16 units; nil when the capture carried none.
     public let range: NSRange?
     public let cut: CutEnds
+    /// The dictionary's spelling of the phrase a phrase ask is about (AI contract 5), or nil for a word ask.
+    public let phrase: String?
 
-    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = []) {
+    public init(term: String, sentence: String, range: NSRange?, cut: CutEnds = [], phrase: String? = nil) {
         self.term = term
         self.sentence = sentence
         self.range = range
         self.cut = cut
+        self.phrase = phrase
     }
 
     init(_ handoff: MeaningHandoff) {
-        self.init(term: handoff.term, sentence: handoff.sentence, range: handoff.range, cut: handoff.cut)
+        self.init(term: handoff.term, sentence: handoff.sentence, range: handoff.range, cut: handoff.cut,
+                  phrase: handoff.phrase)
     }
 }
 
@@ -1003,7 +1012,7 @@ public final class MeaningSession {
         }
         let range = handoff.range.map { AITermRange.range(start: $0.location, length: $0.length) } ?? .notFound
         let question = AIQuestion(term: handoff.term, termRange: range, sentence: handoff.sentence, entry: entry,
-                                  sense: sense, language: settings.language, mode: mode)
+                                  sense: sense, language: settings.language, mode: mode, phrase: handoff.phrase)
         let template = settings.template(for: mode) ?? ""
         let composed: String
         do {

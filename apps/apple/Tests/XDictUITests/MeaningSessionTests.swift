@@ -1047,6 +1047,42 @@ import XDictContract
         #expect(calls.allSatisfy { $0.0 == otherDict && $0.1 == otherEntry },
                 "the follow-up moved to the reader's later selection: \(calls)")
     }
+
+    /// **A phrase ask's term is the sentence's own words** (AI contract 5; plan-phrase-recognition WI-9): the model
+    /// reads the surface span, marked over the whole span, and the dictionary's spelling never enters the question —
+    /// it is the lookup key, not the term.
+    @Test func aPhraseAskTermsTheSurfaceWordsAndCarriesTheDictionarySpelling() async throws {
+        let (session, provider, _) = Self.session()
+        session.hold(MeaningHandoff(term: "took the delay into account",
+                                    sentence: "they took the delay into account before deciding",
+                                    range: NSRange(location: 5, length: 27),
+                                    origin: MeaningOrigin(request: 8, generation: 1),
+                                    phrase: "take something into account"))
+        session.drawn(Self.subject, target: (Self.dict, Self.entry))
+        session.ask(in: MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+        #expect(await Self.waitUntil { await provider.questions.count == 1 })
+        let question = try #require(await provider.questions.first)
+        #expect(question.contains("«took the delay into account»"), "the span is marked as one")
+        #expect(!question.contains("take something into account"), "the dictionary's spelling is no question's term")
+        #expect(session.sent?.questionContext?.phrase == "take something into account")
+        #expect(session.sent?.target == MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+    }
+
+    /// **Without the entry switch a phrase ask is refused before anything is fetched or sent**, like any grounded ask.
+    @Test func aPhraseAskWithoutTheEntrySwitchSendsNothing() async throws {
+        let (session, provider, fetcher) = Self.session(
+            settings: MeaningSettings(source: .http, model: "m", sendEntryText: false))
+        session.hold(MeaningHandoff(term: "took the delay into account",
+                                    sentence: "they took the delay into account before deciding",
+                                    range: NSRange(location: 5, length: 27),
+                                    origin: MeaningOrigin(request: 9, generation: 1),
+                                    phrase: "take something into account"))
+        session.drawn(Self.subject, target: (Self.dict, Self.entry))
+        session.ask(in: MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+        #expect(session.state == .unavailable(.entryTextOff))
+        #expect(await provider.questions.isEmpty)
+        #expect(await fetcher.calls.isEmpty)
+    }
 }
 
 /// **An entry fetch the test can suspend** (plan-explain-sense WI-2): the switch is turned off while it is in flight.

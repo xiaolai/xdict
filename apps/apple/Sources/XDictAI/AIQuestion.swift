@@ -78,9 +78,13 @@ public struct AIQuestion: Sendable, Equatable {
     /// A BCP 47 tag (`CONTRACT.md` §2).
     public let language: String
     public let mode: AIMode
+    /// **The dictionary's spelling of the phrase a phrase ask is about** (contract 5, `CONTRACT.md` §2), slots and all —
+    /// `take something into account`, where `term` is the sentence's own words. The lookup key and provenance; the
+    /// composer never substitutes it, and it never enters the composed question. Nil for a word ask.
+    public let phrase: String?
 
     public init(term: String, termRange: AITermRange, sentence: String, entry: AIEntryText?, sense: AISense? = nil,
-                language: String, mode: AIMode) {
+                language: String, mode: AIMode, phrase: String? = nil) {
         self.term = term
         self.termRange = termRange
         self.sentence = sentence
@@ -88,5 +92,6 @@ public struct AIQuestion: Sendable, Equatable {
         self.sense = sense
         self.language = language
         self.mode = mode
+        self.phrase = phrase
     }
 }

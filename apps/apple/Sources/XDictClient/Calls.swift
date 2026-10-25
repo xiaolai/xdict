@@ -179,7 +179,7 @@ extension Answer {
                                 separation: $0.separation, gap: $0.gap)
                 },
                 coverage: answer.coverage.map { PhraseCoverage(dict: rename($0.dict), state: $0.state) },
-                capped: answer.capped))
+                total: answer.total, capped: answer.capped))
         default:
             return self
         }

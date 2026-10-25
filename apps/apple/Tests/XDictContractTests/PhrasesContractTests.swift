@@ -20,16 +20,14 @@ struct PhrasesContractTests {
         #expect(Deadlines.deadline(for: asked, onFreshConnection: false) == .seconds(5))
         #expect(asked.creditClass == .lookup && !asked.isBulk && !asked.reportsProgress && asked.packageSpec == nil)
         #expect(asked.render == nil)
-        #expect(asked.filesRead(filesOf: Fixtures.filesOf) == Fixtures.package.files.map(\.id) + [Fixtures.otherMDXID])
-        let request = Fixtures.request(asked)
-        #expect(request.refusal(handles: [], filesOf: Fixtures.filesOf) == nil)
+        // Admission reads the operation's own file list: its tokens must cover every file of both dictionaries.
+        #expect(Fixtures.request(asked).refusal(handles: [], filesOf: Fixtures.filesOf) == nil)
     }
 
     @Test func buildingTheInventoryIsABackgroundCallOnOneDictionary() {
         let asked = ServiceOperation.phrasesBuild(dict: Fixtures.dict)
         #expect(asked.reportsProgress && asked.creditClass == nil && !asked.isBulk && asked.packageSpec == nil)
         #expect(Deadlines.deadline(for: asked, onFreshConnection: false) == nil, "bounded by silence, not a deadline")
-        #expect(asked.filesRead(filesOf: Fixtures.filesOf) == Fixtures.package.files.map(\.id))
         #expect(Fixtures.request(asked).refusal(handles: [], filesOf: Fixtures.filesOf) == nil)
     }
 
@@ -63,7 +61,7 @@ struct PhrasesContractTests {
         let asked = Fixtures.request(Self.asked(), id: 31)
         let service = Contract.version + 1
         #expect(Request.receive(try asked.encoded(), handles: [], filesOf: Fixtures.filesOf, serviceContract: service)
-                == .answered(Response(id: 31, outcome: .failure(
+                == .answered(Response(contract: service, id: 31, outcome: .failure(
                     .contractMismatch(service: service, client: Contract.version)))))
         let older = Request(contract: Contract.version - 1, id: 32, tokens: Fixtures.tokens, operation: Self.asked())
         #expect(Request.receive(try older.encoded(), handles: [], filesOf: Fixtures.filesOf)

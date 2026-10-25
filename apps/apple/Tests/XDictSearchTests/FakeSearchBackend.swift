@@ -54,6 +54,10 @@ actor FakeSearchBackend: SearchBackend {
     /// to arrive after a newer one.
     private var examplesHeld = false
     private var examplesWaiting: [(query: String, slot: Slot, outcome: ClientOutcome)] = []
+    /// **Phrase answers a test can hold and release per sentence** (contract 15): an older capture's answer can be made
+    /// to arrive after a newer one.
+    private var phrasesHeld = false
+    private var phrasesWaiting: [(sentence: String, slot: Slot, outcome: ClientOutcome)] = []
     private var waiting: [(caller: Caller, dict: DictId?, slot: Slot, outcome: ClientOutcome)] = []
     var honoursSupersession = true
     var pages: @Sendable (_ query: String, _ dict: DictId, _ options: LookupOptions) -> Result<Page, ClientFailure>
@@ -77,6 +81,16 @@ actor FakeSearchBackend: SearchBackend {
     func setAnswer(_ answer: @escaping @Sendable (ServiceOperation) -> ClientOutcome) { self.answer = answer }
     func setHonoursSupersession(_ honours: Bool) { honoursSupersession = honours }
     func holdExamples() { examplesHeld = true }
+    func holdPhrases() { phrasesHeld = true }
+
+    /// What is waiting to be released, by sentence: a test waits for the question to arrive before releasing it.
+    var heldPhrases: [String] { phrasesWaiting.map(\.sentence) }
+
+    func releasePhrases(_ sentence: String) {
+        let ready = phrasesWaiting.filter { $0.sentence == sentence }
+        phrasesWaiting.removeAll { $0.sentence == sentence }
+        for item in ready { item.slot.fulfil(item.outcome) }
+    }
 
     /// **What is waiting to be released, by query** (audit round 4, 2026-10-25): a test waits for a request to arrive
     /// before releasing it, so a release that would have been lost cannot make the next request hang.
@@ -120,6 +134,9 @@ actor FakeSearchBackend: SearchBackend {
             case .examples(let query, _, _):
                 examplesQuery = query
                 outcome = answer(operation)
+            case .phrases(let sentence, _, _):
+                outcome = answer(operation)
+                if phrasesHeld { phrasesWaiting.append((sentence, slot, outcome)); return PendingCall { await slot.value() } }
             default:
                 outcome = answer(operation)
             }

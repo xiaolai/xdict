@@ -433,6 +433,8 @@ pub struct PhraseAnswer {
     pub state: PhraseState,
     pub matches: Vec<PhraseMatch>,
     pub coverage: Vec<CoverageEntry>,
+    /// Every match found before the cap; `matches` holds `total` when it is at or under it.
+    pub total: u64,
     pub capped: bool,
 }
 

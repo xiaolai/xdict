@@ -109,7 +109,7 @@ struct ServiceClientRecoveryTests {
                     state: .found,
                     matches: [PhraseMatch(dict: second, phrase: "purple passage", location: 23, length: 14,
                                           separation: .none, gap: 0)],
-                    coverage: [PhraseCoverage(dict: second, state: .ready)], capped: false)
+                    coverage: [PhraseCoverage(dict: second, state: .ready)], total: 1, capped: false)
                 return .reply(.phrases(answer), to: request)
             default:
                 return .silent

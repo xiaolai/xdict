@@ -57,6 +57,10 @@ public final class SearchWindowState {
     /// shown in the right pane's Examples section.
     public let examples: ExamplesModel
 
+    /// **The phrase around the captured term** (contract 15, plan-phrase-recognition WI-8), shown in the panel and the
+    /// window's title row.
+    public let phrases: PhrasesModel
+
     @ObservationIgnored private let backend: any SearchBackend
 
     /// `window` names the window's callers in the service client, so two windows never supersede each other. `speech`
@@ -73,6 +77,7 @@ public final class SearchWindowState {
         }
         self.model = model
         examples = ExamplesModel(backend: backend, window: window)
+        phrases = PhrasesModel(backend: backend, window: window)
         meaning = MeaningSession(
             fetchEntryText: { [backend] dict, entry, budget in
                 await backend.entryText(dict, entry: entry, maxTextBytes: budget)
@@ -206,6 +211,56 @@ public final class SearchWindowState {
         // window's previous entry, or failed in a new window; the expected subject keeps a stale draw from starting it,
         // and the adopted lookup's identity keeps a queued presentation of the previous lookup from binding it.
         meaning.hold(handoff, asking: asking, expecting: expecting, adopted: adopted)
+        // **The phrase row follows the captured sentence** (contract 15; plan-phrase-recognition WI-8): the capture is
+        // the reader's tap, so the question is asked here and nowhere else. A capture that carried no term range is not
+        // asked — the core needs the term's place in the sentence — and the row stays hidden.
+        if handoff.phrase != nil {
+            // A phrase ask is already about the phrase: detecting one under its own span would offer itself.
+            phrases.clear()
+        } else if let range = handoff.range {
+            phrases.update(sentence: handoff.sentence,
+                           term: PhraseTerm(location: UInt64(range.location), length: UInt64(range.length)),
+                           handles: phraseHandles)
+        } else {
+            phrases.clear()
+        }
+    }
+
+    /// Every enabled dictionary that answers now, in the reader's order: what the phrase question asks.
+    public var phraseHandles: [DictId] {
+        library.searchSources.filter(\.enabled).compactMap(\.handle)
+    }
+
+    /// **The phrase row chosen**: the dictionary's own spelling becomes the lookup, in place, so Back returns to the
+    /// word that found it. A template (`take something into account`) is a lookup key like any link's.
+    public func openPhrase(_ phrase: String) {
+        model.submit(phrase)
+    }
+
+    /// **The reader asks about the phrase** (AI contract 5; plan-phrase-recognition WI-9): the question's term becomes
+    /// the words the reader met — the sentence's own span — and its target the phrase's entry, found by the reader's
+    /// ordinary lookup of the dictionary's spelling. Recognition alone changed nothing: this is the tap. With the
+    /// entry-text switch off the session refuses it, as it refuses any grounded ask.
+    public func askAboutPhrase(_ candidate: PhraseRow.Candidate) async {
+        guard let held = meaning.held, held.phrase == nil,
+              let span = PhrasesModel.span(candidate, in: held.sentence),
+              let source = source(for: candidate.dict) else { return }
+        let options = LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil)
+        let answer = await backend.request(.lookup(query: candidate.phrase, dicts: [candidate.dict], options: options))
+        guard case .success(let delivered) = answer, case .page(let page) = delivered.answer, let hit = page.hits.first
+        else { return }
+        let handoff = MeaningHandoff(term: String(held.sentence[span]), sentence: held.sentence,
+                                     range: NSRange(span, in: held.sentence), cut: held.cut, origin: held.origin,
+                                     phrase: candidate.phrase)
+        // **The phrase's entry is drawn and adopted, and the ask waits for it**, as an expansion's does: a stale draw
+        // never claims the sentence, and the target is the phrase's entry, never the word's.
+        let expected = MeaningSession.Subject(dictionary: source.id, key: hit.entry.key,
+                                              occurrence: hit.entry.occurrence)
+        let place = Visit(query: candidate.phrase, mode: .reader, scope: model.scope,
+                          result: ResultID(dictionary: source.id, entry: hit.entry), typed: nil, isOrigin: false)
+        holdMeaning(handoff, asking: true, expecting: expected, adopted: true)
+        let token = meaning.handoffToken
+        model.adopt(place, started: { [weak self] serial in self?.meaning.adopted(serial, handoff: token) })
     }
 
     /// **A lookup replaced the presentation**: a query other than the held sentence's word means the reader moved on, and
@@ -214,7 +269,11 @@ public final class SearchWindowState {
     /// leaves the section closed.
     public func lookupDidChange() {
         let lookup = model.lookup
-        if let held = meaning.held, let lookup, lookup.query != held.term { clearMeaning() }
+        // **A phrase ask's own lookup keeps its sentence** (AI contract 5; plan WI-9): the question's term is the
+        // sentence's words, while the window looks the dictionary's spelling up, so the two differ by design. Any other
+        // query is the reader moving on, and drops the sentence as before.
+        let phraseAsk = meaning.held?.phrase != nil && lookup?.query == meaning.held?.phrase
+        if let held = meaning.held, let lookup, lookup.query != held.term, !phraseAsk { clearMeaning() }
         panes.examplesSearched()
         let kept = examples.update(query: lookup?.query ?? "", handles: exampleHandles,
                                   unavailable: exampleUnavailable)
@@ -342,9 +401,11 @@ public final class SearchWindowState {
         Task { await present(shown) }
     }
 
-    /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.
+    /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight — the
+    /// phrase row with it (contract 15).
     public func clearMeaning() {
         meaning.clear()
+        phrases.clear()
     }
 
     /// A link in the shown entry: looked up in link mode in that entry's dictionary (on the All page, the dictionary

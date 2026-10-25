@@ -42,6 +42,7 @@ public struct LookupPanelView: View {
     public var body: some View {
         VStack(spacing: 0) {
             header
+            phraseRow
             EntryHost(controller: state.entry)
                 // The entry fades out above the footer, so scrolled text never runs into its hairline (P41).
                 .mask {
@@ -104,6 +105,87 @@ public struct LookupPanelView: View {
         .padding(.bottom, PanelLook.footerGap)
         .padding(.leading, PanelLook.leading)
         .padding(.trailing, PanelLook.trailing)
+    }
+
+    /// **The phrase the captured sentence holds around its term** (contract 15; plan-phrase-recognition WI-8): the
+    /// dictionary's own spelling and the sentence with that span marked, above the word's entry — never merged into its
+    /// results. A tap looks the phrase up in place, so Back returns to the word that found it. A store still being read,
+    /// and one that could not be, are rows of their own: neither is drawn as "no phrase".
+    @ViewBuilder private var phraseRow: some View {
+        switch state.phrases.row {
+        case .hidden:
+            EmptyView()
+        case .building:
+            phraseLine(Text("Reading your dictionaries for phrases…"))
+                .accessibilityIdentifier("panel.phrase.building")
+        case .unavailable:
+            phraseLine(Text("Phrases are not available for these dictionaries."))
+                .accessibilityIdentifier("panel.phrase.unavailable")
+        case let .found(candidate, total, _):
+            Button {  // placement: P41
+                state.openPhrase(candidate.phrase)
+            } label: {
+                VStack(alignment: .leading, spacing: PanelLook.footerGap) {
+                    sentenceText(candidate)
+                        .font(Tokens.TextRole.caption.font)
+                        .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                        .lineLimit(2)
+                    HStack(spacing: PanelLook.footerGap) {
+                        Text(verbatim: candidate.phrase)
+                            .font(Tokens.TextRole.panelDictionaryName.font)
+                            .foregroundStyle(Tokens.Colour.label.color)
+                        separationText(candidate)
+                            .font(Tokens.TextRole.caption.font)
+                            .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                        if total > 1 {
+                            Text("The first of \(total)")
+                                .font(Tokens.TextRole.caption.font)
+                                .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .padding(.leading, PanelLook.leading)
+                .padding(.trailing, PanelLook.trailing)
+                .padding(.bottom, PanelLook.footerGap)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("panel.phrase")
+        }
+    }
+
+    /// One quiet line of the phrase row's non-answers, laid out as the row above the entry.
+    private func phraseLine(_ text: Text) -> some View {
+        text
+            .font(Tokens.TextRole.caption.font)
+            .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, PanelLook.leading)
+            .padding(.trailing, PanelLook.trailing)
+            .padding(.bottom, PanelLook.footerGap)
+    }
+
+    /// The captured sentence with the phrase's span in bold: the row shows where the phrase sits, not only what it is.
+    private func sentenceText(_ candidate: PhraseRow.Candidate) -> Text {
+        let sentence = state.phrases.sentence
+        var text = AttributedString(sentence)
+        if let range = PhrasesModel.span(candidate, in: sentence),
+           let start = AttributedString.Index(range.lowerBound, within: text),
+           let end = AttributedString.Index(range.upperBound, within: text) {
+            text[start..<end].inlinePresentationIntent = .stronglyEmphasized
+        }
+        return Text(text)
+    }
+
+    /// How the words sat together, in the reader's words: the publisher's mark is stated as one, and the matcher's own
+    /// inference is called a candidate, never the dictionary's.
+    private func separationText(_ candidate: PhraseRow.Candidate) -> Text {
+        switch candidate.separation {
+        case .none: Text("Written unbroken")
+        case .marked: Text("With a gap the dictionary marks")
+        case .inferred: Text("With a gap inferred — a candidate")
+        }
     }
 
     /// The popover's footer rows (P41): "Open in Dictionary" with a book, "Configure Dictionaries" with a gear; here

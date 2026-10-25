@@ -1434,6 +1434,7 @@ impl Core {
                     state: PhraseState::NotAsked,
                     matches: Vec::new(),
                     coverage: Vec::new(),
+                    total: 0,
                     capped: false,
                 });
             }
@@ -1454,7 +1455,7 @@ impl Core {
             let forms: Vec<Vec<String>> = tokens.iter().map(|(token, _, _)| xdict_phrase::forms(token)).collect();
             let mut matches: Vec<PhraseMatch> = Vec::new();
             let mut coverage: Vec<CoverageEntry> = Vec::new();
-            let mut capped = false;
+            let mut total: u64 = 0;
             let mut building = false;
             let mut ready = 0usize;
             for id in &dicts {
@@ -1477,9 +1478,11 @@ impl Core {
                     xdict_phrase::DEFAULT_WIDEST_GAP,
                     xdict_phrase::DEFAULT_WIDEST_INFERRED_GAP,
                 ) {
+                    // **Every match is counted, the list is what stops** (WI-8: the shell says how many were left out);
+                    // counting costs nothing, and materializing them for a word every phrase names would.
+                    total += 1;
                     if matches.len() >= crate::phrases::MAX_MATCHES {
-                        capped = true;
-                        break;
+                        continue;
                     }
                     let (Some((_, first, _)), Some((_, _, last))) = (tokens.get(found.first), tokens.get(found.last))
                     else {
@@ -1509,7 +1512,8 @@ impl Core {
             } else {
                 PhraseState::None
             };
-            Ok(PhraseAnswer { state, matches, coverage, capped })
+            let capped = total > matches.len() as u64;
+            Ok(PhraseAnswer { state, matches, coverage, total, capped })
         })
     }
 

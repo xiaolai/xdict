@@ -121,7 +121,9 @@ export type PhraseMatch = {
   dict: string; phrase: string; location: number; length: number; separation: Separation; gap: number;
 };
 export type CoverageEntry = { dict: string; state: Coverage };
-export type PhraseAnswer = { state: PhraseState; matches: PhraseMatch[]; coverage: CoverageEntry[]; capped: boolean };
+export type PhraseAnswer = {
+  state: PhraseState; matches: PhraseMatch[]; coverage: CoverageEntry[]; total: number; capped: boolean;
+};
 export type PhraseBuilt = { edition: string; phrases: number; cached: boolean };
 export type Resource =
   | { type: 'found'; path: string; mime: string; bytes: Uint8Array }

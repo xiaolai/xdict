@@ -75,6 +75,8 @@ public enum Limit: String, Codable, Hashable, Sendable {
     case page
     /// A body over the render context's ceiling, or the core's own.
     case body
+    /// A sentence over the phrase question's 1,000 UTF-16 units (contract 15).
+    case sentence
 }
 
 /// What `CoreFailure.notFound` did not find. `edition` and `lineage` came with contract version 2: an edition no import

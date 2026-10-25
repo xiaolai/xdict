@@ -48,10 +48,11 @@ struct PhraseServiceTests {
         }
         #expect(built.phrases == 76, "the fixture's phrases, as `conformance/phrase/vectors.jsonl` counts them")
         #expect(!built.cached)
-        // At most one report, after the one pass: a reply and a progress message are two deliveries NSXPC does not
-        // order between them, and the client drops a report for a call already answered (`HealthTests`).
+        // The build reports at its first position and its last, two deliveries NSXPC does not order against the
+        // answer, and the client drops a report for a call already answered (`HealthTests`); it never reports another
+        // number.
         let heard = reports.withLock { $0 }
-        #expect(heard.isEmpty || heard == [79], "one report at most, after the one pass: \(heard)")
+        #expect(heard.allSatisfy { $0 == 0 || $0 == 79 }, "only the build's own positions: \(heard)")
 
         guard case .success(let found) = await client.phrases(Self.sentence, term: Self.term, dicts: [dict]) else {
             Issue.record("the second phrase question failed")
@@ -60,6 +61,7 @@ struct PhraseServiceTests {
         #expect(found.state == .found)
         #expect(found.coverage == [PhraseCoverage(dict: dict, state: .ready)])
         #expect(found.matches.map(\.phrase) == ["purple passage"])
+        #expect(found.total == 1 && !found.capped)
         #expect(found.matches.first?.dict == dict)
         #expect(found.matches.first?.location == 23 && found.matches.first?.length == 14)
         #expect(found.matches.first?.separation == PhraseSeparation.none && found.matches.first?.gap == 0)

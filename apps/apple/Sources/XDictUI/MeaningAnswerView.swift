@@ -68,6 +68,7 @@ public struct MeaningAnswerPane: View {
                 }
                 if state.panes.meaningShown || !state.panes.examplesShown {
                     if showsHeader { header }
+                    phraseOffer
                     content
                 }
             }
@@ -114,6 +115,29 @@ public struct MeaningAnswerPane: View {
             }
         }
         .accessibilityIdentifier("meaning.title")
+    }
+
+    /// **The phrase the captured sentence holds, offered as the question** (AI contract 5; plan-phrase-recognition
+    /// WI-9): showing it changes neither the term nor the target, and sends nothing — the reader's tap asks, with the
+    /// phrase's own entry as the target and the sentence's own words as the term. A phrase ask already made is not
+    /// offered again.
+    @ViewBuilder private var phraseOffer: some View {
+        if case let .found(candidate, total, _) = state.phrases.row, state.meaning.held?.phrase == nil {
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                Button {  // placement: inspector-row
+                    Task { await state.askAboutPhrase(candidate) }
+                } label: {
+                    Text("Ask about “\(candidate.phrase)”")
+                }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier("meaning.phrase")
+                if total > 1 {
+                    Text("The first of \(total)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
     }
 
     @ViewBuilder private var content: some View {
@@ -761,6 +785,13 @@ struct MeaningContextView: View {
                 .lineSpacing(ReadingText.lineSpacing)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
+            // **The dictionary's spelling of a phrase ask** (AI contract 5): the term is the reader's own words, and
+            // this says which key the entry was looked up by.
+            if let phrase = context.phrase {
+                Text("The dictionary spells it “\(phrase)”")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("meaning.context")

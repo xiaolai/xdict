@@ -58,7 +58,8 @@ public enum Contract {
     /// 14 (2026-10-24): the operations `examples` and `examplesBuild` and their answers, the reverse-example query
     /// and the per-edition store's background build (ADR-0031, plan-reverse-examples WI-3–WI-5).
     /// 15 (2026-10-25): the operations `phrases` and `phrasesBuild` and their answers, the phrase covering a captured
-    /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7).
+    /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7); `PhraseAnswer.total`
+    /// counts the matches before the cap, so a capped list says what it left out.
     public static let version: UInt32 = 15
 }
 

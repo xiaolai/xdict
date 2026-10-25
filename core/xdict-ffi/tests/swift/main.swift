@@ -536,7 +536,8 @@ func j(_ m: PhraseMatch) -> [String: Any] {
 func j(_ e: CoverageEntry) -> [String: Any] { ["dict": e.dict, "state": j(e.state)] }
 
 func j(_ a: PhraseAnswer) -> [String: Any] {
-    ["state": j(a.state), "matches": a.matches.map(j), "coverage": a.coverage.map(j), "capped": a.capped]
+    ["state": j(a.state), "matches": a.matches.map(j), "coverage": a.coverage.map(j), "total": a.total,
+     "capped": a.capped]
 }
 
 func j(_ b: PhraseBuilt) -> [String: Any] { ["edition": b.edition, "phrases": b.phrases, "cached": b.cached] }

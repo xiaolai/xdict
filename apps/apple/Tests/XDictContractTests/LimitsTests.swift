@@ -61,6 +61,8 @@ struct LimitsTests {
                                  Fixtures.index(.words(dict: Fixtures.dict, from: 0, limit: 1_000)),
                                  // An example query scans a store: light, and never a body.
                                  Fixtures.index(.examples(query: "", dicts: [], limit: 1)),
+                                 // The phrase question scans each ready edition's by-word index: light, and no body.
+                                 Fixtures.index(.phrases(sentence: "", term: PhraseTerm(location: 0, length: 0), dicts: [])),
                                  Fixtures.index(.link(dict: Fixtures.dict, url: "", origin: .resource(path: ""), render: .reader))])
         for operation in Fixtures.operations {
             #expect((operation.creditClass == .bulk) == operation.isBulk, "\(operation)")

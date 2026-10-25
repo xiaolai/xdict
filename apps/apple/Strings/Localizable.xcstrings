@@ -2621,6 +2621,22 @@
         }
       }
     },
+    "Ask about “%@”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask about “%@”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "询问“%@”"
+          }
+        }
+      }
+    },
     "Ask the source you chose what this word means in this sentence.": {
       "localizations": {
         "en": {
@@ -8735,6 +8751,22 @@
         }
       }
     },
+    "Phrases are not available for these dictionaries.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phrases are not available for these dictionaries."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些词典暂时无法查找短语。"
+          }
+        }
+      }
+    },
     "Pictures": {
       "comment": "The fold at an entry's end holding the pictures the dictionary hides",
       "localizations": {
@@ -9197,6 +9229,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "读取 %@ 中的选中内容耗时过长。请再试一次。"
+          }
+        }
+      }
+    },
+    "Reading your dictionaries for phrases…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading your dictionaries for phrases…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在从词典中查找短语…"
           }
         }
       }
@@ -11484,6 +11532,22 @@
         }
       }
     },
+    "The dictionary spells it “%@”": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary spells it “%@”"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典写作“%@”"
+          }
+        }
+      }
+    },
     "The dictionary’s file is not available now. Check that its folder is connected, then import it again in Settings ▸ Dictionaries.": {
       "localizations": {
         "en": {
@@ -11640,6 +11704,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "这部词典的文件已改变。它仍是同一部词典吗？"
+          }
+        }
+      }
+    },
+    "The first of %lld": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The first of %lld"
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "The first of %lld"
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "共 %lld 条，仅显示第一条"
+                }
+              }
+            }
           }
         }
       }
@@ -13975,6 +14073,38 @@
         }
       }
     },
+    "With a gap inferred — a candidate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With a gap inferred — a candidate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "间隔为推断，仅为候选"
+          }
+        }
+      }
+    },
+    "With a gap the dictionary marks": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "With a gap the dictionary marks"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典标注了间隔"
+          }
+        }
+      }
+    },
     "With every window closed, the shortcut, the Service and hover keep working.": {
       "localizations": {
         "en": {
@@ -14053,6 +14183,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "用%@书写的词"
+          }
+        }
+      }
+    },
+    "Written unbroken": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Written unbroken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原文连写"
           }
         }
       }

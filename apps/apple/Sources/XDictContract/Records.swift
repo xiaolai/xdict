@@ -368,12 +368,15 @@ public struct PhraseAnswer: Codable, Hashable, Sendable {
     public let state: PhraseState
     public let matches: [PhraseMatch]
     public let coverage: [PhraseCoverage]
+    /// Every match found before the cap: what the row says was left out when it is larger than `matches`.
+    public let total: UInt64
     public let capped: Bool
 
-    public init(state: PhraseState, matches: [PhraseMatch], coverage: [PhraseCoverage], capped: Bool) {
+    public init(state: PhraseState, matches: [PhraseMatch], coverage: [PhraseCoverage], total: UInt64, capped: Bool) {
         self.state = state
         self.matches = matches
         self.coverage = coverage
+        self.total = total
         self.capped = capped
     }
 }

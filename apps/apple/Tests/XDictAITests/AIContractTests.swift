@@ -12,9 +12,9 @@ struct AIContractTests {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
     static let vectors = root.appending(path: "conformance/ai/vectors.jsonl")
-    /// The contract major this runner implements (`CONTRACT.md` §9). Contract 4 changed the composed question's fixed
-    /// bytes (the answer-language line, §4b), so the fixtures' major moved with it.
-    static let contractMajor = 4
+    /// The contract major this runner implements (`CONTRACT.md` §9). Contract 5 adds the phrase ask's `phrase` field
+    /// and its vectors (§2, §8), so the fixtures' major moved with it.
+    static let contractMajor = 5
 
     /// A fixture the harness could not use — never an expected refusal.
     struct Harness: Error, CustomStringConvertible { let description: String }
@@ -84,19 +84,24 @@ struct AIContractTests {
         return (id, op, input, expect)
     }
 
+    /// A range as the fixtures write it: an object of integer strings, or `not-found` (contract 5 lets a compose
+    /// case carry one, so a phrase's marked span is composed as the shell composes it).
+    private static func termRange(_ value: Any, at id: String) throws(Harness) -> AITermRange {
+        guard let range = value as? [String: Any] else { throw Harness(description: "\(id): harness: a range object was expected") }
+        let start = range["start"] as? String, length = range["length"] as? String
+        if start == "not-found" { return .notFound }
+        guard let start, let length, let s = Int(start), let l = Int(length) else {
+            throw Harness(description: "\(id): harness: an integer string or not-found was expected")
+        }
+        return .range(start: s, length: l)
+    }
+
     private func evaluateMark(id: String, input: [String: Any], expect: [String: Any]) -> String? {
         guard let sentence = input["sentence"] as? String, let range = input["range"] as? [String: Any] else {
             return "\(id): harness: mark needs a sentence and a range"
         }
-        let start = range["start"] as? String, length = range["length"] as? String
         let parsedRange: AITermRange
-        if start == "not-found" {
-            parsedRange = .notFound
-        } else if let start, let length, let s = Int(start), let l = Int(length) {
-            parsedRange = .range(start: s, length: l)
-        } else {
-            return "\(id): harness: an integer string or not-found was expected"
-        }
+        do { parsedRange = try Self.termRange(range, at: id) } catch { return "\(id): harness: \(error)" }
         guard let wanted = expect["text"] as? String, expect["status"] as? String == "ok" else {
             return "\(id): a mark case expects ok and text"
         }
@@ -137,8 +142,17 @@ struct AIContractTests {
         }
         let sense: AISense?
         do { sense = try Self.sense(input) } catch { return "\(id): harness: \(error)" }
-        let question = AIQuestion(term: term, termRange: .notFound, sentence: sentence, entry: entry,
-                                  sense: sense, language: language, mode: mode)
+        // **A question's term range is part of the contract's input** (§2): compose cases may state one, and a phrase
+        // ask always does — its `term` is the marked span's own words.
+        let range: AITermRange
+        if let value = input["range"] {
+            do { range = try Self.termRange(value, at: id) } catch { return "\(id): harness: \(error)" }
+        } else {
+            range = .notFound
+        }
+        let question = AIQuestion(term: term, termRange: range, sentence: sentence, entry: entry,
+                                  sense: sense, language: language, mode: mode,
+                                  phrase: input["phrase"] as? String)
         do {
             let composed = try AIComposer.compose(template: template, question: question)
             guard expect["status"] as? String == "ok", let wanted = expect["text"] as? String else {
@@ -379,13 +393,13 @@ struct AIContractTests {
     /// **A fixture the harness cannot use is a harness failure** (§8): malformed JSON, an unknown operation, a duplicate
     /// id, an unsupported grammar or major.
     @Test func aFixtureTheHarnessCannotUseIsAHarnessFailure() {
-        let good = #"{"format":1,"contract":4,"id":"a","op":"mark","input":{"sentence":"hold","range":{"start":"not-found","length":"4"}},"expect":{"status":"ok","text":"hold"}}"#
+        let good = #"{"format":1,"contract":5,"id":"a","op":"mark","input":{"sentence":"hold","range":{"start":"not-found","length":"4"}},"expect":{"status":"ok","text":"hold"}}"#
         func run(_ text: String) throws {
             _ = try Self.suite(Data(text.utf8))
         }
         #expect(throws: Harness.self) { try run(good + "\n" + good + "\n") }
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""format":1"#, with: #""format":2"#)) }
-        #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""contract":4"#, with: #""contract":5"#)) }
+        #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""contract":5"#, with: #""contract":6"#)) }
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""op":"mark""#, with: #""op":"frob""#)) }
         #expect(throws: Harness.self) { try run(#"{"#) }
         #expect(throws: Never.self) { try run(good) }
