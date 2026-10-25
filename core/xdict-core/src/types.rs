@@ -470,7 +470,12 @@ impl Location {
     /// The name a reader would recognise: the path's last component, or the source's name.
     pub fn name(&self) -> &str {
         match self {
-            Self::Path { path } => path.rsplit(['/', '\\']).next().unwrap_or(path),
+            // **A path is the platform's** (audit round 1, 2026-10-26): Windows separates on a backslash; on every
+            // other system it is an ordinary character of the file's name.
+            Self::Path { path } => {
+                let separators: &[char] = if cfg!(windows) { &['/', '\\'] } else { &['/'] };
+                path.rsplit(separators).next().unwrap_or(path)
+            }
             Self::Source { name, .. } => name,
         }
     }
@@ -727,5 +732,18 @@ record! {
         pub values: Vec<String>,
         /// What the edition shows when the reader has chosen nothing.
         pub default_value: String,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Location;
+
+    #[test]
+    fn a_backslash_separates_only_on_windows() {
+        let path = Location::Path { path: "/dicts/my\\style.css".into() };
+        assert_eq!(path.name(), if cfg!(windows) { "style.css" } else { "my\\style.css" });
+        let plain = Location::Path { path: "/dicts/style.css".into() };
+        assert_eq!(plain.name(), "style.css");
     }
 }
