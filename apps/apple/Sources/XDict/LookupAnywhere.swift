@@ -640,6 +640,16 @@ final class LookupAnywhere {
         Task { await XDictApp.history.record(reading) }
     }
 
+    /// **A phrase row appearing or leaving re-fits the panel** (audit round 4, 2026-10-26): the fit follows a document's
+    /// finish, and the capture's row arrives later — without this the entry keeps the room the row now needs.
+    func phraseRowChanged() {
+        guard let state, state.model.shown != nil, panel?.isShown == true else { return }
+        shownEntry += 1
+        fit.began(entry: shownEntry)
+        let entry = shownEntry
+        Task { @MainActor in await self.fitToEntry(entry) }
+    }
+
     /// The panel as tall as its entry, within bounds and the screen's room (UI review P-03, Codex §3), its top edge
     /// kept where it is unless that would leave the screen.
     private func fitToEntry(_ entry: Int) async {
@@ -647,7 +657,8 @@ final class LookupAnywhere {
         let document = await state.entry.documentHeight()
         guard let panel, panel.isShown else { return }
         let visible = (panel.anchor.screen ?? NSScreen.main)?.visibleFrame ?? .zero
-        let height = PanelPlacement.height(document: document, chrome: LookupPanelView.chromeHeight,
+        let height = PanelPlacement.height(document: document,
+                                           chrome: LookupPanelView.chromeHeight(for: state.phrases.row),
                                            available: visible.height - 2 * PanelPlacement.margin)
         guard fit.accepts(height: height, current: panel.bodySize.height, entry: entry) else { return }
         panel.resize(height: height)
@@ -776,6 +787,8 @@ private struct PanelRoot: View {
             // **The lookup itself, not only its placeholder** (round 3, finding 4): an empty library's "No dictionaries."
             // is the same value for every query, so a delivered request settled to it never fired the observer above.
             .onChange(of: state.model.lookup) { _, _ in anywhere.placeholderChanged(state.placeholder) }
+            // **The phrase row changes what the panel is**: it appears after the capture, outside a document's finish.
+            .onChange(of: state.phrases.row) { _, _ in anywhere.phraseRowChanged() }
     }
 }
 

@@ -73,6 +73,12 @@ public struct LookupPanelView: View {
     public static let chromeHeight: CGFloat = PanelLook.topSpace + PanelLook.titleRow + PanelLook.footerGap
         + 2 * (PanelLook.footerGap + PanelLook.footerRow + 1) + PanelLook.bottomInset
 
+    /// **The chrome of a panel showing this row** (audit round 4, 2026-10-26): the phrase row is above the entry, not
+    /// inside it, so a panel fitted without it is one row too short.
+    public static func chromeHeight(for row: PhraseRow) -> CGFloat {
+        row == .hidden ? chromeHeight : chromeHeight + PanelLook.phraseRowHeight
+    }
+
     /// The popover's title row (P41): its 20 pt title. Apple's runs a rule after it to the trailing inset; XDict's has none
     /// (owner, 2026-10-18). The popover's title is the dictionary's name; XDict's keeps the speaker before the headword
     /// (owner, 2026-10-17). No switcher: every
@@ -130,6 +136,8 @@ public struct LookupPanelView: View {
                         .font(Tokens.TextRole.caption.font)
                         .foregroundStyle(Tokens.Colour.secondaryLabel.color)
                         .lineLimit(2)
+                    // **One line, so the fit's reservation is the row's height** (audit round 4, 2026-10-26): a phrase or
+                    // a label that wrapped would draw past the space the panel was fitted with.
                     HStack(spacing: PanelLook.footerGap) {
                         Text(verbatim: candidate.phrase)
                             .font(Tokens.TextRole.panelDictionaryName.font)
@@ -144,6 +152,7 @@ public struct LookupPanelView: View {
                         }
                     }
                 }
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
                 .padding(.leading, PanelLook.leading)

@@ -1,6 +1,8 @@
 import AppKit
 import Testing
 import XDictAnywhere
+import XDictContract
+import XDictSearch
 @testable import XDictUI
 
 /// **The lookup panel imitates the system Look Up popover** (P41; owner, 2026-10-17). The numbers are the popover's own,
@@ -25,6 +27,16 @@ struct PopoverParityTests {
         // Title row, the gap under it, then two footer rows, each with its gap and its hairline, and the bottom inset.
         let footerRows: CGFloat = 2 * (8 + 26 + 1) + 8
         #expect(LookupPanelView.chromeHeight == 16 + 24 + 8 + footerRows)
+    }
+
+    /// **The phrase row is chrome, not entry** (audit round 4, 2026-10-26): a panel fitted without it is one row short.
+    @Test func thePhraseRowIsAddedToTheChromeOnlyWhenOneIsShown() {
+        #expect(LookupPanelView.chromeHeight(for: .hidden) == LookupPanelView.chromeHeight)
+        let candidate = PhraseRow.Candidate(dict: DictId(rawValue: "handle"), phrase: "purple passage",
+                                            separation: .none, gap: 0, span: NSRange(location: 0, length: 14))
+        #expect(LookupPanelView.chromeHeight(for: .found(candidate, total: 1, capped: false))
+                == LookupPanelView.chromeHeight + PanelLook.phraseRowHeight)
+        #expect(PanelLook.phraseRowHeight > PanelLook.footerRow, "two caption lines and a name line are more than one row")
     }
 
     @Test func theWholePopoverIsFrostedByThePopoverMaterial() {

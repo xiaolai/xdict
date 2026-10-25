@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import XDictTokens
 
@@ -21,4 +22,18 @@ public enum PanelLook {
     public static let bottomInset: CGFloat = Tokens.Inset.panelBottom
     /// The entry's last 16 pt fade to clear above the footer: scrolled text never meets the footer's hairline.
     public static let entryFade: CGFloat = Tokens.Inset.panelEntryFade
+
+    /// **The phrase row's reserved height** (audit round 4, 2026-10-26): its tallest shape — two caption lines over the
+    /// phrase's own line (`lineLimit(2)`), the gap between them and the row's own bottom gap. A row that draws shorter
+    /// leaves slack in the entry; a panel fitted without the height is a row the popover cannot show.
+    public static var phraseRowHeight: CGFloat {
+        let caption = Tokens.TextRole.caption.nsFont
+        let name = Tokens.TextRole.panelDictionaryName.nsFont
+        return 2 * lineHeight(caption) + lineHeight(name) + 2 * footerGap
+    }
+
+    /// One line of a font as it draws it: the font's own metrics, never a hand-written multiplier.
+    static func lineHeight(_ font: NSFont) -> CGFloat {
+        (font.ascender - font.descender + font.leading).rounded(.up)
+    }
 }
