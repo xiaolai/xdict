@@ -925,6 +925,17 @@ public final class MeaningSession {
         previewSettings = nil
         previewEntry = nil
         previewOperation = nil
+        // **A sense load still running belongs to the answer being dropped** (verification round 3, 2026-10-25): its rows
+        // may arrive after a new ask, so it is cancelled and its state reset. The pane's task keys on the sent record, so
+        // the next answer loads this entry's rows again even when the target is unchanged.
+        if sensesStatus == .loading {
+            sensesGeneration += 1
+            sensesTask?.cancel()
+            sensesTask = nil
+            senses = []
+            sensesTarget = nil
+            sensesStatus = nil
+        }
     }
 
     /// What composition produced: a failure state, the request as it would be sent, or both (a failure after composing

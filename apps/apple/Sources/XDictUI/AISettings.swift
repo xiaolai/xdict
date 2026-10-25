@@ -28,34 +28,7 @@ public struct AISettings: View {
     public var body: some View {
         @Bindable var model = model
         Form {
-            Section {
-                if model.preferences.settings.source == nil {
-                    Text("No source is chosen, so XDict never asks anything. Dictionaries still work as before.")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("ai.no-source")
-                }
-                // **One native single choice** (UI32): a radio group announces the group, the chosen source and each
-                // change to VoiceOver, and moves with the arrow keys, as a row of look-alike buttons did not.
-                Picker(selection: $model.choice) {
-                    ForEach(AISourceChoice.allCases, id: \.self) { choice in
-                        sourceLabel(choice)
-                            .tag(choice)
-                            .accessibilityIdentifier("ai.source.\(choice.identifier)")
-                    }
-                } label: {
-                    Text("Where answers come from")
-                }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
-                .accessibilityLabel(Text("Where answers come from"))
-                .accessibilityIdentifier("ai.source")
-                .settingsAnchor(.aiSource)
-                if model.preferences.settings.source != nil {
-                    statusRow
-                }
-            } header: {
-                Text("Where answers come from")
-            }
+            sourceSection(model: model)
 
             if model.preferences.settings.source == .http {
                 endpointSection(model: model)
@@ -91,6 +64,41 @@ public struct AISettings: View {
         .onChange(of: route.revealSerial) { revealIfAsked() }
     }
 
+    /// **The source choice and its live status** (UI32): the one native radio group, then what the check found. An address
+    /// the field holds but the reader has not finished typing is named here, because the status still describes the saved
+    /// one (audit round 3, 2026-10-25).
+    @ViewBuilder private func sourceSection(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        Section {
+            if model.preferences.settings.source == nil {
+                Text("No source is chosen, so XDict never asks anything. Dictionaries still work as before.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ai.no-source")
+            }
+            // **One native single choice**: a radio group announces the group, the chosen source and each change to
+            // VoiceOver, and moves with the arrow keys, as a row of look-alike buttons did not.
+            Picker(selection: $model.choice) {
+                ForEach(AISourceChoice.allCases, id: \.self) { choice in
+                    sourceLabel(choice)
+                        .tag(choice)
+                        .accessibilityIdentifier("ai.source.\(choice.identifier)")
+                }
+            } label: {
+                Text("Where answers come from")
+            }
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            .accessibilityLabel(Text("Where answers come from"))
+            .accessibilityIdentifier("ai.source")
+            .settingsAnchor(.aiSource)
+            if model.preferences.settings.source != nil {
+                statusRow
+            }
+        } header: {
+            Text("Where answers come from")
+        }
+    }
+
     private func revealIfAsked() {
         if route.revealed == SettingsSearch.Anchor.aiPrompt { advancedShown = true }
     }
@@ -124,6 +132,23 @@ public struct AISettings: View {
     }
 
     @ViewBuilder private var statusRow: some View {
+        if model.endpointInvalid {
+            // **The field's text is not the address in use** (audit round 3, 2026-10-25): saying "Configured" beside it
+            // described the last saved address, which the reader cannot see.
+            Label {
+                Text("This is not an address, so requests still use the last saved one.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            .font(.caption)
+            .foregroundStyle(.orange)
+            .accessibilityIdentifier("ai.status.endpoint-invalid")
+        } else {
+            statusBody
+        }
+    }
+
+    @ViewBuilder private var statusBody: some View {
         switch model.status {
         case .checking: checkingRow
         case .notConfigured: Text("Not set up yet.").foregroundStyle(.secondary)
@@ -134,9 +159,14 @@ public struct AISettings: View {
     }
 
     private var checkingRow: some View {
+        progressRow("Checking…")
+    }
+
+    /// **One progress row** (audit round 3, 2026-10-25): the status check and the key test differed only in their word.
+    private func progressRow(_ label: LocalizedStringResource) -> some View {
         HStack(spacing: Tokens.Space.xs) {
             ProgressView().controlSize(.small)  // placement: spinner
-            Text("Checking…").foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary)
         }
     }
 
@@ -372,10 +402,7 @@ public struct AISettings: View {
     }
 
     private var keyTesting: some View {
-        HStack(spacing: Tokens.Space.xs) {
-            ProgressView().controlSize(.small)  // placement: spinner
-            Text("Testing…").foregroundStyle(.secondary)
-        }
+        progressRow("Testing…")
     }
 
     private func keyRefused(model: AISettingsModel, error: AIProviderError) -> some View {

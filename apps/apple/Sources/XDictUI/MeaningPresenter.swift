@@ -152,6 +152,23 @@ public enum MeaningPresenter {
         }
     }
 
+    /// **The note an explicit save writes** (plan-companion WI-9; owner, 2026-10-25): the explanation, each quote on its
+    /// own line in the pane's quotation marks, then a provenance line naming the source, the model when one was named, and
+    /// that a model wrote the wording. The sentence is never part of it; the day is ISO 8601 in UTC, so a test can read it.
+    public static func noteText(presentation: MeaningPresentation, source: LocalizedStringResource?, model: String?,
+                                date: Date) -> String {
+        // The day is the UTC calendar day, built from components: no format style, no locale, no zone surprises.
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
+        let parts = calendar.dateComponents([.year, .month, .day], from: date)
+        let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
+        let sourceName = source.map { String(localized: $0) } ?? String(localized: MeaningSentences.anAISource)
+        let provenance = String(localized: MeaningSentences.noteProvenance(source: sourceName, model: model, day: day))
+        return ([presentation.explanation] + presentation.quotes.map { "“\($0)”" } + [provenance])
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
     /// The answer was about a chosen sense, and the reader's choice is now **another** sense. Nil is not "moved": the
     /// label says "You have chosen another sense since", which would be false when none is chosen, and the answer already
     /// names its own sense (`chosenSense`). `clearingTheChosenSenseKeepsTheAnswer` pins this (audit round 1, 2026-10-25).

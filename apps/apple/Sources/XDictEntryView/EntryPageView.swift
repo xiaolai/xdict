@@ -723,6 +723,9 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
 
     // MARK: - Find, across frames (R3, P30)
 
+    /// Which find may still publish; a clear or a newer find advances it (audit round 3).
+    private var findSerial = 0
+
     private func clearFindState() {
         findQuery = ""
         findCounts = []
@@ -731,24 +734,31 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     }
 
     /// Finds `query` in every frame (each made first), the first match current; collapsed dictionaries' matches are
-    /// counted as hidden, as folded ones are.
+    /// counted as hidden, as folded ones are. **A find a newer one or a clear overtook publishes nothing** (audit round 3,
+    /// 2026-10-25): the loop checks its serial after every suspension, not only at the end.
     func find(_ query: String) async -> EntryFindResult? {
         if let refusal = materialize(all: true) {
             onRefusal?(refusal)
             return nil
         }
         await loaded()
+        findSerial += 1
+        let mine = findSerial
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findQuery = query
         var counts: [Int] = [], hidden = 0
         for section in sections {
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             guard let pane = section.pane, let result = await pane.find(query) else {
                 counts.append(0)
                 continue
             }
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             hidden += result.hidden + (section.collapsed ? result.visible : 0)
             counts.append(section.collapsed ? 0 : result.visible)
             await clearCurrent(pane)
         }
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findCounts = counts
         findCurrent = nil
         findHidden = hidden
@@ -762,13 +772,18 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     }
 
     func clearFind() async {
+        findSerial += 1
         clearFindState()
         for pane in panes { await pane.clearFind() }
     }
 
     private func move(to next: (section: Int, match: Int)?, forward: Bool = true) async -> EntryFindResult? {
+        let mine = findSerial
         let hidden = findHidden
         let total = findCounts.reduce(0, +)
+        // **Even the no-match branch obeys the serial** (verification round 3, 2026-10-25): a clear before this move began
+        // must not be overwritten by its nil.
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         guard let next, let pane = sections[next.section].pane else {
             findCurrent = nil
             return EntryFindResult(visible: total, hidden: hidden, current: 0)
@@ -780,11 +795,16 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             _ = await pane.find(findQuery)
             for _ in 0..<next.match { _ = await pane.findStep(forward: true) }
         }
+        // **A clear or a newer find owns the page by now** (audit round 3, 2026-10-25): this move neither publishes a
+        // position nor scrolls a document the reader has left.
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findCurrent = next
         if let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
                                                              contentWorld: EntryPane.world) as? Double {
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             reveal(sections[next.section], documentY: y)
         }
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         return EntryFindResult(visible: total, hidden: hidden, current: EntryPagePlan.position(next, counts: findCounts))
     }
 

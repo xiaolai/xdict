@@ -897,6 +897,26 @@ import XDictContract
         #expect(session.sensesTarget?.entry == other)
     }
 
+    /// **Dropping evidence cancels a load still running** (verification round 3, 2026-10-25): a refused ask cannot leave a
+    /// fetch to land rows for the request being replaced, and the release does not repaint them.
+    @Test func droppingEvidenceCancelsAPendingSenseLoad() async {
+        let fetcher = EntryGatedFetcher(first: Self.entry, firstText: "from the first", secondText: "unused")
+        let matched = Self.matched
+        let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in StubProvider(answers: [.success(matched)]) })
+        session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+        #expect(await Self.waitUntil { session.sensesStatus == .loading }, "the load never started")
+        let before = session.sensesSettled
+        session.settings.source = nil
+        session.ask()                       // refused for lack of a source, after dropping the evidence
+        #expect(session.sensesStatus == nil)
+        #expect(session.senses.isEmpty)
+        await fetcher.openFirst()
+        #expect(await Self.waitUntil { session.sensesSettled > before }, "the released fetch never finished")
+        #expect(session.senses.isEmpty && session.sensesStatus == nil, "a cancelled load landed rows")
+    }
+
     /// **A failed read is a failure, not an entry with no senses** (audit round 1, 2026-10-25): the status says so, and
     /// the retry asks again rather than the failure passing for an empty entry.
     @Test func aFailedSenseReadIsNotAnEmptyEntry() async {

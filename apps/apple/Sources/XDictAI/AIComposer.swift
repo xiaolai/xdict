@@ -219,25 +219,24 @@ public struct AIComposer: Sendable {
     /// braces is never read again (`CONTRACT.md` §4.3). **The ceiling is checked before a piece is copied** (audit round
     /// 1, finding 1): an oversized sentence, entry or term is refused rather than allocated and then refused.
     static func render(_ pieces: [Piece], question: AIQuestion, ceiling: Int) throws(AIComposeError) -> String {
-        // **The size comes first** (audit round 2, 2026-10-25): a flood is refused with nothing built, and the per-piece
-        // check below stays as the second guard.
+        var out = ""
+        try render(pieces, question: question, ceiling: ceiling) { out += $0 }
+        return out
+    }
+
+    /// **The copy sink is where a test can see the refusal** (verification round 3, 2026-10-25): the ceiling is decided over
+    /// the parsed pieces first, so a question that cannot fit hands the sink nothing.
+    static func render(_ pieces: [Piece], question: AIQuestion, ceiling: Int,
+                       copy: (String) throws(AIComposeError) -> Void) throws(AIComposeError) {
         guard renderedBytes(pieces, question: question, stoppingAbove: ceiling) <= ceiling else {
             throw .questionTooLong
         }
-        var out = ""
-        func append(_ piece: String) throws(AIComposeError) {
-            guard piece.utf8.count <= ceiling - out.utf8.count else { throw .questionTooLong }
-            out += piece
-        }
         for piece in pieces {
             switch piece {
-            case .literal(let text):
-                try append(text)
-            case .placeholder(let placeholder):
-                try append(placeholder.value(in: question))
+            case .literal(let text): try copy(text)
+            case .placeholder(let placeholder): try copy(placeholder.value(in: question))
             }
         }
-        return out
     }
 }
 

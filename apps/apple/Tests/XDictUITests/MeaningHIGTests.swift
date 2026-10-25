@@ -32,6 +32,24 @@ struct MeaningHIGTests {
         #expect(shown?.questionContext != other)
     }
 
+    /// **A newer capture does not relabel the request already composed** (audit round 3, 2026-10-25): the session's live
+    /// context is a second sentence, and the presentation still shows the request's own.
+    @Test func aNewerCaptureDoesNotRelabelTheRequestShown() async throws {
+        let (session, _, _) = Base.session()
+        session.ask()
+        #expect(await Base.waitUntil { session.state != .asking })
+        let sent = try #require(session.sent)
+        let context = try #require(sent.questionContext)
+        session.hold(MeaningHandoff(term: "run", sentence: "They run daily.", range: NSRange(location: 5, length: 3),
+                                    origin: MeaningOrigin(request: 8, generation: 3)))
+        let answer = AIAnswer(outcome: .matched, quotes: ["to keep"], explanation: "It means that here.")
+        let shown = try #require(MeaningPresenter.present(.answer(answer, mode: .grounded), settings: Self.settings,
+                                                          sent: sent))
+        #expect(shown.questionContext == context)
+        #expect(shown.questionContext?.sentence == "They hold that view.")
+        #expect(session.held?.sentence == "They run daily.", "the newer capture was not the live context")
+    }
+
     @Test func aPreviewShowsTheSentenceItWouldSend() async {
         let (session, _, _) = Base.session()
         session.preview()

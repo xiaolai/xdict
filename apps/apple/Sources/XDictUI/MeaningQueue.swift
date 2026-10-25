@@ -28,6 +28,8 @@ public actor MeaningQueue {
 
     /// Waits for the source kind and takes it; `false` when the task was cancelled while it waited.
     func acquire(_ kind: AIProviderKind, id: UUID) async -> Bool {
+        // **A task already cancelled takes nothing** (audit round 3, 2026-10-25).
+        guard !Task.isCancelled else { return false }
         // A ticket is one ask: no marker for it may outlive its acquisition (audit finding, 2026-10-20).
         cancelled.remove(id)
         pending.insert(id)
@@ -35,6 +37,11 @@ public actor MeaningQueue {
             busy.insert(kind)
             cancelled.remove(id)
             pending.remove(id)
+            // The cancellation may have arrived while the source was being taken.
+            guard !Task.isCancelled else {
+                busy.remove(kind)
+                return false
+            }
             return true
         }
         let taken = await withTaskCancellationHandler {
@@ -52,6 +59,11 @@ public actor MeaningQueue {
         pending.remove(id)
         // A cancellation that raced the hand-over may have inserted a marker after the waiter left; the ticket is done.
         cancelled.remove(id)
+        // **A hand-over to a cancelled ask leaves the source free** (audit round 3, 2026-10-25).
+        if taken, Task.isCancelled {
+            release(kind)
+            return false
+        }
         return taken
     }
 
@@ -71,10 +83,8 @@ public actor MeaningQueue {
         // The ticket has already acquired or abandoned the wait: a late cancellation changes nothing.
         guard pending.contains(id) else { return }
         guard let index = waiters.firstIndex(where: { $0.id == id }) else {
-            // The cancellation may have raced the continuation's installation; the set holds it until then. Markers for
-            // asks that already hold a source are harmless but must not accumulate without bound: the set is cleared
-            // when it outgrows any plausible number of simultaneous waiters.
-            if cancelled.count > 1_024 { cancelled.removeAll() }
+            // The cancellation may have raced the continuation's installation; the set holds it until then, and
+            // `acquire` removes it when the ticket is done (audit round 3: the old global purge could forget a live marker).
             cancelled.insert(id)
             return
         }

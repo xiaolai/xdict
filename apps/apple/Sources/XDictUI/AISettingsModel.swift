@@ -69,6 +69,8 @@ public final class AISettingsModel {
     @ObservationIgnored private let fetchModels: FetchModels
     @ObservationIgnored private let checkStatus: CheckStatus
     @ObservationIgnored private var signInTask: Task<Void, Never>?
+    /// Whether the running login's lines are still shown: its own end closes them (audit round 3).
+    @ObservationIgnored private var loginAcceptsLines = false
     @ObservationIgnored private var signInGeneration = 0
 
     public init(preferences: MeaningPreferences, login: Login? = nil, fetchModels: FetchModels? = nil,
@@ -189,6 +191,9 @@ public final class AISettingsModel {
     }
 
     public func refreshStatus() async {
+        // **A check cancelled before it starts does nothing** (audit round 3, 2026-10-25): `startStatusCheck()` followed by
+        // the pane closing must not publish "Checking…" or call the provider.
+        guard !Task.isCancelled else { return }
         // **A superseded check cannot overwrite the current source's status** (audit finding, 2026-10-20), and neither
         // can a check cancelled by the pane or made for a configuration the reader has since changed (audit finding,
         // 2026-10-25: the task is driven by `StatusKey`, so a change starts a new one and cancels this one).
@@ -207,14 +212,10 @@ public final class AISettingsModel {
         status = found
     }
 
-    /// **What a live check and a key probe depend on**, as one value: the source, its address, the service the source
-    /// actually uses, its model, and the key it actually sends. The view's `task(id:)` and the stale-result guard both
-    /// read this one definition (audit round 1, 2026-10-25), so a change in what they read cannot make one restart a
-    /// check the other keeps, or discard a result nothing asks again for. Any other setting moving (a prompt edit, the
-    /// switch) leaves their answers true.
-    ///
-    /// **The effective service and key, not the stored id** (verification finding, 2026-10-25): a stored profile the
-    /// chosen row does not use, or a key the row does not send, must not make a check stale.
+    /// **What a live check and a key probe depend on**: the source, its address, the service it actually uses, its model
+    /// and the key it actually sends. The view's `task(id:)` and the stale-result guard read this one value, so a check is
+    /// restarted exactly when its inputs change. The *effective* service and key count: a stored profile the chosen row
+    /// does not use, or a key it does not send, must not make a check stale.
     struct SourceIdentity: Hashable {
         let source: AIProviderKind?
         let endpoint: String
@@ -402,16 +403,16 @@ public final class AISettingsModel {
 
     // MARK: - The command-line sources
 
-    /// **Sign In with Codex…** (UI33): one login at a time, owned here so the pane can cancel it. Cancelling ends the
-    /// login's process group (`CLIProcess`) and is not the source's failure.
-    /// **The returned task is the login's own end**, cancellation included (audit round 2, 2026-10-25): a caller that
-    /// must know the login is over — a test, a follow-up — awaits it instead of sleeping to guess. The pane ignores it.
+    /// **Sign In with Codex…** (UI33): one login at a time, owned here so the pane can cancel it; cancelling ends its
+    /// process group (`CLIProcess`) and is not the source's failure. The returned task is the login's own end, cancellation
+    /// included, so a caller that must know it is over awaits it instead of sleeping. The pane ignores it.
     @discardableResult
     public func startSignIn() -> Task<Void, Never>? {
         guard signInTask == nil else { return signInTask }
         signInGeneration += 1
         let mine = signInGeneration
         signingIn = true
+        loginAcceptsLines = true
         loginLines = []
         let task = Task { [weak self] in
             await self?.signIn(mine)
@@ -428,16 +429,15 @@ public final class AISettingsModel {
     /// shows its code.
     public func cancelSignIn() {
         signInGeneration += 1
+        loginAcceptsLines = false
         signInTask?.cancel()
         signInTask = nil
         signingIn = false
         loginLines = []
     }
 
-    /// **One ordered consumer for a login's lines** (audit finding, 2026-10-25): the Codex CLI calls its line handler
-    /// from the thread reading the process's output, and a task per line landed two lines of one login in either order —
-    /// which shuffles the sign-in page's address and its code past each other. The main queue is FIFO and is the main
-    /// actor, so the lines keep the login's own order.
+    /// **One ordered consumer for a login's lines**: the Codex CLI calls its handler from the process's output thread, and
+    /// a task per line landed two lines in either order. The main queue is FIFO, so the lines keep the login's order.
     nonisolated static func deliver(_ line: String,
                                     to append: @escaping @MainActor @Sendable (String) -> Void) {
         DispatchQueue.main.async { MainActor.assumeIsolated { append(line) } }
@@ -447,9 +447,14 @@ public final class AISettingsModel {
     func signIn(_ mine: Int) async {
         // A line from a sign-in already cancelled is not shown under the current one.
         let append: @MainActor @Sendable (String) -> Void = { [weak self] line in
-            guard let self, mine == self.signInGeneration else { return }
+            // **A line queued before the login finished is not shown after it** (audit round 3, 2026-10-25): the output is
+            // closed by the sign-in's own end, not only by a newer generation.
+            guard let self, mine == self.signInGeneration, self.loginAcceptsLines else { return }
             self.loginLines.append(line)
         }
+        // **The output closes on every end of this login** (audit round 3, 2026-10-25): a cancellation or supersession that
+        // returns early still belonged to this generation's login.
+        defer { if mine == signInGeneration { loginAcceptsLines = false } }
         do {
             if let runLogin {
                 try await runLogin(append)
@@ -460,12 +465,14 @@ public final class AISettingsModel {
             // **A finished login speaks only while Codex is still the source** (audit finding, 2026-10-25): the reader
             // may have chosen another source during it, and neither its success nor its failure is that source's.
             guard !Task.isCancelled, mine == signInGeneration, preferences.settings.source == .codexCLI else { return }
+            loginAcceptsLines = false
             loginLines = []
             await refreshStatus()
         } catch {
             // A cancelled login is the reader's choice, not the source's failure; a superseded one says nothing.
             guard mine == signInGeneration, !Task.isCancelled, preferences.settings.source == .codexCLI,
                   !(error is CancellationError), (error as? AIProviderError) != .cancelled else { return }
+            loginAcceptsLines = false
             // **A login's failure outranks a status check already running** (audit round 2, 2026-10-25): that check's
             // generation is older than this verdict, and its guard must not let it overwrite the failure.
             statusGeneration += 1

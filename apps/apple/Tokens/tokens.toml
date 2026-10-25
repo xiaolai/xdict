@@ -89,6 +89,8 @@ popoverChrome = { value = 26, why = "What NSPopover draws around its content (it
 siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
 promptEditor = { value = 140, why = "The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form." }
 filterField = { value = 140, why = "The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row." }
+findSegmentWidth = { value = 26, why = "The find bar's previous and next segments: an SF Symbol plus its padding, so the bar's width does not move when they change." }
+findFieldMin = { value = 140, why = "The find field's least width: a word or two stays visible while the whole bar keeps one row." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }

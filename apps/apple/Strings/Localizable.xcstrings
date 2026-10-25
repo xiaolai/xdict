@@ -9393,6 +9393,22 @@
         }
       }
     },
+    "Replace the note on this entry?": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换此词条的笔记？"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace the note on this entry?"
+          }
+        }
+      }
+    },
     "Request Details": {
       "localizations": {
         "en": {
@@ -9678,6 +9694,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "保存密钥"
+          }
+        }
+      }
+    },
+    "Save as Note": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存为笔记"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as Note"
+          }
+        }
+      }
+    },
+    "Saved as a note.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存为笔记。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved as a note."
+          }
+        }
+      }
+    },
+    "Saved from an XDict AI answer (%@, %@). The wording is the model's.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved from an XDict AI answer (%@, %@). The wording is the model's."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存自 XDict 的 AI 回答（%@，%@）。措辞出自模型。"
+          }
+        }
+      }
+    },
+    "Saved from an XDict AI answer (%@, %@, %@). The wording is the model's.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved from an XDict AI answer (%@, %@, %@). The wording is the model's."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存自 XDict 的 AI 回答（%@，%@，%@）。措辞出自模型。"
+          }
+        }
+      }
+    },
+    "Saving…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在保存…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving…"
           }
         }
       }
@@ -12981,6 +13077,22 @@
         }
       }
     },
+    "This is not an address, so requests still use the last saved one.": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这不是一个地址，请求仍使用上次保存的地址。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is not an address, so requests still use the last saved one."
+          }
+        }
+      }
+    },
     "This link leaves the dictionary for %@. XDict does not load it here; your browser will, if you say so.": {
       "localizations": {
         "en": {
@@ -14426,6 +14538,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "你的措辞，未经测量"
+          }
+        }
+      }
+    },
+    "an AI source": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某个 AI 来源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "an AI source"
           }
         }
       }

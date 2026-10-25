@@ -186,10 +186,19 @@ A shell is compliant when all of these hold, each with its own native tests:
    chosen sense, a partial target, and English and Chinese punctuation.
 3. Its **native lifecycle and privacy** checks pass: one operation per ask, cancelled by Escape, a newer ask, closing or
    the consumer going; no history between asks; consent checked at send (and re-read at the send boundary after the entry
-   fetch and the queue permit); the preview equals the sent bytes; the sentence and the answer are not persisted.
+   fetch and the queue permit); the preview equals the sent bytes; the sentence and the answer are not persisted, except
+   the explanation the reader explicitly saves as a note (§8.4).
 
 A runner reports the case ids, the count and the suite revision (a digest of `vectors.jsonl`). A fixture that cannot be
 decoded, an unknown operation, a duplicate id or an unsupported major is a harness failure, never a refusal.
+
+## 8.4 A note the reader saves
+
+A shell may save the explanation — never the sentence — on the entry the request was composed from, when the reader asks
+for it. The saved note carries a provenance line naming the source, the model when one was named, and the day, and says
+the wording is the model's. It is the reader's note afterwards: editable, syncable and deletable like any other. Nothing
+is saved automatically, and a note already on the entry is replaced only after the reader confirms. (Owner, 2026-10-25:
+"干完"; `plan-companion-window.md` WI-9.)
 
 ## 9. Versioning
 

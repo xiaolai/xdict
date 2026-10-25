@@ -141,6 +141,29 @@ struct MeaningPresenterTests {
         #expect(try Self.text(presentation.problem ?? "") == "The source's answer did not pass XDict's check.")
     }
 
+    /// **The note a save writes** (plan-companion WI-9; owner, 2026-10-25): the explanation, each quote in the pane's
+    /// quotation marks, then a provenance line naming the source, the model and the day; the sentence never goes in.
+    @Test func theSavedNoteIsTheExplanationItsQuotesAndItsProvenance() throws {
+        let presentation = try #require(MeaningPresenter.present(Self.answer(.matched, ["to keep"]),
+                                                                 settings: Self.settings, sent: Self.sent()))
+        var components = DateComponents()
+        components.year = 2026
+        components.month = 10
+        components.day = 25
+        components.timeZone = TimeZone(secondsFromGMT: 0)
+        let date = try #require(Calendar(identifier: .gregorian).date(from: components))
+        let text = MeaningPresenter.noteText(presentation: presentation,
+                                             source: MeaningSentences.source(.claudeCLI), model: "a-model", date: date)
+        let lines = text.components(separatedBy: "\n")
+        #expect(lines.count == 3, "the note is not three parts: \(text)")
+        #expect(lines[0] == "It means that here.")
+        #expect(lines[1] == "“to keep”")
+        #expect(lines[2].contains("a-model") && lines[2].contains("2026-10-25"))
+        let provenance = MeaningSentences.noteProvenance(source: "Claude", model: "a-model", day: "2026-10-25")
+        #expect(try Self.text(provenance)
+                == "Saved from an XDict AI answer (Claude, a-model, 2026-10-25). The wording is the model's.")
+    }
+
     /// **Copy Answer is the explanation and its quotes as text** (plan-companion WI-10): each quote its own paragraph,
     /// quotation marks the pane's own, nothing that is not shown.
     @Test func theCopiedAnswerIsTheExplanationAndItsQuotes() throws {

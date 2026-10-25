@@ -280,6 +280,17 @@ struct AIContractTests {
         // the test measures the decision itself, not only the error compose happens to return.
         #expect(AIComposer.renderedBytes(try AIComposer.pieces(of: template), question: question)
                 > AIComposer.questionCeilingUTF8)
+        // **The sink sees nothing** (verification round 3, 2026-10-25): the refusal is decided before a piece is copied.
+        var copied = 0
+        do {
+            try AIComposer.render(try AIComposer.pieces(of: template), question: question, ceiling: 1_024) { _ in
+                copied += 1
+            }
+            Issue.record("the oversized question rendered")
+        } catch {
+            #expect(error == .questionTooLong)
+        }
+        #expect(copied == 0, "the refused question handed \(copied) pieces to the sink")
         do {
             _ = try AIComposer.compose(template: template, question: question)
             Issue.record("a 64 MB question was composed")

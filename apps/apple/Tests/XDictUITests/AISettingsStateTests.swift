@@ -44,6 +44,19 @@ struct AISettingsStateTests {
         #expect(AISettings.shellQuoted("/Users/o'brien") == "'/Users/o'\\''brien'")
     }
 
+    /// **One gate for the provider fakes** (audit round 3, 2026-10-25): short hops until released; a login's wait ends as
+    /// its own cancellation.
+    static func wait(until flag: Flag) async {
+        while !flag.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+    }
+
+    static func waitCancelling(until flag: Flag) async throws(AIProviderError) {
+        while !flag.isSet {
+            if Task.isCancelled { throw .cancelled }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+    }
+
     // MARK: - The source switch
 
     /// **A sign-in belongs to Codex** (audit finding, 2026-10-25): choosing another source ends it, and its failure is not
@@ -53,10 +66,7 @@ struct AISettingsStateTests {
         let started = Flag()
         let model = AISettingsModel(preferences: try preferences(), login: { _ in
             started.set()
-            while !gate.isSet {
-                if Task.isCancelled { throw AIProviderError.cancelled }
-                try? await Task.sleep(for: .milliseconds(10))
-            }
+            try await Self.waitCancelling(until: gate)
             throw AIProviderError.notSignedIn
         }, checkStatus: { _ in .ready("codex") })
         model.select(.codexCLI)
@@ -86,7 +96,7 @@ struct AISettingsStateTests {
         let model = AISettingsModel(preferences: try preferences(), checkStatus: { _ in
             if calls.next() == 1 {
                 started.set()
-                while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+                await Self.wait(until: gate)
                 return .ready("stale")
             }
             return .ready("fresh")
@@ -113,7 +123,7 @@ struct AISettingsStateTests {
             // **Cancellation lands mid-check by construction** (audit round 2, 2026-10-25): the provider proves it began
             // and then waits, so no sleep races a delay.
             entered.set()
-            while !release.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+            await Self.wait(until: release)
             return .ready("from a cancelled check")
         })
         let task = Task { await model.refreshStatus() }
@@ -221,7 +231,7 @@ struct AISettingsStateTests {
         let gate = Flag()
         let model = AISettingsModel(preferences: try preferences(), checkStatus: { _ in
             started.set()
-            while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+            await Self.wait(until: gate)
             return .ready("found")
         })
         defer { gate.set() }

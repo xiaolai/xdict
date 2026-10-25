@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "48a13ad6265477d41fc12112b95891b7af76c178196974114379442d62269711"
+    public static let sourceDigest = "d2cc5963a8e09200d51d45196f19a90b5d8ae7ef50151ebdde9b4b3cf276c6c0"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -102,6 +102,10 @@ public enum Tokens {
         public static let promptEditor: CGFloat = 140
         /// The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row.
         public static let filterField: CGFloat = 140
+        /// The find bar's previous and next segments: an SF Symbol plus its padding, so the bar's width does not move when they change.
+        public static let findSegmentWidth: CGFloat = 26
+        /// The find field's least width: a word or two stays visible while the whole bar keeps one row.
+        public static let findFieldMin: CGFloat = 140
     }
 
     /// Timings the shell runs itself: the drawer's springs and how long an undo stays offered.

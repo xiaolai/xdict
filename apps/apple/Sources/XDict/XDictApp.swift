@@ -195,9 +195,19 @@ struct XDictApp: App {
         var environment = setup.entryEvents.map { EntryEnvironment(events: $0) } ?? EntryEnvironment()
         if panel { environment.readingFrame = environment.readingFrame.union(.panel) }
         let entry = EntryViewController(environment: environment)
-        return SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
-                                 speech: SystemOutput(volume: setup.speechVolume),
-                                 speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
+        let state = SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
+                                      speech: SystemOutput(volume: setup.speechVolume),
+                                      speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
+        // **The pane's Save as Note** (plan-companion WI-9; owner, 2026-10-25): the app's study model, behind the reader's
+        // explicit tap; a note already on the entry is replaced only after the pane asks.
+        state.noteSaver = { entry, text, name in
+            await XDictApp.study.saveNote(entry: entry, text: text, name: name) != nil
+        }
+        state.entryNoteCheck = { entry in
+            // `note(for:)` reads the loaded set on the main actor; it does not suspend.
+            XDictApp.study.note(for: entry) != nil
+        }
+        return state
     }
 
     /// Each main window's state as it is made: for the instrument that drives the real app (`--lookup-window`).

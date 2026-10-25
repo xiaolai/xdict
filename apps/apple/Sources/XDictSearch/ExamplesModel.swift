@@ -89,17 +89,34 @@ public final class ExamplesModel {
     /// **The library's example stores changed**: ask again once, when a dictionary that was still building is ready;
     /// a dictionary whose build failed is named so the section does not say it is still preparing.
     public func buildStateChanged(ready: [DictId], unavailable: [DictId] = []) {
+        let previous = self.unavailable
         self.unavailable = Set(unavailable)
-        revision &+= 1
-        let now = Set(ready)
-        guard asked, now != lastReady else { return }
+        // **Only what this query asked about counts** (audit round 3, 2026-10-25): another dictionary's store finishing
+        // must not supersede a query that never included it.
+        let now = Set(ready).intersection(lastHandles)
+        let failures = Set(unavailable).intersection(lastHandles)
+        let readyChanged = now != lastReady
+        let changed = readyChanged || failures != previous.intersection(lastHandles)
+        guard changed else { return }
         lastReady = now
+        // **Only a visible change is announced** (audit round 3, 2026-10-25): while a new query waits, the previous
+        // query's hits must not look like this query's; a readiness change alone re-asks, whose answer carries its own
+        // revision; and a failure on a dictionary the answer did not name changes nothing the section shows.
+        if answered != nil, failures.intersection(notReady) != previous.intersection(notReady) { revision &+= 1 }
+        guard asked, readyChanged else { return }
         ask(query, lastHandles)
     }
 
     public func clear() {
         serial += 1
+        let mine = serial
         task?.cancel()
+        // **Clearing withdraws the query still out** (audit round 3, 2026-10-25): the service does not run a query no pane
+        // shows. A later ask advances `serial` first, so this withdrawal cannot cancel it.
+        task = Task { [weak self] in
+            guard let self, self.serial == mine else { return }
+            await self.backend.supersede(self.caller)
+        }
         query = ""
         hits = []
         total = 0
@@ -124,6 +141,8 @@ public final class ExamplesModel {
         let operation = ServiceOperation.examples(query: query, dicts: handles, limit: Self.page)
         let (backend, caller) = (backend, caller)
         task = Task { [weak self] in
+            // **A request cancelled before it started is never submitted** (audit round 3, 2026-10-25).
+            guard !Task.isCancelled else { return }
             let pending = await backend.queue([operation], as: caller, superseding: true)
             guard let outcome = await pending.first?.outcome(), let self, self.serial == mine else { return }
             switch outcome.examples {

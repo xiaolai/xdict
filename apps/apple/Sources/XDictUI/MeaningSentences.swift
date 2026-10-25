@@ -82,6 +82,20 @@ public enum MeaningSentences {
     public static let selectionMoved =
         LocalizedStringResource("You have chosen another sense since. This answer is about the one shown here.")
 
+    /// The note's origin when the request named no source: a saved note is data and still says where it came from.
+    public static let anAISource = LocalizedStringResource("an AI source")
+
+    /// **A saved note says where it came from** (plan-companion WI-9; owner, 2026-10-25): the source (and the model when
+    /// one was named), the day, and that a model wrote the wording — the reader's note never claims otherwise.
+    public static func noteProvenance(source: String, model: String?, day: String) -> LocalizedStringResource {
+        if let model, !model.isEmpty {
+            LocalizedStringResource(
+                "Saved from an XDict AI answer (\(source), \(model), \(day)). The wording is the model's.")
+        } else {
+            LocalizedStringResource("Saved from an XDict AI answer (\(source), \(day)). The wording is the model's.")
+        }
+    }
+
     /// **The cut, in the tense of the request** (UI19): a preview's entry *will be* cut; a sent one *was*.
     public static func cut(at bytes: UInt64, sent: Bool) -> LocalizedStringResource {
         sent ? LocalizedStringResource("The entry was cut at \(bytes) bytes, so only the part before that was sent.")

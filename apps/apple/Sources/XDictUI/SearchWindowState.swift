@@ -311,6 +311,26 @@ public final class SearchWindowState {
         hit.sources.first { $0.dict == dictionary }?.entry
     }
 
+    // MARK: - Saving an answer as a note (plan-companion WI-9; owner, 2026-10-25)
+
+    /// The shell's study model, wired by the app: nil hides the pane's Save as Note (an instrument window, a test).
+    @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String) async -> Bool)?
+    /// Whether an entry already carries a note, so a save asks before replacing it.
+    @ObservationIgnored public var entryNoteCheck: (@MainActor (EntryRef) async -> Bool)?
+
+    /// **Saves the answer the reader asked to keep** on the entry it was composed from. The caller builds the text — the
+    /// explanation, its quotes and the provenance line; the sentence never goes in.
+    public func saveNote(for target: MeaningTarget, text: String) async -> Bool {
+        guard let noteSaver else { return false }
+        return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "")
+    }
+
+    /// Whether that entry already has a note.
+    public func entryHasNote(_ entry: EntryRef) async -> Bool {
+        guard let entryNoteCheck else { return false }
+        return await entryNoteCheck(entry)
+    }
+
     /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.
     public func clearMeaning() {
         meaning.clear()

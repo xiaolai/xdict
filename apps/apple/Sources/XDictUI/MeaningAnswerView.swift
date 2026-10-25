@@ -23,6 +23,18 @@ public struct MeaningAnswerPane: View {
     @State private var revealFailed: String?
     /// The reveal whose answer may still change the pane: a later reveal, or a new answer, supersedes it (audit round 1).
     @State private var revealSerial = 0
+    /// How the answer's Save as Note ended (plan-companion WI-9): one action, replaced by its outcome.
+    @State private var noteState: NoteSaveState = .idle
+    /// A note already on the entry: the save asks before replacing it.
+    @State private var noteReplaceAsked = false
+
+    /// The save's own state; the pane offers one control at a time.
+    enum NoteSaveState: Equatable {
+        case idle
+        case saving
+        case saved
+        case failed
+    }
 
     public init(state: SearchWindowState, showsHeader: Bool = true) {
         self.state = state
@@ -56,7 +68,7 @@ public struct MeaningAnswerPane: View {
         .accessibilityIdentifier("meaning.pane")
         // **The answer's own entry supplies the sense list** (plan-companion WI-8): one fetch per edition-qualified
         // entry, made only while a request with an entry is shown.
-        .task(id: state.meaning.sent?.target) {
+        .task(id: state.meaning.sent) {
             if let target = state.meaning.sent?.target, state.meaning.sent?.mode != .sentenceOnly {
                 state.meaning.loadSenses(for: target)
             }
@@ -66,6 +78,8 @@ public struct MeaningAnswerPane: View {
         .onChange(of: state.meaning.state) {
             revealSerial += 1
             revealFailed = nil
+            noteState = .idle
+            noteReplaceAsked = false
         }
     }
 
@@ -292,12 +306,69 @@ public struct MeaningAnswerPane: View {
         }
     }
 
-    /// A failure's own recovery replaces Ask Again (UI15): two buttons for one retry read as two actions.
+    /// A failure's own recovery replaces Ask Again (UI15): two buttons for one retry read as two actions. **Save as Note**
+    /// sits beside them when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
     @ViewBuilder private func answerActions(_ presentation: MeaningPresentation) -> some View {
         if state.meaning.canAsk, presentation.recovery == nil {
             Button("Ask Again") { state.meaning.askAgain() }  // placement: inspector-row
                 .accessibilityIdentifier("meaning.again")
         }
+        if let target = state.meaning.sent?.target, state.noteSaver != nil, !presentation.explanation.isEmpty {
+            saveNoteControl(presentation, target: target)
+        }
+    }
+
+    /// **The reader's explicit save** (plan-companion WI-9; owner, 2026-10-25): one tap writes the explanation, its quotes
+    /// and a provenance line on the entry the request was composed from. A note already there is replaced only after the
+    /// pane asks; the outcome replaces the button.
+    @ViewBuilder private func saveNoteControl(_ presentation: MeaningPresentation, target: MeaningTarget) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            switch noteState {
+            case .saved:
+                Label { Text("Saved as a note.") } icon: { Image(systemName: "checkmark.circle") }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("meaning.note.saved")
+            case .failed:
+                Label { Text("The note could not be saved.") } icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("meaning.note.failed")
+            case .saving:
+                HStack(spacing: Tokens.Space.xs) {
+                    ProgressView().controlSize(.small)  // placement: spinner
+                    Text("Saving…").font(.caption).foregroundStyle(.secondary)
+                }
+            case .idle:
+                Button("Save as Note") {  // placement: inspector-row
+                    Task { await saveNote(presentation, target: target) }
+                }
+                .accessibilityIdentifier("meaning.note.save")
+            }
+        }
+        .confirmationDialog("Replace the note on this entry?", isPresented: $noteReplaceAsked, titleVisibility: .visible) {
+            Button("Replace", role: .destructive) {  // placement: inspector-row
+                Task { await writeNote(presentation, target: target) }
+            }
+            Button("Cancel", role: .cancel) {}  // placement: inspector-row
+        }
+    }
+
+    /// Asks first only when the entry already has a note: an empty entry takes the note directly.
+    private func saveNote(_ presentation: MeaningPresentation, target: MeaningTarget) async {
+        if await state.entryHasNote(target.entry) {
+            noteReplaceAsked = true
+            return
+        }
+        await writeNote(presentation, target: target)
+    }
+
+    private func writeNote(_ presentation: MeaningPresentation, target: MeaningTarget) async {
+        noteState = .saving
+        let text = MeaningPresenter.noteText(presentation: presentation,
+                                             source: MeaningSentences.source(state.meaning.sent?.source),
+                                             model: state.meaning.sent?.model, date: Date())
+        noteState = await state.saveNote(for: target, text: text) ? .saved : .failed
     }
 
     /// **The entry's senses, each a way into the chosen-sense question** (plan-companion WI-8): the core's own list,

@@ -120,10 +120,22 @@ struct CompanionSourceTests {
     @Test func theViewDrawsTheSenseDecision() throws {
         let source = try Self.code("Sources/XDictUI/MeaningAnswerView.swift")
         #expect(source.contains("switch senseDecision"))
+        // The rows reload for each new answer, not only when the target changes (verification round 3).
+        #expect(source.contains(".task(id: state.meaning.sent)"))
         // **The retry button's own line** (audit round 3, 2026-10-25): the substring alone also matched the pane's
         // initial `.task` load, so removing the retry action left the check green.
         #expect(source.contains(#"Button("Try Again") { state.meaning.loadSenses(for: target) }"#))
         #expect(source.contains("The senses could not be read."))
+    }
+
+    /// **The pane's save goes through the wired state** (plan-companion WI-9): the control exists only with a study model,
+    /// and the text is the note builder's.
+    @Test func thePaneSavesANoteThroughTheStatesModel() throws {
+        let source = try Self.code("Sources/XDictUI/MeaningAnswerView.swift")
+        #expect(source.contains("state.noteSaver != nil"))
+        #expect(source.contains("state.saveNote(for: target, text: text)"))
+        #expect(source.contains("MeaningPresenter.noteText("))
+        #expect(source.contains(#"Button("Save as Note")"#))
     }
 
     /// **Settings' own preview carries the answer language**: it composes through `AIComposer`, so the preview a reader
