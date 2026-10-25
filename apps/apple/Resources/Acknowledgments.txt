@@ -1,7 +1,7 @@
 XDict — third-party notices
 
 XDict is ISC-licensed. Its dictionary service links the Rust crates below; its entries use the fonts below.
-XDict's own crates: xdict-core, xdict-entry, xdict-ffi, xdict-health, xdict-identity, xdict-ledger, xdict-lookup, xdict-mdx, xdict-mmap, xdict-schedule.
+XDict's own crates: xdict-core, xdict-entry, xdict-ffi, xdict-health, xdict-identity, xdict-ledger, xdict-lookup, xdict-mdx, xdict-mmap, xdict-phrase, xdict-schedule.
 
 Fonts
 =====
