@@ -126,8 +126,8 @@ record! {
     }
 
     /// **A page of one dictionary's words** (plan-setup-v2 WI-6, ADR-0028): what a consumer that lists them — Core
-    /// Spotlight, today — reads, and nothing else. Public keys only, one per spelling, in the key block's own order;
-    /// no bodies, so a page costs no decompression.
+    /// Spotlight, today — reads, and nothing else. Public keys only, every key entry in the key block's own order, a
+    /// repeated spelling therefore repeated; no bodies, so a page costs no decompression.
     #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Words {
         /// The edition these words belong to: a page from another edition cannot be continued, so the reader starts
