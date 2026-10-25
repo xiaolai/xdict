@@ -489,6 +489,10 @@ fn stem_forms(stem: &str) -> Vec<String> {
     if let Some(double) = undouble(stem) {
         forms.push(double);
     }
+    // **`-ck` is how `-c` inflects**: `panicked` → stem `panick` → `panic` (audit round 3, 2026-10-26).
+    if let Some(base) = stem.strip_suffix('k').filter(|base| base.ends_with('c')) {
+        forms.push(base.to_string());
+    }
     forms
 }
 
@@ -540,25 +544,40 @@ fn inflections(base: &str) -> Vec<String> {
             push(&mut out, format!("{stem}ied"));
         }
     } else {
-        push(&mut out, format!("{base}ed"));
-        if is_cvc(base)
-            && let Some(last) = base.chars().last()
-        {
-            push(&mut out, format!("{base}{last}ed"));
+        // **A base ending in `-c` spells its past with `-cked`**: `panic` → `panicked`, never `panicced`.
+        if ends("c") {
+            push(&mut out, format!("{base}ked"));
+        } else {
+            push(&mut out, format!("{base}ed"));
+            if is_cvc(base)
+                && let Some(last) = base.chars().last()
+            {
+                push(&mut out, format!("{base}{last}ed"));
+            }
         }
     }
 
     // Gerund.
     if ends("ie") {
         push(&mut out, format!("{}ying", base.trim_end_matches("ie")));
-    } else if ends("e") && !ends("ee") {
-        push(&mut out, format!("{}ing", base.trim_end_matches('e')));
+    } else if ends("e") {
+        // **A base ending in `-ee`, `-ye` or `-oe` keeps its e**: seeing, dyeing, shoeing (audit round 3, 2026-10-26).
+        if ends("ee") || ends("ye") || ends("oe") {
+            push(&mut out, format!("{base}ing"));
+        } else {
+            push(&mut out, format!("{}ing", base.trim_end_matches('e')));
+        }
     } else {
-        push(&mut out, format!("{base}ing"));
-        if is_cvc(base)
-            && let Some(last) = base.chars().last()
-        {
-            push(&mut out, format!("{base}{last}ing"));
+        // **`-c` takes a `k` before `-ing`**: `panic` → `panicking`.
+        if ends("c") {
+            push(&mut out, format!("{base}king"));
+        } else {
+            push(&mut out, format!("{base}ing"));
+            if is_cvc(base)
+                && let Some(last) = base.chars().last()
+            {
+                push(&mut out, format!("{base}{last}ing"));
+            }
         }
     }
 
@@ -568,7 +587,11 @@ fn inflections(base: &str) -> Vec<String> {
         push(&mut out, format!("{base}st"));
     } else if let Some(stem) = base.strip_suffix("y") {
         let vowel_before = stem.chars().last().is_some_and(|c| "aeiou".contains(c));
-        if !vowel_before {
+        if vowel_before {
+            // **A vowel before the `y` keeps it**: `gray` → `grayer`/`grayest` (audit round 3, 2026-10-26).
+            push(&mut out, format!("{base}er"));
+            push(&mut out, format!("{base}est"));
+        } else {
             push(&mut out, format!("{stem}ier"));
             push(&mut out, format!("{stem}iest"));
         }

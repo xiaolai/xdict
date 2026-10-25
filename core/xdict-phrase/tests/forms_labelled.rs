@@ -95,3 +95,34 @@ fn ying_and_doubled_comparatives_are_reached() {
         assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
     }
 }
+
+/// **A kept e, a kept y, and the k `-c` takes** (audit round 3, 2026-10-26): `dyeing` and `shoeing` keep the e the
+/// gerund rule dropped, `grayer` keeps the y the `-y` branch dropped, and `panicked`/`panicking` both reach `panic`
+/// as it reaches them.
+#[test]
+fn kept_letters_and_the_ks_of_c() {
+    for (base, inflected) in [
+        ("dye", "dyeing"),
+        ("shoe", "shoeing"),
+        ("see", "seeing"),
+        ("agree", "agreeing"),
+        ("gray", "grayer"),
+        ("gray", "grayest"),
+        ("panic", "panicked"),
+        ("panic", "panicking"),
+    ] {
+        let got = forms(base);
+        assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
+    }
+    for (surface, base) in [
+        ("dyeing", "dye"),
+        ("shoeing", "shoe"),
+        ("grayer", "gray"),
+        ("grayest", "gray"),
+        ("panicked", "panic"),
+        ("panicking", "panic"),
+    ] {
+        let got = forms(surface);
+        assert!(got.iter().any(|form| form == base), "{surface} does not reach {base}: {got:?}");
+    }
+}
