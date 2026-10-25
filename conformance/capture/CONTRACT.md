@@ -90,8 +90,9 @@ geometry.
 
 - The sentence lives in **one ephemeral session per presentation**, in memory only, with one exception: the reader's
   local reading history (amended 2026-10-21, ADR-0023) may persist it on this device. The next presentation replaces it,
-  and its end or the presentation's close drops it from the session. Only the **term** goes to search, the service, the
-  trail, and observation hooks.
+  and its end or the presentation's close drops it from the session. Only the **term** goes to search, the service's
+  lookup, the trail, and observation hooks; the service may also read the sentence for phrase matching, under the
+  bullet below.
 - **The history is the one consumer that may persist the sentence** (amended 2026-10-21, ADR-0023): with the reader's
   history on it writes the sentence to the on-device ledger, never sends it anywhere, and writes nothing while the
   history is off or the reading's language is outside the reader's target set.
@@ -99,6 +100,13 @@ geometry.
   reads the presentation's sentence and the term's range, sends them to the source the reader chose — the entry text only
   under the reader's switch — and keeps nothing when the presentation ends. What it sends is `conformance/ai/`'s
   contract; this one still governs where the sentence lives.
+- **The local dictionary service is the second consumer that may read the sentence** (amended 2026-10-26, owner;
+  ADR-0033 d.11): on the capture that presents it, the shell may send the sentence and the term's range to the XPC
+  dictionary service for **phrase matching only**. It stays on this machine; the service logs nothing of it and stores
+  nothing of it; its answer carries the dictionaries' keys and spans, never the sentence. The AI pane remains the only
+  consumer that may send it anywhere. macOS's canary for this one is
+  `apps/apple/Tests/XDictContractTests/PhrasePrivacyTests.swift` (the request carries it, the answer does not), beside
+  `CapturePrivacyCanaryTests`, which still scans what capture itself holds.
 - No description, debug description, dump or log written by the application names the sentence. Diagnostics are
   metadata only.
 - Captured text is **untrusted data for every consumer**. Prompt handling is the consumer's; preserving the text
