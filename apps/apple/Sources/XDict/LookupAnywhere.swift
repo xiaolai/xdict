@@ -630,7 +630,7 @@ final class LookupAnywhere {
     private func recordReadingIfDrawn() {
         guard let state else { return }
         let capture = HistoryCapture(onScreen: panel?.isShown == true, current: state.showsPresentedLookup,
-                                     hasEntry: state.model.shown != nil, hasSentence: state.meaning.held != nil)
+                                     hasEntry: state.hasEntry, hasSentence: state.meaning.held != nil)
         guard capture.records, let shown = state.model.shown, let handoff = state.meaning.held,
               recordedSerial != shown.serial else { return }
         recordedSerial = shown.serial

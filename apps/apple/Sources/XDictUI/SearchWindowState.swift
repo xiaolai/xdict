@@ -651,7 +651,9 @@ public final class SearchWindowState {
     /// Whether an entry, or the All page, is shown: what the menus' entry commands (Print…, Find…, Expand All…) are
     /// enabled by. Read from the observed model, never from the entry view's web view, which SwiftUI cannot observe:
     /// keyed on that, every such item stayed disabled on the All page after a search (UI tour `page.print`, 2026-10-18).
-    public var hasEntry: Bool { model.shown != nil }
+    // **A placeholder that covers the pane means no entry is readable**, whatever the previous lookup left
+    // (audit round 2): entry commands are disabled with the document the reader cannot see.
+    public var hasEntry: Bool { model.shown != nil && !placeholder.clearsEntry }
 
     /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
     /// entry either (UI review X1). Called when the placeholder changes.
