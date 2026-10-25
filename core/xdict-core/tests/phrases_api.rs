@@ -278,17 +278,17 @@ fn a_failed_build_says_unavailable_and_a_later_build_clears_it() {
     source.set_inode(99);
     let failed = core.phrases_build(dict.clone(), &NoProgress).unwrap_err();
     assert!(matches!(failed, CoreError::SourceChanged { .. }), "{failed:?}");
+    // **While the file is not the one that was opened, the question is the source's** (audit round 4, 2026-10-26): no
+    // store, recorded failure or not, answers for a file the handle can no longer vouch for.
+    let changed = core.phrases("the review was full of purple passage".into(), 23, 6, vec![dict.clone()]);
+    assert!(matches!(changed, Err(CoreError::SourceChanged { .. })), "{changed:?}");
+
+    // The file's identity coming back does not retry by itself: the failed build stays until a build is asked for.
+    source.set_inode(2);
     let answer = phrase_for(&core, &dict, "the review was full of purple passage", "purple");
     assert_eq!(answer.state, PhraseState::Unavailable);
     assert_eq!(answer.coverage, [CoverageEntry { dict: dict.clone(), state: Coverage::Unavailable }]);
     assert!(answer.matches.is_empty());
-
-    // The file's identity coming back does not retry by itself: the failure stays until a build is asked for.
-    source.set_inode(2);
-    assert_eq!(
-        phrase_for(&core, &dict, "the review was full of purple passage", "purple").state,
-        PhraseState::Unavailable
-    );
     core.phrases_build(dict.clone(), &NoProgress).unwrap();
     assert_eq!(phrase_for(&core, &dict, "the review was full of purple passage", "purple").state, PhraseState::Found);
 }
@@ -324,12 +324,15 @@ fn a_partial_search_names_each_dictionary_and_is_never_none() {
     // The second fails to build: one ready and empty beside one unavailable is unavailable, never none.
     second.set_inode(99);
     assert!(core.phrases_build(second_dict.clone(), &NoProgress).is_err());
+    // **A changed file fails the whole question while it is changed** (audit round 4, 2026-10-26): the handle cannot
+    // vouch for the store it would read, so the reopen path, not this call, is what makes the dictionary current.
+    assert!(core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict.clone(), second_dict.clone()]).is_err());
+    second.set_inode(2);
     let failed = core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict.clone(), second_dict.clone()]).unwrap();
     assert_eq!(failed.state, PhraseState::Unavailable);
     assert_eq!(failed.coverage[1].state, Coverage::Unavailable);
 
     // Both ready: now nothing matched, and that is `none`.
-    second.set_inode(2);
     core.phrases_build(second_dict.clone(), &NoProgress).unwrap();
     let none = core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict, second_dict]).unwrap();
     assert_eq!(none.state, PhraseState::None);

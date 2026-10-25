@@ -730,7 +730,11 @@ impl Core {
             }
             let mut out: Vec<String> = Vec::new();
             for id in &dicts {
-                xdict_lookup::suggest(&self.dict(id)?.mdx, &prefix, limit as usize, &mut out)?;
+                let dict = self.dict(id)?;
+                // **A replaced file suggests nothing from its old index** (audit round 4, 2026-10-26), as `lookup` checks
+                // before and after its own read.
+                dict.mdx_source.unchanged()?;
+                xdict_lookup::suggest(&dict.mdx, &prefix, limit as usize, &mut out)?;
             }
             Ok(out)
         })
@@ -1479,6 +1483,10 @@ impl Core {
             let mut ready = 0usize;
             for id in &dicts {
                 let opened = self.dict(id)?;
+                // **A file replaced on disk answers nothing from its old store** (audit round 4, 2026-10-26): the matcher
+                // indexes the file the reader opened, so a stale one names phrases that may have gone; the caller's own
+                // reopen path is what makes the dictionary current again.
+                opened.mdx_source.unchanged()?;
                 let edition = opened.edition.clone();
                 if self.lock()?.phrase_failures.contains(&edition) {
                     coverage.push(CoverageEntry { dict: id.clone(), state: Coverage::Unavailable });
