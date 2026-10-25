@@ -271,7 +271,9 @@ public final class SearchWindowState {
         // never claims the sentence, and the target is the phrase's entry, never the word's.
         let expected = MeaningSession.Subject(dictionary: source.id, key: hit.entry.key,
                                               occurrence: hit.entry.occurrence)
-        let place = Visit(query: candidate.phrase, mode: .reader, scope: model.scope,
+        // **The place is the phrase's own dictionary**, as `SearchModel.open` makes it (audit round 2): the reader's
+        // scope may name another dictionary, and a visit adopted under it would show one entry under another's scope.
+        let place = Visit(query: candidate.phrase, mode: .reader, scope: .one(source.id),
                           result: ResultID(dictionary: source.id, entry: hit.entry), typed: nil, isOrigin: false)
         holdMeaning(handoff, asking: true, expecting: expected, adopted: true)
         let token = meaning.handoffToken
