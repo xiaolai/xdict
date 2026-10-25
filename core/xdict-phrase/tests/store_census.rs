@@ -72,7 +72,7 @@ fn the_store_size_and_build_time_are_measured_per_edition() {
         let inventory = Inventory::from_keys(keys, slots.clone());
         let build_ms = started.elapsed().as_secs_f64() * 1e3;
         let started = Instant::now();
-        let bytes = inventory.encode(&name(path), versions);
+        let bytes = inventory.encode(&name(path), versions).unwrap();
         let encode_ms = started.elapsed().as_secs_f64() * 1e3;
         let phrases = inventory.phrases().len() as u64;
         total_phrases += phrases;

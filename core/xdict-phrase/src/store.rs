@@ -5,7 +5,7 @@
 //! extractor and the two inputs that change the contents — the public-key predicate's version and the folding's — so
 //! a store written under another build is refused and rebuilt, never read.
 
-use crate::template::{Template, tokens};
+use crate::template::Template;
 
 use crate::{Matcher, Slots};
 
@@ -36,7 +36,9 @@ impl Inventory {
         let mut phrases: Vec<String> = Vec::new();
         let mut seen = std::collections::HashSet::new();
         for key in keys {
-            if tokens(&key).len() < 2 || Template::new(&key, &slots).is_none() {
+            // **`Template::new` is the one filter**: it refuses a key with fewer than two literal words, which
+            // includes every single word, so a token count here would only tokenize twice.
+            if Template::new(&key, &slots).is_none() {
                 continue;
             }
             if seen.insert(key.clone()) {
@@ -60,30 +62,32 @@ impl Inventory {
         Matcher::new(self.phrases.iter().cloned(), self.slots.clone())
     }
 
-    /// The store's bytes: header, slots, phrases, and one checksum over everything before it.
-    pub fn encode(&self, edition: &str, versions: Versions) -> Vec<u8> {
+    /// The store's bytes: header, slots, phrases, and one checksum over everything before it. `Err` when the store is
+    /// larger than its 32-bit offsets can name — an edition that big cannot be expressed, and wrong boundaries must
+    /// never be written instead.
+    pub fn encode(&self, edition: &str, versions: Versions) -> Result<Vec<u8>, TooLarge> {
         let mut out = Vec::with_capacity(256 + self.phrases.iter().map(String::len).sum::<usize>());
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&FORMAT.to_le_bytes());
         out.extend_from_slice(&EXTRACTOR.to_le_bytes());
         out.extend_from_slice(&versions.policy.to_le_bytes());
         out.extend_from_slice(&versions.folding.to_le_bytes());
-        push_str(&mut out, edition);
+        push_str(&mut out, edition)?;
 
         let slots = self.slots.words();
-        out.extend_from_slice(&u32::try_from(slots.len()).unwrap_or(u32::MAX).to_le_bytes());
+        out.extend_from_slice(&u32::try_from(slots.len()).map_err(|_| TooLarge)?.to_le_bytes());
         for slot in slots {
-            push_str(&mut out, slot);
+            push_str(&mut out, slot)?;
         }
 
-        out.extend_from_slice(&u64::try_from(self.phrases.len()).unwrap_or(u64::MAX).to_le_bytes());
+        out.extend_from_slice(&u64::try_from(self.phrases.len()).map_err(|_| TooLarge)?.to_le_bytes());
         let mut arena: Vec<u8> = Vec::new();
         let mut offsets: Vec<u32> = Vec::with_capacity(self.phrases.len() + 1);
         for phrase in &self.phrases {
-            offsets.push(u32::try_from(arena.len()).unwrap_or(u32::MAX));
+            offsets.push(u32::try_from(arena.len()).map_err(|_| TooLarge)?);
             arena.extend_from_slice(phrase.as_bytes());
         }
-        offsets.push(u32::try_from(arena.len()).unwrap_or(u32::MAX));
+        offsets.push(u32::try_from(arena.len()).map_err(|_| TooLarge)?);
         for offset in offsets {
             out.extend_from_slice(&offset.to_le_bytes());
         }
@@ -92,7 +96,7 @@ impl Inventory {
 
         let checksum = xxhash_rust::xxh3::xxh3_64(&out);
         out.extend_from_slice(&checksum.to_le_bytes());
-        out
+        Ok(out)
     }
 
     /// The store, or `None` when it is not this edition's of these versions, truncated, or checksum-broken — a store
@@ -125,7 +129,14 @@ impl Inventory {
         }
 
         let count = usize::try_from(read.u64()?).ok()?;
-        let mut offsets: Vec<u32> = Vec::with_capacity(count + 1);
+        // **The count is bounded by the bytes that are left before anything is reserved**: a checksum-valid header
+        // could otherwise name `usize::MAX` phrases and make the decoder allocate (or overflow) before it reads one.
+        let offsets_needed = count.checked_add(1)?;
+        let remaining = body.len().checked_sub(read.at)?;
+        if offsets_needed > remaining / 4 {
+            return None;
+        }
+        let mut offsets: Vec<u32> = Vec::with_capacity(offsets_needed);
         for _ in 0..=count {
             offsets.push(read.u32()?);
         }
@@ -146,10 +157,23 @@ impl Inventory {
     }
 }
 
-fn push_str(out: &mut Vec<u8>, text: &str) {
-    let len = u32::try_from(text.len()).unwrap_or(u32::MAX);
+/// A store larger than its format holds: a phrase or the arena over 4 GiB.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TooLarge;
+
+impl std::fmt::Display for TooLarge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a phrase store larger than its 32-bit offsets can name")
+    }
+}
+
+impl std::error::Error for TooLarge {}
+
+fn push_str(out: &mut Vec<u8>, text: &str) -> Result<(), TooLarge> {
+    let len = u32::try_from(text.len()).map_err(|_| TooLarge)?;
     out.extend_from_slice(&len.to_le_bytes());
     out.extend_from_slice(text.as_bytes());
+    Ok(())
 }
 
 struct Reader<'a> {

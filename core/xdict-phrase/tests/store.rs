@@ -26,7 +26,7 @@ fn inventory() -> Inventory {
 #[test]
 fn a_store_round_trips_its_phrases_and_its_slots() {
     let store = inventory();
-    let bytes = store.encode(EDITION, versions());
+    let bytes = store.encode(EDITION, versions()).unwrap();
     let decoded = Inventory::decode(&bytes, EDITION, versions()).expect("the store does not decode");
     assert_eq!(decoded.phrases(), store.phrases());
     assert_eq!(decoded.slots(), store.slots());
@@ -37,7 +37,7 @@ fn a_store_round_trips_its_phrases_and_its_slots() {
 
 #[test]
 fn a_store_of_another_edition_or_other_versions_is_refused() {
-    let bytes = inventory().encode(EDITION, versions());
+    let bytes = inventory().encode(EDITION, versions()).unwrap();
     let other_edition = "mdx-sha256-v1:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd";
     assert!(Inventory::decode(&bytes, other_edition, versions()).is_none());
     for changed in [Versions { policy: 8, folding: 3 }, Versions { policy: 7, folding: 4 }] {
@@ -54,7 +54,7 @@ fn a_store_of_another_edition_or_other_versions_is_refused() {
 
 #[test]
 fn a_truncated_or_corrupt_store_is_refused() {
-    let bytes = inventory().encode(EDITION, versions());
+    let bytes = inventory().encode(EDITION, versions()).unwrap();
     for cut in [0, 3, bytes.len() / 2, bytes.len() - 1] {
         assert!(Inventory::decode(&bytes[..cut], EDITION, versions()).is_none(), "truncated at {cut} was read");
     }
@@ -76,11 +76,27 @@ fn the_builder_keeps_templates_only_and_one_of_each_spelling() {
 
 #[test]
 fn a_decoded_store_still_finds_the_phrase() {
-    let decoded = Inventory::decode(&inventory().encode(EDITION, versions()), EDITION, versions()).expect("decode");
+    let decoded = Inventory::decode(&inventory().encode(EDITION, versions()).unwrap(), EDITION, versions()).expect("decode");
     let matcher = decoded.matcher();
     let words: Vec<Vec<String>> =
         "the review was full of purple passage nobody could follow".split_whitespace().map(forms).collect();
     let found = matcher.matches(&words, 5, 12, 3);
     assert_eq!(found.first().map(|m| m.phrase.as_str()), Some("purple passage"));
     assert_eq!(found.first().map(|m| m.separation), Some(Separation::None));
+}
+
+/// **A header can lie within its checksum** (audit round 1, 2026-10-26): a phrase count larger than the offsets that
+/// follow is refused before anything is reserved for it, so a corrupt store cannot make the decoder allocate.
+#[test]
+fn a_store_naming_more_phrases_than_its_offsets_hold_is_refused() {
+    let store = inventory();
+    let bytes = store.encode(EDITION, versions()).unwrap();
+    let slot_lens: Vec<usize> = store.slots().words().iter().map(String::len).collect();
+    // magic, format, extractor, policy, folding; the edition; the slot count; each slot; then the phrase count.
+    let count_at = 20 + 4 + EDITION.len() + 4 + slot_lens.iter().map(|len| 4 + len).sum::<usize>();
+    let mut altered = bytes[..bytes.len() - 8].to_vec();
+    altered[count_at..count_at + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+    let checksum = xxhash_rust::xxh3::xxh3_64(&altered);
+    altered.extend_from_slice(&checksum.to_le_bytes());
+    assert!(Inventory::decode(&altered, EDITION, versions()).is_none(), "a count past the bytes was read");
 }
