@@ -12,14 +12,15 @@ use std::sync::Arc;
 
 use xdict_core as core;
 use xdict_core::{
-    BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Day, DayLabel,
-    DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport, ExampleHit, ExampleSource,
-    Examples, ExamplesBuilt, Feature, FileIdentity, FindingKind, FontReason, Health, HealthClass, HealthExample,
-    HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont, Limit, Link, LinkOrigin,
-    LookupOptions, MatchMode, Missing, Note, Opened, Page, Problem, Reading, ReadingSpan, ReadingStyle,
-    ReanchorOutcome, ReanchorReport, ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome,
-    ReviewPolicy, ReviewSummary, Sense, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase,
-    StudyTarget, StyleChanges, SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
+    BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Coverage,
+    CoverageEntry, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport,
+    ExampleHit, ExampleSource, Examples, ExamplesBuilt, Feature, FileIdentity, FindingKind, FontReason, Health,
+    HealthClass, HealthExample, HealthFinding, History, Hit, HitProblem, How, ImportReason, Imported, IoKind, KeptFont,
+    Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, PhraseAnswer, PhraseBuilt,
+    PhraseMatch, PhraseState, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport,
+    ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary,
+    Separation, Sense, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
+    SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
 };
 
 uniffi::setup_scaffolding!("xdict");
@@ -393,6 +394,65 @@ pub struct ExamplesBuilt {
     pub cached: bool,
 }
 
+/// **One phrase found around the captured term** (`dev-docs/plan-phrase-recognition.md` WI-6): the dictionary's own
+/// spelling, the sentence span in UTF-16 units, and how far the words were allowed to separate.
+#[uniffi::remote(Record)]
+pub struct PhraseMatch {
+    pub dict: String,
+    /// The dictionary's own spelling, slots and all — the string to look up.
+    pub phrase: String,
+    pub location: u64,
+    pub length: u64,
+    pub separation: Separation,
+    pub gap: u64,
+}
+
+#[uniffi::remote(Enum)]
+pub enum Separation {
+    None,
+    Marked { words: u64 },
+    Inferred { words: u64 },
+}
+
+#[uniffi::remote(Record)]
+pub struct CoverageEntry {
+    pub dict: String,
+    pub state: Coverage,
+}
+
+#[uniffi::remote(Enum)]
+pub enum Coverage {
+    Ready,
+    Building,
+    Unavailable,
+}
+
+/// **What [`Core::phrases`] answers**: what was searched, and what was found.
+#[uniffi::remote(Record)]
+pub struct PhraseAnswer {
+    pub state: PhraseState,
+    pub matches: Vec<PhraseMatch>,
+    pub coverage: Vec<CoverageEntry>,
+    pub capped: bool,
+}
+
+#[uniffi::remote(Enum)]
+pub enum PhraseState {
+    NotAsked,
+    Building,
+    Unavailable,
+    None,
+    Found,
+}
+
+/// **What building one dictionary's phrase inventory did.**
+#[uniffi::remote(Record)]
+pub struct PhraseBuilt {
+    pub edition: String,
+    pub phrases: u64,
+    pub cached: bool,
+}
+
 #[uniffi::remote(Record)]
 pub struct Hit {
     pub dict: String,
@@ -642,6 +702,8 @@ pub enum Limit {
     File,
     Page,
     Body,
+    /// A sentence longer than the phrase question accepts.
+    Sentence,
 }
 
 #[uniffi::remote(Enum)]
@@ -801,6 +863,32 @@ impl Core {
         match progress {
             Some(progress) => self.0.examples_build(dict, &Watcher(progress)),
             None => self.0.examples_build(dict, &core::NoProgress),
+        }
+    }
+
+    /// **The phrases covering the term in a captured sentence** (plan-phrase-recognition WI-5): every ready
+    /// dictionary's phrase that covers the term's word, best first, with the state of each dictionary that could not
+    /// answer. The sentence and the term are re-validated here; nothing is sent anywhere.
+    pub fn phrases(
+        &self,
+        sentence: String,
+        term_location: u64,
+        term_length: u64,
+        dicts: Vec<String>,
+    ) -> Result<PhraseAnswer, CoreError> {
+        self.0.phrases(sentence, term_location, term_length, dicts)
+    }
+
+    /// **Builds one dictionary's phrase inventory in the background** (plan-phrase-recognition WI-4): `progress`
+    /// reports records done and answers `false` to cancel, in which case nothing is written.
+    pub fn phrases_build(
+        &self,
+        dict: String,
+        progress: Option<Arc<dyn Progress>>,
+    ) -> Result<PhraseBuilt, CoreError> {
+        match progress {
+            Some(progress) => self.0.phrases_build(dict, &Watcher(progress)),
+            None => self.0.phrases_build(dict, &core::NoProgress),
         }
     }
 

@@ -114,6 +114,15 @@ export type HealthFinding = {
 export type Health = { version: number; entries: number; findings: HealthFinding[]; classes: { name: string; count: number }[] };
 export type DisplayOption = { id: string; attribute: string; values: string[]; defaultValue: string };
 export type DisplayOptions = { version: number; options: DisplayOption[]; css: string };
+export type Coverage = 'ready' | 'building' | 'unavailable';
+export type PhraseState = 'notAsked' | 'building' | 'unavailable' | 'none' | 'found';
+export type Separation = { type: 'none' } | { type: 'marked'; words: number } | { type: 'inferred'; words: number };
+export type PhraseMatch = {
+  dict: string; phrase: string; location: number; length: number; separation: Separation; gap: number;
+};
+export type CoverageEntry = { dict: string; state: Coverage };
+export type PhraseAnswer = { state: PhraseState; matches: PhraseMatch[]; coverage: CoverageEntry[]; capped: boolean };
+export type PhraseBuilt = { edition: string; phrases: number; cached: boolean };
 export type Resource =
   | { type: 'found'; path: string; mime: string; bytes: Uint8Array }
   | { type: 'missing'; path: string };
@@ -196,6 +205,8 @@ interface GlueCore {
   splitLineage(edition: string, newLineage: string): string;
   lineageOf(edition: string): string;
   health(dict: string, progress?: { progress(done: number, total: number): boolean }): string;
+  phrases(sentence: string, termLocation: number, termLength: number, dicts: string): string;
+  phrases_build(dict: string, progress?: { progress(done: number, total: number): boolean }): string;
   selfTestPanic(): string;
 }
 
@@ -459,6 +470,17 @@ export class XDictCore {
   health(dict: string, progress?: (done: number, total: number) => boolean): Health {
     const watcher = progress ? { progress } : undefined;
     return this.call(() => this.inner.health(dict, watcher));
+  }
+
+  /** **The phrases covering the term in a captured sentence** (`dev-docs/plan-phrase-recognition.md` WI-5). */
+  phrases(sentence: string, termLocation: number, termLength: number, dicts: string[]): PhraseAnswer {
+    return this.call(() => this.inner.phrases(sentence, termLocation, termLength, JSON.stringify(dicts)));
+  }
+
+  /** Builds one dictionary's phrase inventory in the background; `progress` as for an import. */
+  phrasesBuild(dict: string, progress?: (done: number, total: number) => boolean): PhraseBuilt {
+    const watcher = progress ? { progress } : undefined;
+    return this.call(() => this.inner.phrases_build(dict, watcher));
   }
 
   /** The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013). */

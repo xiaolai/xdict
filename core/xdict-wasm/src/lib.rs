@@ -621,6 +621,25 @@ impl Core {
         watched_reply(|| self.0.health(dict.into(), &progress))
     }
 
+    /// **The phrases covering the term in a captured sentence** (`dev-docs/plan-phrase-recognition.md` WI-5): every
+    /// ready dictionary's phrase that covers the term's word, best first. `dicts` is a JSON array of handles.
+    pub fn phrases(&self, sentence: &str, term_location: u32, term_length: u32, dicts: &str) -> Reply {
+        let dicts = from_json(dicts)?;
+        reply(self.0.phrases(sentence.into(), u64::from(term_location), u64::from(term_length), dicts))
+    }
+
+    /// **Builds one dictionary's phrase inventory in the background**: `progress` as for an import.
+    pub fn phrases_build(&self, dict: &str, progress: Option<JsProgress>) -> Reply {
+        let progress = match progress {
+            Some(p) => {
+                Some(PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("builds")))?)
+            }
+            None => None,
+        };
+        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        watched_reply(|| self.0.phrases_build(dict.into(), &progress))
+    }
+
     /// The display options that apply to an open dictionary, with its defaults, and their CSS (ADR-0013). Reads a
     /// sample of the edition's records, so through its sources.
     #[wasm_bindgen(js_name = displayOptions)]
