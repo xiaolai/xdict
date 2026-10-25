@@ -1708,6 +1708,22 @@
         }
       }
     },
+    "A service fills in its address. Custom uses the one you type." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "A service fills in its address. Custom uses the one you type."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择服务会填入它的地址；自定义使用你输入的地址。"
+          }
+        }
+      }
+    },
     "A single name such as com would cover every site under it. Type a site such as example.com." : {
       "localizations" : {
         "en" : {
@@ -3207,6 +3223,22 @@
         }
       }
     },
+    "Choose a Model" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a Model"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择模型"
+          }
+        }
+      }
+    },
     "Choose a folder XDict can sync with on your other devices." : {
       "localizations" : {
         "en" : {
@@ -3781,6 +3813,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "当前词典：%@"
+          }
+        }
+      }
+    },
+    "Custom" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Custom"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "自定义"
           }
         }
       }
@@ -4406,6 +4454,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "英语口音"
+          }
+        }
+      }
+    },
+    "Enter a key to see this service's models." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter a key to see this service's models."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入密钥后可查看该服务的模型。"
           }
         }
       }
@@ -6336,6 +6400,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "浅色"
+          }
+        }
+      }
+    },
+    "Load Models" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load Models"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "载入模型"
           }
         }
       }
@@ -9861,6 +9941,22 @@
         }
       }
     },
+    "Service" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Service"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务"
+          }
+        }
+      }
+    },
     "Set Up XDict…" : {
       "localizations" : {
         "en" : {
@@ -11811,6 +11907,38 @@
         }
       }
     },
+    "The service refused the list request (HTTP %lld)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service refused the list request (HTTP %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务拒绝了模型列表请求（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "The service refused the list request (HTTP %lld): %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The service refused the list request (HTTP %1$lld): %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务拒绝了模型列表请求（HTTP %1$lld）：%2$@"
+          }
+        }
+      }
+    },
     "The shortcut is in use by another app. Choose another one." : {
       "localizations" : {
         "en" : {
@@ -12737,6 +12865,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "此资源文件（.mdd）使用 MDict 3.0 格式，XDict 暂时无法读取。"
+          }
+        }
+      }
+    },
+    "This service does not list its models." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This service does not list its models."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该服务不提供模型列表。"
+          }
+        }
+      }
+    },
+    "This service listed no models; type one above." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This service listed no models; type one above."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "该服务没有列出模型；请在上方填写。"
           }
         }
       }

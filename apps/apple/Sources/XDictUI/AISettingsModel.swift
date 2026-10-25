@@ -16,6 +16,14 @@ public final class AISettingsModel {
         case failed(AIProviderError)
     }
 
+    /// **The service's model list in the pane** (2026-10-25): not asked for yet, being fetched, the list, or why not.
+    public enum ModelsState: Equatable, Sendable {
+        case idle
+        case loading
+        case loaded([AIModel])
+        case failed(ModelCatalogError)
+    }
+
     public let preferences: MeaningPreferences
     public private(set) var status: MeaningSourceStatus = .checking
     @ObservationIgnored private var statusGeneration = 0
@@ -25,6 +33,12 @@ public final class AISettingsModel {
     public private(set) var keyFailure: LocalizedStringResource?
     public var promptKind: AIMode = .grounded
     public var draft = ""
+    /// The service's model list, fetched only when the reader asks (`loadModels`).
+    public private(set) var models: ModelsState = .idle
+    @ObservationIgnored private var modelsGeneration = 0
+    /// The address, service and key the list belongs to; another configuration shows no list rather than a stale one.
+    @ObservationIgnored private var modelsIdentity: String?
+
     /// The Codex login's own output, verbatim: the web address and code the reader needs. Data, never translated.
     public private(set) var loginLines: [String] = []
     public private(set) var signingIn = false
@@ -33,13 +47,18 @@ public final class AISettingsModel {
 
     /// **How a sign-in runs**: the Codex login by default; a test hands in its own. Lines arrive on the main actor.
     public typealias Login = @MainActor (_ onLine: @escaping @MainActor (String) -> Void) async throws -> Void
+    /// **How a model list is fetched**: sayso's catalogue by default; a test hands in its own.
+    public typealias FetchModels = @Sendable (ModelCatalog.Request) async -> Result<[AIModel], ModelCatalogError>
     @ObservationIgnored private let runLogin: Login?
+    @ObservationIgnored private let fetchModels: FetchModels
     @ObservationIgnored private var signInTask: Task<Void, Never>?
     @ObservationIgnored private var signInGeneration = 0
 
-    public init(preferences: MeaningPreferences, login: Login? = nil) {
+    public init(preferences: MeaningPreferences, login: Login? = nil, fetchModels: FetchModels? = nil) {
         self.preferences = preferences
         runLogin = login
+        // The live fetch is internal: a public initializer's default value cannot name it, so nil resolves here.
+        self.fetchModels = fetchModels ?? liveModelFetch
         keyState = preferences.hasKey ? .stored : .absent
         draft = preferences.effectiveTemplate(language: preferences.settings.language, mode: promptKind)
     }
@@ -57,6 +76,29 @@ public final class AISettingsModel {
     }
 
     public var language: String { preferences.settings.language }
+
+    /// The service the endpoint is: the stored profile when it belongs to the chosen row, Custom otherwise.
+    public var profile: AIProviderProfile { MeaningProviders.profile(preferences.settings) }
+
+    /// **The list this configuration may show**: a list fetched for another address, service or key is not shown, even
+    /// while it is still held — the menu never offers another service's models.
+    public var modelsShown: ModelsState {
+        modelsIdentity == listIdentity ? models : .idle
+    }
+
+    /// **What the model menu offers**: the fetched list, or the service's own few names before a fetch. A list the
+    /// service says is empty is authoritative: the hints must not speak over it.
+    public var modelChoices: [String] {
+        if case .loaded(let list) = modelsShown { return list.map(\.id) }
+        return profile.hints
+    }
+
+    /// What makes a list this configuration's own: the address, the service and the key it was fetched with.
+    private var listIdentity: String {
+        let settings = preferences.settings
+        let key = MeaningProviders.apiKey(settings)
+        return "\(settings.endpoint?.absoluteString ?? "")|\(MeaningProviders.profile(settings).id)|\(key?.hashValue ?? 0)"
+    }
 
     /// **The build's Apple source against this Mac, when the Mac is older** (ADR-0026, owner's rule of 2026-10-21): the
     /// Apple row stays visible on every supported system and says which macOS the source needs and which this Mac runs,
@@ -84,6 +126,49 @@ public final class AISettingsModel {
         let found = await MeaningProviders.status(preferences.settings)
         guard mine == statusGeneration else { return }
         status = found
+    }
+
+    // MARK: - The model list (2026-10-25)
+
+    /// **Load the service's own model list**, on the reader's ask and never per keystroke. The same address, key and
+    /// service served from the process's cache is answered without a request.
+    public func loadModels() async {
+        guard preferences.settings.source == .http, let endpoint = preferences.settings.endpoint else {
+            models = .idle
+            return
+        }
+        let settings = preferences.settings
+        let profile = MeaningProviders.profile(settings)
+        let request = ModelCatalog.Request(profile: profile, baseURL: endpoint,
+                                           apiKey: MeaningProviders.apiKey(settings))
+        modelsGeneration += 1
+        let mine = modelsGeneration
+        let identity = listIdentity
+        modelsIdentity = identity
+        models = .loading
+        let result = await fetchModels(request)
+        // **A list for an address, key or service the reader has since changed proves nothing**: only this load may
+        // speak for the current pane.
+        guard mine == modelsGeneration, identity == listIdentity, preferences.settings.endpoint == endpoint,
+              MeaningProviders.profile(preferences.settings).id == profile.id,
+              MeaningProviders.apiKey(preferences.settings) == MeaningProviders.apiKey(settings) else {
+            // **A load whose configuration is gone leaves nothing behind**: when no newer load owns the pane, the state
+            // returns to idle, so coming back to this configuration does not show a request that no longer exists.
+            if mine == modelsGeneration {
+                models = .idle
+                modelsIdentity = nil
+            }
+            return
+        }
+        switch result {
+        case .success(let list): models = .loaded(list)
+        case .failure(let error): models = .failed(error)
+        }
+    }
+
+    /// A model picked from the list is the reader's choice, stored exactly as typing it would.
+    public func chooseModel(_ id: String) {
+        preferences.update { $0.model = id }
     }
 
     // MARK: - The key
@@ -134,8 +219,7 @@ public final class AISettingsModel {
             return
         }
         do {
-            let provider = try HTTPProvider(configuration: .init(endpoint: endpoint, model: settings.model,
-                                                                 apiKey: MeaningProviders.apiKey(settings)))
+            let provider = try HTTPProvider(configuration: MeaningProviders.httpConfiguration(settings, endpoint: endpoint))
             _ = try await provider.probe()
             guard mine == keyGeneration else { return }
             // **A result for a configuration the reader has since changed proves nothing** (audit finding, 2026-10-20).
@@ -159,7 +243,7 @@ public final class AISettingsModel {
     /// What a probe was sent with, as one question: the address, the model, and the key the source actually uses (nil for
     /// a local endpoint, whatever the Keychain holds). A change in any of them makes the probe's verdict stale.
     private static func stillCurrent(_ captured: MeaningSettings, _ now: MeaningSettings) -> Bool {
-        now.endpoint == captured.endpoint && now.model == captured.model
+        now.endpoint == captured.endpoint && now.model == captured.model && now.profile == captured.profile
             && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
     }
 
@@ -249,5 +333,20 @@ public final class AISettingsModel {
     public func resetDraft() {
         preferences.resetTemplates(language: preferences.settings.language, mode: promptKind)
         loadDraft()
+    }
+}
+
+/// **The live model-list fetch**: sayso's catalogue, with the process's in-memory cache in front of it. Nothing is
+/// persisted: a list is a snapshot the service itself can change, so a relaunch asks again rather than trusting a file.
+private let modelListCache = ModelCatalogCache()
+
+@Sendable func liveModelFetch(_ request: ModelCatalog.Request) async -> Result<[AIModel], ModelCatalogError> {
+    if let entry = await modelListCache.entry(for: request) { return .success(entry.models) }
+    do {
+        let models = try await ModelCatalog().fetch(request)
+        await modelListCache.store(models, for: request)
+        return .success(models)
+    } catch {
+        return .failure(error)
     }
 }

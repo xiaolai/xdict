@@ -26,6 +26,7 @@ public struct AISettings: View {
     private struct StatusKey: Hashable {
         let source: AIProviderKind?
         let endpoint: String
+        let profile: String
         let model: String
         let usesKey: Bool
         let key: String
@@ -78,6 +79,7 @@ public struct AISettings: View {
         .settingsPane()
         .task(id: StatusKey(source: model.preferences.settings.source,
                             endpoint: model.preferences.settings.endpoint?.absoluteString ?? "",
+                            profile: MeaningProviders.profile(model.preferences.settings).id,
                             model: model.preferences.settings.model,
                             usesKey: model.preferences.settings.usesKey,
                             key: model.preferences.settings.key ?? "")) {
@@ -159,6 +161,22 @@ public struct AISettings: View {
     private func endpointSection(model: AISettingsModel) -> some View {
         @Bindable var model = model
         return Section {
+            // **The service comes first**: it fills the address and tells the provider how the key travels; Custom
+            // leaves both to the reader.
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                Picker(selection: Binding(get: { model.profile.id },
+                                          set: { id in model.preferences.chooseProfile(id) })) {
+                    ForEach(MeaningProfiles.offered(cloud: model.preferences.httpCloud)) { profile in
+                        serviceLabel(profile).tag(profile.id)
+                    }
+                } label: {
+                    Text("Service")
+                }
+                .accessibilityIdentifier("ai.service")
+                Text("A service fills in its address. Custom uses the one you type.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             // Each field is its own Form row: the field's label is the row's label, said once
             // (`RepeatedLabelTests`), with its sentence under it.
             VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
@@ -181,12 +199,59 @@ public struct AISettings: View {
                 Text("Empty lets the server choose.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                // **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers
+                // it (or the service's few known names before a fetch); typing above remains the final word.
+                HStack(spacing: Tokens.Space.s) {
+                    Button("Load Models") { Task { await model.loadModels() } }  // placement: form-pane
+                        .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil)
+                        .accessibilityIdentifier("ai.models.load")
+                    if model.modelsShown == .loading {
+                        ProgressView().controlSize(.small)  // placement: spinner
+                    }
+                    if !model.modelChoices.isEmpty {
+                        Menu {  // placement: form-pane
+                            ForEach(model.modelChoices, id: \.self) { id in
+                                Button { model.chooseModel(id) } label: { Text(verbatim: id) }
+                            }
+                        } label: {
+                            Text("Choose a Model")
+                        }
+                        .accessibilityIdentifier("ai.models.menu")
+                    }
+                }
+                modelsNote(model: model)
             }
             if model.preferences.httpCloud {
                 keyRows(model: model)
             }
         } header: {
             Text("The server")
+        }
+    }
+
+    /// A service's label: its own name (a proper noun, shown verbatim), or the localized Custom.
+    @ViewBuilder private func serviceLabel(_ profile: AIProviderProfile) -> some View {
+        if profile.id == MeaningProfiles.custom {
+            Text("Custom")
+        } else {
+            Text(verbatim: profile.name)
+        }
+    }
+
+    /// Why the list did not come, or that it was empty; nothing while it has not been asked for.
+    @ViewBuilder private func modelsNote(model: AISettingsModel) -> some View {
+        switch model.modelsShown {
+        case .failed(let error):
+            Text(MeaningSentences.catalogue(error))
+                .font(.caption)
+                .foregroundStyle(.orange)
+                .accessibilityIdentifier("ai.models.failure")
+        case .loaded(let list) where list.isEmpty:
+            Text("This service listed no models; type one above.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        case .idle, .loading, .loaded:
+            EmptyView()
         }
     }
 

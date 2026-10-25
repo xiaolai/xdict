@@ -22,6 +22,7 @@ public final class MeaningPreferences {
     private enum Key {
         static let source = "meaning.source"
         static let endpoint = "meaning.endpoint"
+        static let profile = "meaning.http.profile"
         static let model = "meaning.model"
         static let sendEntryText = "meaning.sendEntryText"
         static let language = "meaning.language"
@@ -36,9 +37,13 @@ public final class MeaningPreferences {
         self.defaults = defaults
         self.keys = keys
         let language = defaults.string(forKey: Key.language) ?? "en"
+        let endpoint = defaults.string(forKey: Key.endpoint).flatMap(URL.init(string:))
         settings = MeaningSettings(
             source: defaults.string(forKey: Key.source).flatMap(AIProviderKind.init(rawValue:)),
-            endpoint: defaults.string(forKey: Key.endpoint).flatMap(URL.init(string:)),
+            endpoint: endpoint,
+            // **An install that predates the choice is inferred from its address**: the reader's endpoint decides
+            // which service it was, and an unknown or absent one is Custom.
+            profile: defaults.string(forKey: Key.profile) ?? MeaningProfiles.matching(endpoint: endpoint),
             model: defaults.string(forKey: Key.model) ?? "",
             key: keys.key(),
             sendEntryText: defaults.bool(forKey: Key.sendEntryText),
@@ -60,6 +65,16 @@ public final class MeaningPreferences {
     public func update(_ change: (inout MeaningSettings) -> Void) {
         change(&settings)
         persist()
+    }
+
+    /// **The service the endpoint is** (2026-10-25): a known one fills in its address, Custom keeps the reader's. The
+    /// choice is remembered even while the other row is selected, so switching back restores the service.
+    public func chooseProfile(_ id: String) {
+        let profile = AIProviderProfile.profile(id: id) ?? .custom
+        update {
+            $0.profile = profile.id
+            if let base = profile.baseURL { $0.endpoint = base }
+        }
     }
 
     /// **An address the reader typed or pasted** (2026-10-25): the space or newline around a pasted URL is not part of
@@ -124,6 +139,7 @@ public final class MeaningPreferences {
     private func persist() {
         set(settings.source?.rawValue, forKey: Key.source)
         set(settings.endpoint?.absoluteString, forKey: Key.endpoint)
+        set(settings.profile, forKey: Key.profile)
         set(settings.model.isEmpty ? nil : settings.model, forKey: Key.model)
         defaults.set(settings.sendEntryText, forKey: Key.sendEntryText)
         defaults.set(settings.language, forKey: Key.language)

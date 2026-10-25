@@ -24,8 +24,7 @@ public enum MeaningProviders {
             return AppleProvider.make()
         case .http:
             guard let endpoint = settings.endpoint else { throw .unreachable }
-            return try HTTPProvider(configuration: .init(endpoint: endpoint, model: settings.model,
-                                                          apiKey: apiKey(settings)))
+            return try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
         case .claudeCLI:
             return ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
                                                          model: nil, answerSchema: AIAnswerSchema.claude))
@@ -50,8 +49,7 @@ public enum MeaningProviders {
         case .http:
             guard let endpoint = settings.endpoint else { return .notConfigured }
             do {
-                _ = try HTTPProvider(configuration: .init(endpoint: endpoint, model: settings.model,
-                                                          apiKey: apiKey(settings)))
+                _ = try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
                 return .ready(settings.model)
             } catch {
                 return .failed(error)
@@ -66,6 +64,19 @@ public enum MeaningProviders {
                 return .failed(error)
             }
         }
+    }
+
+    /// The service these settings name: the stored profile when it belongs to the chosen row, Custom otherwise.
+    static func profile(_ settings: MeaningSettings) -> AIProviderProfile {
+        MeaningProfiles.selected(settings)
+    }
+
+    /// **The HTTP configuration for these settings**: the address, the model, the one stored key when this row sends
+    /// one, and the chosen service's auth and token-field preference from sayso's profile table.
+    static func httpConfiguration(_ settings: MeaningSettings, endpoint: URL) -> HTTPProvider.Configuration {
+        let profile = MeaningProfiles.selected(settings)
+        return .init(endpoint: endpoint, model: settings.model, apiKey: apiKey(settings),
+                     auth: profile.auth, tokenField: profile.tokenField)
     }
 
     /// XDict's own folder for a source's configuration or working directory.

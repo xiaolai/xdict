@@ -13,6 +13,9 @@ public struct MeaningSettings: Sendable, Equatable {
     public var source: AIProviderKind?
     /// An `http` source's address: a cloud endpoint or a server the reader runs. The app promises nothing about it.
     public var endpoint: URL?
+    /// **The service the address is** (2026-10-25), as `AIProviderProfile.known`'s id; `"custom"` when the reader
+    /// supplies the address. It decides how the key travels and which token-limit field is sent first — never a secret.
+    public var profile: String
     public var model: String
     public var key: String?
     /// **Whether the key belongs to the chosen endpoint row**: true only for the cloud endpoint (ADR-0021 d.3). A key left
@@ -28,11 +31,12 @@ public struct MeaningSettings: Sendable, Equatable {
     /// chosen-sense one carries `{entry}` and `{sense}` (contract 3).
     public var templates: [AIMode: String]
 
-    public init(source: AIProviderKind? = nil, endpoint: URL? = nil, model: String = "", key: String? = nil,
-                usesKey: Bool = false, sendEntryText: Bool = false, language: String = "en",
-                templates: [AIMode: String] = [:]) {
+    public init(source: AIProviderKind? = nil, endpoint: URL? = nil, profile: String = MeaningProfiles.custom,
+                model: String = "", key: String? = nil, usesKey: Bool = false, sendEntryText: Bool = false,
+                language: String = "en", templates: [AIMode: String] = [:]) {
         self.source = source
         self.endpoint = endpoint
+        self.profile = profile
         self.model = model
         self.key = key
         self.usesKey = usesKey

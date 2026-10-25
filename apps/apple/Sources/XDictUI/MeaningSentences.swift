@@ -185,6 +185,29 @@ public enum MeaningSentences {
         }
     }
 
+    /// **Why a service's model list could not be read.** The failures it shares with a provider borrow its sentences;
+    /// the list's own — a service that lists nothing, a key it wants first, a refused request — have their own.
+    public static func catalogue(_ error: ModelCatalogError) -> LocalizedStringResource {
+        switch error {
+        case .noList:
+            LocalizedStringResource("This service does not list its models.")
+        case .missingKey:
+            LocalizedStringResource("Enter a key to see this service's models.")
+        case .unreachable: provider(.unreachable)
+        case .unauthorised: provider(.unauthorised)
+        case .rateLimited: provider(.rateLimited)
+        case .timeout: provider(.timeout)
+        case .cancelled: provider(.cancelled)
+        case .badShape: provider(.badShape)
+        case .server(let status, let message):
+            if message.isEmpty {
+                LocalizedStringResource("The service refused the list request (HTTP \(status)).")
+            } else {
+                LocalizedStringResource("The service refused the list request (HTTP \(status)): \(message)")
+            }
+        }
+    }
+
     /// Why Apple's model cannot run here.
     public static func availability(_ reason: AppleAvailability) -> LocalizedStringResource {
         switch reason {

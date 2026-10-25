@@ -115,6 +115,74 @@ struct MeaningPreferencesTests {
         #expect(MeaningProviders.apiKey(preferences.settings) == nil, "a CLI source gets no HTTP key")
     }
 
+    /// **The chosen service fills in its address and survives a relaunch** (2026-10-25); Custom keeps the address the
+    /// reader typed rather than clearing it.
+    @Test func theChosenServiceSurvivesAndFillsItsAddress() {
+        let defaults = Self.defaults()
+        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        first.choose(.http, cloud: true)
+        first.chooseProfile("deepseek")
+        #expect(first.settings.profile == "deepseek")
+        #expect(first.settings.endpoint?.absoluteString == "https://api.deepseek.com")
+        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        #expect(second.settings.profile == "deepseek")
+        #expect(second.settings.endpoint?.absoluteString == "https://api.deepseek.com")
+        second.chooseProfile("custom")
+        #expect(second.settings.profile == "custom")
+        #expect(second.settings.endpoint?.absoluteString == "https://api.deepseek.com",
+                "choosing Custom must not erase the address in the field")
+    }
+
+    /// **A service from the other row is hidden, never forgotten** (2026-10-25): the local row uses Custom while a cloud
+    /// service is stored, and switching back restores it.
+    @Test func aServiceFromTheOtherRowIsHiddenNotForgotten() {
+        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+        preferences.choose(.http, cloud: true)
+        preferences.chooseProfile("deepseek")
+        preferences.choose(.http, cloud: false)
+        #expect(MeaningProviders.profile(preferences.settings).id == "custom")
+        preferences.choose(.http, cloud: true)
+        #expect(MeaningProviders.profile(preferences.settings).id == "deepseek")
+    }
+
+    /// **An install that predates the choice is inferred from its address**, and the address itself is untouched.
+    @Test func anAddressFromBeforeTheChoiceNamesItsService() {
+        #expect(MeaningProfiles.matching(endpoint: URL(string: "https://openrouter.ai/api/v1/")) == "openrouter")
+        #expect(MeaningProfiles.matching(endpoint: URL(string: "https://api.deepseek.com/")) == "deepseek")
+        #expect(MeaningProfiles.matching(endpoint: URL(string: "https://api.example.com/v1")) == "custom")
+        #expect(MeaningProfiles.matching(endpoint: nil) == "custom")
+        let defaults = Self.defaults()
+        defaults.set("https://openrouter.ai/api/v1", forKey: "meaning.endpoint")
+        defaults.set(true, forKey: "meaning.http.cloud")
+        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        #expect(preferences.settings.profile == "openrouter")
+        #expect(preferences.settings.endpoint?.absoluteString == "https://openrouter.ai/api/v1")
+    }
+
+    /// **The provider is built with the service's own auth and token-field preference** (sayso's profile table), and a
+    /// profile from the other row never answers for the chosen one.
+    @Test func theProviderGetsTheServicesAuthAndTokenField() throws {
+        let openai = try #require(URL(string: "https://api.openai.com/v1"))
+        var settings = MeaningSettings(source: .http, endpoint: openai, profile: "openai", usesKey: true)
+        var config = MeaningProviders.httpConfiguration(settings, endpoint: openai)
+        #expect(config.auth == .bearer)
+        #expect(config.tokenField == .completionFirst)
+        let deepseek = try #require(URL(string: "https://api.deepseek.com"))
+        settings.profile = "deepseek"
+        settings.endpoint = deepseek
+        config = MeaningProviders.httpConfiguration(settings, endpoint: deepseek)
+        #expect(config.tokenField == .maxTokensFirst)
+        let ollama = try #require(URL(string: "http://127.0.0.1:11434/v1"))
+        settings.profile = "ollama"
+        settings.usesKey = false
+        settings.endpoint = ollama
+        let local = MeaningProviders.httpConfiguration(settings, endpoint: ollama)
+        #expect(local.auth == .none)
+        #expect(MeaningProviders.profile(settings).id == "ollama")
+        settings.usesKey = true
+        #expect(MeaningProviders.profile(settings).id == "custom", "a local profile never answers for the cloud row")
+    }
+
     /// **A pasted address keeps its server** (2026-10-25): whitespace around it is not part of it, text that is not a
     /// URL yet cannot erase the stored address, and an emptied field is the reader asking for none.
     @Test func anAddressIsTrimmedAndAStrayWhitespaceCannotEraseIt() {
