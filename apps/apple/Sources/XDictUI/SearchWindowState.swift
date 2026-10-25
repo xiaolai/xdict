@@ -263,10 +263,13 @@ public final class SearchWindowState {
         phraseAskSerial += 1
         let ask = phraseAskSerial
         let presentation = meaning.handoffToken
-        let lookup = model.lookup?.serial
+        // **The whole lookup this tap belongs to** (audit round 4, 2026-10-26): a scope change keeps the serial, and an
+        // answer adopted under a scope the reader has since left would draw the phrase in another dictionary's place.
+        let lookup = model.lookup.map { (serial: $0.serial, scope: $0.scope) }
         let options = LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil)
         let answer = await backend.request(.lookup(query: candidate.phrase, dicts: [candidate.dict], options: options))
-        guard phraseAskSerial == ask, model.lookup?.serial == lookup, meaning.handoffToken == presentation,
+        guard phraseAskSerial == ask, model.lookup?.serial == lookup?.serial, model.lookup?.scope == lookup?.scope,
+              meaning.handoffToken == presentation,
               let now = meaning.held, now.phrase == nil,
               now.term == held.term, now.sentence == held.sentence, now.range == held.range,
               self.source(for: candidate.dict) != nil
@@ -277,7 +280,7 @@ public final class SearchWindowState {
         }
         guard case .page(let page) = delivered.answer, let hit = page.hits.first else {
             // **A tap whose lookup drew nothing says so** (audit round 3, 2026-10-26), and the sentence stays held for
-            // another dictionary's phrase.
+            // another dictionary's phrase — Try Again repeats this lookup.
             meaning.noEntry()
             return
         }
@@ -424,7 +427,9 @@ public final class SearchWindowState {
 
     /// Whether that entry already has a note; nil when the check could not answer.
     public func entryHasNote(_ entry: EntryRef) async -> Bool? {
-        guard let entryNoteCheck else { return false }
+        // **No check is "cannot say", never "no note"** (audit round 4, 2026-10-26): an absent check would otherwise
+        // write over an existing note without asking.
+        guard let entryNoteCheck else { return nil }
         return await entryNoteCheck(entry)
     }
 
