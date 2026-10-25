@@ -1,17 +1,19 @@
 //! The phrase census (`dev-docs/plan-phrase-recognition.md` WI-1): how many multi-word headwords the reader's own
-//! dictionaries carry, what scripts they are in, how long they are, and what placeholder slots they use. A
-//! measurement, not a gate: without the variable it says "not measured" and passes, because a green run over nothing
-//! is not a measurement.
+//! dictionaries carry, what scripts they are in, how long they are, what placeholder slots they use, and how many
+//! spellings repeat. A measurement, not a gate: without the variable it says "not measured" and passes, because a
+//! green run over nothing is not a measurement.
 //!
 //! `XDICT_PHRASE_CENSUS_CORPUS` lists folders (`:`-separated, `;` on Windows) searched two levels deep for `.mdx`;
 //! `XDICT_MDX_CORPUS` is used when it is unset, so the corpus the other measurements name is the default.
 //! `cargo test --release -p xdict-mdx --test phrase_census -- --nocapture`.
 //!
-//! What it does not measure: whether a phrase's entry carries senses (that needs the core's entry projection and an
-//! import per dictionary), and whether a found span is the unit a reader met (that needs a person-read sample). Both
-//! are stated in the plan; neither is claimed here.
+//! What it does not measure: whether a phrase's entry carries senses or redirects elsewhere (that needs the core's
+//! lookup and entry projection and an import per dictionary), and whether a raw key is a phrase a reader would meet
+//! (that needs a person-read classification sample). Both are the plan's remaining census work; neither is claimed
+//! here.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
@@ -58,6 +60,9 @@ struct Tally {
     keys: u64,
     public: u64,
     multiword: u64,
+    unique_multiword: u64,
+    repeated_spellings: u64,
+    extra_occurrences: u64,
     latin: u64,
     other: u64,
     mixed: u64,
@@ -82,10 +87,13 @@ fn is_slot(token: &str) -> (bool, bool, bool) {
     (english, abbreviation, token.contains('~'))
 }
 
+fn line(columns: &[String]) -> String {
+    columns.join("\t")
+}
+
 #[test]
 fn the_census_counts_multiword_headwords_and_their_shapes() {
-    let Ok(roots) =
-        std::env::var("XDICT_PHRASE_CENSUS_CORPUS").or_else(|_| std::env::var("XDICT_MDX_CORPUS"))
+    let Ok(roots) = std::env::var("XDICT_PHRASE_CENSUS_CORPUS").or_else(|_| std::env::var("XDICT_MDX_CORPUS"))
     else {
         eprintln!("not measured: XDICT_PHRASE_CENSUS_CORPUS and XDICT_MDX_CORPUS are unset");
         return;
@@ -95,7 +103,30 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
     let mut total = Tally::default();
     let mut measured = 0;
     eprintln!(
-        "file\tkeys\tpublic\tmultiword\tlatin\tother\tmixed\tnoletters\t2w\t3w\t4w\t5w\t6w+\tslot_en\tslot_abbr\tslot_tilde\tlongest\tms"
+        "{}",
+        line(&[
+            "file".into(),
+            "keys".into(),
+            "public".into(),
+            "multiword".into(),
+            "unique_mw".into(),
+            "repeats".into(),
+            "extra".into(),
+            "latin".into(),
+            "other".into(),
+            "mixed".into(),
+            "noletters".into(),
+            "2w".into(),
+            "3w".into(),
+            "4w".into(),
+            "5w".into(),
+            "6w+".into(),
+            "slot_en".into(),
+            "slot_abbr".into(),
+            "slot_tilde".into(),
+            "longest".into(),
+            "ms".into(),
+        ])
     );
     for path in &files {
         let started = Instant::now();
@@ -107,6 +138,7 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
             }
         };
         let mut t = Tally { keys: file.len() as u64, ..Tally::default() };
+        let mut spellings: HashMap<String, u32> = HashMap::new();
         for i in 0..file.len() {
             let Ok(public) = file.is_public(i) else { continue };
             if !public {
@@ -119,6 +151,7 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
                 continue;
             }
             t.multiword += 1;
+            *spellings.entry(key.to_string()).or_insert(0) += 1;
             let (mut latin, mut other) = (false, false);
             for c in key.chars() {
                 match letter_script(c) {
@@ -150,27 +183,37 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
                 t.longest_key = key.to_string();
             }
         }
+        t.unique_multiword = spellings.len() as u64;
+        for count in spellings.values().filter(|count| **count > 1) {
+            t.repeated_spellings += 1;
+            t.extra_occurrences += u64::from(*count - 1);
+        }
         measured += 1;
         eprintln!(
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{:.0}",
-            name(path),
-            t.keys,
-            t.public,
-            t.multiword,
-            t.latin,
-            t.other,
-            t.mixed,
-            t.no_letters,
-            t.words[0],
-            t.words[1],
-            t.words[2],
-            t.words[3],
-            t.words[4],
-            t.slot_english,
-            t.slot_abbreviation,
-            t.slot_tilde,
-            t.longest,
-            started.elapsed().as_secs_f64() * 1e3
+            "{}",
+            line(&[
+                name(path),
+                t.keys.to_string(),
+                t.public.to_string(),
+                t.multiword.to_string(),
+                t.unique_multiword.to_string(),
+                t.repeated_spellings.to_string(),
+                t.extra_occurrences.to_string(),
+                t.latin.to_string(),
+                t.other.to_string(),
+                t.mixed.to_string(),
+                t.no_letters.to_string(),
+                t.words[0].to_string(),
+                t.words[1].to_string(),
+                t.words[2].to_string(),
+                t.words[3].to_string(),
+                t.words[4].to_string(),
+                t.slot_english.to_string(),
+                t.slot_abbreviation.to_string(),
+                t.slot_tilde.to_string(),
+                t.longest.to_string(),
+                format!("{:.0}", started.elapsed().as_secs_f64() * 1e3),
+            ])
         );
         if !t.longest_key.is_empty() {
             eprintln!("  longest in {}: {:?}", name(path), t.longest_key);
@@ -178,6 +221,9 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
         total.keys += t.keys;
         total.public += t.public;
         total.multiword += t.multiword;
+        total.unique_multiword += t.unique_multiword;
+        total.repeated_spellings += t.repeated_spellings;
+        total.extra_occurrences += t.extra_occurrences;
         total.latin += t.latin;
         total.other += t.other;
         total.mixed += t.mixed;
@@ -194,23 +240,29 @@ fn the_census_counts_multiword_headwords_and_their_shapes() {
         }
     }
     eprintln!(
-        "TOTAL\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-        total.keys,
-        total.public,
-        total.multiword,
-        total.latin,
-        total.other,
-        total.mixed,
-        total.no_letters,
-        total.words[0],
-        total.words[1],
-        total.words[2],
-        total.words[3],
-        total.words[4],
-        total.slot_english,
-        total.slot_abbreviation,
-        total.slot_tilde,
-        total.longest
+        "{}",
+        line(&[
+            "TOTAL".into(),
+            total.keys.to_string(),
+            total.public.to_string(),
+            total.multiword.to_string(),
+            total.unique_multiword.to_string(),
+            total.repeated_spellings.to_string(),
+            total.extra_occurrences.to_string(),
+            total.latin.to_string(),
+            total.other.to_string(),
+            total.mixed.to_string(),
+            total.no_letters.to_string(),
+            total.words[0].to_string(),
+            total.words[1].to_string(),
+            total.words[2].to_string(),
+            total.words[3].to_string(),
+            total.words[4].to_string(),
+            total.slot_english.to_string(),
+            total.slot_abbreviation.to_string(),
+            total.slot_tilde.to_string(),
+            total.longest.to_string(),
+        ])
     );
     eprintln!("{measured} files measured");
     assert!(measured > 0, "no file could be read, so the census says nothing");
