@@ -183,6 +183,22 @@ struct PhrasesModelTests {
         #expect(phrases.sentence == newer)
     }
 
+    /// **A dictionary set that changed is a new question** (WI-7's "disabled mid-request"): the model asks over the
+    /// handles it is given, so the next capture after an enable or a disable never answers from the old set.
+    @Test func a_changed_dictionary_set_asks_again() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { _ in
+            PhrasesFixture.outcome(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()]))
+        }
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { if case .found = phrases.row { true } else { false } })
+        let pair = PhrasesFixture.handles + [Fixture.handle("two")]
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: pair)
+        #expect(await eventually(awaiting: 2) { await phraseOperations(backend).count == 2 })
+        #expect(await phraseOperations(backend).last?.dicts == pair)
+    }
+
     @Test func clearing_hides_the_row() async throws {
         let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
         await backend.setAnswer { _ in
