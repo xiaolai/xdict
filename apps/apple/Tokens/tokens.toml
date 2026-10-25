@@ -27,6 +27,7 @@ radius = { kind = "length", swift = "Radius", doc = "Corner radii." }
 line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
 size = { kind = "size", swift = "Size", doc = "Fixed two-dimensional sizes." }
 text = { kind = "font", swift = "TextRole", doc = "Text roles: a system text style where one fits, else a size Apple measured." }
+reading = { kind = "number", swift = "Reading", doc = "The reading text's own metrics: what the companion pane shares with the entry so its prose reads as the dictionary's (ADR-0021 d.14)." }
 colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's semantic colours first; a literal only where Apple's page was measured." }
 entryText = { kind = "string", swift = "EntryText", doc = "Values the entry view writes into CSS, SVG or a script as text: the reading inset, glyph strokes, the blocked image's placeholder, the popover glass measured." }
 divider = { kind = "length", swift = "PageDivider", doc = "The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41)." }
@@ -88,6 +89,8 @@ popoverChrome = { value = 26, why = "What NSPopover draws around its content (it
 siteField = { value = 140, why = "The site field of Settings > General's Never look up on row: a host fits, and the row's sentence keeps two lines beside it rather than three (P53)." }
 promptEditor = { value = 140, why = "The prompt editor's least height: about eight lines of the default template in 12 pt monospaced type, so a whole instruction reads without scrolling the form." }
 filterField = { value = 140, why = "The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row." }
+findSegmentWidth = { value = 26, why = "The find bar's previous and next segments: an SF Symbol plus its padding, so the bar's width does not move when they change." }
+findFieldMin = { value = 140, why = "The find field's least width: a word or two stays visible while the whole bar keeps one row." }
 
 [window]
 mainMinimumWidth = { value = 400, source = "P1" }
@@ -131,6 +134,9 @@ meaningSheetHeight = { value = 480, why = "A compact Meaning in Context sheet ke
 paneGap = { value = 8, why = "The air between the main window and the answer pane, so the pane reads as its own surface (owner, 2026-10-24)." }
 paneInitialHeight = { value = 600, why = "The answer pane's height before its first frame is set; its real height follows the main window." }
 drawerShutWidth = { value = 1, why = "The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer)." }
+mainIdealWidth = { value = 1000, why = "The main window's opening width: the reading column, the sidebar and the inspector at their defaults." }
+mainIdealHeight = { value = 700, why = "The main window's opening height: a full entry paragraph above the synonyms." }
+scrollEdgeTolerance = { value = 1, why = "How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }
@@ -189,6 +195,12 @@ panelTitle = { size = 20, source = "P41" }
 panelFooter = { size = 13, weight = "semibold", source = "P41" }
 panelDictionaryName = { size = 13, weight = "semibold", why = "A dictionary's name above its entry in the lookup popover: the footer rows' size, well under the 20 pt headword (owner, 2026-10-18: a smaller font)." }
 tableCell = { size = 12, why = "Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12)." }
+readingBody = { size = 16, design = "serif", source = "P18" }
+readingBodyEmphasized = { size = 16, weight = "semibold", design = "serif", why = "The matched run inside an example pair: the reading face at the selected row's weight, so the match reads as emphasis, not as another size (owner's decision 5, 2026-10-18)." }
+
+[reading]
+# The entry's own line height; the companion's reading text reads at the same target (ADR-0021 d.14).
+leading = { value = 1.4, source = "P18" }
 
 [colour]
 shadow = { system = "shadowColor" }

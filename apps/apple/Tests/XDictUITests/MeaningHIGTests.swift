@@ -26,7 +26,43 @@ struct MeaningHIGTests {
         #expect(context?.term == "hold")
         #expect(context?.range == NSRange(location: 5, length: 4))
         let shown = MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent)
-        #expect(shown?.questionContext == context, "the pane's context is the request's, not a newer capture's")
+        #expect(shown?.questionContext == context, "the pane's context is the request's own field")
+        // **The negative control**: another sentence, the one a stale read would have to come from, is not what it shows.
+        let other = MeaningContext(term: "run", sentence: "They run daily.", range: NSRange(location: 5, length: 3))
+        #expect(shown?.questionContext != other)
+    }
+
+    /// **A presenter reads the request it is given, not the session's live capture** (audit rounds 3 and 4, 2026-10-25): the
+    /// UI's own path from a capture to the pane is covered by `MeaningSessionTests` and the window's tests, so this one holds
+    /// the presenter's rule: the frozen request's context, with a second sentence held meanwhile.
+    @Test func thePresenterKeepsTheRequestsOwnContextWhenTheCaptureMoves() async throws {
+        let (session, _, _) = Base.session()
+        session.ask()
+        #expect(await Base.waitUntil { session.state != .asking })
+        let sent = try #require(session.sent)
+        let context = try #require(sent.questionContext)
+        session.hold(MeaningHandoff(term: "run", sentence: "They run daily.", range: NSRange(location: 5, length: 3),
+                                    origin: MeaningOrigin(request: 8, generation: 3)))
+        let answer = AIAnswer(outcome: .matched, quotes: ["to keep"], explanation: "It means that here.")
+        let shown = try #require(MeaningPresenter.present(.answer(answer, mode: .grounded), settings: Self.settings,
+                                                          sent: sent))
+        #expect(shown.questionContext == context)
+        #expect(shown.questionContext?.sentence == "They hold that view.")
+        #expect(session.held?.sentence == "They run daily.", "the newer capture was not the live context")
+    }
+
+    /// **A newer capture clears the answer built from the old one** (audit round 4, 2026-10-25): the pane never shows the
+    /// old sentence's answer beside the new sentence, and the presenter has nothing left to present.
+    @Test func aNewerCaptureClearsTheAnswer() async {
+        let (session, _, _) = Base.session()
+        session.ask()
+        #expect(await Base.waitUntil { session.state != .asking })
+        #expect(session.sent != nil)
+        session.hold(MeaningHandoff(term: "run", sentence: "They run daily.", range: NSRange(location: 5, length: 3),
+                                    origin: MeaningOrigin(request: 9, generation: 4)))
+        #expect(session.sent == nil, "the old answer's sent record survived the new sentence")
+        #expect(session.state == .idle, "the old answer stayed on screen under the new sentence")
+        #expect(MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent) == nil)
     }
 
     @Test func aPreviewShowsTheSentenceItWouldSend() async {
@@ -51,33 +87,48 @@ struct MeaningHIGTests {
         #expect(shown?.evidenceTarget == MeaningTarget(dictionary: Base.dict, entry: Base.entry))
     }
 
-    @Test func aSentenceOnlyAnswerHasNoEvidenceSource() async {
+    @Test func aSentenceOnlyAnswerHasNoEvidenceSource() async throws {
         let (session, _, _) = Base.session(
             settings: MeaningSettings(source: .http, model: "m", sendEntryText: false),
             provider: StubProvider(answers: [.success(#"{"outcome":"explanationOnly","quotes":[],"explanation":"x"}"#)]))
         session.dictionaryNamer = { _ in "Oxford" }
         session.ask()
+        // **The state is the answer the test means** (audit round 2, 2026-10-25): any other settled state used to pass the
+        // optional comparisons below without producing one.
         #expect(await Base.waitUntil { session.state != .asking })
-        #expect(session.sent?.target == nil)
-        let shown = MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent)
-        #expect(shown?.evidenceSource == nil)
+        guard case .answer(_, let mode) = session.state else {
+            Issue.record("no answer: \(session.state)")
+            return
+        }
+        #expect(mode == .sentenceOnly)
+        let sent = try #require(session.sent)
+        #expect(sent.target == nil)
+        let shown = try #require(MeaningPresenter.present(session.state, settings: Self.settings, sent: sent))
+        #expect(shown.evidenceSource == nil)
     }
 
     // MARK: - UI23: an incidental sense click keeps a finished answer
 
-    @Test func aFinishedAnswerSurvivesANewSelectionLabelledWithItsOwnSense() async {
-        let (session, provider, _) = Base.senseSession()
+    @Test func aFinishedAnswerSurvivesANewSelectionLabelledWithItsOwnSense() async throws {
+        // **Two answers, told apart** (audit round 4, 2026-10-25): the default stub repeated the sense-2 response, so a stale
+        // sense-2 prompt would have passed.
+        let provider = StubProvider(answers: [
+            .success(#"{"outcome":"explained","quotes":["an opinion"],"explanation":"The second sense."}"#),
+            .success(#"{"outcome":"explained","quotes":["to keep"],"explanation":"The first sense."}"#),
+        ])
+        let (session, _, _) = Base.senseSession(provider: provider)
         session.explain()
         #expect(await Base.waitUntil { session.state != .asking })
-        guard case .answer = session.state else {
+        guard case .answer(let answer, let mode) = session.state else {
             Issue.record("no answer: \(session.state)")
             return
         }
+        let sent = session.sent
         session.select(MeaningSelection(dictionary: Base.dict, entry: Base.entry, sense: 1, dictionaryName: "Test"))
-        guard case .answer = session.state else {
-            Issue.record("a click on another sense erased the answer: \(session.state)")
-            return
-        }
+        // **The whole answer survives, not just its case** (audit round 2, 2026-10-25): the same explanation, quotes and
+        // mode, and the same frozen request.
+        #expect(session.state == .answer(answer, mode: mode), "a click on another sense changed the answer")
+        #expect(session.sent == sent, "a click on another sense changed the request the answer is about")
         #expect(session.sent?.sense?.id == 2, "the answer stays labelled with the sense it was about")
         #expect(session.selection?.sense == 1)
         let shown = MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent,
@@ -89,46 +140,68 @@ struct MeaningHIGTests {
                                             selection: MeaningSelection(dictionary: Base.dict, entry: Base.entry,
                                                                         sense: 2))
         #expect(same?.selectionMoved == false)
+        // **The next explain is about the new selection** (audit round 3, 2026-10-25): the comment above now has its ask.
+        session.explain()
+        #expect(await Base.waitUntil { session.state != .asking && session.sent?.sense?.id == 1 },
+                "the next explain did not ask about the selection")
+        let questions = await provider.questions
+        try #require(questions.count == 2)
+        #expect(questions[1].contains("to keep"), "the second question did not carry the new selection's sense")
+        guard case .answer(let answer, _) = session.state else {
+            Issue.record("the second explain did not answer: \(session.state)")
+            return
+        }
+        #expect(answer.explanation == "The first sense.")
     }
 
     @Test func clearingTheChosenSenseKeepsTheAnswer() async {
         let (session, _, _) = Base.senseSession()
         session.explain()
         #expect(await Base.waitUntil { session.state != .asking })
+        guard case .answer(let answer, let mode) = session.state else {
+            Issue.record("no answer: \(session.state)")
+            return
+        }
+        let sent = session.sent
         session.clearSelection()
         #expect(session.selection == nil)
         #expect(!session.hasSenseSelection)
-        guard case .answer = session.state else {
-            Issue.record("clearing the choice erased the answer: \(session.state)")
-            return
-        }
+        #expect(session.state == .answer(answer, mode: mode), "clearing the choice changed the answer")
+        #expect(session.sent == sent, "clearing the choice changed the request")
+        let shown = MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent,
+                                             selection: session.selection)
+        // **None chosen is not "another sense"** (audit round 1, 2026-10-25): the label says "You have chosen another
+        // sense since", which would be false here; the answer already names its own sense.
+        #expect(shown?.selectionMoved == false)
     }
 
     // MARK: - UI15, UI20: recovery first, the code behind it
 
-    @Test func eachRecoverableFailureNamesItsNextStep() {
-        func recovery(_ state: MeaningSession.State) -> MeaningRecovery? {
-            MeaningPresenter.present(state, settings: Self.settings, sent: nil)?.recovery
+    @Test func eachRecoverableFailureNamesItsNextStep() throws {
+        // **A state with no presentation is a failure of the test** (audit round 3, 2026-10-25): optional chaining passed a
+        // missing presentation off as "no next step".
+        func recovery(_ state: MeaningSession.State) throws -> MeaningRecovery? {
+            try #require(MeaningPresenter.present(state, settings: Self.settings, sent: nil)).recovery
         }
-        #expect(recovery(.unavailable(.noSource)) == .openAISettings)
-        #expect(recovery(.unavailable(.entryTextOff)) == .openAISettings)
-        #expect(recovery(.template(.templateTooLong)) == .openAISettings)
-        #expect(recovery(.unavailable(.provider(.unauthorised))) == .openAISettings)
-        #expect(recovery(.unavailable(.provider(.notSignedIn))) == .openAISettings)
-        #expect(recovery(.unavailable(.provider(.modelNotFound))) == .openAISettings)
-        #expect(recovery(.unavailable(.provider(.timeout))) == .retry)
-        #expect(recovery(.unavailable(.provider(.unreachable))) == .retry)
-        #expect(recovery(.unavailable(.provider(.rateLimited))) == .retry)
-        #expect(recovery(.unavailable(.consentChanged)) == .openAISettings)
-        #expect(recovery(.unavailable(.provider(.contextExceeded))) == .openAISettings)
-        #expect(recovery(.invalid(.shape)) == .retry)
-        #expect(recovery(.cancelled) == .retry)
+        #expect(try recovery(.unavailable(.noSource)) == .openAISettings)
+        #expect(try recovery(.unavailable(.entryTextOff)) == .openAISettings)
+        #expect(try recovery(.template(.templateTooLong)) == .openAISettings)
+        #expect(try recovery(.unavailable(.provider(.unauthorised))) == .openAISettings)
+        #expect(try recovery(.unavailable(.provider(.notSignedIn))) == .openAISettings)
+        #expect(try recovery(.unavailable(.provider(.modelNotFound))) == .openAISettings)
+        #expect(try recovery(.unavailable(.provider(.timeout))) == .retry)
+        #expect(try recovery(.unavailable(.provider(.unreachable))) == .retry)
+        #expect(try recovery(.unavailable(.provider(.rateLimited))) == .retry)
+        #expect(try recovery(.unavailable(.consentChanged)) == .openAISettings)
+        #expect(try recovery(.unavailable(.provider(.contextExceeded))) == .openAISettings)
+        #expect(try recovery(.invalid(.shape)) == .retry)
+        #expect(try recovery(.cancelled) == .retry)
         // Nothing the pane could do: the reader moves on in the entry.
-        #expect(recovery(.unavailable(.noContext)) == nil)
-        #expect(recovery(.unavailable(.noEntry)) == nil)
-        #expect(recovery(.unavailable(.provider(.guardrail))) == nil)
+        #expect(try recovery(.unavailable(.noContext)) == nil)
+        #expect(try recovery(.unavailable(.noEntry)) == nil)
+        #expect(try recovery(.unavailable(.provider(.guardrail))) == nil)
         // An answer is not a failure.
-        #expect(recovery(.answer(AIAnswer(outcome: .matched, quotes: ["to keep"], explanation: "x"), mode: .grounded))
+        #expect(try recovery(.answer(AIAnswer(outcome: .matched, quotes: ["to keep"], explanation: "x"), mode: .grounded))
                 == nil)
     }
 

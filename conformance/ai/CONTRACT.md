@@ -1,6 +1,6 @@
 # The AI contract
 
-**ai-contract: 3** · 2026-10-22 · Normative. A shell asks a language model what a captured word means in its sentence,
+**ai-contract: 4** · 2026-10-25 · Normative. A shell asks a language model what a captured word means in its sentence,
 and shows the answer beside the reader's entry. Every shell implements this natively; none of it is in the core, and the
 core never sees a prompt, a key or an answer (ADR-0021; ADR-0003 d.1). The fixtures in this folder are the executable
 form of this text. Where they disagree, this text is corrected first and the fixtures follow.
@@ -69,7 +69,8 @@ The template is the reader's: shown, editable, reset to the default (ADR-0021 d.
    §6, or §6a in `explainSense` mode. In `grounded` and `explainSense` mode the app also appends the **entry state**
    (§4a) between the rendered template and the contract; in `explainSense` mode the **chosen sense's state** follows it.
    The composed question is exactly: the rendered template, `\n\n`, [the entry state, `\n\n`, when the mode has an
-   entry], [the chosen sense's state, `\n\n`, in `explainSense` mode only], the response contract.
+   entry], [the chosen sense's state, `\n\n`, in `explainSense` mode only], the answer-language line (§4b), `\n\n`,
+   the response contract.
 5. **Bounds**: a template over **8,192 UTF-8 bytes** is `template.tooLong`; a composed question over **1,048,576
    UTF-8 bytes** is `question.tooLong` — the shell's entry budget must keep a real entry inside it. A `grounded` question
    with no entry is `question.entryRequired`.
@@ -94,6 +95,22 @@ uses:
 
 - `whole` true: `The chosen sense above is complete: every part of it was sent.`
 - `whole` false: `The chosen sense above is incomplete: part of it was not sent. Answer incompleteInput when the missing part could decide it; never answer explained or doesNotFit.`
+
+## 4b. The answer's language (fixed, appended by the app)
+
+The contract has always said which language the answer is in — §2's `language` is “the language the explanation is
+written in”, and §5 requires `explanation` to be one sentence in it — but nothing in the composed question said so: no
+shipped default template uses the optional `{language}`. Contract 4 makes the question say it. The app appends this one
+line after the rendered template and the states (each after one blank line), and one blank line before the response
+contract:
+
+```text
+The explanation must be written in the language whose BCP 47 tag is "<language>"; quotes are copied verbatim and are never translated.
+```
+
+`<language>` is the question's `language`, exactly as given. The line is the app's: a template cannot drop, reword or
+override it, and it is appended for every mode and every source. It names no source of quotes because the source depends
+on the mode (§5): the entry's text in `grounded`, the chosen sense's in `explainSense`, nothing in `sentenceOnly`.
 
 ## 5. The answer
 
@@ -169,13 +186,24 @@ A shell is compliant when all of these hold, each with its own native tests:
    chosen sense, a partial target, and English and Chinese punctuation.
 3. Its **native lifecycle and privacy** checks pass: one operation per ask, cancelled by Escape, a newer ask, closing or
    the consumer going; no history between asks; consent checked at send (and re-read at the send boundary after the entry
-   fetch and the queue permit); the preview equals the sent bytes; the sentence and the answer are not persisted.
+   fetch and the queue permit); the preview equals the sent bytes; the sentence and the answer are not persisted, except
+   the explanation the reader explicitly saves as a note (§8.4).
 
 A runner reports the case ids, the count and the suite revision (a digest of `vectors.jsonl`). A fixture that cannot be
 decoded, an unknown operation, a duplicate id or an unsupported major is a harness failure, never a refusal.
+
+## 8.4 A note the reader saves
+
+A shell may save the explanation — never the sentence — on the entry the request was composed from, when the reader asks
+for it. The saved note carries a provenance line naming the source, the model when one was named, and the day, and says
+the wording is the model's. It is the reader's note afterwards: editable, syncable and deletable like any other. Nothing
+is saved automatically, and a note already on the entry is replaced only after the reader confirms. (Owner, 2026-10-25:
+"干完"; `plan-companion-window.md` WI-9.)
 
 ## 9. Versioning
 
 Three identities, never conflated: **ai-contract major** (this file), **fixture grammar** (`format`), **suite revision**
 (digest of `vectors.jsonl`). A closed enum gaining a required member is a major change; a new explanation wording or a
-new default template is not.
+new default template is not. **A change to the composed question's fixed bytes is a major change even when it makes the
+question say what §5 already required** (contract 4): every compose case's expected text changes with it, so a shell
+that passed the previous major would fail the next major's fixtures.

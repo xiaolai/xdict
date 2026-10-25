@@ -8,7 +8,7 @@ implementation — never through a core binding.
 
 | File | What it is |
 |---|---|
-| `CONTRACT.md` | the normative text, `ai-contract: 2` |
+| `CONTRACT.md` | the normative text, `ai-contract: 4` |
 | `vectors.jsonl` | `mark`, `compose` and `validate` cases, grammar `format: 1` |
 | `defaults/<language>.<mode>.txt` | the shipped default templates, one per language and mode |
 | a shell's runner | not here: macOS keeps its runner in its own test tree (`apps/apple/Tests/XDictAITests/AIContractTests.swift`) |
@@ -18,7 +18,8 @@ implementation — never through a core binding.
 1. **`mark`** — the marking rule (CONTRACT.md §3): feed `sentence` and `range`, compare the complete `«…»`-marked text,
    ordinal UTF-16. A range that cannot be applied marks nothing.
 2. **`compose`** — the template rules (§4): feed the template, mode and values; compare the **complete composed question**,
-   including the fixed response contract appended after one blank line (§6), byte for byte. An invalid case compares the
+   including the answer-language line (§4b) and the fixed response contract appended after one blank line (§6), byte for
+   byte. An invalid case compares the
    stable code (`template.unknownPlaceholder`, `template.missingPlaceholder`, `template.entryInSentenceOnly`,
    `template.tooLong`).
 3. **`validate`** — the answer rules (§5): feed the answer object, the entry (`text`, `complete`) and the mode; compare

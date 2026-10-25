@@ -7,7 +7,11 @@ import XDictAI
 // `Mirror` walking into it. `MeaningPrivacyTests` holds them to it.
 
 extension MeaningHandoff: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
-    public var description: String { "MeaningHandoff(term: \(term), \(sentence.utf16.count) UTF-16 units)" }
+    /// **Sizes only** (audit round 4, 2026-10-25): a phrase selection can equal the whole sentence, so neither the term nor
+    /// the sentence may be printed.
+    public var description: String {
+        "MeaningHandoff(term: \(term.utf16.count) UTF-16 units, \(sentence.utf16.count) UTF-16 units)"
+    }
     public var debugDescription: String { description }
     public var customMirror: Mirror { Mirror(self, children: [:]) }
 }
@@ -29,32 +33,26 @@ extension MeaningSettings: CustomStringConvertible, CustomDebugStringConvertible
 }
 
 extension MeaningSession: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
-    /// The state's name, not its payload: an answer's quotes and explanation are the entry's words, and the held
-    /// sentence is the reader's. Neither belongs in a log. The session is main-actor only, so describing it from
-    /// anywhere else is a programming error that traps rather than a quiet read off the actor.
-    public nonisolated var description: String {
-        MainActor.assumeIsolated { "MeaningSession(\(Self.label(state)), held: \(held != nil))" }
-    }
+    /// **The kind and nothing else** (audit round 3, 2026-10-25): the state's payload is the reader's, and a nonisolated
+    /// description cannot read main-actor state — `MainActor.assumeIsolated` trapped whenever a background task described
+    /// a session. A constant cannot leak and cannot trap.
+    public nonisolated var description: String { "MeaningSession" }
     public nonisolated var debugDescription: String { description }
     public nonisolated var customMirror: Mirror { Mirror(self, children: [:]) }
-
-    static func label(_ state: State) -> String {
-        switch state {
-        case .idle: "idle"
-        case .asking: "asking"
-        case .preview: "preview"
-        case .answer: "answer"
-        case .template: "template"
-        case .invalid: "invalid"
-        case .unavailable: "unavailable"
-        case .cancelled: "cancelled"
-        }
-    }
 }
 
 extension MeaningContext: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
     /// The displayed question is still reader context: diagnostics name its size, never its words.
     public var description: String { "MeaningContext(\(sentence.utf16.count) UTF-16 units)" }
+    public var debugDescription: String { description }
+    public var customMirror: Mirror { Mirror(self, children: [:]) }
+}
+
+extension MeaningRequestFacts: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
+    /// The choices, never the reader's sentence or the sense's text.
+    public var description: String {
+        "MeaningRequestFacts(sense: \(chosenSense != nil), evidence: \(evidenceTarget != nil))"
+    }
     public var debugDescription: String { description }
     public var customMirror: Mirror { Mirror(self, children: [:]) }
 }

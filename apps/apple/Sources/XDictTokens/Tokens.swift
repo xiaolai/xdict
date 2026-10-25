@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "29263c8ed6e3b5ac1aaba2c7be6e07fbb6147c7cc3f87921601f330985897e69"
+    public static let sourceDigest = "e920fe0cc62239fb7200836f92689aeea97bb3974f80b35b73f7b810f7539fb2"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -102,6 +102,10 @@ public enum Tokens {
         public static let promptEditor: CGFloat = 140
         /// The Dictionaries filter field width: room for a dictionary name or language while keeping add and remove actions visible in the same row.
         public static let filterField: CGFloat = 140
+        /// The find bar's previous and next segments: an SF Symbol plus its padding, so the bar's width does not move when they change.
+        public static let findSegmentWidth: CGFloat = 26
+        /// The find field's least width: a word or two stays visible while the whole bar keeps one row.
+        public static let findFieldMin: CGFloat = 140
     }
 
     /// Timings the shell runs itself: the drawer's springs and how long an undo stays offered.
@@ -244,6 +248,12 @@ public enum Tokens {
         public static let paneInitialHeight: CGFloat = 600
         /// The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer).
         public static let drawerShutWidth: CGFloat = 1
+        /// The main window's opening width: the reading column, the sidebar and the inspector at their defaults.
+        public static let mainIdealWidth: CGFloat = 1000
+        /// The main window's opening height: a full entry paragraph above the synonyms.
+        public static let mainIdealHeight: CGFloat = 700
+        /// How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll.
+        public static let scrollEdgeTolerance: CGFloat = 1
     }
 
     /// Corner radii.
@@ -304,6 +314,16 @@ public enum Tokens {
         public static let panelDictionaryName = TokenFont(size: 13, weight: .semibold, design: .default, italic: false)
         /// Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12).
         public static let tableCell = TokenFont(size: 12, weight: .regular, design: .default, italic: false)
+        /// Apple-measured (P18, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let readingBody = TokenFont(size: 16, weight: .regular, design: .serif, italic: false)
+        /// The matched run inside an example pair: the reading face at the selected row's weight, so the match reads as emphasis, not as another size (owner's decision 5, 2026-10-18).
+        public static let readingBodyEmphasized = TokenFont(size: 16, weight: .semibold, design: .serif, italic: false)
+    }
+
+    /// The reading text's own metrics: what the companion pane shares with the entry so its prose reads as the dictionary's (ADR-0021 d.14).
+    public enum Reading {
+        /// Apple-measured (P18, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let leading: Double = 1.4
     }
 
     /// Colours: the system's semantic colours first; a literal only where Apple's page was measured.

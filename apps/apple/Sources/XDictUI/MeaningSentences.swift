@@ -1,5 +1,6 @@
 import Foundation
 import XDictAI
+import XDictClient
 
 /// **What the AI pane tells the reader, in their language** (plan-ai-meaning WI-6; ADR-0007 decision 10: the model hands
 /// kinds, the view layer words them). Every sentence is in `Strings/Localizable.xcstrings`, in English and Simplified
@@ -82,6 +83,20 @@ public enum MeaningSentences {
     public static let selectionMoved =
         LocalizedStringResource("You have chosen another sense since. This answer is about the one shown here.")
 
+    /// The note's origin when the request named no source: a saved note is data and still says where it came from.
+    public static let anAISource = LocalizedStringResource("an AI source")
+
+    /// **A saved note says where it came from** (plan-companion WI-9; owner, 2026-10-25): the source (and the model when
+    /// one was named), the day, and that a model wrote the wording — the reader's note never claims otherwise.
+    public static func noteProvenance(source: String, model: String?, day: String) -> LocalizedStringResource {
+        if let model, !model.isEmpty {
+            LocalizedStringResource(
+                "Saved from an XDict AI answer (\(source), \(model), \(day)). The wording is the model's.")
+        } else {
+            LocalizedStringResource("Saved from an XDict AI answer (\(source), \(day)). The wording is the model's.")
+        }
+    }
+
     /// **The cut, in the tense of the request** (UI19): a preview's entry *will be* cut; a sent one *was*.
     public static func cut(at bytes: UInt64, sent: Bool) -> LocalizedStringResource {
         sent ? LocalizedStringResource("The entry was cut at \(bytes) bytes, so only the part before that was sent.")
@@ -124,7 +139,20 @@ public enum MeaningSentences {
         case .noSource: LocalizedStringResource("Choose a source in Settings ▸ AI.")
         case .noContext: LocalizedStringResource("There is no captured sentence to answer about.")
         case .noEntry: LocalizedStringResource("No entry is on screen for this sentence.")
-        case .entryFailure: LocalizedStringResource("The entry could not be read.")
+        case .entryFailure(let failure):
+            // **The known cause is said, with what to do about it** (audit round 4, 2026-10-25): the reader's dictionary
+            // list lives in Settings ▸ Dictionaries (ADR-0012), and every branch names a next step.
+            switch failure {
+            case .reopenNeedsImport:
+                LocalizedStringResource("The dictionary changed on disk. Import it again in Settings ▸ Dictionaries.")
+            case .fileUnavailable:
+                LocalizedStringResource(
+                    "The dictionary’s file is not available now. Check that its folder is connected, then import it again in Settings ▸ Dictionaries.")
+            case .wire, .superseded, .needsFiles:
+                // **A routing failure names no dictionary** (audit round 4, 2026-10-25): reimporting is not its remedy, so
+                // it shares the sentence that offers the one step a reader has.
+                LocalizedStringResource("The entry could not be read just now. Ask again.")
+            }
         case .consentChanged:
             LocalizedStringResource("The entry-text switch changed while the question was being prepared, so nothing was sent.")
         case .noSense:

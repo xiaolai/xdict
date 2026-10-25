@@ -124,6 +124,10 @@ public struct MeaningSent: Sendable, Equatable {
     public let mode: AIMode
     /// **The source the request was composed for**, so an answer is never relabelled after the reader switches sources.
     public let source: AIProviderKind?
+    /// **The model the request asked for**, frozen at compose time (Codex refutation, 2026-10-25): the reader may change
+    /// Settings ▸ AI afterwards, and the pane must not relabel an old answer. Nil for a source that names no model (the
+    /// CLI sources pass their own defaults) and for an HTTP source with an empty field.
+    public let model: String?
     /// False when the entry's budget cut it (`entry_text`'s `complete`); always true in `sentenceOnly` mode.
     public let complete: Bool
     public let cutAt: UInt64
@@ -141,10 +145,11 @@ public struct MeaningSent: Sendable, Equatable {
 
     public init(text: String, mode: AIMode, source: AIProviderKind?, complete: Bool, cutAt: UInt64,
                 sense: AISense? = nil, dictionaryName: String? = nil, questionContext: MeaningContext? = nil,
-                target: MeaningTarget? = nil) {
+                target: MeaningTarget? = nil, model: String? = nil) {
         self.text = text
         self.mode = mode
         self.source = source
+        self.model = model
         self.complete = complete
         self.cutAt = cutAt
         self.sense = sense
@@ -289,10 +294,14 @@ public final class MeaningSession {
     /// The operation a preview showed: its mode and its sense, so Send refuses a different one and Ask Again repeats
     /// this one rather than the switch's mode read again.
     @ObservationIgnored private var previewOperation: Operation?
-    /// The operation whose result is shown: what Ask Again repeats.
+    /// **The operation the last ask tried, refused or not**: what Ask Again repeats — never an older ask's operation
+    /// after a newer one that failed before it reached a target (audit round 1, 2026-10-25).
     @ObservationIgnored private var lastOperation: Operation?
     /// The operation a deferred ask (a hand-off before its entry drew) will run.
     @ObservationIgnored private var askWhenDrawnOperation: Operation?
+    /// **The sentence's lookup settled with nothing drawn** (audit round 2, 2026-10-25): a later ask must answer
+    /// `noEntry` at once rather than wait for a draw that already failed to come.
+    @ObservationIgnored private var lookupWithoutEntry = false
 
     @ObservationIgnored private let fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>
     @ObservationIgnored private let presented: @MainActor () -> (DictId, EntryRef)?
@@ -301,8 +310,17 @@ public final class MeaningSession {
     /// **The operation `running` is executing**: a cleared chosen sense must be able to invalidate a preview or ask still
     /// being composed (audit finding, 2026-10-25).
     @ObservationIgnored private var runningOperation: Operation?
+    /// **The source the running ask was started for**, frozen at the tap (verification round 1, 2026-10-25): the pane
+    /// names the request's recipient, which a Settings change while it runs must not relabel.
+    public private(set) var askingSource: AIProviderKind?
+    /// **The entry the running ask is about**, frozen with the source (audit round 3): the pane's context speaker speaks
+    /// the request's dictionary's language while `sent` is still nil.
+    public private(set) var askingTarget: MeaningTarget?
     /// Bumped by every ask, cancel and clear: a task finishing after one of them changes nothing.
     @ObservationIgnored private var generation = 0
+    /// **Counts every ask, Send or preview task that finished, stale or not** (audit round 2, 2026-10-25): a test's signal
+    /// that a released operation is over. Nothing in the app reads it.
+    public private(set) var settled = 0
 
     /// - `fetchEntryText` is `entry_text` through the service (contract 8), under a text budget.
     /// - `presented` is the entry drawn now: the ask's edition-qualified target.
@@ -322,6 +340,94 @@ public final class MeaningSession {
     /// **The row's chosen-sense button has a sense to explain**: a sentence is held and the reader selected one of its
     /// entry's senses (plan-explain-sense WI-5).
     public var hasSenseSelection: Bool { held != nil && selection != nil }
+
+    /// **A sense the entry names, as the pane's list shows it** (plan-companion WI-8): the core's projection, never a
+    /// guess. The snippet is the sense's own bytes, whitespace-collapsed, so rows with no label or an identical section
+    /// stay distinguishable.
+    public struct SenseRow: Equatable, Sendable, Identifiable {
+        public let id: UInt32
+        public let label: String?
+        public let section: String?
+        public let snippet: String
+        public let whole: Bool
+    }
+
+    /// The senses of `sensesTarget`, empty while the fetch runs, when it failed, or when the projection names none.
+    public private(set) var senses: [SenseRow] = []
+    /// The edition-qualified entry those rows belong to: another entry's list is never shown for this one.
+    public private(set) var sensesTarget: MeaningTarget?
+    /// **How the fetch for `sensesTarget` ended**, so a failure is not shown as an entry with no senses (audit round 1,
+    /// 2026-10-25): nil when nothing was asked, `.loading` while it runs, `.loaded` (even with no rows), `.failed`.
+    public enum SensesStatus: Equatable, Sendable {
+        case loading
+        case loaded
+        case failed
+    }
+    public private(set) var sensesStatus: SensesStatus?
+    /// Counts every sense fetch that finished, stale or not: a test's signal that a released load is over (audit round 3).
+    public private(set) var sensesSettled = 0
+    @ObservationIgnored private var sensesGeneration = 0
+    @ObservationIgnored private var sensesTask: Task<Void, Never>?
+
+    /// **The entry's own senses, for the pane's list**: one `entry_text` fetch per edition-qualified entry, under the
+    /// ask's own budget, cancelled by another entry's load or the presentation ending. A late answer for an entry the
+    /// pane has left is dropped by generation rather than shown against the new one. **One fetch per target**: the
+    /// status, not the row count, says whether there is something to ask again — an entry with no senses is loaded, not
+    /// unasked (audit round 1, 2026-10-25). A failed fetch is asked again only by the reader's retry.
+    public func loadSenses(for target: MeaningTarget) {
+        if sensesTarget == target, let status = sensesStatus, status != .failed { return }
+        sensesGeneration += 1
+        let mine = sensesGeneration
+        sensesTask?.cancel()
+        senses = []
+        sensesTarget = target
+        sensesStatus = .loading
+        let fetchEntryText = self.fetchEntryText
+        sensesTask = Task { [weak self] in
+            let result = await fetchEntryText(target.dictionary, target.entry, MeaningBudget.entryTextBytes)
+            guard let self else { return }
+            self.sensesSettled += 1
+            guard mine == self.sensesGeneration, !Task.isCancelled else { return }
+            switch result {
+            case .success(let projected):
+                self.senses = Self.rows(of: projected)
+                self.sensesStatus = .loaded
+            case .failure:
+                self.senses = []
+                self.sensesStatus = .failed
+            }
+        }
+    }
+
+    /// The rows a projection makes: every sense the markup named, with its own text as the snippet.
+    static func rows(of projected: EntryText) -> [SenseRow] {
+        let bytes = Array(projected.text.utf8)
+        return projected.senses.map { sense in
+            let snippet = slice(bytes, start: sense.start, len: sense.len)?
+                .split(whereSeparator: \.isWhitespace).joined(separator: " ") ?? ""
+            return SenseRow(id: sense.id, label: sense.label, section: sense.section,
+                            snippet: String(snippet.prefix(80)), whole: sense.whole)
+        }
+    }
+
+    /// **An entry's bytes at a sense's range, as text** — the one range rule both the sense list and the composed
+    /// sense read (audit round 1, 2026-10-25): nil when the range is past the text or splits a character (a forged range
+    /// is refused, never repaired).
+    nonisolated static func slice(_ bytes: [UInt8], start: UInt64, len: UInt64) -> String? {
+        guard let start = Int(exactly: start), let len = Int(exactly: len),
+              start <= bytes.count, len <= bytes.count - start else { return nil }
+        return String(bytes: bytes[start..<(start + len)], encoding: .utf8)
+    }
+
+    /// A new capture or the presentation ending: the list goes with it.
+    private func clearSenses() {
+        sensesGeneration += 1
+        sensesTask?.cancel()
+        sensesTask = nil
+        senses = []
+        sensesTarget = nil
+        sensesStatus = nil
+    }
 
     /// Whether the chosen-sense ask may send the entry: its one consent rule, the reader's switch. The button is shown
     /// disabled with the reason when this is false, never silently absent (ADR-0021 d.4).
@@ -344,14 +450,12 @@ public final class MeaningSession {
         awaitsAdoptedPlace = adopted
         adoptionSerial = nil
         handoffToken += 1
-        sent = nil
-        previewSettings = nil
-        previewEntry = nil
+        dropEvidence()
         selection = nil
-        previewOperation = nil
         lastOperation = nil
-        askWhenDrawnOperation = nil
         askWhenDrawn = asking
+        lookupWithoutEntry = false
+        clearSenses()
         // The entry the sentence belongs to is remembered even without an ask owed: a manual ask before it draws must
         // wait for it, not ground in whatever the window shows (verification finding, 2026-10-20).
         askWhenDrawnExpected = expecting
@@ -371,9 +475,8 @@ public final class MeaningSession {
         guard self.selection != selection else { return }
         let finished = Self.isFinished(state)
         abandon()
-        // A tap that was still waiting for its entry is the old operation's: a selection is the reader moving on.
-        askWhenDrawn = false
-        askWhenDrawnOperation = nil
+        // A tap that was still waiting for its entry is the old operation's: abandon() ended it; a selection is the
+        // reader moving on.
         self.selection = selection
         previewSettings = nil
         previewEntry = nil
@@ -393,6 +496,9 @@ public final class MeaningSession {
             cancel()
         } else if runningOperation?.mode == .explainSense {
             abandon()
+            // **The request being abandoned is not this pane's any more** (audit round 4, 2026-10-25): its sent record
+            // goes with it, so the pane does not show a cancelled request beside "No Answer Yet".
+            dropEvidence()
             state = .idle
         }
         selection = nil
@@ -424,6 +530,7 @@ public final class MeaningSession {
         }
         // **The sentence's own entry**: until it draws, no other presentation binds it, ask owed or not.
         if let expected = askWhenDrawnExpected, subject != expected { return }
+        lookupWithoutEntry = false
         if askWhenDrawn {
             // A deferred ask waits for its own entry; another presentation's draw is not the one the reader asked about.
             // (Without an expected subject — a caller with none — the first draw is the one.)
@@ -459,6 +566,7 @@ public final class MeaningSession {
     /// be grounded. (Verification finding, 2026-10-20: the tap used to be lost.)
     public func noEntry() {
         abandon()
+        lookupWithoutEntry = true
         state = .unavailable(.noEntry)
     }
 
@@ -470,15 +578,12 @@ public final class MeaningSession {
         boundTarget = nil
         awaitsAdoptedPlace = false
         adoptionSerial = nil
-        sent = nil
-        previewSettings = nil
-        previewEntry = nil
+        dropEvidence()
         selection = nil
-        previewOperation = nil
         lastOperation = nil
-        askWhenDrawnOperation = nil
-        askWhenDrawn = false
         askWhenDrawnExpected = nil
+        lookupWithoutEntry = false
+        clearSenses()
         state = .idle
     }
 
@@ -487,14 +592,9 @@ public final class MeaningSession {
         abandon()
         // **The sentence keeps the entry it belongs to** (verification finding, 2026-10-20): cancelling stops the ask, not
         // the binding; a second ask must still wait for that entry rather than sample whatever the window shows.
-        askWhenDrawn = false
-        askWhenDrawnOperation = nil
         if case .preview = state {
             // **Cancel on a preview means dismiss it** (audit finding, 2026-10-20); it used to change nothing.
-            sent = nil
-            previewSettings = nil
-            previewEntry = nil
-            previewOperation = nil
+            dropEvidence()
             state = .idle
             return
         }
@@ -512,19 +612,25 @@ public final class MeaningSession {
     /// with the switch off, the row says so and nothing is sent.
     public func explain() {
         let chosen = settingsProvider?() ?? settings
-        // **An early refusal ends the earlier work too**: otherwise its late answer would overwrite the reason given here,
-        // and the previous attempt's prompt would stay attached to a request that never left (audit finding, 2026-10-25).
-        abandon()
-        dropEvidence()
         guard chosen.sendEntryText else {
-            state = .unavailable(.entryTextOff)
+            refuse(.entryTextOff)
             return
         }
         guard let selection else {
-            state = .unavailable(.noSense)
+            refuse(.noSense)
             return
         }
+        // The successful path's cleanup belongs to `ask(operation:)` alone (audit round 4, 2026-10-25).
         ask(operation: Operation(mode: .explainSense, selection: selection, target: nil))
+    }
+
+    /// **An early refusal**: the earlier work ends, the evidence and retry context go, and the reason is shown — the same
+    /// steps on every path that returns before an ask runs (audit round 4).
+    private func refuse(_ reason: Unavailable) {
+        abandon()
+        dropEvidence()
+        lastOperation = nil
+        state = .unavailable(reason)
     }
 
     /// **Ask Again repeats the operation that produced what is shown**: its mode and its chosen sense, not the switch
@@ -547,10 +653,8 @@ public final class MeaningSession {
         // made after it must not move the follow-up to another entry. A caller with no answer shown falls back to the
         // selection. Read before the abandonment clears the evidence it comes from.
         let target = sent?.target ?? selection.map { MeaningTarget(dictionary: $0.dictionary, entry: $0.entry) }
-        abandon()
-        dropEvidence()
         guard chosen.sendEntryText else {
-            state = .unavailable(.entryTextOff)
+            refuse(.entryTextOff)
             return
         }
         ask(operation: Operation(mode: .grounded, selection: nil, target: target))
@@ -581,6 +685,7 @@ public final class MeaningSession {
         // prompt attached (audit finding, 2026-10-25).
         abandon()
         dropEvidence()
+        lastOperation = operation
         guard let handoff = held else {
             state = .unavailable(.noContext)
             return
@@ -603,9 +708,12 @@ public final class MeaningSession {
             // **The sentence has not drawn its entry yet** (verification finding, 2026-10-20): the window may still show
             // the entry from before the hand-off — and a capture whose popover had not resolved yet names no entry at
             // all — so the tap waits for the first draw and asks then. `drawn` binds the adopted presentation; the
-            // placeholder settles a tap that never gets one through `noEntry`.
+            // placeholder settles a tap that never gets one through `noEntry`. The source recorded is the one the ask
+            // will actually use when it starts: a deferred ask runs under the settings read at its own start.
             askWhenDrawn = true
             askWhenDrawnOperation = operation
+            askingSource = chosen.source
+            askingTarget = operation.target
             state = .asking
             return
         case .refused(let reason):
@@ -615,23 +723,34 @@ public final class MeaningSession {
         generation += 1
         let mine = generation
         state = .asking
-        lastOperation = operation
+        askingSource = chosen.source
+        askingTarget = target.map { MeaningTarget(dictionary: $0.0, entry: $0.1) }
         runningOperation = operation
         let fetchEntryText = self.fetchEntryText
         let makeProvider = self.makeProvider
         let recheck = Self.consentReader(self)
         let name = dictionaryName(for: operation, target: target)
         running = Task { [weak self] in
-            let outcome = await Self.perform(handoff: handoff, mode: operation.mode, target: target,
+            let outcome = await Self.composeAndSend(handoff: handoff, mode: operation.mode, target: target,
                                              selection: operation.selection, dictionaryName: name, settings: chosen,
                                              fetchEntryText: fetchEntryText, makeProvider: makeProvider,
                                              recheck: recheck)
-            guard let self, self.generation == mine else { return }
-            self.running = nil
-            self.runningOperation = nil
-            self.state = outcome.state
-            self.sent = outcome.sent
+            guard let self else { return }
+            self.finish(outcome, mine: mine)
         }
+    }
+
+    /// **One completion for an ask and a Send** (audit round 3, 2026-10-25): the count, the generation check and the
+    /// clearing of the running state happen once, so the two paths cannot drift.
+    private func finish(_ outcome: Performed, mine: Int) {
+        settled += 1
+        guard generation == mine else { return }
+        running = nil
+        runningOperation = nil
+        askingSource = nil
+        askingTarget = nil
+        state = outcome.state
+        sent = outcome.sent
     }
 
     /// **Send, from a preview**: the Send button's own action. It transmits the previewed bytes themselves — no refetch,
@@ -656,18 +775,17 @@ public final class MeaningSession {
         let mine = generation
         sent = previewed
         state = .asking
+        askingSource = current.source
+        askingTarget = previewed.target
         lastOperation = operation
         runningOperation = operation
         let makeProvider = self.makeProvider
         let recheck = Self.consentReader(self)
         running = Task { [weak self] in
-            let outcome = await Self.performSent(sent: previewed, entry: entry, settings: current,
-                                                 makeProvider: makeProvider, recheck: recheck)
-            guard let self, self.generation == mine else { return }
-            self.running = nil
-            self.runningOperation = nil
-            self.state = outcome.state
-            self.sent = outcome.sent
+            let outcome = await Self.send(sent: previewed, entry: entry, settings: current,
+                                          makeProvider: makeProvider, recheck: recheck)
+            guard let self else { return }
+            self.finish(outcome, mine: mine)
         }
     }
 
@@ -697,7 +815,7 @@ public final class MeaningSession {
                 guard let drawn = presented(), drawn == bound else { return .refused(.noContext) }
                 return .resolved(drawn)
             }
-            if subject == nil { return .waitsForDraw }
+            if subject == nil { return lookupWithoutEntry ? .refused(.noEntry) : .waitsForDraw }
             guard let drawn = presented() else { return .refused(.noEntry) }
             return .resolved(drawn)
         }
@@ -715,17 +833,23 @@ public final class MeaningSession {
             return
         }
         let chosen = settingsProvider?() ?? settings
+        // **A refused preview is still the newest attempt** (audit rounds 2 and 3, 2026-10-25): its operation is recorded
+        // before the source guard, so a preview refused for lack of a source leaves its own operation for Try Again once
+        // the reader chooses one — never the last answer's.
+        let operation = operation(for: chosen, selection: selection)
+        lastOperation = operation
         guard chosen.source != nil else {
             state = .unavailable(.noSource)
             return
         }
-        let operation = operation(for: chosen, selection: selection)
         let target: (DictId, EntryRef)?
         switch resolveTarget(operation) {
         case .resolved(let resolved):
             target = resolved
         case .waitsForDraw:
-            // A preview before the sentence's own entry draws would show another entry: nothing to preview yet.
+            // A preview before the sentence's own entry draws would show another entry: nothing to preview yet. This is
+            // not "the lookup settled with nothing" (audit round 3): the draw may still come, and an ask that follows
+            // waits for it rather than being refused forever.
             state = .unavailable(.noEntry)
             return
         case .refused(let reason):
@@ -742,7 +866,9 @@ public final class MeaningSession {
             let composed = await Self.compose(handoff: handoff, mode: operation.mode, target: target,
                                               selection: operation.selection, dictionaryName: name, settings: chosen,
                                               fetchEntryText: fetchEntryText)
-            guard let self, self.generation == mine else { return }
+            guard let self else { return }
+            self.settled += 1
+            guard self.generation == mine else { return }
             self.running = nil
             self.runningOperation = nil
             self.sent = composed.sent
@@ -787,6 +913,8 @@ public final class MeaningSession {
         running?.cancel()
         running = nil
         runningOperation = nil
+        askingSource = nil
+        askingTarget = nil
         askWhenDrawn = false
         askWhenDrawnOperation = nil
         // **The expected subject outlives a cancellation**: it protects the sentence's binding, not the ask (audit
@@ -801,6 +929,10 @@ public final class MeaningSession {
         previewSettings = nil
         previewEntry = nil
         previewOperation = nil
+        // **A sense load still running belongs to the answer being dropped** (verification round 3, 2026-10-25): its rows
+        // may arrive after a new ask, so it is cancelled and its state reset. The pane's task keys on the sent record, so
+        // the next answer loads this entry's rows again even when the target is unchanged.
+        if sensesStatus == .loading { clearSenses() }
     }
 
     /// What composition produced: a failure state, the request as it would be sent, or both (a failure after composing
@@ -809,8 +941,6 @@ public final class MeaningSession {
         let failure: State?
         let sent: MeaningSent?
         let entry: AIEntryText?
-        /// The chosen sense, in the explain-sense mode only; the validator binds an answer to it.
-        let sense: AISense?
     }
 
     /// **Composition alone**: the entry under the budget, the chosen sense, the question, the template. No provider,
@@ -822,14 +952,14 @@ public final class MeaningSession {
     ) async -> Composed {
         // A source is required to have come this far (`ask` refuses without one).
         guard settings.source != nil else {
-            return Composed(failure: .unavailable(.noSource), sent: nil, entry: nil, sense: nil)
+            return Composed(failure: .unavailable(.noSource), sent: nil, entry: nil)
         }
         var entry: AIEntryText?
         var sense: AISense?
         if mode != .sentenceOnly {
-            guard let target else { return Composed(failure: .unavailable(.noEntry), sent: nil, entry: nil, sense: nil) }
+            guard let target else { return Composed(failure: .unavailable(.noEntry), sent: nil, entry: nil) }
             let fetched = await fetchEntryText(target.0, target.1, MeaningBudget.entryTextBytes)
-            guard !Task.isCancelled else { return Composed(failure: .cancelled, sent: nil, entry: nil, sense: nil) }
+            guard !Task.isCancelled else { return Composed(failure: .cancelled, sent: nil, entry: nil) }
             let projected: EntryText
             switch fetched {
             case .success(let text):
@@ -837,7 +967,7 @@ public final class MeaningSession {
             case .failure(let failure):
                 // **The service's own typed failure travels** (audit finding, 2026-10-25): a transport interruption is a
                 // different reason, and a different next step, from an entry that no longer exists.
-                return Composed(failure: .unavailable(.entryFailure(failure)), sent: nil, entry: nil, sense: nil)
+                return Composed(failure: .unavailable(.entryFailure(failure)), sent: nil, entry: nil)
             }
             entry = AIEntryText(text: projected.text, complete: projected.complete, cutAt: projected.cutAt,
                                 ref: AIEntryRef(edition: projected.entry.edition.rawValue, key: projected.entry.key,
@@ -848,7 +978,7 @@ public final class MeaningSession {
                 guard let selection,
                       let chosen = projected.senses.first(where: { $0.id == selection.sense }),
                       let text = senseText(of: chosen, in: projected.text) else {
-                    return Composed(failure: .unavailable(.noSense), sent: nil, entry: entry, sense: nil)
+                    return Composed(failure: .unavailable(.noSense), sent: nil, entry: entry)
                 }
                 sense = AISense(id: chosen.id, start: chosen.start, len: chosen.len, text: text,
                                 label: chosen.label, section: chosen.section, whole: chosen.whole)
@@ -862,7 +992,7 @@ public final class MeaningSession {
         do {
             composed = try AIComposer.compose(template: template, question: question)
         } catch {
-            return Composed(failure: .template(error), sent: nil, entry: entry, sense: nil)
+            return Composed(failure: .template(error), sent: nil, entry: entry)
         }
         return Composed(failure: nil,
                         sent: MeaningSent(text: composed, mode: mode, source: settings.source,
@@ -872,17 +1002,15 @@ public final class MeaningSession {
                                           questionContext: MeaningContext(handoff),
                                           target: mode == .sentenceOnly ? nil : target.map {
                                               MeaningTarget(dictionary: $0.0, entry: $0.1)
-                                          }),
-                        entry: entry, sense: sense)
+                                          },
+                                          model: settings.source == .http && !settings.model.isEmpty
+                                              ? settings.model : nil),
+                        entry: entry)
     }
 
-    /// The chosen sense's text, as the entry's own bytes at its range: nil when the range is out of the text or is not
-    /// valid UTF-8, which the core's own projection never produces (a forged one is refused, never repaired).
+    /// The chosen sense's text, as the entry's own bytes at its range (the same range rule the sense list uses).
     private nonisolated static func senseText(of sense: Sense, in text: String) -> String? {
-        let bytes = Array(text.utf8)
-        guard let start = Int(exactly: sense.start), let len = Int(exactly: sense.len),
-              start <= bytes.count, len <= bytes.count - start else { return nil }
-        return String(bytes: bytes[start..<(start + len)], encoding: .utf8)
+        slice(Array(text.utf8), start: sense.start, len: sense.len)
     }
 
     /// One ask's result: its terminal state, and the question it sent when it composed one.
@@ -895,7 +1023,7 @@ public final class MeaningSession {
     /// queue permit, the send-boundary checks (consent and cancellation, re-read after each wait), the provider call and
     /// validation. One path means the consent rule cannot be fixed in one caller and left broken in the other.
     private nonisolated static func send(
-        sent: MeaningSent, entry: AIEntryText?, sense: AISense?, settings: MeaningSettings,
+        sent: MeaningSent, entry: AIEntryText?, settings: MeaningSettings,
         makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
         recheck: @Sendable () async -> MeaningSettings
     ) async -> Performed {
@@ -939,7 +1067,7 @@ public final class MeaningSession {
             guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
             do {
                 let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: sent.mode, entry: entry,
-                                                           sense: sense)
+                                                           sense: sent.sense)
                 return Performed(state: .answer(answer, mode: sent.mode), sent: sent)
             } catch let invalid as AIAnswerError {
                 return Performed(state: .invalid(invalid), sent: sent)
@@ -960,19 +1088,9 @@ public final class MeaningSession {
         return result
     }
 
-    /// **The second half of an ask, for a preview's Send**: the composed text goes to the source as it was shown and is
-    /// validated against the entry it was composed from.
-    private nonisolated static func performSent(
-        sent: MeaningSent, entry: AIEntryText?, settings: MeaningSettings,
-        makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
-        recheck: @Sendable () async -> MeaningSettings
-    ) async -> Performed {
-        await send(sent: sent, entry: entry, sense: sent.sense, settings: settings, makeProvider: makeProvider,
-                   recheck: recheck)
-    }
-
-    /// One ask, apart from the session's state so cancellation is decided by `generation` alone.
-    private nonisolated static func perform(
+    /// **A direct ask's composition and send**, apart from the session's state so cancellation is decided by `generation`
+    /// alone. The preview's own Send is `sendPreview()`.
+    private nonisolated static func composeAndSend(
         handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
         dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
@@ -990,7 +1108,7 @@ public final class MeaningSession {
             return Performed(state: .unavailable(.consentChanged), sent: sent)
         }
         guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
-        return await send(sent: sent, entry: composed.entry, sense: composed.sense, settings: settings,
+        return await send(sent: sent, entry: composed.entry, settings: settings,
                           makeProvider: makeProvider, recheck: recheck)
     }
 }

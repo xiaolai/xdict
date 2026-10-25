@@ -32,6 +32,12 @@ struct XDictApp: App {
 
     /// Applies the switch's value, one run at a time.
     @MainActor static func applySpotlight(_ on: Bool) {
+        // **Switching off cancels the queued reconciliation too** (audit round 4, 2026-10-25): an on-run must not follow a
+        // deletion the reader asked for.
+        if !on {
+            spotlightPending?.cancel()
+            spotlightPending = nil
+        }
         let previous = spotlightRun
         previous?.cancel()
         spotlightRun = Task { @MainActor in
@@ -50,7 +56,8 @@ struct XDictApp: App {
         spotlightPending?.cancel()
         spotlightPending = Task { @MainActor in
             try? await Task.sleep(for: .seconds(2))
-            guard !Task.isCancelled else { return }
+            // **The switch is read again after the wait** (audit round 4): the reader may have turned it off meanwhile.
+            guard !Task.isCancelled, spotlightSettings.enabled else { return }
             applySpotlight(true)
         }
     }
@@ -102,7 +109,7 @@ struct XDictApp: App {
                 .background(WindowMinimum(ToolbarLayout.minimumWindow))
                 .task { await LibraryLaunch.once() }
         }
-        .defaultSize(width: 1_000, height: 700)
+        .defaultSize(width: Tokens.Window.mainIdealWidth, height: Tokens.Window.mainIdealHeight)
         .commands {
             SearchCommands()
             // The standard View items for the sidebar and the toolbar (UI review A-05).
@@ -119,7 +126,8 @@ struct XDictApp: App {
         Window("Acknowledgments", id: Self.acknowledgmentsWindow) {
             AcknowledgmentsView(notices: AcknowledgmentsView.bundled())
         }
-        .defaultSize(width: 640, height: 560)
+        .defaultSize(width: Tokens.Window.acknowledgmentsIdealWidth,
+                     height: Tokens.Window.acknowledgmentsIdealHeight)
         .commandsRemoved()
 
         // **The review window** (plan-history-and-learning §5): the card in front, its note and the four answers.
@@ -195,9 +203,20 @@ struct XDictApp: App {
         var environment = setup.entryEvents.map { EntryEnvironment(events: $0) } ?? EntryEnvironment()
         if panel { environment.readingFrame = environment.readingFrame.union(.panel) }
         let entry = EntryViewController(environment: environment)
-        return SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
-                                 speech: SystemOutput(volume: setup.speechVolume),
-                                 speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
+        let state = SearchWindowState(library: library, backend: service, entry: entry, window: UUID().uuidString,
+                                      speech: SystemOutput(volume: setup.speechVolume),
+                                      speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
+        // **The pane's Save as Note** (plan-companion WI-9; owner, 2026-10-25): the app's study model, behind the reader's
+        // explicit tap; a note already on the entry is replaced only after the pane asks.
+        state.noteSaver = { entry, text, name in
+            await XDictApp.study.saveNote(entry: entry, text: text, name: name) != nil
+        }
+        state.entryNoteCheck = { entry in
+            // **The notes are loaded before the answer is trusted** (audit round 4, 2026-10-25): an unloaded set would say
+            // "no note" and let a save replace one without asking. A failed load is unknown, not empty.
+            await XDictApp.study.loadNotes() ? XDictApp.study.note(for: entry) != nil : nil
+        }
+        return state
     }
 
     /// Each main window's state as it is made: for the instrument that drives the real app (`--lookup-window`).
@@ -305,11 +324,21 @@ struct MainWindow: View {
 /// The library is read and its dictionaries opened once per launch, by whichever window appears first.
 @MainActor
 enum LibraryLaunch {
-    private static var started = false
+    private static var launch: Task<Void, Never>?
 
+    /// **The launch work runs once, and every caller waits for it** (audit round 4, 2026-10-25): a second caller used to
+    /// return while the library was still starting, so a search could be submitted before its dictionaries were open.
     static func once() async {
-        guard !started else { return }
-        started = true
+        if let launch {
+            await launch.value
+            return
+        }
+        let task = Task { await run() }
+        launch = task
+        await task.value
+    }
+
+    private static func run() async {
         await XDictApp.library.start()
         // **Announcements from here on** (audit-fix 2026-10-22 finding 13): the launch's own settle has been read, and
         // the index is given its launch run below; a later import, removal or disable is announced through this.

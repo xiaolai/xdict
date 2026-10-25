@@ -99,6 +99,9 @@ public final class SearchWindowState {
             self?.selectSense(handle: handle, edition: edition, reference: reference, id: id)
         }
         entry.onPageSourcesChanged = { [weak self] sources in self?.pageSources = sources }
+        // **The presentation follows the scope wherever it was changed** (audit round 4, 2026-10-25): the picker, the
+        // Search menu and the keyboard all end in `setScope`.
+        model.scopeDidChange = { [weak self] in self?.scopeChanged() }
     }
 
     /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists
@@ -265,11 +268,10 @@ public final class SearchWindowState {
     public func examplesLibraryChanged() {
         var ready: [DictId] = []
         var unavailable: [DictId] = []
-        for source in library.searchSources {
-            guard source.enabled, let handle = source.handle else { continue }
+        for source in exampleSources {
             switch library.examples[source.id] {
-            case .ready: ready.append(handle)
-            case .unavailable: unavailable.append(handle)
+            case .ready: ready.append(source.handle)
+            case .unavailable: unavailable.append(source.handle)
             case .building, nil: break
             }
         }
@@ -289,11 +291,55 @@ public final class SearchWindowState {
     /// **An example row chosen**: its entry opens in the dictionary that printed it — the first of its sources this
     /// library still has. The entry is shown in place, so Back returns to the word that found it.
     public func openExample(_ hit: ExampleHit) {
-        for candidate in hit.sources {
-            guard let source = source(for: candidate.dict) else { continue }
-            model.open(ResultID(dictionary: source.id, entry: candidate.entry))
-            return
-        }
+        guard let candidate = Self.firstAvailableSource(hit, isAvailable: { source(for: $0) != nil }),
+              let source = source(for: candidate.dict) else { return }
+        model.open(ResultID(dictionary: source.id, entry: candidate.entry))
+    }
+
+    /// **A pair's own source, chosen by the reader** (plan-companion WI-12): when a pair came from more than one
+    /// dictionary, the attribution offers each one the library has; the plain click keeps the first available.
+    public func openExample(_ hit: ExampleHit, in dictionary: DictId) {
+        guard let source = source(for: dictionary), let entry = Self.exampleEntry(hit, in: dictionary) else { return }
+        model.open(ResultID(dictionary: source.id, entry: entry))
+    }
+
+    /// The first of a pair's sources the library has, in the pair's own order: a source whose dictionary was removed is
+    /// skipped, never opened in another dictionary's frame.
+    nonisolated static func firstAvailableSource(_ hit: ExampleHit, isAvailable: (DictId) -> Bool) -> ExampleSource? {
+        hit.sources.first { isAvailable($0.dict) }
+    }
+
+    /// A pair's entry in one named dictionary, when the pair came from it.
+    nonisolated static func exampleEntry(_ hit: ExampleHit, in dictionary: DictId) -> EntryRef? {
+        hit.sources.first { $0.dict == dictionary }?.entry
+    }
+
+    // MARK: - Saving an answer as a note (plan-companion WI-9; owner, 2026-10-25)
+
+    /// The shell's study model, wired by the app: nil hides the pane's Save as Note (an instrument window, a test).
+    @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String) async -> Bool)?
+    /// Whether an entry already carries a note, so a save asks before replacing it; nil when that cannot be known (the
+    /// notes did not load), and then nothing is written.
+    @ObservationIgnored public var entryNoteCheck: (@MainActor (EntryRef) async -> Bool?)?
+
+    /// **Saves the answer the reader asked to keep** on the entry it was composed from. The caller builds the text — the
+    /// explanation, its quotes and the provenance line; the sentence never goes in.
+    public func saveNote(for target: MeaningTarget, text: String) async -> Bool {
+        guard let noteSaver else { return false }
+        return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "")
+    }
+
+    /// Whether that entry already has a note; nil when the check could not answer.
+    public func entryHasNote(_ entry: EntryRef) async -> Bool? {
+        guard let entryNoteCheck else { return false }
+        return await entryNoteCheck(entry)
+    }
+
+    /// **A scope change can change which presentation is due** (audit round 4, 2026-10-25): the same shown entry is one
+    /// frame or an All page depending on the scope, and the model may keep it while the lookup changes.
+    public func scopeChanged() {
+        guard let shown = model.shown else { return }
+        Task { await present(shown) }
     }
 
     /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.
@@ -310,9 +356,14 @@ public final class SearchWindowState {
 
     // MARK: - Sound and speech (WI-7)
 
-    /// The language the shown entry's dictionary is declared in (the library's, WI-5): what its sounds are spoken in.
+    /// The language the active frame's dictionary is declared in (the library's, WI-5): what its sounds are spoken in.
     public var presentedLanguage: String? {
-        guard let dictionary = entry.activeItem ?? presented else { return nil }
+        searchLanguage(entry.activeItem ?? presented)
+    }
+
+    /// The search language a dictionary declares, by its library id; nil when the library has none.
+    private func searchLanguage(_ dictionary: UUID?) -> String? {
+        guard let dictionary else { return nil }
         return library.entries.first { $0.id == dictionary }?.languages.pair.search
     }
 
@@ -326,11 +377,27 @@ public final class SearchWindowState {
     public var canPronounce: Bool { presented != nil && shownWord != nil }
 
     /// A `sound://` link in the shown entry: its recording, from the open dictionary the entry was read from, or the
-    /// entry's word spoken in its place.
+    /// entry's word spoken in its place. **The fallback word and language come from the frame the sound came from**
+    /// (audit round 1, 2026-10-25): on the All page another dictionary's frame can show another word than the primary.
     public func playRecording(_ path: String) {
         guard let handle = entry.binding?.handle else { return }
-        let word = shownWord ?? "", language = presentedLanguage
-        Task { await pronunciation.playRecording(path, from: DictId(rawValue: handle), word: word, language: language) }
+        let dictionary = DictId(rawValue: handle)
+        let word = frameWord(for: dictionary) ?? ""
+        let language = searchLanguage(source(for: dictionary)?.id) ?? presentedLanguage
+        Task { await pronunciation.playRecording(path, from: dictionary, word: word, language: language) }
+    }
+
+    /// **The word one dictionary's frame shows** (audit round 1, 2026-10-25): the primary's own hit, or `AllPage`'s one
+    /// rule for another dictionary's frame — shared, never re-derived (audit round 2).
+    private func frameWord(for handle: DictId) -> String? {
+        guard let source = source(for: handle), let shown = model.shown else { return nil }
+        let shownHit = model.hit(shown.result)
+        if source.id == shown.result.dictionary {
+            return shownHit?.headword ?? shown.result.entry.key
+        }
+        guard let section = model.sections.first(where: { $0.id == source.id }),
+              let hit = AllPage.hit(in: section, headword: shownHit?.headword) else { return nil }
+        return hit.headword.isEmpty ? hit.entry.key : hit.headword
     }
 
     /// A `.tts` link in the shown entry: its text, in the dictionary's language.
@@ -338,24 +405,54 @@ public final class SearchWindowState {
         pronunciation.speak(text, language: presentedLanguage)
     }
 
-    /// The speak button: the shown entry's word, as written.
+    /// **The language to speak the pane's term in** (Codex refutation, 2026-10-25): the answer's own dictionary when the
+    /// library knows it, else the shown entry's. The shown entry can be another dictionary entirely on the All page, so
+    /// `pronounceShown`'s language is not the answer's.
+    nonisolated static func termLanguage(for target: MeaningTarget?, languageOf: (DictId) -> String?,
+                                         presented: String?) -> String? {
+        target.flatMap { languageOf($0.dictionary) } ?? presented
+    }
+
+    /// **Speak the captured term** for the answer pane: the answer's dictionary's language, not the shown frame's; no
+    /// recording is resolved here (the entry view owns a `sound://` link's playback).
+    public func pronounceTerm(_ term: String, for target: MeaningTarget?) {
+        let language = Self.termLanguage(for: target, languageOf: { handle in
+            searchLanguage(source(for: handle)?.id)
+        }, presented: presentedLanguage)
+        pronunciation.speak(term, language: language)
+    }
+
+    /// The speak button: the shown entry's word, as written, in the shown entry's own dictionary language — never the
+    /// last frame the reader touched, which can be another language (audit round 1, 2026-10-25).
     public func pronounceShown() {
         guard let word = shownWord else { return }
-        speak(word)
+        pronunciation.speak(word, language: searchLanguage(presented))
     }
 
-    /// What the speaker says: the selection, trimmed, when there is one, else the entry's word.
-    public static func spokenText(selection: String?, word: String?) -> String? {
-        let selected = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return selected.isEmpty ? word : selected
-    }
-
-    /// The title bar's speaker and Edit ▸ Pronounce: the entry's selected text, else the shown word.
+    /// The title bar's speaker and Edit ▸ Pronounce: the entry's selected text, else the shown word. **The selection and
+    /// its language come from the same frame** (audit rounds 2 and 3, 2026-10-25): `selectedTextAndFrame()` reads the
+    /// focused frame and names it; the fallback word belongs to the shown entry. The presentation is read before the
+    /// await, so a navigation during the read drops the result.
     public func pronounceSelectionOrShown() {
+        let word = shownWord
+        let shownLanguage = searchLanguage(presented)
+        let shown = model.shown
         Task { @MainActor in
-            guard let text = Self.spokenText(selection: await entry.selectedText(), word: shownWord) else { return }
-            speak(text)
+            guard let read = await entry.selectedTextAndFrame(), model.shown == shown,
+                  let spoken = Self.spoken(selection: read.text, word: word) else { return }
+            pronunciation.speak(spoken.text, language: spoken.isSelection
+                                                        ? searchLanguage(read.item ?? presented)
+                                                        : shownLanguage)
         }
+    }
+
+    /// **What the speaker says, and whether it is a selection**: one normalisation for the text and its language (audit
+    /// round 3). Nil when there is neither a selection nor a word.
+    public static func spoken(selection: String?, word: String?) -> (text: String, isSelection: Bool)? {
+        let selected = selection?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !selected.isEmpty { return (selected, true) }
+        guard let word else { return nil }
+        return (word, false)
     }
 
     /// Shows the model's entry in the pane, from its dictionary as the library has it now: for a typed word over every
@@ -365,7 +462,9 @@ public final class SearchWindowState {
         // the serial says the window has moved on, and binding the held sentence — or firing its deferred ask — to an
         // entry no longer shown would send the wrong entry. `ask()` samples the presented entry in the same turn as the
         // draw, so with this guard the target is the one the subject names.
-        guard model.shown == shown else { return }
+        // **The lookup is part of the presentation's identity** (audit round 4, 2026-10-25): a shown result kept from the
+        // previous lookup must not draw under the new lookup's scope and sections.
+        guard model.shown == shown, shown.lookup == model.lookup?.serial else { return }
         // An entry about to be drawn: the held sentence belongs only to this presentation's own entry, so a reader who
         // moved on is asked `noContext`, never sent the wrong entry. The drawn target travels with the subject, so a later
         // ask cannot sample a presentation that replaced this one.
@@ -403,7 +502,9 @@ public final class SearchWindowState {
     public var pageResults: [ResultID]? {
         guard let shown = model.shown, let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode)
         else { return nil }
-        return AllPage.results(sections: model.sections, shown: shown.result, headword: model.hit(shown.result)?.headword)
+        let current = shown.lookup == model.lookup?.serial
+        return AllPage.results(sections: model.sections, shown: shown.result,
+                               headword: current ? model.hit(shown.result)?.headword : nil, shownIsCurrent: current)
     }
 
     private func pageItems(_ results: [ResultID]) -> [EntryPageItem] {
@@ -429,10 +530,18 @@ public final class SearchWindowState {
     }
 
     /// Another dictionary answered while the page is shown: the page again, its frames kept, the new ones in place.
+    /// **A presentation the window has left by the time the task runs draws nothing** (audit round 1, 2026-10-25): a
+    /// navigation, a placeholder that closed the entry, or another page makes these results obsolete.
     public func pageResultsChanged() {
         guard let results = pageResults, entry.pageFrames != nil else { return }
-        let primary = model.shown?.result.dictionary
-        Task { await entry.showPage(pageItems(results), primary: primary) }
+        let shown = model.shown
+        let lookup = model.lookup
+        let primary = shown?.result.dictionary
+        Task { @MainActor in
+            // The lookup is its own identity: `begin()` can start another while the same entry is still shown.
+            guard let shown, model.shown == shown, model.lookup == lookup, entry.pageFrames != nil else { return }
+            await entry.showPage(pageItems(results), primary: primary)
+        }
     }
 
     /// What covers the entry pane now (UI review X1): "No entries found." only once the list has settled empty, so it
@@ -450,11 +559,6 @@ public final class SearchWindowState {
     /// enabled by. Read from the observed model, never from the entry view's web view, which SwiftUI cannot observe:
     /// keyed on that, every such item stayed disabled on the All page after a search (UI tour `page.print`, 2026-10-18).
     public var hasEntry: Bool { model.shown != nil }
-
-    /// The dictionary the shown entry is read from: named beside its headword (Codex §5).
-    public var shownSourceName: String? {
-        model.shown.flatMap { model.source($0.result.dictionary)?.name }
-    }
 
     /// A placeholder that covers the pane closes the entry under it, so VoiceOver cannot reach a previous lookup's
     /// entry either (UI review X1). Called when the placeholder changes.
@@ -480,7 +584,9 @@ public final class SearchWindowState {
         case .start, .searching, .none:
             break
         }
-        guard placeholder.clearsEntry, entry.reference != nil else { return }
+        // **A pending presentation is invalidated whenever the placeholder clears the entry** (audit round 3, 2026-10-25):
+        // `reference` is nil while the first fetch is under way, and an obsolete request could finish underneath it.
+        guard placeholder.clearsEntry else { return }
         entry.closeEntry()
         presented = nil
     }
@@ -526,7 +632,4 @@ public final class SearchWindowState {
         focusResults()
         return true
     }
-
-    /// Escape in the search field: the field clears itself, as a search field does.
-    public func cancel() -> Bool { false }
 }

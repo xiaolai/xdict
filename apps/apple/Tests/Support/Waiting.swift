@@ -21,6 +21,20 @@ public func eventually(for timeout: Duration, step: Duration = .milliseconds(5),
     return condition()
 }
 
+/// **The same wait for a condition that must be awaited** (audit round 4, 2026-10-25): the fake service's queue is actor
+/// state, and reading it needs a hop the synchronous closure above cannot make. Its label keeps the two apart, so a sync
+/// condition still means the fast overload.
+@MainActor
+public func eventually(awaiting seconds: Double = 2, step: Duration = .milliseconds(5),
+                       _ condition: @escaping @MainActor () async -> Bool) async -> Bool {
+    let deadline = ContinuousClock.now + .seconds(seconds)
+    while ContinuousClock.now < deadline {
+        if await condition() { return true }
+        try? await Task.sleep(for: step)
+    }
+    return await condition()
+}
+
 /// The same wait for a condition that is not main-actor isolated (a child process's exit, a staging folder's state).
 public func eventuallyOffMain(_ seconds: Double = 3, step: Duration = .milliseconds(20),
                               _ condition: () -> Bool) async -> Bool {

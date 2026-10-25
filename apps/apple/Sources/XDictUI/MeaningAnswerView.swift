@@ -3,6 +3,7 @@ import SwiftUI
 import XDictAI
 import XDictCapture
 import XDictEntryView
+import XDictSearch
 import XDictTokens
 
 /// **The answer to one "meaning here" tap** (plan-ai-meaning WI-6; ADR-0021 d.1, d.2; HIG audit 2026-10-23): the task's
@@ -20,6 +21,32 @@ public struct MeaningAnswerPane: View {
     @State private var visible: CGFloat?
     /// A reveal that found nothing on the page shown now (UI11).
     @State private var revealFailed: String?
+    /// The reveal whose answer may still change the pane: a later reveal, or a new answer, supersedes it (audit round 1).
+    @State private var revealSerial = 0
+    /// How the answer's Save as Note ended (plan-companion WI-9): one action, replaced by its outcome.
+    @State private var noteState: NoteSaveState = .idle
+    /// A note already on the entry: the save asks before replacing it.
+    @State private var noteReplaceAsked = false
+    /// **The save being run, and the payload it writes** (audit round 4, 2026-10-25): captured before the existence check, so
+    /// a new answer cannot re-pair the old explanation with a newer source, and Retry keeps the same bytes.
+    @State private var noteOperation = 0
+    @State private var pendingNote: NotePayload?
+
+    /// The payload one save writes, frozen from the presentation at the tap.
+    struct NotePayload: Equatable {
+        let text: String
+        let target: MeaningTarget
+    }
+
+    /// The save's own state; the pane offers one control at a time.
+    enum NoteSaveState: Equatable {
+        case idle
+        case checking
+        case saving
+        case saved
+        case failed
+        case checkFailed
+    }
 
     public init(state: SearchWindowState, showsHeader: Bool = true) {
         self.state = state
@@ -51,6 +78,25 @@ public struct MeaningAnswerPane: View {
         .frame(minWidth: 0, idealWidth: 0, maxWidth: .infinity, alignment: .leading)
         .background { VisibleWidth { visible = $0 } }
         .accessibilityIdentifier("meaning.pane")
+        // **The answer's own entry supplies the sense list** (plan-companion WI-8): one fetch per edition-qualified
+        // entry, made only while a request with an entry is shown.
+        .task(id: state.meaning.sent) {
+            if let target = state.meaning.sent?.target, state.meaning.sent?.mode != .sentenceOnly {
+                state.meaning.loadSenses(for: target)
+            }
+        }
+        // **A reveal's failure belongs to the answer it was tried on** (audit round 1, 2026-10-25): a new answer, or a
+        // new request, clears it and supersedes any reveal still pending.
+        .onChange(of: state.meaning.state) {
+            revealSerial += 1
+            revealFailed = nil
+            // **A save belongs to the answer it was made from** (audit round 4, 2026-10-25): a new answer ends the old
+            // operation, so its existence check or write cannot paint its outcome under this answer.
+            noteOperation += 1
+            pendingNote = nil
+            noteState = .idle
+            noteReplaceAsked = false
+        }
     }
 
     private var settings: MeaningSettings {
@@ -98,14 +144,15 @@ public struct MeaningAnswerPane: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             Text("Review before sending")
                 .font(.subheadline.weight(.semibold))
-            if let source = MeaningSentences.source(settings.source) {
+            if let source = MeaningSentences.source(sent.source) {
                 Text("To “\(source)”")
             }
             if let context = sent.questionContext {
-                MeaningContextView(context: context)
+                MeaningContextView(context: context, speak: { state.pronounceTerm(context.term, for: sent.target) })
             }
             Text(MeaningSentences.previewEntry(included: sent.mode != .sentenceOnly))
                 .foregroundStyle(.secondary)
+            senseList(previewing: true)
             if let sense = sent.sense {
                 chosenSense(sense, dictionary: sent.dictionaryName)
             }
@@ -132,14 +179,18 @@ public struct MeaningAnswerPane: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             HStack(spacing: Tokens.Space.s) {
                 ProgressView().controlSize(.small)  // placement: spinner
-                if let source = MeaningSentences.source(settings.source) {
+                if let source = MeaningSentences.source(state.meaning.askingSource ?? settings.source) {
                     Text("Asking “\(source)”…")
                 } else {
                     Text("Asking…")
                 }
             }
             if let context = state.meaning.held.map(MeaningContext.init) {
-                MeaningContextView(context: context)
+                // **The running request's own entry**, not the shown one (audit round 3): `sent` is nil until an ask
+                // completes, so the frozen asking target names the dictionary whose language the term is spoken in.
+                MeaningContextView(context: context, speak: {
+                    state.pronounceTerm(context.term, for: state.meaning.askingTarget ?? state.meaning.sent?.target)
+                })
             }
             Button("Cancel") { state.meaning.cancel() }  // placement: inspector-row
                 .accessibilityIdentifier("meaning.cancel")
@@ -148,88 +199,362 @@ public struct MeaningAnswerPane: View {
 
     @ViewBuilder private func answer(_ presentation: MeaningPresentation) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
-            if let context = presentation.questionContext {
-                MeaningContextView(context: context)
-            }
-            if let problem = presentation.problem {
-                problemView(problem, presentation: presentation)
-            }
-            if presentation.selectionMoved {
-                Label { Text(MeaningSentences.selectionMoved) } icon: { Image(systemName: "arrow.uturn.backward") }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("meaning.selection-moved")
-            }
-            if let outcome = presentation.outcome {
-                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                    Text(outcome).font(.subheadline.weight(.semibold))
-                    if let grounding = MeaningSentences.grounding(presentation.grounding) {
-                        Text(grounding).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-            // **The answer to the reader's question first** (UI10), then the source text it rests on.
-            if !presentation.explanation.isEmpty {
-                Text(verbatim: presentation.explanation)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("meaning.explanation")
-                Label { Text(MeaningSentences.generated) } icon: { Image(systemName: "sparkles") }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("meaning.generated")
-            }
-            if let sense = presentation.chosenSense {
-                chosenSense(sense, dictionary: presentation.dictionaryName)
-            }
-            if let coverage = presentation.senseCoverage {
-                Label { Text(coverage) } icon: { Image(systemName: "scissors") }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("meaning.sense.coverage")
-            }
+            answerHeader(presentation)
+            explanation(presentation)
+            answerSense(presentation)
             if !presentation.quotes.isEmpty {
                 evidence(presentation)
             }
-            if let coverage = presentation.coverage {
-                Label { Text(coverage) } icon: { Image(systemName: "scissors") }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("meaning.coverage")
-            }
-            if case .answer(let answer, mode: .explainSense) = state.meaning.state, answer.outcome == .doesNotFit {
-                // **The verdict is not the end of the question** (plan-explain-sense WI-5): the model can be asked
-                // which sense the sentence uses instead, on the same sentence and entry.
-                Text(MeaningSentences.doesNotFitOffer)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("Ask Which Sense It Is") {  // placement: inspector-row
-                    state.meaning.askSelection()
+            entryCoverage(presentation)
+            doesNotFitOffer()
+            requestDetails()
+            answerActions(presentation)
+        }
+    }
+
+    /// The sentence, a typed problem, a moved selection and the outcome word: what frames the answer.
+    @ViewBuilder private func answerHeader(_ presentation: MeaningPresentation) -> some View {
+        if let context = presentation.questionContext {
+            MeaningContextView(context: context, speak: { state.pronounceTerm(context.term, for: state.meaning.sent?.target) })
+        }
+        if let problem = presentation.problem {
+            problemView(problem, presentation: presentation)
+        }
+        if presentation.selectionMoved {
+            Label { Text(MeaningSentences.selectionMoved) } icon: { Image(systemName: "arrow.uturn.backward") }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("meaning.selection-moved")
+        }
+        if let outcome = presentation.outcome {
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                Text(outcome).font(.subheadline.weight(.semibold))
+                if let grounding = MeaningSentences.grounding(presentation.grounding) {
+                    Text(grounding).font(.caption).foregroundStyle(.secondary)
                 }
-                .accessibilityIdentifier("meaning.selection-ask")
-            }
-            if let sent = state.meaning.sent {
-                DisclosureGroup(isExpanded: $promptShown) {
-                    VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                        exactRequest(sent.text)
-                        if !sent.complete {
-                            Text(MeaningSentences.cut(at: sent.cutAt, sent: true))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                } label: {
-                    Text("Request Details")
-                }
-                .accessibilityIdentifier("meaning.prompt")
-            }
-            // A failure's own recovery replaces Ask Again (UI15): two buttons for one retry read as two actions.
-            if state.meaning.canAsk, presentation.recovery == nil {
-                Button("Ask Again") { state.meaning.askAgain() }  // placement: inspector-row
-                    .accessibilityIdentifier("meaning.again")
             }
         }
+    }
+
+    /// **The answer to the reader's question first** (UI10), then the source text it rests on; Copy Answer beside it.
+    @ViewBuilder private func explanation(_ presentation: MeaningPresentation) -> some View {
+        if !presentation.explanation.isEmpty {
+            Text(verbatim: presentation.explanation)
+                .font(ReadingText.body.font)
+                .lineSpacing(ReadingText.lineSpacing)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("meaning.explanation")
+            Label { Text(MeaningSentences.generated) } icon: { Image(systemName: "sparkles") }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("meaning.generated")
+            // **Copy Answer** (plan-companion WI-10): the explanation and its quotes as text, nothing else.
+            Button("Copy Answer") { copyAnswer(presentation) }  // placement: inspector-row
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .accessibilityIdentifier("meaning.copy-answer")
+        }
+    }
+
+    /// **Who answered, and the senses the answer is about** (plan-companion WI-8, WI-11): the source and model from the
+    /// frozen request, the entry's rows, the chosen sense and its own cut.
+    @ViewBuilder private func answerSense(_ presentation: MeaningPresentation) -> some View {
+        if let sent = state.meaning.sent, sent.model != nil || !showsHeader {
+            answeredBy(sent)
+        }
+        senseList(previewing: false)
+        if let sense = presentation.chosenSense {
+            chosenSense(sense, dictionary: presentation.dictionaryName)
+        }
+        if let coverage = presentation.senseCoverage {
+            coverageLabel(coverage, identifier: "meaning.sense.coverage")
+        }
+    }
+
+    /// The entry's cut, when it was sent cut: independent of whether the answer quotes anything.
+    @ViewBuilder private func entryCoverage(_ presentation: MeaningPresentation) -> some View {
+        if let coverage = presentation.coverage {
+            coverageLabel(coverage, identifier: "meaning.coverage")
+        }
+    }
+
+    /// **A cut, said the same way for the entry and the chosen sense** (audit round 3, 2026-10-25); its identifier tells
+    /// the two facts apart.
+    private func coverageLabel(_ text: LocalizedStringResource, identifier: String) -> some View {
+        Label { Text(text) } icon: { Image(systemName: "scissors") }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier(identifier)
+    }
+
+    /// **The verdict is not the end of the question** (plan-explain-sense WI-5): the model can be asked which sense the
+    /// sentence uses instead, on the same sentence and entry.
+    @ViewBuilder private func doesNotFitOffer() -> some View {
+        if case .answer(let answer, mode: .explainSense) = state.meaning.state, answer.outcome == .doesNotFit {
+            Text(MeaningSentences.doesNotFitOffer)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Ask Which Sense It Is") {  // placement: inspector-row
+                state.meaning.askSelection()
+            }
+            .accessibilityIdentifier("meaning.selection-ask")
+        }
+    }
+
+    /// The request that produced the answer, verbatim, and its cut, behind a disclosure.
+    @ViewBuilder private func requestDetails() -> some View {
+        if let sent = state.meaning.sent {
+            DisclosureGroup(isExpanded: $promptShown) {
+                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+                    exactRequest(sent.text)
+                    if !sent.complete {
+                        Text(MeaningSentences.cut(at: sent.cutAt, sent: true))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } label: {
+                Text("Request Details")
+            }
+            .accessibilityIdentifier("meaning.prompt")
+        }
+    }
+
+    /// A failure's own recovery replaces Ask Again (UI15): two buttons for one retry read as two actions. **Save as Note**
+    /// sits beside them when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
+    @ViewBuilder private func answerActions(_ presentation: MeaningPresentation) -> some View {
+        if state.meaning.canAsk, presentation.recovery == nil {
+            Button("Ask Again") { state.meaning.askAgain() }  // placement: inspector-row
+                .accessibilityIdentifier("meaning.again")
+        }
+        if let target = state.meaning.sent?.target, state.noteSaver != nil, !presentation.explanation.isEmpty {
+            saveNoteControl(presentation, target: target)
+        }
+    }
+
+    /// **The reader's explicit save** (plan-companion WI-9; owner, 2026-10-25): one tap writes the explanation, its quotes
+    /// and a provenance line on the entry the request was composed from. A note already there is replaced only after the
+    /// pane asks; the outcome replaces the button, and a failure keeps the payload for Retry.
+    @ViewBuilder private func saveNoteControl(_ presentation: MeaningPresentation, target: MeaningTarget) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            switch noteState {
+            case .saved:
+                Label { Text("Saved as a note.") } icon: { Image(systemName: "checkmark.circle") }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("meaning.note.saved")
+            case .failed:
+                Label { Text("The note could not be saved.") } icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("meaning.note.failed")
+                Button("Try Again") { retryNote() }  // placement: inspector-row
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .accessibilityIdentifier("meaning.note.retry")
+            case .checkFailed:
+                Label { Text("The note could not be read, so nothing was saved.") }
+                    icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("meaning.note.check-failed")
+                Button("Try Again") { retryNote() }  // placement: inspector-row
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .accessibilityIdentifier("meaning.note.retry")
+            case .checking:
+                HStack(spacing: Tokens.Space.xs) {
+                    ProgressView().controlSize(.small)  // placement: spinner
+                    Text("Checking…").font(.caption).foregroundStyle(.secondary)
+                }
+            case .saving:
+                HStack(spacing: Tokens.Space.xs) {
+                    ProgressView().controlSize(.small)  // placement: spinner
+                    Text("Saving…").font(.caption).foregroundStyle(.secondary)
+                }
+            case .idle:
+                Button("Save as Note") {  // placement: inspector-row
+                    saveNote(presentation, target: target)
+                }
+                .accessibilityIdentifier("meaning.note.save")
+            }
+        }
+        .confirmationDialog("Replace the note on this entry?", isPresented: $noteReplaceAsked, titleVisibility: .visible) {
+            Button("Replace", role: .destructive) {  // placement: inspector-row
+                guard let payload = pendingNote else { return }
+                startWrite(payload)
+            }
+            Button("Cancel", role: .cancel) {}  // placement: inspector-row
+        }
+    }
+
+    /// Freezes the payload, then asks whether a note is already there; the button leaves `.idle` before any suspension, so a
+    /// second tap cannot start a second save.
+    private func saveNote(_ presentation: MeaningPresentation, target: MeaningTarget) {
+        // **One save at a time** (audit round 4, 2026-10-25): a second tap that raced the first cannot start its own.
+        guard noteState == .idle else { return }
+        let payload = NotePayload(text: MeaningPresenter.noteText(presentation: presentation, date: Date()),
+                                 target: target)
+        noteOperation += 1
+        checkThenWrite(payload)
+    }
+
+    /// **Every save asks first, Retry included** (audit round 4, 2026-10-25): a check that could not answer is never
+    /// answered by writing straight away, which would replace a note without the question.
+    private func retryNote() {
+        guard let payload = pendingNote else { return }
+        noteOperation += 1
+        checkThenWrite(payload)
+    }
+
+    /// Whether the entry already carries a note, then write: the frozen payload is kept for a Retry either way.
+    private func checkThenWrite(_ payload: NotePayload) {
+        pendingNote = payload
+        let mine = noteOperation
+        noteState = .checking
+        Task { @MainActor in
+            let exists = await state.entryHasNote(payload.target.entry)
+            guard mine == noteOperation else { return }
+            switch exists {
+            case .none:
+                noteState = .checkFailed
+            case .some(true):
+                noteState = .idle
+                noteReplaceAsked = true
+            case .some(false):
+                startWrite(payload)
+            }
+        }
+    }
+
+    /// Writes the payload; a newer operation's outcome is the only one the pane shows.
+    private func startWrite(_ payload: NotePayload) {
+        let mine = noteOperation
+        noteState = .saving
+        Task { @MainActor in
+            let saved = await state.saveNote(for: payload.target, text: payload.text)
+            guard mine == noteOperation else { return }
+            noteState = saved ? .saved : .failed
+        }
+    }
+
+    /// **The entry's senses, each a way into the chosen-sense question** (plan-companion WI-8): the core's own list,
+    /// with the chosen one marked; a row selects its sense and asks about it in one tap. **Only the rows read for this
+    /// request's entry** are shown (audit round 1, 2026-10-25): a previous answer's list never pairs its ordinal with
+    /// another entry. With the entry-text switch off the rows are disabled and the pane says which switch turns them on,
+    /// never hiding why; a failed read says so and can be asked again rather than passing for an entry with no senses.
+    /// **`previewing` is how a tap reads** (audit round 2, 2026-10-25): in the unsent preview a row selects its sense
+    /// and composes the request again; from an answer it asks about that sense.
+    @ViewBuilder private func senseList(previewing: Bool) -> some View {
+        switch senseDecision {
+        case .hidden:
+            EmptyView()
+        case .failed(let target):
+            senseFailure(target)
+        case .rows(let target):
+            senseRows(target, previewing: previewing)
+        }
+    }
+
+    /// What the list shows, as one value: the view only draws it.
+    var senseDecision: SenseListDecision {
+        SenseListDecision.of(sentTarget: state.meaning.sent?.target, sensesTarget: state.meaning.sensesTarget,
+                             status: state.meaning.sensesStatus, count: state.meaning.senses.count)
+    }
+
+    /// A failed read says so, and asks again on the reader's tap.
+    private func senseFailure(_ target: MeaningTarget) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            Text("Senses in this entry").font(.caption).foregroundStyle(.secondary)
+            Text("The senses could not be read.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Button("Try Again") { state.meaning.loadSenses(for: target) }  // placement: inspector-row
+                .buttonStyle(.borderless)
+                .font(.caption)
+                .accessibilityIdentifier("meaning.senses.retry")
+        }
+        .accessibilityIdentifier("meaning.senses.failed")
+    }
+
+    /// The projection's rows, the chosen one marked; with the entry-text switch off they are disabled and the reason is
+    /// said rather than hidden.
+    private func senseRows(_ target: MeaningTarget, previewing: Bool) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            Text("Senses in this entry").font(.caption).foregroundStyle(.secondary)
+            ForEach(state.meaning.senses) { row in
+                Button { askAbout(row, target: target, previewing: previewing) } label: {  // placement: inspector-row
+                    senseRow(row, chosen: state.meaning.sent?.sense?.id == row.id)
+                }
+                .buttonStyle(.plain)
+                .disabled(!settings.sendEntryText)
+                .accessibilityIdentifier("meaning.senses.\(row.id)")
+            }
+            if !settings.sendEntryText {
+                Text(MeaningSentences.explainNeedsEntryText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityIdentifier("meaning.senses")
+    }
+
+    private func askAbout(_ row: MeaningSession.SenseRow, target: MeaningTarget, previewing: Bool) {
+        state.meaning.select(MeaningSelection(dictionary: target.dictionary, entry: target.entry, sense: row.id,
+                                              dictionaryName: state.source(for: target.dictionary)?.name))
+        if previewing {
+            state.meaning.preview()
+        } else {
+            state.meaning.explain()
+        }
+    }
+
+    private func senseRow(_ row: MeaningSession.SenseRow, chosen: Bool) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+            if let label = row.label, !label.isEmpty {
+                Text(verbatim: label).font(Tokens.TextRole.caption.font.monospaced())
+            } else {
+                Text(verbatim: "#\(row.id)").font(Tokens.TextRole.caption.font.monospaced())
+            }
+            if let section = row.section, !section.isEmpty {
+                Text(verbatim: section).font(Tokens.TextRole.caption.font).foregroundStyle(.secondary)
+            }
+            Text(verbatim: row.snippet)
+                .font(ReadingText.body.font)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            if !row.whole {
+                Text("partial text").font(Tokens.TextRole.caption.font).foregroundStyle(.secondary)
+            }
+        }
+        .foregroundStyle(chosen ? .primary : .secondary)
+        .padding(.vertical, Tokens.Space.xxs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    /// The source the request went to and, when it named one, the model it asked for.
+    private func answeredBy(_ sent: MeaningSent) -> some View {
+        var parts: [String] = []
+        if let source = MeaningSentences.source(sent.source) { parts.append(String(localized: source)) }
+        if let model = sent.model, !model.isEmpty { parts.append(model) }
+        return Text(verbatim: parts.joined(separator: " · "))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .accessibilityIdentifier("meaning.answered-by")
+    }
+
+    private func copyAnswer(_ presentation: MeaningPresentation) {
+        copyToPasteboard(presentation.copyText)
+    }
+
+    /// The pasteboard, once: every copy control writes plain text the same way.
+    private func copyToPasteboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     /// **The plain problem, its next step, then the code** (UI15, UI20): an ordinary reader acts on the first two; the
@@ -258,8 +583,7 @@ public struct MeaningAnswerPane: View {
                         Text(verbatim: code).font(.caption.monospaced()).textSelection(.enabled)
                         Spacer(minLength: 0)
                         Button("Copy Details") {  // placement: inspector-row
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(MeaningSentences.errorDetails(code: code), forType: .string)
+                            copyToPasteboard(MeaningSentences.errorDetails(code: code))
                         }
                         .buttonStyle(.borderless)
                         .font(.caption)
@@ -286,36 +610,48 @@ public struct MeaningAnswerPane: View {
             .foregroundStyle(.secondary)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("meaning.evidence.source")
-            ForEach(presentation.quotes, id: \.self) { quote in
-                VStack(alignment: .leading, spacing: Tokens.Space.xs) {
-                    Text(verbatim: quote)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("meaning.quote")
-                    Button("Show in the Entry") {  // placement: inspector-row
-                        reveal(quote, in: presentation.evidenceTarget)
-                    }
-                    .buttonStyle(.borderless)
+            ForEach(Array(presentation.quotes.enumerated()), id: \.offset) { _, quote in
+                quoteRow(quote, target: presentation.evidenceTarget)
+            }
+        }
+    }
+
+    /// One quoted sense: its text, the way into the entry, and a failed reveal said beside it.
+    private func quoteRow(_ quote: String, target: MeaningTarget?) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xs) {
+            Text(verbatim: quote)
+                .font(ReadingText.body.font)
+                .lineSpacing(ReadingText.lineSpacing)
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("meaning.quote")
+            Button("Show in the Entry") {  // placement: inspector-row
+                reveal(quote, in: target)
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .accessibilityIdentifier("meaning.show-in-entry")
+            if revealFailed == quote {
+                Text(MeaningSentences.revealFailed)
                     .font(.caption)
-                    .accessibilityIdentifier("meaning.show-in-entry")
-                    if revealFailed == quote {
-                        Text(MeaningSentences.revealFailed)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("meaning.reveal-failed")
-                    }
-                }
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("meaning.reveal-failed")
             }
         }
     }
 
     private func reveal(_ quote: String, in target: MeaningTarget?) {
+        revealSerial += 1
+        let mine = revealSerial
         revealFailed = nil
         let found = state.revealEvidence(quote, target: target)
         Task { @MainActor in
-            if await found.value == false { revealFailed = quote }
+            // **The verdict is read before the guard, never after it** (verification round 1, 2026-10-25): checking the
+            // generation first let a reveal that finished later still write its failure.
+            let nothing = await found.value == false
+            guard mine == revealSerial else { return }
+            if nothing { revealFailed = quote }
         }
     }
 
@@ -324,8 +660,7 @@ public struct MeaningAnswerPane: View {
         VStack(alignment: .leading, spacing: Tokens.Space.xs) {
             PromptText(text: text)
             Button("Copy Request") {  // placement: inspector-row
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
+                copyToPasteboard(text)
             }
             .buttonStyle(.borderless)
             .font(.caption)
@@ -341,6 +676,8 @@ public struct MeaningAnswerPane: View {
                 Text(verbatim: label).font(.caption.monospaced()).foregroundStyle(.secondary)
             }
             Text(verbatim: sense.text)
+                .font(ReadingText.body.font)
+                .lineSpacing(ReadingText.lineSpacing)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("meaning.sense")
@@ -351,14 +688,46 @@ public struct MeaningAnswerPane: View {
     }
 }
 
+/// **What the sense list shows for one presentation** (audit round 2, 2026-10-25): the target gate and the failure state
+/// as one pure decision, so they are tested without rendering a view. Rows are shown only for the entry they were read
+/// from; a failed read says so; an entry with no senses shows nothing.
+enum SenseListDecision: Equatable {
+    case hidden
+    case failed(MeaningTarget)
+    case rows(MeaningTarget)
+
+    static func of(sentTarget: MeaningTarget?, sensesTarget: MeaningTarget?,
+                   status: MeaningSession.SensesStatus?, count: Int) -> SenseListDecision {
+        guard let sentTarget, sentTarget == sensesTarget else { return .hidden }
+        if status == .failed { return .failed(sentTarget) }
+        return count > 0 ? .rows(sentTarget) : .hidden
+    }
+}
+
 /// **The sentence a request is about, the word emphasized** (UI09): an ellipsis says where the capture cut it.
 struct MeaningContextView: View {
     let context: MeaningContext
+    /// **The pane's speaker** (plan-companion WI-7): the captured term in the answer's dictionary language. Nil where the
+    /// context is shown without an ask (Settings' preview).
+    var speak: (@MainActor () -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-            Text(MeaningSentences.contextHeading).font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: Tokens.Space.xs) {
+                if let speak {
+                    // A glyph beside the heading it speaks for, not a trailing action (plan-companion WI-7).
+                    Button(action: speak) { Image(systemName: "speaker.wave.2") }  // placement: glyph
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel(Text("Pronounce"))
+                        .accessibilityIdentifier("meaning.pronounce")
+                }
+                Text(MeaningSentences.contextHeading)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
             Text(Self.attributed(context))
+                .font(ReadingText.body.font)
+                .lineSpacing(ReadingText.lineSpacing)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         }

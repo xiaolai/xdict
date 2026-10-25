@@ -25,47 +25,10 @@ public struct AISettings: View {
         self.route = route
     }
 
-    /// Everything a live check depends on: a corrected address, model or key re-runs it (audit finding, 2026-10-20).
-    private struct StatusKey: Hashable {
-        let source: AIProviderKind?
-        let endpoint: String
-        let profile: String
-        let model: String
-        let usesKey: Bool
-        let key: String
-    }
-
     public var body: some View {
         @Bindable var model = model
         Form {
-            Section {
-                if model.preferences.settings.source == nil {
-                    Text("No source is chosen, so XDict never asks anything. Dictionaries still work as before.")
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("ai.no-source")
-                }
-                // **One native single choice** (UI32): a radio group announces the group, the chosen source and each
-                // change to VoiceOver, and moves with the arrow keys, as a row of look-alike buttons did not.
-                Picker(selection: $model.choice) {
-                    ForEach(AISourceChoice.allCases, id: \.self) { choice in
-                        sourceLabel(choice)
-                            .tag(choice)
-                            .accessibilityIdentifier("ai.source.\(choice.identifier)")
-                    }
-                } label: {
-                    Text("Where answers come from")
-                }
-                .pickerStyle(.radioGroup)
-                .labelsHidden()
-                .accessibilityLabel(Text("Where answers come from"))
-                .accessibilityIdentifier("ai.source")
-                .settingsAnchor(.aiSource)
-                if model.preferences.settings.source != nil {
-                    statusRow
-                }
-            } header: {
-                Text("Where answers come from")
-            }
+            sourceSection(model: model)
 
             if model.preferences.settings.source == .http {
                 endpointSection(model: model)
@@ -80,13 +43,12 @@ public struct AISettings: View {
             promptSection(model: model)
         }
         .settingsPane()
-        .task(id: StatusKey(source: model.preferences.settings.source,
-                            endpoint: model.preferences.settings.endpoint?.absoluteString ?? "",
-                            profile: MeaningProviders.profile(model.preferences.settings).id,
-                            model: model.preferences.settings.model,
-                            usesKey: model.preferences.settings.usesKey,
-                            key: MeaningProviders.apiKey(model.preferences.settings) ?? "")) {
-            await model.refreshStatus()
+        // **A corrected address, service, model or key re-runs the check** (audit finding, 2026-10-20): the same identity
+        // the result guard reads, so the two cannot disagree (audit round 1, 2026-10-25).
+        .task(id: AISettingsModel.sourceIdentity(model.preferences.settings)) {
+            // **One owner for a status check**: the activation handler starts the same task through `startStatusCheck()`,
+            // so the two triggers cannot run duplicates (audit round 4, 2026-10-25).
+            model.startStatusCheck()
         }
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
         .onChange(of: model.promptKind) { model.loadDraft() }
@@ -102,6 +64,41 @@ public struct AISettings: View {
         // A Settings search that found a row inside Advanced opens it (UI30).
         .onAppear { revealIfAsked() }
         .onChange(of: route.revealSerial) { revealIfAsked() }
+    }
+
+    /// **The source choice and its live status** (UI32): the one native radio group, then what the check found. An address
+    /// the field holds but the reader has not finished typing is named here, because the status still describes the saved
+    /// one (audit round 3, 2026-10-25).
+    @ViewBuilder private func sourceSection(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        Section {
+            if model.preferences.settings.source == nil {
+                Text("No source is chosen, so XDict never asks anything. Dictionaries still work as before.")
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ai.no-source")
+            }
+            // **One native single choice**: a radio group announces the group, the chosen source and each change to
+            // VoiceOver, and moves with the arrow keys, as a row of look-alike buttons did not.
+            Picker(selection: $model.choice) {
+                ForEach(AISourceChoice.allCases, id: \.self) { choice in
+                    sourceLabel(choice)
+                        .tag(choice)
+                        .accessibilityIdentifier("ai.source.\(choice.identifier)")
+                }
+            } label: {
+                Text("Where answers come from")
+            }
+            .pickerStyle(.radioGroup)
+            .labelsHidden()
+            .accessibilityLabel(Text("Where answers come from"))
+            .accessibilityIdentifier("ai.source")
+            .settingsAnchor(.aiSource)
+            if model.preferences.settings.source != nil {
+                statusRow
+            }
+        } header: {
+            Text("Where answers come from")
+        }
     }
 
     private func revealIfAsked() {
@@ -137,6 +134,23 @@ public struct AISettings: View {
     }
 
     @ViewBuilder private var statusRow: some View {
+        if model.endpointInvalid {
+            // **The field's text is not the address in use** (audit round 3, 2026-10-25): saying "Configured" beside it
+            // described the last saved address, which the reader cannot see.
+            Label {
+                Text("This is not an address, so requests still use the last saved one.")
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            .font(.caption)
+            .foregroundStyle(.orange)
+            .accessibilityIdentifier("ai.status.endpoint-invalid")
+        } else {
+            statusBody
+        }
+    }
+
+    @ViewBuilder private var statusBody: some View {
         switch model.status {
         case .checking: checkingRow
         case .notConfigured: Text("Not set up yet.").foregroundStyle(.secondary)
@@ -147,45 +161,57 @@ public struct AISettings: View {
     }
 
     private var checkingRow: some View {
+        progressRow("Checking…")
+    }
+
+    /// **One progress row** (audit round 3, 2026-10-25): the status check and the key test differed only in their word.
+    private func progressRow(_ label: LocalizedStringResource) -> some View {
         HStack(spacing: Tokens.Space.xs) {
             ProgressView().controlSize(.small)  // placement: spinner
-            Text("Checking…").foregroundStyle(.secondary)
+            Text(label).foregroundStyle(.secondary)
         }
     }
 
     private func readyRow(_ detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
-            Label { Text("Ready") } icon: { Image(systemName: "checkmark.circle") }
-                .foregroundStyle(.secondary)
-            if !detail.isEmpty {
-                Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityIdentifier("ai.status.ready")
+        statusSummary(LocalizedStringResource("Ready"), detail: detail)
+            .accessibilityIdentifier("ai.status.ready")
     }
 
     /// **Configured, not Ready** (audit finding, 2026-10-25): the check proves what is installed or built, not that the
     /// key or sign-in works. A word that promised more would be believed.
     private func configuredRow(_ detail: String) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
-                Label { Text("Configured") } icon: { Image(systemName: "checkmark.circle") }
-                    .foregroundStyle(.secondary)
-                if !detail.isEmpty {
-                    Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            statusSummary(LocalizedStringResource("Configured"), detail: detail)
             configuredCaption
         }
         .accessibilityIdentifier("ai.status.configured")
     }
 
-    /// What the check did not prove, by the source it could not prove it for.
+    /// **One status row for both words** (audit round 2, 2026-10-25): they differed only in the word they say.
+    private func statusSummary(_ title: LocalizedStringResource, detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+            Label { Text(title) } icon: { Image(systemName: "checkmark.circle") }
+                .foregroundStyle(.secondary)
+            if !detail.isEmpty {
+                Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// What the check did not prove, by the source it could not prove it for. **Test exists only on the cloud row**
+    /// (audit round 1, 2026-10-25): a local endpoint has no key to test, so its caption says what was and was not
+    /// checked without naming a button the pane does not show.
     @ViewBuilder private var configuredCaption: some View {
         if model.preferences.settings.source == .http {
-            Text("Test checks the key; a question will say if it does not work.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            if model.preferences.httpCloud {
+                Text("Test checks the key; a question will say if it does not work.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("The address is well formed. A question will say whether the server answers.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         } else {
             Text("Claude Code is installed. Whether it is signed in is checked by the first question.")
                 .font(.caption)
@@ -275,8 +301,10 @@ public struct AISettings: View {
     /// The model, the service's own list on the reader's ask, and why the list did not come.
     private func modelRow(model: AISettingsModel) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            // **A typed model ends a probe too** (audit round 4, 2026-10-25): a verdict on the old model was speaking
+            // for a configuration the reader had already changed.
             TextField(text: Binding(get: { model.preferences.settings.model },
-                                    set: { model.preferences.setModel($0) })) {
+                                    set: { model.modelTyped($0) })) {
                 Text("Model")
             }
             .accessibilityIdentifier("ai.model")
@@ -378,10 +406,7 @@ public struct AISettings: View {
     }
 
     private var keyTesting: some View {
-        HStack(spacing: Tokens.Space.xs) {
-            ProgressView().controlSize(.small)  // placement: spinner
-            Text("Testing…").foregroundStyle(.secondary)
-        }
+        progressRow("Testing…")
     }
 
     private func keyRefused(model: AISettingsModel, error: AIProviderError) -> some View {
@@ -421,7 +446,10 @@ public struct AISettings: View {
             if model.signingIn {
                 codexSignIn(model: model, login: model.login)
             } else {
-                Button("Sign In with Codex…") { model.startSignIn() }  // placement: form-pane
+                Button("Sign In with Codex…") {  // placement: form-pane
+                    unopenedURL = nil
+                    model.startSignIn()
+                }
                     .accessibilityIdentifier("ai.codex.signin")
                 Text("XDict keeps a Codex sign-in of its own, apart from the one in Terminal.")
                     .font(.caption)
@@ -447,7 +475,10 @@ public struct AISettings: View {
                 Text("Waiting for you to sign in…")
             }
         } actions: {
-            Button("Cancel") { model.cancelSignIn() }  // placement: form-pane
+            Button("Cancel") {  // placement: form-pane
+                unopenedURL = nil
+                model.cancelSignIn()
+            }
                 .accessibilityIdentifier("ai.codex.cancel")
         }
     }
@@ -525,9 +556,17 @@ public struct AISettings: View {
     }
 
     /// The exact shell line that signs in where XDict's Claude Code runs: the same `CLAUDE_CONFIG_DIR` the provider sets.
+    /// The folder is one single-quoted shell word (audit round 1, 2026-10-25): a home directory containing `$`, a
+    /// backtick or `"` is then literal text, not a substitution the reader's paste would execute.
     private var claudeSignInCommand: String {
-        let folder = MeaningProviders.folder("claude").path(percentEncoded: false)
-        return "mkdir -p \"\(folder)\" && CLAUDE_CONFIG_DIR=\"\(folder)\" claude"
+        let folder = Self.shellQuoted(MeaningProviders.folder("claude").path(percentEncoded: false))
+        return "mkdir -p \(folder) && CLAUDE_CONFIG_DIR=\(folder) claude"
+    }
+
+    /// A path as one shell word: single quotes, and each embedded single quote closed, escaped and reopened — the one
+    /// quoting that leaves `$`, backticks, `"` and `\` literal.
+    static func shellQuoted(_ text: String) -> String {
+        "'" + text.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 
     /// The pasteboard, once: a code, an address or a command the reader must type exactly.
@@ -592,15 +631,25 @@ public struct AISettings: View {
     /// change observer loads them — a setter that also loaded them here loaded every switch twice (audit finding,
     /// 2026-10-25).
     private func languageRow(model: AISettingsModel) -> some View {
-        Picker(selection: Binding(get: { model.preferences.settings.language },
-                                  set: { model.preferences.setLanguage($0) })) {
-            Text("English").tag("en")
-            Text("Simplified Chinese").tag("zh-Hans")
-        } label: {
-            Text("Answer language")
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            Picker(selection: Binding(get: { model.preferences.settings.language },
+                                      set: { model.preferences.setLanguage($0) })) {
+                Text("English").tag("en")
+                Text("Simplified Chinese").tag("zh-Hans")
+            } label: {
+                Text("Answer language")
+            }
+            .accessibilityIdentifier("ai.language")
+            .settingsAnchor(.aiLanguage)
+            // **What the choice does, exactly** (contract 4, §4b): it is the answer's language, not only the prompt's;
+            // quotes stay verbatim in the dictionary's language; the instruction is the app's, so an edited prompt
+            // cannot remove it.
+            Text("The explanation is written in this language. Quotes stay in the dictionary’s own language, and an edited prompt does not change this: the instruction is the app’s.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("ai.language.caption")
         }
-        .accessibilityIdentifier("ai.language")
-        .settingsAnchor(.aiLanguage)
     }
 
     @ViewBuilder private func advancedPrompt(model: AISettingsModel) -> some View {
@@ -633,7 +682,7 @@ public struct AISettings: View {
                 editedBadge("ai.prompt.edited")
             }
             Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
-                .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
+                .disabled(!model.canResetDraft())
                 .accessibilityIdentifier("ai.prompt.reset")
         }
     }
@@ -652,16 +701,32 @@ public struct AISettings: View {
     }
 
     private var promptGuidance: some View {
-        Text("The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        Text(Self.guidance(for: model.promptKind))
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
     }
 
+    /// **Each kind's own placeholders** (audit round 2, 2026-10-25): the composer requires two, permits `{language}` and
+    /// requires or forbids `{entry}` and `{sense}` by mode; one sentence that listed all five alike taught a rule the
+    /// composer does not have.
+    static func guidance(for kind: AIMode) -> LocalizedStringResource {
+        switch kind {
+        case .grounded:
+            LocalizedStringResource("The prompt needs {term}, {sentence} and {entry}; {language} is optional and {sense} is not used here. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        case .sentenceOnly:
+            LocalizedStringResource("The prompt needs {term} and {sentence}; {language} is optional, and {entry} and {sense} are not used here. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        case .explainSense:
+            LocalizedStringResource("The prompt needs {term}, {sentence}, {entry} and {sense}; {language} is optional. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        }
+    }
+
     private func promptPreview(model: AISettingsModel) -> some View {
         DisclosureGroup {
             previewText(model: model)
-            Text("This is a sample: the sentence you capture and the entry you see are sent instead.")
+            Text(model.promptKind == .sentenceOnly
+                 ? LocalizedStringResource("This is a sample: only the sentence you capture is sent.")
+                 : LocalizedStringResource("This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } label: {
@@ -679,7 +744,9 @@ public struct AISettings: View {
                 .font(.caption.monospaced())
                 .textSelection(.enabled)
         } label: {
-            Text("What XDict adds to every request")
+            // **The disclosure shows the response format** (audit round 2, 2026-10-25): the language line and the
+            // state blocks are also appended, and "every request" claimed to show all of them.
+            Text("Response Format")
         }
     }
 

@@ -131,29 +131,25 @@ final class EntryPageDivider: NSView {
 
     override var isFlipped: Bool { true }
 
+    /// The hairline both title rows draw, from just after the name to the trailing inset (audit round 4, 2026-10-25:
+    /// the window and popover branches drew it twice, in two colours that are the same token).
+    private func drawRule(from start: CGFloat, to end: CGFloat, at y: CGFloat) {
+        guard end > start else { return }
+        Self.ruleColour.setStroke()
+        let rule = NSBezierPath()
+        rule.lineWidth = 1
+        rule.move(to: NSPoint(x: start, y: y))
+        rule.line(to: NSPoint(x: end, y: y))
+        rule.stroke()
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         let mid = (bounds.height / 2).rounded(.down) + 0.5
         if style == .popover {
-            // The title row's hairline: the separator colour, from just after the name to the trailing inset.
-            let start = label.frame.maxX + Popover.gap, end = bounds.maxX - Popover.trailing
-            guard end > start else { return }
-            NSColor.separatorColor.setStroke()
-            let rule = NSBezierPath()
-            rule.lineWidth = 1
-            rule.move(to: NSPoint(x: start, y: mid))
-            rule.line(to: NSPoint(x: end, y: mid))
-            rule.stroke()
+            drawRule(from: label.frame.maxX + Popover.gap, to: bounds.maxX - Popover.trailing, at: mid)
             return
         }
-        let start = label.frame.maxX + Self.gap, end = bounds.maxX - Self.trailing
-        if end > start {
-            Self.ruleColour.setStroke()
-            let rule = NSBezierPath()
-            rule.lineWidth = 1
-            rule.move(to: NSPoint(x: start, y: mid))
-            rule.line(to: NSPoint(x: end, y: mid))
-            rule.stroke()
-        }
+        drawRule(from: label.frame.maxX + Self.gap, to: bounds.maxX - Self.trailing, at: mid)
         // ▼ expanded, ▶ collapsed, in the label colour at Apple's size (about 11 pt across).
         let c = NSPoint(x: Self.triangleCentre, y: bounds.height / 2), r = metrics.triangle
         let triangle = NSBezierPath()
@@ -293,6 +289,9 @@ final class EntryPageSection {
         let clamped = CGFloat(min(max(points, 1), EntryPage.maximumFrameHeight))
         guard abs(height.constant - clamped) >= 0.5 else { return }
         height.constant = clamped
+        // **A frame held at the cap scrolls its own document** (audit round 4, 2026-10-25); one as tall as its document
+        // hands the wheel to the page.
+        pane?.view.scrollsInternally = clamped >= EntryPage.maximumFrameHeight - 0.5
         onHeightChange?()
     }
 
@@ -306,6 +305,7 @@ final class EntryPageSection {
         let view = pane.view
         view.translatesAutoresizingMaskIntoConstraints = false
         view.passesScrollToPage = true
+        view.scrollsInternally = frameHeight >= EntryPage.maximumFrameHeight - 0.5
         holder.addSubview(view)
         NSLayoutConstraint.activate([
             view.topAnchor.constraint(equalTo: holder.topAnchor),
@@ -356,6 +356,8 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     var onContentHeightChanged: (() -> Void)?
     /// Where to land once the frames above it have loaded: a page offset in points.
     private var pendingOffset: Double?
+    /// Which presentation a suspended reveal belongs to (audit round 4, 2026-10-25).
+    private var pageGeneration = 0
     /// Find across the frames: the query, each section's visible match count, and the current match.
     private var findQuery = ""
     private var findCounts: [Int] = []
@@ -434,6 +436,7 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     /// Shows `items` in this order: a section whose dictionary, binding and record are unchanged keeps its frame as it
     /// is; the others are made afresh. Returns the first refusal, if a frame could not be made with every layer.
     func show(_ items: [EntryPageItem], landing offset: Double?) -> EntryRefusal? {
+        let previous = sections.map { $0.item.identity }
         let old = Dictionary(sections.map { ($0.item.identity, $0) }, uniquingKeysWith: { first, _ in first })
         var kept: Set<ObjectIdentifier> = []
         var next: [EntryPageSection] = []
@@ -449,6 +452,12 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         if kept.isEmpty {
             asked = .now
             firstPaint = nil
+        }
+        // **A changed section set invalidates Find** (audit round 4, 2026-10-25): its counts index the old sections, and a
+        // removed or reordered dictionary would make Next reach another frame or beyond the array.
+        if next.map({ $0.item.identity }) != previous {
+            pageGeneration += 1
+            findSerial += 1
             clearFindState()
         }
         sections = next
@@ -470,12 +479,20 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 stack.insertArrangedSubview(view, at: index)
             }
         }
-        if let offset { pendingOffset = offset } else if kept.isEmpty { scrollTo(0) }
+        // **Every presentation states its landing** (audit round 4): an earlier offset must not outlive the page it was
+        // asked for, and reused frames already loaded never call `finished()` to consume it.
+        pendingOffset = offset
+        if offset == nil, kept.isEmpty { scrollTo(0) }
         onContentHeightChanged?()
-        return materialize()
+        let refusal = materialize()
+        landIfReady()
+        return refusal
     }
 
     func close() {
+        pageGeneration += 1
+        findSerial += 1
+        clearFindState()
         NotificationCenter.default.removeObserver(self)
         for section in sections { section.close() }
         sections = []
@@ -519,6 +536,8 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 pane.setZoom(zoom)
                 pane.view.configuration.userContentController.add(self, contentWorld: EntryPane.world,
                                                                   name: Self.heightHandler)
+                pane.view.configuration.userContentController.add(self, contentWorld: EntryPane.world,
+                                                                  name: Self.scrollHandler)
                 Task { _ = await pane.show(section.item.reference) }
             }
         }
@@ -576,24 +595,46 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 + parseFloat(h.marginBottom || "0");
             return Math.ceil(Math.max(text, root));
         };
+        const reportScroll = () => window.webkit.messageHandlers.xdictPageScroll.postMessage(
+            [window.scrollY, Math.max(0, document.documentElement.scrollHeight - window.innerHeight)]);
         if (!window.__xdictPageHeight && window.ResizeObserver) {
             let last = 0;
             window.__xdictPageHeight = new ResizeObserver(() => {
                 const now = measure();
                 if (now !== last) { last = now; window.webkit.messageHandlers.xdictPageHeight.postMessage(now); }
+                reportScroll();
             });
             window.__xdictPageHeight.observe(document.documentElement);
             if (document.body) { window.__xdictPageHeight.observe(document.body); }
         }
+        if (!window.__xdictScrollWatch) {
+            window.__xdictScrollWatch = true;
+            window.addEventListener("scroll", reportScroll, {passive: true});
+            window.addEventListener("resize", reportScroll);
+        }
+        reportScroll();
         return measure();
         """
 
+    static let scrollHandler = "xdictPageScroll"
+
     nonisolated func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
         MainActor.assumeIsolated {
-            guard message.world == EntryPane.world, let height = (message.body as? NSNumber)?.doubleValue,
-                  let view = message.webView,
-                  let section = sections.first(where: { $0.pane?.view === view }) else { return }
-            section.setHeight(height * zoom)
+            guard message.world == EntryPane.world, let view = message.webView else { return }
+            switch message.name {
+            case Self.heightHandler:
+                guard let height = (message.body as? NSNumber)?.doubleValue,
+                      let section = sections.first(where: { $0.pane?.view === view }) else { return }
+                section.setHeight(height * zoom)
+            case Self.scrollHandler:
+                // **The frame's own scroll position** (audit round 4, 2026-10-25): macOS's WKWebView has no public
+                // `scrollView`, so the wheel's edge hand-off reads what the document reports about itself.
+                guard let webView = view as? EntryWebView,
+                      let numbers = message.body as? [NSNumber], numbers.count == 2 else { return }
+                webView.innerScroll = (numbers[0].doubleValue, numbers[1].doubleValue)
+            default:
+                return
+            }
         }
     }
 
@@ -702,26 +743,42 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
         pendingOffset = nil
         document.layoutSubtreeIfNeeded()
         scrollTo(Double(section.holder.frame.minY))
+        let mine = pageGeneration
         if let refusal = materialize(including: index) {
             onRefusal?(refusal)
             return false
         }
-        await loaded()
-        // The page may have been shown again while it loaded: the section must still be this page's.
-        guard sections.contains(where: { $0 === section }), let pane = section.pane else { return false }
-        await clearFind()
-        guard let result = await pane.find(text), result.visible > 0 else {
-            await pane.clearFind()
+        // **A frame that timed out is not a frame to search** (audit round 4, 2026-10-25): the reveal would report a
+        // missing word from a document that had not finished loading.
+        guard case .loaded = await loaded() else { return false }
+        // **The page may have been shown again while it loaded** (audit round 4, 2026-10-25): the reveal's own generation
+        // and the section must both still stand before a frame is searched or scrolled.
+        guard mine == pageGeneration, sections.contains(where: { $0 === section }), let pane = section.pane else {
             return false
         }
-        if let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
-                                                             contentWorld: EntryPane.world) as? Double {
-            reveal(section, documentY: y)
+        await clearFind()
+        guard mine == pageGeneration, sections.contains(where: { $0 === section }) else { return false }
+        guard let result = await pane.find(text), result.visible > 0 else {
+            // **A page shown again owns its own find** (audit round 4, 2026-10-25): the old reveal's clear would take it.
+            if mine == pageGeneration { await pane.clearFind() }
+            return false
         }
+        // **A match that cannot be placed is not a reveal** (audit round 4, 2026-10-25): a failed script call or a null
+        // position used to be reported as a shown match.
+        guard let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
+                                                               contentWorld: EntryPane.world) as? Double else {
+            if mine == pageGeneration { await pane.clearFind() }
+            return false
+        }
+        guard mine == pageGeneration, sections.contains(where: { $0 === section }) else { return false }
+        reveal(section, documentY: y)
         return true
     }
 
     // MARK: - Find, across frames (R3, P30)
+
+    /// Which find may still publish; a clear or a newer find advances it (audit round 3).
+    private var findSerial = 0
 
     private func clearFindState() {
         findQuery = ""
@@ -731,24 +788,31 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     }
 
     /// Finds `query` in every frame (each made first), the first match current; collapsed dictionaries' matches are
-    /// counted as hidden, as folded ones are.
+    /// counted as hidden, as folded ones are. **A find a newer one or a clear overtook publishes nothing** (audit round 3,
+    /// 2026-10-25): the loop checks its serial after every suspension, not only at the end.
     func find(_ query: String) async -> EntryFindResult? {
         if let refusal = materialize(all: true) {
             onRefusal?(refusal)
             return nil
         }
-        await loaded()
+        guard case .loaded = await loaded() else { return nil }
+        findSerial += 1
+        let mine = findSerial
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findQuery = query
         var counts: [Int] = [], hidden = 0
         for section in sections {
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             guard let pane = section.pane, let result = await pane.find(query) else {
                 counts.append(0)
                 continue
             }
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             hidden += result.hidden + (section.collapsed ? result.visible : 0)
             counts.append(section.collapsed ? 0 : result.visible)
             await clearCurrent(pane)
         }
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findCounts = counts
         findCurrent = nil
         findHidden = hidden
@@ -762,13 +826,24 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
     }
 
     func clearFind() async {
+        findSerial += 1
         clearFindState()
-        for pane in panes { await pane.clearFind() }
+        // **A page shown again is not cleared by the old one's clear** (audit round 4, 2026-10-25): a reused pane may
+        // already carry the new page's find.
+        let mine = pageGeneration
+        for pane in panes {
+            guard mine == pageGeneration else { return }
+            await pane.clearFind()
+        }
     }
 
     private func move(to next: (section: Int, match: Int)?, forward: Bool = true) async -> EntryFindResult? {
+        let mine = findSerial
         let hidden = findHidden
         let total = findCounts.reduce(0, +)
+        // **Even the no-match branch obeys the serial** (verification round 3, 2026-10-25): a clear before this move began
+        // must not be overwritten by its nil.
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         guard let next, let pane = sections[next.section].pane else {
             findCurrent = nil
             return EntryFindResult(visible: total, hidden: hidden, current: 0)
@@ -777,14 +852,23 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             _ = await pane.findStep(forward: forward)
         } else {
             if let current = findCurrent, let old = sections[current.section].pane { await clearCurrent(old) }
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             _ = await pane.find(findQuery)
-            for _ in 0..<next.match { _ = await pane.findStep(forward: true) }
+            for _ in 0..<next.match {
+                guard !Task.isCancelled, mine == findSerial else { return nil }
+                _ = await pane.findStep(forward: true)
+            }
         }
+        // **A clear or a newer find owns the page by now** (audit rounds 3 and 4): this move neither publishes a position
+        // nor scrolls a document the reader has left.
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         findCurrent = next
         if let y = try? await pane.view.callAsyncJavaScript(Self.currentMatchTop, arguments: [:], in: nil,
                                                              contentWorld: EntryPane.world) as? Double {
+            guard !Task.isCancelled, mine == findSerial else { return nil }
             reveal(sections[next.section], documentY: y)
         }
+        guard !Task.isCancelled, mine == findSerial else { return nil }
         return EntryFindResult(visible: total, hidden: hidden, current: EntryPagePlan.position(next, counts: findCounts))
     }
 
@@ -802,12 +886,29 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             arguments: [:], in: nil, contentWorld: EntryPane.world)
     }
 
-    /// Returns once every frame made has loaded its document, or after two seconds.
-    private func loaded() async {
+    /// How a wait for the page's frames ended.
+    enum LoadOutcome {
+        case loaded
+        case timedOut
+        case cancelled
+    }
+
+    /// Returns once every frame made has loaded its document, a timeout after two seconds, or at once on cancellation.
+    private func loaded() async -> LoadOutcome {
+        // **A cancelled caller is answered at once, even with every frame finished** (audit round 4, 2026-10-25): the
+        // loop's own check never ran in that case, and a cancelled print or reveal went on to act.
+        if Task.isCancelled { return .cancelled }
         let deadline = ContinuousClock.now + .seconds(2)
-        while sections.contains(where: { $0.pane != nil && !$0.finished }), ContinuousClock.now < deadline {
-            try? await Task.sleep(for: .milliseconds(20))
+        while sections.contains(where: { $0.pane != nil && !$0.finished }) {
+            if Task.isCancelled { return .cancelled }
+            guard ContinuousClock.now < deadline else { return .timedOut }
+            do {
+                try await Task.sleep(for: .milliseconds(20))
+            } catch {
+                return .cancelled
+            }
         }
+        return .loaded
     }
 
     // MARK: - Print (P44)
@@ -819,17 +920,42 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
             onRefusal?(refusal)
             return nil
         }
-        await loaded()
-        // On paper, as Apple's prints: a frame shown dark is drawn light for print, then shown as it was.
+        if case .loaded = await loaded() {} else { return nil }
+        let drawn = await withLightFrames {
+            await printDrawings()
+        }
+        guard let (frames, collapsed, images) = drawn else { return nil }
+        let plan = EntryPrintPlan.layout(frames, collapsed: collapsed)
+        guard !plan.isEmpty, plan.count == images.count else {
+            EntryLog.logger.error("print: \(plan.count) sections planned for \(images.count) drawings")
+            return nil
+        }
+        let width = max(scroll.contentView.bounds.width, 1)
+        return EntryPagePrintView(width: width, sections: Array(zip(plan, images)))
+    }
+
+    /// On paper, as Apple's prints: a frame shown dark is drawn light for print, then shown as it was. Nil when the
+    /// light frames did not load in time: restoring the scheme reloads them, so a capture taken after the restore would
+    /// draw the dark twin of what was asked for (audit round 4, 2026-10-25).
+    private func withLightFrames<T>(_ body: () async -> T?) async -> T? {
         let dark = sections.compactMap(\.pane).filter { $0.scheme == .dark }
-        if !dark.isEmpty {
-            for section in sections where section.pane.map({ pane in dark.contains { $0 === pane } }) == true { section.finished = false }
-            for pane in dark { pane.setScheme(.light) }
-            await loaded()
+        guard !dark.isEmpty else { return await body() }
+        for section in sections where section.pane.map({ pane in dark.contains { $0 === pane } }) == true {
+            section.finished = false
         }
-        defer {
+        for pane in dark { pane.setScheme(.light) }
+        guard case .loaded = await loaded() else {
             for pane in dark { pane.setScheme(.dark) }
+            return nil
         }
+        let result = await body()
+        for pane in dark { pane.setScheme(.dark) }
+        return result
+    }
+
+    /// Each section's drawing for print: its height and line breaks, and the expanded frames' PDFs. Nil when a frame
+    /// cannot be drawn or measured.
+    private func printDrawings() async -> ([(String, Double, [Double])], [Bool], [NSImage])? {
         var frames: [(String, Double, [Double])] = []
         var collapsed: [Bool] = []
         var images: [NSImage] = []
@@ -839,31 +965,24 @@ final class EntryPage: NSObject, WKScriptMessageHandler {
                 collapsed.append(true)
                 continue
             }
-            let image: NSImage
             do {
                 let data = try await pane.view.pdf(configuration: WKPDFConfiguration())
-                guard let drawn = NSImage(data: data) else { throw CocoaError(.fileReadCorruptFile) }
-                image = drawn
+                guard let image = NSImage(data: data) else { throw CocoaError(.fileReadCorruptFile) }
+                let lines = (try? await pane.view.callAsyncJavaScript(EntryPrintPlan.linesScript, arguments: [:],
+                                                                       in: nil, contentWorld: EntryPane.world))
+                    as? [[NSNumber]]
+                let boxes = (lines ?? []).compactMap { box in
+                    box.count == 2 ? (box[0].doubleValue * zoom, box[1].doubleValue * zoom) : nil
+                }
+                frames.append((section.name, section.frameHeight, EntryPrintPlan.breaks(lines: boxes)))
+                collapsed.append(false)
+                images.append(image)
             } catch {
                 EntryLog.logger.error("print: a frame could not be drawn: \(error.localizedDescription, privacy: .public)")
                 return nil
             }
-            let lines = (try? await pane.view.callAsyncJavaScript(EntryPrintPlan.linesScript, arguments: [:], in: nil,
-                                                                   contentWorld: EntryPane.world)) as? [[NSNumber]]
-            let boxes = (lines ?? []).compactMap { box in
-                box.count == 2 ? (box[0].doubleValue * zoom, box[1].doubleValue * zoom) : nil
-            }
-            frames.append((section.name, section.frameHeight, EntryPrintPlan.breaks(lines: boxes)))
-            collapsed.append(false)
-            images.append(image)
         }
-        let plan = EntryPrintPlan.layout(frames, collapsed: collapsed)
-        guard !plan.isEmpty, plan.count == images.count else {
-            EntryLog.logger.error("print: \(plan.count) sections planned for \(images.count) drawings")
-            return nil
-        }
-        let width = max(scroll.contentView.bounds.width, 1)
-        return EntryPagePrintView(width: width, sections: Array(zip(plan, images)))
+        return (frames, collapsed, images)
     }
 
     // MARK: - Which frame

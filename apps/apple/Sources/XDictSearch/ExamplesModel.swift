@@ -39,8 +39,10 @@ public final class ExamplesModel {
     /// The dictionaries still preparing, which are not the ones whose build failed.
     public var preparing: [DictId] { notReady.filter { !unavailable.contains($0) } }
 
-    /// A dictionary the section waited for has failed to build.
-    public var preparationFailed: Bool { !notReady.isEmpty && preparing.isEmpty }
+    /// **The unready dictionaries whose build failed this session** (audit round 2, 2026-10-25): a failure beside a
+    /// dictionary still building is a failure to report, not just a build to wait for.
+    public var failedToPrepare: [DictId] { notReady.filter { unavailable.contains($0) } }
+
 
     /// The page the pane asks for (ADR-0031 d.9).
     public static let page: UInt32 = 100
@@ -87,17 +89,34 @@ public final class ExamplesModel {
     /// **The library's example stores changed**: ask again once, when a dictionary that was still building is ready;
     /// a dictionary whose build failed is named so the section does not say it is still preparing.
     public func buildStateChanged(ready: [DictId], unavailable: [DictId] = []) {
+        // **The snapshot is the library's, and comparisons are the query's** (audit round 4, 2026-10-25): keeping only the
+        // last scope's ready set made a scope switch compare {B} with {A} and re-ask for nothing.
+        let previousFailures = self.unavailable.intersection(lastHandles)
+        let failures = Set(unavailable).intersection(lastHandles)
+        let before = lastReady.intersection(lastHandles)
+        let after = Set(ready).intersection(lastHandles)
+        lastReady = Set(ready)
         self.unavailable = Set(unavailable)
-        revision &+= 1
-        let now = Set(ready)
-        guard asked, now != lastReady else { return }
-        lastReady = now
+        let readyChanged = after != before
+        guard readyChanged || failures != previousFailures else { return }
+        // **Only a visible change is announced**: a failure on a dictionary the answer did not name changes nothing.
+        if answered != nil, failures.intersection(notReady) != previousFailures.intersection(notReady) {
+            revision &+= 1
+        }
+        guard asked, readyChanged else { return }
         ask(query, lastHandles)
     }
 
     public func clear() {
         serial += 1
+        let mine = serial
         task?.cancel()
+        // **Clearing withdraws the query still out** (audit round 3, 2026-10-25): the service does not run a query no pane
+        // shows. A later ask advances `serial` first, so this withdrawal cannot cancel it.
+        task = Task { [weak self] in
+            guard let self, self.serial == mine else { return }
+            await self.backend.supersede(self.caller)
+        }
         query = ""
         hits = []
         total = 0
@@ -118,12 +137,25 @@ public final class ExamplesModel {
         asked = true
         failed = false
         answered = nil
+        // **The fields belong to the query that produced them** (audit round 4): a new query starts from nothing, never
+        // under the previous query's hits.
+        hits = []
+        total = 0
+        notReady = []
+        capped = false
         task?.cancel()
         let operation = ServiceOperation.examples(query: query, dicts: handles, limit: Self.page)
         let (backend, caller) = (backend, caller)
         task = Task { [weak self] in
+            // **A request cancelled before it started is never submitted** (audit round 3, 2026-10-25).
+            guard !Task.isCancelled else { return }
             let pending = await backend.queue([operation], as: caller, superseding: true)
-            guard let outcome = await pending.first?.outcome(), let self, self.serial == mine else { return }
+            guard let outcome = await pending.first?.outcome(), let self else { return }
+            // **Every answer the model receives is counted** (audit round 4, 2026-10-25): a test can wait for a late
+            // answer to have been read before asserting it changed nothing. Counted before the serial guard, which is
+            // the decision this counter exists to make observable.
+            self.answersRead &+= 1
+            guard self.serial == mine else { return }
             switch outcome.examples {
             case .success(let examples):
                 self.hits = examples.hits
@@ -142,6 +174,10 @@ public final class ExamplesModel {
             self.revision &+= 1
         }
     }
+
+    /// **Answers this model has received** (audit round 4, 2026-10-25): not observable by the view, and read by the
+    /// tests to wait for a late answer's arrival without a clock.
+    @ObservationIgnored public private(set) var answersRead = 0
 
     /// Whether the text carries a CJK character, so the feature applies: the same ranges the core scans.
     public static func hasCJK(_ text: String) -> Bool {

@@ -83,6 +83,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private var entryBelowPane: NSLayoutConstraint?
     private var entryBelowFind: NSLayoutConstraint?
 
+    /// **Every presentation the window starts**, from `show` or `showPage` (audit round 2, 2026-10-25): a call that
+    /// resumes after a newer one began draws nothing — two presentations of one view could otherwise interleave across
+    /// `compileRuleList`, and the older one could finish last.
+    private var showGeneration = 0
+    /// The find call whose result may still paint, and the call itself (audit round 3).
+    private var findGeneration = 0
+    private var findTask: Task<EntryFindResult?, Never>?
+    /// The one rule-list compilation in flight (audit round 4).
+    private var ruleListTask: Task<Result<WKContentRuleList, EntryRefusal>, Never>?
     /// Why nothing is rendered, while that is so.
     public private(set) var refusal: EntryRefusal?
     /// The consent prompt on screen, if one is: the E2E stage clicks its buttons as a reader would.
@@ -138,7 +147,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// Where this view's per-dictionary choices are kept: the content it shows reads "Original style" from the same.
     public var preferences: EntryPreferences { environment.preferences }
     /// A choice changed elsewhere (the Library's "Original style") reaches the shown entry at once.
-    private var preferencesObserver: (any NSObjectProtocol)?
+    /// Reachable from the nonisolated `deinit`, where the registration is removed (audit round 3).
+    nonisolated(unsafe) private var preferencesObserver: (any NSObjectProtocol)?
     public var lastFind: EntryFindResult? { findBar.result }
 
     public init(environment: EntryEnvironment = EntryEnvironment()) {
@@ -148,6 +158,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     @available(*, unavailable)
     required init?(coder: NSCoder) { nil }
+
+    deinit {
+        // **The observer goes with the controller** (audit round 3, 2026-10-25): a block registration is retained by the
+        // notification center, and the weak capture only kept it harmless, not gone.
+        if let preferencesObserver { NotificationCenter.default.removeObserver(preferencesObserver) }
+    }
 
     override public func loadView() {
         let root = AppearanceTrackingView()
@@ -178,8 +194,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
             container.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             container.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             message.centerYAnchor.constraint(equalTo: root.centerYAnchor),
-            message.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 24),
-            message.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -24),
+            message.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: Tokens.Space.xxl),
+            message.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -Tokens.Space.xxl),
         ])
         view = root
     }
@@ -191,18 +207,20 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     @discardableResult
     public func show(_ reference: EntryReference, from content: any EntryContent, landing: EntryLanding = .top) async
         -> Bool {
+        showGeneration += 1
+        let mine = showGeneration
         _ = view
         await compileRuleList()
+        // **A newer presentation owns the view now**: this one's entry is not the one the window asked for last.
+        guard mine == showGeneration else { return false }
+        endFind()
         closePage()
         if let pane, pane.binding != content.binding || pane.closed {
             pane.close()
             self.pane = nil
         }
         if pane == nil {
-            let scheme = currentScheme(for: content.binding.dictionary)
-            switch EntryPane.open(content: content, confinement: environment.confinement, scheme: scheme,
-                                  frame: currentFrame(for: content.binding.dictionary), style: environment.style,
-                                  ruleList: ruleList, switches: environment.switches, host: self) {
+            switch openPane(content: content) {
             case .failure(let why):
                 refuse(why)
                 return false
@@ -225,9 +243,13 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         pane.setZoom(environment.preferences.zoom())
         pane.setFrame(currentFrame(for: pane.binding.dictionary))
         let shown = await pane.show(reference, landing: landing)
+        // **A superseded call says nothing about the current presentation** (audit round 3, 2026-10-25): a newer show may
+        // own the pane by now, and its entry is not this call's failure.
+        guard mine == showGeneration else { return false }
         if !shown, self.pane === pane, pane.reference != reference {
             say(EntrySentences.entryFailed)
         }
+        if shown { refindIfShown() }
         return shown
     }
 
@@ -240,8 +262,13 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// whole page. Returns whether the page was handed to WebKit.
     @discardableResult
     public func showPage(_ items: [EntryPageItem], primary: UUID?, landing: EntryLanding = .top) async -> Bool {
+        showGeneration += 1
+        let mine = showGeneration
         _ = view
         await compileRuleList()
+        // A page superseded while the rules compiled draws nothing; the newer presentation owns the view.
+        guard mine == showGeneration else { return false }
+        endFind()
         if let pane {
             pane.close()
             self.pane = nil
@@ -255,18 +282,24 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
         refusal = nil
         message.isHidden = true
+        refindIfShown()
         return !items.isEmpty
+    }
+
+    /// **A visible Find reruns against the document just shown** (audit round 4, 2026-10-25): its counts and highlights are
+    /// about the previous one.
+    private func refindIfShown() {
+        guard !findBar.isHidden else { return }
+        let query = findBar.field.stringValue
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        performFind(query)
     }
 
     private func makePage() -> EntryPage {
         let page = EntryPage(preferences: environment.preferences, zoom: environment.preferences.zoom(),
                              style: EntryPageStyle(frame: environment.readingFrame)) { [weak self] section in
             guard let self else { return .failure(.ruleListUnavailable("the entry view is gone")) }
-            let content = section.item.content
-            return EntryPane.open(content: content, confinement: environment.confinement,
-                                  scheme: currentScheme(for: content.binding.dictionary),
-                                  frame: currentFrame(for: content.binding.dictionary), style: environment.style,
-                                  ruleList: ruleList, switches: environment.switches, host: self)
+            return openPane(content: section.item.content)
         }
         page.onRefusal = { [weak self] why in self?.refuse(why) }
         page.onContentHeightChanged = { [weak self] in self?.onContentHeightChanged?() }
@@ -282,6 +315,15 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         view.layoutSubtreeIfNeeded()
         self.page = page
         return page
+    }
+
+    /// **One gate for every pane** (audit round 3, 2026-10-25): the single entry and the All page's frames are made with the
+    /// same confinement, scheme, frame, style, rules and switches; a change in one must not miss the other.
+    private func openPane(content: any EntryContent) -> Result<EntryPane, EntryRefusal> {
+        EntryPane.open(content: content, confinement: environment.confinement,
+                       scheme: currentScheme(for: content.binding.dictionary),
+                       frame: currentFrame(for: content.binding.dictionary), style: environment.style,
+                       ruleList: ruleList, switches: environment.switches, host: self)
     }
 
     private func closePage() {
@@ -329,13 +371,27 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
     }
 
+    /// **One compilation, awaited by every presentation that needs it** (audit round 4, 2026-10-25): two initial shows
+    /// used to compile independently, and the older completion could overwrite the newer result.
     private func compileRuleList() async {
-        guard ruleList == nil, environment.confinement.ruleList else { return }
-        do {
-            ruleList = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
-        } catch {
-            ruleList = .failure(.ruleListUnavailable(String(describing: error)))
+        guard environment.confinement.ruleList else { return }
+        if ruleList != nil { return }
+        if let task = ruleListTask {
+            ruleList = await task.value
+            return
         }
+        let task = Task { [environment] in
+            let result: Result<WKContentRuleList, EntryRefusal>
+            do {
+                result = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
+            } catch {
+                result = .failure(.ruleListUnavailable(String(describing: error)))
+            }
+            return result
+        }
+        ruleListTask = task
+        ruleList = await task.value
+        ruleListTask = nil
     }
 
     /// The shown entry's height in points (its CSS height at its zoom), or the page's (`pageHeight`) while the page is
@@ -377,6 +433,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     /// Closes the web view: nothing in flight is answered after this.
     public func closeEntry() {
+        // **A presentation still awaiting its rules is superseded by the close** (audit round 3, 2026-10-25): it must not
+        // recreate the entry the reader just closed.
+        showGeneration += 1
+        endFind()
         pane?.close()
         pane = nil
         closePage()
@@ -512,31 +572,72 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public func showFind() {
         setFindShown(true)
         view.window?.makeFirstResponder(findBar.field)
+        // **The bar's query survives its closing, so reopening runs it again** (audit round 4, 2026-10-25): stale counts
+        // over a document cleared of highlights are not shown.
+        let query = findBar.field.stringValue
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty { performFind(query) }
     }
 
     public func hideFind() {
+        endFind()
         setFindShown(false)
+        findBar.show(nil, query: "")
         Task {
             if let page { await page.clearFind() } else { await pane?.clearFind() }
         }
         if let webView = focusPane?.view { view.window?.makeFirstResponder(webView) }
     }
 
-    /// Finds `query` in the shown entry and returns the count; the find bar shows it too.
+    /// **One find at a time, and only the newest paints** (audit round 3, 2026-10-25): a query overtaken by another, by a
+    /// navigation or by the bar closing does not restore its counts or highlights.
     @discardableResult
     public func performFind(_ query: String) -> Task<EntryFindResult?, Never> {
-        Task { @MainActor in
-            let result = if let page { await page.find(query) } else { await pane?.find(query) }
+        runFind(query: query) { page, pane in
+            if let page { return await page.find(query) }
+            return await pane?.find(query)
+        }
+    }
+
+    /// **The one find runner** (audit round 4, 2026-10-25): a generation, a cancelled predecessor, the gates and the bar's
+    /// paint; a query and a step differ only in the operation they run.
+    private func runFind(query: String,
+                         _ operation: @escaping @MainActor (EntryPage?, EntryPane?) async -> EntryFindResult?)
+        -> Task<EntryFindResult?, Never> {
+        findGeneration += 1
+        let mine = findGeneration
+        findTask?.cancel()
+        let task: Task<EntryFindResult?, Never> = Task { @MainActor in
+            let result = await operation(page, pane)
+            guard !Task.isCancelled, mine == findGeneration else { return nil }
             findBar.show(result, query: query)
             return result
         }
+        findTask = task
+        return task
+    }
+
+    /// Ends the find in flight without clearing the page: a new presentation or a closing bar owns the next state.
+    private func endFind() {
+        findGeneration += 1
+        findTask?.cancel()
+        findTask = nil
     }
 
     /// Edit ▸ Find ▸ Use Selection for Find (⌘E, P33): the entry's selected text becomes the find bar's query.
     @discardableResult
     public func useSelectionForFind() -> Task<EntryFindResult?, Never> {
-        Task { @MainActor in
-            guard let selected = await focusPane?.selectedText(), !selected.isEmpty else { return nil }
+        let generation = showGeneration
+        let pane = focusPane
+        // **Captured now, not when the task starts** (audit round 4, 2026-10-25): a find started between this call and
+        // the task's first turn had already been overtaken by the read's result.
+        let mine = findGeneration
+        return Task { @MainActor in
+            guard let selected = await pane?.selectedText(), !selected.isEmpty else { return nil }
+            // **The frame, the presentation and the find may all have moved during the read** (audit round 4, 2026-10-25):
+            // the bar only opens for the document the selection was read from, and a find opened or closed meanwhile
+            // owns the next state.
+            guard !Task.isCancelled, mine == findGeneration,
+                  generation == showGeneration, pane === focusPane else { return nil }
             setFindShown(true)
             findBar.field.stringValue = selected
             return await performFind(selected).value
@@ -546,6 +647,13 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// The entry's selected text, or nil when nothing is selected.
     public func selectedText() async -> String? { await focusPane?.selectedText() }
 
+    /// **The focused frame's selected text, with the item that frame shows** (audit round 3, 2026-10-25): the selection and
+    /// its dictionary must come from one frame — `activeItem` is the last link's frame, not necessarily the focused one.
+    public func selectedTextAndFrame() async -> (text: String?, item: UUID?)? {
+        guard let pane = focusPane else { return nil }
+        return (await pane.selectedText(), page?.sections.first { $0.pane === pane }?.id)
+    }
+
     /// Edit ▸ Find ▸ Jump to Selection (⌘J, P33): the entry scrolled to its selection.
     public func jumpToSelection() {
         Task { @MainActor in await focusPane?.jumpToSelection() }
@@ -553,12 +661,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     @discardableResult
     public func stepFind(forward: Bool) -> Task<EntryFindResult?, Never> {
-        Task { @MainActor in
-            let result = if let page { await page.findStep(forward: forward) } else {
-                await pane?.findStep(forward: forward)
-            }
-            findBar.show(result, query: findBar.field.stringValue)
-            return result
+        runFind(query: findBar.field.stringValue) { page, pane in
+            if let page { return await page.findStep(forward: forward) }
+            return await pane?.findStep(forward: forward)
         }
     }
 
@@ -612,7 +717,11 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public func stepSense(_ delta: Int) {
         guard let pane = focusPane else { return }
         Task { @MainActor in
-            guard owns(pane), let reference = pane.documentReference, let id = await pane.stepSense(delta) else { return }
+            guard owns(pane), let reference = pane.documentReference else { return }
+            guard let id = await pane.stepSense(delta) else { return }
+            // **The frame and its document may have moved during the script call** (audit round 3, 2026-10-25): a
+            // selection for a document no longer on screen is dropped, never reported.
+            guard owns(pane), pane.documentReference == reference else { return }
             onSelectSense?(pane.binding.handle, pane.binding.edition, reference, id)
         }
     }
@@ -714,7 +823,7 @@ final class EntryFindBar: NSView {
             let title = String(localized: name)
             steps.setImage(NSImage(systemSymbolName: symbol, accessibilityDescription: title), forSegment: segment)
             steps.setToolTip(title, forSegment: segment)
-            steps.setWidth(26, forSegment: segment)
+            steps.setWidth(Tokens.Control.findSegmentWidth, forSegment: segment)
         }
         steps.target = self
         steps.action = #selector(stepped)
@@ -735,7 +844,7 @@ final class EntryFindBar: NSView {
         NSLayoutConstraint.activate([
             row.topAnchor.constraint(equalTo: topAnchor), row.bottomAnchor.constraint(equalTo: bottomAnchor),
             row.leadingAnchor.constraint(equalTo: leadingAnchor), row.trailingAnchor.constraint(equalTo: trailingAnchor),
-            field.widthAnchor.constraint(greaterThanOrEqualToConstant: 140),
+            field.widthAnchor.constraint(greaterThanOrEqualToConstant: Tokens.Control.findFieldMin),
             edge.leadingAnchor.constraint(equalTo: leadingAnchor), edge.trailingAnchor.constraint(equalTo: trailingAnchor),
             edge.bottomAnchor.constraint(equalTo: bottomAnchor),
         ])
