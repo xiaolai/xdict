@@ -11955,6 +11955,38 @@
         }
       }
     },
+    "The source refused the request (HTTP %lld)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source refused the request (HTTP %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源拒绝了请求（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "The source refused the request (HTTP %lld): %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source refused the request (HTTP %1$lld): %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源拒绝了请求（HTTP %1$lld）：%2$@"
+          }
+        }
+      }
+    },
     "The source took too long to answer." : {
       "localizations" : {
         "en" : {

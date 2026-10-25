@@ -333,7 +333,7 @@ struct AIContractTests {
     @Test func theProvidersCanGenerateEveryOutcomeTheContractNames() {
         let outcomes = Set(AIOutcome.allCases.map(\.rawValue))
         for outcome in outcomes {
-            #expect(ClaudeCLIProvider.answerSchema.contains("\"\(outcome)\""),
+            #expect(AIAnswerSchema.claude.contains("\"\(outcome)\""),
                     "the Claude schema omits \(outcome)")
         }
         #if canImport(FoundationModels)

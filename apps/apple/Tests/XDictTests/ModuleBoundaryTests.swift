@@ -48,10 +48,10 @@ struct ModuleBoundaryTests {
         // The AI contract's values and providers (ADR-0021): `Foundation` for the answer's JSON, `FoundationModels`
         // for Apple's on-device model, `Darwin` for the CLI child's process group, and sayso's `CodexAuth` for the
         // Codex sign-in states.
-        "XDictAI": ["CodexAuth", "Darwin", "Foundation", "FoundationModels", "Synchronization"],
+        "XDictAI": ["Foundation", "FoundationModels", "SaySoAI", "SaySoAICLI", "SaySoAIApple"],
         // The vectors, read and hashed: the digest is the suite revision (`CryptoKit`); `CodexAuth` for the state enum
         // the Codex tests inject.
-        "XDictAITests": ["CodexAuth", "CryptoKit", "Foundation", "Synchronization", "Testing"],
+        "XDictAITests": ["CodexAuth", "CryptoKit", "Foundation", "SaySoAICLI", "Testing"],
         // The design tokens: lengths as CGFloat, text roles and colours for both AppKit and SwiftUI call sites.
         "XDictTokens": ["AppKit", "SwiftUI"],
         // `CryptoKit`: the source's digest, compared with the one the generated file carries.

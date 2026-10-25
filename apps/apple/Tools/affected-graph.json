@@ -113,7 +113,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "e8a0073e61957bcdce6237b2fe2bf4afae593772",
+  "apps/apple/Package.swift": "1192dfcbf2bf5fb4e8b05a18efedf088068f63f1",
   "core/Cargo.toml": "5e8d6c55b414e203b3c2b6b65f2b5ea6ba15296b",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "f95e5ad89755669a80cd22154b3201c9bda9d504",
@@ -168,8 +168,7 @@
   },
   "XDictAITests": {
    "deps": [
-    "XDictAI",
-    "XDictTestSupport"
+    "XDictAI"
    ],
    "dir": "apps/apple/Tests/XDictAITests/",
    "type": "test"

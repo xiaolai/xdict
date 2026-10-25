@@ -12,11 +12,16 @@ struct AppleSystemSentenceTests {
         #expect(text.contains("15.7"), "the version this Mac runs: \(text)")
     }
 
-    /// Every availability reason has a sentence of its own: a new case cannot silently read as `.unknown`.
+    /// Every availability reason has a sentence of its own: a new case cannot silently read as `.unknown`. The list is
+    /// sayso's payload-free cases plus the system case with sample versions — the type itself is no longer `CaseIterable`,
+    /// because a system case is infinitely variable and never belongs in one (sayso 0.5.0).
+    static let reasons: [AppleAvailability] = AppleAvailability.fixedCases
+        + [.system(required: "27", running: "15.7")]
+
     @Test func everyReasonHasADistinctSentence() {
-        let sentences = AppleAvailability.allCases.map {
+        let sentences = Self.reasons.map {
             String(localized: MeaningSentences.availability($0))
         }
-        #expect(Set(sentences).count == AppleAvailability.allCases.count)
+        #expect(Set(sentences).count == Self.reasons.count)
     }
 }

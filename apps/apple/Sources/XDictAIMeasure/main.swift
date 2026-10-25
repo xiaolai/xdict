@@ -274,12 +274,12 @@ enum Harness {
         var provider: (any AIProvider)?
         switch source {
         case .apple?:
-            provider = AppleOnDeviceProvider()
+            provider = AppleProvider.make()
         case .claude?:
             provider = ClaudeCLIProvider(configuration: .init(
                 executable: nil, configDirectory: claudeHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.claude"),
                 workingDirectory: work, model: nil, timeout: .seconds(240),
-                searchPath: ProcessInfo.processInfo.environment["PATH"]))
+                searchPath: ProcessInfo.processInfo.environment["PATH"], answerSchema: AIAnswerSchema.claude))
         case .codex?:
             provider = try CodexCLIProvider(configuration: .init(
                 executable: nil, codexHome: codexHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.codex"),

@@ -154,6 +154,14 @@ public enum MeaningSentences {
             LocalizedStringResource("The answer was cut off, so it is not shown.")
         case .badShape:
             LocalizedStringResource("The source answered in a shape XDict does not understand.")
+        case .server(let status, let message):
+            // **The server's own sentence** (measured 2026-10-25: DeepSeek names the models it serves in a 400): it is
+            // shown when it gave one, because it says what to fix; a bare status otherwise.
+            if message.isEmpty {
+                LocalizedStringResource("The source refused the request (HTTP \(status)).")
+            } else {
+                LocalizedStringResource("The source refused the request (HTTP \(status)): \(message)")
+            }
         case .timeout:
             LocalizedStringResource("The source took too long to answer.")
         case .cancelled:

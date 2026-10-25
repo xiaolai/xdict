@@ -151,6 +151,10 @@ public enum MeaningPresenter {
             .openAISettings
         case .unreachable, .rateLimited, .truncated, .badShape, .timeout, .cancelled, .framework:
             .retry
+        case .server(let status, _):
+            // A refused request is usually a setting to change (a model name, a balance, a parameter); a server-side
+            // failure is worth one more try.
+            (400..<500).contains(status) ? .openAISettings : .retry
         case .refused, .guardrail:
             nil
         }

@@ -62,7 +62,7 @@ public final class AISettingsModel {
     /// Apple row stays visible on every supported system and says which macOS the source needs and which this Mac runs,
     /// in the reader's language. Nil when the system is new enough.
     public var appleSystemNotice: LocalizedStringResource? {
-        if case .system(let required, let running) = AppleOnDeviceProvider.availability() {
+        if case .system(let required, let running) = AppleProvider.availability() {
             return MeaningSentences.availability(.system(required: required, running: running))
         }
         return nil

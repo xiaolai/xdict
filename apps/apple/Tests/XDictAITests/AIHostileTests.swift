@@ -6,6 +6,11 @@ import Testing
 /// sentence is untrusted data, and the mechanism that could act on it is closed before the text ever arrives. Each test
 /// names what would fail if the box opened: the child's stdin is the text verbatim, its argument vector holds no word of
 /// it, and the flags that deny tools, MCP servers, the reader's configuration and any second session are still there.
+///
+/// The Codex half of this proof moved with the provider into sayso's own suite (`AIProviderCLITests`): its provider
+/// takes a test probe through an internal seam, and XDict now builds it through the package's public API only. The
+/// assertions there are the same — stdin verbatim, no word of the text in argv, the shell and browser tools disabled,
+/// the user's config and rules ignored, no inherited key.
 struct AIHostileTests {
     /// A dictionary entry whose "definition" is a set of instructions, as a hostile MDX could hold.
     static let hostile = """
@@ -24,11 +29,33 @@ struct AIHostileTests {
         return arguments[index + 1]
     }
 
+    /// A stub `claude`: `--version` answers, and an ask answers from the files the test writes.
+    static func stub(version: String = "2.1.304") throws -> (CLIStub, URL) {
+        let stub = try CLIStub()
+        var body = stub.recordingPreamble()
+        body += """
+        if [ "$1" = "--version" ]; then echo '\(version)'; exit 0; fi
+        """ + "\n"
+        body += """
+        cat "$D/response" 2>/dev/null
+        [ -f "$D/stderr" ] && cat "$D/stderr" >&2
+        exit $(cat "$D/exit" 2>/dev/null || echo 0)
+        """ + "\n"
+        return (stub, try stub.script("claude", body: body))
+    }
+
+    static func provider(_ stub: CLIStub, _ url: URL) -> ClaudeCLIProvider {
+        ClaudeCLIProvider(configuration: .init(
+            executable: url, configDirectory: stub.directory.appending(path: "config"),
+            workingDirectory: stub.directory.appending(path: "work"), timeout: .seconds(30),
+            answerSchema: AIAnswerSchema.claude))
+    }
+
     @Test func claudeGetsTheTextAsDataAndItsBoxStaysClosed() async throws {
-        let (stub, url) = try ClaudeCLIProviderTests.stub()
+        let (stub, url) = try Self.stub()
         let response = #"{"type":"result","subtype":"success","is_error":false,"result":"x","structured_output":{"outcome":"refused","quotes":[],"explanation":"\#(Self.refusal)"}}"#
         try stub.write("response", response)
-        let answer = try await ClaudeCLIProviderTests.provider(stub, url).answer(to: Self.hostile)
+        let answer = try await Self.provider(stub, url).answer(to: Self.hostile)
         #expect(answer.contains("refused"))
         let ask = try stub.invocation(2)  // 1 is the version probe
         #expect(ask.stdin == Self.hostile, "the instruction is data on stdin, byte for byte")
@@ -39,25 +66,5 @@ struct AIHostileTests {
         #expect(Self.value(of: "--permission-prompts", in: ask.arguments) == "none")
         #expect(ask.environment["ANTHROPIC_API_KEY"] == nil)
         #expect(ask.environment["CLAUDE_CODE_OAUTH_TOKEN"] == nil)
-    }
-
-    @Test func codexGetsTheTextAsDataAndItsBoxStaysClosed() async throws {
-        let (stub, url) = try CodexCLIProviderTests.stub()
-        let response = #"{"outcome":"refused","quotes":[],"explanation":"\#(Self.refusal)"}"#
-        try stub.write("response", response)
-        let answer = try await CodexCLIProviderTests.provider(stub, url).answer(to: Self.hostile)
-        #expect(answer.contains("refused"))
-        let ask = try stub.invocation(1)
-        #expect(ask.stdin == Self.hostile)
-        #expect(!ask.arguments.contains { $0.contains("id_rsa") || $0.contains("rm -rf") || $0.contains("example.com") },
-                "no word of the text reaches the argument vector: \(ask.arguments)")
-        #expect(ask.arguments.contains("read-only"), "the sandbox stays read-only")
-        // `-s read-only` still allows reads through the shell tool; the tool itself is disabled.
-        #expect(Self.value(of: "--disable", in: ask.arguments) == "shell_tool",
-                "the shell tool must be off, not merely sandboxed: \(ask.arguments)")
-        #expect(ask.arguments.contains("--ignore-user-config"))
-        #expect(ask.arguments.contains("--ignore-rules"))
-        #expect(ask.environment["OPENAI_API_KEY"] == nil)
-        #expect(ask.environment["CODEX_API_KEY"] == nil)
     }
 }

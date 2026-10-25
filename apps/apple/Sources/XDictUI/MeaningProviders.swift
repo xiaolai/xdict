@@ -21,14 +21,14 @@ public enum MeaningProviders {
         case .none:
             throw .notInstalled
         case .appleOnDevice:
-            return AppleOnDeviceProvider()
+            return AppleProvider.make()
         case .http:
             guard let endpoint = settings.endpoint else { throw .unreachable }
             return try HTTPProvider(configuration: .init(endpoint: endpoint, model: settings.model,
                                                           apiKey: apiKey(settings)))
         case .claudeCLI:
             return ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
-                                                         model: nil))
+                                                         model: nil, answerSchema: AIAnswerSchema.claude))
         case .codexCLI:
             // sayso's client confines the home before the CLI runs, so it must exist now; the provider prepares the rest.
             let home = folder("codex")
@@ -46,7 +46,7 @@ public enum MeaningProviders {
         guard let source = settings.source else { return .notConfigured }
         switch source {
         case .appleOnDevice:
-            let availability = AppleOnDeviceProvider.availability()
+            let availability = AppleProvider.availability()
             return availability == .available ? .ready("") : .failed(.unavailable(availability))
         case .http:
             guard let endpoint = settings.endpoint else { return .notConfigured }
