@@ -138,3 +138,25 @@ fn kept_letters_and_the_ks_of_c() {
     // `dye` keeps only its own — `dying` is `die`'s gerund, never `dye`'s.
     assert!(!forms("dye").iter().any(|form| form == "dying"), "dye acquired die's gerund: {:?}", forms("dye"));
 }
+
+/// **A doubled z, and singe's kept e** (audit round 4, 2026-10-26): `quiz` pluralises as `quizzes` and comes back from
+/// it, `buzz` only adds `-es`, and `singe` keeps its e before `-ing` — `singeing`, which stripping the e alone cannot
+/// spell (`singe` also reaches `sing` through its own e, the module's measured over-generation).
+#[test]
+fn a_doubled_z_and_singes_kept_e() {
+    for (base, inflected) in [
+        ("quiz", "quizzes"),
+        ("buzz", "buzzes"),
+        // **Only some words double**: waltz and topaz keep the ordinary -zes (audit round 4's verification).
+        ("waltz", "waltzes"),
+        ("topaz", "topazes"),
+        ("singe", "singeing"),
+    ] {
+        let got = forms(base);
+        assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
+    }
+    for (surface, base) in [("quizzes", "quiz"), ("singeing", "singe")] {
+        let got = forms(surface);
+        assert!(got.iter().any(|form| form == base), "{surface} does not reach {base}: {got:?}");
+    }
+}

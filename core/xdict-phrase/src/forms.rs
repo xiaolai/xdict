@@ -90,6 +90,8 @@ const IRREGULAR: &[(&str, &str)] = &[
     ("lain", "lie"),
     ("lying", "lie"),
     ("lied", "lie"),
+    // **`singe` keeps its e before `-ing`** — `singeing`, never `singing`, which is `sing`'s (audit round 4, 2026-10-26).
+    ("singeing", "singe"),
     ("led", "lead"),
     ("grew", "grow"),
     ("grown", "grow"),
@@ -306,6 +308,7 @@ const IRREGULAR_FORMS: &[(&str, &[&str])] = &[
     ("eat", &["ate", "eaten"]),
     ("drink", &["drank", "drunk"]),
     ("sing", &["sang", "sung"]),
+    ("singe", &["singeing"]),
     ("swim", &["swam", "swum", "swimming"]),
     ("fly", &["flew", "flown"]),
     ("forget", &["forgot", "forgotten", "forgetting"]),
@@ -473,6 +476,10 @@ fn strip_candidates(surface: &str) -> Vec<String> {
     }
     if let Some(stem) = surface.strip_suffix("es") {
         push(&mut out, stem.to_string());
+        // **`-zzes` is a doubled `z`**: `quizzes` → `quizz` → `quiz` (audit round 4, 2026-10-26).
+        if let Some(base) = undouble(stem).filter(|base| base.ends_with('z')) {
+            push(&mut out, base);
+        }
     }
     if !surface.ends_with("ss")
         && let Some(stem) = surface.strip_suffix("s")
@@ -521,7 +528,13 @@ fn inflections(base: &str) -> Vec<String> {
 
     // Plural and third person singular.
     if ends("s") || ends("x") || ends("z") || ends("ch") || ends("sh") {
+        // **A single `-z` also doubles before `-es`** (audit round 4, 2026-10-26): `quiz` → `quizzes` beside `quizes`,
+        // which over-generation tolerates, while `waltz` keeps its ordinary `waltzes` — only some words double, and no
+        // rule here can tell which. A doubled `-zz` only adds `-es` (`buzzes`).
         push(&mut out, format!("{base}es"));
+        if ends("z") && !ends("zz") {
+            push(&mut out, format!("{base}zes"));
+        }
     } else if let Some(stem) = base.strip_suffix("y") {
         let vowel_before = stem.chars().last().is_some_and(|c| "aeiou".contains(c));
         if vowel_before {
