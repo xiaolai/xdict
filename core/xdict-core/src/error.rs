@@ -85,6 +85,8 @@ pub enum Limit {
     Page,
     /// A body larger than the view's `max_body_bytes`, or the core's own ceiling.
     Body,
+    /// A sentence longer than the phrase question accepts (the capture contract's 1,000 UTF-16 units).
+    Sentence,
 }
 
 /// What a [`CoreError::NotFound`] did not find.

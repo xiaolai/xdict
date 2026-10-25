@@ -18,6 +18,7 @@ xdict-ledger = { path = "../xdict-ledger" }
 xdict-health = { path = "../xdict-health" }
 xdict-identity = { path = "../xdict-identity" }
 xdict-lookup = { path = "../xdict-lookup" }
+xdict-phrase = { path = "../xdict-phrase" }
 xdict-mdx = { path = "../xdict-mdx" }
 xdict-schedule = { path = "../xdict-schedule" }
 serde_json.workspace = true

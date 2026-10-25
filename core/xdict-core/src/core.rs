@@ -22,7 +22,7 @@ use xdict_ledger::{
     Store, StudyCard, StudyGrade, StudyPhase, StudyTarget, TargetKind, UndoRecord,
 };
 use xdict_lookup::{How as LookupHow, Mode, Policy, Problem as LookupProblem};
-use xdict_mdx::index::{Derive, Plain};
+use xdict_mdx::index::{Derive, Plain, Region};
 use xdict_mdx::{Budget, File, Kind};
 use xdict_schedule::{
     Card as ScheduleCard, DEFAULT_WEIGHTS, Grade as ScheduleGrade, Phase as SchedulePhase, Scheduler,
@@ -31,6 +31,7 @@ use xdict_schedule::{
 
 use crate::error::{CoreError, Limit, Missing};
 use crate::health::HEALTH;
+use crate::phrases::{Coverage, CoverageEntry, PhraseAnswer, PhraseBuilt, PhraseMatch, PhraseState};
 use crate::source::{Changed, Opened as OpenedSource, Verified, buffer, read_all};
 #[cfg(not(target_family = "wasm"))]
 use crate::store::Directory;
@@ -88,6 +89,11 @@ struct State {
     random: SplitMix,
     next_handle: u32,
     open: HashMap<u32, Arc<Dict>>,
+    /// Phrase matchers by store name, decoded and indexed once per open edition and retained (plan WI-4; the
+    /// refutation's objection 10: the examples store's per-call decode is not this).
+    phrase_matchers: HashMap<String, Arc<xdict_phrase::Matcher>>,
+    /// Editions whose inventory build failed: terminal until a build succeeds, never a perpetual "building".
+    phrase_failures: HashSet<String>,
 }
 
 /// One opened package.
@@ -178,7 +184,13 @@ impl Core {
             }
             let mut random = SplitMix::seeded(&config.entropy)?;
             let nonce = (random.next() >> 32) as u32;
-            let state = State { random, next_handle: 1, open: HashMap::new() };
+            let state = State {
+                random,
+                next_handle: 1,
+                open: HashMap::new(),
+                phrase_matchers: HashMap::new(),
+                phrase_failures: HashSet::new(),
+            };
             let indexes: Box<dyn IndexStore> = match (storage, &config.cache_dir) {
                 (Some(storage), _) => Box::new(Shell(storage)),
                 #[cfg(not(target_family = "wasm"))]
@@ -417,6 +429,10 @@ impl Core {
             // Dropped once the lock is released: the last reference drops the shell's sources, whose destructors
             // may call the core.
             let removed = self.lock()?.open.remove(&handle);
+            if let Some(dict) = removed.as_ref() {
+                // **A closed edition's matcher goes with it** (plan WI-4): retained per open edition, dropped on close.
+                self.lock()?.phrase_matchers.remove(&crate::phrases::store_name(&dict.edition));
+            }
             drop(removed);
             Ok(())
         })
@@ -1311,6 +1327,196 @@ impl Core {
         })
     }
 
+    // MARK: - Phrases (plan-phrase-recognition WI-4, WI-5)
+
+    /// **Builds one edition's phrase inventory** (`dev-docs/plan-phrase-recognition.md` WI-4): every public multi-word
+    /// key becomes a template, written through the index storage under a name that carries the format, the extractor,
+    /// the public-key policy and the folding. Like the examples pass it reports progress, has no deadline and stops by
+    /// `cancel`; a store that is already there and decodes is answered `cached` without a read of the keys.
+    pub fn phrases_build(&self, dict: String, progress: &dyn Progress) -> Result<PhraseBuilt, CoreError> {
+        let opened = self.dict(&dict)?;
+        let edition = opened.edition.clone();
+        let outcome = self.phrases_build_opened(&opened, progress);
+        match outcome {
+            Ok(built) => {
+                let mut state = self.lock()?;
+                state.phrase_failures.remove(&edition);
+                state.phrase_matchers.remove(&crate::phrases::store_name(&edition));
+                Ok(built)
+            }
+            Err(error) => {
+                // **A cancelled build is the reader's choice, not the dictionary's failure** (the refutation's #8):
+                // only a real error makes the edition terminal, and a later build clears it.
+                if !matches!(error, CoreError::Cancelled { .. })
+                    && let Ok(mut state) = self.lock()
+                {
+                    state.phrase_failures.insert(edition);
+                }
+                Err(error)
+            }
+        }
+    }
+
+    fn phrases_build_opened(&self, opened: &Dict, progress: &dyn Progress) -> Result<PhraseBuilt, CoreError> {
+        opened.mdx_source.unchanged()?;
+        let edition = opened.edition.clone();
+        let name = crate::phrases::store_name(&edition);
+        let versions = crate::phrases::versions();
+        if let Some(region) = self.indexes.get(&name)? {
+            let bytes = region_to_vec(&*region)?;
+            if let Some(inventory) = xdict_phrase::Inventory::decode(&bytes, &edition, versions) {
+                return Ok(PhraseBuilt { edition, phrases: inventory.phrases().len() as u64, cached: true });
+            }
+        }
+        let count = opened.mdx.len();
+        let mut keys: Vec<String> = Vec::new();
+        for i in 0..count {
+            if i % 4096 == 0 && !progress.progress(i as u64, count as u64) {
+                return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
+            }
+            let Ok(public) = opened.mdx.is_public(i) else { continue };
+            if !public {
+                continue;
+            }
+            let Ok(key) = opened.mdx.key(i) else { continue };
+            if key.split_whitespace().count() < 2 {
+                continue;
+            }
+            keys.push(key.into_owned());
+        }
+        let inventory = xdict_phrase::Inventory::from_keys(keys, crate::phrases::slots());
+        let phrases = inventory.phrases().len() as u64;
+        let bytes = inventory.encode(&edition, versions);
+        if !progress.progress(count as u64, count as u64) {
+            return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
+        }
+        self.indexes.put(&name, &bytes)?;
+        Ok(PhraseBuilt { edition, phrases, cached: false })
+    }
+
+    /// **The phrases covering the term in this sentence** (`dev-docs/plan-phrase-recognition.md` WI-5): every phrase of
+    /// every ready dictionary that covers the word under the term, best first, with the states of the dictionaries that
+    /// could not answer. The sentence and the term are re-validated here (the capture contract's bounds); nothing is
+    /// sent anywhere.
+    pub fn phrases(
+        &self,
+        sentence: String,
+        term_location: u64,
+        term_length: u64,
+        dicts: Vec<String>,
+    ) -> Result<PhraseAnswer, CoreError> {
+        guard(|| {
+            let total = sentence.encode_utf16().count() as u64;
+            if total > crate::phrases::MAX_SENTENCE_UTF16 {
+                return Err(CoreError::TooLarge {
+                    limit: Limit::Sentence,
+                    detail: format!(
+                        "a sentence holds at most {} UTF-16 units, {total} were given",
+                        crate::phrases::MAX_SENTENCE_UTF16
+                    ),
+                });
+            }
+            // **An empty sentence is "no sentence", whatever range came with it**: the capture carried no context,
+            // which is a state, not a bad request.
+            if total == 0 {
+                return Ok(PhraseAnswer {
+                    state: PhraseState::NotAsked,
+                    matches: Vec::new(),
+                    coverage: Vec::new(),
+                    capped: false,
+                });
+            }
+            let end = term_location
+                .checked_add(term_length)
+                .ok_or_else(|| CoreError::Malformed { detail: "the term's range overflows".into() })?;
+            if term_length == 0 || end > total {
+                return Err(CoreError::Malformed {
+                    detail: "the term's range does not lie inside the sentence".into(),
+                });
+            }
+            let tokens = tokens_with_offsets(&sentence);
+            let word = tokens
+                .iter()
+                .position(|(_, start, end)| *start <= term_location && term_location < *end)
+                .or_else(|| tokens.iter().position(|(_, start, _)| *start >= term_location))
+                .unwrap_or_else(|| tokens.len().saturating_sub(1));
+            let forms: Vec<Vec<String>> = tokens.iter().map(|(token, _, _)| xdict_phrase::forms(token)).collect();
+            let mut matches: Vec<PhraseMatch> = Vec::new();
+            let mut coverage: Vec<CoverageEntry> = Vec::new();
+            let mut capped = false;
+            let mut building = false;
+            let mut ready = 0usize;
+            for id in &dicts {
+                let opened = self.dict(id)?;
+                let edition = opened.edition.clone();
+                if self.lock()?.phrase_failures.contains(&edition) {
+                    coverage.push(CoverageEntry { dict: id.clone(), state: Coverage::Unavailable });
+                    continue;
+                }
+                let Some(matcher) = self.phrase_matcher(&opened)? else {
+                    coverage.push(CoverageEntry { dict: id.clone(), state: Coverage::Building });
+                    building = true;
+                    continue;
+                };
+                ready += 1;
+                coverage.push(CoverageEntry { dict: id.clone(), state: Coverage::Ready });
+                for found in matcher.matches(
+                    &forms,
+                    word,
+                    xdict_phrase::DEFAULT_WIDEST_GAP,
+                    xdict_phrase::DEFAULT_WIDEST_INFERRED_GAP,
+                ) {
+                    if matches.len() >= crate::phrases::MAX_MATCHES {
+                        capped = true;
+                        break;
+                    }
+                    let (Some((_, first, _)), Some((_, _, last))) = (tokens.get(found.first), tokens.get(found.last))
+                    else {
+                        continue;
+                    };
+                    let separation = found.separation;
+                    let gap = found.gap() as u64;
+                    matches.push(PhraseMatch {
+                        dict: id.clone(),
+                        phrase: found.phrase,
+                        location: *first,
+                        length: last.saturating_sub(*first),
+                        separation,
+                        gap,
+                    });
+                }
+            }
+            let state = if !matches.is_empty() {
+                PhraseState::Found
+            } else if building {
+                PhraseState::Building
+            } else if ready > 0 {
+                PhraseState::None
+            } else {
+                PhraseState::Unavailable
+            };
+            Ok(PhraseAnswer { state, matches, coverage, capped })
+        })
+    }
+
+    /// One edition's matcher, decoded once and retained; `None` when the store is absent or does not decode, which
+    /// both mean "build it".
+    fn phrase_matcher(&self, opened: &Dict) -> Result<Option<Arc<xdict_phrase::Matcher>>, CoreError> {
+        let name = crate::phrases::store_name(&opened.edition);
+        if let Some(matcher) = self.lock()?.phrase_matchers.get(&name).cloned() {
+            return Ok(Some(matcher));
+        }
+        let Some(region) = self.indexes.get(&name)? else { return Ok(None) };
+        let bytes = region_to_vec(&*region)?;
+        let Some(inventory) = xdict_phrase::Inventory::decode(&bytes, &opened.edition, crate::phrases::versions())
+        else {
+            return Ok(None);
+        };
+        let matcher = Arc::new(inventory.matcher());
+        self.lock()?.phrase_matchers.insert(name, matcher.clone());
+        Ok(Some(matcher))
+    }
+
     /// One edition's store, decoded, or `None` when it is absent or does not decode: both mean "build it".
     fn examples_store(&self, opened: &Dict) -> Result<Option<crate::examples::Store>, CoreError> {
         let Some(region) = self.indexes.get(&examples_name(&opened.edition))? else { return Ok(None) };
@@ -2146,6 +2352,43 @@ fn text_spans(runs: Vec<xdict_entry::TextRun>) -> Vec<TextSpan> {
             sense: run.sense,
         })
         .collect()
+}
+
+/// A stored region as its bytes: the phrase store's decoder takes a slice, and the storage hands regions.
+fn region_to_vec(region: &dyn Region) -> Result<Vec<u8>, CoreError> {
+    let len = usize::try_from(region.len())
+        .map_err(|_| CoreError::internal("a stored region is larger than this process can hold"))?;
+    region
+        .bytes(0, len)
+        .map(std::borrow::Cow::into_owned)
+        .map_err(|error| CoreError::internal(format!("reading a stored region: {error}")))
+}
+
+/// The sentence's words with their UTF-16 ranges: the capture contract counts in UTF-16 units, and a span the shell
+/// draws is two of them.
+fn tokens_with_offsets(sentence: &str) -> Vec<(String, u64, u64)> {
+    let mut tokens: Vec<(String, u64, u64)> = Vec::new();
+    let mut current = String::new();
+    let mut start = 0u64;
+    let mut at = 0u64;
+    for character in sentence.chars() {
+        let width = character.len_utf16() as u64;
+        if character.is_whitespace() {
+            if !current.is_empty() {
+                tokens.push((std::mem::take(&mut current), start, at));
+            }
+        } else {
+            if current.is_empty() {
+                start = at;
+            }
+            current.push(character);
+        }
+        at += width;
+    }
+    if !current.is_empty() {
+        tokens.push((current, start, at));
+    }
+    tokens
 }
 
 /// The edition's digest, from the one form an edition has (`mdx-sha256-v1:<hex>`).
