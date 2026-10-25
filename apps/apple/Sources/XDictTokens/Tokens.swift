@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "29263c8ed6e3b5ac1aaba2c7be6e07fbb6147c7cc3f87921601f330985897e69"
+    public static let sourceDigest = "48a13ad6265477d41fc12112b95891b7af76c178196974114379442d62269711"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -304,6 +304,16 @@ public enum Tokens {
         public static let panelDictionaryName = TokenFont(size: 13, weight: .semibold, design: .default, italic: false)
         /// Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12).
         public static let tableCell = TokenFont(size: 12, weight: .regular, design: .default, italic: false)
+        /// Apple-measured (P18, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let readingBody = TokenFont(size: 16, weight: .regular, design: .serif, italic: false)
+        /// The matched run inside an example pair: the reading face at the selected row's weight, so the match reads as emphasis, not as another size (owner's decision 5, 2026-10-18).
+        public static let readingBodyEmphasized = TokenFont(size: 16, weight: .semibold, design: .serif, italic: false)
+    }
+
+    /// The reading text's own metrics: what the companion pane shares with the entry so its prose reads as the dictionary's (ADR-0021 d.14).
+    public enum Reading {
+        /// Apple-measured (P18, `Tools/parity/apple-dictionary.tsv`): fixed.
+        public static let leading: Double = 1.4
     }
 
     /// Colours: the system's semantic colours first; a literal only where Apple's page was measured.

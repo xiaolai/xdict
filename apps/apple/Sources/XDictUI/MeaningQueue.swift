@@ -22,6 +22,10 @@ public actor MeaningQueue {
         let continuation: CheckedContinuation<Bool, Never>
     }
 
+    /// **The asks waiting for a source right now** (audit round 2, 2026-10-25): a test's signal that a second ask is
+    /// queued before it is cancelled. Nothing in the app reads it.
+    public var waitingCount: Int { waiters.count }
+
     /// Waits for the source kind and takes it; `false` when the task was cancelled while it waited.
     func acquire(_ kind: AIProviderKind, id: UUID) async -> Bool {
         // A ticket is one ask: no marker for it may outlive its acquisition (audit finding, 2026-10-20).

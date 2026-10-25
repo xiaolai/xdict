@@ -53,6 +53,23 @@ import XDictContract
         return (session, provider, fetcher)
     }
 
+    /// **A session whose fetch and provider are the caller's** (audit round 2, 2026-10-25): the hand-off, settings and
+    /// first draw are this factory's, as in every other test; the caller keeps its own fetcher and provider to observe.
+    static func session(
+        settings: MeaningSettings = MeaningSettings(source: .http, model: "m", sendEntryText: true),
+        fetch: @escaping @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
+        presented: @escaping @MainActor () -> (DictId, EntryRef)?,
+        makeProvider: @escaping @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
+        drawn: Bool = true
+    ) -> MeaningSession {
+        let session = MeaningSession(fetchEntryText: fetch, presented: presented, makeProvider: makeProvider)
+        session.settings = settings
+        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.", range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 5, generation: 1)))
+        if drawn { session.drawn(Self.subject, target: (Self.dict, Self.entry)) }
+        return session
+    }
+
     /// Shares the async overload's 10-second budget: at full-suite startup the main actor can stall about 3 seconds,
     /// enough to use up the old 3-second deadline on its own.
     static func waitUntil(_ predicate: @MainActor () -> Bool, timeout: Duration = .seconds(10)) async -> Bool {
@@ -178,18 +195,24 @@ import XDictContract
     }
 
     @Test func escapingTheAskLeavesTheLateAnswerUnshown() async {
-        let provider = StubProvider(answers: [.success(Self.matched)], delay: .milliseconds(300))
-        let (session, _, _) = Self.session(provider: provider)
+        // **The answer really arrives** (audit round 2, 2026-10-25): a provider that throws on cancellation never delivered
+        // the late answer this test claims to reject.
+        let release = Flag()
+        let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
+        let entryText = Self.entryText
+        let session = Self.session(fetch: { _, _, _ in .success(entryText) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in provider })
         session.ask()
         #expect(session.state == .asking)
-        // The provider has the question before Escape, so the cancellation interrupts a call in flight.
-        #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
-                "the provider never got the question")
-        #expect(await provider.questions.count == 1)
+        // **The call is in flight and held** (audit round 3): no delay can let it finish before the cancellation.
+        #expect(await Self.waitUntil { await provider.questions.count == 1 }, "the provider never got the question")
+        let before = session.settled
         session.cancel()
         #expect(session.state == .cancelled)
-        // The provider's answer arrives after the cancellation: it changes nothing.
-        try? await Task.sleep(for: .milliseconds(500))
+        release.set()
+        // The provider's answer arrives after the cancellation and the session's task ends: it changed nothing.
+        #expect(await Self.waitUntil { session.settled > before }, "the late answer never finished")
         #expect(session.state == .cancelled)
         #expect(await provider.questions.count == 1)
     }
@@ -496,7 +519,7 @@ import XDictContract
         #expect(!question.contains("What does the word"), "the shipped default is not also sent")
     }
 
-    @Test func aNewAskDropsTheLastPromptsText() async {
+    @Test func clearingDropsTheLastPromptsText() async {
         let (session, _, _) = Self.session()
         session.ask()
         #expect(await Self.waitUntil { session.state != .asking })
@@ -517,15 +540,23 @@ import XDictContract
     }
 
     @Test func anAskCancelledWhileItWaitsNeverReachesTheSource() async {
-        let provider = StubProvider(answers: [.success(Self.matched)], delay: .milliseconds(150))
-        let (first, _, _) = Self.session(provider: provider)
-        let (second, _, _) = Self.session(provider: provider)
+        let release = Flag()
+        let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
+        let entryText = Self.entryText
+        let first = Self.session(fetch: { _, _, _ in .success(entryText) },
+                                 presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+        let second = Self.session(fetch: { _, _, _ in .success(entryText) },
+                                  presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
         first.ask()
         #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
                 "the provider never got the question")
         second.ask()
+        // **Queued before it is cancelled** (audit round 2, 2026-10-25): a cancel racing the task's start exercised a
+        // different path than the queue's.
+        #expect(await Self.waitUntil { await MeaningQueue.shared.waitingCount == 1 }, "the second ask never queued")
         second.cancel()
         #expect(second.state == .cancelled)
+        release.set()
         #expect(await Self.waitUntil { first.state != .asking })
         #expect(await provider.questions.count == 1, "the cancelled ask never reached the source")
     }
@@ -549,16 +580,8 @@ import XDictContract
 
     /// A session whose fetch the test gates, so the switch can be turned off while the entry is being read.
     static func gatedSession(_ fetcher: GatedFetcher, _ provider: StubProvider) -> MeaningSession {
-        let session = MeaningSession(
-            fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
-            presented: { (Self.dict, Self.entry) },
-            makeProvider: { _ in provider })
-        session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
-        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
-                                    range: NSRange(location: 5, length: 4),
-                                    origin: MeaningOrigin(request: 7, generation: 2)))
-        session.drawn(Self.subject, target: (Self.dict, Self.entry))
-        return session
+        Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+                     presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
     }
 
     @Test func aSwitchTurnedOffWhileTheEntryIsReadSendsNothing() async {
@@ -580,8 +603,8 @@ import XDictContract
         #expect(await MeaningQueue.shared.acquire(.http, id: ticket), "the test could not hold the source")
         session.ask()
         #expect(await Self.waitUntil { await fetcher.calls.count == 1 })
-        // The ask has read the entry and waits for the source's permit.
-        try? await Task.sleep(for: .milliseconds(100))
+        // **The ask is waiting for the source's permit** (audit round 3): observed, not guessed by a sleep.
+        #expect(await Self.waitUntil { await MeaningQueue.shared.waitingCount == 1 }, "the ask never queued")
         session.settings.sendEntryText = false
         await MeaningQueue.shared.release(.http)
         #expect(await Self.waitUntil { session.state != .asking })
@@ -655,7 +678,7 @@ import XDictContract
         #expect(await provider.questions.isEmpty, "selecting a sense sends nothing")
     }
 
-    @Test func askAgainRepeatsTheChosenSenseAndTheSelectionAskIsTheGroundedOne() async {
+    @Test func askAgainRepeatsTheChosenSenseAndTheSelectionAskIsTheGroundedOne() async throws {
         let provider = StubProvider(answers: [.success(Self.explained), .success(Self.doesNotFit), .success(Self.matched)])
         let (session, _, _) = Self.senseSession(provider: provider)
         session.explain()
@@ -665,6 +688,7 @@ import XDictContract
         session.askSelection()
         #expect(await Self.waitUntil { await provider.questions.count == 3 && session.state != .asking })
         let questions = await provider.questions
+        try #require(questions.count == 3, "the three asks did not all reach the source")
         #expect(questions[1].contains("The chosen sense above is complete"), "Ask Again repeated the chosen sense")
         #expect(!questions[2].contains("The chosen sense above is"), "the selection ask is the grounded one")
         #expect(questions[2].contains(Self.entryText.text), "the grounded ask carries the whole entry")
@@ -700,13 +724,20 @@ import XDictContract
     }
 
     @Test func aSelectionCancelsTheAskInFlightAndItsLateAnswerIsNotShown() async {
-        let provider = StubProvider(answers: [.success(Self.explained)], delay: .milliseconds(300))
-        let (session, _, _) = Self.senseSession(provider: provider)
+        let release = Flag()
+        let provider = StubbornProvider(answers: [.success(Self.explained)], release: release)
+        let senseEntryText = Self.senseEntryText
+        let session = Self.session(fetch: { _, _, _ in .success(senseEntryText) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in provider })
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 2, dictionaryName: "Test"))
         session.explain()
         #expect(await Self.waitUntil { await provider.questions.count == 1 })
+        let before = session.settled
         session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
         #expect(session.state == .idle)
-        try? await Task.sleep(for: .milliseconds(500))
+        release.set()
+        #expect(await Self.waitUntil { session.settled > before }, "the late answer never finished")
         #expect(session.state == .idle, "the late answer to the old sense was shown")
         #expect(session.sent == nil)
     }
@@ -760,14 +791,20 @@ import XDictContract
     /// **An early refusal cancels the ask it interrupted** (audit finding, 2026-10-25): the late answer to the old ask
     /// cannot overwrite the reason the refusal gave.
     @Test func aRefusalCancelsTheAskInFlight() async {
-        let provider = StubProvider(answers: [.success(Self.matched)], delay: .milliseconds(300))
-        let (session, _, _) = Self.session(provider: provider)
+        let release = Flag()
+        let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
+        let entryText = Self.entryText
+        let session = Self.session(fetch: { _, _, _ in .success(entryText) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in provider })
         session.ask()
         #expect(await Self.waitUntil { await provider.questions.count == 1 }, "the ask never reached the source")
+        let before = session.settled
         session.settings.sendEntryText = false
         session.explain()
         #expect(session.state == .unavailable(.entryTextOff))
-        try? await Task.sleep(for: .milliseconds(500))
+        release.set()
+        #expect(await Self.waitUntil { session.settled > before }, "the cancelled ask never finished")
         #expect(session.state == .unavailable(.entryTextOff), "the cancelled ask's late answer overwrote the refusal")
     }
 
@@ -789,22 +826,150 @@ import XDictContract
     @Test func clearingTheSenseInvalidatesAComposingPreview() async {
         let fetcher = GatedFetcher(.success(Self.senseEntryText))
         let provider = StubProvider(answers: [.success(Self.explained)])
-        let session = MeaningSession(
-            fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
-            presented: { (Self.dict, Self.entry) },
-            makeProvider: { _ in provider })
-        session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
-        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
-                                    range: NSRange(location: 5, length: 4),
-                                    origin: MeaningOrigin(request: 5, generation: 1)))
-        session.drawn(Self.subject, target: (Self.dict, Self.entry))
+        let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in provider })
         session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 2, dictionaryName: "Test"))
         session.preview()
         #expect(await Self.waitUntil { await fetcher.calls == 1 }, "the preview never read the entry")
+        let before = session.settled
         session.clearSelection()
         await fetcher.open()
-        try? await Task.sleep(for: .milliseconds(100))
+        #expect(await Self.waitUntil { session.settled > before }, "the released preview never finished")
         #expect(session.state == .idle, "the cleared sense's preview appeared")
+    }
+
+    // MARK: - The entry's own senses (plan-companion WI-8)
+
+    /// **The list is the core's projection, verbatim**: ids, labels and each sense's own text, so a row with no label or
+    /// a repeated section still reads as itself.
+    @Test func theSenseListIsTheProjectionsOwn() {
+        let rows = MeaningSession.rows(of: Self.senseEntryText)
+        #expect(rows.map(\.id) == [1, 2])
+        #expect(rows.map(\.label) == ["1", "2"])
+        #expect(rows.map(\.snippet) == ["to keep", "an opinion"])
+        #expect(rows.allSatisfy { $0.whole })
+    }
+
+    /// **The list loads for the answer's own entry**: one fetch, the rows in document order, the target recorded.
+    @Test func theSenseListLoadsForItsEntry() async {
+        let (session, _, fetcher) = Self.session(fetched: .success(Self.senseEntryText))
+        let target = MeaningTarget(dictionary: Self.dict, entry: Self.entry)
+        session.loadSenses(for: target)
+        #expect(await Self.waitUntil { !session.senses.isEmpty })
+        #expect(session.senses.map(\.id) == [1, 2])
+        #expect(session.sensesTarget == target)
+        #expect(await fetcher.calls.count == 1)
+    }
+
+    /// **A row selects its sense and asks about it**, the way the pane's row does: the ask is the chosen-sense question,
+    /// and it sends that sense — never the one that happened to be selected before.
+    @Test func aSenseRowAsksAboutItsOwnSense() async {
+        let (session, provider, _) = Self.senseSession()
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
+        session.explain()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(await provider.questions.count == 1)
+        #expect(session.sent?.sense?.id == 1, "the ask did not carry the row's sense")
+        #expect(session.sent?.mode == .explainSense)
+    }
+
+    /// **A late list for an entry the pane has left is dropped** (Codex refutation B4): loads are generation-guarded, so
+    /// A's slow answer cannot replace B's rows.
+    @Test func aLateSenseListForAnotherEntryIsDropped() async {
+        // **By entry, not by arrival order** (audit round 2, 2026-10-25): the first fetch is proven to have started and is
+        // released only after the second's rows are shown.
+        let other = EntryRef(edition: Self.edition, key: "other", occurrence: 0)
+        let fetcher = EntryGatedFetcher(first: Self.entry, firstText: "from the first", secondText: "from the second")
+        let matched = Self.matched
+        let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+                                   presented: { (Self.dict, Self.entry) },
+                                   makeProvider: { _ in StubProvider(answers: [.success(matched)]) })
+        session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: Self.entry))
+        #expect(await Self.waitUntil { await fetcher.started == [Self.entry] }, "the first fetch never started")
+        session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: other))
+        #expect(await Self.waitUntil { session.senses.first?.snippet == "from the second" })
+        let before = session.sensesSettled
+        await fetcher.openFirst()
+        // **The session's own count says the released fetch was processed** (audit round 3), not the fetcher's return.
+        #expect(await Self.waitUntil { session.sensesSettled > before }, "the released fetch never finished")
+        #expect(session.senses.first?.snippet == "from the second", "a late list for the first entry replaced this one")
+        #expect(session.sensesTarget?.entry == other)
+    }
+
+    /// **A failed read is a failure, not an entry with no senses** (audit round 1, 2026-10-25): the status says so, and
+    /// the retry asks again rather than the failure passing for an empty entry.
+    @Test func aFailedSenseReadIsNotAnEmptyEntry() async {
+        let (session, _, fetcher) = Self.session(fetched: .failure(.wire(.interrupted)))
+        let target = MeaningTarget(dictionary: Self.dict, entry: Self.entry)
+        session.loadSenses(for: target)
+        #expect(await Self.waitUntil { session.sensesStatus == .failed })
+        #expect(session.senses.isEmpty)
+        session.loadSenses(for: target)
+        #expect(await Self.waitUntil { await fetcher.calls.count == 2 }, "the retry did not ask again")
+    }
+
+    /// **An entry with no senses is loaded, not unasked**: the status, not the row count, decides whether the list is
+    /// fetched again (audit round 1, 2026-10-25).
+    @Test func aLoadedEmptySenseListIsNotAskedAgain() async {
+        let empty = EntryText(entry: Self.entry, text: "hold", spans: [], senses: [], style: 13, complete: true,
+                              omittedBytes: 0, cutAt: 4, spansDropped: 0)
+        let (session, _, fetcher) = Self.session(fetched: .success(empty))
+        let target = MeaningTarget(dictionary: Self.dict, entry: Self.entry)
+        session.loadSenses(for: target)
+        #expect(await Self.waitUntil { session.sensesStatus == .loaded })
+        #expect(session.senses.isEmpty)
+        session.loadSenses(for: target)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(await fetcher.calls.count == 1, "a loaded empty list was fetched again")
+    }
+
+    /// **A running ask keeps the source it was started for** (verification round 1, 2026-10-25): a Settings change while
+    /// it runs must not relabel the pane's "Asking …" line, and the frozen source clears when the answer lands.
+    @Test func aRunningAskKeepsItsOwnSource() async {
+        let provider = StubProvider(answers: [.success(Self.matched)], delay: .milliseconds(150))
+        let (session, _, _) = Self.session(provider: provider)
+        session.ask()
+        #expect(session.state == .asking)
+        session.settings.source = .claudeCLI
+        #expect(session.askingSource == .http)
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.askingSource == nil)
+    }
+
+    /// **Ask Again repeats the newest attempt, even one refused before it reached a target**: a refused ask does not
+    /// leave an earlier answer's operation as the one to repeat (audit round 1, 2026-10-25).
+    @Test func askAgainRepeatsTheLatestAttemptNotThePreviousAnswer() async {
+        let (session, provider, _) = Self.senseSession()
+        session.explain()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.sent?.mode == .explainSense)
+        session.settings.source = nil
+        session.ask()
+        #expect(session.state == .unavailable(.noSource))
+        session.settings.source = .http
+        session.askAgain()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.sent?.mode == .grounded, "Ask Again repeated the earlier answer's operation")
+        #expect(await provider.questions.count == 2)
+    }
+
+    /// **The model is frozen at compose time** (Codex refutation, 2026-10-25): an HTTP ask records the model it named, so
+    /// a later Settings change cannot relabel the answer; a CLI source records none, because its provider chooses.
+    @Test func theAskedModelIsFrozenIntoTheSentRecord() async {
+        let (http, _, _) = Self.session(settings: MeaningSettings(source: .http, model: "listed-alpha",
+                                                                  sendEntryText: true))
+        http.ask()
+        #expect(await Self.waitUntil { http.state != .asking })
+        #expect(http.sent?.model == "listed-alpha")
+        http.settings.model = "listed-beta"
+        #expect(http.sent?.model == "listed-alpha", "a later Settings change relabelled the answer")
+
+        let (cli, _, _) = Self.session(settings: MeaningSettings(source: .claudeCLI, model: "ignored",
+                                                                 sendEntryText: true))
+        cli.ask()
+        #expect(await Self.waitUntil { cli.state != .asking })
+        #expect(cli.sent?.model == nil, "a CLI source has no model XDict asked for")
     }
 
     /// **The reader's answer language reaches the question** (audit finding, 2026-10-25): the session composes from the
@@ -881,6 +1046,41 @@ actor Fetcher {
     }
 }
 
+/// **A fetcher that holds its first entry's answer until released** (audit round 2, 2026-10-25): by entry, so the stale
+/// test proves the first fetch started before the second is asked.
+actor EntryGatedFetcher {
+    private(set) var started: [EntryRef] = []
+    private(set) var finished = 0
+    private let first: EntryRef
+    private let firstText: String
+    private let secondText: String
+    private var released = false
+    private var release: CheckedContinuation<Void, Never>?
+
+    init(first: EntryRef, firstText: String, secondText: String) {
+        self.first = first
+        self.firstText = firstText
+        self.secondText = secondText
+    }
+
+    func fetch(_ dict: DictId, _ entry: EntryRef, _ budget: UInt64) async -> Result<EntryText, ClientFailure> {
+        started.append(entry)
+        if entry == first, !released { await withCheckedContinuation { release = $0 } }
+        finished += 1
+        let text = entry == first ? firstText : secondText
+        return .success(EntryText(entry: entry, text: text, spans: [], senses: [
+            Sense(id: 1, start: 0, len: UInt64(text.utf8.count), label: nil, section: nil, parent: nil, whole: true),
+        ], style: 13, complete: true, omittedBytes: 0, cutAt: UInt64(text.utf8.count), spansDropped: 0))
+    }
+
+    func openFirst() {
+        released = true
+        release?.resume()
+        release = nil
+    }
+}
+
+
 /// A service whose answer for `entry_text` changes between calls, to prove Send reuses the previewed bytes.
 actor ChangingFetcher {
     private(set) var calls = 0
@@ -897,6 +1097,35 @@ actor ChangingFetcher {
 }
 
 /// A source that answers with scripted results, after an optional delay that a cancellation interrupts.
+/// **A provider that finishes a call even after it is cancelled** (audit round 2, 2026-10-25): the stub below throws
+/// `.cancelled` when interrupted, so the late-answer tests never delivered the answer they claimed to reject. The sleep
+/// runs in a detached task, which cancellation does not reach.
+actor StubbornProvider: AIProvider {
+    nonisolated let id = AIProviderID(kind: .http)
+    private(set) var questions: [String] = []
+    private let answers: [Result<String, AIProviderError>]
+    private let delay: Duration?
+    /// When set, the answer waits for the test to release it — cancellation does not end the wait (audit round 3).
+    private let release: Flag?
+
+    init(answers: [Result<String, AIProviderError>], delay: Duration? = nil, release: Flag? = nil) {
+        self.answers = answers
+        self.delay = delay
+        self.release = release
+    }
+
+    func answer(to question: String) async throws(AIProviderError) -> String {
+        questions.append(question)
+        let index = min(questions.count - 1, answers.count - 1)
+        if let release {
+            await Task.detached { while !release.isSet { try? await Task.sleep(for: .milliseconds(10)) } }.value
+        } else if let delay {
+            await Task.detached { try? await Task.sleep(for: delay) }.value
+        }
+        return try answers[index].get()
+    }
+}
+
 actor StubProvider: AIProvider {
     nonisolated let id = AIProviderID(kind: .http)
     private(set) var questions: [String] = []
@@ -913,6 +1142,9 @@ actor StubProvider: AIProvider {
 
     func answer(to question: String) async throws(AIProviderError) -> String {
         questions.append(question)
+        // **This call's answer is chosen before it suspends** (audit round 2, 2026-10-25): a later call must not move
+        // which scripted answer an earlier one receives.
+        let index = min(questions.count - 1, answers.count - 1)
         inFlight += 1
         peak = max(peak, inFlight)
         defer { inFlight -= 1 }
@@ -923,7 +1155,6 @@ actor StubProvider: AIProvider {
                 throw .cancelled
             }
         }
-        let index = min(questions.count - 1, answers.count - 1)
         return try answers[index].get()
     }
 }

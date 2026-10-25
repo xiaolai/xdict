@@ -125,7 +125,8 @@ struct ExamplesModelTests {
         let model = ExamplesModel(backend: backend, window: "test")
         model.update(query: "居然", handles: [handle], unavailable: [handle])
         #expect(await eventually { !model.notReady.isEmpty })
-        #expect(model.preparationFailed, "the library's failure is carried into the query, not waited for")
+        #expect(model.failedToPrepare == [handle], "the library's failure is carried into the query, not waited for")
+        #expect(model.preparing.isEmpty)
     }
 
     @Test func every_completed_answer_advances_the_revision() async {
@@ -145,7 +146,7 @@ struct ExamplesModelTests {
         model.update(query: "居然", handles: [handle])
         #expect(await eventually { !model.notReady.isEmpty })
         model.buildStateChanged(ready: [], unavailable: [handle])
-        #expect(model.preparationFailed)
+        #expect(model.failedToPrepare == [handle])
         #expect(model.preparing.isEmpty)
     }
 

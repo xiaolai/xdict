@@ -83,6 +83,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     private var entryBelowPane: NSLayoutConstraint?
     private var entryBelowFind: NSLayoutConstraint?
 
+    /// **Every presentation the window starts**, from `show` or `showPage` (audit round 2, 2026-10-25): a call that
+    /// resumes after a newer one began draws nothing — two presentations of one view could otherwise interleave across
+    /// `compileRuleList`, and the older one could finish last.
+    private var showGeneration = 0
     /// Why nothing is rendered, while that is so.
     public private(set) var refusal: EntryRefusal?
     /// The consent prompt on screen, if one is: the E2E stage clicks its buttons as a reader would.
@@ -191,8 +195,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     @discardableResult
     public func show(_ reference: EntryReference, from content: any EntryContent, landing: EntryLanding = .top) async
         -> Bool {
+        showGeneration += 1
+        let mine = showGeneration
         _ = view
         await compileRuleList()
+        // **A newer presentation owns the view now**: this one's entry is not the one the window asked for last.
+        guard mine == showGeneration else { return false }
         closePage()
         if let pane, pane.binding != content.binding || pane.closed {
             pane.close()
@@ -225,6 +233,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         pane.setZoom(environment.preferences.zoom())
         pane.setFrame(currentFrame(for: pane.binding.dictionary))
         let shown = await pane.show(reference, landing: landing)
+        // **A superseded call says nothing about the current presentation** (audit round 3, 2026-10-25): a newer show may
+        // own the pane by now, and its entry is not this call's failure.
+        guard mine == showGeneration else { return false }
         if !shown, self.pane === pane, pane.reference != reference {
             say(EntrySentences.entryFailed)
         }
@@ -240,8 +251,12 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// whole page. Returns whether the page was handed to WebKit.
     @discardableResult
     public func showPage(_ items: [EntryPageItem], primary: UUID?, landing: EntryLanding = .top) async -> Bool {
+        showGeneration += 1
+        let mine = showGeneration
         _ = view
         await compileRuleList()
+        // A page superseded while the rules compiled draws nothing; the newer presentation owns the view.
+        guard mine == showGeneration else { return false }
         if let pane {
             pane.close()
             self.pane = nil
@@ -377,6 +392,9 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     /// Closes the web view: nothing in flight is answered after this.
     public func closeEntry() {
+        // **A presentation still awaiting its rules is superseded by the close** (audit round 3, 2026-10-25): it must not
+        // recreate the entry the reader just closed.
+        showGeneration += 1
         pane?.close()
         pane = nil
         closePage()
@@ -545,6 +563,13 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     /// The entry's selected text, or nil when nothing is selected.
     public func selectedText() async -> String? { await focusPane?.selectedText() }
+
+    /// **The focused frame's selected text, with the item that frame shows** (audit round 3, 2026-10-25): the selection and
+    /// its dictionary must come from one frame — `activeItem` is the last link's frame, not necessarily the focused one.
+    public func selectedTextAndFrame() async -> (text: String?, item: UUID?)? {
+        guard let pane = focusPane else { return nil }
+        return (await pane.selectedText(), page?.sections.first { $0.pane === pane }?.id)
+    }
 
     /// Edit ▸ Find ▸ Jump to Selection (⌘J, P33): the entry scrolled to its selection.
     public func jumpToSelection() {

@@ -207,15 +207,30 @@ public final class AISettingsModel {
         status = found
     }
 
-    /// **What a live check and a key probe depend on**, as one question: the source, its address, the service the
-    /// source actually uses, its model, and the key it actually sends. Any other setting moving (a prompt edit, the
-    /// switch) leaves their answers true. **The effective service, not the stored id** (verification finding,
-    /// 2026-10-25): `StatusKey` decides when to start a check from `MeaningProviders.profile`, so a stored profile the
-    /// chosen row does not use must not make a check stale — the guard would drop its result and nothing would ask again.
+    /// **What a live check and a key probe depend on**, as one value: the source, its address, the service the source
+    /// actually uses, its model, and the key it actually sends. The view's `task(id:)` and the stale-result guard both
+    /// read this one definition (audit round 1, 2026-10-25), so a change in what they read cannot make one restart a
+    /// check the other keeps, or discard a result nothing asks again for. Any other setting moving (a prompt edit, the
+    /// switch) leaves their answers true.
+    ///
+    /// **The effective service and key, not the stored id** (verification finding, 2026-10-25): a stored profile the
+    /// chosen row does not use, or a key the row does not send, must not make a check stale.
+    struct SourceIdentity: Hashable {
+        let source: AIProviderKind?
+        let endpoint: String
+        let profile: String
+        let model: String
+        let key: String
+    }
+
+    static func sourceIdentity(_ settings: MeaningSettings) -> SourceIdentity {
+        SourceIdentity(source: settings.source, endpoint: settings.endpoint?.absoluteString ?? "",
+                       profile: MeaningProviders.profile(settings).id, model: settings.model,
+                       key: MeaningProviders.apiKey(settings) ?? "")
+    }
+
     private static func sameSource(_ captured: MeaningSettings, _ now: MeaningSettings) -> Bool {
-        now.source == captured.source && now.endpoint == captured.endpoint && now.model == captured.model
-            && MeaningProviders.profile(now).id == MeaningProviders.profile(captured).id
-            && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
+        sourceIdentity(captured) == sourceIdentity(now)
     }
 
     // MARK: - The model list (2026-10-25)
@@ -252,6 +267,13 @@ public final class AISettingsModel {
                 models = .idle
                 modelsIdentity = nil
             }
+            return
+        }
+        // **A cancelled load publishes nothing** (audit round 2, 2026-10-25): a fetch that ignores cancellation must not
+        // land after the pane's own cancellation, and neither must one whose address draft is no longer an address.
+        guard !Task.isCancelled, !endpointInvalid else {
+            models = .idle
+            modelsIdentity = nil
             return
         }
         switch result {
@@ -351,37 +373,26 @@ public final class AISettingsModel {
             keyState = .failed(.unreachable)
             return
         }
+        let failure: AIProviderError?
         do {
             let provider = try HTTPProvider(configuration: MeaningProviders.httpConfiguration(settings, endpoint: endpoint))
             _ = try await provider.probe()
-            guard mine == keyGeneration else { return }
-            // **A cancelled probe is the pane's choice, not the key's verdict**, and a result for a configuration the
-            // reader has since changed proves nothing (audit findings of 2026-10-20 and 2026-10-25).
-            guard !Task.isCancelled else {
-                restoreKeyState()
-                return
-            }
-            guard Self.sameSource(settings, preferences.settings) else {
-                restoreKeyState()
-                return
-            }
-            keyState = .stored
+            failure = nil
         } catch {
-            guard mine == keyGeneration else { return }
             // The probe's failures are typed `AIProviderError` already: a raw `CancellationError` cannot reach here.
-            guard !Task.isCancelled, error != .cancelled else {
-                restoreKeyState()
-                return
-            }
-            // The failure belongs to the address, model and effective key it was sent with — source selection included,
-            // which is what turns `usesKey` on or off (verification finding, 2026-10-20).
-            guard Self.sameSource(settings, preferences.settings) else {
-                restoreKeyState()
-                return
-            }
-            keyVerdict = settings
-            keyState = .failed(error)
+            failure = error
         }
+        guard mine == keyGeneration else { return }
+        // **One completion rule for a success and a failure** (audit round 2, 2026-10-25): a cancelled probe is the
+        // pane's choice, not the key's verdict; a result for an address the field no longer holds, or a configuration
+        // the reader has since changed, proves nothing (audit findings of 2026-10-20, 2026-10-25).
+        guard !Task.isCancelled, !endpointInvalid, failure != .cancelled,
+              Self.sameSource(settings, preferences.settings) else {
+            restoreKeyState()
+            return
+        }
+        if failure != nil { keyVerdict = settings }
+        keyState = failure.map { .failed($0) } ?? .stored
     }
 
     /// The stored key outlives a stale probe; its four-state row shows what is still true.
@@ -393,19 +404,24 @@ public final class AISettingsModel {
 
     /// **Sign In with Codex…** (UI33): one login at a time, owned here so the pane can cancel it. Cancelling ends the
     /// login's process group (`CLIProcess`) and is not the source's failure.
-    public func startSignIn() {
-        guard signInTask == nil else { return }
+    /// **The returned task is the login's own end**, cancellation included (audit round 2, 2026-10-25): a caller that
+    /// must know the login is over — a test, a follow-up — awaits it instead of sleeping to guess. The pane ignores it.
+    @discardableResult
+    public func startSignIn() -> Task<Void, Never>? {
+        guard signInTask == nil else { return signInTask }
         signInGeneration += 1
         let mine = signInGeneration
         signingIn = true
         loginLines = []
-        signInTask = Task { [weak self] in
+        let task = Task { [weak self] in
             await self?.signIn(mine)
             // A sign-in cancelled and started again meanwhile is the new one's to finish.
             guard let self, mine == self.signInGeneration else { return }
             self.signInTask = nil
             self.signingIn = false
         }
+        signInTask = task
+        return task
     }
 
     /// **Cancel** — the button, and leaving the pane (`onDisappear`): a pending sign-in does not outlive the place that
@@ -450,6 +466,9 @@ public final class AISettingsModel {
             // A cancelled login is the reader's choice, not the source's failure; a superseded one says nothing.
             guard mine == signInGeneration, !Task.isCancelled, preferences.settings.source == .codexCLI,
                   !(error is CancellationError), (error as? AIProviderError) != .cancelled else { return }
+            // **A login's failure outranks a status check already running** (audit round 2, 2026-10-25): that check's
+            // generation is older than this verdict, and its guard must not let it overwrite the failure.
+            statusGeneration += 1
             status = .failed((error as? AIProviderError) ?? .framework("codex"))
         }
     }

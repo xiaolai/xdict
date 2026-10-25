@@ -27,6 +27,7 @@ radius = { kind = "length", swift = "Radius", doc = "Corner radii." }
 line = { kind = "length", swift = "Line", doc = "Rule and outline widths." }
 size = { kind = "size", swift = "Size", doc = "Fixed two-dimensional sizes." }
 text = { kind = "font", swift = "TextRole", doc = "Text roles: a system text style where one fits, else a size Apple measured." }
+reading = { kind = "number", swift = "Reading", doc = "The reading text's own metrics: what the companion pane shares with the entry so its prose reads as the dictionary's (ADR-0021 d.14)." }
 colour = { kind = "colour", swift = "Colour", doc = "Colours: the system's semantic colours first; a literal only where Apple's page was measured." }
 entryText = { kind = "string", swift = "EntryText", doc = "Values the entry view writes into CSS, SVG or a script as text: the reading inset, glyph strokes, the blocked image's placeholder, the popover glass measured." }
 divider = { kind = "length", swift = "PageDivider", doc = "The divider between dictionaries on the All page (P15) and its compact form in the lookup popover (P41)." }
@@ -189,6 +190,12 @@ panelTitle = { size = 20, source = "P41" }
 panelFooter = { size = 13, weight = "semibold", source = "P41" }
 panelDictionaryName = { size = 13, weight = "semibold", why = "A dictionary's name above its entry in the lookup popover: the footer rows' size, well under the 20 pt headword (owner, 2026-10-18: a smaller font)." }
 tableCell = { size = 12, why = "Text in the Settings table's cells and a printed section's name: a step under the body (owner, 2026-10-18: kept at 12)." }
+readingBody = { size = 16, design = "serif", source = "P18" }
+readingBodyEmphasized = { size = 16, weight = "semibold", design = "serif", why = "The matched run inside an example pair: the reading face at the selected row's weight, so the match reads as emphasis, not as another size (owner's decision 5, 2026-10-18)." }
+
+[reading]
+# The entry's own line height; the companion's reading text reads at the same target (ADR-0021 d.14).
+leading = { value = 1.4, source = "P18" }
 
 [colour]
 shadow = { system = "shadowColor" }

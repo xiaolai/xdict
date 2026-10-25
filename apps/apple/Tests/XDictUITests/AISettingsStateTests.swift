@@ -21,13 +21,38 @@ struct AISettingsStateTests {
         return preferences
     }
 
+    // MARK: - One identity, one shell word (audit round 1, 2026-10-25)
+
+    /// **The check's identity is exactly what the check reads**: a key the local row never sends does not restart it,
+    /// and the model it names does — the view's task and the stale-result guard share this one value.
+    @Test func theCheckIdentityIsTheEffectiveConfiguration() throws {
+        let preferences = try preferences(cloud: false)
+        preferences.setModel("local-a")
+        let first = AISettingsModel.sourceIdentity(preferences.settings)
+        try preferences.setKey("unused-local-key")
+        #expect(AISettingsModel.sourceIdentity(preferences.settings) == first,
+                "a key the local row never sends restarted the check")
+        preferences.setModel("local-b")
+        #expect(AISettingsModel.sourceIdentity(preferences.settings) != first)
+    }
+
+    /// **The sign-in command quotes its folder as one shell word**: `$`, a backtick and `"` stay literal after a paste,
+    /// and an apostrophe is closed, escaped and reopened.
+    @Test func theSignInCommandQuotesItsFolderAsOneShellWord() {
+        #expect(AISettings.shellQuoted("/Users/plain/Library") == "'/Users/plain/Library'")
+        #expect(AISettings.shellQuoted("/Users/a b/$HOME/`x`/\"q\"") == "'/Users/a b/$HOME/`x`/\"q\"'")
+        #expect(AISettings.shellQuoted("/Users/o'brien") == "'/Users/o'\\''brien'")
+    }
+
     // MARK: - The source switch
 
     /// **A sign-in belongs to Codex** (audit finding, 2026-10-25): choosing another source ends it, and its failure is not
     /// written as the new source's status.
     @Test func switchingTheSourceEndsTheSignInAndItsFailure() async throws {
         let gate = Flag()
+        let started = Flag()
         let model = AISettingsModel(preferences: try preferences(), login: { _ in
+            started.set()
             while !gate.isSet {
                 if Task.isCancelled { throw AIProviderError.cancelled }
                 try? await Task.sleep(for: .milliseconds(10))
@@ -38,12 +63,16 @@ struct AISettingsStateTests {
         // A published status first, so "the failure did not land" is distinguishable from "nothing ever ran".
         await model.refreshStatus()
         #expect(model.status == .ready("codex"))
-        model.startSignIn()
+        let login = model.startSignIn()
         #expect(model.signingIn)
+        // **The login is running before the source moves** (audit round 2, 2026-10-25): a switch racing the task's start
+        // tested nothing.
+        #expect(await eventually(2) { started.isSet }, "the sign-in never started")
         model.select(.appleOnDevice)
         #expect(!model.signingIn, "the sign-in outlived the source")
         gate.set()
-        try await Task.sleep(for: .milliseconds(100))
+        // The login's own end, not a sleep: its failure is decided by the time this returns.
+        await login?.value
         #expect(model.status == .ready("codex"), "the old sign-in's failure landed on the new source")
     }
 
@@ -64,7 +93,9 @@ struct AISettingsStateTests {
         })
         defer { gate.set() }
         let first = Task { await model.refreshStatus() }
-        #expect(await eventually(2) { started.isSet }, "the first check never ran")
+        // **A check that never started fails here, not on the gate** (audit round 2, 2026-10-25): `#expect` continues, and
+        // the second call would then block on the first one's gate forever.
+        try #require(await eventually(2) { started.isSet }, "the first check never ran")
         await model.refreshStatus()
         gate.set()
         await first.value
@@ -73,13 +104,22 @@ struct AISettingsStateTests {
 
     /// **A check the pane cancelled cannot publish either**: the result it was holding belongs to no pane.
     @Test func aCancelledStatusCheckDoesNotPublish() async throws {
+        let entered = Flag()
+        let release = Flag()
+        // **The provider is released even when the start check throws** (audit round 3, 2026-10-25): otherwise a failed
+        // prerequisite leaves an unstructured task polling behind the suite.
+        defer { release.set() }
         let model = AISettingsModel(preferences: try preferences(), checkStatus: { _ in
-            try? await Task.sleep(for: .milliseconds(50))
+            // **Cancellation lands mid-check by construction** (audit round 2, 2026-10-25): the provider proves it began
+            // and then waits, so no sleep races a delay.
+            entered.set()
+            while !release.isSet { try? await Task.sleep(for: .milliseconds(10)) }
             return .ready("from a cancelled check")
         })
         let task = Task { await model.refreshStatus() }
-        try await Task.sleep(for: .milliseconds(10))
+        try #require(await eventually(2) { entered.isSet }, "the check never began")
         task.cancel()
+        release.set()
         await task.value
         #expect(model.status != .ready("from a cancelled check"), "a cancelled check published its result")
         #expect(model.status == .checking, "the pane is left where the cancelled check began")

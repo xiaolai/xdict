@@ -39,8 +39,10 @@ public final class ExamplesModel {
     /// The dictionaries still preparing, which are not the ones whose build failed.
     public var preparing: [DictId] { notReady.filter { !unavailable.contains($0) } }
 
-    /// A dictionary the section waited for has failed to build.
-    public var preparationFailed: Bool { !notReady.isEmpty && preparing.isEmpty }
+    /// **The unready dictionaries whose build failed this session** (audit round 2, 2026-10-25): a failure beside a
+    /// dictionary still building is a failure to report, not just a build to wait for.
+    public var failedToPrepare: [DictId] { notReady.filter { unavailable.contains($0) } }
+
 
     /// The page the pane asks for (ADR-0031 d.9).
     public static let page: UInt32 = 100
