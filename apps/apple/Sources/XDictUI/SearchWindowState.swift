@@ -30,6 +30,9 @@ public final class SearchWindowState {
     /// now (plan-capture WI-4 rule 3): a stale document finishing in the gap before a newer lookup's entry request
     /// acknowledged the newer term `shown`.
     @ObservationIgnored private var presentedEntry = PresentedEntry()
+    /// **Which phrase ask this window is on** (audit round 1, 2026-10-26): a newer tap supersedes an older one still
+    /// waiting for its lookup, so the older never adopts or asks.
+    @ObservationIgnored private var phraseAskSerial = 0
 
     /// Whether the entry view was asked to show the lookup the model shows now — the identity a finished document's
     /// acknowledgement rests on (both the lookup and its shown entry: while a newer lookup awaits its first result the
@@ -245,8 +248,20 @@ public final class SearchWindowState {
         guard let held = meaning.held, held.phrase == nil,
               let span = PhrasesModel.span(candidate, in: held.sentence),
               let source = source(for: candidate.dict) else { return }
+        // **The presentation and the ask this tap belongs to** (audit round 1, 2026-10-26): the lookup is awaited, and
+        // a newer capture, a navigation or another phrase ask in the meantime must not have its sentence replaced by
+        // this one — two asks on one handoff must not both land.
+        phraseAskSerial += 1
+        let ask = phraseAskSerial
+        let presentation = meaning.handoffToken
+        let lookup = model.lookup?.serial
         let options = LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil)
         let answer = await backend.request(.lookup(query: candidate.phrase, dicts: [candidate.dict], options: options))
+        guard phraseAskSerial == ask, model.lookup?.serial == lookup, meaning.handoffToken == presentation,
+              let now = meaning.held, now.phrase == nil,
+              now.term == held.term, now.sentence == held.sentence, now.range == held.range,
+              self.source(for: candidate.dict) != nil
+        else { return }
         guard case .success(let delivered) = answer, case .page(let page) = delivered.answer, let hit = page.hits.first
         else { return }
         let handoff = MeaningHandoff(term: String(held.sentence[span]), sentence: held.sentence,
