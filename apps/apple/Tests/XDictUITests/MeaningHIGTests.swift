@@ -32,9 +32,10 @@ struct MeaningHIGTests {
         #expect(shown?.questionContext != other)
     }
 
-    /// **A newer capture does not relabel the request already composed** (audit round 3, 2026-10-25): the session's live
-    /// context is a second sentence, and the presentation still shows the request's own.
-    @Test func aNewerCaptureDoesNotRelabelTheRequestShown() async throws {
+    /// **A presenter reads the request it is given, not the session's live capture** (audit rounds 3 and 4, 2026-10-25): the
+    /// UI's own path from a capture to the pane is covered by `MeaningSessionTests` and the window's tests, so this one holds
+    /// the presenter's rule: the frozen request's context, with a second sentence held meanwhile.
+    @Test func thePresenterKeepsTheRequestsOwnContextWhenTheCaptureMoves() async throws {
         let (session, _, _) = Base.session()
         session.ask()
         #expect(await Base.waitUntil { session.state != .asking })
@@ -48,6 +49,20 @@ struct MeaningHIGTests {
         #expect(shown.questionContext == context)
         #expect(shown.questionContext?.sentence == "They hold that view.")
         #expect(session.held?.sentence == "They run daily.", "the newer capture was not the live context")
+    }
+
+    /// **A newer capture clears the answer built from the old one** (audit round 4, 2026-10-25): the pane never shows the
+    /// old sentence's answer beside the new sentence, and the presenter has nothing left to present.
+    @Test func aNewerCaptureClearsTheAnswer() async {
+        let (session, _, _) = Base.session()
+        session.ask()
+        #expect(await Base.waitUntil { session.state != .asking })
+        #expect(session.sent != nil)
+        session.hold(MeaningHandoff(term: "run", sentence: "They run daily.", range: NSRange(location: 5, length: 3),
+                                    origin: MeaningOrigin(request: 9, generation: 4)))
+        #expect(session.sent == nil, "the old answer's sent record survived the new sentence")
+        #expect(session.state == .idle, "the old answer stayed on screen under the new sentence")
+        #expect(MeaningPresenter.present(session.state, settings: Self.settings, sent: session.sent) == nil)
     }
 
     @Test func aPreviewShowsTheSentenceItWouldSend() async {
@@ -94,8 +109,14 @@ struct MeaningHIGTests {
 
     // MARK: - UI23: an incidental sense click keeps a finished answer
 
-    @Test func aFinishedAnswerSurvivesANewSelectionLabelledWithItsOwnSense() async {
-        let (session, provider, _) = Base.senseSession()
+    @Test func aFinishedAnswerSurvivesANewSelectionLabelledWithItsOwnSense() async throws {
+        // **Two answers, told apart** (audit round 4, 2026-10-25): the default stub repeated the sense-2 response, so a stale
+        // sense-2 prompt would have passed.
+        let provider = StubProvider(answers: [
+            .success(#"{"outcome":"explained","quotes":["an opinion"],"explanation":"The second sense."}"#),
+            .success(#"{"outcome":"explained","quotes":["to keep"],"explanation":"The first sense."}"#),
+        ])
+        let (session, _, _) = Base.senseSession(provider: provider)
         session.explain()
         #expect(await Base.waitUntil { session.state != .asking })
         guard case .answer(let answer, let mode) = session.state else {
@@ -123,7 +144,14 @@ struct MeaningHIGTests {
         session.explain()
         #expect(await Base.waitUntil { session.state != .asking && session.sent?.sense?.id == 1 },
                 "the next explain did not ask about the selection")
-        #expect(await provider.questions.count == 2)
+        let questions = await provider.questions
+        try #require(questions.count == 2)
+        #expect(questions[1].contains("to keep"), "the second question did not carry the new selection's sense")
+        guard case .answer(let answer, _) = session.state else {
+            Issue.record("the second explain did not answer: \(session.state)")
+            return
+        }
+        #expect(answer.explanation == "The first sense.")
     }
 
     @Test func clearingTheChosenSenseKeepsTheAnswer() async {

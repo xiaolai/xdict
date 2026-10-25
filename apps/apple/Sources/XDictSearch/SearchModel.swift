@@ -363,10 +363,15 @@ public final class SearchModel {
         }
     }
 
+    /// **The window's one notice that the scope changed** (audit round 4, 2026-10-25): the picker, the Search menu and
+    /// the keyboard all come through `setScope`, and the window's presentation follows every one of them.
+    public var scopeDidChange: (() -> Void)?
+
     /// The reader's scope (Q1). A typed word's lookup asks the dictionaries it adds; a link's keeps its own.
     public func setScope(_ newScope: SearchScope) {
         guard newScope != scope else { return }
         scope = newScope
+        scopeDidChange?()
         guard let current = lookup, current.mode == .reader else { return }
         lookup = Lookup(query: current.query, mode: current.mode, scope: newScope, serial: current.serial)
         trail.updateCurrent { $0.scope = newScope }

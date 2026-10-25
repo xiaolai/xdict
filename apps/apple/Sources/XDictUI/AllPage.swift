@@ -13,13 +13,18 @@ public enum AllPage {
         scope == .all && mode == .reader
     }
 
-    public static func results(sections: [ResultSection], shown: ResultID, headword: String?) -> [ResultID] {
+    /// `shownIsCurrent` says the shown result belongs to the lookup this page is for (audit round 4, 2026-10-25): a result
+    /// left over from the previous lookup is not that dictionary's frame even when its section already answered.
+    public static func results(sections: [ResultSection], shown: ResultID, headword: String?,
+                               shownIsCurrent: Bool) -> [ResultID] {
         sections.compactMap { section -> ResultID? in
-            // **The shown dictionary obeys its own status too** (audit round 3, 2026-10-25): `SearchModel.begin()` can
-            // keep a previous lookup's shown result while its section is searching or has nothing, and that frame must
-            // not appear on the new page.
             if section.id == shown.dictionary {
+                // **The shown dictionary obeys its own status too** (audit round 3): a searching or empty section has no
+                // frame.
                 guard case .results = section.status else { return nil }
+                guard shownIsCurrent else {
+                    return hit(in: section, headword: nil).map { ResultID(dictionary: section.id, entry: $0.entry) }
+                }
                 return shown
             }
             guard let hit = hit(in: section, headword: headword) else { return nil }

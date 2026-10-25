@@ -31,7 +31,7 @@ struct AllPageTests {
             Self.section(d, Self.found("Apple", "apple")),
         ]
         let shown = ResultID(dictionary: a, entry: Self.hit("apple").entry)
-        let page = AllPage.results(sections: sections, shown: shown, headword: "apple")
+        let page = AllPage.results(sections: sections, shown: shown, headword: "apple", shownIsCurrent: true)
         #expect(page.map(\.dictionary) == [a, d], "a dictionary without the word, or still searching, has no frame")
         #expect(page.first == shown)
         #expect(page.last?.entry.key == "apple", "the headword's own spelling, not merely the first hit")
@@ -41,7 +41,7 @@ struct AllPageTests {
         let (a, b) = (UUID(), UUID())
         let sections = [Self.section(a, Self.found("apple")), Self.section(b, Self.found("apple", "Apple"))]
         let shown = ResultID(dictionary: b, entry: Self.hit("Apple").entry)
-        let page = AllPage.results(sections: sections, shown: shown, headword: "Apple")
+        let page = AllPage.results(sections: sections, shown: shown, headword: "Apple", shownIsCurrent: true)
         #expect(page.map(\.dictionary) == [a, b], "the reader's order, not the shown one first")
         #expect(page[1] == shown)
         #expect(page[0].entry.key == "apple", "no exact spelling there: its first hit")

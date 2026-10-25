@@ -496,6 +496,9 @@ public final class MeaningSession {
             cancel()
         } else if runningOperation?.mode == .explainSense {
             abandon()
+            // **The request being abandoned is not this pane's any more** (audit round 4, 2026-10-25): its sent record
+            // goes with it, so the pane does not show a cancelled request beside "No Answer Yet".
+            dropEvidence()
             state = .idle
         }
         selection = nil
@@ -609,21 +612,25 @@ public final class MeaningSession {
     /// with the switch off, the row says so and nothing is sent.
     public func explain() {
         let chosen = settingsProvider?() ?? settings
-        // **An early refusal ends the earlier work too**: otherwise its late answer would overwrite the reason given here,
-        // and the previous attempt's prompt would stay attached to a request that never left (audit finding, 2026-10-25).
-        abandon()
-        dropEvidence()
         guard chosen.sendEntryText else {
-            lastOperation = nil
-            state = .unavailable(.entryTextOff)
+            refuse(.entryTextOff)
             return
         }
         guard let selection else {
-            lastOperation = nil
-            state = .unavailable(.noSense)
+            refuse(.noSense)
             return
         }
+        // The successful path's cleanup belongs to `ask(operation:)` alone (audit round 4, 2026-10-25).
         ask(operation: Operation(mode: .explainSense, selection: selection, target: nil))
+    }
+
+    /// **An early refusal**: the earlier work ends, the evidence and retry context go, and the reason is shown — the same
+    /// steps on every path that returns before an ask runs (audit round 4).
+    private func refuse(_ reason: Unavailable) {
+        abandon()
+        dropEvidence()
+        lastOperation = nil
+        state = .unavailable(reason)
     }
 
     /// **Ask Again repeats the operation that produced what is shown**: its mode and its chosen sense, not the switch
@@ -646,11 +653,8 @@ public final class MeaningSession {
         // made after it must not move the follow-up to another entry. A caller with no answer shown falls back to the
         // selection. Read before the abandonment clears the evidence it comes from.
         let target = sent?.target ?? selection.map { MeaningTarget(dictionary: $0.dictionary, entry: $0.entry) }
-        abandon()
-        dropEvidence()
         guard chosen.sendEntryText else {
-            lastOperation = nil
-            state = .unavailable(.entryTextOff)
+            refuse(.entryTextOff)
             return
         }
         ask(operation: Operation(mode: .grounded, selection: nil, target: target))
@@ -727,7 +731,7 @@ public final class MeaningSession {
         let recheck = Self.consentReader(self)
         let name = dictionaryName(for: operation, target: target)
         running = Task { [weak self] in
-            let outcome = await Self.perform(handoff: handoff, mode: operation.mode, target: target,
+            let outcome = await Self.composeAndSend(handoff: handoff, mode: operation.mode, target: target,
                                              selection: operation.selection, dictionaryName: name, settings: chosen,
                                              fetchEntryText: fetchEntryText, makeProvider: makeProvider,
                                              recheck: recheck)
@@ -928,14 +932,7 @@ public final class MeaningSession {
         // **A sense load still running belongs to the answer being dropped** (verification round 3, 2026-10-25): its rows
         // may arrive after a new ask, so it is cancelled and its state reset. The pane's task keys on the sent record, so
         // the next answer loads this entry's rows again even when the target is unchanged.
-        if sensesStatus == .loading {
-            sensesGeneration += 1
-            sensesTask?.cancel()
-            sensesTask = nil
-            senses = []
-            sensesTarget = nil
-            sensesStatus = nil
-        }
+        if sensesStatus == .loading { clearSenses() }
     }
 
     /// What composition produced: a failure state, the request as it would be sent, or both (a failure after composing
@@ -1091,10 +1088,9 @@ public final class MeaningSession {
         return result
     }
 
-    /// **The second half of an ask, for a preview's Send**: the composed text goes to the source as it was shown and is
-    /// validated against the entry it was composed from.
-    /// One ask, apart from the session's state so cancellation is decided by `generation` alone.
-    private nonisolated static func perform(
+    /// **A direct ask's composition and send**, apart from the session's state so cancellation is decided by `generation`
+    /// alone. The preview's own Send is `sendPreview()`.
+    private nonisolated static func composeAndSend(
         handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
         dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,

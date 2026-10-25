@@ -21,6 +21,8 @@ public struct MeaningRequestFacts: Equatable, Sendable {
     public let questionContext: MeaningContext?
     public let evidenceSource: String?
     public let evidenceTarget: MeaningTarget?
+    /// The model the request named, when it named one: the note's provenance carries it (audit round 4).
+    public let model: String?
 
     /// The request's own source when it has one: switching sources in Settings must not relabel an old answer. **The
     /// entry's and the sense's cuts are two facts** (contract 3, §4a): a whole entry can hold a partial sense.
@@ -32,12 +34,13 @@ public struct MeaningRequestFacts: Equatable, Sendable {
         questionContext = sent?.questionContext
         evidenceSource = sent?.target == nil ? nil : sent?.dictionaryName
         evidenceTarget = sent?.target
+        model = sent?.model
     }
 
     /// A value a test or a caller builds by hand.
     public init(source: LocalizedStringResource? = nil, chosenSense: AISense? = nil, dictionaryName: String? = nil,
                 senseCoverage: LocalizedStringResource? = nil, questionContext: MeaningContext? = nil,
-                evidenceSource: String? = nil, evidenceTarget: MeaningTarget? = nil) {
+                evidenceSource: String? = nil, evidenceTarget: MeaningTarget? = nil, model: String? = nil) {
         self.source = source
         self.chosenSense = chosenSense
         self.dictionaryName = dictionaryName
@@ -45,6 +48,7 @@ public struct MeaningRequestFacts: Equatable, Sendable {
         self.questionContext = questionContext
         self.evidenceSource = evidenceSource
         self.evidenceTarget = evidenceTarget
+        self.model = model
     }
 }
 
@@ -88,10 +92,16 @@ public struct MeaningPresentation: Equatable, Sendable {
 
     /// **What Copy Answer puts on the pasteboard** (plan-companion WI-10): the explanation, then each quote it rests on,
     /// separated by a blank line — text, never markup, and nothing the pane does not show.
-    public var copyText: String {
+    public var copyText: String { answerText(separator: "\n\n") }
+
+    /// The note's opening: the explanation, then each quote on its own line (audit round 4, 2026-10-25: one rule shared with
+    /// Copy Answer, so the two cannot format the same answer differently).
+    var noteBody: String { answerText(separator: "\n") }
+
+    private func answerText(separator: String) -> String {
         ([explanation] + quotes.map { "“\($0)”" })
             .filter { !$0.isEmpty }
-            .joined(separator: "\n\n")
+            .joined(separator: separator)
     }
 
     public init(facts: MeaningRequestFacts, grounding: Grounding, outcome: LocalizedStringResource?,
@@ -154,19 +164,19 @@ public enum MeaningPresenter {
 
     /// **The note an explicit save writes** (plan-companion WI-9; owner, 2026-10-25): the explanation, each quote on its
     /// own line in the pane's quotation marks, then a provenance line naming the source, the model when one was named, and
-    /// that a model wrote the wording. The sentence is never part of it; the day is ISO 8601 in UTC, so a test can read it.
-    public static func noteText(presentation: MeaningPresentation, source: LocalizedStringResource?, model: String?,
-                                date: Date) -> String {
-        // The day is the UTC calendar day, built from components: no format style, no locale, no zone surprises.
+    /// that a model wrote the wording. **Everything comes from the presentation's frozen facts** (audit round 4): a request
+    /// started while a save waits cannot pair its source with the old explanation. The sentence is never part of it; the day
+    /// is the UTC calendar day, so a test can read it.
+    public static func noteText(presentation: MeaningPresentation, date: Date,
+                                translate: (LocalizedStringResource) -> String = { String(localized: $0) }) -> String {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-        let sourceName = source.map { String(localized: $0) } ?? String(localized: MeaningSentences.anAISource)
-        let provenance = String(localized: MeaningSentences.noteProvenance(source: sourceName, model: model, day: day))
-        return ([presentation.explanation] + presentation.quotes.map { "“\($0)”" } + [provenance])
-            .filter { !$0.isEmpty }
-            .joined(separator: "\n")
+        let source = presentation.facts.source ?? MeaningSentences.anAISource
+        let provenance = translate(MeaningSentences.noteProvenance(source: translate(source),
+                                                                   model: presentation.facts.model, day: day))
+        return ([presentation.noteBody] + [provenance]).filter { !$0.isEmpty }.joined(separator: "\n")
     }
 
     /// The answer was about a chosen sense, and the reader's choice is now **another** sense. Nil is not "moved": the

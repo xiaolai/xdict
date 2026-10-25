@@ -11308,6 +11308,22 @@
         }
       }
     },
+    "The dictionary changed on disk. Import it again in Settings ▸ Dictionaries.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The dictionary changed on disk. Import it again in Settings ▸ Dictionaries."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典在磁盘上已变更。请在“设置 ▸ 词典”中重新导入。"
+          }
+        }
+      }
+    },
     "The dictionary edition this was read in is no longer in your library.": {
       "localizations": {
         "en": {
@@ -11452,18 +11468,34 @@
         }
       }
     },
-    "The entry could not be read.": {
+    "The dictionary’s file is not available now. Check that its folder is connected, then import it again in Settings ▸ Dictionaries.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The entry could not be read."
+            "value": "The dictionary’s file is not available now. Check that its folder is connected, then import it again in Settings ▸ Dictionaries."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法读取词条。"
+            "value": "词典文件现在不可用。请检查其文件夹是否已连接，然后在“设置 ▸ 词典”中重新导入。"
+          }
+        }
+      }
+    },
+    "The entry could not be read just now. Ask again.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The entry could not be read just now. Ask again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法读取该词条。请再问一次。"
           }
         }
       }
@@ -11800,6 +11832,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "无法清空笔记。"
+          }
+        }
+      }
+    },
+    "The note could not be read, so nothing was saved.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The note could not be read, so nothing was saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取笔记，因此未保存任何内容。"
           }
         }
       }
@@ -13061,18 +13109,34 @@
         }
       }
     },
-    "This is a sample: the sentence you capture and the entry you see are sent instead.": {
+    "This is a sample: only the sentence you capture is sent.": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This is a sample: the sentence you capture and the entry you see are sent instead."
+            "value": "This is a sample: only the sentence you capture is sent."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这只是示例：实际发送的是你取的句子和你看到的词条。"
+            "value": "这是示例：只会发送你捕获的句子。"
+          }
+        }
+      }
+    },
+    "This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这是示例：会改为发送你捕获的句子和你看到的词条（当词条文本开关打开时）。"
           }
         }
       }

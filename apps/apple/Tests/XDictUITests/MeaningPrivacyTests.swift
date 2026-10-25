@@ -12,6 +12,15 @@ import XDictUI
 @Suite struct MeaningPrivacyTests {
     static let sentence = "They hold that view about the quiet river."
 
+    static func session() -> MeaningSession {
+        let session = MeaningSession(fetchEntryText: { _, _, _ in .failure(.wire(.interrupted)) },
+                                     presented: { nil },
+                                     makeProvider: { (_: MeaningSettings) throws(AIProviderError) -> any AIProvider in
+                                         throw .notInstalled })
+        session.hold(handoff())
+        return session
+    }
+
     static func handoff() -> MeaningHandoff {
         MeaningHandoff(term: "hold", sentence: sentence, range: NSRange(location: 5, length: 4),
                        origin: MeaningOrigin(request: 1, generation: 2))
@@ -23,7 +32,14 @@ import XDictUI
             #expect(!line.contains("quiet river"), "the sentence reached a description: \(line)")
         }
         #expect(Mirror(reflecting: handoff).children.isEmpty, "dump would walk into the sentence")
-        #expect(String(describing: handoff).contains("hold"), "the term is not context: it names the value")
+        #expect(String(describing: handoff).contains("UTF-16 units"), "a description names the sizes")
+        // **The term can be the whole sentence** (audit round 4, 2026-10-25): a phrase selection equal to it must not leak.
+        let whole = MeaningHandoff(term: Self.sentence, sentence: Self.sentence,
+                                   range: NSRange(location: 0, length: Self.sentence.utf16.count),
+                                   origin: MeaningOrigin(request: 2, generation: 3))
+        for line in [String(describing: whole), whole.debugDescription] {
+            #expect(!line.contains("quiet river"))
+        }
     }
 
     @Test func aDisplayedQuestionIsNotInAnyDescription() {
@@ -61,19 +77,20 @@ import XDictUI
     }
 
     @Test func aKeyIsNotInTheSettingsDescription() {
-        let settings = MeaningSettings(source: .http, endpoint: URL(string: "http://127.0.0.1:1/v1"), model: "m",
+        var settings = MeaningSettings(source: .http, endpoint: URL(string: "http://127.0.0.1:1/v1"), model: "m",
                                        key: "sk-a-secret-value", sendEntryText: true, language: "en")
+        // **The reader's edited prompt is private too** (audit round 4): a description that printed it must fail here.
+        settings.templates[.grounded] = "private template canary"
         for line in [String(describing: settings), String(reflecting: settings)] {
             #expect(!line.contains("sk-a-secret-value"), "the key reached a description: \(line)")
             #expect(!line.contains("127.0.0.1"), "the address reached a description: \(line)")
+            #expect(!line.contains("private template canary"), "the edited prompt reached a description: \(line)")
         }
         #expect(Mirror(reflecting: settings).children.isEmpty)
     }
 
     @Test func aSessionDescribesItselfAsAKindOnly() {
-        let session = MeaningSession(fetchEntryText: { _, _, _ in .failure(.wire(.interrupted)) },
-                                     presented: { nil }, makeProvider: { (_: MeaningSettings) throws(AIProviderError) -> any AIProvider in throw .notInstalled })
-        session.hold(Self.handoff())
+        let session = Self.session()
         for line in [String(describing: session), String(reflecting: session), session.debugDescription] {
             #expect(line == "MeaningSession", "a session's description stopped being a constant: \(line)")
         }
@@ -83,12 +100,15 @@ import XDictUI
     /// **Describing a session off the main actor neither traps nor leaks** (audit round 3, 2026-10-25): the nonisolated
     /// description is a constant, not a main-actor read.
     @Test func aSessionCanBeDescribedOffTheMainActor() async {
-        let session = MeaningSession(fetchEntryText: { _, _, _ in .failure(.wire(.interrupted)) },
-                                     presented: { nil }, makeProvider: { (_: MeaningSettings) throws(AIProviderError) -> any AIProvider in throw .notInstalled })
-        session.hold(Self.handoff())
-        let line = await Task.detached { String(describing: session) }.value
-        #expect(line == "MeaningSession")
-        #expect(!line.contains("quiet river"))
+        let session = Self.session()
+        // **Every description path, off the actor** (audit round 4, 2026-10-25): reflecting and the mirror were tested only on
+        // the main actor, where an isolation regression would not show.
+        let (described, reflected, empty) = await Task.detached {
+            (String(describing: session), String(reflecting: session), Mirror(reflecting: session).children.isEmpty)
+        }.value
+        #expect(described == "MeaningSession")
+        #expect(reflected == "MeaningSession")
+        #expect(empty)
     }
 
     /// **The composed prompt holds the sentence and the entry** (WI-6's View the prompt): it may be shown in the pane,

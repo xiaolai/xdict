@@ -76,7 +76,6 @@ struct ReadingTextTests {
         let natural = font.ascender - font.descender + font.leading
         #expect(natural > 0)
         #expect(ReadingText.lineSpacing == max(0, 22.4 - natural))
-        #expect(ReadingText.lineSpacing > 0)
     }
 
     /// **Both branches of the spacing rule**, without needing a real font taller than the target (audit round 3).

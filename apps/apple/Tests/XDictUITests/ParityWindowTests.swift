@@ -52,11 +52,18 @@ struct ParityWindowTests {
 
     /// The title bar's speaker reads the selection, else the entry's word (owner, 2026-10-18).
     @Test func theSpeakerReadsTheSelectionElseTheWord() {
-        #expect(SearchWindowState.spokenText(selection: "word of mouth", word: "word") == "word of mouth")
-        #expect(SearchWindowState.spokenText(selection: "  spoken  \n", word: "word") == "spoken")
-        #expect(SearchWindowState.spokenText(selection: "   ", word: "word") == "word")
-        #expect(SearchWindowState.spokenText(selection: nil, word: "word") == "word")
-        #expect(SearchWindowState.spokenText(selection: nil, word: nil) == nil)
+        // **Both fields of the production decision** (audit round 4, 2026-10-25): the text and whether it is a selection,
+        // which the language choice follows.
+        func check(_ selection: String?, _ word: String?, _ text: String?, _ isSelection: Bool) {
+            let spoken = SearchWindowState.spoken(selection: selection, word: word)
+            #expect(spoken?.text == text)
+            #expect(spoken?.isSelection == isSelection)
+        }
+        check("word of mouth", "word", "word of mouth", true)
+        check("  spoken  \n", "word", "spoken", true)
+        check("   ", "word", "word", false)
+        check(nil, "word", "word", false)
+        if SearchWindowState.spoken(selection: nil, word: nil) != nil { Issue.record("nothing was spoken") }
     }
 
     @Test func theTitleIsXDictWithTheCountUnderIt() {

@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "d2cc5963a8e09200d51d45196f19a90b5d8ae7ef50151ebdde9b4b3cf276c6c0"
+    public static let sourceDigest = "e920fe0cc62239fb7200836f92689aeea97bb3974f80b35b73f7b810f7539fb2"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -248,6 +248,12 @@ public enum Tokens {
         public static let paneInitialHeight: CGFloat = 600
         /// The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer).
         public static let drawerShutWidth: CGFloat = 1
+        /// The main window's opening width: the reading column, the sidebar and the inspector at their defaults.
+        public static let mainIdealWidth: CGFloat = 1000
+        /// The main window's opening height: a full entry paragraph above the synonyms.
+        public static let mainIdealHeight: CGFloat = 700
+        /// How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll.
+        public static let scrollEdgeTolerance: CGFloat = 1
     }
 
     /// Corner radii.

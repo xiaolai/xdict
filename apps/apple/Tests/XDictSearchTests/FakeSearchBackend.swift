@@ -50,6 +50,10 @@ actor FakeSearchBackend: SearchBackend {
     private(set) var requests: [ServiceOperation] = []
     private(set) var superseded: [Caller] = []
     private var held: Set<DictId> = []
+    /// **Examples answers a test can hold and release per query** (audit round 4, 2026-10-25): an older answer can be made
+    /// to arrive after a newer one.
+    private var examplesHeld = false
+    private var examplesWaiting: [(query: String, slot: Slot, outcome: ClientOutcome)] = []
     private var waiting: [(caller: Caller, dict: DictId?, slot: Slot, outcome: ClientOutcome)] = []
     var honoursSupersession = true
     var pages: @Sendable (_ query: String, _ dict: DictId, _ options: LookupOptions) -> Result<Page, ClientFailure>
@@ -72,6 +76,17 @@ actor FakeSearchBackend: SearchBackend {
     func setSuggest(_ suggest: @escaping @Sendable (String, [DictId]) -> [String]) { self.suggest = suggest }
     func setAnswer(_ answer: @escaping @Sendable (ServiceOperation) -> ClientOutcome) { self.answer = answer }
     func setHonoursSupersession(_ honours: Bool) { honoursSupersession = honours }
+    func holdExamples() { examplesHeld = true }
+
+    /// **What is waiting to be released, by query** (audit round 4, 2026-10-25): a test waits for a request to arrive
+    /// before releasing it, so a release that would have been lost cannot make the next request hang.
+    var heldExamples: [String] { examplesWaiting.map(\.query) }
+
+    func releaseExamples(_ query: String) {
+        let ready = examplesWaiting.filter { $0.query == query }
+        examplesWaiting.removeAll { $0.query == query }
+        for item in ready { item.slot.fulfil(item.outcome) }
+    }
 
     var lookups: [(query: String, dicts: [DictId], options: LookupOptions, caller: Caller, superseding: Bool)] {
         queued.compactMap {
@@ -94,6 +109,7 @@ actor FakeSearchBackend: SearchBackend {
             let slot = Slot()
             let outcome: ClientOutcome
             var dict: DictId?
+            var examplesQuery: String?
             switch operation {
             case .lookup(let query, let dicts, let options):
                 dict = dicts.first
@@ -101,10 +117,15 @@ actor FakeSearchBackend: SearchBackend {
                     .map { Delivered(answer: .page($0), payload: nil) }
             case .suggest(let prefix, let dicts, _):
                 outcome = .success(Delivered(answer: .suggestions(suggest(prefix, dicts)), payload: nil))
+            case .examples(let query, _, _):
+                examplesQuery = query
+                outcome = answer(operation)
             default:
                 outcome = answer(operation)
             }
-            if let dict, held.contains(dict) {
+            if let examplesQuery, examplesHeld {
+                examplesWaiting.append((examplesQuery, slot, outcome))
+            } else if let dict, held.contains(dict) {
                 waiting.append((caller, dict, slot, outcome))
             } else {
                 slot.fulfil(outcome)

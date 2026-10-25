@@ -50,9 +50,13 @@ struct AISettingsStateTests {
         while !flag.isSet { try? await Task.sleep(for: .milliseconds(10)) }
     }
 
-    static func waitCancelling(until flag: Flag) async throws(AIProviderError) {
+    static func waitCancelling(until flag: Flag,
+                               onCancel: @escaping @Sendable () -> Void = {}) async throws(AIProviderError) {
         while !flag.isSet {
-            if Task.isCancelled { throw .cancelled }
+            if Task.isCancelled {
+                onCancel()
+                throw .cancelled
+            }
             try? await Task.sleep(for: .milliseconds(10))
         }
     }
@@ -64,9 +68,10 @@ struct AISettingsStateTests {
     @Test func switchingTheSourceEndsTheSignInAndItsFailure() async throws {
         let gate = Flag()
         let started = Flag()
+        let cancelledSeen = Flag()
         let model = AISettingsModel(preferences: try preferences(), login: { _ in
             started.set()
-            try await Self.waitCancelling(until: gate)
+            try await Self.waitCancelling(until: gate, onCancel: { cancelledSeen.set() })
             throw AIProviderError.notSignedIn
         }, checkStatus: { _ in .ready("codex") })
         model.select(.codexCLI)
@@ -80,6 +85,9 @@ struct AISettingsStateTests {
         #expect(await eventually(2) { started.isSet }, "the sign-in never started")
         model.select(.appleOnDevice)
         #expect(!model.signingIn, "the sign-in outlived the source")
+        // **The task itself was cancelled** (audit round 4, 2026-10-25): releasing the gate masked a missing cancel, because
+        // the generation guard hid the fake's failure either way.
+        #expect(await eventually(2) { cancelledSeen.isSet }, "the sign-in task was not cancelled")
         gate.set()
         // The login's own end, not a sleep: its failure is decided by the time this returns.
         await login?.value
@@ -131,8 +139,27 @@ struct AISettingsStateTests {
         task.cancel()
         release.set()
         await task.value
-        #expect(model.status != .ready("from a cancelled check"), "a cancelled check published its result")
-        #expect(model.status == .checking, "the pane is left where the cancelled check began")
+        // **Left where the cancelled check began**: publishing its result would move it, which this equality forbids.
+        #expect(model.status == .checking, "a cancelled check published its result")
+    }
+
+    /// **A result for a configuration the reader changed is rejected without a second check** (audit round 4, 2026-10-25):
+    /// the sameSource guard, not only the generation, is what the test holds.
+    @Test func aResultForAChangedConfigurationIsRejected() async throws {
+        let started = Flag()
+        let gate = Flag()
+        let model = AISettingsModel(preferences: try preferences(), checkStatus: { _ in
+            started.set()
+            await Self.wait(until: gate)
+            return .ready("stale")
+        })
+        defer { gate.set() }
+        let task = Task { await model.refreshStatus() }
+        try #require(await eventually(2) { started.isSet }, "the check never began")
+        model.preferences.setModel("another-model")
+        gate.set()
+        await task.value
+        #expect(model.status != .ready("stale"), "a result for a changed configuration was published")
     }
 
     // MARK: - The key's verdict

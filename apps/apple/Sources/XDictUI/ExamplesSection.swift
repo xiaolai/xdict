@@ -94,11 +94,21 @@ struct ExamplesSection: View {
             }
         }
         if !state.examples.failedToPrepare.isEmpty {
-            Text(state.examples.hits.isEmpty && state.examples.preparing.isEmpty
-                 ? LocalizedStringResource("The examples could not be read.")
-                 : LocalizedStringResource("Some dictionaries’ examples could not be read."))
-                .font(Tokens.TextRole.callout.font)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                Text(state.examples.hits.isEmpty && state.examples.preparing.isEmpty
+                     ? LocalizedStringResource("The examples could not be read.")
+                     : LocalizedStringResource("Some dictionaries’ examples could not be read."))
+                    .font(Tokens.TextRole.callout.font)
+                    .foregroundStyle(.secondary)
+                // **The failed dictionaries are named** (audit round 4, 2026-10-25): a failure the reader cannot place is
+                // as silent as no message at all.
+                let names = state.examples.failedToPrepare.compactMap { state.source(for: $0)?.name }
+                if !names.isEmpty {
+                    Text(verbatim: names.joined(separator: ", "))
+                        .font(Tokens.TextRole.caption.font)
+                        .foregroundStyle(.tertiary)
+                }
+            }
         } else if state.examples.preparing.isEmpty, state.examples.hits.isEmpty {
             Text("No examples were found.")
                 .font(Tokens.TextRole.callout.font)
@@ -142,10 +152,18 @@ struct ExamplesSection: View {
     /// **A pair's distinct sources the library still has**, in the pair's own order: a removed dictionary is gone, and a
     /// dictionary that printed the same pair under two entries appears once — one menu row and one count per dictionary
     /// (audit round 1, 2026-10-25), since a plain click can only open one of its entries.
-    private func availableSources(_ hit: ExampleHit) -> [ExampleSource] {
+    /// **A pair's available source with its name resolved once** (audit round 4, 2026-10-25): the filter, the menu and
+    /// the labels used to resolve the same dictionary three times.
+    struct ResolvedSource {
+        let source: ExampleSource
+        let name: String
+    }
+
+    private func availableSources(_ hit: ExampleHit) -> [ResolvedSource] {
         var seen: Set<DictId> = []
-        return hit.sources.filter { source in
-            state.source(for: source.dict) != nil && seen.insert(source.dict).inserted
+        return hit.sources.compactMap { source in
+            guard seen.insert(source.dict).inserted, let name = state.source(for: source.dict)?.name else { return nil }
+            return ResolvedSource(source: source, name: name)
         }
     }
 
@@ -155,10 +173,8 @@ struct ExamplesSection: View {
         let available = availableSources(hit)
         if available.count > 1 {
             Menu {  // placement: inspector-row
-                ForEach(available, id: \.dict) { candidate in
-                    if let source = state.source(for: candidate.dict) {
-                        Button(source.name) { state.openExample(hit, in: candidate.dict) }  // placement: inspector-row
-                    }
+                ForEach(available, id: \.source.dict) { candidate in
+                    Button(candidate.name) { state.openExample(hit, in: candidate.source.dict) }  // placement: inspector-row
                 }
             } label: {
                 attributionText(available: available)
@@ -176,11 +192,11 @@ struct ExamplesSection: View {
 
     /// **One available source names both labels** (audit round 1, 2026-10-25): the dictionary and the headword come from
     /// the same source, so a removed first dictionary cannot leave another dictionary's name beside its headword.
-    private func attributionText(available: [ExampleSource]) -> some View {
-        let source = available.first.flatMap { state.source(for: $0.dict) }
-        let headword = available.first?.headword ?? ""
+    private func attributionText(available: [ResolvedSource]) -> some View {
+        let name = available.first?.name
+        let headword = available.first?.source.headword ?? ""
         return HStack(spacing: Tokens.Space.xs) {
-            if let source { Text(verbatim: source.name) }
+            if let name { Text(verbatim: name) }
             if !headword.isEmpty { Text(verbatim: "·") }
             if !headword.isEmpty { Text(verbatim: headword) }
             if available.count > 1 { Text("· \(available.count) dictionaries") }
@@ -191,8 +207,8 @@ struct ExamplesSection: View {
         .padding(.bottom, Tokens.Space.xs)
     }
 
-    /// **The Chinese with the match marked** (the owner's decision 5): a dotted underline from the token system's line
-    /// style and the selected row's weight; both are tokens, no literal.
+    /// **The Chinese with the match marked** (the owner's decision 5): a dotted underline and the reading font's
+    /// emphasized role, from the token system; no literal.
     static func marked(_ hit: ExampleHit) -> AttributedString {
         let (endOffset, overflow) = hit.start.addingReportingOverflow(hit.len)
         guard !overflow, let start = index(hit.chinese, hit.start), let end = index(hit.chinese, endOffset), start <= end

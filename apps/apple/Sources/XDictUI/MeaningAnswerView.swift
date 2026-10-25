@@ -27,13 +27,25 @@ public struct MeaningAnswerPane: View {
     @State private var noteState: NoteSaveState = .idle
     /// A note already on the entry: the save asks before replacing it.
     @State private var noteReplaceAsked = false
+    /// **The save being run, and the payload it writes** (audit round 4, 2026-10-25): captured before the existence check, so
+    /// a new answer cannot re-pair the old explanation with a newer source, and Retry keeps the same bytes.
+    @State private var noteOperation = 0
+    @State private var pendingNote: NotePayload?
+
+    /// The payload one save writes, frozen from the presentation at the tap.
+    struct NotePayload: Equatable {
+        let text: String
+        let target: MeaningTarget
+    }
 
     /// The save's own state; the pane offers one control at a time.
     enum NoteSaveState: Equatable {
         case idle
+        case checking
         case saving
         case saved
         case failed
+        case checkFailed
     }
 
     public init(state: SearchWindowState, showsHeader: Bool = true) {
@@ -78,6 +90,10 @@ public struct MeaningAnswerPane: View {
         .onChange(of: state.meaning.state) {
             revealSerial += 1
             revealFailed = nil
+            // **A save belongs to the answer it was made from** (audit round 4, 2026-10-25): a new answer ends the old
+            // operation, so its existence check or write cannot paint its outcome under this answer.
+            noteOperation += 1
+            pendingNote = nil
             noteState = .idle
             noteReplaceAsked = false
         }
@@ -320,7 +336,7 @@ public struct MeaningAnswerPane: View {
 
     /// **The reader's explicit save** (plan-companion WI-9; owner, 2026-10-25): one tap writes the explanation, its quotes
     /// and a provenance line on the entry the request was composed from. A note already there is replaced only after the
-    /// pane asks; the outcome replaces the button.
+    /// pane asks; the outcome replaces the button, and a failure keeps the payload for Retry.
     @ViewBuilder private func saveNoteControl(_ presentation: MeaningPresentation, target: MeaningTarget) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
             switch noteState {
@@ -334,6 +350,25 @@ public struct MeaningAnswerPane: View {
                     .font(.caption)
                     .foregroundStyle(.orange)
                     .accessibilityIdentifier("meaning.note.failed")
+                Button("Try Again") { retryNote() }  // placement: inspector-row
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .accessibilityIdentifier("meaning.note.retry")
+            case .checkFailed:
+                Label { Text("The note could not be read, so nothing was saved.") }
+                    icon: { Image(systemName: "exclamationmark.triangle") }
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("meaning.note.check-failed")
+                Button("Try Again") { retryNote() }  // placement: inspector-row
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .accessibilityIdentifier("meaning.note.retry")
+            case .checking:
+                HStack(spacing: Tokens.Space.xs) {
+                    ProgressView().controlSize(.small)  // placement: spinner
+                    Text("Checking…").font(.caption).foregroundStyle(.secondary)
+                }
             case .saving:
                 HStack(spacing: Tokens.Space.xs) {
                     ProgressView().controlSize(.small)  // placement: spinner
@@ -341,34 +376,68 @@ public struct MeaningAnswerPane: View {
                 }
             case .idle:
                 Button("Save as Note") {  // placement: inspector-row
-                    Task { await saveNote(presentation, target: target) }
+                    saveNote(presentation, target: target)
                 }
                 .accessibilityIdentifier("meaning.note.save")
             }
         }
         .confirmationDialog("Replace the note on this entry?", isPresented: $noteReplaceAsked, titleVisibility: .visible) {
             Button("Replace", role: .destructive) {  // placement: inspector-row
-                Task { await writeNote(presentation, target: target) }
+                guard let payload = pendingNote else { return }
+                startWrite(payload)
             }
             Button("Cancel", role: .cancel) {}  // placement: inspector-row
         }
     }
 
-    /// Asks first only when the entry already has a note: an empty entry takes the note directly.
-    private func saveNote(_ presentation: MeaningPresentation, target: MeaningTarget) async {
-        if await state.entryHasNote(target.entry) {
-            noteReplaceAsked = true
-            return
-        }
-        await writeNote(presentation, target: target)
+    /// Freezes the payload, then asks whether a note is already there; the button leaves `.idle` before any suspension, so a
+    /// second tap cannot start a second save.
+    private func saveNote(_ presentation: MeaningPresentation, target: MeaningTarget) {
+        // **One save at a time** (audit round 4, 2026-10-25): a second tap that raced the first cannot start its own.
+        guard noteState == .idle else { return }
+        let payload = NotePayload(text: MeaningPresenter.noteText(presentation: presentation, date: Date()),
+                                 target: target)
+        noteOperation += 1
+        checkThenWrite(payload)
     }
 
-    private func writeNote(_ presentation: MeaningPresentation, target: MeaningTarget) async {
+    /// **Every save asks first, Retry included** (audit round 4, 2026-10-25): a check that could not answer is never
+    /// answered by writing straight away, which would replace a note without the question.
+    private func retryNote() {
+        guard let payload = pendingNote else { return }
+        noteOperation += 1
+        checkThenWrite(payload)
+    }
+
+    /// Whether the entry already carries a note, then write: the frozen payload is kept for a Retry either way.
+    private func checkThenWrite(_ payload: NotePayload) {
+        pendingNote = payload
+        let mine = noteOperation
+        noteState = .checking
+        Task { @MainActor in
+            let exists = await state.entryHasNote(payload.target.entry)
+            guard mine == noteOperation else { return }
+            switch exists {
+            case .none:
+                noteState = .checkFailed
+            case .some(true):
+                noteState = .idle
+                noteReplaceAsked = true
+            case .some(false):
+                startWrite(payload)
+            }
+        }
+    }
+
+    /// Writes the payload; a newer operation's outcome is the only one the pane shows.
+    private func startWrite(_ payload: NotePayload) {
+        let mine = noteOperation
         noteState = .saving
-        let text = MeaningPresenter.noteText(presentation: presentation,
-                                             source: MeaningSentences.source(state.meaning.sent?.source),
-                                             model: state.meaning.sent?.model, date: Date())
-        noteState = await state.saveNote(for: target, text: text) ? .saved : .failed
+        Task { @MainActor in
+            let saved = await state.saveNote(for: payload.target, text: payload.text)
+            guard mine == noteOperation else { return }
+            noteState = saved ? .saved : .failed
+        }
     }
 
     /// **The entry's senses, each a way into the chosen-sense question** (plan-companion WI-8): the core's own list,

@@ -9,7 +9,7 @@ import AppKit
 /// one value added to every line's natural box; it does not set a CSS line height, and it is computed from the base face
 /// alone because the fallback a run will draw with is known only at layout. So the reachable rule is: the target is
 /// 16 × 1.4; the extra spacing is the target minus the base font's natural height, never negative. A Latin line then
-/// draws at exactly the target; a line whose fallback is taller than the base (a CJK run can be) draws its own taller
+/// draws at the target when the base font's natural box is shorter than it; a line whose fallback is taller draws
 /// box plus that same spacing — never shrunk, and not held to 22.4 either. The render measures the result.
 public enum ReadingText {
     /// The reading body's face and size: `text.readingBody` (P18).

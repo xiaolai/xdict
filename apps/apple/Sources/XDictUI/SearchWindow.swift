@@ -171,7 +171,9 @@ public struct SearchWindow: View {
 
     /// The searchable field's scope, through the model's scope (P6, P7).
     private var searchScope: Binding<SearchScope> {
-        Binding { state.model.scope } set: { state.model.setScope($0) }
+        Binding { state.model.scope } set: {
+            state.model.setScope($0)
+        }
     }
 
     /// Its placeholder: "Search", or "Search in <name>" for the chosen scope (P6).

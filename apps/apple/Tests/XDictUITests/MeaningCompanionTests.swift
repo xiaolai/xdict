@@ -73,9 +73,79 @@ struct CompanionSourceTests {
     /// **The file's code with whole-line comments removed** (audit round 3, 2026-10-25): a wiring check that matched a
     /// comment proved nothing.
     static func code(_ path: String) throws -> String {
-        try source(path).split(separator: "\n", omittingEmptySubsequences: false)
-            .filter { !$0.trimmingCharacters(in: .whitespaces).hasPrefix("//") }
-            .joined(separator: "\n")
+        let text = try source(path)
+        // **Both comment kinds go, nested block comments included** (audit round 4, 2026-10-25): a regular expression
+        // ended at the first `*/`, so the rest of a nested comment still looked like code. String literals are kept
+        // whole, so a `//` inside one is not a comment.
+        var out = ""
+        var depth = 0
+        var inLine = false
+        var inString = false
+        var index = text.startIndex
+        while index < text.endIndex {
+            let character = text[index]
+            let next = text.index(after: index)
+            if inLine {
+                if character == "\n" { inLine = false; out.append(character) }
+                index = next
+                continue
+            }
+            if depth > 0 {
+                if character == "/", next < text.endIndex, text[next] == "*" {
+                    depth += 1
+                    index = text.index(after: next)
+                } else if character == "*", next < text.endIndex, text[next] == "/" {
+                    depth -= 1
+                    index = text.index(after: next)
+                } else {
+                    index = next
+                }
+                continue
+            }
+            if inString {
+                out.append(character)
+                if character == "\\", next < text.endIndex {
+                    out.append(text[next])
+                    index = text.index(after: next)
+                } else {
+                    if character == "\"" { inString = false }
+                    index = next
+                }
+                continue
+            }
+            if character == "/", next < text.endIndex, text[next] == "/" {
+                inLine = true
+                index = text.index(after: next)
+                continue
+            }
+            if character == "/", next < text.endIndex, text[next] == "*" {
+                depth = 1
+                index = text.index(after: next)
+                continue
+            }
+            if character == "\"" { inString = true }
+            out.append(character)
+            index = next
+        }
+        return out
+    }
+
+    /// **The text inside the braces opened by the first `marker`** (audit round 4, 2026-10-25): lets a wiring check tie a
+    /// statement to the condition it must sit under, rather than matching two independent substrings.
+    static func bracedBody(after marker: String, in source: String) -> String? {
+        guard let marker = source.range(of: marker),
+              let open = source[marker.upperBound...].firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var index = open
+        while index < source.endIndex {
+            if source[index] == "{" { depth += 1 }
+            if source[index] == "}" {
+                depth -= 1
+                if depth == 0 { return String(source[source.index(after: open)..<index]) }
+            }
+            index = source.index(after: index)
+        }
+        return nil
     }
 
     /// **The matched run in an example keeps the reading face** (Codex refutation B2): only the weight changes; the
@@ -124,7 +194,9 @@ struct CompanionSourceTests {
         #expect(source.contains(".task(id: state.meaning.sent)"))
         // **The retry button's own line** (audit round 3, 2026-10-25): the substring alone also matched the pane's
         // initial `.task` load, so removing the retry action left the check green.
-        #expect(source.contains(#"Button("Try Again") { state.meaning.loadSenses(for: target) }"#))
+        // **The action, whatever its line breaks** (audit round 4): a reformatted closure must not fail the wiring check.
+        #expect(source.range(of: #"Button\("Try Again"\)\s*\{\s*state\.meaning\.loadSenses\(for: target\)"#,
+                            options: .regularExpression) != nil)
         #expect(source.contains("The senses could not be read."))
     }
 
@@ -132,10 +204,26 @@ struct CompanionSourceTests {
     /// and the text is the note builder's.
     @Test func thePaneSavesANoteThroughTheStatesModel() throws {
         let source = try Self.code("Sources/XDictUI/MeaningAnswerView.swift")
-        #expect(source.contains("state.noteSaver != nil"))
-        #expect(source.contains("state.saveNote(for: target, text: text)"))
-        #expect(source.contains("MeaningPresenter.noteText("))
-        #expect(source.contains(#"Button("Save as Note")"#))
+        // **The guard, the control and the action, together** (audit round 4, 2026-10-25): a button moved outside the guard, or
+        // an action disconnected from the state, fails here.
+        // **The control is inside the guard's own braces** (audit round 4, 2026-10-25): two independent substrings let a
+        // control moved outside the guard pass.
+        let body = try #require(Self.bracedBody(after: "if let target = state.meaning.sent?.target, state.noteSaver != nil,",
+                                                in: source))
+        #expect(body.contains("saveNoteControl(presentation, target: target)"))
+        // **The button and its action together** (audit round 4, 2026-10-25): the label alone passed with the action
+        // removed.
+        #expect(source.range(of: #"Button\("Save as Note"\)\s*\{[^}]*saveNote\(presentation, target: target\)"#,
+                            options: .regularExpression) != nil)
+        // **The chain from the tap to the state's writer** (audit round 4, 2026-10-25): every step's body must call the
+        // next one, so a mutation removing a link fails here.
+        let save = try #require(Self.bracedBody(after: "private func saveNote(_ presentation: MeaningPresentation,"
+                                                + " target: MeaningTarget)", in: source))
+        #expect(save.contains("checkThenWrite(payload)"))
+        let check = try #require(Self.bracedBody(after: "private func checkThenWrite(_ payload: NotePayload)", in: source))
+        #expect(check.contains("startWrite(payload)"))
+        let write = try #require(Self.bracedBody(after: "private func startWrite(_ payload: NotePayload)", in: source))
+        #expect(write.contains("state.saveNote(for: payload.target, text: payload.text)"))
     }
 
     /// **Settings' own preview carries the answer language**: it composes through `AIComposer`, so the preview a reader

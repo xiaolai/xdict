@@ -99,6 +99,9 @@ public final class SearchWindowState {
             self?.selectSense(handle: handle, edition: edition, reference: reference, id: id)
         }
         entry.onPageSourcesChanged = { [weak self] sources in self?.pageSources = sources }
+        // **The presentation follows the scope wherever it was changed** (audit round 4, 2026-10-25): the picker, the
+        // Search menu and the keyboard all end in `setScope`.
+        model.scopeDidChange = { [weak self] in self?.scopeChanged() }
     }
 
     /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists
@@ -315,8 +318,9 @@ public final class SearchWindowState {
 
     /// The shell's study model, wired by the app: nil hides the pane's Save as Note (an instrument window, a test).
     @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String) async -> Bool)?
-    /// Whether an entry already carries a note, so a save asks before replacing it.
-    @ObservationIgnored public var entryNoteCheck: (@MainActor (EntryRef) async -> Bool)?
+    /// Whether an entry already carries a note, so a save asks before replacing it; nil when that cannot be known (the
+    /// notes did not load), and then nothing is written.
+    @ObservationIgnored public var entryNoteCheck: (@MainActor (EntryRef) async -> Bool?)?
 
     /// **Saves the answer the reader asked to keep** on the entry it was composed from. The caller builds the text — the
     /// explanation, its quotes and the provenance line; the sentence never goes in.
@@ -325,10 +329,17 @@ public final class SearchWindowState {
         return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "")
     }
 
-    /// Whether that entry already has a note.
-    public func entryHasNote(_ entry: EntryRef) async -> Bool {
+    /// Whether that entry already has a note; nil when the check could not answer.
+    public func entryHasNote(_ entry: EntryRef) async -> Bool? {
         guard let entryNoteCheck else { return false }
         return await entryNoteCheck(entry)
+    }
+
+    /// **A scope change can change which presentation is due** (audit round 4, 2026-10-25): the same shown entry is one
+    /// frame or an All page depending on the scope, and the model may keep it while the lookup changes.
+    public func scopeChanged() {
+        guard let shown = model.shown else { return }
+        Task { await present(shown) }
     }
 
     /// The presentation ended: the sentence goes (it was never anywhere else), and so does the ask in flight.
@@ -444,11 +455,6 @@ public final class SearchWindowState {
         return (word, false)
     }
 
-    /// What the speaker says: the selection, trimmed, when there is one, else the entry's word.
-    public static func spokenText(selection: String?, word: String?) -> String? {
-        spoken(selection: selection, word: word)?.text
-    }
-
     /// Shows the model's entry in the pane, from its dictionary as the library has it now: for a typed word over every
     /// dictionary, the All page (P15) with every dictionary's entry, the shown one among them.
     public func present(_ shown: SearchModel.Shown) async {
@@ -456,7 +462,9 @@ public final class SearchWindowState {
         // the serial says the window has moved on, and binding the held sentence — or firing its deferred ask — to an
         // entry no longer shown would send the wrong entry. `ask()` samples the presented entry in the same turn as the
         // draw, so with this guard the target is the one the subject names.
-        guard model.shown == shown else { return }
+        // **The lookup is part of the presentation's identity** (audit round 4, 2026-10-25): a shown result kept from the
+        // previous lookup must not draw under the new lookup's scope and sections.
+        guard model.shown == shown, shown.lookup == model.lookup?.serial else { return }
         // An entry about to be drawn: the held sentence belongs only to this presentation's own entry, so a reader who
         // moved on is asked `noContext`, never sent the wrong entry. The drawn target travels with the subject, so a later
         // ask cannot sample a presentation that replaced this one.
@@ -494,7 +502,9 @@ public final class SearchWindowState {
     public var pageResults: [ResultID]? {
         guard let shown = model.shown, let lookup = model.lookup, AllPage.applies(scope: lookup.scope, mode: lookup.mode)
         else { return nil }
-        return AllPage.results(sections: model.sections, shown: shown.result, headword: model.hit(shown.result)?.headword)
+        let current = shown.lookup == model.lookup?.serial
+        return AllPage.results(sections: model.sections, shown: shown.result,
+                               headword: current ? model.hit(shown.result)?.headword : nil, shownIsCurrent: current)
     }
 
     private func pageItems(_ results: [ResultID]) -> [EntryPageItem] {

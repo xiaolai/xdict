@@ -22,14 +22,9 @@ struct AIContractTests {
     @Test func theVectors() throws {
         let data = try Data(contentsOf: Self.vectors)
         let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        var lines = String(decoding: data, as: UTF8.self).split(separator: "\n", omittingEmptySubsequences: false)
-        if lines.last?.isEmpty == true { lines.removeLast() }
-        // **An empty suite is a failure, not a pass** (audit round 3, 2026-10-25): zero cases used to report success.
-        try #require(!lines.isEmpty, "vectors.jsonl holds no cases")
-        var ids = Set<String>()
+        let cases = try Self.suite(data)
         var failures: [String] = []
-        for (index, line) in lines.enumerated() {
-            let (id, op, input, expect) = try Self.fixture(line, at: "line \(index + 1)", ids: &ids)
+        for (id, op, input, expect) in cases {
             let problem: String?
             switch op {
             case "mark": problem = evaluateMark(id: id, input: input, expect: expect)
@@ -39,9 +34,25 @@ struct AIContractTests {
             }
             if let problem { failures.append(problem) }
         }
-        print("ai-contract cases: \(ids.sorted().joined(separator: " "))")
-        print("ai-contract: \(ids.count) cases, suite sha256:\(digest)")
+        print("ai-contract cases: \(cases.map(\.id).sorted().joined(separator: " "))")
+        print("ai-contract: \(cases.count) cases, suite sha256:\(digest)")
         #expect(failures.isEmpty, "\(failures.joined(separator: "\n"))")
+    }
+
+    /// **A whole suite, read strictly** (audit round 4, 2026-10-25): the bytes must be UTF-8, an empty suite is a harness
+    /// failure, and every line goes through the one parser below. The runner and the harness-failure test share it.
+    static func suite(_ data: Data)
+        throws(Harness) -> [(id: String, op: String, input: [String: Any], expect: [String: Any])] {
+        guard let text = String(data: data, encoding: .utf8) else { throw Harness(description: "the suite is not UTF-8") }
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)
+        if lines.last?.isEmpty == true { lines.removeLast() }
+        guard !lines.isEmpty else { throw Harness(description: "the suite holds no cases") }
+        var ids = Set<String>()
+        var cases: [(id: String, op: String, input: [String: Any], expect: [String: Any])] = []
+        for (index, line) in lines.enumerated() {
+            cases.append(try fixture(line, at: "line \(index + 1)", ids: &ids))
+        }
+        return cases
     }
 
     /// **One fixture line, validated** (audit round 2, 2026-10-25): its grammar, version, id and operation. The runner and
@@ -170,7 +181,23 @@ struct AIContractTests {
                 return "\(id): expected \(expect["code"] ?? "invalid"), got \(validated.outcome.rawValue)"
             }
             let wanted = expect["outcome"] as? String ?? ""
-            return validated.outcome.rawValue == wanted ? nil : "\(id): outcome \(validated.outcome.rawValue), wanted \(wanted)"
+            guard validated.outcome.rawValue == wanted else {
+                return "\(id): outcome \(validated.outcome.rawValue), wanted \(wanted)"
+            }
+            // **The whole record, not only its outcome** (audit round 4, 2026-10-25): a dropped or reordered quote, or an
+            // altered explanation, used to pass; §7 compares the complete validated value.
+            // **Ordinal UTF-16, as §5.3 compares them** (audit round 4, 2026-10-25): Swift's `==` reads two canonically
+            // equivalent strings as equal, so an NFD quote would pass against an NFC one here and prove nothing.
+            let wantedQuotes = expect["quotes"] as? [String] ?? (answer["quotes"] as? [String] ?? [])
+            guard validated.quotes.count == wantedQuotes.count,
+                  zip(validated.quotes, wantedQuotes).allSatisfy({ same($0.0, $0.1) }) else {
+                return "\(id): quotes \(validated.quotes), wanted \(wantedQuotes)"
+            }
+            let wantedExplanation = expect["explanation"] as? String ?? (answer["explanation"] as? String ?? "")
+            guard same(validated.explanation, wantedExplanation) else {
+                return "\(id): explanation \(validated.explanation), wanted \(wantedExplanation)"
+            }
+            return nil
         } catch {
             guard expect["status"] as? String == "invalid" else {
                 return "\(id): refused (\(error.code)), expected \(expect["outcome"] ?? "a value")"
@@ -229,6 +256,23 @@ struct AIContractTests {
                                                                        sentence: "Please hold", entry: nil,
                                                                        language: "en", mode: .sentenceOnly))
         #expect(!sentenceOnly.contains("The entry above is"))
+    }
+
+    /// **Braces are read as scalars, and a stray one is refused** (audit round 4, 2026-10-25): a closing brace with no
+    /// opening one is not passed through as text, and one joined to a combining accent is still the placeholder parser's
+    /// brace rather than part of a literal run.
+    @Test func aStrayClosingBraceIsRefusedAndACombinedOneIsStillABrace() throws {
+        let question = AIQuestion(term: "hold", termRange: .notFound, sentence: "Please hold", entry: nil,
+                                  language: "en", mode: .sentenceOnly)
+        #expect(throws: AIComposeError.unknownPlaceholder("}")) {
+            try AIComposer.compose(template: "hold }", question: question)
+        }
+        #expect(throws: AIComposeError.unknownPlaceholder("}")) {
+            try AIComposer.compose(template: "hold }\u{0301}", question: question)
+        }
+        // The success case carries what the contract requires of a sentence-only template, and reads its own text first:
+        // composition appends fixed blocks after it.
+        #expect(try AIComposer.compose(template: "{term}: {sentence}", question: question).hasPrefix("hold: Please hold"))
     }
 
     /// **The chosen sense's completeness reaches the model** (§4a, contract 3): a span-dropped sense is partial even
@@ -337,11 +381,7 @@ struct AIContractTests {
     @Test func aFixtureTheHarnessCannotUseIsAHarnessFailure() {
         let good = #"{"format":1,"contract":4,"id":"a","op":"mark","input":{"sentence":"hold","range":{"start":"not-found","length":"4"}},"expect":{"status":"ok","text":"hold"}}"#
         func run(_ text: String) throws {
-            var lines = String(decoding: Data(text.utf8), as: UTF8.self)
-                .split(separator: "\n", omittingEmptySubsequences: false)
-            if lines.last?.isEmpty == true { lines.removeLast() }
-            var ids = Set<String>()
-            for line in lines { _ = try Self.fixture(line, at: "", ids: &ids) }
+            _ = try Self.suite(Data(text.utf8))
         }
         #expect(throws: Harness.self) { try run(good + "\n" + good + "\n") }
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""format":1"#, with: #""format":2"#)) }
@@ -349,6 +389,9 @@ struct AIContractTests {
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""op":"mark""#, with: #""op":"frob""#)) }
         #expect(throws: Harness.self) { try run(#"{"#) }
         #expect(throws: Never.self) { try run(good) }
+        // **An empty suite is a harness failure** (audit round 4): zero cases must not report success.
+        #expect(throws: Harness.self) { _ = try Self.suite(Data()) }
+        #expect(throws: Harness.self) { _ = try Self.suite(Data("\n".utf8)) }
     }
 
     /// **The response contract is the contract's own bytes** (`CONTRACT.md` §6): the fenced block after `## 6.`, joined by
@@ -506,14 +549,27 @@ struct AIContractTests {
 
     /// **The shipped defaults are the files** (`CONTRACT.md` §4.7), byte for byte.
     @Test func theDefaultTemplatesAreTheFiles() throws {
-        for language in AITemplates.languages {
-            for mode in AIMode.allCases {
-                let file = Self.root.appending(path: "conformance/ai/defaults/\(language).\(mode.rawValue).txt")
-                let wanted = try String(contentsOf: file, encoding: .utf8)
-                let got = try #require(AITemplates.defaultTemplate(language: language, mode: mode),
-                                       "no default for \(language)/\(mode.rawValue)")
-                #expect(Self.sameBytes(got, wanted), "\(language)/\(mode.rawValue) differs from its file")
-            }
+        let directory = Self.root.appending(path: "conformance/ai/defaults")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path(percentEncoded: false))
+        var pairs: [(String, AIMode)] = []
+        for name in names.sorted() where name.hasSuffix(".txt") {
+            let parts = name.dropLast(4).split(separator: ".").map(String.init)
+            if parts.count == 2, let mode = AIMode(rawValue: parts[1]) { pairs.append((parts[0], mode)) }
+        }
+        try #require(!pairs.isEmpty, "no default templates in conformance/ai/defaults")
+        // **The directory is the expected set** (audit round 4, 2026-10-25): production's language list used to define what
+        // was checked, so emptying it emptied the check too.
+        let files = Set(pairs.map { "\($0.0).\($0.1.rawValue)" })
+        let shipped = Set(AITemplates.languages.flatMap { language in
+            AIMode.allCases.map { "\(language).\($0.rawValue)" }
+        })
+        #expect(files == shipped, "the shipped defaults and the files disagree")
+        for (language, mode) in pairs {
+            let file = directory.appending(path: "\(language).\(mode.rawValue).txt")
+            let wanted = try String(contentsOf: file, encoding: .utf8)
+            let got = try #require(AITemplates.defaultTemplate(language: language, mode: mode),
+                                   "no default for \(language)/\(mode.rawValue)")
+            #expect(Self.sameBytes(got, wanted), "\(language)/\(mode.rawValue) differs from its file")
         }
     }
 

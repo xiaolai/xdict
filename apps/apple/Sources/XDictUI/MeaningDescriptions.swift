@@ -7,7 +7,11 @@ import XDictAI
 // `Mirror` walking into it. `MeaningPrivacyTests` holds them to it.
 
 extension MeaningHandoff: CustomStringConvertible, CustomDebugStringConvertible, CustomReflectable {
-    public var description: String { "MeaningHandoff(term: \(term), \(sentence.utf16.count) UTF-16 units)" }
+    /// **Sizes only** (audit round 4, 2026-10-25): a phrase selection can equal the whole sentence, so neither the term nor
+    /// the sentence may be printed.
+    public var description: String {
+        "MeaningHandoff(term: \(term.utf16.count) UTF-16 units, \(sentence.utf16.count) UTF-16 units)"
+    }
     public var debugDescription: String { description }
     public var customMirror: Mirror { Mirror(self, children: [:]) }
 }

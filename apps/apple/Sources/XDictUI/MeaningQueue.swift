@@ -22,21 +22,16 @@ public actor MeaningQueue {
         let continuation: CheckedContinuation<Bool, Never>
     }
 
-    /// **The asks waiting for a source right now** (audit round 2, 2026-10-25): a test's signal that a second ask is
-    /// queued before it is cancelled. Nothing in the app reads it.
-    public var waitingCount: Int { waiters.count }
+    /// **The asks waiting for a source right now**: a test's signal that a second ask is queued before it is cancelled.
+    var waitingCount: Int { waiters.count }
 
     /// Waits for the source kind and takes it; `false` when the task was cancelled while it waited.
     func acquire(_ kind: AIProviderKind, id: UUID) async -> Bool {
         // **A task already cancelled takes nothing** (audit round 3, 2026-10-25).
         guard !Task.isCancelled else { return false }
-        // A ticket is one ask: no marker for it may outlive its acquisition (audit finding, 2026-10-20).
         cancelled.remove(id)
-        pending.insert(id)
         if !busy.contains(kind) {
             busy.insert(kind)
-            cancelled.remove(id)
-            pending.remove(id)
             // The cancellation may have arrived while the source was being taken.
             guard !Task.isCancelled else {
                 busy.remove(kind)
@@ -44,6 +39,8 @@ public actor MeaningQueue {
             }
             return true
         }
+        // **Only a ticket that waits is pending** (audit round 4, 2026-10-25): the uncontended path has no marker to keep.
+        pending.insert(id)
         let taken = await withTaskCancellationHandler {
             await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
                 // The cancellation may already have run, before this continuation existed.

@@ -182,20 +182,35 @@ public struct AIComposer: Sendable {
     }
 
     static func pieces(of template: String) throws(AIComposeError) -> [Piece] {
+        // **Scalars, not Characters** (audit round 4, 2026-10-25): "}" followed by a combining accent is one grapheme, and a
+        // Character search would read it as a literal; a closing brace with no opening one is refused, never passed through.
         var out: [Piece] = []
-        var rest = Substring(template)
-        while let open = rest.firstIndex(of: "{") {
-            if open > rest.startIndex { out.append(.literal(String(rest[..<open]))) }
-            let after = rest.index(after: open)
-            guard let close = rest[after...].firstIndex(of: "}") else {
-                throw .unknownPlaceholder(String(rest[after...]))
+        var literal = String.UnicodeScalarView()
+        let scalars = template.unicodeScalars
+        var index = scalars.startIndex
+        while index < scalars.endIndex {
+            let scalar = scalars[index]
+            if scalar == "{" {
+                if !literal.isEmpty {
+                    out.append(.literal(String(literal)))
+                    literal = String.UnicodeScalarView()
+                }
+                let nameStart = scalars.index(after: index)
+                guard let close = scalars[nameStart...].firstIndex(of: "}") else {
+                    throw .unknownPlaceholder(String(String.UnicodeScalarView(scalars[nameStart...])))
+                }
+                let name = String(String.UnicodeScalarView(scalars[nameStart..<close]))
+                guard let placeholder = Placeholder(rawValue: name) else { throw .unknownPlaceholder(name) }
+                out.append(.placeholder(placeholder))
+                index = scalars.index(after: close)
+            } else if scalar == "}" {
+                throw .unknownPlaceholder("}")
+            } else {
+                literal.append(scalar)
+                index = scalars.index(after: index)
             }
-            let name = String(rest[after..<close])
-            guard let placeholder = Placeholder(rawValue: name) else { throw .unknownPlaceholder(name) }
-            out.append(.placeholder(placeholder))
-            rest = rest[rest.index(after: close)...]
         }
-        if !rest.isEmpty { out.append(.literal(String(rest))) }
+        if !literal.isEmpty { out.append(.literal(String(literal))) }
         return out
     }
 

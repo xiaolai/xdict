@@ -29,7 +29,23 @@ public final class AISettingsModel {
     @ObservationIgnored private var statusGeneration = 0
     @ObservationIgnored private var keyGeneration = 0
     /// The configuration a failed key test spoke for: another one makes its verdict stale (audit finding, 2026-10-25).
-    @ObservationIgnored private var keyVerdict: MeaningSettings?
+    /// **A failed probe's configuration, without the key it carried** (audit round 4, 2026-10-25): the row only needs to
+    /// know whether the reader changed what the failure described, and the secret is not part of that answer.
+    struct KeyVerdict: Equatable {
+        let source: AIProviderKind?
+        let endpoint: String
+        let profile: String
+        let model: String
+
+        init(_ settings: MeaningSettings) {
+            source = settings.source
+            endpoint = settings.endpoint?.absoluteString ?? ""
+            profile = MeaningProviders.profile(settings).id
+            model = settings.model
+        }
+    }
+
+    @ObservationIgnored private var keyVerdict: KeyVerdict?
     public var keyState: KeyState = .absent
     public var draftKey = ""
     /// **The address as typed** (audit finding, 2026-10-25): the field has its own editing state, so text that is not
@@ -143,6 +159,7 @@ public final class AISettingsModel {
     // MARK: - The source
 
     public func select(_ kind: AIProviderKind?, cloud: Bool = false) {
+        invalidateKeyTest()
         // **A sign-in belongs to the Codex source** (audit finding, 2026-10-25): choosing another source ends the login,
         // so its process group stops and no line or failure of it can land under the new source.
         if kind != .codexCLI { cancelSignIn() }
@@ -155,6 +172,7 @@ public final class AISettingsModel {
     /// **A service choice fills the address** (both the stored endpoint and the field's draft): from here, the reader's
     /// own edit starts from the service's base address rather than from the other row's.
     public func chooseProfile(_ id: String) {
+        invalidateKeyTest()
         preferences.chooseProfile(id)
         loadEndpointDraft()
     }
@@ -164,14 +182,17 @@ public final class AISettingsModel {
     public func endpointTyped() {
         let text = draftEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
+            invalidateKeyTest()
             preferences.setEndpoint("")
             endpointInvalid = false
             return
         }
         guard MeaningPreferences.address(text) != nil else {
             endpointInvalid = true
+            invalidateKeyTest()
             return
         }
+        invalidateKeyTest()
         preferences.setEndpoint(text)
         // The space or newline around a pasted address is not part of it: once it is a valid address, the field shows the
         // address itself (the same text the stored value has), not the paste's padding.
@@ -197,7 +218,7 @@ public final class AISettingsModel {
         // **A superseded check cannot overwrite the current source's status** (audit finding, 2026-10-20), and neither
         // can a check cancelled by the pane or made for a configuration the reader has since changed (audit finding,
         // 2026-10-25: the task is driven by `StatusKey`, so a change starts a new one and cancels this one).
-        if case .failed = keyState, let verdict = keyVerdict, !Self.sameSource(verdict, preferences.settings) {
+        if case .failed = keyState, let verdict = keyVerdict, verdict != KeyVerdict(preferences.settings) {
             restoreKeyState()
         }
         statusGeneration += 1
@@ -245,8 +266,7 @@ public final class AISettingsModel {
         guard preferences.settings.source == .http, let endpoint = preferences.settings.endpoint else {
             // **A pane with no endpoint has no load**: the generation advances so an older request cannot land here.
             modelsGeneration += 1
-            models = .idle
-            modelsIdentity = nil
+            resetModels()
             return
         }
         let settings = preferences.settings
@@ -264,23 +284,25 @@ public final class AISettingsModel {
         guard mine == modelsGeneration, identity == listIdentity else {
             // **A load whose configuration is gone leaves nothing behind**: when no newer load owns the pane, the state
             // returns to idle, so coming back to this configuration does not show a request that no longer exists.
-            if mine == modelsGeneration {
-                models = .idle
-                modelsIdentity = nil
-            }
+            if mine == modelsGeneration { resetModels() }
             return
         }
         // **A cancelled load publishes nothing** (audit round 2, 2026-10-25): a fetch that ignores cancellation must not
         // land after the pane's own cancellation, and neither must one whose address draft is no longer an address.
         guard !Task.isCancelled, !endpointInvalid else {
-            models = .idle
-            modelsIdentity = nil
+            resetModels()
             return
         }
         switch result {
         case .success(let list): models = .loaded(list)
         case .failure(let error): models = .failed(error)
         }
+    }
+
+    /// **No model list is shown and none is owned**: the one reset four paths need (audit round 4, 2026-10-25).
+    private func resetModels() {
+        models = .idle
+        modelsIdentity = nil
     }
 
     /// **Load Models' owner**: one load at a time, started by the view and cancellable with it.
@@ -294,8 +316,7 @@ public final class AISettingsModel {
         modelsTask?.cancel()
         modelsTask = nil
         modelsGeneration += 1
-        models = .idle
-        modelsIdentity = nil
+        resetModels()
     }
 
     /// **Nothing the pane started outlives it**: the sign-in, a model load and a key test end together.
@@ -311,6 +332,7 @@ public final class AISettingsModel {
 
     /// A model picked from the list is the reader's choice, stored exactly as typing it would.
     public func chooseModel(_ id: String) {
+        invalidateKeyTest()
         preferences.setModel(id)
     }
 
@@ -323,6 +345,7 @@ public final class AISettingsModel {
             keyGeneration += 1
             draftKey = ""
             keyFailure = nil
+            keyVerdict = nil
             keyState = .stored
         } catch {
             let status = (error as? MeaningKeyError)?.status ?? -1
@@ -343,8 +366,10 @@ public final class AISettingsModel {
     public func removeKey() {
         do {
             try preferences.setKey(nil)
-            // The key a running test is proving is gone; its verdict must not bring `.stored` back.
+            // The key a running test is proving is gone; its verdict must not bring `.stored` back, and a stored failure
+            // verdict describes a key that is no longer there (audit round 4, 2026-10-25).
             keyGeneration += 1
+            keyVerdict = nil
             keyState = .absent
             keyFailure = nil
         } catch {
@@ -352,6 +377,13 @@ public final class AISettingsModel {
             let status = (error as? MeaningKeyError)?.status ?? -1
             keyFailure = LocalizedStringResource("The Keychain refused to remove the key (status \(status)).")
         }
+    }
+
+    /// **The model field's own change** (audit round 4, 2026-10-25): the probe is about the model it started for, so a
+    /// typed model invalidates it as a source, profile or endpoint change does.
+    public func modelTyped(_ model: String) {
+        invalidateKeyTest()
+        preferences.setModel(model)
     }
 
     /// **Test**'s owner: one probe at a time, started by the view and cancellable with it.
@@ -367,10 +399,13 @@ public final class AISettingsModel {
         guard !Task.isCancelled, !endpointInvalid else { return }
         keyGeneration += 1
         let mine = keyGeneration
+        // **A new probe replaces the last verdict** (audit round 4, 2026-10-25): the old failure named the configuration
+        // this one is proving again.
+        keyVerdict = nil
         keyState = .testing
         let settings = preferences.settings
         guard let endpoint = settings.endpoint else {
-            keyVerdict = settings
+            keyVerdict = KeyVerdict(settings)
             keyState = .failed(.unreachable)
             return
         }
@@ -392,13 +427,28 @@ public final class AISettingsModel {
             restoreKeyState()
             return
         }
-        if failure != nil { keyVerdict = settings }
+        keyVerdict = failure.map { _ in KeyVerdict(settings) }
         keyState = failure.map { .failed($0) } ?? .stored
     }
 
-    /// The stored key outlives a stale probe; its four-state row shows what is still true.
+    /// The stored key outlives a stale probe; its four-state row shows what is still true. **Its verdict goes with the
+    /// configuration it described** (audit round 4, 2026-10-25): only a failure keeps one.
     private func restoreKeyState() {
+        keyVerdict = nil
         keyState = preferences.hasKey ? .stored : .absent
+    }
+
+    /// **A probe belongs to the configuration it started for** (audit round 4, 2026-10-25): a change ends it at once
+    /// rather than leaving the key row disabled until an obsolete request returns. A stored failure verdict is the same
+    /// fact — it named the configuration the reader has now left — so it goes too.
+    private func invalidateKeyTest() {
+        if case .testing = keyState {
+            keyGeneration += 1
+            keyState = preferences.hasKey ? .stored : .absent
+        } else if case .failed = keyState {
+            keyState = preferences.hasKey ? .stored : .absent
+        }
+        keyVerdict = nil
     }
 
     // MARK: - The command-line sources
@@ -491,11 +541,12 @@ public final class AISettingsModel {
     public func draftChanged() {
         let language = preferences.settings.language
         if draft == preferences.storedTemplate(language: language, mode: promptKind) { return }
+        // **An empty editor is the reader starting over** (audit round 4, 2026-10-25): it saves nothing and restores
+        // nothing; the preview says the template cannot compose until text exists. Reset to Default is the way back.
+        guard !draft.isEmpty else { return }
         let shipped = AITemplates.effective(language: language, mode: promptKind, stored: nil)
-        if draft.isEmpty || draft == shipped {
+        if draft == shipped {
             preferences.setTemplate(nil, language: language, mode: promptKind)
-            // An empty editor was restoring the default behind the reader's back while showing nothing: show it.
-            if draft.isEmpty { loadDraft() }
         } else {
             preferences.setTemplate(draft, language: language, mode: promptKind)
         }
@@ -504,6 +555,14 @@ public final class AISettingsModel {
     public func resetDraft() {
         preferences.resetTemplates(language: preferences.settings.language, mode: promptKind)
         loadDraft()
+    }
+
+    /// **Reset is offered whenever Reset would change the text** (audit round 4, 2026-10-25): an editor cleared over an
+    /// unedited default has nothing else to bring the default back, so the button used to be disabled where it was needed.
+    public func canResetDraft() -> Bool {
+        let language = preferences.settings.language
+        return preferences.isEdited(language: language, mode: promptKind)
+            || draft != AITemplates.effective(language: language, mode: promptKind, stored: nil)
     }
 }
 

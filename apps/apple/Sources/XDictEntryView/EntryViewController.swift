@@ -90,6 +90,8 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// The find call whose result may still paint, and the call itself (audit round 3).
     private var findGeneration = 0
     private var findTask: Task<EntryFindResult?, Never>?
+    /// The one rule-list compilation in flight (audit round 4).
+    private var ruleListTask: Task<Result<WKContentRuleList, EntryRefusal>, Never>?
     /// Why nothing is rendered, while that is so.
     public private(set) var refusal: EntryRefusal?
     /// The consent prompt on screen, if one is: the E2E stage clicks its buttons as a reader would.
@@ -247,6 +249,7 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         if !shown, self.pane === pane, pane.reference != reference {
             say(EntrySentences.entryFailed)
         }
+        if shown { refindIfShown() }
         return shown
     }
 
@@ -279,7 +282,17 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
         refusal = nil
         message.isHidden = true
+        refindIfShown()
         return !items.isEmpty
+    }
+
+    /// **A visible Find reruns against the document just shown** (audit round 4, 2026-10-25): its counts and highlights are
+    /// about the previous one.
+    private func refindIfShown() {
+        guard !findBar.isHidden else { return }
+        let query = findBar.field.stringValue
+        guard !query.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        performFind(query)
     }
 
     private func makePage() -> EntryPage {
@@ -358,13 +371,27 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         }
     }
 
+    /// **One compilation, awaited by every presentation that needs it** (audit round 4, 2026-10-25): two initial shows
+    /// used to compile independently, and the older completion could overwrite the newer result.
     private func compileRuleList() async {
-        guard ruleList == nil, environment.confinement.ruleList else { return }
-        do {
-            ruleList = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
-        } catch {
-            ruleList = .failure(.ruleListUnavailable(String(describing: error)))
+        guard environment.confinement.ruleList else { return }
+        if ruleList != nil { return }
+        if let task = ruleListTask {
+            ruleList = await task.value
+            return
         }
+        let task = Task { [environment] in
+            let result: Result<WKContentRuleList, EntryRefusal>
+            do {
+                result = .success(try await EntryRuleList.compile(in: environment.ruleListDirectory))
+            } catch {
+                result = .failure(.ruleListUnavailable(String(describing: error)))
+            }
+            return result
+        }
+        ruleListTask = task
+        ruleList = await task.value
+        ruleListTask = nil
     }
 
     /// The shown entry's height in points (its CSS height at its zoom), or the page's (`pageHeight`) while the page is
@@ -545,11 +572,16 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     public func showFind() {
         setFindShown(true)
         view.window?.makeFirstResponder(findBar.field)
+        // **The bar's query survives its closing, so reopening runs it again** (audit round 4, 2026-10-25): stale counts
+        // over a document cleared of highlights are not shown.
+        let query = findBar.field.stringValue
+        if !query.trimmingCharacters(in: .whitespaces).isEmpty { performFind(query) }
     }
 
     public func hideFind() {
         endFind()
         setFindShown(false)
+        findBar.show(nil, query: "")
         Task {
             if let page { await page.clearFind() } else { await pane?.clearFind() }
         }
@@ -560,11 +592,22 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// navigation or by the bar closing does not restore its counts or highlights.
     @discardableResult
     public func performFind(_ query: String) -> Task<EntryFindResult?, Never> {
+        runFind(query: query) { page, pane in
+            if let page { return await page.find(query) }
+            return await pane?.find(query)
+        }
+    }
+
+    /// **The one find runner** (audit round 4, 2026-10-25): a generation, a cancelled predecessor, the gates and the bar's
+    /// paint; a query and a step differ only in the operation they run.
+    private func runFind(query: String,
+                         _ operation: @escaping @MainActor (EntryPage?, EntryPane?) async -> EntryFindResult?)
+        -> Task<EntryFindResult?, Never> {
         findGeneration += 1
         let mine = findGeneration
         findTask?.cancel()
         let task: Task<EntryFindResult?, Never> = Task { @MainActor in
-            let result = if let page { await page.find(query) } else { await pane?.find(query) }
+            let result = await operation(page, pane)
             guard !Task.isCancelled, mine == findGeneration else { return nil }
             findBar.show(result, query: query)
             return result
@@ -583,8 +626,18 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
     /// Edit ▸ Find ▸ Use Selection for Find (⌘E, P33): the entry's selected text becomes the find bar's query.
     @discardableResult
     public func useSelectionForFind() -> Task<EntryFindResult?, Never> {
-        Task { @MainActor in
-            guard let selected = await focusPane?.selectedText(), !selected.isEmpty else { return nil }
+        let generation = showGeneration
+        let pane = focusPane
+        // **Captured now, not when the task starts** (audit round 4, 2026-10-25): a find started between this call and
+        // the task's first turn had already been overtaken by the read's result.
+        let mine = findGeneration
+        return Task { @MainActor in
+            guard let selected = await pane?.selectedText(), !selected.isEmpty else { return nil }
+            // **The frame, the presentation and the find may all have moved during the read** (audit round 4, 2026-10-25):
+            // the bar only opens for the document the selection was read from, and a find opened or closed meanwhile
+            // owns the next state.
+            guard !Task.isCancelled, mine == findGeneration,
+                  generation == showGeneration, pane === focusPane else { return nil }
             setFindShown(true)
             findBar.field.stringValue = selected
             return await performFind(selected).value
@@ -608,19 +661,10 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
 
     @discardableResult
     public func stepFind(forward: Bool) -> Task<EntryFindResult?, Never> {
-        findGeneration += 1
-        let mine = findGeneration
-        findTask?.cancel()
-        let task: Task<EntryFindResult?, Never> = Task { @MainActor in
-            let result = if let page { await page.findStep(forward: forward) } else {
-                await pane?.findStep(forward: forward)
-            }
-            guard !Task.isCancelled, mine == findGeneration else { return nil }
-            findBar.show(result, query: findBar.field.stringValue)
-            return result
+        runFind(query: findBar.field.stringValue) { page, pane in
+            if let page { return await page.findStep(forward: forward) }
+            return await pane?.findStep(forward: forward)
         }
-        findTask = task
-        return task
     }
 
     // MARK: - EntryPaneHost

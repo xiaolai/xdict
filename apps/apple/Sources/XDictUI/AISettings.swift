@@ -46,7 +46,9 @@ public struct AISettings: View {
         // **A corrected address, service, model or key re-runs the check** (audit finding, 2026-10-20): the same identity
         // the result guard reads, so the two cannot disagree (audit round 1, 2026-10-25).
         .task(id: AISettingsModel.sourceIdentity(model.preferences.settings)) {
-            await model.refreshStatus()
+            // **One owner for a status check**: the activation handler starts the same task through `startStatusCheck()`,
+            // so the two triggers cannot run duplicates (audit round 4, 2026-10-25).
+            model.startStatusCheck()
         }
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
         .onChange(of: model.promptKind) { model.loadDraft() }
@@ -299,8 +301,10 @@ public struct AISettings: View {
     /// The model, the service's own list on the reader's ask, and why the list did not come.
     private func modelRow(model: AISettingsModel) -> some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            // **A typed model ends a probe too** (audit round 4, 2026-10-25): a verdict on the old model was speaking
+            // for a configuration the reader had already changed.
             TextField(text: Binding(get: { model.preferences.settings.model },
-                                    set: { model.preferences.setModel($0) })) {
+                                    set: { model.modelTyped($0) })) {
                 Text("Model")
             }
             .accessibilityIdentifier("ai.model")
@@ -678,7 +682,7 @@ public struct AISettings: View {
                 editedBadge("ai.prompt.edited")
             }
             Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
-                .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
+                .disabled(!model.canResetDraft())
                 .accessibilityIdentifier("ai.prompt.reset")
         }
     }
@@ -720,7 +724,9 @@ public struct AISettings: View {
     private func promptPreview(model: AISettingsModel) -> some View {
         DisclosureGroup {
             previewText(model: model)
-            Text("This is a sample: the sentence you capture and the entry you see are sent instead.")
+            Text(model.promptKind == .sentenceOnly
+                 ? LocalizedStringResource("This is a sample: only the sentence you capture is sent.")
+                 : LocalizedStringResource("This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } label: {

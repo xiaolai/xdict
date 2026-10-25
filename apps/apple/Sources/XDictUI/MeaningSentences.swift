@@ -1,5 +1,6 @@
 import Foundation
 import XDictAI
+import XDictClient
 
 /// **What the AI pane tells the reader, in their language** (plan-ai-meaning WI-6; ADR-0007 decision 10: the model hands
 /// kinds, the view layer words them). Every sentence is in `Strings/Localizable.xcstrings`, in English and Simplified
@@ -138,7 +139,20 @@ public enum MeaningSentences {
         case .noSource: LocalizedStringResource("Choose a source in Settings ▸ AI.")
         case .noContext: LocalizedStringResource("There is no captured sentence to answer about.")
         case .noEntry: LocalizedStringResource("No entry is on screen for this sentence.")
-        case .entryFailure: LocalizedStringResource("The entry could not be read.")
+        case .entryFailure(let failure):
+            // **The known cause is said, with what to do about it** (audit round 4, 2026-10-25): the reader's dictionary
+            // list lives in Settings ▸ Dictionaries (ADR-0012), and every branch names a next step.
+            switch failure {
+            case .reopenNeedsImport:
+                LocalizedStringResource("The dictionary changed on disk. Import it again in Settings ▸ Dictionaries.")
+            case .fileUnavailable:
+                LocalizedStringResource(
+                    "The dictionary’s file is not available now. Check that its folder is connected, then import it again in Settings ▸ Dictionaries.")
+            case .wire, .superseded, .needsFiles:
+                // **A routing failure names no dictionary** (audit round 4, 2026-10-25): reimporting is not its remedy, so
+                // it shares the sentence that offers the one step a reader has.
+                LocalizedStringResource("The entry could not be read just now. Ask again.")
+            }
         case .consentChanged:
             LocalizedStringResource("The entry-text switch changed while the question was being prepared, so nothing was sent.")
         case .noSense:

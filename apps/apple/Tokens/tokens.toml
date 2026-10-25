@@ -134,6 +134,9 @@ meaningSheetHeight = { value = 480, why = "A compact Meaning in Context sheet ke
 paneGap = { value = 8, why = "The air between the main window and the answer pane, so the pane reads as its own surface (owner, 2026-10-24)." }
 paneInitialHeight = { value = 600, why = "The answer pane's height before its first frame is set; its real height follows the main window." }
 drawerShutWidth = { value = 1, why = "The drawer's shut width: one point, because AppKit does not animate a zero-size window (type-review's KeyboardDrawer)." }
+mainIdealWidth = { value = 1000, why = "The main window's opening width: the reading column, the sidebar and the inspector at their defaults." }
+mainIdealHeight = { value = 700, why = "The main window's opening height: a full entry paragraph above the synonyms." }
+scrollEdgeTolerance = { value = 1, why = "How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }

@@ -152,16 +152,23 @@ struct MeaningPresenterTests {
         components.day = 25
         components.timeZone = TimeZone(secondsFromGMT: 0)
         let date = try #require(Calendar(identifier: .gregorian).date(from: components))
-        let text = MeaningPresenter.noteText(presentation: presentation,
-                                             source: MeaningSentences.source(.claudeCLI), model: "a-model", date: date)
+        // **The presentation's own facts carry the source and the model** (audit round 4, 2026-10-25).
+        let sourced = MeaningPresentation(facts: MeaningRequestFacts(source: MeaningSentences.source(.claudeCLI),
+                                                                    model: "a-model"),
+                                          grounding: presentation.grounding, outcome: presentation.outcome,
+                                          coverage: nil, quotes: presentation.quotes,
+                                          explanation: presentation.explanation, problem: nil, code: nil)
+        let text = MeaningPresenter.noteText(presentation: sourced, date: date) { resource in
+            (try? CompiledCatalog.text(resource, in: "en")) ?? "<missing text>"
+        }
         let lines = text.components(separatedBy: "\n")
-        #expect(lines.count == 3, "the note is not three parts: \(text)")
+        try #require(lines.count == 3, "the note is not three parts: \(text)")
         #expect(lines[0] == "It means that here.")
         #expect(lines[1] == "“to keep”")
-        #expect(lines[2].contains("a-model") && lines[2].contains("2026-10-25"))
-        let provenance = MeaningSentences.noteProvenance(source: "Claude", model: "a-model", day: "2026-10-25")
-        #expect(try Self.text(provenance)
-                == "Saved from an XDict AI answer (Claude, a-model, 2026-10-25). The wording is the model's.")
+        // The whole provenance is the catalog's sentence, with this source, model and day.
+        let source = try Self.text(try #require(MeaningSentences.source(.claudeCLI)))
+        let provenance = MeaningSentences.noteProvenance(source: source, model: "a-model", day: "2026-10-25")
+        #expect(lines[2] == (try Self.text(provenance)))
     }
 
     /// **Copy Answer is the explanation and its quotes as text** (plan-companion WI-10): each quote its own paragraph,

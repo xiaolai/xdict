@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import XDictTokens
 
 /// **The context menu, stripped to what keeps the reader in XDict** (ADR-0009 decision 7): WebKit's default menu opens a
 /// link in a new window, downloads a linked file or an image, opens an image, copies a link — each a way out that no
@@ -53,8 +54,25 @@ public final class EntryWebView: WKWebView {
         return super.previousValidKeyView
     }
 
+    /// A capped frame scrolls its own document (audit round 4, 2026-10-25), and hands the wheel to the page when its
+    /// document's edge is reached; a frame as tall as its document passes every wheel event to the page.
+    var scrollsInternally = false
+    /// **The document's own scroll position** (audit round 4, 2026-10-25): its scroll and resize listener reports
+    /// `(y, max)` here, because macOS's `WKWebView` has no public `scrollView` to ask.
+    var innerScroll = (y: 0.0, max: 0.0)
+
     override public func scrollWheel(with event: NSEvent) {
-        if passesScrollToPage, let page = enclosingScrollView {
+        guard passesScrollToPage, let page = enclosingScrollView else {
+            super.scrollWheel(with: event)
+            return
+        }
+        guard scrollsInternally else {
+            page.scrollWheel(with: event)
+            return
+        }
+        let up = event.scrollingDeltaY > 0
+        let edge = Tokens.Window.scrollEdgeTolerance
+        if (up && innerScroll.y <= edge) || (!up && innerScroll.y >= innerScroll.max - edge) {
             page.scrollWheel(with: event)
         } else {
             super.scrollWheel(with: event)
