@@ -105,13 +105,12 @@ fn the_destination_class_of_a_sample_of_phrase_keys_is_counted() {
         let mut sampled = 0u64;
         let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
         let mut from = 0u64;
-        'pages: loop {
-            let Ok(page) = core.words(dict.clone(), from, 1_000) else { break };
+        while let Ok(page) = core.words(dict.clone(), from, 1_000) {
             for key in &page.words {
                 if key.split_whitespace().count() < 2 {
                     continue;
                 }
-                if multi % step == 0 && sampled < wanted {
+                if multi.is_multiple_of(step) && sampled < wanted {
                     sampled += 1;
                     let Ok(answer) = core.lookup(key.clone(), vec![dict.clone()], options.clone()) else { continue };
                     match class(&answer) {
@@ -125,7 +124,7 @@ fn the_destination_class_of_a_sample_of_phrase_keys_is_counted() {
                         _ => {}
                     }
                     if sampled == wanted {
-                        break 'pages;
+                        break;
                     }
                 }
                 multi += 1;
