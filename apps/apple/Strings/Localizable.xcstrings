@@ -3303,6 +3303,22 @@
         }
       }
     },
+    "Choose the dictionary this answer is grounded in.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the dictionary this answer is grounded in."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择这条答案所依据的词典。"
+          }
+        }
+      }
+    },
     "Chose a sense from the entry": {
       "localizations": {
         "en": {

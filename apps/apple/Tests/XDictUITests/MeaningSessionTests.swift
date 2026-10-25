@@ -561,6 +561,26 @@ import XDictContract
         #expect(await provider.questions.count == 1, "the cancelled ask reached the source")
     }
 
+    /// **The reader can ground the question in another dictionary's entry** (owner, 2026-10-26): the page showed one
+    /// dictionary's entry, and an explicit choice sends the other dictionary's text and records it as the answer's target.
+    @Test func anAskCanBeGroundedInAChosenDictionary() async {
+        let fetcher = EchoFetcher()
+        let provider = StubProvider(answers: [.success(Self.matched)])
+        let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+                                   presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+        let otherDictionary = DictId(rawValue: "feedface00000002")
+        let otherEntry = EntryRef(edition: Self.edition, key: "resource", occurrence: 0)
+        // A sense chosen on the entry the page showed belongs to that entry, not to the chosen one.
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
+        session.ask(in: MeaningTarget(dictionary: otherDictionary, entry: otherEntry))
+        #expect(session.selection == nil, "a sense chosen on the old entry survived the change")
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(await fetcher.calls.map(\.0) == [otherDictionary], "the chosen dictionary's entry was not read")
+        #expect(await fetcher.calls.map(\.1) == [otherEntry])
+        #expect(session.sent?.target == MeaningTarget(dictionary: otherDictionary, entry: otherEntry))
+        #expect(await provider.questions.count == 1)
+    }
+
     @Test func aProviderFailureIsTypedAndNotRetriedElsewhere() async {
         let (session, provider, _) = Self.session(provider: StubProvider(answers: [.failure(.unauthorised)]))
         session.ask()
@@ -1117,6 +1137,20 @@ actor ChangingFetcher {
     func fetch(_ dict: DictId, _ entry: EntryRef, _ budget: UInt64) -> Result<EntryText, ClientFailure> {
         calls += 1
         return results.count > 1 ? results.removeFirst() : results[0]
+    }
+}
+
+/// **An entry fetch that answers for the entry it was asked about** (owner, 2026-10-26): a chosen dictionary's fetch
+/// must carry that entry's own text, not another dictionary's.
+actor EchoFetcher {
+    private(set) var calls: [(DictId, EntryRef)] = []
+
+    func fetch(_ dict: DictId, _ entry: EntryRef, _ budget: UInt64) -> Result<EntryText, ClientFailure> {
+        calls.append((dict, entry))
+        // The fixture answer's quote ("to keep") is a byte slice of this text, so the answer validates as usual.
+        let text = "resource\n  to keep"
+        return .success(EntryText(entry: entry, text: text, spans: [], senses: [], style: 13, complete: true,
+                                  omittedBytes: 0, cutAt: UInt64(text.utf8.count), spansDropped: 0))
     }
 }
 

@@ -200,6 +200,17 @@ struct CompanionSourceTests {
         #expect(source.contains("The senses could not be read."))
     }
 
+    /// **The evidence row offers the page's other dictionaries** (owner, 2026-10-26): the source is a menu whose choice
+    /// grounds the same question in that dictionary's entry, and the row is a plain label when there is nothing to choose.
+    @Test func theEvidenceSourceOffersThePagesDictionaries() throws {
+        let source = try Self.code("Sources/XDictUI/MeaningAnswerView.swift")
+        #expect(source.contains("state.groundingChoices"))
+        #expect(source.contains("state.askMeaning(in: chosen)"))
+        #expect(source.contains("meaning.evidence.dictionary"))
+        let state = try Self.code("Sources/XDictUI/SearchWindowState.swift")
+        #expect(state.contains("MeaningGrounding.choices(results: results, sources: model.known)"))
+    }
+
     /// **The pane's save goes through the wired state** (plan-companion WI-9): the control exists only with a study model,
     /// and the text is the note builder's.
     @Test func thePaneSavesANoteThroughTheStatesModel() throws {

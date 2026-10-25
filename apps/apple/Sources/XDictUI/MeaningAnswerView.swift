@@ -202,7 +202,9 @@ public struct MeaningAnswerPane: View {
             answerHeader(presentation)
             explanation(presentation)
             answerSense(presentation)
-            if !presentation.quotes.isEmpty {
+            // **The source row is shown for a grounded answer even with no quote** (owner, 2026-10-26): the dictionary a
+            // does-not-fit verdict came from is the one the reader may want to change.
+            if presentation.evidenceSource != nil || !presentation.quotes.isEmpty {
                 evidence(presentation)
             }
             entryCoverage(presentation)
@@ -597,19 +599,48 @@ public struct MeaningAnswerPane: View {
     }
 
     /// **The dictionary text the answer quotes, with its dictionary** (UI10, UI11): after the explanation, each quote
-    /// one step from its place in the entry; a reveal that finds nothing says so.
+    /// one step from its place in the entry; a reveal that finds nothing says so. **The dictionary is a choice when the
+    /// page has more than one** (owner, 2026-10-26): choosing one asks the same question on that dictionary's entry,
+    /// instead of the entry the page happened to show first.
     private func evidence(_ presentation: MeaningPresentation) -> some View {
-        VStack(alignment: .leading, spacing: Tokens.Space.sm) {
-            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
-                Text(MeaningSentences.evidence)
-                if let name = presentation.evidenceSource {
-                    Text(verbatim: "· \(name)")
+        let choices = state.groundingChoices
+        let choosing = choices.count > 1 && presentation.evidenceTarget != nil && settings.sendEntryText
+        return VStack(alignment: .leading, spacing: Tokens.Space.sm) {
+            if let name = presentation.evidenceSource {
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+                    Text(MeaningSentences.evidence)
+                    if choosing {
+                        Menu {  // placement: inspector-row
+                            Picker(selection: Binding(get: { presentation.evidenceTarget },
+                                                      set: { chosen in
+                                                          if let chosen { state.askMeaning(in: chosen) }
+                                                      })) {
+                                ForEach(choices) { choice in
+                                    Text(choice.name).tag(Optional(choice.target))
+                                }
+                            } label: {
+                                EmptyView()
+                            }
+                            .pickerStyle(.inline)
+                            .labelsHidden()
+                        } label: {
+                            Text(verbatim: "· \(name)")
+                                .contentShape(Rectangle())
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.visible)
+                        .fixedSize()
+                        .help("Choose the dictionary this answer is grounded in.")
+                        .accessibilityIdentifier("meaning.evidence.dictionary")
+                    } else {
+                        Text(verbatim: "· \(name)")
+                    }
                 }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityElement(children: choosing ? .contain : .combine)
+                .accessibilityIdentifier("meaning.evidence.source")
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("meaning.evidence.source")
             ForEach(Array(presentation.quotes.enumerated()), id: \.offset) { _, quote in
                 quoteRow(quote, target: presentation.evidenceTarget)
             }

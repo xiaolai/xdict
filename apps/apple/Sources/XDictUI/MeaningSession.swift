@@ -161,7 +161,7 @@ public struct MeaningSent: Sendable, Equatable {
 
 /// **One entry an operation is about** (plan-explain-sense WI-5): the dictionary's handle and the entry's reference, in
 /// the frame the reader is reading. Carried as a value, so an operation's target cannot drift with the window.
-public struct MeaningTarget: Equatable, Sendable {
+public struct MeaningTarget: Equatable, Hashable, Sendable {
     public let dictionary: DictId
     public let entry: EntryRef
 
@@ -605,6 +605,23 @@ public final class MeaningSession {
     public func ask() {
         let chosen = settingsProvider?() ?? settings
         ask(operation: Operation(mode: chosen.sendEntryText ? .grounded : .sentenceOnly, selection: nil, target: nil))
+    }
+
+    /// **The reader chose which dictionary answers this sentence** (owner, 2026-10-26): the same in-context question,
+    /// grounded in the entry of the dictionary they picked from the page, instead of the one shown first. The entry's
+    /// text leaves only under the switch, like every grounded ask.
+    public func ask(in target: MeaningTarget) {
+        let chosen = settingsProvider?() ?? settings
+        guard chosen.sendEntryText else {
+            refuse(.entryTextOff)
+            return
+        }
+        // **A sense chosen on another entry does not survive** (owner, 2026-10-26): its ordinal belongs to that entry.
+        // Choosing the entry already bound keeps the reader's choice for the chips.
+        if let selection, selection.dictionary != target.dictionary || selection.entry != target.entry {
+            self.selection = nil
+        }
+        ask(operation: Operation(mode: .grounded, selection: nil, target: target))
     }
 
     /// **The reader asks about the sense they selected** (plan-explain-sense WI-5; ADR-0029 d.6): the entry's text and

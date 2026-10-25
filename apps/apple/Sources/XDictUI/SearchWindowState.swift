@@ -497,6 +497,21 @@ public final class SearchWindowState {
 
     // MARK: - The All page (P15)
 
+    /// **The dictionaries this word can be answered from** (owner, 2026-10-26): the page's results in its order, each
+    /// named and ready to ground an ask. One or none off the page, where there is nothing to choose.
+    public var groundingChoices: [MeaningGrounding.Choice] {
+        guard let results = pageResults else { return [] }
+        return MeaningGrounding.choices(results: results, sources: model.known)
+    }
+
+    /// **The reader chose the dictionary that answers** (owner, 2026-10-26): the question already asked about this
+    /// sentence, grounded in the chosen dictionary's entry.
+    public func askMeaning(in target: MeaningTarget) {
+        meaning.ask(in: target)
+        // The marks follow the choice: a sense chosen on the entry just left has no row left to mark.
+        markSelection()
+    }
+
     /// The entries the All page holds now: changes as each dictionary answers, so the page grows in the reader's order.
     /// Nil when no page is due.
     public var pageResults: [ResultID]? {
