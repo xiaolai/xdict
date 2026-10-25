@@ -271,9 +271,10 @@ record! {
         NotAsked,
         /// At least one dictionary's inventory is not built yet, and nothing matched.
         Building,
-        /// No dictionary could answer, and none is still building.
+        /// Nothing matched, and something could not answer: a dictionary whose store could not be built, or no
+        /// dictionary asked at all. A partial search is never `none`.
         Unavailable,
-        /// Every eligible dictionary answered; nothing matched.
+        /// Every dictionary asked answered; nothing matched.
         None,
         Found,
     }

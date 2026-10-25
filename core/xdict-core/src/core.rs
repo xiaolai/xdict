@@ -1485,14 +1485,17 @@ impl Core {
                     });
                 }
             }
+            // **`none` only when every dictionary asked answered** (D4): one ready-and-empty beside one whose store
+            // could not be built is `unavailable`, never a complete "nothing here".
+            let unavailable = coverage.iter().any(|entry| entry.state == Coverage::Unavailable);
             let state = if !matches.is_empty() {
                 PhraseState::Found
             } else if building {
                 PhraseState::Building
-            } else if ready > 0 {
-                PhraseState::None
-            } else {
+            } else if unavailable || ready == 0 {
                 PhraseState::Unavailable
+            } else {
+                PhraseState::None
             };
             Ok(PhraseAnswer { state, matches, coverage, capped })
         })

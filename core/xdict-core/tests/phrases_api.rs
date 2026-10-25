@@ -57,6 +57,51 @@ fn package(dir: &Scratch, name: &str, entries: &[W]) -> Package {
     Package { mdx: dir.at(&format!("{name}.mdx")), mdd: vec![], sidecars: vec![] }
 }
 
+/// A dictionary file whose identity the test can change under an open handle, as a moved or rewritten file's would.
+struct ChangingSource {
+    bytes: Vec<u8>,
+    identity: Mutex<FileIdentity>,
+}
+
+impl ChangingSource {
+    fn new(bytes: Vec<u8>, identity: FileIdentity) -> Arc<Self> {
+        Arc::new(Self { bytes, identity: Mutex::new(identity) })
+    }
+    fn set_inode(&self, inode: u64) {
+        self.identity.lock().unwrap().inode = inode;
+    }
+}
+
+impl ByteSource for ChangingSource {
+    fn size(&self) -> u64 {
+        self.bytes.len() as u64
+    }
+    fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
+        let start = usize::try_from(offset).unwrap();
+        let end = start.checked_add(len as usize).unwrap();
+        self.bytes.get(start..end).map(<[u8]>::to_vec).ok_or_else(|| CoreError::Io {
+            kind: IoKind::ShortRead,
+            detail: "a short read from the phrase source".into(),
+        })
+    }
+    fn identity(&self) -> Option<FileIdentity> {
+        Some(*self.identity.lock().unwrap())
+    }
+}
+
+/// One dictionary's own bytes, its title distinguishing its edition, served through a source the test can change.
+fn changing_package(name: &str, title: &str) -> (Package, Arc<ChangingSource>) {
+    let bytes = writer::write(&Spec { title: title.into(), ..Spec::mdx() }, &entries()).unwrap();
+    let identity = FileIdentity { device: 1, inode: 2, size: bytes.len() as u64, mtime_ns: 3, ctime_ns: 4 };
+    let source = ChangingSource::new(bytes, identity);
+    let package = Package {
+        mdx: Location::Source { name: format!("{name}.mdx"), source: source.clone() },
+        mdd: vec![],
+        sidecars: vec![],
+    };
+    (package, source)
+}
+
 fn core() -> Core {
     Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap()
 }
@@ -219,4 +264,74 @@ fn a_store_that_does_not_decode_says_building_and_the_build_repairs_it() {
     let built = core.phrases_build(dict.clone(), &NoProgress).unwrap();
     assert!(!built.cached);
     assert_eq!(phrase_for(&core, &dict, "the review was full of purple passage", "purple").state, PhraseState::Found);
+}
+
+/// **A failed build is terminal until a build succeeds** (the refutation's #8): the edition answers `unavailable`,
+/// never `building` forever, and an explicit later build clears it. The failure here is the file changing under the
+/// open handle, the one way a build can fail that the test can make happen.
+#[test]
+fn a_failed_build_says_unavailable_and_a_later_build_clears_it() {
+    let (package, source) = changing_package("failed", "Failed");
+    let core = core();
+    let (dict, _) = opened(&core, package);
+
+    source.set_inode(99);
+    let failed = core.phrases_build(dict.clone(), &NoProgress).unwrap_err();
+    assert!(matches!(failed, CoreError::SourceChanged { .. }), "{failed:?}");
+    let answer = phrase_for(&core, &dict, "the review was full of purple passage", "purple");
+    assert_eq!(answer.state, PhraseState::Unavailable);
+    assert_eq!(answer.coverage, [CoverageEntry { dict: dict.clone(), state: Coverage::Unavailable }]);
+    assert!(answer.matches.is_empty());
+
+    // The file's identity coming back does not retry by itself: the failure stays until a build is asked for.
+    source.set_inode(2);
+    assert_eq!(
+        phrase_for(&core, &dict, "the review was full of purple passage", "purple").state,
+        PhraseState::Unavailable
+    );
+    core.phrases_build(dict.clone(), &NoProgress).unwrap();
+    assert_eq!(phrase_for(&core, &dict, "the review was full of purple passage", "purple").state, PhraseState::Found);
+}
+
+/// **Each dictionary answers for itself, and a partial search is never `none`** (D4): one ready dictionary beside one
+/// still building, and later beside one whose build failed, says so in `coverage` and in the overall state.
+#[test]
+fn a_partial_search_names_each_dictionary_and_is_never_none() {
+    let (first_package, _first) = changing_package("first", "First");
+    let (second_package, second) = changing_package("second", "Second");
+    let core = core();
+    let (first_dict, _) = opened(&core, first_package);
+    let (second_dict, _) = opened(&core, second_package);
+    core.phrases_build(first_dict.clone(), &NoProgress).unwrap();
+
+    // One ready and one building: the matches are found, and the coverage names both.
+    let found = core
+        .phrases("the review was full of purple passage".into(), 30, 7, vec![first_dict.clone(), second_dict.clone()])
+        .unwrap();
+    assert_eq!(found.state, PhraseState::Found);
+    assert_eq!(
+        found.coverage,
+        [
+            CoverageEntry { dict: first_dict.clone(), state: Coverage::Ready },
+            CoverageEntry { dict: second_dict.clone(), state: Coverage::Building },
+        ]
+    );
+    // Nothing matches anywhere, and one store is still being read: building, never a complete "nothing here".
+    let partial =
+        core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict.clone(), second_dict.clone()]).unwrap();
+    assert_eq!(partial.state, PhraseState::Building);
+
+    // The second fails to build: one ready and empty beside one unavailable is unavailable, never none.
+    second.set_inode(99);
+    assert!(core.phrases_build(second_dict.clone(), &NoProgress).is_err());
+    let failed = core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict.clone(), second_dict.clone()]).unwrap();
+    assert_eq!(failed.state, PhraseState::Unavailable);
+    assert_eq!(failed.coverage[1].state, Coverage::Unavailable);
+
+    // Both ready: now nothing matched, and that is `none`.
+    second.set_inode(2);
+    core.phrases_build(second_dict.clone(), &NoProgress).unwrap();
+    let none = core.phrases("a quiet afternoon".into(), 2, 5, vec![first_dict, second_dict]).unwrap();
+    assert_eq!(none.state, PhraseState::None);
+    assert!(none.matches.is_empty());
 }
