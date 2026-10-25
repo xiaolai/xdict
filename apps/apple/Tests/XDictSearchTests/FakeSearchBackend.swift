@@ -36,7 +36,8 @@ final class Slot: Sendable {
 }
 
 /// **The dictionary service as the main window sees it, faked**: lookups answered from the test's `pages`, suggestions
-/// from its `suggest`, an entry's calls from `answer`. A dictionary can be held, so its lookups wait until released; a
+/// from its `suggest`, an entry's calls from `answer`. A dictionary can be held, so its lookups and its phrase-store
+/// build wait until released; a
 /// caller's superseding call answers its earlier unanswered calls `superseded`, as `ServiceClient` does — unless
 /// `honoursSupersession` is off, which delivers a held answer late anyway, so the model's own guard can be seen.
 actor FakeSearchBackend: SearchBackend {
@@ -137,6 +138,9 @@ actor FakeSearchBackend: SearchBackend {
             case .phrases(let sentence, _, _):
                 outcome = answer(operation)
                 if phrasesHeld { phrasesWaiting.append((sentence, slot, outcome)); return PendingCall { await slot.value() } }
+            case .phrasesBuild(let buildDict):
+                dict = buildDict
+                outcome = answer(operation)
             default:
                 outcome = answer(operation)
             }

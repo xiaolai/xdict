@@ -79,6 +79,9 @@ public final class PhrasesModel {
     @ObservationIgnored private var task: Task<Void, Never>?
     /// The question whose answer is the row's: asking it again while that answer stands changes nothing.
     @ObservationIgnored private var asked: (sentence: String, term: PhraseTerm, handles: [DictId])?
+    /// **The builds running for a dictionary** (audit round 2): a repeated capture waits on the build already running
+    /// instead of asking the service for a second one.
+    @ObservationIgnored private var builds: [DictId: Task<Void, Never>] = [:]
 
     public init(backend: any SearchBackend, window: String) {
         self.backend = backend
@@ -125,11 +128,11 @@ public final class PhrasesModel {
 
     private func run(_ sentence: String, _ term: PhraseTerm, _ handles: [DictId], _ mine: Int) async {
         guard let answer = await ask(sentence, term, handles, mine), serial == mine else {
-            // **A question that failed is answered as unavailable**, never left on "still reading" for good (audit
-            // round 1): the serial check keeps a superseded question from writing here.
+            // **A question that failed is answered as unavailable and stays retryable** (audit rounds 1 and 2): the
+            // serial check keeps a superseded question from writing here, and `asked` stays nil so a later capture
+            // asks again rather than being answered from a failure for good.
             if serial == mine {
                 row = .unavailable
-                asked = (sentence, term, handles)
             }
             return
         }
@@ -140,19 +143,39 @@ public final class PhrasesModel {
             return
         }
         for dict in building {
-            let pending = await backend.queue([.phrasesBuild(dict: dict)], as: buildCaller, superseding: false)
-            _ = await pending.first?.outcome()
+            await build(dict)
             guard serial == mine else { return }
         }
         guard let again = await ask(sentence, term, handles, mine), serial == mine else {
             if serial == mine {
                 row = .unavailable
-                asked = (sentence, term, handles)
             }
+            return
+        }
+        // **A build that finished and left the store unreadable is not "still reading"** (audit round 2): nothing more
+        // is running, and the answer is cached as complete only when it is.
+        if again.coverage.contains(where: { $0.state == .building }) {
+            row = .unavailable
             return
         }
         row = PhraseRow(again)
         asked = (sentence, term, handles)
+    }
+
+    /// **One build per dictionary at a time** (audit round 2): a second capture awaits the running build rather than
+    /// queueing another; when it ends, the next capture may start a fresh one.
+    private func build(_ dict: DictId) async {
+        if let running = builds[dict] {
+            await running.value
+            return
+        }
+        let task = Task { [backend, buildCaller] in
+            let pending = await backend.queue([.phrasesBuild(dict: dict)], as: buildCaller, superseding: false)
+            _ = await pending.first?.outcome()
+        }
+        builds[dict] = task
+        await task.value
+        builds[dict] = nil
     }
 
     private func ask(_ sentence: String, _ term: PhraseTerm, _ handles: [DictId], _ mine: Int) async -> PhraseAnswer? {

@@ -209,6 +209,62 @@ struct PhrasesModelTests {
         #expect(await eventually { phrases.row == .unavailable })
     }
 
+    /// **A failed question is asked again on the next capture** (audit round 2, 2026-10-26): `unavailable` is the row
+    /// while it stands, never the answer for that sentence for good.
+    @Test func a_failed_question_can_be_asked_again() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        let attempts = Mutex(0)
+        await backend.setAnswer { _ in
+            let attempt = attempts.withLock { count -> Int in
+                count += 1
+                return count
+            }
+            return attempt == 1
+                ? .failure(.wire(.interrupted))
+                : PhrasesFixture.outcome(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()]))
+        }
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { phrases.row == .unavailable })
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { if case .found = phrases.row { true } else { false } })
+        #expect(await phraseOperations(backend).count == 2, "the failure was cached as the answer")
+    }
+
+    /// **A dictionary is built once, however many captures arrive while its build runs** (audit round 2, 2026-10-26):
+    /// the second capture awaits the running build instead of queueing another, and the row still ends on the phrase.
+    @Test func a_second_capture_waits_for_the_running_build() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        let stored = Mutex(false)
+        await backend.setAnswer { operation in
+            switch operation {
+            case .phrases:
+                let ready = stored.withLock { $0 }
+                return PhrasesFixture.outcome(ready
+                    ? PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()])
+                    : PhrasesFixture.answer(.building))
+            case .phrasesBuild:
+                stored.withLock { $0 = true }
+                return PhrasesFixture.built()
+            default:
+                return .failure(.wire(.interrupted))
+            }
+        }
+        await backend.hold(Fixture.handle("one"))
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually(awaiting: 2) { await buildOperations(backend).count == 1 }, "the build is out")
+        let second = "purple passage was the phrase that mattered"
+        phrases.update(sentence: second, term: PhraseTerm(location: 0, length: 6), handles: PhrasesFixture.handles)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(await buildOperations(backend).count == 1, "the running build is awaited, not started again")
+        await backend.release(Fixture.handle("one"))
+        #expect(await eventually { if case .found = phrases.row { true } else { false } },
+                "the row ends on a phrase, not on a spinner: \(phrases.row)")
+        #expect(phrases.sentence == second)
+        #expect(await buildOperations(backend).count == 1, "the build was not started again after it finished")
+    }
+
     /// **The sentence is kept exactly as captured**: its leading whitespace stays, because the term's range counts
     /// UTF-16 units of this very string.
     @Test func the_sentence_is_kept_as_captured() async throws {
