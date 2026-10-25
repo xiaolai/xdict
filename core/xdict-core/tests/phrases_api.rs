@@ -106,6 +106,25 @@ fn a_sentence_finds_its_phrase_after_the_build_and_says_building_before_it() {
     assert!(again.cached);
 }
 
+/// **A repeated spelling is one phrase, and the lookup keeps both entries** (the refutation's objection 9): the phrase
+/// answer carries the spelling and the dictionary, never a pretend identity; the shell resolves the entry through its
+/// ordinary lookup, which carries the occurrence.
+#[test]
+fn a_repeated_spelling_is_one_phrase_and_the_lookup_keeps_both_entries() {
+    let dir = Scratch::new("dupes");
+    let core = core();
+    let repeated = vec![entry("give up", "to stop trying"), entry("give up", "to surrender")];
+    let (dict, _) = opened(&core, package(&dir, "dupes", &repeated));
+    core.phrases_build(dict.clone(), &NoProgress).unwrap();
+    let options = LookupOptions { limit: 10, offset: 0, mode: MatchMode::Reader, generation: None };
+    let page = core.lookup("give up".into(), vec![dict.clone()], options).unwrap();
+    let occurrences: Vec<u32> = page.hits.iter().map(|hit| hit.entry.occurrence).collect();
+    assert_eq!(occurrences, [0, 1], "the lookup lost one of the two entries under the spelling");
+    let answer = phrase_for(&core, &dict, "they give up easily", "give");
+    assert_eq!(answer.matches.len(), 1, "one phrase per spelling, not one per entry");
+    assert_eq!(answer.matches.first().map(|m| m.phrase.as_str()), Some("give up"));
+}
+
 #[test]
 fn a_bad_range_or_a_long_sentence_is_refused() {
     let dir = Scratch::new("bounds");
