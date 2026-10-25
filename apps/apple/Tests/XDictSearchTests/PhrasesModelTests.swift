@@ -285,6 +285,24 @@ struct PhrasesModelTests {
         #expect(candidate.phrase == "purple passage")
     }
 
+    /// **A found answer beside a store still building is shown but not remembered** (audit round 4, 2026-10-26): the
+    /// building dictionary can change it, so the same capture asks again rather than returning the old answer.
+    @Test func a_partial_found_answer_is_asked_again() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { operation in
+            guard case .phrases = operation else { return PhrasesFixture.built() }
+            return PhrasesFixture.outcome(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()],
+                                                               coverage: [.building]))
+        }
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { if case .found = phrases.row { true } else { false } })
+        let asked = await phraseOperations(backend).count
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually(awaiting: 2) { await phraseOperations(backend).count > asked },
+                "the partial answer was cached as complete")
+    }
+
     /// **The sentence is kept exactly as captured**: its leading whitespace stays, because the term's range counts
     /// UTF-16 units of this very string.
     @Test func the_sentence_is_kept_as_captured() async throws {
