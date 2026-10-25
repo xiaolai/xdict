@@ -6,6 +6,12 @@ import XDictClient
 import XDictContract
 @testable import XDictUI
 
+/// **A flag a test sets from the session's own actor** (audit round 4, 2026-10-26): a non-Sendable local captured by a
+/// `@MainActor` closure is the compiler's argument, not the test's.
+@MainActor final class Began {
+    var value = false
+}
+
 /// **One ask, from the reader's tap to the answer** (plan-ai-meaning WI-5; `conformance/ai/CONTRACT.md` §8.3): the entry's
 /// text only under the switch, one source with no fallback, one ask at a time, and cancellation that nothing late can
 /// undo. Every seam is a fake here: no network, no CLI, no service.
@@ -108,6 +114,38 @@ import XDictContract
         #expect(question.contains("«hold»"), "the term is marked in its sentence")
         #expect(await fetcher.calls.count == 1)
         #expect(await fetcher.calls.first?.2 == MeaningBudget.entryTextBytes)
+    }
+
+    /// **A no-entry failure carries none of the earlier request's evidence** (audit round 4, 2026-10-26): the prompt and
+    /// provenance of the last answer never attach to the reason a tap could not be grounded, and the sentence stays.
+    @Test func noEntryDropsTheEarlierRequestsEvidence() async {
+        let (session, _, _) = Self.session()
+        session.ask()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.sent != nil)
+        session.noEntry()
+        #expect(session.state == .unavailable(.noEntry))
+        #expect(session.sent == nil, "the previous request's evidence stayed")
+        #expect(session.held != nil, "the sentence is kept: the tap can still be made")
+    }
+
+    /// **A new ask tells the window the failed tap's retry is over** (audit round 4, 2026-10-26): otherwise Ask Again on
+    /// the new answer would repeat the lookup of a phrase the reader has moved past.
+    @Test func anAskBeginsNotifiesTheWindow() async {
+        let (session, _, _) = Self.session()
+        let began = Began()
+        session.onAskBegins = { began.value = true }
+        session.ask()
+        #expect(began.value)
+        #expect(await Self.waitUntil { session.state != .asking })
+    }
+
+    /// **A phrase lookup that failed says why and keeps the sentence** (audit round 4, 2026-10-26).
+    @Test func aFailedPhraseLookupKeepsTheSentence() {
+        let (session, _, _) = Self.session()
+        session.entryLookupFailed(.wire(.interrupted))
+        #expect(session.state == .unavailable(.entryFailure(.wire(.interrupted))))
+        #expect(session.held != nil)
     }
 
     @Test func withTheSwitchOffNothingOfTheEntryIsFetchedOrSent() async {

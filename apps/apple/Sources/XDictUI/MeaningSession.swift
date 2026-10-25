@@ -575,6 +575,10 @@ public final class MeaningSession {
     /// be grounded. (Verification finding, 2026-10-20: the tap used to be lost.)
     public func noEntry() {
         abandon()
+        // **The evidence of an earlier answer does not attach to this failure** (audit round 4, 2026-10-26), and the
+        // operation it would repeat is not the one the reader tapped.
+        dropEvidence()
+        lastOperation = nil
         lookupWithoutEntry = true
         state = .unavailable(.noEntry)
     }
@@ -584,6 +588,10 @@ public final class MeaningSession {
     public func entryLookupFailed(_ failure: ClientFailure) {
         refuse(.entryFailure(failure))
     }
+
+    /// **A new ask has begun** (audit round 4, 2026-10-26): the window's retry of a failed phrase lookup belongs to the
+    /// failure that armed it, and the reader asking something else ends it.
+    @ObservationIgnored public var onAskBegins: (@MainActor () -> Void)?
 
     /// **The presentation ended**: the sentence goes, and so does the ask in flight and its answer.
     public func clear() {
@@ -717,6 +725,7 @@ public final class MeaningSession {
         // prompt attached (audit finding, 2026-10-25).
         abandon()
         dropEvidence()
+        onAskBegins?()
         lastOperation = operation
         guard let handoff = held else {
             state = .unavailable(.noContext)

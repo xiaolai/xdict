@@ -351,7 +351,7 @@ public struct MeaningAnswerPane: View {
     /// sits beside them when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
     @ViewBuilder private func answerActions(_ presentation: MeaningPresentation) -> some View {
         if state.meaning.canAsk, presentation.recovery == nil {
-            Button("Ask Again") { state.meaning.askAgain() }  // placement: inspector-row
+            Button("Ask Again") { state.askAgain() }  // placement: inspector-row
                 .accessibilityIdentifier("meaning.again")
         }
         if let target = state.meaning.sent?.target, state.noteSaver != nil, !presentation.explanation.isEmpty {
@@ -597,7 +597,7 @@ public struct MeaningAnswerPane: View {
                 Button("Open AI Settings…") { SettingsRoute.shared.showPane(.ai) }  // placement: inspector-row
                     .accessibilityIdentifier("meaning.recover.settings")
             case .retry:
-                Button("Try Again") { state.meaning.askAgain() }  // placement: inspector-row
+                Button("Try Again") { state.askAgain() }  // placement: inspector-row
                     .accessibilityIdentifier("meaning.recover.retry")
             case nil:
                 EmptyView()

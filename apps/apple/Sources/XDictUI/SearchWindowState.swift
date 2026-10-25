@@ -110,6 +110,10 @@ public final class SearchWindowState {
         // **The presentation follows the scope wherever it was changed** (audit round 4, 2026-10-25): the picker, the
         // Search menu and the keyboard all end in `setScope`.
         model.scopeDidChange = { [weak self] in self?.scopeChanged() }
+        // **Asking something else ends the failed tap's retry** (audit round 4, 2026-10-26): the window's retry belongs
+        // to the failure that armed it, and the reader asking anything else ends it. The last line of `init`, because it
+        // is the first that may capture `self`.
+        meaning.onAskBegins = { [weak self] in self?.failedPhraseTap = nil }
     }
 
     /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists
@@ -223,6 +227,7 @@ public final class SearchWindowState {
         // window's previous entry, or failed in a new window; the expected subject keeps a stale draw from starting it,
         // and the adopted lookup's identity keeps a queued presentation of the previous lookup from binding it.
         meaning.hold(handoff, asking: asking, expecting: expecting, adopted: adopted)
+        failedPhraseTap = nil
         // **The phrase row follows the captured sentence** (contract 15; plan-phrase-recognition WI-8): the capture is
         // the reader's tap, so the question is asked here and nowhere else. A capture that carried no term range is not
         // asked — the core needs the term's place in the sentence — and the row stays hidden.
@@ -241,6 +246,21 @@ public final class SearchWindowState {
     /// Every enabled dictionary that answers now, in the reader's order: what the phrase question asks.
     public var phraseHandles: [DictId] {
         library.searchSources.filter(\.enabled).compactMap(\.handle)
+    }
+
+    /// **The phrase tap whose lookup could not finish** (audit round 4, 2026-10-26): the pane's Try Again repeats an ask,
+    /// and an ask needs the entry this lookup never found — so the window keeps the candidate and retries the tap.
+    @ObservationIgnored private var failedPhraseTap: PhraseRow.Candidate?
+
+    /// **Ask Again, from the window**: a tap whose lookup failed repeats that lookup; anything else repeats the ask the
+    /// pane last tried, as before.
+    public func askAgain() {
+        if let candidate = failedPhraseTap {
+            failedPhraseTap = nil
+            Task { await askAboutPhrase(candidate) }
+            return
+        }
+        meaning.askAgain()
     }
 
     /// **The phrase row chosen**: the dictionary's own spelling becomes the lookup, in place, so Back returns to the
@@ -275,12 +295,16 @@ public final class SearchWindowState {
               self.source(for: candidate.dict) != nil
         else { return }
         guard case .success(let delivered) = answer else {
-            if case .failure(let failure) = answer { meaning.entryLookupFailed(failure) }
+            if case .failure(let failure) = answer {
+                failedPhraseTap = candidate
+                meaning.entryLookupFailed(failure)
+            }
             return
         }
         guard case .page(let page) = delivered.answer, let hit = page.hits.first else {
             // **A tap whose lookup drew nothing says so** (audit round 3, 2026-10-26), and the sentence stays held for
             // another dictionary's phrase — Try Again repeats this lookup.
+            failedPhraseTap = candidate
             meaning.noEntry()
             return
         }
@@ -445,6 +469,7 @@ public final class SearchWindowState {
     public func clearMeaning() {
         meaning.clear()
         phrases.clear()
+        failedPhraseTap = nil
     }
 
     /// A link in the shown entry: looked up in link mode in that entry's dictionary (on the All page, the dictionary
