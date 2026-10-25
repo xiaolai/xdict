@@ -7,8 +7,8 @@ import XDictContract
 /// markup. A short call naming one open dictionary, holding no credit and no handle; the answer is the core's catalogue
 /// entry for that edition and its CSS, carried in the JSON, never as a payload.
 struct DisplayOptionsContractTests {
-    @Test func theContractIsVersion14() {
-        #expect(Contract.version == 14, "raised by `examples` and `examplesBuild` (ADR-0031); 13 carried `words` (ADR-0028) and the senses (ADR-0029)")
+    @Test func theContractIsVersion15() {
+        #expect(Contract.version == 15, "raised by `phrases` and `phrasesBuild` (plan-phrase-recognition WI-7); 14 carried `examples` and `examplesBuild` (ADR-0031), 13 `words` (ADR-0028) and the senses (ADR-0029)")
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

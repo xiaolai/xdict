@@ -231,6 +231,27 @@ public actor ServiceClient {
         }
     }
 
+    /// **Builds one dictionary's phrase inventory in the background** (plan-phrase-recognition WI-4, WI-7); `progress`
+    /// hears records done. Like a health check it has no deadline and stops by `cancelImport`.
+    public func submitPhrasesBuild(_ dict: DictId, progress: (@Sendable (UInt64, UInt64) -> Void)? = nil) -> CallTicket {
+        let call = makeCall(.phrasesBuild(dict: dict), caller: nil, package: nil, progress: progress)
+        enqueue(call)
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
+    /// **The phrases covering the captured term** (plan-phrase-recognition WI-5, WI-7): every ready dictionary's phrase
+    /// that covers `term`'s word in `sentence`, best first, with the state of each dictionary that could not answer. A
+    /// store not built yet answers `building`, never a failure, and the shell may ask for its build.
+    public func phrases(_ sentence: String, term: PhraseTerm, dicts: [DictId]) async
+        -> Result<PhraseAnswer, ClientFailure> {
+        await call(.phrases(sentence: sentence, term: term, dicts: dicts)).flatMap { delivered in
+            guard case .phrases(let answer) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not phrases")))
+            }
+            return .success(answer)
+        }
+    }
+
     /// Stops the import or health check `ticket` names: one not yet sent never is; one running stops at its next
     /// progress report and answers `cancelled`.
     public func cancelImport(_ ticket: CallTicket) async -> Result<Cancellation, ClientFailure> {

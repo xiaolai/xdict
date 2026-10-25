@@ -295,6 +295,103 @@ public struct ExamplesBuilt: Codable, Hashable, Sendable {
     }
 }
 
+// MARK: - Phrase recognition (contract 15; plan-phrase-recognition WI-7)
+
+/// **Where the captured term lies in its sentence**, in UTF-16 units as the capture contract counts
+/// (`conformance/capture/CONTRACT.md`): the core re-validates it against the sentence it is given.
+public struct PhraseTerm: Codable, Hashable, Sendable {
+    public let location: UInt64
+    public let length: UInt64
+
+    public init(location: UInt64, length: UInt64) {
+        self.location = location
+        self.length = length
+    }
+}
+
+/// The answer's overall state, the core's `PhraseState` under its names: `none` only when every dictionary asked
+/// answered, `building` while one store is not built, `unavailable` when something could not answer and nothing matched.
+public enum PhraseState: String, Codable, Hashable, Sendable {
+    case notAsked, building, unavailable, none, found
+}
+
+/// How one dictionary's phrase inventory stood when it was asked.
+public enum PhraseCoverageState: String, Codable, Hashable, Sendable {
+    case ready, building, unavailable
+}
+
+/// Whether the phrase's words sat together, and on whose authority they were allowed not to: written unbroken, a gap
+/// the publisher marked with a slot, or a gap the matcher inferred for a bare two-word phrasal verb.
+public enum PhraseSeparation: Codable, Hashable, Sendable {
+    case none
+    case marked(words: UInt64)
+    case inferred(words: UInt64)
+}
+
+/// One phrase found around the term: the dictionary's own spelling, the sentence span in UTF-16 units (gap included),
+/// and how far the words were allowed to separate. A **candidate**, not a verdict.
+public struct PhraseMatch: Codable, Hashable, Sendable {
+    public let dict: DictId
+    /// The dictionary's own spelling, slots and all — the string to look up.
+    public let phrase: String
+    public let location: UInt64
+    public let length: UInt64
+    public let separation: PhraseSeparation
+    /// How many words the span stepped over.
+    public let gap: UInt64
+
+    public init(dict: DictId, phrase: String, location: UInt64, length: UInt64, separation: PhraseSeparation,
+                gap: UInt64) {
+        self.dict = dict
+        self.phrase = phrase
+        self.location = location
+        self.length = length
+        self.separation = separation
+        self.gap = gap
+    }
+}
+
+/// What one dictionary answered, in the order the call asked.
+public struct PhraseCoverage: Codable, Hashable, Sendable {
+    public let dict: DictId
+    public let state: PhraseCoverageState
+
+    public init(dict: DictId, state: PhraseCoverageState) {
+        self.dict = dict
+        self.state = state
+    }
+}
+
+/// **What `phrases` answers** (contract 15): every ready dictionary's phrase covering the term, best first, with the
+/// states of the dictionaries that could not answer and whether the list was capped.
+public struct PhraseAnswer: Codable, Hashable, Sendable {
+    public let state: PhraseState
+    public let matches: [PhraseMatch]
+    public let coverage: [PhraseCoverage]
+    public let capped: Bool
+
+    public init(state: PhraseState, matches: [PhraseMatch], coverage: [PhraseCoverage], capped: Bool) {
+        self.state = state
+        self.matches = matches
+        self.coverage = coverage
+        self.capped = capped
+    }
+}
+
+/// **What `phrasesBuild` answers**: what building one dictionary's phrase inventory did.
+public struct PhrasesBuilt: Codable, Hashable, Sendable {
+    public let edition: Edition
+    public let phrases: UInt64
+    /// The store was already there and decoded; nothing was written.
+    public let cached: Bool
+
+    public init(edition: Edition, phrases: UInt64, cached: Bool) {
+        self.edition = edition
+        self.phrases = phrases
+        self.cached = cached
+    }
+}
+
 // MARK: - Rendering
 
 /// The render context of `entry`, `link` and `resource` (the core's `View`, ADR-0007 decision 6), **less its base**:

@@ -97,6 +97,14 @@ final class Dictionaries: Sendable {
             case .examplesBuild(let dict):
                 let built = try core.examplesBuild(dict: dict.rawValue, progress: progress)
                 return (.answer(.examplesBuilt(XDictContract.ExamplesBuilt(built))), nil)
+            // Plan-phrase-recognition WI-7: the phrase question, and the per-edition inventory built in the background.
+            case .phrases(let sentence, let term, let dicts):
+                let answer = try core.phrases(sentence: sentence, termLocation: term.location, termLength: term.length,
+                                              dicts: dicts.map(\.rawValue))
+                return (.answer(.phrases(XDictContract.PhraseAnswer(answer))), nil)
+            case .phrasesBuild(let dict):
+                let built = try core.phrasesBuild(dict: dict.rawValue, progress: progress)
+                return (.answer(.phrasesBuilt(XDictContract.PhrasesBuilt(built))), nil)
             case .entry(let dict, let entry, let render):
                 let (answer, payload) = Answer.of(try core.entry(dict: dict.rawValue, entry: XDictCore.EntryRef(entry),
                                                                  view: XDictCore.View(render)))

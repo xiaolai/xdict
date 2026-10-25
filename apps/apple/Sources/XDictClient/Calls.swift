@@ -111,9 +111,10 @@ extension ServiceOperation {
         switch self {
         case .close(let dict), .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _),
              .health(let dict), .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
-             .examplesBuild(let dict), .words(let dict, _, _), .studyNote(let dict, _, _, _, _, _),
-             .definitionHash(let dict, _): [dict]
-        case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _): dicts
+             .examplesBuild(let dict), .phrasesBuild(let dict), .words(let dict, _, _),
+             .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _): [dict]
+        case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _),
+             .phrases(_, _, let dicts): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
@@ -135,6 +136,9 @@ extension ServiceOperation {
         case .examples(let query, let dicts, let limit):
             .examples(query: query, dicts: dicts.map(rename), limit: limit)
         case .examplesBuild(let dict): .examplesBuild(dict: rename(dict))
+        case .phrases(let sentence, let term, let dicts):
+            .phrases(sentence: sentence, term: term, dicts: dicts.map(rename))
+        case .phrasesBuild(let dict): .phrasesBuild(dict: rename(dict))
         case .studyNote(let dict, let entry, let text, let name, let stamp, let operation):
             .studyNote(dict: rename(dict), entry: entry, text: text, name: name, stamp: stamp, operation: operation)
         case .definitionHash(let dict, let entry): .definitionHash(dict: rename(dict), entry: entry)
@@ -167,6 +171,15 @@ extension Answer {
                                })
                 },
                 total: examples.total, notReady: examples.notReady.map(rename), capped: examples.capped))
+        case .phrases(let answer):
+            return .phrases(PhraseAnswer(
+                state: answer.state,
+                matches: answer.matches.map {
+                    PhraseMatch(dict: rename($0.dict), phrase: $0.phrase, location: $0.location, length: $0.length,
+                                separation: $0.separation, gap: $0.gap)
+                },
+                coverage: answer.coverage.map { PhraseCoverage(dict: rename($0.dict), state: $0.state) },
+                capped: answer.capped))
         default:
             return self
         }

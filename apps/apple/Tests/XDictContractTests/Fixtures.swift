@@ -125,12 +125,15 @@ enum Fixtures {
         .words(dict: dict, from: 0, limit: 1_000),
         .examples(query: "居然", dicts: [dict, other], limit: 100),
         .examplesBuild(dict: dict),
+        .phrases(sentence: "the review was full of purple passage nobody could follow",
+                 term: PhraseTerm(location: 30, length: 7), dicts: [dict, other]),
+        .phrasesBuild(dict: dict),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 40
+    static let operationCases = 42
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -173,6 +176,8 @@ enum Fixtures {
         case .words: 37
         case .examples: 38
         case .examplesBuild: 39
+        case .phrases: 40
+        case .phrasesBuild: 41
         }
     }
 
@@ -253,7 +258,26 @@ enum Fixtures {
         ], total: 1, notReady: [other], capped: false)),
         .examplesBuilt(ExamplesBuilt(edition: edition, pairs: 1, roles: 1, fallback: 0, entries: 1, failed: 0,
                                      noChinese: false, cached: false)),
+        .phrases(phrases),
+        .phrases(PhraseAnswer(state: .building, matches: [],
+                              coverage: [PhraseCoverage(dict: other, state: .building)], capped: false)),
+        .phrasesBuilt(phrasesBuilt),
     ]
+
+    /// Every separation and every coverage state in one answer: the round trip carries them all.
+    static let phrases = PhraseAnswer(
+        state: .found,
+        matches: [
+            PhraseMatch(dict: dict, phrase: "purple passage", location: 23, length: 14, separation: .none, gap: 0),
+            PhraseMatch(dict: dict, phrase: "take something into account", location: 40, length: 27,
+                        separation: .marked(words: 2), gap: 2),
+            PhraseMatch(dict: other, phrase: "turn down", location: 70, length: 19,
+                        separation: .inferred(words: 2), gap: 2),
+        ],
+        coverage: [PhraseCoverage(dict: dict, state: .ready), PhraseCoverage(dict: other, state: .unavailable)],
+        capped: true)
+
+    static let phrasesBuilt = PhrasesBuilt(edition: edition, phrases: 1_026_973, cached: false)
 
     /// ADR-0013: the core's answer for an edition carrying both pronunciation variants, as NOAD (IPA by default).
     static let displayOptions = DisplayOptions(
@@ -283,7 +307,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 32
+    static let answerCases = 34
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -318,6 +342,8 @@ enum Fixtures {
         case .words: 29
         case .examples: 30
         case .examplesBuilt: 31
+        case .phrases: 32
+        case .phrasesBuilt: 33
         }
     }
 

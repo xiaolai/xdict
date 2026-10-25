@@ -87,6 +87,46 @@ struct ServiceClientRecoveryTests {
         } == [[first], [second]])
     }
 
+    /// **A phrase answer's handles are the caller's** (contract 15): after a reopen the service names its new handle,
+    /// and the client renames every dictionary in `matches` and in `coverage` back, so the pane never sees one.
+    @Test func aPhraseAnswerAfterAReopenNamesTheCallersHandle() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, files in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                guard files?.count == package.files.count else { return .failure(.refused(.missingHandle), to: request) }
+                return .reply(.opened(.ready(dict: count == 1 ? first : second, edition: Fixture.edition, info: Fixture.info)),
+                              to: request)
+            case .phrases(_, _, let dicts) where dicts == [first]:
+                return .failure(.core(.staleHandle(detail: "restarted")), to: request)
+            case .phrases:
+                let answer = PhraseAnswer(
+                    state: .found,
+                    matches: [PhraseMatch(dict: second, phrase: "purple passage", location: 23, length: 14,
+                                          separation: .none, gap: 0)],
+                    coverage: [PhraseCoverage(dict: second, state: .ready)], capped: false)
+                return .reply(.phrases(answer), to: request)
+            default:
+                return .silent
+            }
+        }
+        let client = ServiceClient(connect: service.connect)
+        _ = await client.open(package)
+        let outcome = await client.phrases("the review was full of purple passage",
+                                           term: PhraseTerm(location: 30, length: 7), dicts: [first])
+        guard case .success(let answer) = outcome else {
+            Issue.record("no phrase answer: \(outcome)")
+            return
+        }
+        #expect(answer.matches.map(\.dict) == [first], "the service's new handle leaked into the answer")
+        #expect(answer.coverage.map(\.dict) == [first])
+    }
+
     /// **Tokens** for every file a call reads, from `stat`, numbered in increasing order; a file gone is `missing`.
     @Test func tokensComeFromStatAndOnlyIncrease() async throws {
         let (package, directory) = try Fixture.package()

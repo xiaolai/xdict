@@ -203,6 +203,67 @@ extension XDictContract.ExamplesBuilt {
     }
 }
 
+// Plan-phrase-recognition WI-7: the phrase answer, its states and the separation the shell words.
+
+extension XDictContract.PhraseAnswer {
+    init(_ answer: XDictCore.PhraseAnswer) {
+        self.init(state: XDictContract.PhraseState(answer.state),
+                  matches: answer.matches.map(XDictContract.PhraseMatch.init),
+                  coverage: answer.coverage.map(XDictContract.PhraseCoverage.init), capped: answer.capped)
+    }
+}
+
+extension XDictContract.PhraseState {
+    init(_ state: XDictCore.PhraseState) {
+        switch state {
+        case .notAsked: self = .notAsked
+        case .building: self = .building
+        case .unavailable: self = .unavailable
+        case .none: self = .none
+        case .found: self = .found
+        }
+    }
+}
+
+extension XDictContract.PhraseCoverageState {
+    init(_ state: XDictCore.Coverage) {
+        switch state {
+        case .ready: self = .ready
+        case .building: self = .building
+        case .unavailable: self = .unavailable
+        }
+    }
+}
+
+extension XDictContract.PhraseSeparation {
+    init(_ separation: XDictCore.Separation) {
+        switch separation {
+        case .none: self = .none
+        case .marked(let words): self = .marked(words: words)
+        case .inferred(let words): self = .inferred(words: words)
+        }
+    }
+}
+
+extension XDictContract.PhraseMatch {
+    init(_ match: XDictCore.PhraseMatch) {
+        self.init(dict: DictId(rawValue: match.dict), phrase: match.phrase, location: match.location,
+                  length: match.length, separation: XDictContract.PhraseSeparation(match.separation), gap: match.gap)
+    }
+}
+
+extension XDictContract.PhraseCoverage {
+    init(_ entry: XDictCore.CoverageEntry) {
+        self.init(dict: DictId(rawValue: entry.dict), state: XDictContract.PhraseCoverageState(entry.state))
+    }
+}
+
+extension XDictContract.PhrasesBuilt {
+    init(_ built: XDictCore.PhraseBuilt) {
+        self.init(edition: Edition(rawValue: built.edition), phrases: built.phrases, cached: built.cached)
+    }
+}
+
 extension XDictContract.Page {
     init(_ page: XDictCore.Page) {
         self.init(hits: page.hits.map(XDictContract.Hit.init), total: page.total, generation: page.generation,
