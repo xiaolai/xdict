@@ -369,3 +369,28 @@ fn a_dictionary_closed_during_its_build_answers_nothing_until_reopened() {
     let found = phrase_for(&core, &again, "the review was full of purple passage", "purple");
     assert_eq!(found.state, PhraseState::Found, "the store the build wrote was not decoded on the next open");
 }
+
+#[test]
+fn a_term_range_that_splits_a_character_is_refused() {
+    let dir = Scratch::new("surrogate");
+    let core = core();
+    let (dict, _) = opened(&core, package(&dir, "surrogate", &entries()));
+    core.phrases_build(dict.clone(), &NoProgress).unwrap();
+    let split = core.phrases("😀 hold".into(), 1, 1, vec![dict]).unwrap_err();
+    assert!(matches!(split, CoreError::Malformed { .. }), "{split:?}");
+}
+
+#[test]
+fn a_panicking_progress_callback_is_an_internal_error_not_a_crash() {
+    struct Panic;
+    impl Progress for Panic {
+        fn progress(&self, _done: u64, _total: u64) -> bool {
+            panic!("the reader's callback panicked")
+        }
+    }
+    let dir = Scratch::new("panic");
+    let core = core();
+    let (dict, _) = opened(&core, package(&dir, "panic", &entries()));
+    let refused = core.phrases_build(dict, &Panic);
+    assert!(matches!(refused, Err(CoreError::Internal { .. })), "{refused:?}");
+}

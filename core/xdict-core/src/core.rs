@@ -427,11 +427,16 @@ impl Core {
             let handle = self.parse_handle(&dict)?;
             // Dropped once the lock is released: the last reference drops the shell's sources, whose destructors
             // may call the core.
-            let removed = self.lock()?.open.remove(&handle);
+            let mut state = self.lock()?;
+            let removed = state.open.remove(&handle);
             if let Some(dict) = removed.as_ref() {
-                // **A closed edition's matcher goes with it** (plan WI-4): retained per open edition, dropped on close.
-                self.lock()?.phrase_matchers.remove(&crate::phrases::store_name(&dict.edition));
+                // **An edition's matcher goes with its last open handle** (plan WI-4): two handles can name one
+                // edition, and closing one must not take the matcher the other still answers from.
+                if !state.open.values().any(|other| other.edition == dict.edition) {
+                    state.phrase_matchers.remove(&crate::phrases::store_name(&dict.edition));
+                }
             }
+            drop(state);
             drop(removed);
             Ok(())
         })
@@ -1333,6 +1338,9 @@ impl Core {
     /// the public-key policy and the folding. Like the examples pass it reports progress, has no deadline and stops by
     /// `cancel`; a store that is already there and decodes is answered `cached` without a read of the keys.
     pub fn phrases_build(&self, dict: String, progress: &dyn Progress) -> Result<PhraseBuilt, CoreError> {
+        // **No panic crosses the boundary**, as for every other public call: the progress and storage callbacks are
+        // the shell's, and one that panics is an internal error, not a crash in the service.
+        guard(|| {
         let opened = self.dict(&dict)?;
         let edition = opened.edition.clone();
         let outcome = self.phrases_build_opened(&opened, progress);
@@ -1361,6 +1369,7 @@ impl Core {
                 Err(error)
             }
         }
+        })
     }
 
     fn phrases_build_opened(
@@ -1385,11 +1394,11 @@ impl Core {
             if i % 4096 == 0 && !progress.progress(i as u64, count as u64) {
                 return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
             }
-            let Ok(public) = opened.mdx.is_public(i) else { continue };
-            if !public {
+            // **An unreadable key fails the build**: a store written without it would call itself complete.
+            if !opened.mdx.is_public(i)? {
                 continue;
             }
-            let Ok(key) = opened.mdx.key(i) else { continue };
+            let key = opened.mdx.key(i)?;
             if key.split_whitespace().count() < 2 {
                 continue;
             }
@@ -1397,10 +1406,15 @@ impl Core {
         }
         let inventory = xdict_phrase::Inventory::from_keys(keys, crate::phrases::slots());
         let phrases = inventory.phrases().len() as u64;
-        let bytes = inventory.encode(&edition, versions);
+        let bytes = inventory.encode(&edition, versions).map_err(|_| {
+            CoreError::internal("a phrase inventory is larger than its store format holds")
+        })?;
         if !progress.progress(count as u64, count as u64) {
             return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
         }
+        // **The file may have changed under the build** (its progress callback runs the shell's code): a store written
+        // from bytes the source no longer holds would answer for the wrong edition.
+        opened.mdx_source.unchanged()?;
         self.indexes.put(&name, &bytes)?;
         Ok((PhraseBuilt { edition, phrases, cached: false }, Arc::new(inventory.matcher())))
     }
@@ -1445,6 +1459,11 @@ impl Core {
                 return Err(CoreError::Malformed {
                     detail: "the term's range does not lie inside the sentence".into(),
                 });
+            }
+            // **Both ends sit on character boundaries**: a range inside a surrogate pair names no text — the capture
+            // contract refuses one, and the service cannot trust its caller to have checked.
+            if !utf16_boundaries(&sentence, term_location, end) {
+                return Err(CoreError::Malformed { detail: "the term's range splits a character".into() });
             }
             let tokens = tokens_with_offsets(&sentence);
             let word = tokens
@@ -1531,7 +1550,11 @@ impl Core {
             return Ok(None);
         };
         let matcher = Arc::new(inventory.matcher());
-        self.lock()?.phrase_matchers.insert(name, matcher.clone());
+        let mut state = self.lock()?;
+        // **A close can land between the decode and here**: its matcher is not kept for a handle that is gone.
+        if state.open.values().any(|other| other.edition == opened.edition) {
+            state.phrase_matchers.insert(name, matcher.clone());
+        }
         Ok(Some(matcher))
     }
 
@@ -2380,6 +2403,22 @@ fn region_to_vec(region: &dyn Region) -> Result<Vec<u8>, CoreError> {
         .bytes(0, len)
         .map(std::borrow::Cow::into_owned)
         .map_err(|error| CoreError::internal(format!("reading a stored region: {error}")))
+}
+
+/// Whether both UTF-16 offsets fall on character boundaries of `sentence`.
+fn utf16_boundaries(sentence: &str, first: u64, second: u64) -> bool {
+    let mut at = 0u64;
+    let mut found = 0;
+    for character in sentence.chars() {
+        if at == first || at == second {
+            found += 1;
+        }
+        at += character.len_utf16() as u64;
+    }
+    if at == first || at == second {
+        found += 1;
+    }
+    found == 2
 }
 
 /// The sentence's words with their UTF-16 ranges: the capture contract counts in UTF-16 units, and a span the shell
