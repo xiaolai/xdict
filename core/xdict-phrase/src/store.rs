@@ -145,10 +145,15 @@ impl Inventory {
         if read.at != body.len() {
             return None;
         }
+        // **The offsets must cover the arena exactly and name nonempty phrases** (audit round 2): `[0, 0]` over a
+        // nonempty arena is a checksum away from being valid, and would silently discard it.
+        if offsets.first().copied()? != 0 || offsets.last().copied()? as usize != arena.len() {
+            return None;
+        }
         let mut phrases: Vec<String> = Vec::with_capacity(count);
         for pair in offsets.windows(2) {
             let (start, end) = (*pair.first()? as usize, *pair.get(1)? as usize);
-            if start > end || end > arena.len() {
+            if start >= end || end > arena.len() {
                 return None;
             }
             phrases.push(std::str::from_utf8(arena.get(start..end)?).ok()?.to_string());

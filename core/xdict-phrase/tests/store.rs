@@ -76,7 +76,8 @@ fn the_builder_keeps_templates_only_and_one_of_each_spelling() {
 
 #[test]
 fn a_decoded_store_still_finds_the_phrase() {
-    let decoded = Inventory::decode(&inventory().encode(EDITION, versions()).unwrap(), EDITION, versions()).expect("decode");
+    let decoded =
+        Inventory::decode(&inventory().encode(EDITION, versions()).unwrap(), EDITION, versions()).expect("decode");
     let matcher = decoded.matcher();
     let words: Vec<Vec<String>> =
         "the review was full of purple passage nobody could follow".split_whitespace().map(forms).collect();
@@ -99,4 +100,22 @@ fn a_store_naming_more_phrases_than_its_offsets_hold_is_refused() {
     let checksum = xxhash_rust::xxh3::xxh3_64(&altered);
     altered.extend_from_slice(&checksum.to_le_bytes());
     assert!(Inventory::decode(&altered, EDITION, versions()).is_none(), "a count past the bytes was read");
+}
+
+/// **Offsets that leave the arena uncovered or name an empty phrase are refused** (audit round 2): the first must be
+/// zero, the last the arena's length, and each pair strictly increasing.
+#[test]
+fn offsets_that_do_not_cover_the_arena_are_refused() {
+    let store = inventory();
+    let bytes = store.encode(EDITION, versions()).unwrap();
+    let slot_lens: Vec<usize> = store.slots().words().iter().map(String::len).collect();
+    let count_at = 20 + 4 + EDITION.len() + 4 + slot_lens.iter().map(|len| 4 + len).sum::<usize>();
+    let offsets_at = count_at + 8;
+    let mut altered = bytes[..bytes.len() - 8].to_vec();
+    // The first phrase's end set to its start: an empty phrase over a nonempty arena.
+    let start = u32::from_le_bytes(altered[offsets_at..offsets_at + 4].try_into().unwrap());
+    altered[offsets_at + 4..offsets_at + 8].copy_from_slice(&start.to_le_bytes());
+    let checksum = xxhash_rust::xxh3::xxh3_64(&altered);
+    altered.extend_from_slice(&checksum.to_le_bytes());
+    assert!(Inventory::decode(&altered, EDITION, versions()).is_none(), "an empty phrase was read");
 }
