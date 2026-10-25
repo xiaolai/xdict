@@ -93,8 +93,7 @@ fn line(columns: &[String]) -> String {
 
 #[test]
 fn the_census_counts_multiword_headwords_and_their_shapes() {
-    let Ok(roots) = std::env::var("XDICT_PHRASE_CENSUS_CORPUS").or_else(|_| std::env::var("XDICT_MDX_CORPUS"))
-    else {
+    let Ok(roots) = std::env::var("XDICT_PHRASE_CENSUS_CORPUS").or_else(|_| std::env::var("XDICT_MDX_CORPUS")) else {
         eprintln!("not measured: XDICT_PHRASE_CENSUS_CORPUS and XDICT_MDX_CORPUS are unset");
         return;
     };

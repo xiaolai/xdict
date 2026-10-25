@@ -19,7 +19,7 @@ use xdict_core::{
     Limit, Link, LinkOrigin, LookupOptions, MatchMode, Missing, Note, Opened, Page, PhraseAnswer, PhraseBuilt,
     PhraseMatch, PhraseState, Problem, Reading, ReadingSpan, ReadingStyle, ReanchorOutcome, ReanchorReport,
     ReanchorResult, RecordOutcome, Recoverability, Removal, Resource, ReviewOutcome, ReviewPolicy, ReviewSummary,
-    Separation, Sense, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
+    Sense, Separation, SkipReason, SkippedSheet, Stamp, StudyCard, StudyGrade, StudyPhase, StudyTarget, StyleChanges,
     SyncReport, TargetKind, TextSpan, TextView, Versions, View, Words,
 };
 
@@ -883,11 +883,7 @@ impl Core {
 
     /// **Builds one dictionary's phrase inventory in the background** (plan-phrase-recognition WI-4): `progress`
     /// reports records done and answers `false` to cancel, in which case nothing is written.
-    pub fn phrases_build(
-        &self,
-        dict: String,
-        progress: Option<Arc<dyn Progress>>,
-    ) -> Result<PhraseBuilt, CoreError> {
+    pub fn phrases_build(&self, dict: String, progress: Option<Arc<dyn Progress>>) -> Result<PhraseBuilt, CoreError> {
         match progress {
             Some(progress) => self.0.phrases_build(dict, &Watcher(progress)),
             None => self.0.phrases_build(dict, &core::NoProgress),

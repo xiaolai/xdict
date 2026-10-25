@@ -19,13 +19,18 @@ const TERM: (u64, u64) = (25, 7);
 const QUERY: &str = "take";
 
 fn package(dir: &Path) -> Option<Package> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir).ok()?.map(|entry| entry.unwrap().path()).filter(|p| p.is_file()).collect();
+    let mut files: Vec<PathBuf> =
+        std::fs::read_dir(dir).ok()?.map(|entry| entry.unwrap().path()).filter(|p| p.is_file()).collect();
     files.sort();
     let ext = |p: &Path, e: &str| p.extension().is_some_and(|x| x.eq_ignore_ascii_case(e));
     let mdx = files.iter().find(|p| ext(p, "mdx"))?;
-    let mdd: Vec<Location> = files.iter().filter(|p| ext(p, "mdd")).map(|p| Location::Path { path: p.to_string_lossy().into() }).collect();
-    let sidecars: Vec<Location> =
-        files.iter().filter(|p| !ext(p, "mdx") && !ext(p, "mdd")).map(|p| Location::Path { path: p.to_string_lossy().into() }).collect();
+    let mdd: Vec<Location> =
+        files.iter().filter(|p| ext(p, "mdd")).map(|p| Location::Path { path: p.to_string_lossy().into() }).collect();
+    let sidecars: Vec<Location> = files
+        .iter()
+        .filter(|p| !ext(p, "mdx") && !ext(p, "mdd"))
+        .map(|p| Location::Path { path: p.to_string_lossy().into() })
+        .collect();
     Some(Package { mdx: Location::Path { path: mdx.to_string_lossy().into() }, mdd, sidecars })
 }
 
@@ -48,10 +53,8 @@ fn the_phrase_question_and_a_lookup_are_timed_on_every_dictionary() {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };
-    let iterations: u32 = std::env::var("XDICT_PHRASE_LATENCY_ITERATIONS")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(20);
+    let iterations: u32 =
+        std::env::var("XDICT_PHRASE_LATENCY_ITERATIONS").ok().and_then(|value| value.parse().ok()).unwrap_or(20);
     let cache = std::env::temp_dir().join(format!("xdict-phrase-latency-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&cache);
     let core = Core::new(Config {
@@ -86,9 +89,7 @@ fn the_phrase_question_and_a_lookup_are_timed_on_every_dictionary() {
         let started = Instant::now();
         let built = core.phrases_build(dict.clone(), &NoProgress).unwrap();
         let build_ms = started.elapsed().as_secs_f64() * 1e3;
-        let ask = |into: &str| {
-            core.phrases(SENTENCE.to_string(), TERM.0, TERM.1, vec![into.to_string()]).unwrap()
-        };
+        let ask = |into: &str| core.phrases(SENTENCE.to_string(), TERM.0, TERM.1, vec![into.to_string()]).unwrap();
         // One warm ask, then the timed ones; the answer is not printed, only its cost.
         ask(&dict);
         let mut phrase_times = Vec::with_capacity(iterations as usize);
@@ -132,6 +133,16 @@ fn the_phrase_question_and_a_lookup_are_timed_on_every_dictionary() {
     eprintln!("ALL\tphrases p50 {p50:.1} p95 {p95:.1} p99 {p99:.1} us");
     eprintln!("ALL\tlookup  p50 {l50:.1} p95 {l95:.1} p99 {l99:.1} us");
     eprintln!("ALL\tbuild   p50 {b50:.1} p95 {b95:.1} p99 {b99:.1} ms");
-    eprintln!("ALL\tone capture, serial: p50 {:.1} p95 {:.1} p99 {:.1} us (lookup + phrases)", l50 + p50, l95 + p95, l99 + p99);
-    eprintln!("ALL\tone capture, parallel: p50 {:.1} p95 {:.1} p99 {:.1} us (the slower of the two)", l50.max(p50), l95.max(p95), l99.max(p99));
+    eprintln!(
+        "ALL\tone capture, serial: p50 {:.1} p95 {:.1} p99 {:.1} us (lookup + phrases)",
+        l50 + p50,
+        l95 + p95,
+        l99 + p99
+    );
+    eprintln!(
+        "ALL\tone capture, parallel: p50 {:.1} p95 {:.1} p99 {:.1} us (the slower of the two)",
+        l50.max(p50),
+        l95.max(p95),
+        l99.max(p99)
+    );
 }

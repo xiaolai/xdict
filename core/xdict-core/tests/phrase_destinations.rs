@@ -11,7 +11,9 @@
 
 use std::path::{Path, PathBuf};
 
-use xdict_core::{Config, Core, HitProblem, How, Location, LookupOptions, MatchMode, NoProgress, Opened, PROTOCOL, Package};
+use xdict_core::{
+    Config, Core, HitProblem, How, Location, LookupOptions, MatchMode, NoProgress, Opened, PROTOCOL, Package,
+};
 
 fn package(dir: &Path) -> Option<Package> {
     let mut files: Vec<PathBuf> =
@@ -73,10 +75,8 @@ fn the_destination_class_of_a_sample_of_phrase_keys_is_counted() {
         eprintln!("not measured: XDICT_MDX_CORPUS is unset");
         return;
     };
-    let wanted: u64 = std::env::var("XDICT_PHRASE_DESTINATIONS_SAMPLE")
-        .ok()
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(50);
+    let wanted: u64 =
+        std::env::var("XDICT_PHRASE_DESTINATIONS_SAMPLE").ok().and_then(|value| value.parse().ok()).unwrap_or(50);
     let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
     let mut folders: Vec<PathBuf> = std::env::split_paths(&roots)
         .flat_map(|root| std::fs::read_dir(root).unwrap().map(|entry| entry.unwrap().path()))
@@ -136,8 +136,15 @@ fn the_destination_class_of_a_sample_of_phrase_keys_is_counted() {
         }
         eprintln!(
             "{name}\t{}\t{}\t{sampled}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
-            imported.info.keys, built.phrases, classes.own, classes.redirect, classes.dangling, classes.loop_,
-            classes.limit, classes.nothing, classes.fan_out
+            imported.info.keys,
+            built.phrases,
+            classes.own,
+            classes.redirect,
+            classes.dangling,
+            classes.loop_,
+            classes.limit,
+            classes.nothing,
+            classes.fan_out
         );
         all.own += classes.own;
         all.redirect += classes.redirect;

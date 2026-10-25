@@ -47,7 +47,11 @@ fn the_phrase_vectors_conform() {
     let dir = tempdir();
     xdict_conformance::write_fixture(&xdict_conformance::fixtures().join("phrase"), &dir).unwrap();
     let core = Core::new(Config { client_protocol: PROTOCOL, ..Config::default() }).unwrap();
-    let package = Package { mdx: Location::Path { path: dir.join("phrase.mdx").to_string_lossy().into_owned() }, mdd: vec![], sidecars: vec![] };
+    let package = Package {
+        mdx: Location::Path { path: dir.join("phrase.mdx").to_string_lossy().into_owned() },
+        mdd: vec![],
+        sidecars: vec![],
+    };
     core.import(package.clone(), &NoProgress).unwrap();
     let Opened::Ready { dict, .. } = core.open(package).unwrap() else { panic!("the fixture did not open") };
 
@@ -66,13 +70,21 @@ fn the_phrase_vectors_conform() {
         let name = case["name"].as_str().unwrap_or("case");
         match case["kind"].as_str().unwrap() {
             // The inventory's build: the fixture's phrases counted, and a second build answering from the store.
-            "build" => check(&format!("{name}.build"), &case["expect"], &outcome(core.phrases_build(dict.clone(), &NoProgress))),
+            "build" => check(
+                &format!("{name}.build"),
+                &case["expect"],
+                &outcome(core.phrases_build(dict.clone(), &NoProgress)),
+            ),
             "vector" => {
                 let sentence = case["sentence"].as_str().unwrap().to_string();
                 let location = case["term"]["location"].as_u64().unwrap();
                 let length = case["term"]["length"].as_u64().unwrap();
                 let answer = labelled(outcome(core.phrases(sentence, location, length, vec![dict.clone()])));
-                let mut expected = if case.get("error").is_some() { json!({ "error": case["error"] }) } else { case["expect"].clone() };
+                let mut expected = if case.get("error").is_some() {
+                    json!({ "error": case["error"] })
+                } else {
+                    case["expect"].clone()
+                };
                 // A capped list says how many it kept without writing all of them into the vector.
                 if let Some(count) = expected.as_object_mut().and_then(|object| object.remove("matchCount")) {
                     let matches = answer["matches"].as_array().map_or(0, Vec::len);
