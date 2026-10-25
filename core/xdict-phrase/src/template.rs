@@ -59,14 +59,19 @@ impl Slots {
 }
 
 /// Whether the words of the phrase sat together, and on whose authority they were allowed not to.
+///
+/// The payload is `u64`, and the variants carry named fields, because this type crosses the bindings: UniFFI has no
+/// `usize`, and the Web binding serialises it as a tagged object (`{"type":"marked","words":2}`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type"))]
 pub enum Separation {
     /// Written unbroken, exactly as the dictionary spells it.
     None,
     /// The publisher wrote a slot here, and this many words of the sentence filled it.
-    Marked(usize),
+    Marked { words: u64 },
     /// The publisher wrote the phrase unbroken; the gap is the matcher's own inference.
-    Inferred(usize),
+    Inferred { words: u64 },
 }
 
 /// One phrase, split at its slots.

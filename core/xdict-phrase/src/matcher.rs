@@ -21,7 +21,9 @@ impl Match {
     pub fn gap(&self) -> usize {
         match self.separation {
             Separation::None => 0,
-            Separation::Marked(words) | Separation::Inferred(words) => words,
+            Separation::Marked { words } | Separation::Inferred { words } => {
+                usize::try_from(words).unwrap_or(usize::MAX)
+            }
         }
     }
 }
@@ -163,9 +165,9 @@ fn consider(
         let separation = if gap == 0 {
             Separation::None
         } else if inferred {
-            Separation::Inferred(gap)
+            Separation::Inferred { words: gap as u64 }
         } else {
-            Separation::Marked(gap)
+            Separation::Marked { words: gap as u64 }
         };
         let taken = borrowed_forms(runs, &starts, words);
         let better = match &best {

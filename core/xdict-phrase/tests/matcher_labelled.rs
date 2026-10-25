@@ -249,7 +249,7 @@ fn a_bare_phrasal_verb_is_broken_only_by_inference() {
     let found = found.expect("the split phrasal verb is not found");
     assert_eq!(found.phrase, "turn down");
     assert_eq!((found.first, found.last), (1, 4));
-    assert_eq!(found.separation, Separation::Inferred(2));
+    assert_eq!(found.separation, Separation::Inferred { words: 2 });
 }
 
 #[test]
@@ -276,7 +276,7 @@ fn an_inferred_gap_is_held_tighter_than_a_marked_one() {
     let marked = sentence("take what people think and other possible edge cases all into account");
     assert_eq!(
         leading(&index().matches(&marked, 0, DEFAULT_WIDEST_GAP, DEFAULT_WIDEST_INFERRED_GAP)).map(|m| m.separation),
-        Some(Separation::Marked(9))
+        Some(Separation::Marked { words: 9 })
     );
 }
 

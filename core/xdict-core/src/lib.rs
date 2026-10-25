@@ -25,7 +25,6 @@ pub use examples::{
     NORMALIZER as EXAMPLES_NORMALIZATION,
 };
 pub use health::HEALTH;
-pub use phrases::{Coverage, CoverageEntry, PhraseAnswer, PhraseBuilt, PhraseMatch, PhraseState};
 pub use source::{ByteSource, MAX_TRANSFER};
 pub use store::IndexStorage;
 pub use types::*;

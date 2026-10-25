@@ -1185,6 +1185,7 @@ dependencies = [
  "xdict-mdx",
  "xdict-mdx-writer",
  "xdict-mmap",
+ "xdict-phrase",
  "xdict-schedule",
  "xdict-win-fileid",
  "xxhash-rust",
@@ -1283,6 +1284,15 @@ version = "0.4.0"
 dependencies = [
  "memmap2",
  "xdict-win-fileid",
+]
+
+[[package]]
+name = "xdict-phrase"
+version = "0.4.0"
+dependencies = [
+ "serde",
+ "xdict-mdx",
+ "xxhash-rust",
 ]
 
 [[package]]

@@ -11,6 +11,7 @@ pub use xdict_ledger::{
 };
 
 pub use xdict_identity::FileIdentity;
+pub use xdict_phrase::Separation;
 
 use crate::source::ByteSource;
 
@@ -216,6 +217,73 @@ record! {
         /// The edition has no Chinese in an evenly spaced sample: its empty store is kept and the pass skipped.
         pub no_chinese: bool,
         /// The store was already there and current; nothing was read.
+        pub cached: bool,
+    }
+
+    /// One phrase found around the term, as a shell draws it (`dev-docs/plan-phrase-recognition.md` WI-5).
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PhraseMatch {
+        /// The dictionary handle, the form the shell's lookup takes.
+        pub dict: String,
+        /// The dictionary's own spelling, slots and all — the string to look up.
+        pub phrase: String,
+        /// The span in the sentence, UTF-16 units and zero-based, gap included.
+        pub location: u64,
+        pub length: u64,
+        pub separation: Separation,
+        /// How many words the span stepped over.
+        pub gap: u64,
+    }
+
+    /// What one dictionary answered, in the caller's order.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct CoverageEntry {
+        pub dict: String,
+        pub state: Coverage,
+    }
+
+    /// **What [`crate::Core::phrases`] answers**: what was searched, and what was found.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PhraseAnswer {
+        /// `none` only when every eligible dictionary answered and none matched; `found` whenever a match exists.
+        pub state: PhraseState,
+        pub matches: Vec<PhraseMatch>,
+        pub coverage: Vec<CoverageEntry>,
+        /// True when the match list stopped at its cap; the shell says so.
+        pub capped: bool,
+    }
+
+    /// How one dictionary's phrase inventory stood when the question was asked.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum Coverage {
+        /// Its inventory answered.
+        Ready,
+        /// Its inventory is not built yet (or its store did not decode): ask the shell to build it.
+        Building,
+        /// Its inventory could not be built: terminal, never a perpetual "still reading".
+        Unavailable,
+    }
+
+    /// The answer's overall state.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum PhraseState {
+        /// The capture carried no sentence.
+        NotAsked,
+        /// At least one dictionary's inventory is not built yet, and nothing matched.
+        Building,
+        /// No dictionary could answer, and none is still building.
+        Unavailable,
+        /// Every eligible dictionary answered; nothing matched.
+        None,
+        Found,
+    }
+
+    /// **What [`crate::Core::phrases_build`] answers**: what building one edition's inventory did.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PhraseBuilt {
+        pub edition: String,
+        pub phrases: u64,
+        /// The store was already there and decoded; nothing was written.
         pub cached: bool,
     }
 

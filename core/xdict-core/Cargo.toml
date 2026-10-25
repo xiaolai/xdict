@@ -9,7 +9,7 @@ rust-version.workspace = true
 
 [features]
 # Serialisation for the Web binding, which passes messages as JSON.
-serde = ["dep:serde"]
+serde = ["dep:serde", "xdict-phrase/serde"]
 
 [dependencies]
 serde = { workspace = true, optional = true }

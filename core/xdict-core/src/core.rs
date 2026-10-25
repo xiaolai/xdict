@@ -31,7 +31,6 @@ use xdict_schedule::{
 
 use crate::error::{CoreError, Limit, Missing};
 use crate::health::HEALTH;
-use crate::phrases::{Coverage, CoverageEntry, PhraseAnswer, PhraseBuilt, PhraseMatch, PhraseState};
 use crate::source::{Changed, Opened as OpenedSource, Verified, buffer, read_all};
 #[cfg(not(target_family = "wasm"))]
 use crate::store::Directory;
