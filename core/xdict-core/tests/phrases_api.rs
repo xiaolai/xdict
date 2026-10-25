@@ -335,3 +335,37 @@ fn a_partial_search_names_each_dictionary_and_is_never_none() {
     assert_eq!(none.state, PhraseState::None);
     assert!(none.matches.is_empty());
 }
+
+/// **A dictionary closed while its inventory builds** (WI-4's lifetime: removal during a build): the build finishes
+/// and the store is written, the closed handle answers nothing, and reopening decodes what the build wrote — no panic,
+/// no half-kept matcher the next open would trust.
+#[test]
+fn a_dictionary_closed_during_its_build_answers_nothing_until_reopened() {
+    struct Closer<'a> {
+        core: &'a Core,
+        dict: Mutex<Option<String>>,
+    }
+    impl Progress for Closer<'_> {
+        fn progress(&self, done: u64, total: u64) -> bool {
+            if done == total
+                && let Some(dict) = self.dict.lock().unwrap().take()
+            {
+                let _ = self.core.close(dict);
+            }
+            true
+        }
+    }
+    let dir = Scratch::new("close-during-build");
+    let core = core();
+    let package = package(&dir, "closing", &entries());
+    let (dict, _) = opened(&core, package.clone());
+    let closer = Closer { core: &core, dict: Mutex::new(Some(dict.clone())) };
+    let built = core.phrases_build(dict.clone(), &closer).unwrap();
+    assert!(!built.cached);
+    let closed = core.phrases("the review was full of purple passage".into(), 25, 6, vec![dict]).unwrap_err();
+    assert!(matches!(closed, CoreError::StaleHandle { .. }), "{closed:?}");
+
+    let Opened::Ready { dict: again, .. } = core.open(package).unwrap() else { panic!("not open") };
+    let found = phrase_for(&core, &again, "the review was full of purple passage", "purple");
+    assert_eq!(found.state, PhraseState::Found, "the store the build wrote was not decoded on the next open");
+}

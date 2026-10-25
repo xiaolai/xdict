@@ -1337,10 +1337,17 @@ impl Core {
         let edition = opened.edition.clone();
         let outcome = self.phrases_build_opened(&opened, progress);
         match outcome {
-            Ok(built) => {
+            // **The matcher is indexed here, on the background thread** (WI-4's lifetime): the first ask after a build
+            // is warm, and an edition whose store was already there decodes it in this pass too.
+            Ok((built, matcher)) => {
+                let handle = self.parse_handle(&dict)?;
                 let mut state = self.lock()?;
                 state.phrase_failures.remove(&edition);
-                state.phrase_matchers.remove(&crate::phrases::store_name(&edition));
+                // **A dictionary closed while its inventory built keeps nothing**: its matcher would outlive the
+                // handle, and the next open decodes the store instead (a close after this install removes it).
+                if state.open.contains_key(&handle) {
+                    state.phrase_matchers.insert(crate::phrases::store_name(&edition), matcher);
+                }
                 Ok(built)
             }
             Err(error) => {
@@ -1356,7 +1363,11 @@ impl Core {
         }
     }
 
-    fn phrases_build_opened(&self, opened: &Dict, progress: &dyn Progress) -> Result<PhraseBuilt, CoreError> {
+    fn phrases_build_opened(
+        &self,
+        opened: &Dict,
+        progress: &dyn Progress,
+    ) -> Result<(PhraseBuilt, Arc<xdict_phrase::Matcher>), CoreError> {
         opened.mdx_source.unchanged()?;
         let edition = opened.edition.clone();
         let name = crate::phrases::store_name(&edition);
@@ -1364,7 +1375,8 @@ impl Core {
         if let Some(region) = self.indexes.get(&name)? {
             let bytes = region_to_vec(&*region)?;
             if let Some(inventory) = xdict_phrase::Inventory::decode(&bytes, &edition, versions) {
-                return Ok(PhraseBuilt { edition, phrases: inventory.phrases().len() as u64, cached: true });
+                let built = PhraseBuilt { edition, phrases: inventory.phrases().len() as u64, cached: true };
+                return Ok((built, Arc::new(inventory.matcher())));
             }
         }
         let count = opened.mdx.len();
@@ -1390,7 +1402,7 @@ impl Core {
             return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
         }
         self.indexes.put(&name, &bytes)?;
-        Ok(PhraseBuilt { edition, phrases, cached: false })
+        Ok((PhraseBuilt { edition, phrases, cached: false }, Arc::new(inventory.matcher())))
     }
 
     /// **The phrases covering the term in this sentence** (`dev-docs/plan-phrase-recognition.md` WI-5): every phrase of
