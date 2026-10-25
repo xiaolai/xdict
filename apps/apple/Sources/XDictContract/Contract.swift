@@ -339,15 +339,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// An entry, a resource or an entry's text: the calls whose reply is the heaviest, of which
     /// `Limits.bulkCallsInFlight` run at once.
     public var isBulk: Bool {
-        switch self {
-        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: true
-        case .versions, .importPackage, .cancel, .openPackage, .close, .lookup, .suggest, .words, .link, .joinLineage,
-             .splitLineage, .lineageOf, .health, .readingStyle, .convertApple, .cancelConversion, .displayOptions,
-             .examples, .examplesBuild, .phrases, .phrasesBuild,
-             .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove,
-             .ledgerRestore: false
-        }
+        // **One classification, not two lists that drift** (audit round 1, 2026-10-26): the credit class already says
+        // which calls are bulk, and every bulk call is exactly one that holds a bulk credit.
+        creditClass == .bulk
     }
 
     /// Which of a connection's credits this operation holds while it runs (`Credits`): bulk for an entry or a resource,

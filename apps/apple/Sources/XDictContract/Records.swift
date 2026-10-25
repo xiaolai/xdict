@@ -1,5 +1,3 @@
-import Foundation
-
 // The core's records and enums (ADR-0007; `xdict-core` `types.rs`), as the contract carries them: plain Codable Swift,
 // so the app never needs the UniFFI binding, which the service alone links and converts from (`CoreMapping.swift`
 // there). Fields and cases are the core's, under its names, with two exceptions said where they occur: an entry's HTML

@@ -2,7 +2,6 @@ import AppKit
 import SwiftUI
 import XDictAI
 import XDictCapture
-import XDictEntryView
 import XDictSearch
 import XDictTokens
 
