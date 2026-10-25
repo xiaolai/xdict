@@ -234,6 +234,16 @@ impl Drop for Source {
     }
 }
 
+/// **The progress callback a call registers, and the exception baseline it records** (audit round 4, 2026-10-26): one
+/// constructor for `import`, `health` and `phrases_build` — the table's entry, or the exhausted reply its label names.
+fn progress_for(progress: Option<JsProgress>, what: &str) -> Result<Progress, String> {
+    let slot = match progress {
+        Some(p) => Some(PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted(what)))?),
+        None => None,
+    };
+    Ok(Progress(slot, THROWN.with(|thrown| thrown.borrow().len())))
+}
+
 /// Every number of a table is in use.
 fn exhausted(what: &str) -> CoreError {
     CoreError::Io { kind: core::IoKind::OutOfMemory, detail: format!("no number is left for more {what}") }
@@ -443,13 +453,7 @@ impl Core {
 
     pub fn import(&self, package: &str, progress: Option<JsProgress>) -> Reply {
         let package = package_from(&from_json::<Value>(package)?)?;
-        let progress = match progress {
-            Some(p) => Some(
-                PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("imports")))?,
-            ),
-            None => None,
-        };
-        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        let progress = progress_for(progress, "imports")?;
         watched_reply(|| self.0.import(package, &progress))
     }
 
@@ -611,13 +615,7 @@ impl Core {
 
     /// The edition's health report (WI-12): checked once and kept with its indexes; `progress` as for an import.
     pub fn health(&self, dict: &str, progress: Option<JsProgress>) -> Reply {
-        let progress = match progress {
-            Some(p) => {
-                Some(PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("checks")))?)
-            }
-            None => None,
-        };
-        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        let progress = progress_for(progress, "checks")?;
         watched_reply(|| self.0.health(dict.into(), &progress))
     }
 
@@ -625,18 +623,14 @@ impl Core {
     /// ready dictionary's phrase that covers the term's word, best first. `dicts` is a JSON array of handles.
     pub fn phrases(&self, sentence: &str, term_location: u32, term_length: u32, dicts: &str) -> Reply {
         let dicts = from_json(dicts)?;
-        reply(self.0.phrases(sentence.into(), u64::from(term_location), u64::from(term_length), dicts))
+        // **A read can reach a JS source** (a store that is loaded lazily), so it goes through the wrapper that turns a
+        // source's throw into a typed error, as every other read does (audit round 4, 2026-10-26).
+        watched_reply(|| self.0.phrases(sentence.into(), u64::from(term_location), u64::from(term_length), dicts))
     }
 
     /// **Builds one dictionary's phrase inventory in the background**: `progress` as for an import.
     pub fn phrases_build(&self, dict: &str, progress: Option<JsProgress>) -> Reply {
-        let progress = match progress {
-            Some(p) => {
-                Some(PROGRESS.with(|table| table.borrow_mut().insert(p)).ok_or_else(|| to_json(&exhausted("builds")))?)
-            }
-            None => None,
-        };
-        let progress = Progress(progress, THROWN.with(|thrown| thrown.borrow().len()));
+        let progress = progress_for(progress, "builds")?;
         watched_reply(|| self.0.phrases_build(dict.into(), &progress))
     }
 
