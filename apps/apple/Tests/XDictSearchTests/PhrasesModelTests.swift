@@ -265,6 +265,26 @@ struct PhrasesModelTests {
         #expect(await buildOperations(backend).count == 1, "the build was not started again after it finished")
     }
 
+    /// **One dictionary's unfinished build does not take a phrase another found away** (audit round 3, 2026-10-26):
+    /// the row stays on the candidate, and the still-building dictionary is reported beside it, not instead of it.
+    @Test func a_found_phrase_survives_another_dictionarys_build() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { operation in
+            guard case .phrases = operation else { return PhrasesFixture.built() }
+            return PhrasesFixture.outcome(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()],
+                                                               coverage: [.building]))
+        }
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { if case .found = phrases.row { true } else { false } })
+        try await Task.sleep(for: .milliseconds(100))
+        guard case .found(let candidate, _, _) = phrases.row else {
+            Issue.record("another dictionary's build took the phrase away: \(phrases.row)")
+            return
+        }
+        #expect(candidate.phrase == "purple passage")
+    }
+
     /// **The sentence is kept exactly as captured**: its leading whitespace stays, because the term's range counts
     /// UTF-16 units of this very string.
     @Test func the_sentence_is_kept_as_captured() async throws {

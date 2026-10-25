@@ -153,8 +153,9 @@ public final class PhrasesModel {
             return
         }
         // **A build that finished and left the store unreadable is not "still reading"** (audit round 2): nothing more
-        // is running, and the answer is cached as complete only when it is.
-        if again.coverage.contains(where: { $0.state == .building }) {
+        // is running, and the answer is cached as complete only when it is. **A phrase another dictionary found stays
+        // found** (audit round 3): one dictionary's failure does not take the reader's only answer away.
+        if again.coverage.contains(where: { $0.state == .building }), again.state != .found {
             row = .unavailable
             return
         }
