@@ -127,9 +127,10 @@ struct MeaningPreferencesTests {
         let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
         #expect(second.settings.profile == "deepseek")
         #expect(second.settings.endpoint?.absoluteString == "https://api.deepseek.com")
+        second.setEndpoint("https://reader.example.com/v1")
         second.chooseProfile("custom")
         #expect(second.settings.profile == "custom")
-        #expect(second.settings.endpoint?.absoluteString == "https://api.deepseek.com",
+        #expect(second.settings.endpoint?.absoluteString == "https://reader.example.com/v1",
                 "choosing Custom must not erase the address in the field")
     }
 
@@ -164,9 +165,13 @@ struct MeaningPreferencesTests {
     @Test func theProviderGetsTheServicesAuthAndTokenField() throws {
         let openai = try #require(URL(string: "https://api.openai.com/v1"))
         var settings = MeaningSettings(source: .http, endpoint: openai, profile: "openai", usesKey: true)
+        settings.key = "sk-shared"
         var config = MeaningProviders.httpConfiguration(settings, endpoint: openai)
         #expect(config.auth == .bearer)
         #expect(config.tokenField == .completionFirst)
+        // **The one key reaches a cloud configuration and never a local one** (audit finding, 2026-10-25): the test
+        // asserts the built configuration, not only the helper that decides.
+        #expect(config.apiKey == "sk-shared")
         let deepseek = try #require(URL(string: "https://api.deepseek.com"))
         settings.profile = "deepseek"
         settings.endpoint = deepseek
@@ -178,9 +183,86 @@ struct MeaningPreferencesTests {
         settings.endpoint = ollama
         let local = MeaningProviders.httpConfiguration(settings, endpoint: ollama)
         #expect(local.auth == .none)
+        #expect(local.apiKey == nil, "the shared key must not travel to a server chosen as local")
         #expect(MeaningProviders.profile(settings).id == "ollama")
         settings.usesKey = true
         #expect(MeaningProviders.profile(settings).id == "custom", "a local profile never answers for the cloud row")
+    }
+
+    /// **Each row keeps its own service, address and model** (audit finding, 2026-10-25): an edited address survives
+    /// Off and a switch back, the other row never inherits it, and both survive a relaunch — so the one key is never
+    /// pointed at the server chosen for the other row.
+    @Test func eachRowKeepsItsOwnServiceAndAddress() {
+        let defaults = Self.defaults()
+        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        preferences.choose(.http, cloud: true)
+        preferences.chooseProfile("openai")
+        preferences.setEndpoint("https://proxy.example.com/v1")   // the reader's own base for this service
+        preferences.choose(nil)                                    // Off
+        #expect(preferences.settings.endpoint?.absoluteString == "https://proxy.example.com/v1",
+                "Off must not lose the selected row's address")
+        preferences.choose(.http, cloud: true)
+        #expect(preferences.settings.endpoint?.absoluteString == "https://proxy.example.com/v1",
+                "the cloud row comes back as it was left, not as its service's default")
+        #expect(preferences.settings.profile == "openai")
+
+        preferences.choose(.http, cloud: false)                    // a local row never configured
+        #expect(preferences.settings.endpoint == nil)
+        #expect(preferences.settings.profile == MeaningProfiles.custom)
+        preferences.chooseProfile("ollama")
+
+        preferences.choose(.http, cloud: true)
+        #expect(preferences.settings.endpoint?.absoluteString == "https://proxy.example.com/v1")
+
+        // Both rows survive a relaunch, each with its own values.
+        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        second.choose(.http, cloud: false)
+        #expect(second.settings.profile == "ollama")
+        #expect(second.settings.endpoint?.absoluteString == "http://127.0.0.1:11434/v1")
+        second.choose(.http, cloud: true)
+        #expect(second.settings.endpoint?.absoluteString == "https://proxy.example.com/v1")
+    }
+
+    /// **An Off cloud install from before the rows keeps its server on the cloud row** (verification finding,
+    /// 2026-10-25): the row comes from the address, not from the Off state's false row flag.
+    @Test func aLegacyCloudAddressIsMigratedToTheCloudRow() {
+        let defaults = Self.defaults()
+        defaults.set("https://api.deepseek.com", forKey: "meaning.endpoint")
+        defaults.set(false, forKey: "meaning.http.cloud")   // the reader quit while Off
+        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        preferences.choose(.http, cloud: false)
+        #expect(preferences.settings.endpoint == nil, "the local row must not inherit a cloud address")
+        preferences.choose(.http, cloud: true)
+        #expect(preferences.settings.endpoint?.absoluteString == "https://api.deepseek.com")
+        #expect(preferences.settings.profile == "deepseek")
+    }
+
+    /// **A legacy Custom loopback endpoint is a local server** (verification finding, 2026-10-25): the row decides where
+    /// the one key may travel, and a loopback server must never be filed as the cloud row's.
+    @Test func aLegacyCustomLoopbackAddressIsMigratedToTheLocalRow() {
+        let defaults = Self.defaults()
+        defaults.set("http://127.0.0.1:11434/v1", forKey: "meaning.endpoint")
+        defaults.set("custom", forKey: "meaning.http.profile")
+        defaults.set(true, forKey: "meaning.http.cloud")   // the reader was on the cloud row when they quit
+        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        preferences.choose(.http, cloud: true)
+        #expect(preferences.settings.endpoint == nil, "a loopback server is not the cloud row's")
+        preferences.choose(.http, cloud: false)
+        #expect(preferences.settings.endpoint?.absoluteString == "http://127.0.0.1:11434/v1")
+        #expect(preferences.settings.profile == MeaningProfiles.custom)
+    }
+
+    /// **Returning to a row restores its own service's address** (audit finding, 2026-10-25): the cloud key must not be
+    /// left pointed at the server the reader typed for the local row.
+    @Test func returningToTheCloudRowRestoresItsServicesAddress() {
+        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+        preferences.choose(.http, cloud: true)
+        preferences.chooseProfile("openai")
+        preferences.choose(.http, cloud: false)
+        preferences.setEndpoint("http://127.0.0.1:11434/v1")
+        preferences.choose(.http, cloud: true)
+        #expect(preferences.settings.endpoint?.absoluteString == "https://api.openai.com/v1")
+        #expect(preferences.settings.usesKey)
     }
 
     /// **A pasted address keeps its server** (2026-10-25): whitespace around it is not part of it, text that is not a

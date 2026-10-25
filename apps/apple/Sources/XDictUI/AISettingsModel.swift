@@ -37,7 +37,10 @@ public final class AISettingsModel {
     public private(set) var models: ModelsState = .idle
     @ObservationIgnored private var modelsGeneration = 0
     /// The address, service and key the list belongs to; another configuration shows no list rather than a stale one.
-    @ObservationIgnored private var modelsIdentity: String?
+    @ObservationIgnored private var modelsIdentity: ListIdentity?
+    /// The pane's two long buttons own their work here, so leaving the pane ends it (audit finding, 2026-10-25).
+    @ObservationIgnored private var modelsTask: Task<Void, Never>?
+    @ObservationIgnored private var keyTestTask: Task<Void, Never>?
 
     /// The Codex login's own output, verbatim: the web address and code the reader needs. Data, never translated.
     public private(set) var loginLines: [String] = []
@@ -93,11 +96,19 @@ public final class AISettingsModel {
         return profile.hints
     }
 
-    /// What makes a list this configuration's own: the address, the service and the key it was fetched with.
-    private var listIdentity: String {
+    /// **What makes a list a configuration's own**, as one value: the address, the service and the key it was fetched
+    /// with. Exact equality, so display and completion cannot disagree about which configuration a list belongs to.
+    private struct ListIdentity: Equatable {
+        let endpoint: String
+        let profile: String
+        let key: String?
+    }
+
+    private var listIdentity: ListIdentity {
         let settings = preferences.settings
-        let key = MeaningProviders.apiKey(settings)
-        return "\(settings.endpoint?.absoluteString ?? "")|\(MeaningProviders.profile(settings).id)|\(key?.hashValue ?? 0)"
+        return ListIdentity(endpoint: settings.endpoint?.absoluteString ?? "",
+                            profile: MeaningProviders.profile(settings).id,
+                            key: MeaningProviders.apiKey(settings))
     }
 
     /// **The build's Apple source against this Mac, when the Mac is older** (ADR-0026, owner's rule of 2026-10-21): the
@@ -130,11 +141,17 @@ public final class AISettingsModel {
 
     // MARK: - The model list (2026-10-25)
 
-    /// **Load the service's own model list**, on the reader's ask and never per keystroke. The same address, key and
-    /// service served from the process's cache is answered without a request.
+    /// **Load the service's own model list**, on the reader's ask and never per keystroke. Every press asks the service:
+    /// the list changes when a model is pulled or retired, and a cached answer would make the button look broken.
     public func loadModels() async {
+        // **A task cancelled before it ran does nothing**: a cancelled button press must not start a request, and its
+        // `modelsGeneration` bump would otherwise let that request speak for the pane after it is gone.
+        guard !Task.isCancelled else { return }
         guard preferences.settings.source == .http, let endpoint = preferences.settings.endpoint else {
+            // **A pane with no endpoint has no load**: the generation advances so an older request cannot land here.
+            modelsGeneration += 1
             models = .idle
+            modelsIdentity = nil
             return
         }
         let settings = preferences.settings
@@ -149,9 +166,7 @@ public final class AISettingsModel {
         let result = await fetchModels(request)
         // **A list for an address, key or service the reader has since changed proves nothing**: only this load may
         // speak for the current pane.
-        guard mine == modelsGeneration, identity == listIdentity, preferences.settings.endpoint == endpoint,
-              MeaningProviders.profile(preferences.settings).id == profile.id,
-              MeaningProviders.apiKey(preferences.settings) == MeaningProviders.apiKey(settings) else {
+        guard mine == modelsGeneration, identity == listIdentity else {
             // **A load whose configuration is gone leaves nothing behind**: when no newer load owns the pane, the state
             // returns to idle, so coming back to this configuration does not show a request that no longer exists.
             if mine == modelsGeneration {
@@ -164,6 +179,30 @@ public final class AISettingsModel {
         case .success(let list): models = .loaded(list)
         case .failure(let error): models = .failed(error)
         }
+    }
+
+    /// **Load Models' owner**: one load at a time, started by the view and cancellable with it.
+    public func startModelLoad() {
+        modelsTask?.cancel()
+        modelsTask = Task { [weak self] in await self?.loadModels() }
+    }
+
+    /// **A load does not outlive the pane that asked for it**: its request is cancelled and its answer dropped.
+    public func discardModelLoad() {
+        modelsTask?.cancel()
+        modelsTask = nil
+        modelsGeneration += 1
+        models = .idle
+        modelsIdentity = nil
+    }
+
+    /// **Nothing the pane started outlives it**: the sign-in, a model load and a key test end together.
+    public func cancelPaneWork() {
+        cancelSignIn()
+        discardModelLoad()
+        keyTestTask?.cancel()
+        keyTestTask = nil
+        restoreKeyState()
     }
 
     /// A model picked from the list is the reader's choice, stored exactly as typing it would.
@@ -208,8 +247,15 @@ public final class AISettingsModel {
         }
     }
 
+    /// **Test**'s owner: one probe at a time, started by the view and cancellable with it.
+    public func startKeyTest() {
+        keyTestTask?.cancel()
+        keyTestTask = Task { [weak self] in await self?.testKey() }
+    }
+
     /// **Test** asks the endpoint one short question (`HTTPProvider.probe`), which is the only way to know the key works.
     public func testKey() async {
+        guard !Task.isCancelled else { return }
         keyGeneration += 1
         let mine = keyGeneration
         keyState = .testing
@@ -222,7 +268,12 @@ public final class AISettingsModel {
             let provider = try HTTPProvider(configuration: MeaningProviders.httpConfiguration(settings, endpoint: endpoint))
             _ = try await provider.probe()
             guard mine == keyGeneration else { return }
-            // **A result for a configuration the reader has since changed proves nothing** (audit finding, 2026-10-20).
+            // **A cancelled probe is the pane's choice, not the key's verdict**, and a result for a configuration the
+            // reader has since changed proves nothing (audit findings of 2026-10-20 and 2026-10-25).
+            guard !Task.isCancelled else {
+                restoreKeyState()
+                return
+            }
             guard Self.stillCurrent(settings, preferences.settings) else {
                 restoreKeyState()
                 return
@@ -230,6 +281,11 @@ public final class AISettingsModel {
             keyState = .stored
         } catch {
             guard mine == keyGeneration else { return }
+            // The probe's failures are typed `AIProviderError` already: a raw `CancellationError` cannot reach here.
+            guard !Task.isCancelled, error != .cancelled else {
+                restoreKeyState()
+                return
+            }
             // The failure belongs to the address, model and effective key it was sent with — source selection included,
             // which is what turns `usesKey` on or off (verification finding, 2026-10-20).
             guard Self.stillCurrent(settings, preferences.settings) else {
@@ -336,16 +392,12 @@ public final class AISettingsModel {
     }
 }
 
-/// **The live model-list fetch**: sayso's catalogue, with the process's in-memory cache in front of it. Nothing is
-/// persisted: a list is a snapshot the service itself can change, so a relaunch asks again rather than trusting a file.
-private let modelListCache = ModelCatalogCache()
-
+/// **The live model-list fetch**: sayso's catalogue, asked afresh on each press. A list is a snapshot the service itself
+/// changes — a model pulled into a local server a minute ago must appear on the next press — so nothing is cached here
+/// and nothing is persisted; the pane holds the last answer in memory.
 @Sendable func liveModelFetch(_ request: ModelCatalog.Request) async -> Result<[AIModel], ModelCatalogError> {
-    if let entry = await modelListCache.entry(for: request) { return .success(entry.models) }
     do {
-        let models = try await ModelCatalog().fetch(request)
-        await modelListCache.store(models, for: request)
-        return .success(models)
+        return .success(try await ModelCatalog().fetch(request))
     } catch {
         return .failure(error)
     }

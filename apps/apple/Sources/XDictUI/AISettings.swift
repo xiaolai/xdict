@@ -88,8 +88,8 @@ public struct AISettings: View {
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
         .onChange(of: model.promptKind) { model.loadDraft() }
         .onChange(of: model.draft) { model.draftChanged() }
-        // **A pending sign-in does not outlive the pane that shows its code** (UI33).
-        .onDisappear { model.cancelSignIn() }
+        // **Nothing the pane started outlives it** (UI33; audit finding, 2026-10-25): sign-in, model load and key test.
+        .onDisappear { model.cancelPaneWork() }
         // A Settings search that found a row inside Advanced opens it (UI30).
         .onAppear { revealIfAsked() }
         .onChange(of: route.revealSerial) { revealIfAsked() }
@@ -202,7 +202,7 @@ public struct AISettings: View {
                 // **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers
                 // it (or the service's few known names before a fetch); typing above remains the final word.
                 HStack(spacing: Tokens.Space.s) {
-                    Button("Load Models") { Task { await model.loadModels() } }  // placement: form-pane
+                    Button("Load Models") { model.startModelLoad() }  // placement: form-pane
                         .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil)
                         .accessibilityIdentifier("ai.models.load")
                     if model.modelsShown == .loading {
@@ -295,7 +295,7 @@ public struct AISettings: View {
 
     private func keyButtons(model: AISettingsModel) -> some View {
         HStack(spacing: Tokens.Space.s) {
-            Button("Test") { Task { await model.testKey() } }  // placement: form-pane
+            Button("Test") { model.startKeyTest() }  // placement: form-pane
                 .accessibilityIdentifier("ai.key.test")
             Button("Replace") {  // placement: form-pane
                 model.replaceKey()

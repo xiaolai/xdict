@@ -18,6 +18,9 @@ public final class MeaningPreferences {
 
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private let keys: any MeaningKeyStore
+    /// **Which endpoint row owns `settings` right now**: it changes only when the HTTP source is chosen, so a detour
+    /// through Off or a CLI never files one row's values under the other.
+    @ObservationIgnored private var selectedRow: Bool
 
     private enum Key {
         static let source = "meaning.source"
@@ -31,33 +34,118 @@ public final class MeaningPreferences {
         static func template(_ language: String, _ mode: AIMode) -> String {
             "meaning.template.\(language).\(mode.rawValue)"
         }
+
+        static func row(_ cloud: Bool) -> String { cloud ? "cloud" : "local" }
+        static func rowEndpoint(_ row: String) -> String { "meaning.row.\(row).endpoint" }
+        static func rowProfile(_ row: String) -> String { "meaning.row.\(row).profile" }
+        static func rowModel(_ row: String) -> String { "meaning.row.\(row).model" }
+    }
+
+    /// **One endpoint row's own state** (audit finding, 2026-10-25): the local and cloud rows each keep their service,
+    /// address and model, so switching rows neither loses the reader's edited address nor leaves the one key pointed at
+    /// the other row's server. `initialized` is false for a row an install from before rows has never had.
+    private struct Row {
+        var endpoint: URL?
+        var profile: String
+        var model: String
+        var initialized: Bool
     }
 
     public init(defaults: UserDefaults = .standard, keys: any MeaningKeyStore = KeychainKeyStore()) {
         self.defaults = defaults
         self.keys = keys
         let language = defaults.string(forKey: Key.language) ?? "en"
-        let endpoint = defaults.string(forKey: Key.endpoint).flatMap(URL.init(string:))
+        // **An install from before the rows is filed where its server belongs**, before anything reads a row.
+        Self.migrateLegacyRowIfNeeded(defaults: defaults)
+        let cloud = defaults.bool(forKey: Key.httpCloud)
+        httpCloud = cloud
+        selectedRow = cloud
+        // **The selected row's own state, or the single endpoint an install from before rows stored**: the reader's
+        // address is never carried between rows, and its service is inferred only when nothing was ever chosen.
+        // **Migration has already filed every legacy value in a row**: the selected row is the only source from here,
+        // so a row never configured is genuinely empty and never borrows the other row's address.
+        let row = Self.row(cloud: cloud, defaults: defaults)
+        let endpoint = row.initialized ? row.endpoint : nil
+        let profile = row.initialized ? row.profile : MeaningProfiles.custom
+        let model = row.initialized ? row.model : ""
         settings = MeaningSettings(
             source: defaults.string(forKey: Key.source).flatMap(AIProviderKind.init(rawValue:)),
             endpoint: endpoint,
-            // **An install that predates the choice is inferred from its address**: the reader's endpoint decides
-            // which service it was, and an unknown or absent one is Custom.
-            profile: defaults.string(forKey: Key.profile) ?? MeaningProfiles.matching(endpoint: endpoint),
-            model: defaults.string(forKey: Key.model) ?? "",
+            profile: profile,
+            model: model,
             key: keys.key(),
             sendEntryText: defaults.bool(forKey: Key.sendEntryText),
             language: language,
             templates: Self.storedTemplates(defaults, language: language))
-        httpCloud = defaults.bool(forKey: Key.httpCloud)
         settings.usesKey = settings.source == .http && httpCloud
+    }
+
+    /// **One endpoint from before the two rows belongs to the row its service (or its address) belongs to** — not to
+    /// whichever row the reader was on when they quit: an Off state stores the row flag as false, and filing a cloud
+    /// server under the local row would leave the pane offering it there (verification finding, 2026-10-25).
+    private static func migrateLegacyRowIfNeeded(defaults: UserDefaults) {
+        guard defaults.string(forKey: Key.rowProfile(Key.row(true))) == nil,
+              defaults.string(forKey: Key.rowProfile(Key.row(false))) == nil else { return }
+        let endpoint = defaults.string(forKey: Key.endpoint).flatMap(URL.init(string:))
+        let profile = defaults.string(forKey: Key.profile)
+        let model = defaults.string(forKey: Key.model)
+        guard endpoint != nil || profile != nil || model != nil else { return }
+        let cloud: Bool
+        if let known = profile.flatMap(AIProviderProfile.profile(id:)), known.id != MeaningProfiles.custom {
+            cloud = !MeaningProfiles.isLocal(known)
+        } else if let host = endpoint?.host {
+            cloud = !MeaningProfiles.isLocal(host: host)
+        } else {
+            cloud = defaults.bool(forKey: Key.httpCloud)
+        }
+        let name = Key.row(cloud)
+        if let endpoint { defaults.set(endpoint.absoluteString, forKey: Key.rowEndpoint(name)) }
+        if let profile { defaults.set(profile, forKey: Key.rowProfile(name)) } else {
+            defaults.set(MeaningProfiles.matching(endpoint: endpoint), forKey: Key.rowProfile(name))
+        }
+        if let model { defaults.set(model, forKey: Key.rowModel(name)) }
+    }
+
+    private static func row(cloud: Bool, defaults: UserDefaults) -> Row {
+        let name = Key.row(cloud)
+        guard let profile = defaults.string(forKey: Key.rowProfile(name)) else {
+            return Row(endpoint: nil, profile: MeaningProfiles.custom, model: "", initialized: false)
+        }
+        return Row(endpoint: defaults.string(forKey: Key.rowEndpoint(name)).flatMap(URL.init(string:)),
+                   profile: profile,
+                   model: defaults.string(forKey: Key.rowModel(name)) ?? "",
+                   initialized: true)
+    }
+
+    /// The selected row's current values, written where a switch back will find them.
+    private func storeSelectedRow() {
+        let name = Key.row(selectedRow)
+        set(settings.endpoint?.absoluteString, forKey: Key.rowEndpoint(name))
+        defaults.set(settings.profile, forKey: Key.rowProfile(name))
+        set(settings.model.isEmpty ? nil : settings.model, forKey: Key.rowModel(name))
+    }
+
+    /// The row being selected, as it was left; a row never configured is Custom with no address.
+    private func loadRow(cloud: Bool) {
+        let row = Self.row(cloud: cloud, defaults: defaults)
+        settings.profile = row.initialized ? row.profile : MeaningProfiles.custom
+        settings.endpoint = row.initialized ? row.endpoint : nil
+        settings.model = row.initialized ? row.model : ""
     }
 
     /// **The source the reader chose**; nil turns the feature off. `cloud` picks which endpoint row is selected.
     public func choose(_ kind: AIProviderKind?, cloud: Bool = false) {
+        // **The row being left keeps its own service, address and model** (audit finding, 2026-10-25); the row being
+        // selected comes back as it was left, so a reader's edited address survives Off, and the cloud key is never
+        // pointed at the server typed for the local row.
+        storeSelectedRow()
         settings.source = kind
         httpCloud = cloud
         settings.usesKey = kind == .http && cloud
+        if kind == .http {
+            selectedRow = cloud
+            loadRow(cloud: cloud)
+        }
         persist()
     }
 
@@ -141,6 +229,8 @@ public final class MeaningPreferences {
         set(settings.endpoint?.absoluteString, forKey: Key.endpoint)
         set(settings.profile, forKey: Key.profile)
         set(settings.model.isEmpty ? nil : settings.model, forKey: Key.model)
+        // The selected row's own copy, beside the single legacy records older builds read.
+        storeSelectedRow()
         defaults.set(settings.sendEntryText, forKey: Key.sendEntryText)
         defaults.set(settings.language, forKey: Key.language)
         defaults.set(httpCloud, forKey: Key.httpCloud)

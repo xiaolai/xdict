@@ -1,15 +1,18 @@
 import Foundation
 import Testing
 import XDictAI
+import XDictTestSupport
 @testable import XDictUI
 
 /// **The service's model list in Settings ▸ AI** (2026-10-25): fetched on the reader's ask, offered as a choice, stored
 /// exactly as typing it would; a failed or superseded load says so rather than showing a stale list.
 @MainActor
 struct AISettingsModelsTests {
-    static func preferences() -> MeaningPreferences {
+    /// A cloud DeepSeek configuration over an isolated defaults suite; the suite must exist, or the test would silently
+    /// write the reader's own defaults.
+    static func preferences() throws -> MeaningPreferences {
         let suite = "ai.xdict.tests.ai-models." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
+        let defaults = try #require(UserDefaults(suiteName: suite))
         defaults.removePersistentDomain(forName: suite)
         let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
         preferences.choose(.http, cloud: true)
@@ -17,110 +20,185 @@ struct AISettingsModelsTests {
         return preferences
     }
 
-    @Test func loadingShowsTheListAndChoosingStoresIt() async {
-        let preferences = Self.preferences()
+    @Test func loadingShowsTheListAndChoosingStoresIt() async throws {
+        let preferences = try Self.preferences()
         let model = AISettingsModel(preferences: preferences, fetchModels: { request in
             #expect(request.profile.id == "deepseek")
             #expect(request.baseURL.absoluteString == "https://api.deepseek.com")
-            return .success([AIModel(id: "deepseek-flash"), AIModel(id: "deepseek-v4-pro")])
+            // **Names the fallback hints never contain**: choices equal to the hints would pass even if the fetched
+            // list were ignored.
+            return .success([AIModel(id: "listed-alpha"), AIModel(id: "listed-beta")])
         })
         await model.loadModels()
-        #expect(model.modelsShown == .loaded([AIModel(id: "deepseek-flash"), AIModel(id: "deepseek-v4-pro")]))
-        #expect(model.modelChoices == ["deepseek-flash", "deepseek-v4-pro"])
-        model.chooseModel("deepseek-v4-pro")
-        #expect(preferences.settings.model == "deepseek-v4-pro")
+        #expect(model.modelsShown == .loaded([AIModel(id: "listed-alpha"), AIModel(id: "listed-beta")]))
+        #expect(model.modelChoices == ["listed-alpha", "listed-beta"])
+        model.chooseModel("listed-beta")
+        #expect(preferences.settings.model == "listed-beta")
     }
 
-    /// **A list belongs to the configuration it came from**: changing the address hides it and offers the new service's
-    /// hints instead — the menu never shows another service's models.
-    @Test func aListForAnotherConfigurationIsNotShown() async {
-        let preferences = Self.preferences()
-        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in
-            .success([AIModel(id: "deepseek-flash")])
-        })
+    /// **A list belongs to the address, the key and the service it came from**: changing any one of them hides it.
+    @Test func aListForAnotherAddressOrKeyIsNotShown() async throws {
+        let preferences = try Self.preferences()
+        let listed = [AIModel(id: "listed-alpha")]
+        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in .success(listed) })
         await model.loadModels()
-        #expect(model.modelsShown == .loaded([AIModel(id: "deepseek-flash")]))
-        preferences.chooseProfile("openai")
+        #expect(model.modelsShown == .loaded(listed))
+
+        preferences.setEndpoint("https://api.deepseek.com/v2")
+        #expect(model.modelsShown == .idle, "another address")
+        preferences.setEndpoint("https://api.deepseek.com")
+        #expect(model.modelsShown == .loaded(listed), "the same configuration shows its list again")
+
+        try preferences.setKey("key-b")
+        #expect(model.modelsShown == .idle, "another key")
+        try preferences.setKey(nil)
+        #expect(model.modelsShown == .loaded(listed))
+    }
+
+    /// The service alone can differ at a common address: the identity must include it, not only the endpoint.
+    @Test func aListForAnotherServiceAtTheSameAddressIsNotShown() async throws {
+        let preferences = try Self.preferences()
+        preferences.choose(.http, cloud: false)
+        preferences.chooseProfile("custom")
+        preferences.setEndpoint("http://127.0.0.1:11434/v1")
+        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in .success([AIModel(id: "listed-alpha")]) })
+        await model.loadModels()
+        #expect(model.modelsShown == .loaded([AIModel(id: "listed-alpha")]))
+        preferences.update { $0.profile = "ollama" }   // same address, another service
         #expect(model.modelsShown == .idle)
-        #expect(model.modelChoices.contains("gpt-5.4"), "the current service's own names are offered instead")
     }
 
-    /// **A load the reader moved away from leaves no spinner behind**: returning to that configuration shows idle, not a
-    /// request that no longer exists, and Load Models works again.
-    @Test func aLoadTheReaderMovedAwayFromLeavesNothingBehind() async {
-        let preferences = Self.preferences()
-        let calls = LockedCount()
-        let started = AsyncStream<Void>.makeStream()
-        let gate = AsyncStream<Void>.makeStream()
-        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in
-            if calls.next() == 1 {
-                started.continuation.yield()
-                var iterator = gate.stream.makeAsyncIterator()
-                _ = await iterator.next()
-                return .success([AIModel(id: "deepseek-flash")])
-            }
-            return .success([AIModel(id: "openai-listed")])
-        })
-        let first = Task { await model.loadModels() }
-        var iterator = started.stream.makeAsyncIterator()
-        _ = await iterator.next()
-        preferences.chooseProfile("openai")   // moved away without loading
-        gate.continuation.yield()
-        await first.value
-        preferences.chooseProfile("deepseek") // back to the configuration the load belonged to
-        #expect(model.modelsShown != .loading)
-    }
-
-    /// **An empty list from the service is authoritative**: the unfetched hints must not be offered over it.
-    @Test func anEmptyListFromTheServiceOffersNoHints() async {
-        let model = AISettingsModel(preferences: Self.preferences(), fetchModels: { _ in .success([]) })
+    @Test func anEmptyListFromTheServiceOffersNoHints() async throws {
+        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .success([]) })
         await model.loadModels()
         #expect(model.modelsShown == .loaded([]))
         #expect(model.modelChoices.isEmpty)
     }
 
     /// A failure is kept as its typed reason, and the service's few known names stay offered so the reader is not stuck.
-    @Test func aFailedLoadSaysWhyAndKeepsTheHints() async {
-        let model = AISettingsModel(preferences: Self.preferences(), fetchModels: { _ in .failure(.missingKey) })
+    @Test func aFailedLoadSaysWhyAndKeepsTheHints() async throws {
+        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .failure(.missingKey) })
         await model.loadModels()
         #expect(model.modelsShown == .failed(.missingKey))
         #expect(model.modelChoices == ["deepseek-flash", "deepseek-v4-pro"])
     }
 
     /// **A load the reader superseded cannot overwrite the newer one**: the first answers late, the second is current.
-    @Test func aSupersededLoadDoesNotOverwrite() async {
+    @Test func aSupersededLoadDoesNotOverwrite() async throws {
+        let preferences = try Self.preferences()
         let calls = LockedCount()
-        let firstStarted = AsyncStream<Void>.makeStream()
-        let gate = AsyncStream<Void>.makeStream()
-        let model = AISettingsModel(preferences: Self.preferences(), fetchModels: { _ in
-            let n = calls.next()
-            if n == 1 {
-                firstStarted.continuation.yield()
-                var iterator = gate.stream.makeAsyncIterator()
-                _ = await iterator.next()
+        let started = Flag()
+        let gate = Flag()
+        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in
+            if calls.next() == 1 {
+                started.set()
+                while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
                 return .success([AIModel(id: "stale")])
             }
             return .success([AIModel(id: "fresh")])
         })
+        defer { gate.set() }
         let first = Task { await model.loadModels() }
-        var started = firstStarted.stream.makeAsyncIterator()
-        _ = await started.next()
+        #expect(await eventually(2) { started.isSet }, "the first fetch never started")
         await model.loadModels()
-        gate.continuation.yield()
+        gate.set()
         await first.value
         #expect(model.modelsShown == .loaded([AIModel(id: "fresh")]))
+    }
+
+    /// **A load the reader moved away from leaves no spinner behind**: returning to that configuration shows idle, and
+    /// Load Models works from there — the retry really fetches again.
+    @Test func aLoadTheReaderMovedAwayFromLeavesNothingBehind() async throws {
+        let preferences = try Self.preferences()
+        let calls = LockedCount()
+        let started = Flag()
+        let gate = Flag()
+        let model = AISettingsModel(preferences: preferences, fetchModels: { _ in
+            if calls.next() == 1 {
+                started.set()
+                while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+                return .success([AIModel(id: "listed-alpha")])
+            }
+            return .success([AIModel(id: "listed-beta")])
+        })
+        defer { gate.set() }
+        let first = Task { await model.loadModels() }
+        #expect(await eventually(2) { started.isSet }, "the first fetch never started")
+        preferences.chooseProfile("openai")   // moved away without loading
+        gate.set()
+        await first.value
+        preferences.chooseProfile("deepseek") // back to the configuration the load belonged to
+        #expect(model.modelsShown == .idle)
+        await model.loadModels()
+        #expect(model.modelsShown == .loaded([AIModel(id: "listed-beta")]))
+        #expect(calls.value == 2, "the retry did not ask the service again")
+    }
+
+    /// **A press cancelled before its body ran does nothing**: it must not start a request, set a spinner, or let its
+    /// generation speak for the pane after it is gone.
+    @Test func aCancelledLoadNeverStarts() async throws {
+        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .failure(.cancelled) })
+        let task = Task { () -> Void in
+            try? await Task.sleep(for: .milliseconds(200))
+            await model.loadModels()
+        }
+        task.cancel()
+        await task.value
+        #expect(model.modelsShown == .idle)
+    }
+
+    /// **The pane's disappear drops a load's answer** (a request that outlived its pane cannot land).
+    @Test func aDiscardedLoadLeavesTheListIdle() async throws {
+        let started = Flag()
+        let gate = Flag()
+        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in
+            started.set()
+            while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
+            return .success([AIModel(id: "late")])
+        })
+        defer { gate.set() }
+        let first = Task { await model.loadModels() }
+        #expect(await eventually(2) { started.isSet }, "the fetch never started")
+        model.discardModelLoad()
+        gate.set()
+        await first.value
+        #expect(model.modelsShown == .idle)
     }
 }
 
 /// A counter the fetch closure (off the main actor) can use.
 final class LockedCount: @unchecked Sendable {
     private let lock = NSLock()
-    private var value = 0
+    private var count = 0
 
     func next() -> Int {
         lock.lock()
         defer { lock.unlock() }
-        value += 1
-        return value
+        count += 1
+        return count
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
+    }
+}
+
+/// A one-way flag the fetch closure and the test share.
+final class Flag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var flag = false
+
+    func set() {
+        lock.lock()
+        flag = true
+        lock.unlock()
+    }
+
+    var isSet: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return flag
     }
 }

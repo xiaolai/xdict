@@ -23,7 +23,7 @@ let package = Package(
 
         // **The AI contract's values** (ADR-0021; `conformance/ai/`): the marking rule, the template composer with the
         // fixed response contract, the answer validator and schema, the shipped defaults, and the adapter that binds
-        // sayso's Apple provider to `AppleAnswer`. The providers themselves are sayso 0.5.0's (SaySoAI, SaySoAICLI,
+        // sayso's Apple provider to `AppleAnswer`. The providers themselves are sayso's (SaySoAI, SaySoAICLI,
         // SaySoAIApple), re-exported; no UI text and no network policy beyond them.
         .target(name: "XDictAI", dependencies: [
             .product(name: "SaySoAI", package: "sayso"),

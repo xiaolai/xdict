@@ -157,15 +157,17 @@ public enum MeaningSentences {
         case .server(let status, let message):
             // **The server's own sentence** (measured 2026-10-25: DeepSeek names the models it serves in a 400): it is
             // shown when it gave one, because it says what to fix; a bare status otherwise.
+            // **Neutral about who failed**: a 4xx is the server declining, a 5xx is the server breaking, and the same
+            // sentence cannot honestly say "refused" for both.
             if message.isEmpty {
-                LocalizedStringResource("The source refused the request (HTTP \(status)).")
+                LocalizedStringResource("The request to the source failed (HTTP \(status)).")
             } else {
-                LocalizedStringResource("The source refused the request (HTTP \(status)): \(message)")
+                LocalizedStringResource("The request to the source failed (HTTP \(status)): \(message)")
             }
         case .timeout:
             LocalizedStringResource("The source took too long to answer.")
         case .cancelled:
-            LocalizedStringResource("The ask was cancelled.")
+            Self.cancelled
         case .notInstalled:
             LocalizedStringResource("The command-line tool is not installed.")
         case .notSignedIn:
@@ -201,9 +203,9 @@ public enum MeaningSentences {
         case .badShape: provider(.badShape)
         case .server(let status, let message):
             if message.isEmpty {
-                LocalizedStringResource("The service refused the list request (HTTP \(status)).")
+                LocalizedStringResource("The model-list request failed (HTTP \(status)).")
             } else {
-                LocalizedStringResource("The service refused the list request (HTTP \(status)): \(message)")
+                LocalizedStringResource("The model-list request failed (HTTP \(status)): \(message)")
             }
         }
     }

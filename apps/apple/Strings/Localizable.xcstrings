@@ -11484,6 +11484,38 @@
         }
       }
     },
+    "The model-list request failed (HTTP %lld)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model-list request failed (HTTP %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型列表请求失败（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "The model-list request failed (HTTP %lld): %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model-list request failed (HTTP %1$lld): %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "模型列表请求失败（HTTP %1$lld）：%2$@"
+          }
+        }
+      }
+    },
     "The note could not be cleared." : {
       "localizations" : {
         "en" : {
@@ -11672,6 +11704,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "请求超出了该来源可接受的长度。"
+          }
+        }
+      }
+    },
+    "The request to the source failed (HTTP %lld)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The request to the source failed (HTTP %lld)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向来源发出的请求失败（HTTP %lld）。"
+          }
+        }
+      }
+    },
+    "The request to the source failed (HTTP %lld): %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The request to the source failed (HTTP %1$lld): %2$@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "向来源发出的请求失败（HTTP %1$lld）：%2$@"
           }
         }
       }
@@ -11907,38 +11971,8 @@
         }
       }
     },
-    "The service refused the list request (HTTP %lld)." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The service refused the list request (HTTP %lld)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务拒绝了模型列表请求（HTTP %lld）。"
-          }
-        }
-      }
-    },
-    "The service refused the list request (HTTP %lld): %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The service refused the list request (HTTP %1$lld): %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务拒绝了模型列表请求（HTTP %1$lld）：%2$@"
-          }
-        }
-      }
-    },
+
+
     "The shortcut is in use by another app. Choose another one." : {
       "localizations" : {
         "en" : {
@@ -12083,38 +12117,8 @@
         }
       }
     },
-    "The source refused the request (HTTP %lld)." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The source refused the request (HTTP %lld)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来源拒绝了请求（HTTP %lld）。"
-          }
-        }
-      }
-    },
-    "The source refused the request (HTTP %lld): %@" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The source refused the request (HTTP %1$lld): %2$@"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来源拒绝了请求（HTTP %1$lld）：%2$@"
-          }
-        }
-      }
-    },
+
+
     "The source took too long to answer." : {
       "localizations" : {
         "en" : {

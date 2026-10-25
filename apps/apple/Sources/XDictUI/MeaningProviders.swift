@@ -48,6 +48,9 @@ public enum MeaningProviders {
             return availability == .available ? .ready("") : .failed(.unavailable(availability))
         case .http:
             guard let endpoint = settings.endpoint else { return .notConfigured }
+            // **A service that needs a key is not set up without one**: the constructor would pass — only a request
+            // proves a key — but "Ready" beside an empty key field would be a promise nothing checked.
+            if profile(settings).keyRequired, (apiKey(settings) ?? "").isEmpty { return .notConfigured }
             do {
                 _ = try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
                 return .ready(settings.model)

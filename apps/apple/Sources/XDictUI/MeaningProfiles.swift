@@ -11,10 +11,21 @@ public enum MeaningProfiles {
     /// Custom's id in the table: the reader supplies the address.
     public static let custom = "custom"
 
-    /// Whether a profile is a server on this Mac. By its address, not a flag: loopback is what makes it local.
+    /// Whether a profile is a server on this Mac. By its address, not a flag: loopback is what makes it local — the
+    /// whole `127.0.0.0/8` range, `localhost` (a hostname's terminal dot aside) and the IPv6 loopback.
     public static func isLocal(_ profile: AIProviderProfile) -> Bool {
-        guard let host = profile.baseURL?.host?.lowercased() else { return false }
-        return host == "localhost" || host == "127.0.0.1" || host == "::1"
+        guard let host = profile.baseURL?.host else { return false }
+        return isLocal(host: host)
+    }
+
+    /// The same test for a bare host, for an address that has no profile yet.
+    static func isLocal(host: String) -> Bool {
+        var host = host.lowercased()
+        if host.hasSuffix(".") { host.removeLast() }
+        if host == "localhost" || host == "::1" { return true }
+        let octets = host.split(separator: ".", omittingEmptySubsequences: false)
+        return octets.count == 4 && octets[0] == "127"
+            && octets.allSatisfy { Int($0).map { (0...255).contains($0) } ?? false }
     }
 
     /// The profiles a row offers, in the table's order, Custom last.
@@ -41,8 +52,17 @@ public enum MeaningProfiles {
         }?.id ?? custom
     }
 
+    /// **Scheme and host are case-insensitive; the path is not.** Lowercasing the whole URL would equate `/V1` with
+    /// `/v1`, names the server may serve differently — so only the two case-insensitive components are folded.
     private static func normalized(_ url: URL) -> String {
-        var text = url.absoluteString.lowercased()
+        var text: String
+        if var parts = URLComponents(url: url, resolvingAgainstBaseURL: false) {
+            parts.scheme = parts.scheme?.lowercased()
+            parts.host = parts.host?.lowercased()
+            text = parts.url?.absoluteString ?? url.absoluteString
+        } else {
+            text = url.absoluteString
+        }
         while text.hasSuffix("/") { text.removeLast() }
         return text
     }
