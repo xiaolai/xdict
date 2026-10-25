@@ -579,6 +579,12 @@ public final class MeaningSession {
         state = .unavailable(.noEntry)
     }
 
+    /// **The phrase's entry could not be looked up** (plan WI-9; audit round 3, 2026-10-26): the tap had no page to
+    /// ground its question in, the reason is the service's own failure, and the sentence stays held for another try.
+    public func entryLookupFailed(_ failure: ClientFailure) {
+        refuse(.entryFailure(failure))
+    }
+
     /// **The presentation ended**: the sentence goes, and so does the ask in flight and its answer.
     public func clear() {
         abandon()

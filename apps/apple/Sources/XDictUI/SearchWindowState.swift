@@ -271,8 +271,16 @@ public final class SearchWindowState {
               now.term == held.term, now.sentence == held.sentence, now.range == held.range,
               self.source(for: candidate.dict) != nil
         else { return }
-        guard case .success(let delivered) = answer, case .page(let page) = delivered.answer, let hit = page.hits.first
-        else { return }
+        guard case .success(let delivered) = answer else {
+            if case .failure(let failure) = answer { meaning.entryLookupFailed(failure) }
+            return
+        }
+        guard case .page(let page) = delivered.answer, let hit = page.hits.first else {
+            // **A tap whose lookup drew nothing says so** (audit round 3, 2026-10-26), and the sentence stays held for
+            // another dictionary's phrase.
+            meaning.noEntry()
+            return
+        }
         let handoff = MeaningHandoff(term: String(held.sentence[span]), sentence: held.sentence,
                                      range: NSRange(span, in: held.sentence), cut: held.cut, origin: held.origin,
                                      phrase: candidate.phrase)
