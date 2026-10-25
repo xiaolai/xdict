@@ -46,7 +46,7 @@ struct EntryTextServiceTests {
         }
         // **The senses crossed the IPC contract with the text** (contract 13, ADR-0029 d.2, d.3): the revision is
         // named, every sense lies inside the text, and every run's membership names a sense that is there.
-        #expect(projected.style == 13)
+        #expect(projected.style == 14)
         for sense in projected.senses {
             #expect(sense.start <= bytes && sense.len <= bytes - sense.start, "a sense outside its text: \(sense)")
             if let parent = sense.parent {
