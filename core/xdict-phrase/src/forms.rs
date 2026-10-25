@@ -366,6 +366,7 @@ const IRREGULAR_FORMS: &[(&str, &[&str])] = &[
     ("criterion", &["criteria"]),
     ("phenomenon", &["phenomena"]),
     ("index", &["indices"]),
+    ("axis", &["axes"]),
 ];
 
 /// The written form, lowercased, first; then the base forms it may come from and their inflections.
@@ -375,7 +376,10 @@ pub fn forms(word: &str) -> Vec<String> {
     let mut seen: HashSet<String> = HashSet::new();
     push(&mut out, &mut seen, written.clone());
 
+    // **The written word is a base too**: a key that spells an inflection (`given up`) must be found by the reader's
+    // `give up`, whose forms include `given` only if `give` itself inflects.
     let mut bases: Vec<String> = Vec::new();
+    add_base(&mut bases, &written);
     for (surface, base) in IRREGULAR {
         if *surface == written {
             add_base(&mut bases, base);
@@ -428,30 +432,29 @@ fn strip_candidates(surface: &str) -> Vec<String> {
         push(&mut out, format!("{stem}y"));
     }
     if let Some(stem) = surface.strip_suffix("ing") {
-        push(&mut out, stem.to_string());
-        push(&mut out, format!("{stem}e"));
-        if let Some(double) = undouble(stem) {
-            push(&mut out, double);
+        for form in stem_forms(stem) {
+            push(&mut out, form);
         }
     }
     if let Some(stem) = surface.strip_suffix("ed") {
-        push(&mut out, stem.to_string());
-        push(&mut out, format!("{stem}e"));
-        if let Some(double) = undouble(stem) {
-            push(&mut out, double);
+        for form in stem_forms(stem) {
+            push(&mut out, form);
         }
     }
+    // **-ier/-iest reverse -y** (`happier` → `happy`), which stripping -er/-est alone cannot recover.
+    if let Some(stem) = surface.strip_suffix("iest") {
+        push(&mut out, format!("{stem}y"));
+    }
+    if let Some(stem) = surface.strip_suffix("ier") {
+        push(&mut out, format!("{stem}y"));
+    }
     if let Some(stem) = surface.strip_suffix("est") {
-        push(&mut out, stem.to_string());
-        push(&mut out, format!("{stem}e"));
-        if let Some(double) = undouble(stem) {
-            push(&mut out, double);
+        for form in stem_forms(stem) {
+            push(&mut out, form);
         }
     } else if let Some(stem) = surface.strip_suffix("er") {
-        push(&mut out, stem.to_string());
-        push(&mut out, format!("{stem}e"));
-        if let Some(double) = undouble(stem) {
-            push(&mut out, double);
+        for form in stem_forms(stem) {
+            push(&mut out, form);
         }
     }
     if let Some(stem) = surface.strip_suffix("es") {
@@ -463,6 +466,16 @@ fn strip_candidates(surface: &str) -> Vec<String> {
         push(&mut out, stem.to_string());
     }
     out
+}
+
+/// The bases a stripped stem may stand for: itself, plus a restored `e` (`making` → `make`) and an undone doubling
+/// (`stopped` → `stop`). One helper for every suffix that inflects this way.
+fn stem_forms(stem: &str) -> Vec<String> {
+    let mut forms = vec![stem.to_string(), format!("{stem}e")];
+    if let Some(double) = undouble(stem) {
+        forms.push(double);
+    }
+    forms
 }
 
 /// `stopped` → stem `stopp` → `stop`; only for a doubled ASCII consonant.
@@ -565,4 +578,23 @@ fn is_cvc(word: &str) -> bool {
     let vowel = |c: &char| "aeiou".contains(*c);
     let consonant = |c: &char| c.is_ascii_alphabetic() && !vowel(c);
     consonant(first) && vowel(mid) && consonant(last) && !matches!(last, 'w' | 'x' | 'y')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{IRREGULAR, IRREGULAR_FORMS};
+
+    /// **The reverse table never lags its forward one** (audit round 1, 2026-10-26): every irregular surface maps back
+    /// to a base, so a base listed in `IRREGULAR_FORMS` must list that surface among its forms — `axes` was missing.
+    #[test]
+    fn every_irregular_reverse_is_listed() {
+        for (surface, base) in IRREGULAR {
+            if surface == base {
+                continue;
+            }
+            if let Some((_, listed)) = IRREGULAR_FORMS.iter().find(|(known, _)| known == base) {
+                assert!(listed.contains(surface), "{base} lists no {surface}");
+            }
+        }
+    }
 }

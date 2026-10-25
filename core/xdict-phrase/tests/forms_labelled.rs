@@ -59,3 +59,25 @@ fn the_recorded_v1_limits_are_still_the_limits() {
         println!("v1 limit check: {surface} -> {got:?}");
     }
 }
+
+/// **The base itself inflects** (audit round 1, 2026-10-26): a dictionary key that spells an inflection is found by
+/// the reader's base form — `given up` by `give up`, `walked` by `walk` — which needs the written word among the bases.
+#[test]
+fn a_base_form_reaches_a_keys_inflected_spelling() {
+    for (base, inflected) in [("give", "given"), ("give", "gave"), ("walk", "walked"), ("walk", "walking")] {
+        let got = forms(base);
+        assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
+    }
+}
+
+/// **-ier and -iest recover -y** (audit round 1, 2026-10-26): `happier` and `happiest` strip to `happi`/`happie` under
+/// the plain -er/-est rules, so a key spelling `happy` was never reached.
+#[test]
+fn a_comparative_y_reaches_its_base() {
+    for surface in ["happier", "happiest", "easier", "earliest"] {
+        let got = forms(surface);
+        assert!(got.iter().any(|form| form.ends_with('y')), "{surface}: {got:?}");
+    }
+    assert!(forms("happier").iter().any(|form| form == "happy"));
+    assert!(forms("earliest").iter().any(|form| form == "early"));
+}
