@@ -199,6 +199,31 @@ struct PhrasesModelTests {
         #expect(await phraseOperations(backend).last?.dicts == pair)
     }
 
+    /// **A question that failed says so** (audit round 1, 2026-10-26): the row is `unavailable`, never a "still
+    /// reading" that would wait for a build that is not coming.
+    @Test func a_failed_question_is_unavailable() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { _ in .failure(.wire(.interrupted)) }
+        let phrases = model(backend)
+        phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
+        #expect(await eventually { phrases.row == .unavailable })
+    }
+
+    /// **The sentence is kept exactly as captured**: its leading whitespace stays, because the term's range counts
+    /// UTF-16 units of this very string.
+    @Test func the_sentence_is_kept_as_captured() async throws {
+        let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
+        await backend.setAnswer { _ in
+            PhrasesFixture.outcome(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()]))
+        }
+        let phrases = model(backend)
+        let sentence = "  " + PhrasesFixture.sentence
+        phrases.update(sentence: sentence, term: PhraseTerm(location: 32, length: 7), handles: PhrasesFixture.handles)
+        #expect(await eventually { if case .found = phrases.row { true } else { false } })
+        #expect(phrases.sentence == sentence)
+        #expect(await phraseOperations(backend).first?.sentence == sentence)
+    }
+
     @Test func clearing_hides_the_row() async throws {
         let backend = FakeSearchBackend { _, _, _ in .success(Fixture.page([])) }
         await backend.setAnswer { _ in

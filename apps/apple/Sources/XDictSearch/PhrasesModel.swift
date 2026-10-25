@@ -89,22 +89,23 @@ public final class PhrasesModel {
     /// **A sentence was captured**: ask for the phrase covering `term`, over `handles`. The same question again while
     /// its answer stands is not re-asked; an empty sentence or no dictionary clears the row.
     public func update(sentence: String, term: PhraseTerm, handles: [DictId]) {
-        let trimmed = sentence.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !handles.isEmpty else {
+        // **The sentence is kept exactly as captured** (audit round 1, 2026-10-26): `term`'s range counts its UTF-16
+        // units, so trimming the stored sentence would move the range under it.
+        guard !sentence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, !handles.isEmpty else {
             clear()
             return
         }
-        if let asked, asked.sentence == trimmed, asked.term == term, asked.handles == handles {
+        if let asked, asked.sentence == sentence, asked.term == term, asked.handles == handles {
             return
         }
         serial += 1
         let mine = serial
-        self.sentence = trimmed
+        self.sentence = sentence
         asked = nil
         row = .hidden
         task?.cancel()
         task = Task { [weak self] in
-            await self?.run(trimmed, term, handles, mine)
+            await self?.run(sentence, term, handles, mine)
         }
     }
 
@@ -123,7 +124,15 @@ public final class PhrasesModel {
     }
 
     private func run(_ sentence: String, _ term: PhraseTerm, _ handles: [DictId], _ mine: Int) async {
-        guard let answer = await ask(sentence, term, handles), serial == mine else { return }
+        guard let answer = await ask(sentence, term, handles, mine), serial == mine else {
+            // **A question that failed is answered as unavailable**, never left on "still reading" for good (audit
+            // round 1): the serial check keeps a superseded question from writing here.
+            if serial == mine {
+                row = .unavailable
+                asked = (sentence, term, handles)
+            }
+            return
+        }
         row = PhraseRow(answer)
         let building = answer.coverage.filter { $0.state == .building }.map(\.dict)
         guard !building.isEmpty else {
@@ -135,12 +144,21 @@ public final class PhrasesModel {
             _ = await pending.first?.outcome()
             guard serial == mine else { return }
         }
-        guard let again = await ask(sentence, term, handles), serial == mine else { return }
+        guard let again = await ask(sentence, term, handles, mine), serial == mine else {
+            if serial == mine {
+                row = .unavailable
+                asked = (sentence, term, handles)
+            }
+            return
+        }
         row = PhraseRow(again)
         asked = (sentence, term, handles)
     }
 
-    private func ask(_ sentence: String, _ term: PhraseTerm, _ handles: [DictId]) async -> PhraseAnswer? {
+    private func ask(_ sentence: String, _ term: PhraseTerm, _ handles: [DictId], _ mine: Int) async -> PhraseAnswer? {
+        // **A cancelled or superseded question is never submitted** (audit round 1): a task cancelled before it ran
+        // must not supersede the newer question the pane is about to show.
+        guard !Task.isCancelled, serial == mine else { return nil }
         let pending = await backend.queue([.phrases(sentence: sentence, term: term, dicts: handles)], as: caller,
                                           superseding: true)
         guard let call = pending.first else { return nil }
@@ -152,9 +170,12 @@ public final class PhrasesModel {
     /// row never traps on a promise it did not check.
     public nonisolated static func span(_ candidate: PhraseRow.Candidate, in sentence: String) -> Range<String.Index>? {
         let length = sentence.utf16.count
-        guard candidate.span.location >= 0, candidate.span.location <= length else { return nil }
-        let end = min(candidate.span.location + candidate.span.length, length)
-        guard end > candidate.span.location else { return nil }
+        let location = candidate.span.location
+        let span = candidate.span.length
+        // **Subtract before adding** (audit round 1): `location + length` can overflow an `Int` before any clamp.
+        guard location >= 0, span >= 0, location <= length else { return nil }
+        let end = location + Swift.min(span, length - location)
+        guard end > location else { return nil }
         guard let start = String.Index(utf16Offset: candidate.span.location, in: sentence).samePosition(in: sentence),
               let finish = String.Index(utf16Offset: end, in: sentence).samePosition(in: sentence)
         else { return nil }
