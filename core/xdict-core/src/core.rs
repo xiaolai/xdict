@@ -1338,38 +1338,38 @@ impl Core {
     /// the public-key policy and the folding. Like the examples pass it reports progress, has no deadline and stops by
     /// `cancel`; a store that is already there and decodes is answered `cached` without a read of the keys.
     pub fn phrases_build(&self, dict: String, progress: &dyn Progress) -> Result<PhraseBuilt, CoreError> {
-        // **No panic crosses the boundary**, as for every other public call: the progress and storage callbacks are
-        // the shell's, and one that panics is an internal error, not a crash in the service.
-        guard(|| {
         let opened = self.dict(&dict)?;
         let edition = opened.edition.clone();
-        let outcome = self.phrases_build_opened(&opened, progress);
-        match outcome {
-            // **The matcher is indexed here, on the background thread** (WI-4's lifetime): the first ask after a build
-            // is warm, and an edition whose store was already there decodes it in this pass too.
-            Ok((built, matcher)) => {
-                let handle = self.parse_handle(&dict)?;
-                let mut state = self.lock()?;
-                state.phrase_failures.remove(&edition);
-                // **A dictionary closed while its inventory built keeps nothing**: its matcher would outlive the
-                // handle, and the next open decodes the store instead (a close after this install removes it).
-                if state.open.contains_key(&handle) {
-                    state.phrase_matchers.insert(crate::phrases::store_name(&edition), matcher);
+        // **No panic crosses the boundary**, as for every other public call: the progress and storage callbacks are
+        // the shell's, and one that panics is an internal error, not a crash in the service.
+        let outcome = guard(|| {
+            match self.phrases_build_opened(&opened, progress) {
+                // **The matcher is indexed here, on the background thread** (WI-4's lifetime): the first ask after a
+                // build is warm, and an edition whose store was already there decodes it in this pass too.
+                Ok((built, matcher)) => {
+                    let handle = self.parse_handle(&dict)?;
+                    let mut state = self.lock()?;
+                    state.phrase_failures.remove(&edition);
+                    // **A dictionary closed while its inventory built keeps nothing**: its matcher would outlive the
+                    // handle, and the next open decodes the store instead.
+                    if state.open.contains_key(&handle) {
+                        state.phrase_matchers.insert(crate::phrases::store_name(&edition), matcher);
+                    }
+                    Ok(built)
                 }
-                Ok(built)
+                Err(error) => Err(error),
             }
-            Err(error) => {
-                // **A cancelled build is the reader's choice, not the dictionary's failure** (the refutation's #8):
-                // only a real error makes the edition terminal, and a later build clears it.
-                if !matches!(error, CoreError::Cancelled { .. })
-                    && let Ok(mut state) = self.lock()
-                {
-                    state.phrase_failures.insert(edition);
-                }
-                Err(error)
-            }
+        });
+        // **Every real failure is terminal for the edition, a panic included** (audit round 2): a panic used to unwind
+        // past the branch that records it, and the next question answered "building" forever. A cancelled build is the
+        // reader's choice, not the dictionary's failure (the refutation's #8).
+        if let Err(error) = &outcome
+            && !matches!(error, CoreError::Cancelled { .. })
+            && let Ok(mut state) = self.lock()
+        {
+            state.phrase_failures.insert(edition);
         }
-        })
+        outcome
     }
 
     fn phrases_build_opened(
@@ -1406,9 +1406,9 @@ impl Core {
         }
         let inventory = xdict_phrase::Inventory::from_keys(keys, crate::phrases::slots());
         let phrases = inventory.phrases().len() as u64;
-        let bytes = inventory.encode(&edition, versions).map_err(|_| {
-            CoreError::internal("a phrase inventory is larger than its store format holds")
-        })?;
+        let bytes = inventory
+            .encode(&edition, versions)
+            .map_err(|_| CoreError::internal("a phrase inventory is larger than its store format holds"))?;
         if !progress.progress(count as u64, count as u64) {
             return Err(CoreError::Cancelled { detail: "the phrase inventory build was cancelled".into() });
         }
