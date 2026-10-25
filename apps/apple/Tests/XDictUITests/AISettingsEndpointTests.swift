@@ -11,17 +11,20 @@ import XDictAI
 /// address had been reset. The field's text is the reader's; only a parsed address may replace the stored one.
 @MainActor
 struct AISettingsEndpointTests {
-    static func preferences() -> MeaningPreferences {
-        let suite = "ai.xdict.tests.ai-endpoint." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        return MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    /// **The suite this test's preferences write to**, kept until the test's own instance goes (audit findings,
+    /// 2026-10-25: a generated suite name that could not be made fell back to the reader's own defaults).
+    let held = HeldDefaults()
+
+    func preferences() throws -> MeaningPreferences {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.ai-endpoint")
+        held.fixture = fixture
+        return MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
     }
 
     @Test func aPastedAddressWithAStraySpaceSurvivesTheTestButtonsRedraw() async throws {
-        let preferences = Self.preferences()
+        let preferences = try preferences()
         preferences.choose(.http, cloud: true)
-        preferences.update { $0.endpoint = URL(string: "https://api.example.com/v1") }
+        preferences.setEndpoint("https://api.example.com/v1")
         let model = AISettingsModel(preferences: preferences)
         model.keyState = .stored  // the Test button is up
 

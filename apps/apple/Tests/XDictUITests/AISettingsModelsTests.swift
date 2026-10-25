@@ -8,20 +8,23 @@ import XDictTestSupport
 /// exactly as typing it would; a failed or superseded load says so rather than showing a stale list.
 @MainActor
 struct AISettingsModelsTests {
-    /// A cloud DeepSeek configuration over an isolated defaults suite; the suite must exist, or the test would silently
-    /// write the reader's own defaults.
-    static func preferences() throws -> MeaningPreferences {
-        let suite = "ai.xdict.tests.ai-models." + UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defaults.removePersistentDomain(forName: suite)
-        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    /// **The suite this test's preferences write to**, kept alive until the test's own instance goes, so
+    /// `TestDefaults.deinit` removes the domain at the end of the test (audit findings, 2026-10-25: the suite was never
+    /// removed). A suite that cannot be made is a failure, never the reader's own defaults.
+    let held = HeldDefaults()
+
+    /// A cloud DeepSeek configuration over that suite.
+    func preferences() throws -> MeaningPreferences {
+        let fixture = try TestDefaults(prefix: "ai.xdict.tests.ai-models")
+        held.fixture = fixture
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         preferences.choose(.http, cloud: true)
         preferences.chooseProfile("deepseek")
         return preferences
     }
 
     @Test func loadingShowsTheListAndChoosingStoresIt() async throws {
-        let preferences = try Self.preferences()
+        let preferences = try self.preferences()
         let model = AISettingsModel(preferences: preferences, fetchModels: { request in
             #expect(request.profile.id == "deepseek")
             #expect(request.baseURL.absoluteString == "https://api.deepseek.com")
@@ -38,7 +41,7 @@ struct AISettingsModelsTests {
 
     /// **A list belongs to the address, the key and the service it came from**: changing any one of them hides it.
     @Test func aListForAnotherAddressOrKeyIsNotShown() async throws {
-        let preferences = try Self.preferences()
+        let preferences = try self.preferences()
         let listed = [AIModel(id: "listed-alpha")]
         let model = AISettingsModel(preferences: preferences, fetchModels: { _ in .success(listed) })
         await model.loadModels()
@@ -57,19 +60,19 @@ struct AISettingsModelsTests {
 
     /// The service alone can differ at a common address: the identity must include it, not only the endpoint.
     @Test func aListForAnotherServiceAtTheSameAddressIsNotShown() async throws {
-        let preferences = try Self.preferences()
+        let preferences = try self.preferences()
         preferences.choose(.http, cloud: false)
         preferences.chooseProfile("custom")
         preferences.setEndpoint("http://127.0.0.1:11434/v1")
         let model = AISettingsModel(preferences: preferences, fetchModels: { _ in .success([AIModel(id: "listed-alpha")]) })
         await model.loadModels()
         #expect(model.modelsShown == .loaded([AIModel(id: "listed-alpha")]))
-        preferences.update { $0.profile = "ollama" }   // same address, another service
+        preferences.chooseProfile("ollama")   // the same address, another service
         #expect(model.modelsShown == .idle)
     }
 
     @Test func anEmptyListFromTheServiceOffersNoHints() async throws {
-        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .success([]) })
+        let model = AISettingsModel(preferences: try self.preferences(), fetchModels: { _ in .success([]) })
         await model.loadModels()
         #expect(model.modelsShown == .loaded([]))
         #expect(model.modelChoices.isEmpty)
@@ -77,7 +80,7 @@ struct AISettingsModelsTests {
 
     /// A failure is kept as its typed reason, and the service's few known names stay offered so the reader is not stuck.
     @Test func aFailedLoadSaysWhyAndKeepsTheHints() async throws {
-        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .failure(.missingKey) })
+        let model = AISettingsModel(preferences: try self.preferences(), fetchModels: { _ in .failure(.missingKey) })
         await model.loadModels()
         #expect(model.modelsShown == .failed(.missingKey))
         #expect(model.modelChoices == ["deepseek-flash", "deepseek-v4-pro"])
@@ -85,7 +88,7 @@ struct AISettingsModelsTests {
 
     /// **A load the reader superseded cannot overwrite the newer one**: the first answers late, the second is current.
     @Test func aSupersededLoadDoesNotOverwrite() async throws {
-        let preferences = try Self.preferences()
+        let preferences = try self.preferences()
         let calls = LockedCount()
         let started = Flag()
         let gate = Flag()
@@ -109,7 +112,7 @@ struct AISettingsModelsTests {
     /// **A load the reader moved away from leaves no spinner behind**: returning to that configuration shows idle, and
     /// Load Models works from there — the retry really fetches again.
     @Test func aLoadTheReaderMovedAwayFromLeavesNothingBehind() async throws {
-        let preferences = try Self.preferences()
+        let preferences = try self.preferences()
         let calls = LockedCount()
         let started = Flag()
         let gate = Flag()
@@ -137,7 +140,7 @@ struct AISettingsModelsTests {
     /// **A press cancelled before its body ran does nothing**: it must not start a request, set a spinner, or let its
     /// generation speak for the pane after it is gone.
     @Test func aCancelledLoadNeverStarts() async throws {
-        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in .failure(.cancelled) })
+        let model = AISettingsModel(preferences: try self.preferences(), fetchModels: { _ in .failure(.cancelled) })
         let task = Task { () -> Void in
             try? await Task.sleep(for: .milliseconds(200))
             await model.loadModels()
@@ -151,7 +154,7 @@ struct AISettingsModelsTests {
     @Test func aDiscardedLoadLeavesTheListIdle() async throws {
         let started = Flag()
         let gate = Flag()
-        let model = AISettingsModel(preferences: try Self.preferences(), fetchModels: { _ in
+        let model = AISettingsModel(preferences: try self.preferences(), fetchModels: { _ in
             started.set()
             while !gate.isSet { try? await Task.sleep(for: .milliseconds(10)) }
             return .success([AIModel(id: "late")])

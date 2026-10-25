@@ -365,6 +365,12 @@ struct StringCatalogTests {
         #expect(Self.literals(in: "Text(\"One\") + Text(\"Two\")").map(\.text) == ["One", "Two"])
         #expect(Self.literals(in: "let s = \"Joined \"\n    + \"across lines\"").map(\.text) == ["Joined across lines"])
         #expect(Self.literals(in: "Text(\"\"\"\n    A long \\\n    sentence\n    \"\"\")").map(\.text) == ["A long sentence"])
+        // **An escaped quote does not close a literal** (2026-10-25): the shell command below holds `\"` around an
+        // interpolated path, and a walk that ended at the first quote read the word after it as a sentence of its own.
+        let command = #"return "mkdir -p \"\(folder)\" && claude""#
+        let walked = Self.literals(in: command)
+        #expect(walked.map(\.text) == ["mkdir -p \\\"\\(folder)\\\" && claude"], "the walk read \(walked.map(\.text))")
+        #expect(Self.rule(for: walked[0], inTheViewLayer: true) == nil, "an interpolated command is not prose")
     }
 
     /// The display-text predicate, on files of the test's own: nothing in an innocent file, and each spelling of a
@@ -616,10 +622,24 @@ struct StringCatalogTests {
         return found
     }
 
-    /// The text up to the next quote.
+    /// **The text up to the next unescaped quote**: a literal holding `\"` does not end at it, and a walk that thought
+    /// so read the rest of the line as further literals — a shell command with a quoted path raised " claude" as an
+    /// untranslated sentence (measured 2026-10-25).
     static func literal(from rest: String) -> String? {
-        guard let end = rest.firstIndex(of: "\"") else { return nil }
-        return String(rest[..<end])
+        var index = rest.startIndex
+        while index < rest.endIndex {
+            switch rest[index] {
+            case "\\":
+                // The escaped character, whatever it is, cannot close the literal.
+                index = rest.index(after: index)
+                if index < rest.endIndex { index = rest.index(after: index) }
+            case "\"":
+                return String(rest[..<index])
+            default:
+                index = rest.index(after: index)
+            }
+        }
+        return nil
     }
 
     /// The files whose code calls a localizing initialiser, comments and strings aside. **A pattern, not a spelling**:

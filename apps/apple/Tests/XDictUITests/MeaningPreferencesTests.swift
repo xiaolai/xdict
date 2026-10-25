@@ -8,15 +8,9 @@ import XDictAI
 /// never in a defaults database, because a defaults file is readable by anything that can read the reader's account.
 @MainActor
 struct MeaningPreferencesTests {
-    static func defaults() -> UserDefaults {
-        let suite = "ai.xdict.tests.meaning." + UUID().uuidString
-        let defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        return defaults
-    }
-
-    @Test func aFreshInstallHasNoSourceAndTheSwitchOff() {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+    @Test func aFreshInstallHasNoSourceAndTheSwitchOff() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         #expect(preferences.settings.source == nil)
         #expect(preferences.settings.sendEntryText == false)
         #expect(preferences.settings.language == "en")
@@ -25,15 +19,14 @@ struct MeaningPreferencesTests {
     }
 
     @Test func theSourceAndItsAddressSurviveANewInstance() throws {
-        let defaults = Self.defaults()
-        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         first.choose(.http, cloud: true)
-        first.update {
-            $0.endpoint = URL(string: "https://api.example.com/v1")
-            $0.model = "a-model"
-            $0.sendEntryText = true
-        }
-        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        first.setEndpoint("https://api.example.com/v1")
+        first.setModel("a-model")
+        first.setSendEntryText(true)
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         #expect(second.settings.source == .http)
         #expect(second.httpCloud)
         #expect(second.settings.endpoint?.absoluteString == "https://api.example.com/v1")
@@ -41,41 +34,60 @@ struct MeaningPreferencesTests {
         #expect(second.settings.sendEntryText)
     }
 
-    @Test func anEditedTemplateSurvivesAndResetRestoresTheDefault() {
-        let defaults = Self.defaults()
-        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
-        let shipped = meaningDefaultTemplate(language: "en", mode: .grounded)
+    @Test func anEditedTemplateSurvivesAndResetRestoresTheDefault() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        let shipped = try meaningDefaultTemplate(language: "en", mode: .grounded)
         #expect(first.effectiveTemplate(language: "en", mode: .grounded) == shipped)
         #expect(first.storedTemplate(language: "en", mode: .grounded) == nil)
         first.setTemplate("Say what {term} means: {sentence} {entry}", language: "en", mode: .grounded)
         #expect(first.storedTemplate(language: "en", mode: .grounded) == "Say what {term} means: {sentence} {entry}")
-        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        // **The edit is what an ask composes from, in the settings the session reads too** (audit finding, 2026-10-25):
+        // a stored value no session ever picked up would look saved and do nothing.
+        #expect(first.effectiveTemplate(language: "en", mode: .grounded)
+            == "Say what {term} means: {sentence} {entry}")
+        #expect(first.settings.templates[.grounded] == "Say what {term} means: {sentence} {entry}")
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         #expect(second.storedTemplate(language: "en", mode: .grounded) == "Say what {term} means: {sentence} {entry}")
+        #expect(second.effectiveTemplate(language: "en", mode: .grounded)
+            == "Say what {term} means: {sentence} {entry}")
         // The other kind is untouched: one template never answers another mode's ask.
         #expect(second.storedTemplate(language: "en", mode: .sentenceOnly) == nil)
         second.resetTemplates(language: "en", mode: .grounded)
         #expect(second.storedTemplate(language: "en", mode: .grounded) == nil)
         #expect(second.effectiveTemplate(language: "en", mode: .grounded) == shipped)
+        #expect(second.settings.templates[.grounded] == nil)
     }
 
     /// **The chosen-sense kind keeps its own prompt** (plan-explain-sense WI-5; ADR-0029 d.6): three kinds, three
     /// templates, and an edit of one never changes another's question.
-    @Test func theChosenSenseTemplateIsItsOwnKind() {
-        let defaults = Self.defaults()
-        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
-        let shipped = meaningDefaultTemplate(language: "en", mode: .explainSense)
+    @Test func theChosenSenseTemplateIsItsOwnKind() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        let shipped = try meaningDefaultTemplate(language: "en", mode: .explainSense)
         #expect(!shipped.isEmpty)
         #expect(first.effectiveTemplate(language: "en", mode: .explainSense) == shipped)
+        // **Each kind starts from an edit of its own** (audit finding, 2026-10-25): with the others empty, a lookup that
+        // ignored the kind could still look right.
+        first.setTemplate("Grounded wording {term} {sentence} {entry}", language: "en", mode: .grounded)
+        first.setTemplate("Sentence-only wording {term} {sentence}", language: "en", mode: .sentenceOnly)
         first.setTemplate("Which sense? {term} {sentence} {entry} {sense}", language: "en", mode: .explainSense)
-        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         #expect(second.storedTemplate(language: "en", mode: .explainSense)
             == "Which sense? {term} {sentence} {entry} {sense}")
-        #expect(second.storedTemplate(language: "en", mode: .grounded) == nil, "one kind answers another's ask")
-        #expect(second.storedTemplate(language: "en", mode: .sentenceOnly) == nil)
+        #expect(second.effectiveTemplate(language: "en", mode: .explainSense)
+            == "Which sense? {term} {sentence} {entry} {sense}")
+        #expect(second.storedTemplate(language: "en", mode: .grounded)
+            == "Grounded wording {term} {sentence} {entry}")
+        #expect(second.storedTemplate(language: "en", mode: .sentenceOnly)
+            == "Sentence-only wording {term} {sentence}")
     }
 
-    @Test func aTemplateEditIsKeptPerLanguage() {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+    @Test func aTemplateEditIsKeptPerLanguage() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         preferences.setTemplate("English wording", language: "en", mode: .grounded)
         preferences.setTemplate("中文写法", language: "zh-Hans", mode: .grounded)
         #expect(preferences.storedTemplate(language: "en", mode: .grounded) == "English wording")
@@ -83,17 +95,22 @@ struct MeaningPreferencesTests {
     }
 
     @Test func theKeyGoesToTheKeyStoreAndNeverToDefaults() throws {
-        let defaults = Self.defaults()
+        let fixture = try TestDefaults()
+        let database = fixture.database
         let keys = MemoryKeyStore()
-        let preferences = MeaningPreferences(defaults: defaults, keys: keys)
+        let preferences = MeaningPreferences(defaults: database, keys: keys)
         try preferences.setKey("sk-not-in-defaults")
         #expect(preferences.hasKey)
         #expect(keys.key() == "sk-not-in-defaults")
         #expect(preferences.settings.key == "sk-not-in-defaults")
-        let everything = defaults.dictionaryRepresentation().values.map { String(describing: $0) }.joined(separator: "\n")
-        #expect(!everything.contains("sk-not-in-defaults"), "the key reached a defaults database")
+        // **The write happens before the check** (audit finding, 2026-10-25): the key was never in defaults only because
+        // a fresh database held nothing; persisting an ordinary change proves the key is not among what persist writes.
+        preferences.setModel("a-model")
+        #expect(database.string(forKey: "meaning.model") == "a-model", "the persist path did not run")
+        #expect(!plistText(database.dictionaryRepresentation()).contains("sk-not-in-defaults"),
+                "the key reached a defaults database")
         // A new instance reads it back from the store.
-        let second = MeaningPreferences(defaults: defaults, keys: keys)
+        let second = MeaningPreferences(defaults: database, keys: keys)
         #expect(second.settings.key == "sk-not-in-defaults")
         try second.setKey(nil)
         #expect(second.hasKey == false)
@@ -101,9 +118,26 @@ struct MeaningPreferencesTests {
         #expect(keys.key() == nil)
     }
 
+    /// **A refused save leaves the stored key and the settings as they were**: the Keychain's failure is the caller's to
+    /// show, and a half-applied key would travel to the server without the reader knowing.
+    @Test func aRefusedKeySaveChangesNothing() throws {
+        let keys = MemoryKeyStore()
+        try keys.save("sk-old")
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: keys)
+        keys.failure = MeaningKeyError(status: -25308)
+        #expect(throws: MeaningKeyError.self) { try preferences.setKey("sk-new") }
+        #expect(keys.key() == "sk-old")
+        #expect(preferences.settings.key == "sk-old")
+        keys.failure = MeaningKeyError(status: -25308)
+        #expect(throws: MeaningKeyError.self) { try preferences.setKey(nil) }
+        #expect(keys.key() == "sk-old")
+    }
+
     /// **A cloud key is never sent to a server chosen as local** (audit finding, 2026-10-20).
     @Test func theKeyBelongsToTheCloudRowOnly() throws {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         try preferences.setKey("sk-cloud-only")
         preferences.choose(.http, cloud: true)
         #expect(preferences.settings.usesKey)
@@ -117,14 +151,15 @@ struct MeaningPreferencesTests {
 
     /// **The chosen service fills in its address and survives a relaunch** (2026-10-25); Custom keeps the address the
     /// reader typed rather than clearing it.
-    @Test func theChosenServiceSurvivesAndFillsItsAddress() {
-        let defaults = Self.defaults()
-        let first = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    @Test func theChosenServiceSurvivesAndFillsItsAddress() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         first.choose(.http, cloud: true)
         first.chooseProfile("deepseek")
         #expect(first.settings.profile == "deepseek")
         #expect(first.settings.endpoint?.absoluteString == "https://api.deepseek.com")
-        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         #expect(second.settings.profile == "deepseek")
         #expect(second.settings.endpoint?.absoluteString == "https://api.deepseek.com")
         second.setEndpoint("https://reader.example.com/v1")
@@ -136,8 +171,9 @@ struct MeaningPreferencesTests {
 
     /// **A service from the other row is hidden, never forgotten** (2026-10-25): the local row uses Custom while a cloud
     /// service is stored, and switching back restores it.
-    @Test func aServiceFromTheOtherRowIsHiddenNotForgotten() {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+    @Test func aServiceFromTheOtherRowIsHiddenNotForgotten() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         preferences.choose(.http, cloud: true)
         preferences.chooseProfile("deepseek")
         preferences.choose(.http, cloud: false)
@@ -147,12 +183,13 @@ struct MeaningPreferencesTests {
     }
 
     /// **An install that predates the choice is inferred from its address**, and the address itself is untouched.
-    @Test func anAddressFromBeforeTheChoiceNamesItsService() {
+    @Test func anAddressFromBeforeTheChoiceNamesItsService() throws {
         #expect(MeaningProfiles.matching(endpoint: URL(string: "https://openrouter.ai/api/v1/")) == "openrouter")
         #expect(MeaningProfiles.matching(endpoint: URL(string: "https://api.deepseek.com/")) == "deepseek")
         #expect(MeaningProfiles.matching(endpoint: URL(string: "https://api.example.com/v1")) == "custom")
         #expect(MeaningProfiles.matching(endpoint: nil) == "custom")
-        let defaults = Self.defaults()
+        let fixture = try TestDefaults()
+        let defaults = fixture.database
         defaults.set("https://openrouter.ai/api/v1", forKey: "meaning.endpoint")
         defaults.set(true, forKey: "meaning.http.cloud")
         let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
@@ -192,9 +229,10 @@ struct MeaningPreferencesTests {
     /// **Each row keeps its own service, address and model** (audit finding, 2026-10-25): an edited address survives
     /// Off and a switch back, the other row never inherits it, and both survive a relaunch — so the one key is never
     /// pointed at the server chosen for the other row.
-    @Test func eachRowKeepsItsOwnServiceAndAddress() {
-        let defaults = Self.defaults()
-        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    @Test func eachRowKeepsItsOwnServiceAndAddress() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let preferences = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         preferences.choose(.http, cloud: true)
         preferences.chooseProfile("openai")
         preferences.setEndpoint("https://proxy.example.com/v1")   // the reader's own base for this service
@@ -215,7 +253,7 @@ struct MeaningPreferencesTests {
         #expect(preferences.settings.endpoint?.absoluteString == "https://proxy.example.com/v1")
 
         // Both rows survive a relaunch, each with its own values.
-        let second = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         second.choose(.http, cloud: false)
         #expect(second.settings.profile == "ollama")
         #expect(second.settings.endpoint?.absoluteString == "http://127.0.0.1:11434/v1")
@@ -225,8 +263,9 @@ struct MeaningPreferencesTests {
 
     /// **An Off cloud install from before the rows keeps its server on the cloud row** (verification finding,
     /// 2026-10-25): the row comes from the address, not from the Off state's false row flag.
-    @Test func aLegacyCloudAddressIsMigratedToTheCloudRow() {
-        let defaults = Self.defaults()
+    @Test func aLegacyCloudAddressIsMigratedToTheCloudRow() throws {
+        let fixture = try TestDefaults()
+        let defaults = fixture.database
         defaults.set("https://api.deepseek.com", forKey: "meaning.endpoint")
         defaults.set(false, forKey: "meaning.http.cloud")   // the reader quit while Off
         let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
@@ -239,8 +278,9 @@ struct MeaningPreferencesTests {
 
     /// **A legacy Custom loopback endpoint is a local server** (verification finding, 2026-10-25): the row decides where
     /// the one key may travel, and a loopback server must never be filed as the cloud row's.
-    @Test func aLegacyCustomLoopbackAddressIsMigratedToTheLocalRow() {
-        let defaults = Self.defaults()
+    @Test func aLegacyCustomLoopbackAddressIsMigratedToTheLocalRow() throws {
+        let fixture = try TestDefaults()
+        let defaults = fixture.database
         defaults.set("http://127.0.0.1:11434/v1", forKey: "meaning.endpoint")
         defaults.set("custom", forKey: "meaning.http.profile")
         defaults.set(true, forKey: "meaning.http.cloud")   // the reader was on the cloud row when they quit
@@ -254,8 +294,9 @@ struct MeaningPreferencesTests {
 
     /// **Returning to a row restores its own service's address** (audit finding, 2026-10-25): the cloud key must not be
     /// left pointed at the server the reader typed for the local row.
-    @Test func returningToTheCloudRowRestoresItsServicesAddress() {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
+    @Test func returningToTheCloudRowRestoresItsServicesAddress() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
         preferences.choose(.http, cloud: true)
         preferences.chooseProfile("openai")
         preferences.choose(.http, cloud: false)
@@ -267,12 +308,13 @@ struct MeaningPreferencesTests {
 
     /// **A pasted address keeps its server** (2026-10-25): whitespace around it is not part of it, text that is not a
     /// URL yet cannot erase the stored address, and an emptied field is the reader asking for none.
-    @Test func anAddressIsTrimmedAndAStrayWhitespaceCannotEraseIt() {
-        let defaults = Self.defaults()
-        let preferences = MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+    @Test func anAddressIsTrimmedAndAStrayWhitespaceCannotEraseIt() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let preferences = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
         preferences.setEndpoint("  https://api.example.com/v1\n")
         #expect(preferences.settings.endpoint?.absoluteString == "https://api.example.com/v1")
-        #expect(MeaningPreferences(defaults: defaults, keys: MemoryKeyStore())
+        #expect(MeaningPreferences(defaults: database, keys: MemoryKeyStore())
             .settings.endpoint?.absoluteString == "https://api.example.com/v1", "the address was not persisted")
         // A field mid-edit, or text that is not a URL, leaves the last good address alone.
         preferences.setEndpoint("https://%zz")
@@ -282,12 +324,78 @@ struct MeaningPreferencesTests {
         #expect(preferences.settings.endpoint == nil)
     }
 
-    @Test func theLanguageTheSessionSendsComesFromThePreferences() {
-        let preferences = MeaningPreferences(defaults: Self.defaults(), keys: MemoryKeyStore())
-        preferences.update { $0.language = "zh-Hans" }
+    /// **Only an absolute http or https address with a host is stored** (audit finding, 2026-10-25): `URL(string:)`
+    /// alone took a relative name and a `file:` URL, either of which would replace a working server with one no
+    /// provider can reach.
+    @Test func anAddressMustBeAbsoluteHttpOrHttpsWithAHost() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
+        preferences.setEndpoint("https://api.example.com/v1")
+        for text in ["api.example.com", "file:///tmp/x", "http://", "ftp://example.com", "  localhost:11434  "] {
+            preferences.setEndpoint(text)
+            #expect(preferences.settings.endpoint?.absoluteString == "https://api.example.com/v1",
+                    "\(text) replaced a working address")
+        }
+        preferences.setEndpoint("http://127.0.0.1:11434/v1")
+        #expect(preferences.settings.endpoint?.absoluteString == "http://127.0.0.1:11434/v1",
+                "a local server answers over plain http")
+        preferences.setEndpoint("https://secure.example.com")
+        #expect(preferences.settings.endpoint?.absoluteString == "https://secure.example.com")
+    }
+
+    /// **The session's lookup and the preferences agree about the language** (audit finding, 2026-10-25): the session
+    /// composes from `settings.template(for:)`, so a language change must be visible there, not only in the pane's
+    /// editor.
+    @Test func theLanguageTheSessionSendsComesFromThePreferences() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
+        preferences.setLanguage("zh-Hans")
         #expect(preferences.settings.language == "zh-Hans")
-        #expect(preferences.effectiveTemplate(language: "zh-Hans", mode: .grounded)
-            == meaningDefaultTemplate(language: "zh-Hans", mode: .grounded))
+        let shipped = try meaningDefaultTemplate(language: "zh-Hans", mode: .grounded)
+        #expect(preferences.effectiveTemplate(language: "zh-Hans", mode: .grounded) == shipped)
+        #expect(preferences.settings.template(for: .grounded) == shipped, "the session would compose in another language")
+        // The answer language follows the setting into a new instance.
+        let second = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
+        second.setLanguage("zh-Hans")
+        #expect(second.settings.template(for: .grounded) == shipped)
+    }
+}
+
+/// **A preferences suite of this test's own, removed when the test's fixture goes** (audit findings, 2026-10-25): a
+/// generated name keeps one test out of another's values, and the removal keeps the test process from filling with
+/// domains. A `?? .standard` fallback would silently write the reader's own defaults instead.
+final class TestDefaults {
+    let suite: String
+    let database: UserDefaults
+
+    init(prefix: String = "ai.xdict.tests.meaning") throws {
+        suite = prefix + "." + UUID().uuidString
+        database = try #require(UserDefaults(suiteName: suite), "a generated suite name was refused")
+        database.removePersistentDomain(forName: suite)
+    }
+
+    deinit { database.removePersistentDomain(forName: suite) }
+}
+
+/// **A test's own defaults suite, held where a helper can keep it**: a struct's test methods cannot assign their own
+/// properties, and the fixture must outlive the helper that made it, so the test holds this reference and the helper
+/// fills it.
+final class HeldDefaults {
+    var fixture: TestDefaults?
+}
+
+/// Every string, data and nested value in a defaults database, flattened: a key stored as `Data` or inside a nested
+/// dictionary must be found too (audit finding, 2026-10-25: `String(describing:)` saw neither).
+private func plistText(_ value: Any) -> String {
+    switch value {
+    case let string as String: return string
+    case let data as Data: return String(decoding: data, as: UTF8.self)
+    case let dictionary as [String: Any]:
+        return dictionary.map { $0.key + "\n" + plistText($0.value) }.joined(separator: "\n")
+    case let array as [Any]:
+        return array.map(plistText).joined(separator: "\n")
+    default:
+        return String(describing: value)
     }
 }
 
@@ -295,6 +403,14 @@ struct MeaningPreferencesTests {
 final class MemoryKeyStore: MeaningKeyStore, @unchecked Sendable {
     private let lock = NSLock()
     private var stored: String?
+    /// The failure the next save or remove throws, if any (audit finding, 2026-10-25: the store never failed, so the
+    /// refused-save path was never exercised).
+    private var _failure: MeaningKeyError?
+
+    var failure: MeaningKeyError? {
+        get { lock.lock(); defer { lock.unlock() }; return _failure }
+        set { lock.lock(); defer { lock.unlock() }; _failure = newValue }
+    }
 
     init(_ key: String? = nil) { stored = key }
 
@@ -307,17 +423,21 @@ final class MemoryKeyStore: MeaningKeyStore, @unchecked Sendable {
     func save(_ key: String) throws {
         lock.lock()
         defer { lock.unlock() }
+        if let _failure { throw _failure }
         stored = key
     }
 
     func remove() throws {
         lock.lock()
         defer { lock.unlock() }
+        if let _failure { throw _failure }
         stored = nil
     }
 }
 
-/// The shipped default, behind the module boundary: `AITemplates` is public and this keeps the test readable.
-func meaningDefaultTemplate(language: String, mode: AIMode) -> String {
-    AITemplates.defaultTemplate(language: language, mode: mode) ?? ""
+/// The shipped default, behind the module boundary: `AITemplates` is public and this keeps the test readable. `#require`
+/// so a missing shipped template fails here, named, instead of comparing against an empty string that hides it.
+func meaningDefaultTemplate(language: String, mode: AIMode) throws -> String {
+    try #require(AITemplates.effective(language: language, mode: mode, stored: nil),
+                 "no shipped template for \(language)/\(mode.rawValue)")
 }

@@ -3335,6 +3335,22 @@
         }
       }
     },
+    "Claude Code is installed. Whether it is signed in is checked by the first question." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Claude Code is installed. Whether it is signed in is checked by the first question."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已安装 Claude Code。是否已登录，会在第一次提问时检查。"
+          }
+        }
+      }
+    },
     "Clear Choice" : {
       "localizations" : {
         "en" : {
@@ -3592,6 +3608,22 @@
         }
       }
     },
+    "Configured" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Configured"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已配置"
+          }
+        }
+      }
+    },
     "Confirm" : {
       "localizations" : {
         "en" : {
@@ -3721,6 +3753,22 @@
         }
       }
     },
+    "Copy Address" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Address"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制地址"
+          }
+        }
+      }
+    },
     "Copy Code" : {
       "localizations" : {
         "en" : {
@@ -3733,6 +3781,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "复制验证码"
+          }
+        }
+      }
+    },
+    "Copy Command" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy Command"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制命令"
           }
         }
       }
@@ -4410,22 +4474,6 @@
         }
       }
     },
-    "Empty lets the server choose." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Empty lets the server choose."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "留空则由服务器选择。"
-          }
-        }
-      }
-    },
     "English" : {
       "localizations" : {
         "en" : {
@@ -4470,6 +4518,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "输入密钥后可查看该服务的模型。"
+          }
+        }
+      }
+    },
+    "Enter an address that begins http:// or https://, with a host." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Enter an address that begins http:// or https://, with a host."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请输入以 http:// 或 https:// 开头、带有主机名的地址。"
           }
         }
       }
@@ -8542,22 +8606,6 @@
         }
       }
     },
-    "Part of the entry was missing" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Part of the entry was missing"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "词条不完整"
-          }
-        }
-      }
-    },
     "Part of this dictionary could not be read. Try again." : {
       "localizations" : {
         "en" : {
@@ -9550,22 +9598,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该复习了"
-          }
-        }
-      }
-    },
-    "Run claude in Terminal once to sign in. XDict never reads that sign-in." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Run claude in Terminal once to sign in. XDict never reads that sign-in."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在终端中运行一次 claude 并登录。XDict 不会读取登录凭据。"
           }
         }
       }
@@ -10684,6 +10716,22 @@
         }
       }
     },
+    "Test checks the key; a question will say if it does not work." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test checks the key; a question will say if it does not work."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「测试」会检查密钥；提问时也会说明它是否可用。"
+          }
+        }
+      }
+    },
     "Testing…" : {
       "localizations" : {
         "en" : {
@@ -11388,6 +11436,22 @@
         }
       }
     },
+    "The input was incomplete" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The input was incomplete"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "输入不完整"
+          }
+        }
+      }
+    },
     "The keys that show or hide the answer pane." : {
       "localizations" : {
         "en" : {
@@ -11448,6 +11512,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "模型拒绝回答"
+          }
+        }
+      }
+    },
+    "The model the service answers with. A service that requires one refuses the question without it." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The model the service answers with. A service that requires one refuses the question without it."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务用来回答的模型。要求指定模型的服务，在未指定时会拒绝提问。"
           }
         }
       }
@@ -11644,6 +11724,22 @@
         }
       }
     },
+    "The question is longer than XDict's limit." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The question is longer than XDict's limit."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "问题超过了 XDict 的长度上限。"
+          }
+        }
+      }
+    },
     "The question is longer than this source can take." : {
       "localizations" : {
         "en" : {
@@ -11688,22 +11784,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "阅读记录已关闭。可在“设置”▸“学习”中开启。"
-          }
-        }
-      }
-    },
-    "The request is too long for the source." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "The request is too long for the source."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求超出了该来源可接受的长度。"
           }
         }
       }
@@ -11971,8 +12051,6 @@
         }
       }
     },
-
-
     "The shortcut is in use by another app. Choose another one." : {
       "localizations" : {
         "en" : {
@@ -11985,6 +12063,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "这个快捷键已被其他 App 占用，请换一个。"
+          }
+        }
+      }
+    },
+    "The sign-in page could not be opened. Copy its address and open it in your browser." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The sign-in page could not be opened. Copy its address and open it in your browser."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "无法打开登录页面。请复制其地址，在浏览器中打开。"
           }
         }
       }
@@ -12117,8 +12211,6 @@
         }
       }
     },
-
-
     "The source took too long to answer." : {
       "localizations" : {
         "en" : {
@@ -13948,6 +14040,22 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "XDict 读取你已有的 MDict 词典。添加词典后，即可在这里查词。"
+          }
+        }
+      }
+    },
+    "XDict runs Claude Code in its own configuration, apart from the one in Terminal. To sign in there, run this in Terminal and follow the sign-in it shows:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict runs Claude Code in its own configuration, apart from the one in Terminal. To sign in there, run this in Terminal and follow the sign-in it shows:"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "XDict 在自己的配置中运行 Claude Code，与「终端」里的那份相互独立。要在那里登录，请在「终端」中运行下面的命令，并按提示登录："
           }
         }
       }

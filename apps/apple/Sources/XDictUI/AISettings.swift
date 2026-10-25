@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import XDictAI
 import XDictTokens
@@ -10,6 +11,8 @@ public struct AISettings: View {
     @State private var model = AISettingsModel(preferences: .shared)
     /// The advanced prompt group: closed by default, opened by the reader or by a Settings search that found a row in it.
     @State private var advancedShown = false
+    /// The sign-in page the system refused to open, if any: its address stays on screen to copy.
+    @State private var unopenedURL: URL?
     private let route: SettingsRoute
 
     public init(route: SettingsRoute = .shared) {
@@ -88,6 +91,12 @@ public struct AISettings: View {
         .onChange(of: model.preferences.settings.language) { model.loadDraft() }
         .onChange(of: model.promptKind) { model.loadDraft() }
         .onChange(of: model.draft) { model.draftChanged() }
+        // **A capability can change while the pane is open** (audit finding, 2026-10-25): Apple Intelligence switched on
+        // in System Settings, a CLI installed in Terminal. Coming back to XDict checks again, and a failed status
+        // offers the same check by hand.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            model.startStatusCheck()
+        }
         // **Nothing the pane started outlives it** (UI33; audit finding, 2026-10-25): sign-in, model load and key test.
         .onDisappear { model.cancelPaneWork() }
         // A Settings search that found a row inside Advanced opens it (UI30).
@@ -145,87 +154,143 @@ public struct AISettings: View {
                 }
             }
             .accessibilityIdentifier("ai.status.ready")
-        case .failed(let error):
-            Label {
-                Text(MeaningSentences.provider(error))
-            } icon: {
-                Image(systemName: "exclamationmark.triangle")
+        case .configured(let detail):
+            // **Configured, not Ready** (audit finding, 2026-10-25): the check proves what is installed or built, not
+            // that the key or sign-in works. A word that promised more would be believed.
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.xs) {
+                    Label { Text("Configured") } icon: { Image(systemName: "checkmark.circle") }
+                        .foregroundStyle(.secondary)
+                    if !detail.isEmpty {
+                        Text(verbatim: detail).font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if model.preferences.settings.source == .http {
+                    Text("Test checks the key; a question will say if it does not work.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("Claude Code is installed. Whether it is signed in is checked by the first question.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            .foregroundStyle(.orange)
-            .accessibilityIdentifier("ai.status.failure")
+            .accessibilityIdentifier("ai.status.configured")
+        case .failed(let error):
+            HStack(alignment: .firstTextBaseline, spacing: Tokens.Space.s) {
+                Label {
+                    Text(MeaningSentences.provider(error))
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle")
+                }
+                .foregroundStyle(.orange)
+                .accessibilityIdentifier("ai.status.failure")
+                // **A failure is not the last word** (audit finding, 2026-10-25): installing the tool or switching a
+                // capability on happens outside this pane, so the reader can ask for the check again.
+                Button("Check Again") { model.startStatusCheck() }  // placement: form-pane
+                    .accessibilityIdentifier("ai.status.check")
+            }
         }
     }
 
     // MARK: - An endpoint
 
     private func endpointSection(model: AISettingsModel) -> some View {
-        @Bindable var model = model
-        return Section {
-            // **The service comes first**: it fills the address and tells the provider how the key travels; Custom
-            // leaves both to the reader.
-            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                Picker(selection: Binding(get: { model.profile.id },
-                                          set: { id in model.preferences.chooseProfile(id) })) {
-                    ForEach(MeaningProfiles.offered(cloud: model.preferences.httpCloud)) { profile in
-                        serviceLabel(profile).tag(profile.id)
-                    }
-                } label: {
-                    Text("Service")
-                }
-                .accessibilityIdentifier("ai.service")
-                Text("A service fills in its address. Custom uses the one you type.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            // Each field is its own Form row: the field's label is the row's label, said once
-            // (`RepeatedLabelTests`), with its sentence under it.
-            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                TextField(text: Binding(get: { model.preferences.settings.endpoint?.absoluteString ?? "" },
-                                        set: { text in model.preferences.setEndpoint(text) }),
-                          prompt: Text(verbatim: "http://127.0.0.1:11434/v1")) {
-                    Text("Address")
-                }
-                .accessibilityIdentifier("ai.endpoint")
-                Text("An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                TextField(text: Binding(get: { model.preferences.settings.model },
-                                        set: { text in model.preferences.update { $0.model = text } })) {
-                    Text("Model")
-                }
-                .accessibilityIdentifier("ai.model")
-                Text("Empty lets the server choose.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                // **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers
-                // it (or the service's few known names before a fetch); typing above remains the final word.
-                HStack(spacing: Tokens.Space.s) {
-                    Button("Load Models") { model.startModelLoad() }  // placement: form-pane
-                        .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil)
-                        .accessibilityIdentifier("ai.models.load")
-                    if model.modelsShown == .loading {
-                        ProgressView().controlSize(.small)  // placement: spinner
-                    }
-                    if !model.modelChoices.isEmpty {
-                        Menu {  // placement: form-pane
-                            ForEach(model.modelChoices, id: \.self) { id in
-                                Button { model.chooseModel(id) } label: { Text(verbatim: id) }
-                            }
-                        } label: {
-                            Text("Choose a Model")
-                        }
-                        .accessibilityIdentifier("ai.models.menu")
-                    }
-                }
-                modelsNote(model: model)
-            }
+        Section {
+            serviceRow(model: model)
+            addressRow(model: model)
+            modelRow(model: model)
             if model.preferences.httpCloud {
                 keyRows(model: model)
             }
         } header: {
             Text("The server")
+        }
+    }
+
+    /// **The service comes first**: it fills the address and tells the provider how the key travels; Custom leaves both
+    /// to the reader. Its own note is the service-specific guidance sayso's table carries.
+    private func serviceRow(model: AISettingsModel) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            Picker(selection: Binding(get: { model.profile.id }, set: { model.chooseProfile($0) })) {
+                ForEach(MeaningProfiles.offered(cloud: model.preferences.httpCloud)) { profile in
+                    serviceLabel(profile).tag(profile.id)
+                }
+            } label: {
+                Text("Service")
+            }
+            .accessibilityIdentifier("ai.service")
+            Text("A service fills in its address. Custom uses the one you type.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if let note = model.profile.note {
+                Text(verbatim: note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("ai.service.note")
+            }
+        }
+    }
+
+    /// **The address keeps its own draft** (audit finding, 2026-10-25): the field always shows what the reader typed;
+    /// text that is not an address is marked and leaves the last good address stored, rather than snapping back under
+    /// the cursor or silently replacing a working server with an unreachable string.
+    private func addressRow(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        return VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            TextField(text: $model.draftEndpoint, prompt: Text(verbatim: "http://127.0.0.1:11434/v1")) {
+                Text("Address")
+            }
+            .accessibilityIdentifier("ai.endpoint")
+            .onChange(of: model.draftEndpoint) { model.endpointTyped() }
+            if model.endpointInvalid {
+                Text("Enter an address that begins http:// or https://, with a host.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("ai.endpoint.invalid")
+            } else {
+                Text("An OpenAI-compatible address, such as http://127.0.0.1:11434/v1 for Ollama.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// The model, the service's own list on the reader's ask, and why the list did not come.
+    private func modelRow(model: AISettingsModel) -> some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+            TextField(text: Binding(get: { model.preferences.settings.model },
+                                    set: { model.preferences.setModel($0) })) {
+                Text("Model")
+            }
+            .accessibilityIdentifier("ai.model")
+            // **Not every service answers without one** (audit finding, 2026-10-25): "Empty lets the server choose" is
+            // false for a service that requires a model, so the sentence promises nothing the service keeps.
+            Text("The model the service answers with. A service that requires one refuses the question without it.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            // **The service's own list, on the reader's ask** (2026-10-25): the button fetches it; the menu offers it
+            // (or the service's few known names before a fetch); typing above remains the final word.
+            HStack(spacing: Tokens.Space.s) {
+                Button("Load Models") { model.startModelLoad() }  // placement: form-pane
+                    .disabled(model.modelsShown == .loading || model.preferences.settings.endpoint == nil
+                              || model.endpointInvalid)
+                    .accessibilityIdentifier("ai.models.load")
+                if model.modelsShown == .loading {
+                    ProgressView().controlSize(.small)  // placement: spinner
+                }
+                if !model.modelChoices.isEmpty {
+                    Menu {  // placement: form-pane
+                        ForEach(model.modelChoices, id: \.self) { id in
+                            Button { model.chooseModel(id) } label: { Text(verbatim: id) }
+                        }
+                    } label: {
+                        Text("Choose a Model")
+                    }
+                    .accessibilityIdentifier("ai.models.menu")
+                }
+            }
+            modelsNote(model: model)
         }
     }
 
@@ -295,7 +360,10 @@ public struct AISettings: View {
 
     private func keyButtons(model: AISettingsModel) -> some View {
         HStack(spacing: Tokens.Space.s) {
+            // **A test is about the address in the field** (audit finding, 2026-10-25): while that is not an address,
+            // the verdict would be about the one behind it.
             Button("Test") { model.startKeyTest() }  // placement: form-pane
+                .disabled(model.endpointInvalid)
                 .accessibilityIdentifier("ai.key.test")
             Button("Replace") {  // placement: form-pane
                 model.replaceKey()
@@ -313,51 +381,7 @@ public struct AISettings: View {
     private func codexSection(model: AISettingsModel) -> some View {
         Section {
             if model.signingIn {
-                let login = model.login
-                ActionRow {
-                    HStack(spacing: Tokens.Space.xs) {
-                        ProgressView().controlSize(.small)  // placement: spinner
-                        Text("Waiting for you to sign in…")
-                    }
-                } actions: {
-                    Button("Cancel") { model.cancelSignIn() }  // placement: form-pane
-                        .accessibilityIdentifier("ai.codex.cancel")
-                }
-                if let url = login.url {
-                    ActionRow {
-                        Text(verbatim: url.host() ?? url.absoluteString).foregroundStyle(.secondary)
-                    } actions: {
-                        Button("Open Sign-In Page") { _ = NSWorkspace.shared.open(url) }  // placement: form-pane
-                            .accessibilityIdentifier("ai.codex.open")
-                    }
-                }
-                if let code = login.code {
-                    ActionRow {
-                        LabeledContent {
-                            Text(verbatim: code).font(.title3.monospaced()).textSelection(.enabled)
-                                .accessibilityIdentifier("ai.codex.code")
-                        } label: {
-                            Text("Code")
-                        }
-                    } actions: {
-                        Button("Copy Code") {  // placement: form-pane
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(code, forType: .string)
-                        }
-                        .accessibilityIdentifier("ai.codex.copy")
-                    }
-                }
-                if !model.loginLines.isEmpty {
-                    DisclosureGroup {
-                        // The login's own lines, verbatim. Data, never translated.
-                        ForEach(Array(model.loginLines.enumerated()), id: \.offset) { _, line in
-                            Text(verbatim: CodexLogin.stripEscapes(line)).font(.caption.monospaced())
-                                .textSelection(.enabled)
-                        }
-                    } label: {
-                        Text("Details")
-                    }
-                }
+                codexSignIn(model: model, login: model.login)
             } else {
                 Button("Sign In with Codex…") { model.startSignIn() }  // placement: form-pane
                     .accessibilityIdentifier("ai.codex.signin")
@@ -370,14 +394,101 @@ public struct AISettings: View {
         }
     }
 
+    /// A running login's rows: progress, the page, the code, and the tool's own lines.
+    @ViewBuilder private func codexSignIn(model: AISettingsModel, login: CodexLogin) -> some View {
+        ActionRow {
+            HStack(spacing: Tokens.Space.xs) {
+                ProgressView().controlSize(.small)  // placement: spinner
+                Text("Waiting for you to sign in…")
+            }
+        } actions: {
+            Button("Cancel") { model.cancelSignIn() }  // placement: form-pane
+                .accessibilityIdentifier("ai.codex.cancel")
+        }
+        if let url = login.url {
+            ActionRow {
+                Text(verbatim: url.host() ?? url.absoluteString).foregroundStyle(.secondary)
+            } actions: {
+                Button("Open Sign-In Page") { open(url) }  // placement: form-pane
+                    .accessibilityIdentifier("ai.codex.open")
+            }
+            // **A page the system would not open is said, not swallowed** (audit finding, 2026-10-25): the address
+            // stays on screen to copy, because the sign-in cannot finish without it.
+            if unopenedURL == url {
+                Text("The sign-in page could not be opened. Copy its address and open it in your browser.")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+                    .accessibilityIdentifier("ai.codex.open.failure")
+                ActionRow {
+                    Text(verbatim: url.absoluteString).font(.caption.monospaced()).textSelection(.enabled)
+                } actions: {
+                    Button("Copy Address") { copy(url.absoluteString) }  // placement: form-pane
+                        .accessibilityIdentifier("ai.codex.open.copy")
+                }
+            }
+        }
+        if let code = login.code {
+            ActionRow {
+                LabeledContent {
+                    Text(verbatim: code).font(.title3.monospaced()).textSelection(.enabled)
+                        .accessibilityIdentifier("ai.codex.code")
+                } label: {
+                    Text("Code")
+                }
+            } actions: {
+                Button("Copy Code") { copy(code) }  // placement: form-pane
+                    .accessibilityIdentifier("ai.codex.copy")
+            }
+        }
+        if !model.loginLines.isEmpty {
+            DisclosureGroup {
+                // The login's own lines, verbatim. Data, never translated.
+                ForEach(Array(model.loginLines.enumerated()), id: \.offset) { _, line in
+                    Text(verbatim: CodexLogin.stripEscapes(line)).font(.caption.monospaced())
+                        .textSelection(.enabled)
+                }
+            } label: {
+                Text("Details")
+            }
+        }
+    }
+
+    /// **Claude Code signs in where XDict runs it** (audit finding, 2026-10-25): a bare `claude` in Terminal signs into
+    /// the reader's own configuration, which XDict never reads; this command names XDict's and creates it first.
     private var claudeSection: some View {
         Section {
-            Text("Run claude in Terminal once to sign in. XDict never reads that sign-in.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                Text("XDict runs Claude Code in its own configuration, apart from the one in Terminal. To sign in there, run this in Terminal and follow the sign-in it shows:")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text(verbatim: claudeSignInCommand)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .accessibilityIdentifier("ai.claude.command")
+                Button("Copy Command") { copy(claudeSignInCommand) }  // placement: form-pane
+                    .accessibilityIdentifier("ai.claude.copy")
+            }
         } header: {
             Text("Claude")
         }
+    }
+
+    /// The exact shell line that signs in where XDict's Claude Code runs: the same `CLAUDE_CONFIG_DIR` the provider sets.
+    private var claudeSignInCommand: String {
+        let folder = MeaningProviders.folder("claude").path(percentEncoded: false)
+        return "mkdir -p \"\(folder)\" && CLAUDE_CONFIG_DIR=\"\(folder)\" claude"
+    }
+
+    /// The pasteboard, once: a code, an address or a command the reader must type exactly.
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    /// **The system's own open, and its refusal said**: `NSWorkspace.open` answers whether it opened anything.
+    private func open(_ url: URL) {
+        unopenedURL = NSWorkspace.shared.open(url) ? nil : url
     }
 
     // MARK: - What leaves XDict
@@ -385,7 +496,7 @@ public struct AISettings: View {
     private func disclosureSection(model: AISettingsModel) -> some View {
         Section {
             Toggle(isOn: Binding(get: { model.preferences.settings.sendEntryText },
-                                 set: { on in model.preferences.update { $0.sendEntryText = on } })) {
+                                 set: { model.preferences.setSendEntryText($0) })) {
                 Text("Send the entry’s text with the question")
                 Text("Off, only the sentence around the word is sent — to every source, one on this Mac included.")
             }
@@ -402,21 +513,9 @@ public struct AISettings: View {
     /// ordinary explanation without meeting template variables or the response contract. An edit stays saved and
     /// labelled *your wording, not measured* (ADR-0021), on the closed disclosure's label too.
     private func promptSection(model: AISettingsModel) -> some View {
-        @Bindable var model = model
-        return Group {
+        Group {
             Section {
-                Picker(selection: Binding(get: { model.preferences.settings.language },
-                                          set: { language in
-                                              model.preferences.update { $0.language = language }
-                                              model.loadDraft()
-                                          })) {
-                    Text("English").tag("en")
-                    Text("Simplified Chinese").tag("zh-Hans")
-                } label: {
-                    Text("Answer language")
-                }
-                .accessibilityIdentifier("ai.language")
-                .settingsAnchor(.aiLanguage)
+                languageRow(model: model)
             } header: {
                 Text("The answer")
             }
@@ -427,14 +526,7 @@ public struct AISettings: View {
                     HStack(spacing: Tokens.Space.s) {
                         Text("Customize the Prompt")
                         if model.hasEditedPrompt {
-                            Label {
-                                Text("Your wording, not measured")
-                            } icon: {
-                                Image(systemName: "pencil")
-                            }
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("ai.prompt.edited.any")
+                            editedBadge("ai.prompt.edited.any")
                         }
                     }
                 }
@@ -444,6 +536,21 @@ public struct AISettings: View {
                 Text("Advanced")
             }
         }
+    }
+
+    /// **The answer's language** (UI18): the templates the editor shows are that language's, and the preferences' own
+    /// change observer loads them — a setter that also loaded them here loaded every switch twice (audit finding,
+    /// 2026-10-25).
+    private func languageRow(model: AISettingsModel) -> some View {
+        Picker(selection: Binding(get: { model.preferences.settings.language },
+                                  set: { model.preferences.setLanguage($0) })) {
+            Text("English").tag("en")
+            Text("Simplified Chinese").tag("zh-Hans")
+        } label: {
+            Text("Answer language")
+        }
+        .accessibilityIdentifier("ai.language")
+        .settingsAnchor(.aiLanguage)
     }
 
     @ViewBuilder private func advancedPrompt(model: AISettingsModel) -> some View {
@@ -458,28 +565,50 @@ public struct AISettings: View {
         }
         .pickerStyle(.radioGroup)
         .accessibilityIdentifier("ai.prompt.kind")
-        TextEditor(text: $model.draft)
-            .font(.body.monospaced())
-            .frame(minHeight: Tokens.Control.promptEditor)
-            .accessibilityLabel(Text("Prompt"))
-            .accessibilityIdentifier("ai.prompt.editor")
-        if model.preferences.isEdited(language: model.language, mode: model.promptKind) {
-            Label {
-                Text("Your wording, not measured")
-            } icon: {
-                Image(systemName: "pencil")
+        promptEditor(model: model)
+        promptGuidance
+        promptPreview(model: model)
+        promptContract(model: model)
+    }
+
+    private func promptEditor(model: AISettingsModel) -> some View {
+        @Bindable var model = model
+        return Group {
+            TextEditor(text: $model.draft)
+                .font(.body.monospaced())
+                .frame(minHeight: Tokens.Control.promptEditor)
+                .accessibilityLabel(Text("Prompt"))
+                .accessibilityIdentifier("ai.prompt.editor")
+            if model.preferences.isEdited(language: model.language, mode: model.promptKind) {
+                editedBadge("ai.prompt.edited")
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .accessibilityIdentifier("ai.prompt.edited")
+            Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
+                .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
+                .accessibilityIdentifier("ai.prompt.reset")
         }
-        Button("Reset to Default") { model.resetDraft() }  // placement: form-pane
-            .disabled(!model.preferences.isEdited(language: model.language, mode: model.promptKind))
-            .accessibilityIdentifier("ai.prompt.reset")
+    }
+
+    /// **The edit badge, once** (audit finding, 2026-10-25): the closed disclosure and the editor say the same thing,
+    /// and two hand-written copies had already drifted apart.
+    private func editedBadge(_ identifier: String) -> some View {
+        Label {
+            Text("Your wording, not measured")
+        } icon: {
+            Image(systemName: "pencil")
+        }
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private var promptGuidance: some View {
         Text("The prompt uses {term}, {sentence}, {entry}, {sense} and {language}; a missing or unknown one is refused before anything is sent. XDict appends the response format, which cannot be edited.")
             .font(.caption)
             .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func promptPreview(model: AISettingsModel) -> some View {
         DisclosureGroup {
             previewText(model: model)
             Text("This is a sample: the sentence you capture and the entry you see are sent instead.")
@@ -489,9 +618,12 @@ public struct AISettings: View {
             Text("Preview the request")
         }
         .accessibilityIdentifier("ai.prompt.preview")
+    }
+
+    private func promptContract(model: AISettingsModel) -> some View {
         DisclosureGroup {
-            // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would
-            // describe an answer this ask never accepts.
+            // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would describe an
+            // answer this ask never accepts.
             Text(verbatim: model.promptKind == .explainSense ? AIComposer.explainResponseContract
                                                              : AIComposer.responseContract)
                 .font(.caption.monospaced())

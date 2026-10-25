@@ -42,7 +42,9 @@ public enum MeaningSentences {
         case .ambiguous: LocalizedStringResource("More than one sense")
         case .noMatchingSense: LocalizedStringResource("No matching sense")
         case .insufficientContext: LocalizedStringResource("Not enough context")
-        case .incompleteInput: LocalizedStringResource("Part of the entry was missing")
+        // **Neutral about what was incomplete** (audit finding, 2026-10-25): the chosen-sense question can earn this
+        // outcome for a partial sense, where "the entry" would name the wrong thing.
+        case .incompleteInput: LocalizedStringResource("The input was incomplete")
         case .explanationOnly: LocalizedStringResource("From the sentence alone")
         case .refused: LocalizedStringResource("The model declined")
         case .guardrail: LocalizedStringResource("The model's guardrails declined")
@@ -122,7 +124,7 @@ public enum MeaningSentences {
         case .noSource: LocalizedStringResource("Choose a source in Settings ▸ AI.")
         case .noContext: LocalizedStringResource("There is no captured sentence to answer about.")
         case .noEntry: LocalizedStringResource("No entry is on screen for this sentence.")
-        case .entryUnreadable: LocalizedStringResource("The entry could not be read.")
+        case .entryFailure: LocalizedStringResource("The entry could not be read.")
         case .consentChanged:
             LocalizedStringResource("The entry-text switch changed while the question was being prepared, so nothing was sent.")
         case .noSense:
@@ -237,8 +239,10 @@ public enum MeaningSentences {
             LocalizedStringResource("The prompt is too long.")
         case .entryRequired:
             LocalizedStringResource("There is no entry to send for this ask.")
+        // **The limit is XDict's own** (audit finding, 2026-10-25): `AIComposer.questionCeilingUTF8` refuses the
+        // composed question before any source sees it, so the sentence must not blame the source.
         case .questionTooLong:
-            LocalizedStringResource("The request is too long for the source.")
+            LocalizedStringResource("The question is longer than XDict's limit.")
         case .senseOutsideExplainSense:
             LocalizedStringResource("This prompt may not use {sense} outside the chosen-sense question.")
         case .senseRequired:

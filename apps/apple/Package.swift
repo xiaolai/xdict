@@ -60,7 +60,8 @@ let package = Package(
         // `WKWebView` per open dictionary, its `xdict:` scheme handler, the core's policy as a header on every response,
         // the rule list, the navigation and UI delegates, the two WebKit switches read back before anything renders, the
         // reader's consent before a remote link leaves, find, zoom and appearance. Its own target because it binds
-        // WebKit and AppKit, which nothing else in the view layer does. It gets bytes through `EntryContent`, never the
+        // WebKit, which no other view-layer target does (the AppKit it also binds is that layer's ordinary currency). It
+        // gets bytes through `EntryContent`, never the
         // contract's types, so the service's client plugs in without the view knowing the wire (WI-3, WI-6).
         // `Style/` is compiled in as text by Tools/reading-style-gen.py (`EntryStyleFiles.swift`), never read at run time.
         .target(name: "XDictEntryView", dependencies: ["XDictBase", "XDictTokens"], exclude: ["Style"]),
@@ -155,9 +156,10 @@ let package = Package(
         // **The core, and who may reach it.** `xdictFFI` is libxdict_ffi.a and its C header as an XCFramework, and
         // `XDictCore` the UniFFI binding generated from that archive; both are written by `Tools/build-core.sh` into
         // `Generated/`, which is untracked. A binary target is how SwiftPM takes a prebuilt archive without
-        // `unsafeFlags`, and it links the archive statically into what depends on it. Only `XDictService` does (and
-        // its tests): `ModuleBoundaryTests` refuses any other target that reaches either module, by the graph and by
-        // its imports, and `Tools/build-bundle.sh` refuses an app binary carrying a core symbol.
+        // `unsafeFlags`, and it links the archive statically into what depends on it. Of the shipped executables only
+        // `XDictService` does (and its tests); `XDictEntryLab` and `XDictAIMeasure` are development hosts that never
+        // ship and link it directly. `ModuleBoundaryTests` refuses any other target that reaches either module, by the
+        // graph and by its imports, and `Tools/build-bundle.sh` refuses an app binary carrying a core symbol.
         .binaryTarget(name: "xdictFFI", path: "Generated/xdictFFI.xcframework"),
         .target(
             name: "XDictCore",

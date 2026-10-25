@@ -149,9 +149,26 @@ public final class MeaningPreferences {
         persist()
     }
 
-    /// Any other change from the pane; persisted at once.
-    public func update(_ change: (inout MeaningSettings) -> Void) {
-        change(&settings)
+    /// **The ordinary fields have named doors** (audit finding, 2026-10-25): a public closure let any caller write the
+    /// endpoint, the profile or the key past `setEndpoint`'s validation and `chooseProfile`'s address, which is how a
+    /// stray edit could point the one key at a server the reader did not choose.
+    public func setModel(_ model: String) {
+        change { $0.model = model }
+    }
+
+    /// The answer's language: the templates the session carries are that language's, so they are refreshed with it.
+    public func setLanguage(_ language: String) {
+        change { $0.language = language }
+    }
+
+    /// The one switch that lets the entry's text leave XDict (ADR-0021 d.9).
+    public func setSendEntryText(_ on: Bool) {
+        change { $0.sendEntryText = on }
+    }
+
+    /// A change this class makes itself, persisted at once.
+    private func change(_ edit: (inout MeaningSettings) -> Void) {
+        edit(&settings)
         persist()
     }
 
@@ -159,22 +176,33 @@ public final class MeaningPreferences {
     /// choice is remembered even while the other row is selected, so switching back restores the service.
     public func chooseProfile(_ id: String) {
         let profile = AIProviderProfile.profile(id: id) ?? .custom
-        update {
+        change {
             $0.profile = profile.id
             if let base = profile.baseURL { $0.endpoint = base }
         }
     }
 
     /// **An address the reader typed or pasted** (2026-10-25): the space or newline around a pasted URL is not part of
-    /// it, and text that is not yet a URL leaves the last good address stored — a stray space must never erase the
-    /// server the reader configured. An empty field is the reader asking for no address.
+    /// it, and text that is not yet an address leaves the last good one stored — a stray space must never erase the
+    /// server the reader configured, and a relative string must never replace a working address with something no
+    /// provider can reach (audit finding, 2026-10-25: `URL(string:)` alone accepted `api.example.com` and `file:`). An
+    /// empty field is the reader asking for no address.
     public func setEndpoint(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {
-            update { $0.endpoint = nil }
-        } else if let url = URL(string: trimmed) {
-            update { $0.endpoint = url }
+            change { $0.endpoint = nil }
+            return
         }
+        guard let url = Self.address(trimmed) else { return }
+        change { $0.endpoint = url }
+    }
+
+    /// **What an address must be to be stored**: absolute, http or https, with a host. A local server may be plain
+    /// http; the provider refuses a key over anything but https.
+    static func address(_ text: String) -> URL? {
+        guard let url = URL(string: text), let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https", let host = url.host, !host.isEmpty else { return nil }
+        return url
     }
 
     /// **The cloud key**: saved to the Keychain, or removed with nil. Never written to defaults.
@@ -197,10 +225,10 @@ public final class MeaningPreferences {
     }
 
     /// The template an ask actually uses: the reader's edit, the shipped default of this language, then English's.
+    /// The rule lives in `AITemplates.effective`, so the pane, the session and the editor cannot disagree about it.
     public func effectiveTemplate(language: String, mode: AIMode) -> String {
-        storedTemplate(language: language, mode: mode)
-            ?? AITemplates.defaultTemplate(language: language, mode: mode)
-            ?? AITemplates.defaultTemplate(language: "en", mode: mode) ?? ""
+        AITemplates.effective(language: language, mode: mode, stored: storedTemplate(language: language, mode: mode))
+            ?? ""
     }
 
     /// Saves an edit, or restores the default with nil. Empty text is the default too: an empty prompt could not compose.

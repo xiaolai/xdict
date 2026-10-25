@@ -2,12 +2,17 @@ import Foundation
 import XDictAI
 import XDictBase
 
-/// **What a source's live check found** (Settings ▸ AI): ready, with a version or model when there is one to name; not
-/// set up yet; or the typed reason it cannot run. The view words every case.
+/// **What a source's live check found** (Settings ▸ AI): ready, with a version or model when there is one to name;
+/// configured as far as a local check can prove, with the version or model it found; not set up yet; or the typed
+/// reason it cannot run. The view words every case.
 public enum MeaningSourceStatus: Equatable, Sendable {
     case checking
     case notConfigured
     case ready(String)
+    /// **Set up as far as a local check can prove** (audit finding, 2026-10-25): Claude Code's check proves the program
+    /// and its version, not the sign-in inside XDict's own configuration, which only an ask reveals. Saying "Ready"
+    /// there would promise something nothing checked; `detail` is the version the check found.
+    case configured(String)
     case failed(AIProviderError)
 }
 
@@ -26,20 +31,29 @@ public enum MeaningProviders {
             guard let endpoint = settings.endpoint else { throw .unreachable }
             return try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
         case .claudeCLI:
-            return ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
-                                                         model: nil, answerSchema: AIAnswerSchema.claude))
+            return claude()
         case .codexCLI:
-            // **The provider makes and checks the app's own home** (sayso 0.5.1 creates it before the probe reads the
-            // sign-in in it); XDict only names the folders. The pre-creation this used to do was a workaround for the
-            // order 0.5.1 fixes, and it swallowed a failed creation with `try?`.
-            return try CodexCLIProvider(configuration: .init(codexHome: folder("codex"),
-                                                             workingDirectory: folder("work"), model: nil))
+            return try codex()
         }
+    }
+
+    /// **Claude Code in XDict's own configuration**: its sign-in is made in `folder("claude")`, never in the reader's.
+    static func claude() -> ClaudeCLIProvider {
+        ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
+                                              model: nil, answerSchema: AIAnswerSchema.claude))
+    }
+
+    /// **Codex in the app's own home**: the provider makes and checks that home before its probe reads the sign-in in
+    /// it (sayso 0.5.1's order); XDict only names the folders. The pre-creation this used to do was a workaround for
+    /// that order, and it swallowed a failed creation with `try?`.
+    static func codex() throws(AIProviderError) -> CodexCLIProvider {
+        try CodexCLIProvider(configuration: .init(codexHome: folder("codex"), workingDirectory: folder("work"),
+                                                  model: nil))
     }
 
     /// **Whether a source can answer, without asking a model** (Settings ▸ AI's live status): local checks only — the
     /// on-device model's availability, an endpoint's shape, a CLI's presence, version and sign-in. Nothing here sends the
-    /// reader's text.
+    /// reader's text. What a check cannot prove says `.configured`, never `.ready`.
     public static func status(_ settings: MeaningSettings) async -> MeaningSourceStatus {
         guard let source = settings.source else { return .notConfigured }
         switch source {
@@ -53,16 +67,24 @@ public enum MeaningProviders {
             if profile(settings).keyRequired, (apiKey(settings) ?? "").isEmpty { return .notConfigured }
             do {
                 _ = try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
-                return .ready(settings.model)
+                // **The constructor proves the address's shape, not the key** (audit finding, 2026-10-25): callers say
+                // Configured, and Test — a probe — is what can say more.
+                return .configured(settings.model)
             } catch {
                 return .failed(error)
             }
-        case .claudeCLI, .codexCLI:
+        case .claudeCLI:
+            // **Typed, never a cast and a fallback** (audit finding, 2026-10-25): the provider is built as itself, and
+            // its check proves the program and version. The sign-in in XDict's own configuration is checked by the
+            // first ask, so this is `.configured`, not `.ready`.
             do {
-                let provider = try make(settings)
-                if let claude = provider as? ClaudeCLIProvider { return .ready(try await claude.check()) }
-                if let codex = provider as? CodexCLIProvider { return .ready(try await codex.check()) }
-                return .ready("")
+                return .configured(try await claude().check())
+            } catch {
+                return .failed(error)
+            }
+        case .codexCLI:
+            do {
+                return .ready(try await codex().check())
             } catch {
                 return .failed(error)
             }

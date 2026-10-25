@@ -4,7 +4,7 @@ import XDictAI
 @testable import XDictUI
 
 /// **The service table made a choice** (2026-10-25): which row a service belongs to, which service an address names, and
-/// what "Ready" needs before it is said.
+/// what "Configured" needs before it is said.
 @MainActor
 struct MeaningProfilesTests {
     static func profile(_ address: String) -> AIProviderProfile {
@@ -32,13 +32,16 @@ struct MeaningProfilesTests {
         #expect(!MeaningProfiles.isLocal(Self.profile("http://127.0.0:11434/v1")))
     }
 
-    /// **A service that needs a key is not "Ready" without one** (audit finding, 2026-10-25): the constructor would
-    /// pass, but only a request proves a key, and an empty field beside Ready helps nobody.
+    /// **A service that needs a key is not configured without one**, and an HTTPS row with one is *configured*, never
+    /// *ready* (audit findings, 2026-10-25): the constructor would pass without a key, and only a probe proves one —
+    /// "Ready" would promise what nothing checked.
     @Test func aServiceThatNeedsAKeyIsNotConfiguredWithoutOne() async throws {
         let endpoint = try #require(URL(string: "https://api.openai.com/v1"))
         var settings = MeaningSettings(source: .http, endpoint: endpoint, profile: "openai", usesKey: true)
         #expect(await MeaningProviders.status(settings) == .notConfigured)
         settings.key = "sk-shared"
-        #expect(await MeaningProviders.status(settings) == .ready(""))
+        #expect(await MeaningProviders.status(settings) == .configured(""))
+        settings.model = "a-model"
+        #expect(await MeaningProviders.status(settings) == .configured("a-model"))
     }
 }

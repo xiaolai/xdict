@@ -35,7 +35,7 @@ struct TestInventoryTests {
         "XDictSearchTests": 49,
         "XDictSpeechTests": 31,
         // 69 → 64 (P41, 2026-10-17): the panel became an NSPopover, placed by AppKit beside its anchor; the placement
-        // tests went with PanelPlacement.frame, and LookupPopoverTests (XDictUITests) holds the anchor and the edge.
+        // tests went with PanelPlacement.frame, and LookupPopoverTests holds the anchor and the edge.
         // 64 → 37 (plan-capture WI-2, 2026-10-18): by transfer, SelectionReaderTests (24) and SelectedTerm's four cases of
         // LookupTextTests moved by name to XDictCaptureMacTests with the reader; one added (the shortcut's admission).
         // 37 → 66 (plan-capture WI-3): 38 were present (the floor above counted one short); the composition layer for
@@ -52,7 +52,10 @@ struct TestInventoryTests {
         // 24 → 29 (plan WI-5, 2026-10-18): the Add Apple Dictionaries… sheet's logic and its sentences.
         // 29 → 33 (plan-capture WI-3): hover's sentences — keys, gestures, scripts, notices and the pause lines.
         // 33 → 34 (plan-capture WI-4): the Screen Recording row's sentences and the notice naming the row.
-        "XDictUITests": 34,
+        // 34 → 42 (2026-10-25): the popover suite moved back in when its own target proved no isolation (SwiftPM runs
+        // every target in one process), and its focus reading was narrowed to XDict's own state, which a concurrent
+        // suite cannot move — the full-run flake's cause. Serialized, so its popover tests never overlap each other.
+        "XDictUITests": 42,
         "XDictEntryViewTests": 43,
         // 90 → 92 (plan WI-5, 2026-10-18): the app's and the service's revisions of one bundle agree.
         "XDictServiceTests": 92,

@@ -62,8 +62,10 @@ struct ModuleBoundaryTests {
         // search field and the entry view's place in it, `Observation` the window's state (plan-macos-v1 WI-6);
         // `ServiceManagement` launch at login and `os` the log of its refusal (WI-9); `Security` the cloud endpoint's
         // key in the Keychain (ADR-0021 d.3, `KeychainKeyStore`), the only secret the app stores; `UserNotifications` the
-        // review reminder, which the shell delivers through the system's own notification centre (plan §5.4).
-        "XDictUI": ["AppKit", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
+        // review reminder, which the shell delivers through the system's own notification centre (plan §5.4);
+        // `Combine` the AI pane's re-check when the app returns to the front (2026-10-25: a notification publisher is
+        // SwiftUI's `onReceive` input, and the pane's live status would otherwise stay stale after System Settings).
+        "XDictUI": ["AppKit", "Combine", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028): the system's index and nothing else; the words'

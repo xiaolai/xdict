@@ -28,8 +28,16 @@ public final class AISettingsModel {
     public private(set) var status: MeaningSourceStatus = .checking
     @ObservationIgnored private var statusGeneration = 0
     @ObservationIgnored private var keyGeneration = 0
+    /// The configuration a failed key test spoke for: another one makes its verdict stale (audit finding, 2026-10-25).
+    @ObservationIgnored private var keyVerdict: MeaningSettings?
     public var keyState: KeyState = .absent
     public var draftKey = ""
+    /// **The address as typed** (audit finding, 2026-10-25): the field has its own editing state, so text that is not
+    /// yet an address stays visible (and marked) while the last good address remains what the source uses. Binding the
+    /// field straight to the stored value made a mid-edit string snap back under the reader's cursor.
+    public var draftEndpoint = ""
+    /// Whether the draft is not an address XDict can store: http or https with a host.
+    public private(set) var endpointInvalid = false
     public private(set) var keyFailure: LocalizedStringResource?
     public var promptKind: AIMode = .grounded
     public var draft = ""
@@ -41,6 +49,8 @@ public final class AISettingsModel {
     /// The pane's two long buttons own their work here, so leaving the pane ends it (audit finding, 2026-10-25).
     @ObservationIgnored private var modelsTask: Task<Void, Never>?
     @ObservationIgnored private var keyTestTask: Task<Void, Never>?
+    /// **Check Again** and the app's own return to the front own their check here, so leaving the pane ends it too.
+    @ObservationIgnored private var statusTask: Task<Void, Never>?
 
     /// The Codex login's own output, verbatim: the web address and code the reader needs. Data, never translated.
     public private(set) var loginLines: [String] = []
@@ -52,18 +62,25 @@ public final class AISettingsModel {
     public typealias Login = @MainActor (_ onLine: @escaping @MainActor (String) -> Void) async throws -> Void
     /// **How a model list is fetched**: sayso's catalogue by default; a test hands in its own.
     public typealias FetchModels = @Sendable (ModelCatalog.Request) async -> Result<[AIModel], ModelCatalogError>
+    /// **How a source's live check is made**: the providers' own checks by default; a test hands in its own, so a
+    /// superseded or cancelled check's result can be held and then released.
+    public typealias CheckStatus = @Sendable (MeaningSettings) async -> MeaningSourceStatus
     @ObservationIgnored private let runLogin: Login?
     @ObservationIgnored private let fetchModels: FetchModels
+    @ObservationIgnored private let checkStatus: CheckStatus
     @ObservationIgnored private var signInTask: Task<Void, Never>?
     @ObservationIgnored private var signInGeneration = 0
 
-    public init(preferences: MeaningPreferences, login: Login? = nil, fetchModels: FetchModels? = nil) {
+    public init(preferences: MeaningPreferences, login: Login? = nil, fetchModels: FetchModels? = nil,
+                checkStatus: CheckStatus? = nil) {
         self.preferences = preferences
         runLogin = login
         // The live fetch is internal: a public initializer's default value cannot name it, so nil resolves here.
         self.fetchModels = fetchModels ?? liveModelFetch
+        self.checkStatus = checkStatus ?? { await MeaningProviders.status($0) }
         keyState = preferences.hasKey ? .stored : .absent
         draft = preferences.effectiveTemplate(language: preferences.settings.language, mode: promptKind)
+        draftEndpoint = preferences.settings.endpoint?.absoluteString ?? ""
     }
 
     /// **The source, as the pane's one single-choice control selects it** (UI32).
@@ -124,19 +141,77 @@ public final class AISettingsModel {
     // MARK: - The source
 
     public func select(_ kind: AIProviderKind?, cloud: Bool = false) {
+        // **A sign-in belongs to the Codex source** (audit finding, 2026-10-25): choosing another source ends the login,
+        // so its process group stops and no line or failure of it can land under the new source.
+        if kind != .codexCLI { cancelSignIn() }
         preferences.choose(kind, cloud: cloud)
+        loadEndpointDraft()
         keyFailure = nil
         if kind == .http, cloud, preferences.hasKey { keyState = .stored }
     }
 
+    /// **A service choice fills the address** (both the stored endpoint and the field's draft): from here, the reader's
+    /// own edit starts from the service's base address rather than from the other row's.
+    public func chooseProfile(_ id: String) {
+        preferences.chooseProfile(id)
+        loadEndpointDraft()
+    }
+
+    /// **The address field was edited**: an address is stored as it becomes valid; text that is not one yet stays in the
+    /// field, marked, and the source keeps the last good address. An empty field is the reader asking for none.
+    public func endpointTyped() {
+        let text = draftEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else {
+            preferences.setEndpoint("")
+            endpointInvalid = false
+            return
+        }
+        guard MeaningPreferences.address(text) != nil else {
+            endpointInvalid = true
+            return
+        }
+        preferences.setEndpoint(text)
+        // The space or newline around a pasted address is not part of it: once it is a valid address, the field shows the
+        // address itself (the same text the stored value has), not the paste's padding.
+        if draftEndpoint != text { draftEndpoint = text }
+        endpointInvalid = false
+    }
+
+    private func loadEndpointDraft() {
+        draftEndpoint = preferences.settings.endpoint?.absoluteString ?? ""
+        endpointInvalid = false
+    }
+
+    /// **Check Again**'s owner, and the app's return to the front: one check at a time, ended with the pane.
+    public func startStatusCheck() {
+        statusTask?.cancel()
+        statusTask = Task { [weak self] in await self?.refreshStatus() }
+    }
+
     public func refreshStatus() async {
-        // **A superseded check cannot overwrite the current source's status** (audit finding, 2026-10-20).
+        // **A superseded check cannot overwrite the current source's status** (audit finding, 2026-10-20), and neither
+        // can a check cancelled by the pane or made for a configuration the reader has since changed (audit finding,
+        // 2026-10-25: the task is driven by `StatusKey`, so a change starts a new one and cancels this one).
+        if case .failed = keyState, let verdict = keyVerdict, !Self.sameSource(verdict, preferences.settings) {
+            restoreKeyState()
+        }
         statusGeneration += 1
         let mine = statusGeneration
+        let settings = preferences.settings
         status = .checking
-        let found = await MeaningProviders.status(preferences.settings)
-        guard mine == statusGeneration else { return }
+        let found = await checkStatus(settings)
+        // **Only a change in what the check reads makes it stale**: the prompt's text or the disclosure switch moving
+        // while a check runs must not leave the pane saying "Checking…" forever.
+        guard mine == statusGeneration, !Task.isCancelled,
+              Self.sameSource(settings, preferences.settings) else { return }
         status = found
+    }
+
+    /// **What a live check and a key probe depend on**, as one question: the source, its address, service and model, and
+    /// the key it actually uses. Any other setting moving (a prompt edit, the switch) leaves their answers true.
+    private static func sameSource(_ captured: MeaningSettings, _ now: MeaningSettings) -> Bool {
+        now.source == captured.source && now.endpoint == captured.endpoint && now.model == captured.model
+            && now.profile == captured.profile && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
     }
 
     // MARK: - The model list (2026-10-25)
@@ -146,7 +221,7 @@ public final class AISettingsModel {
     public func loadModels() async {
         // **A task cancelled before it ran does nothing**: a cancelled button press must not start a request, and its
         // `modelsGeneration` bump would otherwise let that request speak for the pane after it is gone.
-        guard !Task.isCancelled else { return }
+        guard !Task.isCancelled, !endpointInvalid else { return }
         guard preferences.settings.source == .http, let endpoint = preferences.settings.endpoint else {
             // **A pane with no endpoint has no load**: the generation advances so an older request cannot land here.
             modelsGeneration += 1
@@ -202,12 +277,14 @@ public final class AISettingsModel {
         discardModelLoad()
         keyTestTask?.cancel()
         keyTestTask = nil
+        statusTask?.cancel()
+        statusTask = nil
         restoreKeyState()
     }
 
     /// A model picked from the list is the reader's choice, stored exactly as typing it would.
     public func chooseModel(_ id: String) {
-        preferences.update { $0.model = id }
+        preferences.setModel(id)
     }
 
     // MARK: - The key
@@ -226,9 +303,12 @@ public final class AISettingsModel {
         }
     }
 
-    /// **Replace**: the field comes back for a new key; a test still running no longer speaks for it.
+    /// **Replace**: the field comes back for a new key; a test still running no longer speaks for it, and the old key's
+    /// verdict belongs to the key being replaced (audit finding, 2026-10-25).
     public func replaceKey() {
         keyGeneration += 1
+        keyVerdict = nil
+        keyFailure = nil
         keyState = .absent
         draftKey = ""
     }
@@ -255,12 +335,15 @@ public final class AISettingsModel {
 
     /// **Test** asks the endpoint one short question (`HTTPProvider.probe`), which is the only way to know the key works.
     public func testKey() async {
-        guard !Task.isCancelled else { return }
+        // **The field's invalid text is not an address**: probing the stored one behind it would be a verdict on a
+        // server the reader is no longer naming (audit finding, 2026-10-25).
+        guard !Task.isCancelled, !endpointInvalid else { return }
         keyGeneration += 1
         let mine = keyGeneration
         keyState = .testing
         let settings = preferences.settings
         guard let endpoint = settings.endpoint else {
+            keyVerdict = settings
             keyState = .failed(.unreachable)
             return
         }
@@ -274,7 +357,7 @@ public final class AISettingsModel {
                 restoreKeyState()
                 return
             }
-            guard Self.stillCurrent(settings, preferences.settings) else {
+            guard Self.sameSource(settings, preferences.settings) else {
                 restoreKeyState()
                 return
             }
@@ -288,19 +371,13 @@ public final class AISettingsModel {
             }
             // The failure belongs to the address, model and effective key it was sent with — source selection included,
             // which is what turns `usesKey` on or off (verification finding, 2026-10-20).
-            guard Self.stillCurrent(settings, preferences.settings) else {
+            guard Self.sameSource(settings, preferences.settings) else {
                 restoreKeyState()
                 return
             }
+            keyVerdict = settings
             keyState = .failed(error)
         }
-    }
-
-    /// What a probe was sent with, as one question: the address, the model, and the key the source actually uses (nil for
-    /// a local endpoint, whatever the Keychain holds). A change in any of them makes the probe's verdict stale.
-    private static func stillCurrent(_ captured: MeaningSettings, _ now: MeaningSettings) -> Bool {
-        now.endpoint == captured.endpoint && now.model == captured.model && now.profile == captured.profile
-            && MeaningProviders.apiKey(now) == MeaningProviders.apiKey(captured)
     }
 
     /// The stored key outlives a stale probe; its four-state row shows what is still true.
@@ -337,6 +414,15 @@ public final class AISettingsModel {
         loginLines = []
     }
 
+    /// **One ordered consumer for a login's lines** (audit finding, 2026-10-25): the Codex CLI calls its line handler
+    /// from the thread reading the process's output, and a task per line landed two lines of one login in either order —
+    /// which shuffles the sign-in page's address and its code past each other. The main queue is FIFO and is the main
+    /// actor, so the lines keep the login's own order.
+    nonisolated static func deliver(_ line: String,
+                                    to append: @escaping @MainActor @Sendable (String) -> Void) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { append(line) } }
+    }
+
     /// The login itself; `startSignIn` owns its task and its end.
     func signIn(_ mine: Int) async {
         // A line from a sign-in already cancelled is not shown under the current one.
@@ -348,18 +434,18 @@ public final class AISettingsModel {
             if let runLogin {
                 try await runLogin(append)
             } else {
-                guard let codex = try MeaningProviders.make(preferences.settings) as? CodexCLIProvider else { return }
-                _ = try await codex.login { line in
-                    Task { @MainActor in append(line) }
-                }
+                let codex = try MeaningProviders.codex()
+                _ = try await codex.login { line in Self.deliver(line, to: append) }
             }
-            guard !Task.isCancelled, mine == signInGeneration else { return }
+            // **A finished login speaks only while Codex is still the source** (audit finding, 2026-10-25): the reader
+            // may have chosen another source during it, and neither its success nor its failure is that source's.
+            guard !Task.isCancelled, mine == signInGeneration, preferences.settings.source == .codexCLI else { return }
             loginLines = []
             await refreshStatus()
         } catch {
             // A cancelled login is the reader's choice, not the source's failure; a superseded one says nothing.
-            guard mine == signInGeneration, !Task.isCancelled, !(error is CancellationError),
-                  (error as? AIProviderError) != .cancelled else { return }
+            guard mine == signInGeneration, !Task.isCancelled, preferences.settings.source == .codexCLI,
+                  !(error is CancellationError), (error as? AIProviderError) != .cancelled else { return }
             status = .failed((error as? AIProviderError) ?? .framework("codex"))
         }
     }
@@ -375,8 +461,7 @@ public final class AISettingsModel {
     public func draftChanged() {
         let language = preferences.settings.language
         if draft == preferences.storedTemplate(language: language, mode: promptKind) { return }
-        let shipped = AITemplates.defaultTemplate(language: language, mode: promptKind)
-            ?? AITemplates.defaultTemplate(language: "en", mode: promptKind)
+        let shipped = AITemplates.effective(language: language, mode: promptKind, stored: nil)
         if draft.isEmpty || draft == shipped {
             preferences.setTemplate(nil, language: language, mode: promptKind)
             // An empty editor was restoring the default behind the reader's back while showing nothing: show it.

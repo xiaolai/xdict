@@ -113,7 +113,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "eeab7197c5b1bdda97dd27fb54dcc63414b8e599",
+  "apps/apple/Package.swift": "86edb354650be2192049540d797f81d02dcdb4fc",
   "core/Cargo.toml": "5e8d6c55b414e203b3c2b6b65f2b5ea6ba15296b",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "f95e5ad89755669a80cd22154b3201c9bda9d504",

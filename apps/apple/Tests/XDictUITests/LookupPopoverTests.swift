@@ -3,22 +3,17 @@ import Testing
 @testable import XDictUI
 
 /// **The lookup popover never takes the reader's app away** (P41; owner, 2026-10-17): a real `NSPopover`, shown from an
-/// invisible anchor at the word, must leave the frontmost app, XDict's activation and the key window as they were, both
-/// once shown and once dismissed. And it sits as the system's does: below the word, above where below has no room.
+/// invisible anchor at the word, takes no key window and leaves nothing behind, once shown and once dismissed. And it
+/// sits as the system's does: below the word, above where below has no room.
+///
+/// **What it cannot assert here is activation** (measured 2026-10-25): another suite in this process
+/// (`AISettingsEndpointTests`) activates the app on purpose while this one runs, and SwiftPM runs every test target in
+/// one process, so `NSApp.isActive` and `NSWorkspace.frontmostApplication` move for reasons that are not this popover's
+/// — the full-run-only flake, which passed five times alone the same hour. The reader's front app is upheld where it is
+/// observable: the E2E reader stage holds the front before each action and fails when another app took it.
+@Suite(.serialized)
 @MainActor
 struct LookupPopoverTests {
-    /// What XDict's side decides: whether it is the frontmost app, active, and which window is key. (Which other app is
-    /// frontmost is the shared test Mac's, which other runs move: 2026-10-18, a process launched mid-test took it.)
-    private struct Focus: Equatable {
-        let frontIsThisApp: Bool
-        let active: Bool
-        let key: ObjectIdentifier?
-    }
-
-    private func focus() -> Focus {
-        Focus(frontIsThisApp: NSWorkspace.shared.frontmostApplication?.processIdentifier == getpid(),
-              active: NSApp.isActive, key: NSApp.keyWindow.map(ObjectIdentifier.init))
-    }
 
     private func settle() async { try? await Task.sleep(for: .milliseconds(300)) }
 
@@ -30,10 +25,11 @@ struct LookupPopoverTests {
         #expect(anchor.alphaValue == 0 || !anchor.isOpaque)
     }
 
-    @Test func showingAndDismissingLeaveFocusWhereItWas() async {
+    /// **Shown and dismissed, it takes no key window and leaves nothing behind**: the anchor is not key, the popover is
+    /// not key, and after the close neither is shown — the state a steal of the reader's keyboard would leave.
+    @Test func showingAndDismissingTakeNoKeyWindowAndLeaveNothingBehind() async {
         // An accessory app, as XDict beside the reader's app: one that could activate, were it asked to.
         NSApplication.shared.setActivationPolicy(.accessory)
-        let before = focus()
         let popover = LookupPopover()
         popover.show(NSView(frame: CGRect(x: 0, y: 0, width: 390, height: 200)), size: CGSize(width: 390, height: 200),
                      word: CGRect(x: 400, y: 500, width: 40, height: 14), pointer: .zero,
@@ -46,11 +42,12 @@ struct LookupPopoverTests {
         #expect(popover.popover.behavior == .applicationDefined)
         #expect(popover.anchor.frame == CGRect(x: 400, y: 500, width: 40, height: 14), "anchored at the word")
         #expect(popover.popover.contentViewController?.view.window?.isKeyWindow != true, "the popover became key")
-        #expect(focus() == before, "showing moved the focus")
+        #expect(NSApp.keyWindow !== popover.anchor, "the anchor became key")
         popover.close()
         await settle()
         #expect(!popover.isShown && !popover.anchor.isVisible)
-        #expect(focus() == before, "dismissing moved the focus")
+        #expect(NSApp.keyWindow !== popover.anchor, "the anchor was left key")
+        #expect(popover.popover.contentViewController?.view.window?.isKeyWindow != true, "the popover was left key")
     }
 
     @Test func belowTheWordAboveWhereBelowHasNoRoom() {
