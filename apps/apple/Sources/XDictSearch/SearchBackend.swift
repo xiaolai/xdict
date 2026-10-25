@@ -27,7 +27,14 @@ public protocol SearchBackend: Sendable {
 
 extension ServiceClient: SearchBackend {
     public func queue(_ operations: [ServiceOperation], as caller: Caller, superseding: Bool) -> [PendingCall] {
-        operations.enumerated().map { index, operation in
+        // **An empty queue still supersedes when it says so** (audit round 1, 2026-10-26): the protocol promises that
+        // `superseding` answers every earlier call of the caller, and a lookup with no dictionary to ask relies on it.
+        // `submit` is what supersedes a non-empty batch.
+        if superseding, operations.isEmpty {
+            supersede(caller)
+            return []
+        }
+        return operations.enumerated().map { index, operation in
             let ticket = submit(operation, as: caller, supersedingEarlier: superseding && index == 0)
             return PendingCall { await ticket.outcome() }
         }

@@ -121,7 +121,7 @@
   }
  },
  "manifests": {
-  "apps/apple/Package.swift": "bd40dfed52aacb90a5e16934fee7873a74e73274",
+  "apps/apple/Package.swift": "22546a0b7c1e2454c05f45001faa638d96e4b0ae",
   "core/Cargo.toml": "ff1de3b101c67d0032e7876f4cb95e747076388e",
   "core/xdict-conformance/Cargo.toml": "ef6719830ec9e167989097dbac79e04400ad9fcd",
   "core/xdict-core/Cargo.toml": "a6262b6b62c5923f39fa5c7ff518cc6d3a261921",
@@ -303,6 +303,7 @@
     "XDictBase",
     "XDictClient",
     "XDictContract",
+    "XDictSearch",
     "XDictTestSupport"
    ],
    "dir": "apps/apple/Tests/XDictClientTests/",

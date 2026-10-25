@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import XDictTestSupport
 import XDictContract
+import XDictSearch
 @testable import XDictClient
 
 /// **How the client recovers**, against a fake service: a stalled connection abandoned, a service that died, handles
@@ -125,6 +126,21 @@ struct ServiceClientRecoveryTests {
         }
         #expect(answer.matches.map(\.dict) == [first], "the service's new handle leaked into the answer")
         #expect(answer.coverage.map(\.dict) == [first])
+    }
+
+    /// **A queue of no operations still supersedes when asked** (audit round 1, 2026-10-26): the protocol promises it,
+    /// and a model that gives up its scope asks with nothing to send.
+    @Test func anEmptyQueueStillSupersedesItsCaller() async {
+        let service = FakeTransport { request, _ in
+            Fixture.query(request) == "stuck" ? .silent : .reply(Fixture.versions, to: request)
+        }
+        let client = ServiceClient(connect: service.connect)
+        let caller = Caller("empty-queue")
+        let stuck = await client.submit(Fixture.lookup("stuck"), as: caller, supersedingEarlier: false)
+        // Through the protocol: the concrete type's `queue` is its private list of calls.
+        let backend: any SearchBackend = client
+        #expect(await backend.queue([], as: caller, superseding: true).isEmpty)
+        #expect(await stuck.outcome(within: .seconds(2)) == .failure(.superseded))
     }
 
     /// **Tokens** for every file a call reads, from `stat`, numbered in increasing order; a file gone is `missing`.

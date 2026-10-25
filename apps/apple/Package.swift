@@ -186,7 +186,7 @@ let package = Package(
         // The tokens against their source: the generated file made of today's tokens.toml, and both faces of a role.
         .testTarget(name: "XDictTokensTests", dependencies: ["XDictTokens"]),
         // The client against services of the tests' own: fakes of the transport, and NSXPC listeners in this process.
-        .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictTestSupport"]),
+        .testTarget(name: "XDictClientTests", dependencies: ["XDictBase", "XDictClient", "XDictContract", "XDictSearch", "XDictTestSupport"]),
         // The contract as the app sees it, with no core: envelopes, files, identity, admission, the NSXPC interfaces.
         .testTarget(name: "XDictContractTests", dependencies: ["XDictContract"]),
         .testTarget(name: "XDictSpotlightTests", dependencies: ["XDictSpotlight", "XDictTestSupport"]),
