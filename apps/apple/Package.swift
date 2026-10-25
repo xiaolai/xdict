@@ -11,9 +11,10 @@ let package = Package(
     platforms: [.macOS("27.0")],
     // The Codex sign-in contract and the AI providers (sayso, ISC): the one OpenAI-compatible client with its provider
     // profiles and model catalogue, the reader's Claude and Codex CLIs, and Apple's on-device model. Pinned exactly;
-    // sayso is early and its states are the contract.
+    // sayso is early and its states are the contract. 0.5.1 fixes the Codex home's creation order: the probe read the
+    // sign-in before the folder that holds it existed, and a fresh install showed the generic "codex" failure.
     dependencies: [
-        .package(url: "https://github.com/xiaolai/sayso", exact: "0.5.0"),
+        .package(url: "https://github.com/xiaolai/sayso", exact: "0.5.1"),
     ],
     targets: [
         // What the app and the service share, and no domain vocabulary beyond it: the bundle identities, and the values

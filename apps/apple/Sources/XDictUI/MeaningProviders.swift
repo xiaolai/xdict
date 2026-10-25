@@ -30,12 +30,11 @@ public enum MeaningProviders {
             return ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
                                                          model: nil, answerSchema: AIAnswerSchema.claude))
         case .codexCLI:
-            // sayso's client confines the home before the CLI runs, so it must exist now; the provider prepares the rest.
-            let home = folder("codex")
-            try? FileManager.default.createDirectory(at: home, withIntermediateDirectories: true,
-                                                     attributes: [.posixPermissions: 0o700])
-            return try CodexCLIProvider(configuration: .init(codexHome: home, workingDirectory: folder("work"),
-                                                             model: nil))
+            // **The provider makes and checks the app's own home** (sayso 0.5.1 creates it before the probe reads the
+            // sign-in in it); XDict only names the folders. The pre-creation this used to do was a workaround for the
+            // order 0.5.1 fixes, and it swallowed a failed creation with `try?`.
+            return try CodexCLIProvider(configuration: .init(codexHome: folder("codex"),
+                                                             workingDirectory: folder("work"), model: nil))
         }
     }
 
