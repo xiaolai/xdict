@@ -81,3 +81,17 @@ fn a_comparative_y_reaches_its_base() {
     assert!(forms("happier").iter().any(|form| form == "happy"));
     assert!(forms("earliest").iter().any(|form| form == "early"));
 }
+
+/// **-ying and doubled comparatives** (audit round 2, 2026-10-26): `dying` is `die`'s gerund and `big` doubles before
+/// `-er`/`-est`, both beyond the plain suffix rules.
+#[test]
+fn ying_and_doubled_comparatives_are_reached() {
+    for (surface, base) in [("dying", "die"), ("tying", "tie"), ("lying", "lie")] {
+        let got = forms(surface);
+        assert!(got.iter().any(|form| form == base), "{surface} does not reach {base}: {got:?}");
+    }
+    for (base, inflected) in [("big", "bigger"), ("big", "biggest"), ("hot", "hotter"), ("hot", "hottest")] {
+        let got = forms(base);
+        assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
+    }
+}

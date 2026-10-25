@@ -263,6 +263,16 @@ const IRREGULAR_FORMS: &[(&str, &[&str])] = &[
     ("leave", &["left", "leaving"]),
     ("feel", &["felt"]),
     ("put", &["putting"]),
+    // **The bases whose only irregular surface is the doubled gerund**: `forms` reaches these words anyway, and a row
+    // is what the consistency test holds the table to (audit round 2, 2026-10-26).
+    ("bet", &["betting"]),
+    ("hit", &["hitting"]),
+    ("hurt", &["hurting"]),
+    ("let", &["letting"]),
+    ("set", &["setting"]),
+    ("shut", &["shutting"]),
+    ("split", &["splitting"]),
+    ("spread", &["spreading"]),
     ("bring", &["brought"]),
     ("begin", &["began", "begun", "beginning"]),
     ("keep", &["kept"]),
@@ -431,6 +441,10 @@ fn strip_candidates(surface: &str) -> Vec<String> {
     if let Some(stem) = surface.strip_suffix("ied") {
         push(&mut out, format!("{stem}y"));
     }
+    // **-ying is -ie's gerund** (`dying` → `die`, `tying` → `tie`), which stripping -ing alone cannot recover.
+    if let Some(stem) = surface.strip_suffix("ying") {
+        push(&mut out, format!("{stem}ie"));
+    }
     if let Some(stem) = surface.strip_suffix("ing") {
         for form in stem_forms(stem) {
             push(&mut out, form);
@@ -561,6 +575,13 @@ fn inflections(base: &str) -> Vec<String> {
     } else {
         push(&mut out, format!("{base}er"));
         push(&mut out, format!("{base}est"));
+        // **A CVC base doubles**: `big` → `bigger`/`biggest`, `hot` → `hotter`/`hottest`.
+        if is_cvc(base)
+            && let Some(last) = base.chars().last()
+        {
+            push(&mut out, format!("{base}{last}er"));
+            push(&mut out, format!("{base}{last}est"));
+        }
     }
     out
 }
@@ -592,9 +613,14 @@ mod tests {
             if surface == base {
                 continue;
             }
-            if let Some((_, listed)) = IRREGULAR_FORMS.iter().find(|(known, _)| known == base) {
-                assert!(listed.contains(surface), "{base} lists no {surface}");
-            }
+            // **A base with no row is a failure, not a skip** (audit round 2): the table is the base-to-surface half of
+            // `IRREGULAR`, and a quietly absent base is how `axes` went missing.
+            let listed = IRREGULAR_FORMS.iter().find(|(known, _)| known == base).map(|(_, listed)| *listed);
+            assert!(listed.is_some(), "{base} has no IRREGULAR_FORMS row");
+            assert!(listed.is_none_or(|listed| listed.contains(surface)), "{base} lists no {surface}");
+            // **The behavior is the contract**: every irregular surface reaches its base through `forms`, whether or
+            // not a reverse row lists it.
+            assert!(super::forms(surface).iter().any(|form| form == base), "{surface} does not reach {base}");
         }
     }
 }
