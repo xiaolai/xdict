@@ -94,4 +94,11 @@ public enum AITemplates {
             nil
         }
     }
+
+    /// **The template an ask of `mode` uses**: the reader's stored edit, else this language's shipped default, else
+    /// English's. One rule for the session, the preferences and the pane's editor, so an edit saved in one place is the
+    /// text the ask composes from (audit finding, 2026-10-25: four copies of this fallback had drifted).
+    public static func effective(language: String, mode: AIMode, stored: String?) -> String? {
+        stored ?? defaultTemplate(language: language, mode: mode) ?? defaultTemplate(language: "en", mode: mode)
+    }
 }

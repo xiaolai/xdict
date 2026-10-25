@@ -121,7 +121,7 @@ public struct MeaningAnswerPane: View {
                 Text("Exact Request")
             }
             HStack(spacing: Tokens.Space.sm) {
-                Button("Send") { state.meaning.ask() }  // placement: inspector-row
+                Button("Send") { state.meaning.sendPreview() }  // placement: inspector-row
                     .accessibilityIdentifier("meaning.send")
                 Button("Cancel") { state.meaning.cancel() }  // placement: inspector-row
             }

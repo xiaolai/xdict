@@ -173,7 +173,7 @@ import XDictContract
         let (session, provider, _) = Self.session(fetched: .failure(.wire(.interrupted)))
         session.ask()
         #expect(await Self.waitUntil { session.state != .asking })
-        #expect(session.state == .unavailable(.entryUnreadable))
+        #expect(session.state == .unavailable(.entryFailure(.wire(.interrupted))))
         #expect(await provider.questions.isEmpty, "no question goes without the entry it promised")
     }
 
@@ -254,10 +254,11 @@ import XDictContract
         #expect(await provider.questions.isEmpty, "a preview never reaches the source")
         #expect(await fetcher.calls.count == 1, "the entry is read locally, once")
         #expect(session.sent?.text == sent.text)
-        // Send from the preview is an ask of exactly those bytes.
-        session.ask()
+        // Send from the preview is an ask of exactly those bytes, and reads no entry again.
+        session.sendPreview()
         #expect(await Self.waitUntil { session.state != .asking })
         #expect(await provider.questions == [sent.text])
+        #expect(await fetcher.calls.count == 1, "Send read the entry again")
     }
 
     /// **A deferred ask waits for its own entry** (verification finding, 2026-10-20): a stale presentation's draw must
@@ -464,7 +465,7 @@ import XDictContract
         #expect(await Self.waitUntil {
             if case .preview = session.state { true } else { false }
         })
-        session.ask()
+        session.sendPreview()
         #expect(await Self.waitUntil { session.state != .asking })
         let question = await provider.questions.first ?? ""
         #expect(question.contains("hold\n  to keep"), "the previewed entry's text is what left")
@@ -677,7 +678,7 @@ import XDictContract
         #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
         guard case .preview(let previewed) = session.state else { return }
         #expect(previewed.mode == .sentenceOnly && previewed.sense == nil)
-        session.ask()
+        session.sendPreview()
         #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
         #expect(await provider.questions.first == previewed.text, "Send sent other bytes than the preview showed")
     }
@@ -715,10 +716,115 @@ import XDictContract
         session.preview()
         #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
         session.settings.sendEntryText = false
-        session.ask()
+        session.sendPreview()
         #expect(await Self.waitUntil { session.state == .cancelled })
         #expect(await provider.questions.isEmpty,
                 "a preview composed with the switch on was sent after it was turned off")
+    }
+
+    // MARK: - What a new action does to the work already under way (audit findings, 2026-10-25)
+
+    /// **An ask made while a preview is shown sends its own operation**, never the preview (audit finding, 2026-10-25):
+    /// the reader's tap is about the question it names, and the preview is dropped.
+    @Test func anAskWhileAPreviewIsShownSendsItsOwnOperation() async {
+        let (session, provider, fetcher) = Self.senseSession()
+        session.preview()
+        #expect(await Self.waitUntil { if case .preview = session.state { return true } else { return false } })
+        session.askSelection()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
+        let question = await provider.questions.first ?? ""
+        #expect(question.contains(Self.entryText.text), "the ask composed its own grounded question")
+        #expect(!question.contains("The chosen sense above is"), "the previewed chosen-sense request was sent instead")
+        #expect(await fetcher.calls.count == 2, "the ask read the entry for itself")
+    }
+
+    /// **A deferred ask does not survive another action** (audit finding, 2026-10-25): a refusal while the ask waits for
+    /// its entry disarms it, so the draw it was waiting for starts nothing — nothing sends without the reader's Send.
+    @Test func aRefusalDisarmsADeferredAsk() async {
+        let (session, provider, _) = Self.session()
+        let expected = MeaningSession.Subject(dictionary: UUID(), key: "hold", occurrence: 0)
+        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
+                                    range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 21, generation: 9)),
+                     expecting: expected)
+        session.ask()                     // the entry has not drawn yet: the ask waits for it
+        #expect(session.state == .asking)
+        session.settings.sendEntryText = false
+        session.explain()                 // refused, and the deferred ask is disarmed
+        #expect(session.state == .unavailable(.entryTextOff))
+        session.drawn(expected)
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(await provider.questions.isEmpty, "the disarmed ask fired on a later draw")
+    }
+
+    /// **An early refusal cancels the ask it interrupted** (audit finding, 2026-10-25): the late answer to the old ask
+    /// cannot overwrite the reason the refusal gave.
+    @Test func aRefusalCancelsTheAskInFlight() async {
+        let provider = StubProvider(answers: [.success(Self.matched)], delay: .milliseconds(300))
+        let (session, _, _) = Self.session(provider: provider)
+        session.ask()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 }, "the ask never reached the source")
+        session.settings.sendEntryText = false
+        session.explain()
+        #expect(session.state == .unavailable(.entryTextOff))
+        try? await Task.sleep(for: .milliseconds(500))
+        #expect(session.state == .unavailable(.entryTextOff), "the cancelled ask's late answer overwrote the refusal")
+    }
+
+    /// **A refusal or a preview after an answer drops that answer's prompt** (audit finding, 2026-10-25): the prompt is
+    /// what the last ask actually sent, and the pane must not show it beside a request that never left.
+    @Test func aRefusalAfterAnAnswerDropsTheAnswersPrompt() async {
+        let (session, _, _) = Self.session()
+        session.ask()
+        #expect(await Self.waitUntil { session.state != .asking })
+        #expect(session.sent != nil)
+        session.settings.sendEntryText = false
+        session.explain()
+        #expect(session.state == .unavailable(.entryTextOff))
+        #expect(session.sent == nil, "the refused ask kept the previous attempt's prompt")
+    }
+
+    /// **Clearing the chosen sense invalidates a chosen-sense preview still being composed** (audit finding, 2026-10-25):
+    /// the preview would describe a sense the reader has cleared, so it must never appear.
+    @Test func clearingTheSenseInvalidatesAComposingPreview() async {
+        let fetcher = GatedFetcher(.success(Self.senseEntryText))
+        let provider = StubProvider(answers: [.success(Self.explained)])
+        let session = MeaningSession(
+            fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
+            presented: { (Self.dict, Self.entry) },
+            makeProvider: { _ in provider })
+        session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
+        session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
+                                    range: NSRange(location: 5, length: 4),
+                                    origin: MeaningOrigin(request: 5, generation: 1)))
+        session.drawn(Self.subject, target: (Self.dict, Self.entry))
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 2, dictionaryName: "Test"))
+        session.preview()
+        #expect(await Self.waitUntil { await fetcher.calls == 1 }, "the preview never read the entry")
+        session.clearSelection()
+        await fetcher.open()
+        try? await Task.sleep(for: .milliseconds(100))
+        #expect(session.state == .idle, "the cleared sense's preview appeared")
+    }
+
+    /// **The selection ask follows the answer shown, not a later selection** (audit finding, 2026-10-25): the button
+    /// follows up a `doesNotFit` verdict about the frame's own entry, wherever the reader's next click lands.
+    @Test func aSelectionAskKeepsTheFrameOfTheAnswerShown() async {
+        let otherDict = DictId(rawValue: "feedface00000002")
+        let otherEntry = EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:" + String(repeating: "cd", count: 32)),
+                                  key: "hold", occurrence: 0)
+        let provider = StubProvider(answers: [.success(Self.doesNotFit), .success(Self.matched)])
+        let (session, _, fetcher) = Self.senseSession(provider: provider, dictionary: otherDict, entry: otherEntry)
+        session.explain()
+        #expect(await Self.waitUntil { await provider.questions.count == 1 && session.state != .asking })
+        // The reader chooses a sense in another entry after the answer; the follow-up still asks about the answer's frame.
+        session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 1, dictionaryName: "Test"))
+        session.askSelection()
+        #expect(await Self.waitUntil { await provider.questions.count == 2 && session.state != .asking })
+        let calls = await fetcher.calls
+        #expect(calls.count == 2)
+        #expect(calls.allSatisfy { $0.0 == otherDict && $0.1 == otherEntry },
+                "the follow-up moved to the reader's later selection: \(calls)")
     }
 }
 

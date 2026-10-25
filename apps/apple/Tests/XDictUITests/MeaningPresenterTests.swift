@@ -1,6 +1,8 @@
 import Foundation
 import Testing
 import XDictAI
+import XDictClient
+import XDictContract
 import XDictTestSupport
 import XDictUI
 
@@ -92,9 +94,24 @@ struct MeaningPresenterTests {
         #expect(presentation.source == nil)
     }
 
+    /// **The entry's own failure decides the next step** (audit finding, 2026-10-25): a transport interruption or a
+    /// superseded call is worth another ask; a file the service cannot open, or one that now needs an import, is not a
+    /// button that would loop.
+    @Test func anEntryFailureOffersARetryOnlyWhereItCanHelp() {
+        func recovery(_ unavailable: MeaningSession.Unavailable) -> MeaningRecovery? {
+            MeaningPresenter.present(.unavailable(unavailable), settings: Self.settings, sent: nil)?.recovery
+        }
+        #expect(recovery(.entryFailure(.wire(.interrupted))) == .retry)
+        #expect(recovery(.entryFailure(.superseded)) == .retry)
+        #expect(recovery(.entryFailure(.fileUnavailable(file: UUID(), errno: 2))) == nil)
+        #expect(recovery(.entryFailure(.reopenNeedsImport(dict: DictId(rawValue: "1a2b3c4d00000001"),
+                                                          reason: .changed))) == nil)
+        #expect(recovery(.entryFailure(.needsFiles)) == nil)
+    }
+
     @Test func everyUnavailableStateHasASentence() {
         for state in [MeaningSession.State.unavailable(.noContext), .unavailable(.noEntry),
-                      .unavailable(.entryUnreadable), .unavailable(.provider(.notSignedIn))] {
+                      .unavailable(.entryFailure(.wire(.interrupted))), .unavailable(.provider(.notSignedIn))] {
             let presentation = MeaningPresenter.present(state, settings: Self.settings, sent: nil) ?? Self.missing()
             #expect(presentation.isProblem)
             #expect(Self.text(presentation.problem ?? "") != "the catalog did not compile")

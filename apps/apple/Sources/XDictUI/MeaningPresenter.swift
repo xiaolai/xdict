@@ -1,5 +1,6 @@
 import Foundation
 import XDictAI
+import XDictClient
 
 /// **The next step a failure offers in the pane** (HIG audit 2026-10-23, UI15): a configuration the reader fixes in
 /// Settings ▸ AI, or a transient failure worth another try. Opening Settings changes nothing there: turning the entry's
@@ -139,7 +140,13 @@ public enum MeaningPresenter {
     static func recovery(_ unavailable: MeaningSession.Unavailable) -> MeaningRecovery? {
         switch unavailable {
         case .noSource, .entryTextOff, .consentChanged: .openAISettings
-        case .noContext, .noEntry, .entryUnreadable, .noSense: nil
+        case .noContext, .noEntry, .noSense: nil
+        case .entryFailure(let failure):
+            // **A transport or a superseded call is worth another ask**; a file or an import problem is not.
+            switch failure {
+            case .wire, .superseded: .retry
+            case .fileUnavailable, .reopenNeedsImport, .needsFiles: nil
+            }
         case .provider(let error): recovery(error)
         }
     }

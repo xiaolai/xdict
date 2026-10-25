@@ -47,8 +47,7 @@ public struct MeaningSettings: Sendable, Equatable {
 
     /// The template an ask of `mode` uses: the reader's edit, else the shipped default of this language, else English's.
     public func template(for mode: AIMode) -> String? {
-        templates[mode] ?? AITemplates.defaultTemplate(language: language, mode: mode)
-            ?? AITemplates.defaultTemplate(language: "en", mode: mode)
+        AITemplates.effective(language: language, mode: mode, stored: templates[mode])
     }
 
     /// No source chosen: an ask is refused with `noSource`, and nothing is sent anywhere.
@@ -203,7 +202,9 @@ public final class MeaningSession {
         case noSource
         case noContext
         case noEntry
-        case entryUnreadable
+        /// **The entry could not be read, with the service's own typed failure** (audit finding, 2026-10-25): a transport
+        /// interruption is worth a retry, an entry that has gone is not — the blanket `entryUnreadable` said neither.
+        case entryFailure(ClientFailure)
         /// **The disclosure switch (or so the mode) changed while the ask was being prepared** (plan-explain-sense
         /// WI-2, ADR-0029 d.5): nothing was sent. The switch is re-read after the entry fetch and after the queue's
         /// permit, immediately before the provider call — not only at the tap.
@@ -297,6 +298,9 @@ public final class MeaningSession {
     @ObservationIgnored private let presented: @MainActor () -> (DictId, EntryRef)?
     @ObservationIgnored private let makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider
     @ObservationIgnored private var running: Task<Void, Never>?
+    /// **The operation `running` is executing**: a cleared chosen sense must be able to invalidate a preview or ask still
+    /// being composed (audit finding, 2026-10-25).
+    @ObservationIgnored private var runningOperation: Operation?
     /// Bumped by every ask, cancel and clear: a task finishing after one of them changes nothing.
     @ObservationIgnored private var generation = 0
 
@@ -383,7 +387,14 @@ public final class MeaningSession {
     /// stays, labelled by its own request.
     public func clearSelection() {
         guard selection != nil else { return }
-        if case .preview(let previewed) = state, previewed.mode == .explainSense { cancel() }
+        // **A preview or ask about the sense being cleared does not outlive the clear** (audit finding, 2026-10-25): a
+        // shown explain-sense preview is dismissed, and one still being composed is invalidated before it can appear.
+        if case .preview(let previewed) = state, previewed.mode == .explainSense {
+            cancel()
+        } else if runningOperation?.mode == .explainSense {
+            abandon()
+            state = .idle
+        }
         selection = nil
     }
 
@@ -501,6 +512,10 @@ public final class MeaningSession {
     /// with the switch off, the row says so and nothing is sent.
     public func explain() {
         let chosen = settingsProvider?() ?? settings
+        // **An early refusal ends the earlier work too**: otherwise its late answer would overwrite the reason given here,
+        // and the previous attempt's prompt would stay attached to a request that never left (audit finding, 2026-10-25).
+        abandon()
+        dropEvidence()
         guard chosen.sendEntryText else {
             state = .unavailable(.entryTextOff)
             return
@@ -527,13 +542,17 @@ public final class MeaningSession {
     /// It is the ordinary grounded ask — the model selects — and needs the switch for the same reason.
     public func askSelection() {
         let chosen = settingsProvider?() ?? settings
+        // **The frame the reader was reading is the displayed answer's own target**, not the sense that has since been
+        // selected or cleared (audit finding, 2026-10-25): the button follows up a `doesNotFit` verdict, and a selection
+        // made after it must not move the follow-up to another entry. A caller with no answer shown falls back to the
+        // selection. Read before the abandonment clears the evidence it comes from.
+        let target = sent?.target ?? selection.map { MeaningTarget(dictionary: $0.dictionary, entry: $0.entry) }
+        abandon()
+        dropEvidence()
         guard chosen.sendEntryText else {
             state = .unavailable(.entryTextOff)
             return
         }
-        // **The frame the reader was reading** (plan-explain-sense WI-5): on the All page the chosen sense may be in a
-        // dictionary other than the shown one, and the selection ask must ground in that frame's entry.
-        let target = selection.map { MeaningTarget(dictionary: $0.dictionary, entry: $0.entry) }
         ask(operation: Operation(mode: .grounded, selection: nil, target: target))
     }
 
@@ -558,47 +577,10 @@ public final class MeaningSession {
     /// its bytes from the preview, never a recomposition.
     private func ask(operation: Operation) {
         // **Any early return still ends the previous work** (audit finding, 2026-10-20): an ask refused for lack of a
-        // source must not leave the last task running to overwrite this state.
+        // source must not leave the last task running to overwrite this state, and must not keep the previous attempt's
+        // prompt attached (audit finding, 2026-10-25).
         abandon()
-        if case .preview(let previewed) = state {
-            let current = settingsProvider?() ?? settings
-            // **The same operation, not only the same settings**: a new selection makes another request, while a
-            // sentence-only preview ignores the selection and is still the one shown.
-            guard current == previewSettings, self.operation(for: current, selection: selection) == previewOperation else {
-                // The prompt, the switch or the chosen sense changed after the preview: sending would differ from what
-                // was shown.
-                sent = nil
-                previewSettings = nil
-                previewEntry = nil
-                previewOperation = nil
-                state = .cancelled
-                return
-            }
-            // **Send transmits the previewed bytes themselves**: no refetch, no recomposition, so a dictionary that
-            // changed between Preview and Send cannot change what leaves (audit follow-up, 2026-10-20).
-            let operation = previewOperation
-                ?? Operation(mode: previewed.mode, selection: nil, target: nil)
-            let entry = previewEntry
-            previewSettings = nil
-            previewEntry = nil
-            previewOperation = nil
-            generation += 1
-            let mine = generation
-            sent = previewed
-            state = .asking
-            lastOperation = operation
-            let makeProvider = self.makeProvider
-            let recheck = Self.consentReader(self)
-            running = Task { [weak self] in
-                let outcome = await Self.performSent(sent: previewed, entry: entry, settings: current,
-                                                     makeProvider: makeProvider, recheck: recheck)
-                guard let self, self.generation == mine else { return }
-                self.running = nil
-                self.state = outcome.state
-                self.sent = outcome.sent
-            }
-            return
-        }
+        dropEvidence()
         guard let handoff = held else {
             state = .unavailable(.noContext)
             return
@@ -613,55 +595,28 @@ public final class MeaningSession {
             state = .unavailable(.entryTextOff)
             return
         }
-        // The entry is read on the main actor, now: the entry drawn at the tap, never one sampled after an await.
-        var target: (DictId, EntryRef)?
-        switch operation.mode {
-        case .sentenceOnly:
-            break
-        case .explainSense:
-            guard let selection = operation.selection else {
-                state = .unavailable(.noSense)
-                return
-            }
-            // **The frame's own entry** (plan-explain-sense WI-5): on the All page this is the dictionary whose frame
-            // the reader clicked in, not the one shown; the window matched it to that frame's results before selecting.
-            target = (selection.dictionary, selection.entry)
-        case .grounded:
-            if let explicit = operation.target {
-                target = (explicit.dictionary, explicit.entry)
-            } else if let bound = boundTarget {
-                // **The entry must still be the one the sentence was bound to** (verification finding, 2026-10-20): between
-                // a draw and the ask, the window can present another entry, and sending that one would answer about the
-                // wrong sense. Refused, never sent.
-                guard let drawn = presented(), drawn == bound else {
-                    state = .unavailable(.noContext)
-                    return
-                }
-                target = drawn
-            } else if subject == nil {
-                // **The sentence has not drawn its entry yet** (verification finding, 2026-10-20): the window may still show
-                // the entry from before the hand-off — and a capture whose popover had not resolved yet names no entry at
-                // all — so the tap waits for the first draw and asks then. `drawn` binds the adopted presentation; the
-                // placeholder settles a tap that never gets one through `noEntry`.
-                askWhenDrawn = true
-                askWhenDrawnOperation = operation
-                state = .asking
-                return
-            } else {
-                guard let drawn = presented() else {
-                    state = .unavailable(.noEntry)
-                    return
-                }
-                target = drawn
-            }
+        let target: (DictId, EntryRef)?
+        switch resolveTarget(operation) {
+        case .resolved(let resolved):
+            target = resolved
+        case .waitsForDraw:
+            // **The sentence has not drawn its entry yet** (verification finding, 2026-10-20): the window may still show
+            // the entry from before the hand-off — and a capture whose popover had not resolved yet names no entry at
+            // all — so the tap waits for the first draw and asks then. `drawn` binds the adopted presentation; the
+            // placeholder settles a tap that never gets one through `noEntry`.
+            askWhenDrawn = true
+            askWhenDrawnOperation = operation
+            state = .asking
+            return
+        case .refused(let reason):
+            state = .unavailable(reason)
+            return
         }
         generation += 1
         let mine = generation
-        sent = nil
-        previewSettings = nil
-        previewOperation = nil
         state = .asking
         lastOperation = operation
+        runningOperation = operation
         let fetchEntryText = self.fetchEntryText
         let makeProvider = self.makeProvider
         let recheck = Self.consentReader(self)
@@ -673,8 +628,78 @@ public final class MeaningSession {
                                              recheck: recheck)
             guard let self, self.generation == mine else { return }
             self.running = nil
+            self.runningOperation = nil
             self.state = outcome.state
             self.sent = outcome.sent
+        }
+    }
+
+    /// **Send, from a preview**: the Send button's own action. It transmits the previewed bytes themselves — no refetch,
+    /// no recomposition, so a dictionary that changed between Preview and Send cannot change what leaves (audit
+    /// follow-up, 2026-10-20). **Any other ask abandons the preview** rather than sending it (audit finding, 2026-10-25).
+    public func sendPreview() {
+        guard case .preview(let previewed) = state, let operation = previewOperation else { return }
+        abandon()
+        let current = settingsProvider?() ?? settings
+        // **The same operation, not only the same settings**: a new selection makes another request, while a
+        // sentence-only preview ignores the selection and is still the one shown.
+        guard current == previewSettings, self.operation(for: current, selection: selection) == operation else {
+            // The prompt, the switch or the chosen sense changed after the preview: sending would differ from what was
+            // shown.
+            dropEvidence()
+            state = .cancelled
+            return
+        }
+        let entry = previewEntry
+        dropEvidence()
+        generation += 1
+        let mine = generation
+        sent = previewed
+        state = .asking
+        lastOperation = operation
+        runningOperation = operation
+        let makeProvider = self.makeProvider
+        let recheck = Self.consentReader(self)
+        running = Task { [weak self] in
+            let outcome = await Self.performSent(sent: previewed, entry: entry, settings: current,
+                                                 makeProvider: makeProvider, recheck: recheck)
+            guard let self, self.generation == mine else { return }
+            self.running = nil
+            self.runningOperation = nil
+            self.state = outcome.state
+            self.sent = outcome.sent
+        }
+    }
+
+    /// **The entry an operation grounds in**, as both an ask and a preview must compute it — one rule for the target,
+    /// with the undrawn-entry policy left to the caller (an ask waits; a preview refuses) (audit finding, 2026-10-25).
+    private enum TargetResolution {
+        case resolved((DictId, EntryRef)?)
+        case waitsForDraw
+        case refused(Unavailable)
+    }
+
+    private func resolveTarget(_ operation: Operation) -> TargetResolution {
+        switch operation.mode {
+        case .sentenceOnly:
+            return .resolved(nil)
+        case .explainSense:
+            guard let selection = operation.selection else { return .refused(.noSense) }
+            // **The frame's own entry** (plan-explain-sense WI-5): on the All page this is the dictionary whose frame
+            // the reader clicked in, not the one shown; the window matched it to that frame's results before selecting.
+            return .resolved((selection.dictionary, selection.entry))
+        case .grounded:
+            if let explicit = operation.target { return .resolved((explicit.dictionary, explicit.entry)) }
+            if let bound = boundTarget {
+                // **The entry must still be the one the sentence was bound to** (verification finding, 2026-10-20): between
+                // a draw and the ask, the window can present another entry, and sending that one would answer about the
+                // wrong sense. Refused, never sent.
+                guard let drawn = presented(), drawn == bound else { return .refused(.noContext) }
+                return .resolved(drawn)
+            }
+            if subject == nil { return .waitsForDraw }
+            guard let drawn = presented() else { return .refused(.noEntry) }
+            return .resolved(drawn)
         }
     }
 
@@ -683,6 +708,8 @@ public final class MeaningSession {
     /// provider is built or called. The pane offers Send from here.
     public func preview() {
         abandon()
+        // **A preview discards the previous attempt's evidence**: a refusal here must not leave the last prompt attached.
+        dropEvidence()
         guard let handoff = held else {
             state = .unavailable(.noContext)
             return
@@ -693,44 +720,22 @@ public final class MeaningSession {
             return
         }
         let operation = operation(for: chosen, selection: selection)
-        var target: (DictId, EntryRef)?
-        switch operation.mode {
-        case .sentenceOnly:
-            break
-        case .explainSense:
-            guard let selection = operation.selection else {
-                state = .unavailable(.noSense)
-                return
-            }
-            target = (selection.dictionary, selection.entry)
-        case .grounded:
-            if let explicit = operation.target {
-                target = (explicit.dictionary, explicit.entry)
-            } else if let bound = boundTarget {
-                // The previewed request must be the ask's: the same binding check as `ask()`.
-                guard let drawn = presented(), drawn == bound else {
-                    state = .unavailable(.noContext)
-                    return
-                }
-                target = drawn
-            } else if subject == nil {
-                // A preview before the sentence's own entry draws would show another entry: nothing to preview yet.
-                state = .unavailable(.noEntry)
-                return
-            } else {
-                guard let drawn = presented() else {
-                    state = .unavailable(.noEntry)
-                    return
-                }
-                target = drawn
-            }
+        let target: (DictId, EntryRef)?
+        switch resolveTarget(operation) {
+        case .resolved(let resolved):
+            target = resolved
+        case .waitsForDraw:
+            // A preview before the sentence's own entry draws would show another entry: nothing to preview yet.
+            state = .unavailable(.noEntry)
+            return
+        case .refused(let reason):
+            state = .unavailable(reason)
+            return
         }
         generation += 1
         let mine = generation
-        sent = nil
-        previewSettings = nil
-        previewOperation = nil
         state = .idle
+        runningOperation = operation
         let fetchEntryText = self.fetchEntryText
         let name = dictionaryName(for: operation, target: target)
         running = Task { [weak self] in
@@ -739,6 +744,7 @@ public final class MeaningSession {
                                               fetchEntryText: fetchEntryText)
             guard let self, self.generation == mine else { return }
             self.running = nil
+            self.runningOperation = nil
             self.sent = composed.sent
             if let failure = composed.failure {
                 self.state = failure
@@ -772,12 +778,29 @@ public final class MeaningSession {
         settings.sendEntryText == (mode != .sentenceOnly)
     }
 
-    /// Cancels the ask in flight and makes it unable to report. The state keeps whatever it showed, unless the caller
-    /// sets it.
+    /// **Cancels everything an earlier action started and makes it unable to report**: the task, a deferred ask still
+    /// waiting for its entry, and the operation the task was running. The state keeps whatever it showed, unless the
+    /// caller sets it. Every new reader action begins here, so a preview, a `noEntry` or a failure cannot leave a
+    /// deferred ask armed to fire on a later draw (audit finding, 2026-10-25).
     private func abandon() {
         generation += 1
         running?.cancel()
         running = nil
+        runningOperation = nil
+        askWhenDrawn = false
+        askWhenDrawnOperation = nil
+        // **The expected subject outlives a cancellation**: it protects the sentence's binding, not the ask (audit
+        // finding of 2026-10-20); only the draw that binds it or a new hold clears it.
+    }
+
+    /// **The previous attempt's prompt and preview do not belong to the action starting now** (audit finding,
+    /// 2026-10-25): a refused ask or a new preview must not leave the last question's text attached, where the pane would
+    /// show it as this request's. A finished *answer* keeps its own `sent` (`select()` never calls this).
+    private func dropEvidence() {
+        sent = nil
+        previewSettings = nil
+        previewEntry = nil
+        previewOperation = nil
     }
 
     /// What composition produced: a failure state, the request as it would be sent, or both (a failure after composing
@@ -807,8 +830,14 @@ public final class MeaningSession {
             guard let target else { return Composed(failure: .unavailable(.noEntry), sent: nil, entry: nil, sense: nil) }
             let fetched = await fetchEntryText(target.0, target.1, MeaningBudget.entryTextBytes)
             guard !Task.isCancelled else { return Composed(failure: .cancelled, sent: nil, entry: nil, sense: nil) }
-            guard case .success(let projected) = fetched else {
-                return Composed(failure: .unavailable(.entryUnreadable), sent: nil, entry: nil, sense: nil)
+            let projected: EntryText
+            switch fetched {
+            case .success(let text):
+                projected = text
+            case .failure(let failure):
+                // **The service's own typed failure travels** (audit finding, 2026-10-25): a transport interruption is a
+                // different reason, and a different next step, from an entry that no longer exists.
+                return Composed(failure: .unavailable(.entryFailure(failure)), sent: nil, entry: nil, sense: nil)
             }
             entry = AIEntryText(text: projected.text, complete: projected.complete, cutAt: projected.cutAt,
                                 ref: AIEntryRef(edition: projected.entry.edition.rawValue, key: projected.entry.key,
@@ -883,40 +912,52 @@ public final class MeaningSession {
         guard await MeaningQueue.shared.acquire(source, id: ticket) else {
             return Performed(state: .cancelled, sent: sent)
         }
-        // The queue may hand over a permit just as the task is cancelled; the provider must not be called then.
-        guard !Task.isCancelled else {
-            await MeaningQueue.shared.release(source)
-            return Performed(state: .cancelled, sent: sent)
-        }
-        // **The send boundary**: the switch may have been turned off while the ask waited for the source, and the
-        // cancellation may have arrived while the switch was being read on the main actor.
-        guard Self.consentHolds(await recheck(), mode: sent.mode) else {
-            await MeaningQueue.shared.release(source)
-            return Performed(state: .unavailable(.consentChanged), sent: sent)
-        }
-        guard !Task.isCancelled else {
-            await MeaningQueue.shared.release(source)
-            return Performed(state: .cancelled, sent: sent)
-        }
-        let raw: String
-        do {
-            raw = try await provider.answer(to: sent.text)
-        } catch {
-            await MeaningQueue.shared.release(source)
+        // **The permit is released exactly once, on every path below**, through one place (audit finding, 2026-10-25):
+        // the six manual releases it replaces were balanced today and a new exit could have unbalanced them.
+        return await withPermit(source) {
+            // The queue may hand over a permit just as the task is cancelled; the provider must not be called then.
             guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
-            // A cancelled provider call is the session's own cancellation, not a source failure.
-            if error == .cancelled { return Performed(state: .cancelled, sent: sent) }
-            return Performed(state: .unavailable(.provider(error)), sent: sent)
+            // **The send boundary**: the switch may have been turned off while the ask waited for the source, and the
+            // cancellation may have arrived while the switch was being read on the main actor.
+            guard Self.consentHolds(await recheck(), mode: sent.mode) else {
+                return Performed(state: .unavailable(.consentChanged), sent: sent)
+            }
+            guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
+            let raw: String
+            do {
+                raw = try await provider.answer(to: sent.text)
+            } catch {
+                guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
+                // **The provider's failure, typed where the compiler sees `any Error`**: inside this closure the
+                // typed-throws call no longer narrows `error` (measured 2026-10-25), so the session names the type
+                // itself. A cancelled call is the session's own cancellation, not a source failure; anything else
+                // that is not an `AIProviderError` is reported as an unrecognised framework failure rather than lost.
+                let failure = error as? AIProviderError ?? .framework(String(describing: type(of: error)))
+                if failure == .cancelled { return Performed(state: .cancelled, sent: sent) }
+                return Performed(state: .unavailable(.provider(failure)), sent: sent)
+            }
+            guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
+            do {
+                let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: sent.mode, entry: entry,
+                                                           sense: sense)
+                return Performed(state: .answer(answer, mode: sent.mode), sent: sent)
+            } catch let invalid as AIAnswerError {
+                return Performed(state: .invalid(invalid), sent: sent)
+            } catch {
+                // The validator throws only `AIAnswerError`; a different error is a harness fault, reported as a shape
+                // failure rather than cast away (`error` is `any Error` inside this closure, measured 2026-10-25).
+                return Performed(state: .invalid(.shape), sent: sent)
+            }
         }
+    }
+
+    /// Runs one send under a source permit and releases it once, on every path.
+    private nonisolated static func withPermit(
+        _ source: AIProviderKind, _ body: () async -> Performed
+    ) async -> Performed {
+        let result = await body()
         await MeaningQueue.shared.release(source)
-        guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
-        do {
-            let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: sent.mode, entry: entry,
-                                                       sense: sense)
-            return Performed(state: .answer(answer, mode: sent.mode), sent: sent)
-        } catch {
-            return Performed(state: .invalid(error), sent: sent)
-        }
+        return result
     }
 
     /// **The second half of an ask, for a preview's Send**: the composed text goes to the source as it was shown and is
