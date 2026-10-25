@@ -1,0 +1,17 @@
+[package]
+name = "xdict-phrase"
+description = "The phrase a reader is standing inside: templates from the dictionary's own keys, and the matcher"
+version.workspace = true
+publish = false
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+xxhash-rust.workspace = true
+
+[dev-dependencies]
+xdict-mdx = { path = "../xdict-mdx" }
+
+[lints]
+workspace = true

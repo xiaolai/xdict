@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["xdict-mdx", "xdict-mdx-writer", "xdict-core", "xdict-conformance", "xdict-ffi", "xdict-wasm", "xdict-mmap", "xdict-identity", "xdict-lookup", "xdict-entry", "xdict-health", "xdict-schedule", "xdict-ledger", "xdict-win-fileid"]
+members = ["xdict-mdx", "xdict-mdx-writer", "xdict-core", "xdict-conformance", "xdict-ffi", "xdict-wasm", "xdict-mmap", "xdict-identity", "xdict-lookup", "xdict-entry", "xdict-health", "xdict-schedule", "xdict-ledger", "xdict-win-fileid", "xdict-phrase"]
 
 [workspace.package]
 version = "0.4.0"
