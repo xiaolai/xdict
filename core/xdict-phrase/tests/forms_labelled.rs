@@ -106,10 +106,16 @@ fn kept_letters_and_the_ks_of_c() {
         ("shoe", "shoeing"),
         ("see", "seeing"),
         ("agree", "agreeing"),
+        ("eye", "eyeing"),
+        ("eye", "eying"),
         ("gray", "grayer"),
         ("gray", "grayest"),
         ("panic", "panicked"),
         ("panic", "panicking"),
+        // **`-c` keeps its ordinary forms beside the `k`**: arced and arcing are the standard spellings.
+        ("arc", "arced"),
+        ("arc", "arcing"),
+        ("arc", "arcked"),
     ] {
         let got = forms(base);
         assert!(got.iter().any(|form| form == inflected), "{base} does not reach {inflected}: {got:?}");
@@ -117,12 +123,18 @@ fn kept_letters_and_the_ks_of_c() {
     for (surface, base) in [
         ("dyeing", "dye"),
         ("shoeing", "shoe"),
+        ("eying", "eye"),
         ("grayer", "gray"),
         ("grayest", "gray"),
         ("panicked", "panic"),
         ("panicking", "panic"),
+        ("arced", "arc"),
+        ("arcked", "arc"),
     ] {
         let got = forms(surface);
         assert!(got.iter().any(|form| form == base), "{surface} does not reach {base}: {got:?}");
     }
+    // **The boundary the vowel rule draws** (audit round 3's verification, 2026-10-26): `eye` keeps both spellings, and
+    // `dye` keeps only its own — `dying` is `die`'s gerund, never `dye`'s.
+    assert!(!forms("dye").iter().any(|form| form == "dying"), "dye acquired die's gerund: {:?}", forms("dye"));
 }

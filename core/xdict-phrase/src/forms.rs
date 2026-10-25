@@ -544,16 +544,16 @@ fn inflections(base: &str) -> Vec<String> {
             push(&mut out, format!("{stem}ied"));
         }
     } else {
-        // **A base ending in `-c` spells its past with `-cked`**: `panic` → `panicked`, never `panicced`.
+        push(&mut out, format!("{base}ed"));
+        // **A base ending in `-c` also spells its past with `-cked`**: `panic` → `panicked`, `arc` → `arcked` beside
+        // `arced` (audit round 3's verification, 2026-10-26). Never doubled by the CVC rule, which would write
+        // `panicced`.
         if ends("c") {
             push(&mut out, format!("{base}ked"));
-        } else {
-            push(&mut out, format!("{base}ed"));
-            if is_cvc(base)
-                && let Some(last) = base.chars().last()
-            {
-                push(&mut out, format!("{base}{last}ed"));
-            }
+        } else if is_cvc(base)
+            && let Some(last) = base.chars().last()
+        {
+            push(&mut out, format!("{base}{last}ed"));
         }
     }
 
@@ -564,20 +564,25 @@ fn inflections(base: &str) -> Vec<String> {
         // **A base ending in `-ee`, `-ye` or `-oe` keeps its e**: seeing, dyeing, shoeing (audit round 3, 2026-10-26).
         if ends("ee") || ends("ye") || ends("oe") {
             push(&mut out, format!("{base}ing"));
+            // **`eye` keeps both spellings** (audit round 3's verification): after a vowel the dropped e is a form of
+            // its own — `eying` beside `eyeing` — while `dye` has none: `dying` is `die`'s.
+            if let Some(stem) = base.strip_suffix("ye")
+                && stem.chars().last().is_some_and(|c| "aeiou".contains(c))
+            {
+                push(&mut out, format!("{}ing", base.trim_end_matches('e')));
+            }
         } else {
             push(&mut out, format!("{}ing", base.trim_end_matches('e')));
         }
     } else {
-        // **`-c` takes a `k` before `-ing`**: `panic` → `panicking`.
+        push(&mut out, format!("{base}ing"));
+        // **`-c` also takes a `k` before `-ing`**: `panic` → `panicking`, `arc` → `arcking` beside `arcing`.
         if ends("c") {
             push(&mut out, format!("{base}king"));
-        } else {
-            push(&mut out, format!("{base}ing"));
-            if is_cvc(base)
-                && let Some(last) = base.chars().last()
-            {
-                push(&mut out, format!("{base}{last}ing"));
-            }
+        } else if is_cvc(base)
+            && let Some(last) = base.chars().last()
+        {
+            push(&mut out, format!("{base}{last}ing"));
         }
     }
 
