@@ -346,13 +346,12 @@ public struct MeaningAnswerPane: View {
         }
     }
 
-    /// A failure's own recovery replaces Ask Again (UI15): two buttons for one retry read as two actions. **Save as Note**
-    /// sits beside them when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
+    /// **An answer's actions are about the answer, never a re-sample of its question** (after tsundoku's panel; owner,
+    /// 2026-10-26): tsundoku retries only a failure and asks every next question by name. XDict's next questions already
+    /// have names — another sense's row, another dictionary's grounding, the ask button — and "Ask Again" sent an
+    /// identical prompt to the same model for a different sample, which is a lottery, not a tool.
+    /// **Save as Note** sits here when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
     @ViewBuilder private func answerActions(_ presentation: MeaningPresentation) -> some View {
-        if state.meaning.canAsk, presentation.recovery == nil {
-            Button("Ask Again") { state.askAgain() }  // placement: inspector-row
-                .accessibilityIdentifier("meaning.again")
-        }
         if let target = state.meaning.sent?.target, state.noteSaver != nil, !presentation.explanation.isEmpty {
             saveNoteControl(presentation, target: target)
         }

@@ -2623,22 +2623,6 @@
         }
       }
     },
-    "Ask Again": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Ask Again"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "再问一次"
-          }
-        }
-      }
-    },
     "Ask Which Sense It Is": {
       "localizations": {
         "en": {

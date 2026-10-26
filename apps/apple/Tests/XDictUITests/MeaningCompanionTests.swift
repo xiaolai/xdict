@@ -240,6 +240,15 @@ struct CompanionSourceTests {
         #expect(write.contains("state.saveNote(for: payload.target, text: payload.text, replacing: true)"))
     }
 
+    /// **No re-sample of the same question** (after tsundoku's panel; owner, 2026-10-26): tsundoku retries only a failure
+    /// and asks every next question by name, and XDict's next questions have names already — another sense's row,
+    /// another dictionary's grounding, the ask button. "Ask Again" re-sent an identical prompt for a different sample.
+    @Test func thePaneHasNoReSampleOfTheSameQuestion() throws {
+        let source = try Self.code("Sources/XDictUI/MeaningAnswerView.swift")
+        #expect(!source.contains("Button(\"Ask Again\")"), "the pane offers a re-sample of the identical prompt")
+        #expect(source.contains("Button(\"Try Again\")"), "a failure keeps its named retry")
+    }
+
     /// **Settings' own preview carries the answer language**: it composes through `AIComposer`, so the preview a reader
     /// reads is the request that will leave, line included.
     @Test func theSettingsPreviewCarriesTheLanguageLine() throws {
