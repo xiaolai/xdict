@@ -231,10 +231,13 @@ struct CompanionSourceTests {
         let save = try #require(Self.bracedBody(after: "private func saveNote(_ presentation: MeaningPresentation,"
                                                 + " target: MeaningTarget)", in: source))
         #expect(save.contains("checkThenWrite(payload)"))
+        // **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): the first save asks, and the reader's
+        // answer is what the second one carries.
         let check = try #require(Self.bracedBody(after: "private func checkThenWrite(_ payload: NotePayload)", in: source))
-        #expect(check.contains("startWrite(payload)"))
+        #expect(check.contains("state.saveNote(for: payload.target, text: payload.text, replacing: false)"))
+        #expect(check.contains("noteReplaceAsked = true"))
         let write = try #require(Self.bracedBody(after: "private func startWrite(_ payload: NotePayload)", in: source))
-        #expect(write.contains("state.saveNote(for: payload.target, text: payload.text)"))
+        #expect(write.contains("state.saveNote(for: payload.target, text: payload.text, replacing: true)"))
     }
 
     /// **Settings' own preview carries the answer language**: it composes through `AIComposer`, so the preview a reader

@@ -335,7 +335,7 @@ public struct StudyNoteEditor: View {
         failure = nil
         Task {
             let saved = if let study, let entry {
-                await study.saveNote(entry: entry, text: draft, name: name) != nil
+                if case .saved = await study.saveNote(entry: entry, text: draft, name: name) { true } else { false }
             } else {
                 false
             }
@@ -374,7 +374,11 @@ public struct StudyNoteEditor: View {
         saving = true
         failure = nil
         Task {
-            let saved = await study.saveNote(entry: entry, text: previous, name: name) != nil
+            let saved = if case .saved = await study.saveNote(entry: entry, text: previous, name: name) {
+                true
+            } else {
+                false
+            }
             saving = false
             if saved {
                 cleared = nil

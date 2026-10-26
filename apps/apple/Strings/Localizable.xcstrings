@@ -470,6 +470,40 @@
         }
       }
     },
+    "%lld more found.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more found."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%lld more found."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "另有 %lld 条未显示"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "%lld more in folded sections": {
       "localizations": {
         "en": {
@@ -10742,6 +10776,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "还需要你完成：%@。"
+          }
+        }
+      }
+    },
+    "Still reading %lld dictionaries.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Still reading %lld dictionary."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "Still reading %lld dictionaries."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "仍在读取 %lld 部词典"
+                }
+              }
+            }
           }
         }
       }

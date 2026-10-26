@@ -63,7 +63,24 @@ struct PhraseRowTests {
         let found = PhraseRow(PhrasesFixture.answer(.found, matches: [PhrasesFixture.match()], capped: true))
         #expect(found == .found(PhraseRow.Candidate(dict: Fixture.handle("one"), phrase: "purple passage",
                                                     separation: .none, gap: 0, span: NSRange(location: 23, length: 14)),
-                                total: 1, capped: true))
+                                total: 1, capped: true, building: 0, omitted: 0))
+    }
+
+    /// **What the answer left out and what is still being read reach the row** (audit rounds 1–4, 2026-10-26): the cap's
+    /// count and the building dictionaries were discarded before, so the popover showed a complete-looking answer.
+    @Test func the_caps_count_and_the_building_dictionaries_reach_the_row() throws {
+        // Three matches, a total of 70: the list stopped at the cap and 67 were left out. One dictionary still builds.
+        let answer = PhraseAnswer(state: .found, matches: (0..<3).map { PhrasesFixture.match("phrase \($0)") },
+                                  coverage: [PhraseCoverage(dict: Fixture.handle("one"), state: .ready),
+                                             PhraseCoverage(dict: Fixture.handle("two"), state: .building)],
+                                  total: 70, capped: true)
+        guard case .found(_, let total, let capped, let building, let omitted) = PhraseRow(answer) else {
+            Issue.record("not a found row: \(PhraseRow(answer))")
+            return
+        }
+        #expect(total == 70 && capped)
+        #expect(omitted == 67)
+        #expect(building == 1)
     }
 
     /// The separation is carried as the publisher's or the matcher's own, never flattened to "a phrase".
@@ -74,7 +91,7 @@ struct PhraseRowTests {
             let row = PhraseRow(PhrasesFixture.answer(.found, matches: [
                 PhrasesFixture.match(separation: separation, gap: gap),
             ]))
-            guard case .found(let candidate, _, _) = row else {
+            guard case .found(let candidate, _, _, _, _) = row else {
                 Issue.record("no candidate: \(row)")
                 return
             }
@@ -175,7 +192,7 @@ struct PhrasesModelTests {
             .found, matches: [PhrasesFixture.match("red herring", location: 19, length: 11)])) })
         await backend.releasePhrases(PhrasesFixture.sentence)
         try await Task.sleep(for: .milliseconds(50))
-        guard case .found(let candidate, _, _) = phrases.row else {
+        guard case .found(let candidate, _, _, _, _) = phrases.row else {
             Issue.record("no candidate: \(phrases.row)")
             return
         }
@@ -278,7 +295,7 @@ struct PhrasesModelTests {
         phrases.update(sentence: PhrasesFixture.sentence, term: PhrasesFixture.term, handles: PhrasesFixture.handles)
         #expect(await eventually { if case .found = phrases.row { true } else { false } })
         try await Task.sleep(for: .milliseconds(100))
-        guard case .found(let candidate, _, _) = phrases.row else {
+        guard case .found(let candidate, _, _, _, _) = phrases.row else {
             Issue.record("another dictionary's build took the phrase away: \(phrases.row)")
             return
         }

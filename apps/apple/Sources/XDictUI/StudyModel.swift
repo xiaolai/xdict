@@ -161,16 +161,37 @@ public final class StudyModel {
         return outcome
     }
 
+    /// **What saving a note did** (audit rounds 1–4, 2026-10-26): whether it was written, needed the reader's answer
+    /// because a note is already there, or failed.
+    public enum NoteSave: Equatable, Sendable {
+        case saved(StudyNote)
+        case needsReplacement
+        case failed
+    }
+
+    /// The entries whose save is in flight. **A second save waits for the first**, because its own check would read the
+    /// notes as they were before that write and replace it silently.
+    private var savingNotes: Set<String> = []
+
     /// **Saves the reader's note** on an entry named by the history card's facts; the core hashes the definition and
-    /// resolves the lineage.
+    /// resolves the lineage. **The check and the write are one operation** (audit rounds 1–4, 2026-10-26): the pane used
+    /// to ask whether a note was there, and one saved in the meantime was replaced without the question.
     @discardableResult
-    public func saveNote(entry: EntryRef, text: String, name: String) async -> StudyNote? {
+    public func saveNote(entry: EntryRef, text: String, name: String, replacing: Bool = true) async -> NoteSave {
+        let key = "\(entry.edition.rawValue)\u{0}\(entry.key)\u{0}\(entry.occurrence)"
+        guard !savingNotes.contains(key) else { return .failed }
+        savingNotes.insert(key)
+        defer { savingNotes.remove(key) }
+        if !replacing {
+            _ = await loadNotes()
+            if note(for: entry) != nil { return .needsReplacement }
+        }
         let result = await service.call(.studyNoteAt(entry: entry, text: text, name: name, stamp: stamp,
                                                      operation: UUID().uuidString))
-        guard case .success(let delivered) = result, case .studyNote(let note) = delivered.answer else { return nil }
+        guard case .success(let delivered) = result, case .studyNote(let note) = delivered.answer else { return .failed }
         await loadNotes()
         await refresh()
-        return note
+        return .saved(note)
     }
 
     /// The note a target already has, for an editor that revises rather than starts over.
@@ -255,7 +276,7 @@ public final class StudyModel {
     public func clearNote(entry: EntryRef, name: String) async -> NoteClearing {
         guard await loadNotes() else { return .failed }
         guard let existing = note(for: entry), !existing.text.isEmpty else { return .nothingToClear }
-        guard await saveNote(entry: entry, text: "", name: name) != nil else { return .failed }
+        guard case .saved = await saveNote(entry: entry, text: "", name: name) else { return .failed }
         return .cleared(previous: existing.text)
     }
 

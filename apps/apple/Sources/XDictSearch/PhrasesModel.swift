@@ -30,9 +30,11 @@ public enum PhraseRow: Equatable, Sendable {
     case hidden
     case building
     case unavailable
-    /// The core's best match (the first), how many matches there were before the cap, and whether the list stopped at
-    /// it. Every match is a candidate: the row says so where the gap is the matcher's own.
-    case found(Candidate, total: UInt64, capped: Bool)
+    /// The core's best match (the first), how many matches there were before the cap, whether the list stopped at it,
+    /// **how many dictionaries are still being read** and **how many matches were left out of the list** (audit rounds
+    /// 1–4, 2026-10-26): a row that showed only the first match hid both, and the contract asks the shell to say what
+    /// it left out.
+    case found(Candidate, total: UInt64, capped: Bool, building: Int, omitted: UInt64)
 
     /// **Every answer has its own row** (WI-8's first verification): `notAsked` and `none` have nothing to say, a
     /// building or failed store says which it is, and a found answer shows its best candidate.
@@ -47,10 +49,13 @@ public enum PhraseRow: Equatable, Sendable {
             self = .unavailable
         case .found:
             guard let first = answer.matches.first else { self = .hidden; return }
+            let shown = UInt64(answer.matches.count)
             self = .found(
                 Candidate(dict: first.dict, phrase: first.phrase, separation: first.separation, gap: first.gap,
                           span: NSRange(location: Int(clamping: first.location), length: Int(clamping: first.length))),
-                total: answer.total, capped: answer.capped)
+                total: answer.total, capped: answer.capped,
+                building: answer.coverage.filter { $0.state == .building }.count,
+                omitted: answer.total > shown ? answer.total - shown : 0)
         }
     }
 }

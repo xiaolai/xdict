@@ -44,7 +44,6 @@ public struct MeaningAnswerPane: View {
         case saving
         case saved
         case failed
-        case checkFailed
     }
 
     public init(state: SearchWindowState, showsHeader: Bool = true) {
@@ -121,7 +120,7 @@ public struct MeaningAnswerPane: View {
     /// phrase's own entry as the target and the sentence's own words as the term. A phrase ask already made is not
     /// offered again.
     @ViewBuilder private var phraseOffer: some View {
-        if case let .found(candidate, total, _) = state.phrases.row, state.meaning.held?.phrase == nil {
+        if case let .found(candidate, total, _, _, _) = state.phrases.row, state.meaning.held?.phrase == nil {
             VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
                 Button {  // placement: inspector-row
                     Task { await state.askAboutPhrase(candidate) }
@@ -379,16 +378,6 @@ public struct MeaningAnswerPane: View {
                     .buttonStyle(.borderless)
                     .font(.caption)
                     .accessibilityIdentifier("meaning.note.retry")
-            case .checkFailed:
-                Label { Text("The note could not be read, so nothing was saved.") }
-                    icon: { Image(systemName: "exclamationmark.triangle") }
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                    .accessibilityIdentifier("meaning.note.check-failed")
-                Button("Try Again") { retryNote() }  // placement: inspector-row
-                    .buttonStyle(.borderless)
-                    .font(.caption)
-                    .accessibilityIdentifier("meaning.note.retry")
             case .checking:
                 HStack(spacing: Tokens.Space.xs) {
                     ProgressView().controlSize(.small)  // placement: spinner
@@ -434,34 +423,35 @@ public struct MeaningAnswerPane: View {
         checkThenWrite(payload)
     }
 
-    /// Whether the entry already carries a note, then write: the frozen payload is kept for a Retry either way.
+    /// **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): a save that would replace a note comes back
+    /// asking, one saved in between is never replaced unseen, and the frozen payload is kept for a Retry either way.
     private func checkThenWrite(_ payload: NotePayload) {
         pendingNote = payload
         let mine = noteOperation
         noteState = .checking
         Task { @MainActor in
-            let exists = await state.entryHasNote(payload.target.entry)
+            let outcome = await state.saveNote(for: payload.target, text: payload.text, replacing: false)
             guard mine == noteOperation else { return }
-            switch exists {
-            case .none:
-                noteState = .checkFailed
-            case .some(true):
+            switch outcome {
+            case .saved:
+                noteState = .saved
+            case .needsReplacement:
                 noteState = .idle
                 noteReplaceAsked = true
-            case .some(false):
-                startWrite(payload)
+            case .failed:
+                noteState = .failed
             }
         }
     }
 
-    /// Writes the payload; a newer operation's outcome is the only one the pane shows.
+    /// Writes the payload the reader confirmed; a newer operation's outcome is the only one the pane shows.
     private func startWrite(_ payload: NotePayload) {
         let mine = noteOperation
         noteState = .saving
         Task { @MainActor in
-            let saved = await state.saveNote(for: payload.target, text: payload.text)
+            let outcome = await state.saveNote(for: payload.target, text: payload.text, replacing: true)
             guard mine == noteOperation else { return }
-            noteState = saved ? .saved : .failed
+            noteState = outcome == .failed ? .failed : .saved
         }
     }
 

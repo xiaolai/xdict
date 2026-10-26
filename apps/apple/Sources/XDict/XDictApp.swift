@@ -208,13 +208,10 @@ struct XDictApp: App {
                                       speechPreferences: SpeechPreferences(defaults: setup.speechDefaults))
         // **The pane's Save as Note** (plan-companion WI-9; owner, 2026-10-25): the app's study model, behind the reader's
         // explicit tap; a note already on the entry is replaced only after the pane asks.
-        state.noteSaver = { entry, text, name in
-            await XDictApp.study.saveNote(entry: entry, text: text, name: name) != nil
-        }
-        state.entryNoteCheck = { entry in
-            // **The notes are loaded before the answer is trusted** (audit round 4, 2026-10-25): an unloaded set would say
-            // "no note" and let a save replace one without asking. A failed load is unknown, not empty.
-            await XDictApp.study.loadNotes() ? XDictApp.study.note(for: entry) != nil : nil
+        // **The store checks and writes as one** (audit rounds 1–4, 2026-10-26): the pane no longer asks first, so a note
+        // saved between the question and the write cannot be replaced unseen.
+        state.noteSaver = { entry, text, name, replacing in
+            await XDictApp.study.saveNote(entry: entry, text: text, name: name, replacing: replacing)
         }
         return state
     }

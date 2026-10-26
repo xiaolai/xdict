@@ -1142,13 +1142,15 @@ public final class MeaningSession {
         let composed = await Self.compose(handoff: handoff, mode: mode, target: target, selection: selection,
                                           dictionaryName: dictionaryName, settings: settings,
                                           fetchEntryText: fetchEntryText)
-        if let failure = composed.failure { return Performed(state: failure, sent: composed.sent) }
+        // **Nothing was sent on a refusal** (audit rounds 1–4, 2026-10-26): `sent` is what the pane's evidence names and
+        // what a note records as its provenance; a request that stopped at a check never reached the source.
+        if let failure = composed.failure { return Performed(state: failure, sent: nil) }
         guard let sent = composed.sent else { return Performed(state: .unavailable(.noEntry), sent: nil) }
         // **After the fetch**: the reader may have turned the switch off while the entry was read.
         guard Self.consentHolds(await recheck(), mode: mode) else {
-            return Performed(state: .unavailable(.consentChanged), sent: sent)
+            return Performed(state: .unavailable(.consentChanged), sent: nil)
         }
-        guard !Task.isCancelled else { return Performed(state: .cancelled, sent: sent) }
+        guard !Task.isCancelled else { return Performed(state: .cancelled, sent: nil) }
         return await send(sent: sent, entry: composed.entry, settings: settings,
                           makeProvider: makeProvider, recheck: recheck)
     }

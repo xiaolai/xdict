@@ -34,7 +34,7 @@ struct PopoverParityTests {
         #expect(LookupPanelView.chromeHeight(for: .hidden) == LookupPanelView.chromeHeight)
         let candidate = PhraseRow.Candidate(dict: DictId(rawValue: "handle"), phrase: "purple passage",
                                             separation: .none, gap: 0, span: NSRange(location: 0, length: 14))
-        #expect(LookupPanelView.chromeHeight(for: .found(candidate, total: 1, capped: false))
+        #expect(LookupPanelView.chromeHeight(for: .found(candidate, total: 1, capped: false, building: 0, omitted: 0))
                 == LookupPanelView.chromeHeight + PanelLook.phraseRowHeight)
         #expect(PanelLook.phraseRowHeight > PanelLook.footerRow, "two caption lines and a name line are more than one row")
     }

@@ -127,7 +127,7 @@ public struct LookupPanelView: View {
         case .unavailable:
             phraseLine(Text("Phrases are not available for these dictionaries."))
                 .accessibilityIdentifier("panel.phrase.unavailable")
-        case let .found(candidate, total, _):
+        case let .found(candidate, total, _, building, omitted):
             Button {  // placement: P41
                 state.openPhrase(candidate.phrase)
             } label: {
@@ -145,11 +145,23 @@ public struct LookupPanelView: View {
                         separationText(candidate)
                             .font(Tokens.TextRole.caption.font)
                             .foregroundStyle(Tokens.Colour.secondaryLabel.color)
-                        if total > 1 {
+                        // **What the answer left out, and what is still being read** (audit rounds 1–4, 2026-10-26): the
+                        // contract asks the shell to say how many matches the cap left out, and a dictionary still being
+                        // read is not a complete answer.
+                        if omitted > 0 {
+                            Text("\(omitted) more found.")
+                                .font(Tokens.TextRole.caption.font)
+                                .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                        } else if total > 1 {
                             Text("The first of \(total)")
                                 .font(Tokens.TextRole.caption.font)
                                 .foregroundStyle(Tokens.Colour.secondaryLabel.color)
                         }
+                    }
+                    if building > 0 {
+                        Text("Still reading \(building) dictionaries.")
+                            .font(Tokens.TextRole.caption.font)
+                            .foregroundStyle(Tokens.Colour.secondaryLabel.color)
                     }
                 }
                 .lineLimit(1)

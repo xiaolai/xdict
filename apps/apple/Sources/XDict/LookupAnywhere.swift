@@ -614,8 +614,13 @@ final class LookupAnywhere {
         fit.began(entry: shownEntry)
         let entry = shownEntry
         Task { @MainActor in
-            for delay in [0.0, 0.4, 1.2, 3.0] {
-                if delay > 0 { try? await Task.sleep(for: .seconds(delay)) }
+            // **The schedule is measured from the finish** (audit round 4, 2026-10-26): sleeping each interval in turn
+            // measured at 0.4, 1.6 and 4.6 seconds, not the 0.4, 1.2 and 3 the comment promised.
+            var waited: Duration = .zero
+            for delay in [Duration.zero, .milliseconds(400), .milliseconds(1200), .milliseconds(3000)] {
+                let wait = delay - waited
+                if wait > .zero { try? await Task.sleep(for: wait) }
+                waited = delay
                 guard entry == self.shownEntry else { return }
                 await self.fitToEntry(entry)
             }
@@ -734,11 +739,15 @@ final class LookupAnywhere {
         // **The sentence travels with the expansion** (ADR-0021 d.4): captured here, while the presentation still holds
         // it, and handed to the window the place goes to — never stored in the trail (`Visit` is stored; this is not).
         let meaning = state.meaning.held
+        // **The lookup the expansion belongs to** (audit round 4, 2026-10-26): a newer request changes the model's lookup
+        // before its own `show()`, so `presentation` alone let this continuation close the panel and cancel the newer
+        // lookup while the reader was still being served.
+        let lookup = state.model.lookup?.serial
         Task { @MainActor [weak self] in
             let place = await state.model.currentPlace()
             // **Dismissed or replaced while the place was read** (finding 2): the continuation closes nothing and
             // activates nothing — the reader's Escape stands.
-            guard let self, self.presentation == mine, self.isShown else { return }
+            guard let self, self.presentation == mine, self.isShown, state.model.lookup?.serial == lookup else { return }
             guard let place else {
                 if let query = state.model.lookup?.query { MainWindows.hand(Visit(query: query, mode: .reader, scope: .all,
                                                                                   isOrigin: true), meaning: meaning,
@@ -841,7 +850,17 @@ enum MainWindows {
     /// there is none.
     static func deliver() -> Bool {
         states.removeAll { $0.state == nil }
-        guard let place = pending, let state = states.last?.state else { return false }
+        guard let place = pending else { return false }
+        // **One window adopts the place and comes forward** (audit round 4, 2026-10-26): the place went to the last state
+        // made while the first visible window was activated, so with two windows open a lookup landed behind the
+        // reader's back. The frontmost window that is open is the one that takes it.
+        let open = states.compactMap { entry -> (SearchWindowState, NSWindow)? in
+            guard let state = entry.state, let window = state.entry.view.window else { return nil }
+            return (state, window)
+        }
+        let chosen = open.first { $0.1.isKeyWindow } ?? open.first { $0.1.isMainWindow } ?? open.first { $0.1.isVisible }
+            ?? open.last
+        guard let (state, window) = chosen else { return false }
         pending = nil
         let meaning = pendingMeaning
         let ask = pendingAsk
@@ -864,8 +883,7 @@ enum MainWindows {
             state.model.adopt(place)
         }
         state.focusSearch()
-        NSApplication.shared.windows.first { $0.identifier?.rawValue.hasPrefix(XDictApp.mainWindow) == true && $0.isVisible }?
-            .makeKeyAndOrderFront(nil)
+        window.makeKeyAndOrderFront(nil)
         return true
     }
 

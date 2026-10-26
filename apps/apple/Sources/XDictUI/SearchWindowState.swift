@@ -437,24 +437,16 @@ public final class SearchWindowState {
     // MARK: - Saving an answer as a note (plan-companion WI-9; owner, 2026-10-25)
 
     /// The shell's study model, wired by the app: nil hides the pane's Save as Note (an instrument window, a test).
-    @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String) async -> Bool)?
-    /// Whether an entry already carries a note, so a save asks before replacing it; nil when that cannot be known (the
-    /// notes did not load), and then nothing is written.
-    @ObservationIgnored public var entryNoteCheck: (@MainActor (EntryRef) async -> Bool?)?
+    /// **The store decides whether a replacement is needed** (audit rounds 1–4, 2026-10-26): the pane used to check
+    /// first and write second, and a note saved between the two was replaced without a question. `replacing` is the
+    /// reader's answer to the question the store itself asked.
+    @ObservationIgnored public var noteSaver: (@MainActor (EntryRef, String, String, _ replacing: Bool) async -> StudyModel.NoteSave)?
 
     /// **Saves the answer the reader asked to keep** on the entry it was composed from. The caller builds the text — the
     /// explanation, its quotes and the provenance line; the sentence never goes in.
-    public func saveNote(for target: MeaningTarget, text: String) async -> Bool {
-        guard let noteSaver else { return false }
-        return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "")
-    }
-
-    /// Whether that entry already has a note; nil when the check could not answer.
-    public func entryHasNote(_ entry: EntryRef) async -> Bool? {
-        // **No check is "cannot say", never "no note"** (audit round 4, 2026-10-26): an absent check would otherwise
-        // write over an existing note without asking.
-        guard let entryNoteCheck else { return nil }
-        return await entryNoteCheck(entry)
+    public func saveNote(for target: MeaningTarget, text: String, replacing: Bool) async -> StudyModel.NoteSave {
+        guard let noteSaver else { return .failed }
+        return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "", replacing)
     }
 
     /// **A scope change can change which presentation is due** (audit round 4, 2026-10-25): the same shown entry is one
@@ -680,7 +672,11 @@ public final class SearchWindowState {
         Task { @MainActor in
             // The lookup is its own identity: `begin()` can start another while the same entry is still shown.
             guard let shown, model.shown == shown, model.lookup == lookup, entry.pageFrames != nil else { return }
-            await entry.showPage(pageItems(results), primary: primary)
+            // **A page that grows keeps the reader's place** (audit round 4, 2026-10-26): landing at the top cleared the
+            // offset a restored page was waiting to scroll to.
+            let offset = await entry.scrollOffset()
+            guard model.shown == shown, model.lookup == lookup, entry.pageFrames != nil else { return }
+            await entry.showPage(pageItems(results), primary: primary, landing: offset.map(EntryLanding.offset) ?? .top)
         }
     }
 

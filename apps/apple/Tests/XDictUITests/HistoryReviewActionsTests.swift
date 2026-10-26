@@ -169,7 +169,11 @@ struct NoteClearingTests {
         // The fake holds the core's write contract (`Ledger::save_note`): the clear was accepted and is what reads back.
         #expect(model.note(for: Self.entry)?.text == "", "the cleared note is what the notes say now")
         // Undo: the earlier wording saved again, as one more revision.
-        #expect(await model.saveNote(entry: Self.entry, text: "earlier", name: "Tiny")?.text == "earlier")
+        guard case .saved(let earlier) = await model.saveNote(entry: Self.entry, text: "earlier", name: "Tiny") else {
+            Issue.record("the earlier note was not saved")
+            return
+        }
+        #expect(earlier.text == "earlier")
         #expect(model.note(for: Self.entry)?.text == "earlier")
         // A cleared note has nothing left to clear: no second empty revision is sent.
         _ = await model.saveNote(entry: Self.entry, text: "", name: "Tiny")
@@ -183,10 +187,14 @@ struct NoteClearingTests {
         // Mirrors `a_first_empty_note_and_whitespace_text_are_refused` in xdict-ledger: the model reports both as nil.
         let service = FakeStudyService(notes: [])
         let model = StudyModelTests.model(service)
-        #expect(await model.saveNote(entry: Self.entry, text: "", name: "Tiny") == nil, "a first note cannot be empty")
-        #expect(await model.saveNote(entry: Self.entry, text: " \n", name: "Tiny") == nil)
-        #expect(await model.saveNote(entry: Self.entry, text: "mine", name: "Tiny")?.text == "mine")
-        #expect(await model.saveNote(entry: Self.entry, text: "\t", name: "Tiny") == nil, "whitespace is never a clear")
+        #expect(await model.saveNote(entry: Self.entry, text: "", name: "Tiny") == .failed, "a first note cannot be empty")
+        #expect(await model.saveNote(entry: Self.entry, text: " \n", name: "Tiny") == .failed)
+        if case .saved(let mine) = await model.saveNote(entry: Self.entry, text: "mine", name: "Tiny") {
+            #expect(mine.text == "mine")
+        } else {
+            Issue.record("the note was not saved")
+        }
+        #expect(await model.saveNote(entry: Self.entry, text: "\t", name: "Tiny") == .failed, "whitespace is never a clear")
         #expect(model.note(for: Self.entry)?.text == "mine")
     }
 

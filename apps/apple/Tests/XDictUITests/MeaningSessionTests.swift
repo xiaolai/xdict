@@ -12,6 +12,18 @@ import XDictContract
     var value = false
 }
 
+/// A counter a `@Sendable` settings closure can advance, without importing `Synchronization` into this target.
+final class Counter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+    func next() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        count += 1
+        return count
+    }
+}
+
 /// **One ask, from the reader's tap to the answer** (plan-ai-meaning WI-5; `conformance/ai/CONTRACT.md` §8.3): the entry's
 /// text only under the switch, one source with no fallback, one ask at a time, and cancellation that nothing late can
 /// undo. Every seam is a fake here: no network, no CLI, no service.
@@ -146,6 +158,21 @@ import XDictContract
         session.entryLookupFailed(.wire(.interrupted))
         #expect(session.state == .unavailable(.entryFailure(.wire(.interrupted))))
         #expect(session.held != nil)
+    }
+
+    /// **A request refused after composing is not marked sent** (audit rounds 1–4, 2026-10-26): the switch goes off while
+    /// the entry is read, the ask is refused `consentChanged`, and the pane's evidence and a note's provenance must not
+    /// name a request that never reached the source.
+    @Test func aRequestRefusedAfterComposingIsNotMarkedSent() async {
+        let (session, _, _) = Self.session()
+        let calls = Counter()
+        let on = MeaningSettings(source: .http, model: "m", sendEntryText: true)
+        let off = MeaningSettings(source: .http, model: "m", sendEntryText: false)
+        session.settings = on
+        session.settingsProvider = { calls.next() == 1 ? on : off }
+        session.ask()
+        #expect(await Self.waitUntil { session.state == .unavailable(.consentChanged) })
+        #expect(session.sent == nil, "a refused request was marked sent")
     }
 
     @Test func withTheSwitchOffNothingOfTheEntryIsFetchedOrSent() async {
