@@ -86,6 +86,10 @@ const DEFAULT_PX: f64 = 16.0;
 const MAX_DEPTH: usize = 64;
 /// The longest selector a report quotes.
 const SELECTOR_CHARS: usize = 160;
+/// **The longest selector kept for the rules themselves** (audit round 4, 2026-10-26): a selector's tail decides what it
+/// matches, so a report's cap must never be what normalization reads; this one is a memory bound, far past any real
+/// selector.
+const SELECTOR_STORED_CHARS: usize = 4096;
 
 /// What one edition's sheets decide: the fonts kept and the base size.
 #[derive(Debug, Clone, PartialEq)]
@@ -356,12 +360,14 @@ impl Style {
                     };
                     let better = kept.get(&key).is_none_or(|k| reason < k.reason);
                     if better {
-                        kept.insert(key, Kept { family, reason, selector: rule.selector.clone() });
+                        kept.insert(key, Kept { family, reason, selector: report_selector(&rule.selector) });
                     }
                 }
             }
         }
-        let voted = base(&rules);
+        // **An unlinked sheet sets no text's size** (audit round 4, 2026-10-26): its page rule could vote the base while the
+        // calibration that follows already ignored it, so the two disagreed about what the edition's sheets say.
+        let voted = base(rules.iter().zip(&linked).filter(|(_, is_linked)| **is_linked).map(|(rule, _)| rule));
         let page_px = match voted.from {
             BaseFrom::Page { .. } => voted.px,
             _ => DEFAULT_PX,
@@ -1342,11 +1348,18 @@ fn size_token(value: &str, style: &Style) -> Option<(String, bool)> {
     Some((step_token(i), i >= 4))
 }
 
-/// A size kept as written: one that sets no size of its own (`inherit`, ...) or hides the text (`0`).
+/// A size kept as written: one that sets no size of its own (`inherit`, ...) or hides the text (`0`, in any unit a
+/// browser takes). **A zero is a zero in `em`, `rem` or `%` too** (audit round 4, 2026-10-26): dropped as unreadable, an
+/// intentionally hidden piece of text inherited a visible size instead.
 fn size_kept(value: &str) -> bool {
     let v = value.trim().to_ascii_lowercase();
-    matches!(v.as_str(), "inherit" | "initial" | "unset" | "revert" | "revert-layer" | "0")
-        || absolute_px(&v) == Some(0.0)
+    if matches!(v.as_str(), "inherit" | "initial" | "unset" | "revert" | "revert-layer") {
+        return true;
+    }
+    let number = v.trim_end_matches(|c: char| c.is_ascii_alphabetic() || c == '%');
+    let unit = v.get(number.len()..).unwrap_or("");
+    let zero = !number.is_empty() && number.parse::<f64>().is_ok_and(|n| n == 0.0);
+    zero && matches!(unit, "" | "px" | "pt" | "em" | "rem" | "ex" | "ch" | "cap" | "%" | "vw" | "vh" | "vmin" | "vmax")
 }
 
 fn size_value(value: &str, style: &Style, counts: &mut Counts) -> Option<(String, bool)> {
@@ -1359,9 +1372,11 @@ fn size_value(value: &str, style: &Style, counts: &mut Counts) -> Option<(String
 /// `<font size>` (R4): 1–7, or a step from 3.
 pub(crate) fn font_size_attribute(value: &str) -> Option<String> {
     let v = value.trim();
+    // **A value no `i32` holds is saturated, not wrapped** (audit round 4, 2026-10-26): `size="+2147483647"` is a bigger
+    // number than the scale has steps for, and in a checked build the addition would panic the whole normalization.
     let n: i32 = match v.strip_prefix('+') {
-        Some(k) => 3 + k.parse::<i32>().ok()?,
-        None if v.starts_with('-') => 3 + v.parse::<i32>().ok()?,
+        Some(k) => 3i32.saturating_add(k.parse::<i32>().ok()?),
+        None if v.starts_with('-') => 3i32.saturating_add(v.parse::<i32>().ok()?),
         None => v.parse().ok()?,
     };
     let i = match n {
@@ -1546,7 +1561,10 @@ pub(crate) fn presentational(element: &str, name: &str, value: &str, style: &Sty
         // A colour HTML would parse as a legacy colour, outside the palette, goes with nothing in its place.
         "color" if font => Some(colour_attribute(value, Role::Text).map(|c| format!("color:{c}")).unwrap_or_default()),
         "size" if font => font_size_attribute(value),
-        "face" if font => Some(format!("font-family:{}", family_for(value, &Facts::plain(), style).unwrap_or(FONT))),
+        // **A face kept as it is stays the element's own attribute** (audit round 4, 2026-10-26): `family_for` answers
+        // `None` for a phonetic family the style keeps, an icon face and a wide keyword, and replacing that with the
+        // reading font dropped the specialized glyphs the dictionary relies on.
+        "face" if font => family_for(value, &Facts::plain(), style).map(|family| format!("font-family:{family}")),
         "align" => match (element.as_str(), value.to_ascii_lowercase().as_str()) {
             ("img", side @ ("left" | "right")) => Some(format!("float:{side}")),
             ("img", v @ ("top" | "middle" | "bottom")) => Some(format!("vertical-align:{v}")),
@@ -1789,7 +1807,7 @@ fn prose(selector: &str) -> bool {
 }
 
 /// The base size the rules decide ([`BaseFrom`]).
-fn base(rules: &[Rule]) -> Base {
+fn base<'a>(rules: impl Iterator<Item = &'a Rule>) -> Base {
     fn size_of(decls: &[(String, String)]) -> Option<&str> {
         decls.iter().rev().find_map(|(n, v)| match n.as_str() {
             "font-size" => Some(v.as_str()),
@@ -1805,12 +1823,12 @@ fn base(rules: &[Rule]) -> Base {
             (n == "display" && v == "none") || (n == "visibility" && v == "hidden")
         })
     };
-    for rule in rules.iter().filter(|r| !r.face && !hidden(r)) {
+    for rule in rules.filter(|r| !r.face && !hidden(r)) {
         let Some(size) = size_of(&rule.decls) else { continue };
         if rule.page {
             let px = absolute_px(size).or_else(|| relative_to_default(size));
             if let Some(px) = px.filter(|p| *p > 0.0) {
-                page = Some(Base { px, from: BaseFrom::Page { selector: rule.selector.clone() } });
+                page = Some(Base { px, from: BaseFrom::Page { selector: report_selector(&rule.selector) } });
             }
             continue;
         }
@@ -1861,16 +1879,53 @@ fn without_comments(text: &str) -> String {
     out
 }
 
-/// A selector for a report: comments out, spaces collapsed, at most [`SELECTOR_CHARS`] characters.
+/// A selector as the rules read it: comments out, spaces collapsed, at most [`SELECTOR_STORED_CHARS`] characters.
 fn clean_selector(prelude: &str) -> String {
     let clean = without_comments(prelude);
     let collapsed = clean.split_whitespace().collect::<Vec<_>>().join(" ");
-    collapsed.chars().take(SELECTOR_CHARS).collect()
+    collapsed.chars().take(SELECTOR_STORED_CHARS).collect()
+}
+
+/// The same selector as a report quotes it, at most [`SELECTOR_CHARS`] characters.
+fn report_selector(selector: &str) -> String {
+    selector.chars().take(SELECTOR_CHARS).collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// **A zero hides the text it sets, in whatever unit it is written** (audit round 4, 2026-10-26); a real size or a
+    /// keyword that sets no size is a different thing.
+    #[test]
+    fn a_zero_size_is_kept_in_every_unit() {
+        for kept in ["0", "0px", "0pt", "0em", "0rem", "0ex", "0ch", "0%", "0vw", "0vh", "inherit", "unset"] {
+            assert!(size_kept(kept), "{kept} must be kept");
+        }
+        for sized in ["1px", "0.5em", "12pt", "100%", "auto"] {
+            assert!(!size_kept(sized), "{sized} is not a zero");
+        }
+    }
+
+    /// **A font size no i32 holds saturates at the scale's ends** (audit round 4, 2026-10-26): a checked build must not
+    /// panic, an unchecked one must not wrap round to the smallest step.
+    #[test]
+    fn an_enormous_font_size_saturates() {
+        // `+N` is a step from 3, and the scale has five: +3 and everything above it are its top.
+        assert_eq!(font_size_attribute("+2147483647"), font_size_attribute("+3"));
+        assert_eq!(font_size_attribute("2147483647"), font_size_attribute("7"));
+        assert_eq!(font_size_attribute("-2147483648"), font_size_attribute("1"));
+    }
+
+    /// **A selector's tail reaches the rules; only its report is short** (audit round 4, 2026-10-26).
+    #[test]
+    fn a_long_selector_is_kept_whole_and_reported_short() {
+        let selector = format!("{}::before", "div ".repeat(60));
+        let stored = clean_selector(&selector);
+        assert!(stored.chars().count() > SELECTOR_CHARS, "the stored selector was cut at the report's bound");
+        assert!(stored.ends_with("::before"));
+        assert_eq!(report_selector(&stored).chars().count(), SELECTOR_CHARS);
+    }
 
     #[test]
     fn a_shorthand_is_read_in_its_parts() {
