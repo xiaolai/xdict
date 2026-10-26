@@ -570,6 +570,13 @@ pub struct Ledger {
 }
 
 impl Ledger {
+    /// **Whether this operation id is already in the log** (audit rounds 1–4, 2026-10-26): the caller's retry key, which
+    /// a caller must be able to ask before a check of current state — a committed resolution has already removed the
+    /// conflict it settled, so a retry that looked first would answer `NotFound` for an operation that succeeded.
+    pub fn recorded(&self, operation_id: &str) -> bool {
+        self.operations.contains(operation_id)
+    }
+
     /// Replays the log. A torn tail is cut off at the last whole frame; when the snapshot's frontier is this log's, its
     /// projection is used and the events are not projected again.
     pub fn open(store: Arc<dyn Store>) -> Result<Self, LedgerError> {

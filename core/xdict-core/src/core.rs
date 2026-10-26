@@ -124,6 +124,10 @@ const CALIBRATION_ENTRIES: usize = 64;
 const CALIBRATION_BYTES: u64 = 256 << 10;
 /// The most a sampled entry's read may decompress: a short entry in a block shared with a huge one is passed over.
 const CALIBRATION_BLOCK_BYTES: u64 = 8 << 20;
+/// **One sampled entry's text once its compact styles are applied, and all of them together** (audit rounds 2–4,
+/// 2026-10-26): a few bytes of markers can stand for an entry many times their size, and calibration reads a sample.
+const CALIBRATION_EXPANDED_BYTES: usize = 256 << 10;
+const CALIBRATION_SAMPLE_BYTES: usize = 4 << 20;
 /// The ceiling on one entry the examples pass renders, and the text budget its projection reads (ADR-0031 d.3, d.6).
 const EXAMPLES_TEXT_BYTES: usize = 16 << 20;
 /// Entries read for the "does this edition carry Chinese at all" test, evenly spaced (ADR-0031 d.6).
@@ -2010,19 +2014,18 @@ impl Core {
             let grade = study_grade(grade)?;
             let scheduler = Scheduler::with_configuration(policy.retention, policy.maximum_days, DEFAULT_WEIGHTS)
                 .map_err(|error| CoreError::Malformed { detail: format!("scheduler: {error}") })?;
-            let (card, eligible) = {
-                let mut held = self.ledger()?;
-                let ledger = self.opened(&mut held)?;
-                let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
-                    what: Missing::Entry,
-                    detail: format!("no study card for {target_key}"),
-                })?;
-                let due = card.state.is_new() || card.state.due.is_some_and(|due| due <= stamp.at);
-                // **A conflicted card waits for the reader's choice** (ADR-0027): a grade on it would be a third branch.
-                let conflicted = ledger.conflict(&target_key).is_some();
-                let eligible = card.head == revision && due && !conflicted;
-                (card, eligible)
-            };
+            // **One guard from the check to the append** (audit rounds 1–4, 2026-10-26): two calls that checked eligibility
+            // under different guards could both grade one revision, which is the conflict the ledger exists to prevent.
+            let mut held = self.ledger()?;
+            let ledger = self.opened(&mut held)?;
+            let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
+                what: Missing::Entry,
+                detail: format!("no study card for {target_key}"),
+            })?;
+            let due = card.state.is_new() || card.state.due.is_some_and(|due| due <= stamp.at);
+            // **A conflicted card waits for the reader's choice** (ADR-0027): a grade on it would be a third branch.
+            let conflicted = ledger.conflict(&target_key).is_some();
+            let eligible = card.head == revision && due && !conflicted;
             let after = scheduler
                 .review(schedule_card(card.state), schedule_grade(grade), stamp.at)
                 .map_err(|error| CoreError::Malformed { detail: format!("scheduler: {error}") })?;
@@ -2041,8 +2044,6 @@ impl Core {
                 at: stamp.at,
                 device: stamp.device,
             };
-            let mut held = self.ledger()?;
-            let ledger = self.opened(&mut held)?;
             let outcome = ledger.record_grade(record, &operation_id, eligible).map_err(ledger_error)?;
             let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
             Ok(ReviewOutcome { outcome, card })
@@ -2058,18 +2059,16 @@ impl Core {
         operation_id: String,
     ) -> Result<ReviewOutcome, CoreError> {
         guard(|| {
-            let (card, eligible) = {
-                let mut held = self.ledger()?;
-                let ledger = self.opened(&mut held)?;
-                let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
-                    what: Missing::Entry,
-                    detail: format!("no study card for {target_key}"),
-                })?;
-                (card.clone(), !grade_event.is_empty() && card.head == grade_event)
-            };
-            let undo = UndoRecord { target: card.target.clone(), grade_event, at: stamp.at, device: stamp.device };
+            // **One guard from the check to the append** (audit rounds 1–4): the card can move between two guards, and a
+            // second call could void a grade the first has already voided.
             let mut held = self.ledger()?;
             let ledger = self.opened(&mut held)?;
+            let card = ledger.card(&target_key).ok_or_else(|| CoreError::NotFound {
+                what: Missing::Entry,
+                detail: format!("no study card for {target_key}"),
+            })?;
+            let eligible = !grade_event.is_empty() && card.head == grade_event;
+            let undo = UndoRecord { target: card.target.clone(), grade_event, at: stamp.at, device: stamp.device };
             let outcome = ledger.record_undo(undo, &operation_id, eligible).map_err(ledger_error)?;
             let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
             Ok(ReviewOutcome { outcome, card })
@@ -2104,14 +2103,10 @@ impl Core {
                 if path == ours || !named {
                     continue;
                 }
-                let length = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
-                if length > MAX_SYNC_BYTES {
-                    return Err(CoreError::Malformed {
-                        detail: format!("{} is {length} bytes, over the sync bound", path.display()),
-                    });
-                }
-                let bytes = std::fs::read(&path)
-                    .map_err(|error| CoreError::Malformed { detail: format!("{}: {error}", path.display()) })?;
+                // **The bound is enforced on the bytes actually read** (audit rounds 1–4, 2026-10-26): a peer file that
+                // grows between a metadata check and an unbounded read could pass it, so one open reads at most the
+                // bound plus one byte, and one byte over is refused.
+                let bytes = read_within(&path, MAX_SYNC_BYTES)?;
                 let merged = ledger.merge(&bytes).map_err(ledger_error)?;
                 report.peers += 1;
                 report.added += merged.added;
@@ -2145,19 +2140,27 @@ impl Core {
         operation_id: String,
     ) -> Result<ReviewOutcome, CoreError> {
         guard(|| {
-            let (target, eligible) = {
-                let mut held = self.ledger()?;
-                let ledger = self.opened(&mut held)?;
-                let conflict = ledger.conflict(&target_key).ok_or_else(|| CoreError::NotFound {
-                    what: Missing::Entry,
-                    detail: format!("no conflict on {target_key}"),
-                })?;
-                let eligible = conflict.candidates.iter().any(|candidate| candidate.id == keep);
-                (conflict.target.clone(), eligible)
-            };
-            let resolution = ResolutionRecord { target, keep, at: stamp.at, device: stamp.device };
+            // **One guard from the check to the append** (audit rounds 1–4): the resolver's own retry is answered before
+            // the conflict is looked for, because a committed resolution is exactly what removed it.
             let mut held = self.ledger()?;
             let ledger = self.opened(&mut held)?;
+            let conflict = match ledger.conflict(&target_key) {
+                Some(conflict) => conflict,
+                None if ledger.recorded(&operation_id) => {
+                    let card =
+                        ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
+                    return Ok(ReviewOutcome { outcome: RecordOutcome::Duplicate, card });
+                }
+                None => {
+                    return Err(CoreError::NotFound {
+                        what: Missing::Entry,
+                        detail: format!("no conflict on {target_key}"),
+                    });
+                }
+            };
+            let eligible = conflict.candidates.iter().any(|candidate| candidate.id == keep);
+            let resolution =
+                ResolutionRecord { target: conflict.target.clone(), keep, at: stamp.at, device: stamp.device };
             let outcome = ledger.resolve(resolution, &operation_id, eligible).map_err(ledger_error)?;
             let card = ledger.card(&target_key).ok_or_else(|| CoreError::internal("the study card went missing"))?;
             Ok(ReviewOutcome { outcome, card })
@@ -2190,28 +2193,39 @@ impl Core {
             for note in notes {
                 let key = note.target.entry_key.clone();
                 let occurrence = note.target.occurrence;
-                let result = match self.occurrence_hash(&dict, &new_edition, &key, occurrence)? {
-                    None => ReanchorResult::Missing,
-                    Some(hash) if hash == note.target.definition_hash => {
-                        self.record_reanchor(&note, &new_edition, &hash, stamp.at, &stamp.device, &operation_prefix)?;
+                let exact = self.occurrence_hash(&dict, &new_edition, &key, occurrence)?;
+                let at_the_occurrence = exact.is_some();
+                let result = match exact.as_deref() {
+                    Some(hash) if hash == note.target.definition_hash.as_str() => {
+                        self.record_reanchor(&note, &new_edition, hash, stamp.at, &stamp.device, &operation_prefix)?;
                         ReanchorResult::Reanchored
                     }
-                    Some(_) => {
-                        let mut reordered = false;
-                        for other in 0..64u32 {
-                            if other == occurrence {
-                                continue;
-                            }
-                            match self.occurrence_hash(&dict, &new_edition, &key, other)? {
-                                Some(hash) if hash == note.target.definition_hash => {
-                                    reordered = true;
-                                    break;
+                    _ => {
+                        // **The definition may have moved, and the original occurrence may be gone** (audit rounds 3–4,
+                        // 2026-10-26): every occurrence of the key is read, not the first 64 — a definition that moved to
+                        // occurrence 70 is still a reordering — and a key that exists nowhere is the only `Missing`.
+                        let mut matched = false;
+                        let mut present = at_the_occurrence;
+                        let mut other = 0u32;
+                        loop {
+                            if other != occurrence {
+                                match self.occurrence_hash(&dict, &new_edition, &key, other)? {
+                                    None => break,
+                                    Some(hash) => {
+                                        present = true;
+                                        matched |= hash == note.target.definition_hash;
+                                    }
                                 }
-                                None => break,
-                                Some(_) => {}
                             }
+                            other = other.saturating_add(1);
                         }
-                        if reordered { ReanchorResult::Reordered } else { ReanchorResult::Changed }
+                        if matched {
+                            ReanchorResult::Reordered
+                        } else if present {
+                            ReanchorResult::Changed
+                        } else {
+                            ReanchorResult::Missing
+                        }
                     }
                 };
                 outcomes.push(ReanchorOutcome { target: note.target, result });
@@ -2270,6 +2284,7 @@ impl Core {
 /// apply are read from it (ADR-0013). A redirect, or a record too large or unreadable, is passed over.
 fn sample(opened: &Dict) -> Result<Vec<String>, CoreError> {
     let mut entries = Vec::new();
+    let mut total = 0usize;
     let count = opened.mdx.len();
     let step = (count / CALIBRATION_ENTRIES).max(1);
     for i in (0..count).step_by(step).take(CALIBRATION_ENTRIES) {
@@ -2279,12 +2294,75 @@ fn sample(opened: &Dict) -> Result<Vec<String>, CoreError> {
         {
             let text = String::from_utf8_lossy(&record.data);
             if !text.trim_start().starts_with("@@@LINK=") {
-                entries.push(opened.sheet.apply(&text).into_owned());
+                // **A compact style can expand a small record past any bound** (audit rounds 2–4, 2026-10-26): the
+                // sample is held to a per-entry expansion and an aggregate one, so calibration reads a sample, never a
+                // record a marker multiplied.
+                let Ok(expanded) = opened.sheet.apply_within(&text, CALIBRATION_EXPANDED_BYTES) else { continue };
+                if total.saturating_add(expanded.len()) > CALIBRATION_SAMPLE_BYTES {
+                    break;
+                }
+                total += expanded.len();
+                entries.push(expanded.into_owned());
             }
         }
     }
     opened.mdx_source.unchanged()?;
     Ok(entries)
+}
+
+/// **At most `max` bytes of a file, anything over refused** (audit rounds 1–4, 2026-10-26): one open reads the bound plus
+/// one byte, so a peer log that grows or is replaced after any metadata check cannot slip past it.
+#[cfg(not(target_family = "wasm"))]
+fn read_within(path: &Path, max: u64) -> Result<Vec<u8>, CoreError> {
+    use std::io::Read;
+    let detail =
+        |error: &dyn std::fmt::Display| CoreError::Malformed { detail: format!("{}: {error}", path.display()) };
+    let file = std::fs::File::open(path).map_err(|error| detail(&error))?;
+    let mut bytes = Vec::new();
+    file.take(max.saturating_add(1)).read_to_end(&mut bytes).map_err(|error| detail(&error))?;
+    if bytes.len() as u64 > max {
+        return Err(CoreError::Malformed { detail: format!("{} is over the {max}-byte sync bound", path.display()) });
+    }
+    Ok(bytes)
+}
+
+/// **A record's text with numeric character references spelled out** (`&#20013;`, `&#x4E2D;`, the `;` optional as HTML
+/// reads it): a Chinese word written as a reference carries no CJK code point until it is decoded, so a raw-bytes check
+/// would cache `no_chinese` for a bilingual edition (audit round 2, 2026-10-26). Named entities never spell CJK.
+fn decode_char_refs(text: &str) -> std::borrow::Cow<'_, str> {
+    use std::borrow::Cow;
+    if !text.contains("&#") {
+        return Cow::Borrowed(text);
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find("&#") {
+        let (before, after) = rest.split_at(at);
+        out.push_str(before);
+        let body = after.get(2..).unwrap_or("");
+        let (digits, radix) = match body.strip_prefix('x').or_else(|| body.strip_prefix('X')) {
+            Some(hex) => (hex, 16u32),
+            None => (body, 10u32),
+        };
+        let end =
+            digits.bytes().take_while(|b| if radix == 16 { b.is_ascii_hexdigit() } else { b.is_ascii_digit() }).count();
+        let number = digits.get(..end).and_then(|d| u32::from_str_radix(d, radix).ok()).and_then(char::from_u32);
+        match number {
+            Some(character) if end > 0 => {
+                out.push(character);
+                let tail = digits.get(end..).unwrap_or("");
+                let consumed = 2 + usize::from(radix == 16) + end + usize::from(tail.starts_with(';'));
+                rest = after.get(consumed..).unwrap_or("");
+            }
+            _ => {
+                // Not a reference after all: keep the ampersand and read on past it.
+                out.push_str("&#");
+                rest = body;
+            }
+        }
+    }
+    out.push_str(rest);
+    Cow::Owned(out)
 }
 
 /// Runs a call so that a panic inside it comes back as `Internal` (ADR-0003 decision 4).
@@ -2385,7 +2463,19 @@ fn examples_name(edition: &str) -> String {
 fn has_chinese_record(opened: &Dict, i: usize) -> Result<bool, CoreError> {
     let record = opened.mdx.record(i)?;
     let text = String::from_utf8_lossy(&record.data);
-    Ok(!text.trim_start().starts_with("@@@LINK=") && crate::examples::has_cjk(&text))
+    if text.trim_start().starts_with("@@@LINK=") {
+        return Ok(false);
+    }
+    // **A bilingual record can hide its Chinese behind a compact style or a character reference** (audit round 2,
+    // 2026-10-26): `&#20013;` carries no CJK byte at all, and a cached `no_chinese` would keep the dictionary out for
+    // good. The check reads what the entry writes — markers applied, references spelled — never the raw record.
+    let expanded = match opened.sheet.apply_within(&text, CALIBRATION_EXPANDED_BYTES) {
+        Ok(expanded) => expanded,
+        // An entry that cannot be expanded within the calibration budget is read as written: a bounded answer, never a
+        // record a marker multiplied.
+        Err(_) => text,
+    };
+    Ok(crate::examples::has_cjk(&decode_char_refs(&expanded)))
 }
 
 /// The projection's runs as the API's spans; one conversion, so `entry_text` and the examples pass can never
@@ -2643,7 +2733,12 @@ fn served(
         // audio player's and the rest are served empty.
         "text/javascript" => match style.map(|_| xdict_entry::script_purpose(text)) {
             Some(Err(why)) if !strip_off_for_tests => {
-                format!("/* XDict does not run this script ({why}): only scripts that make something work do. */")
+                // **The replacement is held to the same ceiling** (audit rounds 1–4, 2026-10-26): a one-byte script under
+                // a one-byte ceiling must not come back as a longer successful response — where the comment cannot fit,
+                // nothing is served, which is what a blocked script runs.
+                let comment =
+                    format!("/* XDict does not run this script ({why}): only scripts that make something work do. */");
+                if comment.len() > max { String::new() } else { comment }
             }
             _ => xdict_entry::script_text_within(text, base, max)?,
         },
@@ -2862,6 +2957,31 @@ fn ledger_error(error: xdict_ledger::LedgerError) -> CoreError {
 #[allow(clippy::unwrap_used, clippy::indexing_slicing, clippy::panic)]
 mod tests {
     use super::*;
+
+    /// **A reference-carried Chinese is found before `no_chinese` is cached** (audit round 2, 2026-10-26): the decoder
+    /// spells numeric references, keeps everything else as it was, and leaves a bare ampersand alone.
+    #[test]
+    fn numeric_character_references_are_spelled() {
+        assert_eq!(decode_char_refs("&#20013;&#25991;"), "中文");
+        assert_eq!(decode_char_refs("&#x4E2D;&#X6587;"), "中文");
+        assert_eq!(decode_char_refs("&#20013 no semicolon"), "中 no semicolon");
+        assert_eq!(decode_char_refs("a &#not a reference"), "a &#not a reference");
+        assert_eq!(decode_char_refs("nothing to spell"), "nothing to spell");
+    }
+
+    /// **A sync peer's log is read within the bound, from the bytes read** (audit rounds 1–4, 2026-10-26): a file one byte
+    /// over is refused however its metadata reads.
+    #[test]
+    #[cfg(not(target_family = "wasm"))]
+    fn a_sync_file_is_read_within_its_bound() {
+        let dir = std::env::temp_dir().join(format!("xdict-read-within-{}-{}", std::process::id(), line!()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("peer.xdlog");
+        std::fs::write(&path, b"12345").unwrap();
+        assert_eq!(read_within(&path, 5).unwrap(), b"12345");
+        assert!(read_within(&path, 4).is_err(), "one byte over the bound is refused");
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     /// The doctype is written into the body's own buffer when it has room, not into a copy of it: the copy of a
     /// 70 MiB body was `entry()`'s peak.
