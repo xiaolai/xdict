@@ -588,7 +588,10 @@ public final class MeaningSession {
             if let operation {
                 ask(operation: operation)
             } else {
-                ask()
+                // **The popover's Meaning Here** (audit rd 1, contract 6): the button promised the meaning question, so
+                // the destination window's remembered mode must not turn it into a translation or a grammar ask.
+                let chosen = settingsProvider?() ?? settings
+                ask(operation: self.operation(for: chosen, selection: nil, honouring: .meaning))
             }
             return
         }
@@ -645,6 +648,9 @@ public final class MeaningSession {
 
     /// Escape, a newer ask, or closing: the ask in flight ends, and what it would have returned is not shown.
     public func cancel() {
+        // **Cancel ends the question** (audit rd 3): a phrase tap still waiting for its lookup belongs to the attempt the
+        // reader cancelled, and its late page must not adopt the phrase and ask after the fact.
+        onAskBegins?()
         abandon()
         // **The sentence keeps the entry it belongs to** (verification finding, 2026-10-20): cancelling stops the ask, not
         // the binding; a second ask must still wait for that entry rather than sample whatever the window shows.
@@ -931,6 +937,9 @@ public final class MeaningSession {
     /// provider is built or called. The pane offers Send from here.
     public func preview() {
         abandon()
+        // **A preview is a newer question** (audit rd 2): a phrase tap still waiting for its lookup belongs to the
+        // question the preview superseded, and its late page must not replace this preview.
+        onAskBegins?()
         // **A preview discards the previous attempt's evidence**: a refusal here must not leave the last prompt attached.
         dropEvidence()
         guard let handoff = held else {

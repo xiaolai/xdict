@@ -18,7 +18,7 @@ public struct AIComposer: Sendable {
         func bytes(in question: AIQuestion) -> Int {
             switch self {
             case .term: question.term.utf8.count
-            case .sentence: Self.sentence(in: question).utf8.count
+            case .sentence: Self.sentenceBytes(in: question)
             case .entry: question.entry?.text.utf8.count ?? 0
             case .sense: question.sense?.text.utf8.count ?? 0
             case .language: question.language.utf8.count
@@ -36,8 +36,16 @@ public struct AIComposer: Sendable {
             }
         }
 
-        /// **The sentence as this mode sends it** (contract 6 §3): marked for every mode but translation. One helper
-        /// feeds both the byte count and the rendering, so the composer's reservation cannot disagree with its output.
+        /// **The sentence's size without building it** (audit rd 1): the marking's two scalars are counted, never
+        /// allocated, so an oversized sentence is refused before its marked copy exists — the reservation's whole point.
+        static func sentenceBytes(in question: AIQuestion) -> Int {
+            question.sentence.utf8.count
+                + (question.mode.marksTerm
+                    ? AIMarking.markingBytes(sentence: question.sentence, range: question.termRange) : 0)
+        }
+
+        /// **The sentence as this mode sends it** (contract 6 §3): marked for every mode but translation. One rule
+        /// decides marking for the count above and this rendering alike.
         static func sentence(in question: AIQuestion) -> String {
             question.mode.marksTerm
                 ? AIMarking.marked(sentence: question.sentence, range: question.termRange)

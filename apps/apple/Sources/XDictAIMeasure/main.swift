@@ -119,7 +119,6 @@ enum Harness {
     // MARK: - The corpus
 
     struct Sample {
-        let key: String
         let textBytes: Int
         let complete: Bool
         let cutAt: UInt64
@@ -204,18 +203,28 @@ enum Harness {
                 let sentence = String(characters[start..<min(end, characters.count)])
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if sentence.count >= 20, sentence.count <= 300,
-                   let found = sentence.range(of: key, options: [.caseInsensitive, .diacriticInsensitive]) {
-                    let boundary = (found.lowerBound == sentence.startIndex
-                                    || !sentence[sentence.index(before: found.lowerBound)].isLetter)
-                        && (found.upperBound == sentence.endIndex || !sentence[found.upperBound].isLetter)
-                    if boundary {
-                        let location = sentence[..<found.lowerBound].utf16.count
-                        return (sentence, NSRange(location: location, length: key.utf16.count))
-                    }
+                   let found = Self.boundedOccurrence(of: key, in: sentence) {
+                    // **The matched range, not the key's length** (audit rd 1): a case- or diacritic-insensitive match
+                    // can be longer or shorter than the key, and the span must be the sentence's own text.
+                    return (sentence, NSRange(found, in: sentence))
                 }
                 start = end
             }
             index += 1
+        }
+        return nil
+    }
+
+    /// **The first whole-word occurrence of `key`, not merely the first substring** (audit rd 3): *threshold* holds
+    /// *hold*, and a boundary failure must not hide the sentence's own *hold* later on.
+    static func boundedOccurrence(of key: String, in sentence: String) -> Range<String.Index>? {
+        var search = sentence.startIndex..<sentence.endIndex
+        while let found = sentence.range(of: key, options: [.caseInsensitive, .diacriticInsensitive], range: search) {
+            let before = found.lowerBound == sentence.startIndex
+                || !sentence[sentence.index(before: found.lowerBound)].isLetter
+            let after = found.upperBound == sentence.endIndex || !sentence[found.upperBound].isLetter
+            if before, after { return found }
+            search = found.upperBound..<sentence.endIndex
         }
         return nil
     }
@@ -393,7 +402,7 @@ enum Harness {
                 if appleAvailable {
                     tokens = try? await model.tokenCount(for: composed)
                 }
-                samples.append(Sample(key: key, textBytes: text.text.utf8.count,
+                samples.append(Sample(textBytes: text.text.utf8.count,
                                       complete: text.complete, cutAt: text.cutAt, composedBytes: composed.utf8.count,
                                       tokens: tokens, question: question, composed: composed,
                                       sentenceSource: fromEntry == nil ? "synthetic" : "entry"))
@@ -407,8 +416,15 @@ enum Harness {
             let byComposed = samples.map(\.composedBytes).sorted()
             let largest = samples.max { $0.textBytes < $1.textBytes } ?? samples[0]
 
-            let chosen = [largest] + samples.sorted { $0.textBytes < $1.textBytes }
-                .dropFirst(max(0, samples.count / 2 - 1)).prefix(max(0, asks - 1))
+            // **The largest, then distinct others** (audit rd 1): the slice below can reach into the list the largest
+            // came from, and a question repeated is not a second sample.
+            let others = samples.filter { $0.question.entry?.ref != largest.question.entry?.ref }
+                .sorted { $0.textBytes < $1.textBytes }
+            // **The skipped half is skipped first, not dropped** (audit rd 2): with more asks than the upper half holds,
+            // the rest of `others` fills the run, so `--asks` is honoured by distinct entries.
+            let start = min(others.count, max(0, samples.count / 2 - 1))
+            let pool = Array(others[start...]) + Array(others[..<start])
+            let chosen = [largest] + pool.prefix(max(0, asks - 1))
             if emit != nil {
                 // **The exact asks, for a CLI run on the Mac where the reader is signed in** (the harness itself runs on
                 // the build host, whose CLI may not be). The file holds entry text; it is written outside the repository
@@ -434,31 +450,31 @@ enum Harness {
             if let provider, source != nil {
                 for sample in chosen.prefix(asks) {
                     let started = ContinuousClock.now
+                    var outcome = "unavailable"
+                    var validated = false
+                    var code: String?
                     do {
                         let raw = try await provider.answer(to: sample.composed)
-                        let elapsed = started.duration(to: .now)
-                        let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
                         do {
                             let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: .grounded,
                                                                         entry: sample.question.entry)
-                            timings.append(Ask(source: source?.rawValue ?? "none", entryBytes: sample.textBytes,
-                                               composedBytes: sample.composedBytes, tokens: sample.tokens,
-                                               seconds: seconds, outcome: answer.outcome.rawValue, validated: true,
-                                               error: nil, sentence: sample.sentenceSource))
+                            outcome = answer.outcome.rawValue
+                            validated = true
                         } catch {
-                            timings.append(Ask(source: source?.rawValue ?? "none", entryBytes: sample.textBytes,
-                                               composedBytes: sample.composedBytes, tokens: sample.tokens,
-                                               seconds: seconds, outcome: "answer.invalid", validated: false,
-                                               error: error.code, sentence: sample.sentenceSource))
+                            outcome = "answer.invalid"
+                            code = error.code
                         }
                     } catch {
-                        let elapsed = started.duration(to: .now)
-                        let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
-                        timings.append(Ask(source: source?.rawValue ?? "none", entryBytes: sample.textBytes,
-                                           composedBytes: sample.composedBytes, tokens: sample.tokens,
-                                           seconds: seconds, outcome: "unavailable", validated: false,
-                                           error: error.code, sentence: sample.sentenceSource))
+                        code = error.code
                     }
+                    // **One record for every outcome** (audit rd 1): the elapsed time and the Ask's fields are written
+                    // once, so a new outcome cannot forget one of them.
+                    let elapsed = started.duration(to: .now)
+                    let seconds = Double(elapsed.components.seconds) + Double(elapsed.components.attoseconds) / 1e18
+                    timings.append(Ask(source: source?.rawValue ?? "none", entryBytes: sample.textBytes,
+                                       composedBytes: sample.composedBytes, tokens: sample.tokens, seconds: seconds,
+                                       outcome: outcome, validated: validated, error: code,
+                                       sentence: sample.sentenceSource))
                 }
             }
             try? core.close(dict: dict)

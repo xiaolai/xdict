@@ -45,8 +45,13 @@ enum SentenceHarness {
                 throw HarnessError.malformed("a sentence line is not {id, language, sentence, term}: \(line)")
             }
             var range: NSRange?
-            if let value = object["range"] as? [String: Any], let start = value["start"] as? Int,
-               let length = value["length"] as? Int {
+            if let value = object["range"] {
+                // **A range that is present but malformed is the harness's failure** (audit rd 1): silently treating it
+                // as `not-found` would measure a prompt the case never described.
+                guard let fields = value as? [String: Any], let start = fields["start"] as? Int,
+                      let length = fields["length"] as? Int else {
+                    throw HarnessError.malformed("a range is not {start, length}: \(line)")
+                }
                 range = NSRange(location: start, length: length)
             }
             return Case(id: id, language: language, sentence: sentence, term: term, range: range)
@@ -80,12 +85,14 @@ enum SentenceHarness {
         let range = item.range.map { AITermRange.range(start: $0.location, length: $0.length) } ?? .notFound
         switch variant {
         case "translate":
-            let template = AITemplates.defaultTemplate(language: answerLanguage, mode: .translate) ?? ""
+            // **The production fallback** (audit rd 3): a language with no shipped template uses English's, as an ask
+            // does — the requested answer language still travels in the question.
+            let template = AITemplates.effective(language: answerLanguage, mode: .translate, stored: nil) ?? ""
             let question = AIQuestion(term: item.term, termRange: range, sentence: item.sentence, entry: nil,
                                       language: translateTo, mode: .translate)
             return try AIComposer.compose(template: template, question: question)
         case "grammar", "grammar+tags":
-            let template = AITemplates.defaultTemplate(language: answerLanguage, mode: .explainGrammar) ?? ""
+            let template = AITemplates.effective(language: answerLanguage, mode: .explainGrammar, stored: nil) ?? ""
             let question = AIQuestion(term: item.term, termRange: range, sentence: item.sentence, entry: nil,
                                       language: answerLanguage, mode: .explainGrammar)
             let composed = try AIComposer.compose(template: template, question: question)
@@ -113,66 +120,78 @@ enum SentenceHarness {
 
         var rows: [Row] = []
         var blind: [(file: String, id: String, variant: String)] = []
-        let blindDirectory = directory.appending(path: "blind")
+        // **One directory per run** (audit rd 2): a reused output path must not mix earlier answers with this run's key.
+        let blindDirectory = directory.appending(path: "blind").appending(path: UUID().uuidString.lowercased())
         try FileManager.default.createDirectory(at: blindDirectory, withIntermediateDirectories: true)
-        var counter = 0
         for item in cases {
             for variant in variants {
+                let mode: AIMode = variant == "translate" ? .translate : .explainGrammar
+                // **The language this row's answer was asked in** (audit rd 2): a translation's target, a grammar
+                // explanation's own language — never the translation's target on a grammar row.
+                let rowTarget = mode == .translate ? translateTo : answerLanguage
                 let composed: String
                 do {
                     composed = try compose(item, variant: variant, answerLanguage: answerLanguage,
                                            translateTo: translateTo)
                 } catch {
-                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: translateTo,
+                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: rowTarget,
                                     composedBytes: 0, seconds: nil, outcome: "compose.invalid", validated: nil,
                                     detected: nil, error: (error as? AIComposeError)?.code
                                         ?? String(describing: error)))
                     continue
                 }
-                let mode: AIMode = variant == "translate" ? .translate : .explainGrammar
                 guard let provider = providers[mode] else {
-                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: translateTo,
+                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: rowTarget,
                                     composedBytes: composed.utf8.count, seconds: nil, outcome: "composed", validated: nil,
                                     detected: nil, error: nil))
                     continue
                 }
                 let started = Date()
+                let raw: String
                 do {
-                    let raw = try await provider.answer(to: composed)
-                    let seconds = Date().timeIntervalSince(started)
-                    var outcome = "answer.invalid"
-                    var validated: Bool? = false
-                    var errorCode: String?
-                    var answerText = raw
-                    do {
-                        let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: mode, entry: nil)
-                        outcome = answer.outcome.rawValue
-                        validated = true
-                        answerText = variant == "translate" ? (answer.translation ?? answer.explanation)
-                                                            : answer.explanation
-                    } catch {
-                        errorCode = error.code
-                    }
-                    let detected = variant == "translate" ? dominantLanguage(answerText) : nil
-                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: translateTo,
-                                    composedBytes: composed.utf8.count, seconds: seconds, outcome: outcome,
-                                    validated: validated, detected: detected, error: errorCode))
-                    counter += 1
-                    let name = String(format: "answer-%03d.txt", counter)
-                    try answerText.write(to: blindDirectory.appending(path: name), atomically: true, encoding: .utf8)
-                    blind.append((file: name, id: item.id, variant: variant))
+                    raw = try await provider.answer(to: composed)
                 } catch {
+                    // **Only the provider call is caught here** (audit rd 1): a filesystem failure below must not become
+                    // a second row that says the provider failed.
                     let seconds = Date().timeIntervalSince(started)
-                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: translateTo,
+                    rows.append(Row(id: item.id, language: item.language, variant: variant, target: rowTarget,
                                     composedBytes: composed.utf8.count, seconds: seconds, outcome: "provider.failed",
                                     validated: nil, detected: nil, error: String(describing: error)))
+                    continue
                 }
+                let seconds = Date().timeIntervalSince(started)
+                var outcome = "answer.invalid"
+                var validated: Bool? = false
+                var errorCode: String?
+                var answerText = raw
+                do {
+                    let answer = try AIAnswerValidator.validate(json: Data(raw.utf8), mode: mode, entry: nil)
+                    outcome = answer.outcome.rawValue
+                    validated = true
+                    // **A refusal's reason is its explanation, not its empty translation** (contract 6 §5b; audit rd 1).
+                    answerText = mode == .translate && answer.outcome == .translated
+                        ? (answer.translation ?? "") : answer.explanation
+                } catch {
+                    errorCode = error.code
+                }
+                // **The answer's own language is checked in every mode** (audit rd 2): a grammar explanation is asked in
+                // the reader's language too, and a translation that ignores its target is the failure this column exists
+                // to show.
+                let detected = dominantLanguage(answerText)
+                rows.append(Row(id: item.id, language: item.language, variant: variant, target: rowTarget,
+                                composedBytes: composed.utf8.count, seconds: seconds, outcome: outcome,
+                                validated: validated, detected: detected, error: errorCode))
+                // **A blind answer's name says nothing about its variant** (audit rd 1): the fixed order would hand the
+                // reader the tags experiment's identity before they read a word.
+                let name = "answer-" + UUID().uuidString.lowercased() + ".txt"
+                try answerText.write(to: blindDirectory.appending(path: name), atomically: true, encoding: .utf8)
+                blind.append((file: name, id: item.id, variant: variant))
             }
         }
 
         var lines = ["id\tlanguage\tvariant\ttarget\tcomposedBytes\tseconds\toutcome\tvalidated\tdetected\tlanguageMatch\terror"]
         for row in rows {
-            let match = row.detected.map { $0 == row.target ? "yes" : "no" } ?? ""
+            let match = row.detected.map { sameLanguage($0, row.target) ? "yes" : "no" } ?? ""
             lines.append([row.id, row.language, row.variant, row.target,
                           row.composedBytes == 0 ? "" : String(row.composedBytes),
                           row.seconds.map { String(format: "%.2f", $0) } ?? "", row.outcome,
@@ -185,7 +204,22 @@ enum SentenceHarness {
         let keyData = try JSONSerialization.data(withJSONObject: key, options: [.prettyPrinted, .sortedKeys])
         try keyData.write(to: blindDirectory.appending(path: "key.json"))
         print("sentences: \(cases.count) cases × \(variants.count) variants, \(rows.count) rows, "
-              + "\(blind.count) blind answers; wrote \(directory.path)")
+              + "\(blind.count) blind answers; wrote \(directory.path)"
+              + (blind.isEmpty ? "" : " and \(blindDirectory.path)"))
+    }
+
+    /// **Whether two tags name the same language for this measurement** (audit rd 3): the base subtag decides, and a
+    /// script, when either side names one, must agree — `en-US` matches `en`, and `zh-Hant` does not match `zh-Hans`.
+    static func sameLanguage(_ a: String, _ b: String) -> Bool {
+        let scripts: Set<String> = ["hans", "hant", "latn", "cyrl", "arab", "deva", "hebr", "thai", "jpan", "kore",
+                                    "grek"]
+        let left = a.lowercased().split(separator: "-").map(String.init)
+        let right = b.lowercased().split(separator: "-").map(String.init)
+        guard left.first == right.first else { return false }
+        let leftScript = left.dropFirst().first(where: scripts.contains)
+        let rightScript = right.dropFirst().first(where: scripts.contains)
+        if let leftScript, let rightScript { return leftScript == rightScript }
+        return true
     }
 
     /// The language a translation came out in, as `NLLanguageRecognizer` names it; nil when it names none.

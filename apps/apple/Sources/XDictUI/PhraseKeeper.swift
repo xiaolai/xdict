@@ -21,6 +21,11 @@ public final class PhraseKeeper {
     }
 
     public private(set) var state: State = .idle
+    /// **The candidate the state is about** (audit rd 1): a phrase row's first candidate can change when another
+    /// dictionary finishes building, and the previous phrase's "Kept" or "Replace Note" must not be shown for the new
+    /// one. The whole candidate is kept — a dictionary too — because two dictionaries can spell one phrase alike and
+    /// their entries are not the same card.
+    public private(set) var candidate: PhraseRow.Candidate?
     /// A newer keep supersedes an older one's late answer, as the phrase ask's serial does.
     @ObservationIgnored private var serial = 0
     @ObservationIgnored private let backend: any SearchBackend
@@ -34,22 +39,34 @@ public final class PhraseKeeper {
     }
 
     /// The phrase's dictionary is no longer in the library: the keep cannot name its entry, and says so.
-    public func fail() {
+    public func fail(_ candidate: PhraseRow.Candidate) {
         serial += 1
+        self.candidate = candidate
         state = .failed
+    }
+
+    /// **This candidate's own state**: another phrase's — or the same phrase in another dictionary — kept, replace or
+    /// failed state is not shown for it.
+    public func state(for candidate: PhraseRow.Candidate) -> State {
+        self.candidate == candidate ? state : .idle
     }
 
     /// The sentence moved on, or the presentation ended: nothing is kept and no late answer lands.
     public func reset() {
         serial += 1
+        candidate = nil
         state = .idle
     }
 
     /// **Keep the phrase as a card**: the row's own lookup finds the entry the reader could open, and the note's text is
     /// the dictionary's spelling. `replacing` is the reader's yes after `needsReplacement`.
     public func keep(_ candidate: PhraseRow.Candidate, replacing: Bool = false) async {
+        // **One keep at a time for one candidate** (audit rd 2): a second tap while the first is suspended would start a
+        // second save, and the notes' own duplicate guard would fail it while the first wrote the card.
+        guard !(state == .keeping && self.candidate == candidate) else { return }
         serial += 1
         let mine = serial
+        self.candidate = candidate
         state = .keeping
         let options = LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil)
         let answer = await backend.request(.lookup(query: candidate.phrase, dicts: [candidate.dict], options: options))
@@ -62,7 +79,11 @@ public final class PhraseKeeper {
             return
         }
         let target = MeaningTarget(dictionary: candidate.dict, entry: hit.entry)
-        switch await save(target, candidate.phrase, replacing) {
+        let saved = await save(target, candidate.phrase, replacing)
+        // **The save's suspension is another chance to be superseded** (audit rd 1): a reset or a newer keep during it
+        // owns the state, and this completion must present nothing.
+        guard serial == mine else { return }
+        switch saved {
         case .saved: state = .kept
         case .needsReplacement: state = .needsReplacement
         case .failed: state = .failed

@@ -153,8 +153,15 @@ struct PhraseKeepTests {
     @Test func aMissingDictionaryIsAStatedFailure() {
         let backend = ScriptedLookupBackend(.success(Delivered(answer: .page(Self.page()), payload: nil)))
         let keeper = PhraseKeeper(backend: backend) { _, _, _ in .failed }
-        keeper.fail()
+        keeper.fail(Self.candidate())
         #expect(keeper.state == .failed)
+        #expect(keeper.state(for: Self.candidate()) == .failed, "the failure is this phrase's own")
+        #expect(keeper.state(for: Self.candidate("look the word up")) == .idle,
+                "another candidate never inherits the previous phrase's state")
+        #expect(keeper.state(for: PhraseRow.Candidate(dict: DictId(rawValue: "handle-other"),
+                                                      phrase: "take something into account", separation: .none,
+                                                      gap: 0, span: NSRange(location: 0, length: 1))) == .idle,
+                "the same phrase in another dictionary is another candidate")
     }
 }
 

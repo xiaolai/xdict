@@ -31,6 +31,15 @@ struct SettingsSearchTests {
         #expect(prompt.first?.isAdvanced == true)
     }
 
+    /// **The prompt's two newer kinds are searchable** (contract 6; audit rd 1): the editor lists translation and
+    /// grammar templates, so a reader looking for either must find the same row.
+    @Test func thePromptsNewerKindsAreSearchable() {
+        for query in ["translation", "grammar", "翻译", "语法"] {
+            #expect(SettingsSearch.results(query).contains { $0.anchor == SettingsSearch.Anchor.aiPrompt },
+                    "\(query) does not find the prompt editor")
+        }
+    }
+
     @Test func caseAndOrderAreForgiven() {
         #expect(Self.panes("SHORTCUT") == Self.panes("shortcut"))
         #expect(Self.panes("source ai").first == .ai)

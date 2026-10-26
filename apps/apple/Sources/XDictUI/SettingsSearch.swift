@@ -58,7 +58,7 @@ public enum SettingsSearch {
         .aiSource: ["人工智能", "模型", "来源", "登录", "本地", "云端"],
         .aiEntryText: ["隐私", "发送", "词条"],
         .aiLanguage: ["回答语言", "中文", "英文"],
-        .aiPrompt: ["提示词", "模板", "高级", "预览"],
+        .aiPrompt: ["提示词", "模板", "高级", "预览", "翻译", "语法"],
         .setupBoard: ["设置", "权限", "辅助功能", "服务", "快捷键"],
     ]
 
@@ -102,7 +102,8 @@ public enum SettingsSearch {
         Item(.ai, .aiLanguage, "Answer language",
              keywords: ["ai", "language", "chinese", "english"]),
         Item(.ai, .aiPrompt, "Customize the Prompt", advanced: true,
-             keywords: ["ai", "prompt", "template", "wording", "advanced", "preview"]),
+             keywords: ["ai", "prompt", "template", "wording", "advanced", "preview", "translation", "translate",
+                        "grammar"]),
         Item(.setup, .setupBoard, "Setup",
              keywords: ["setup", "permissions", "accessibility", "screen", "recording", "shortcut", "services",
                         "spotlight", "readiness"]),

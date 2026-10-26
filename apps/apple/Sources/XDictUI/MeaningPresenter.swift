@@ -146,7 +146,8 @@ public enum MeaningPresenter {
                 quotes: answer.quotes,
                 // **A translation's answer is its translation** (contract 6 §5b): the same field the pane's Copy and
                 // Save as Note read, so one rule formats every mode's answer.
-                explanation: mode == .translate ? (answer.translation ?? "") : answer.explanation,
+                explanation: mode == .translate && answer.outcome == .translated
+                    ? (answer.translation ?? "") : answer.explanation,
                 problem: nil,
                 code: nil,
                 selectionMoved: moved(sent: sent, mode: mode, selection: selection))

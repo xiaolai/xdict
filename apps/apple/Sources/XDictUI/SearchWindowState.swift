@@ -113,7 +113,12 @@ public final class SearchWindowState {
         // **Asking something else ends the failed tap's retry** (audit round 4, 2026-10-26): the window's retry belongs
         // to the failure that armed it, and the reader asking anything else ends it. The last line of `init`, because it
         // is the first that may capture `self`.
-        meaning.onAskBegins = { [weak self] in self?.failedPhraseTap = nil }
+        meaning.onAskBegins = { [weak self] in
+            // **A newer question ends the phrase tap's pending lookup** (audit rd 1): its late page must not adopt its
+            // place and replace the sentence the reader has since asked about.
+            self?.failedPhraseTap = nil
+            self?.phraseAskSerial += 1
+        }
         // **The question the reader last asked comes back with the next window** (plan-context-tools WI-8): read from the
         // app's own preferences, never from the Settings store, so a window that never asks touches no Keychain.
         meaning.choose(MeaningAskMode.stored())
@@ -123,6 +128,9 @@ public final class SearchWindowState {
     /// remembered for the next window. The previous answer goes; the sentence stays.
     public func chooseMeaningMode(_ mode: MeaningAskMode) {
         mode.store()
+        // The pending phrase tap belonged to the previous question; its late answer must not land under this one.
+        failedPhraseTap = nil
+        phraseAskSerial += 1
         meaning.choose(mode)
     }
 
@@ -219,7 +227,12 @@ public final class SearchWindowState {
     public func entryDrew(_ subject: MeaningSession.Subject, target: (DictId, EntryRef)?, lookup: Int?) {
         let hadSentence = meaning.held != nil
         meaning.drawn(subject, target: target, lookup: lookup)
-        if hadSentence, meaning.held == nil { phrases.clear() }
+        if hadSentence, meaning.held == nil {
+            phrases.clear()
+            // **The keep belonged to that sentence** (audit rd 2): its pending lookup must not write a card after the
+            // reader has navigated away.
+            phraseKeeper.reset()
+        }
     }
 
     /// The entry drawn now, as an ask's target: its dictionary's handle and its edition-qualified reference.
@@ -317,7 +330,7 @@ public final class SearchWindowState {
     /// `replacing` is the reader's yes after `needsReplacement`; without it an existing note is never overwritten.
     public func keepPhrase(_ candidate: PhraseRow.Candidate, replacing: Bool = false) async {
         guard source(for: candidate.dict) != nil else {
-            phraseKeeper.fail()
+            phraseKeeper.fail(candidate)
             return
         }
         await phraseKeeper.keep(candidate, replacing: replacing)

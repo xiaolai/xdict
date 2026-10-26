@@ -76,7 +76,18 @@ public struct LookupPanelView: View {
     /// **The chrome of a panel showing this row** (audit round 4, 2026-10-26): the phrase row is above the entry, not
     /// inside it, so a panel fitted without it is one row too short.
     public static func chromeHeight(for row: PhraseRow) -> CGFloat {
-        row == .hidden ? chromeHeight : chromeHeight + PanelLook.phraseRowHeight
+        switch row {
+        case .hidden:
+            return chromeHeight
+        case let .found(_, _, _, building, _):
+            // **The building line is part of the row's height** (audit rd 1): a found row with dictionaries still being
+            // read draws one caption line more than the reserve holds, and a panel fitted short clips it.
+            let extra = building > 0
+                ? PanelLook.lineHeight(Tokens.TextRole.caption.nsFont) + PanelLook.footerGap : 0
+            return chromeHeight + PanelLook.phraseRowHeight + extra
+        case .building, .unavailable:
+            return chromeHeight + PanelLook.phraseRowHeight
+        }
     }
 
     /// The popover's title row (P41): its 20 pt title. Apple's runs a rule after it to the trailing inset; XDict's has none
@@ -325,7 +336,7 @@ struct PhraseKeepControl: View {
     let identifier: String
 
     var body: some View {
-        switch state.phraseKeeper.state {
+        switch state.phraseKeeper.state(for: candidate) {
         case .idle:
             Button("Keep") { Task { await state.keepPhrase(candidate) } }  // placement: P41
                 .buttonStyle(.borderless)
