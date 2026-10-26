@@ -243,144 +243,25 @@ const IRREGULAR: &[(&str, &str)] = &[
     ("axes", "axis"),
 ];
 
-/// Base → inflections a rule cannot produce, for the same verbs and nouns.
-const IRREGULAR_FORMS: &[(&str, &[&str])] = &[
-    ("be", &["am", "is", "are", "was", "were", "been", "being"]),
-    ("have", &["has", "had", "having"]),
-    ("do", &["does", "did", "done", "doing"]),
-    ("go", &["goes", "went", "gone", "going"]),
-    ("say", &["says", "said"]),
-    ("get", &["gets", "got", "gotten", "getting"]),
-    ("make", &["made", "making"]),
-    ("know", &["knew", "known"]),
-    ("think", &["thought"]),
-    ("take", &["took", "taken", "taking"]),
-    ("see", &["saw", "seen", "seeing"]),
-    ("come", &["came", "coming"]),
-    ("give", &["gave", "given", "giving"]),
-    ("find", &["found"]),
-    ("tell", &["told"]),
-    ("become", &["became", "becoming"]),
-    ("show", &["showed", "shown"]),
-    ("leave", &["left", "leaving"]),
-    ("feel", &["felt"]),
-    ("put", &["putting"]),
-    // **The bases whose only irregular surface is the doubled gerund**: `forms` reaches these words anyway, and a row
-    // is what the consistency test holds the table to (audit round 2, 2026-10-26).
-    ("bet", &["betting"]),
-    ("hit", &["hitting"]),
-    ("hurt", &["hurting"]),
-    ("let", &["letting"]),
-    ("set", &["setting"]),
-    ("shut", &["shutting"]),
-    ("split", &["splitting"]),
-    ("spread", &["spreading"]),
-    ("bring", &["brought"]),
-    ("begin", &["began", "begun", "beginning"]),
-    ("keep", &["kept"]),
-    ("hold", &["held"]),
-    ("write", &["wrote", "written", "writing"]),
-    ("stand", &["stood"]),
-    ("hear", &["heard"]),
-    ("mean", &["meant"]),
-    ("meet", &["met"]),
-    ("run", &["ran", "running"]),
-    ("pay", &["paid"]),
-    ("sit", &["sat", "sitting"]),
-    ("speak", &["spoke", "spoken", "speaking"]),
-    ("lie", &["lay", "lain", "lying", "lied"]),
-    ("lead", &["led"]),
-    ("grow", &["grew", "grown"]),
-    ("lose", &["lost", "losing"]),
-    ("fall", &["fell", "fallen"]),
-    ("send", &["sent"]),
-    ("build", &["built"]),
-    ("understand", &["understood"]),
-    ("draw", &["drew", "drawn"]),
-    ("break", &["broke", "broken"]),
-    ("spend", &["spent"]),
-    ("cut", &["cutting"]),
-    ("rise", &["rose", "risen", "rising"]),
-    ("drive", &["drove", "driven", "driving"]),
-    ("buy", &["bought"]),
-    ("wear", &["wore", "worn"]),
-    ("choose", &["chose", "chosen", "choosing"]),
-    ("eat", &["ate", "eaten"]),
-    ("drink", &["drank", "drunk"]),
-    ("sing", &["sang", "sung"]),
-    ("singe", &["singeing"]),
-    ("swim", &["swam", "swum", "swimming"]),
-    ("fly", &["flew", "flown"]),
-    ("forget", &["forgot", "forgotten", "forgetting"]),
-    ("forgive", &["forgave", "forgiven", "forgiving"]),
-    ("freeze", &["froze", "frozen", "freezing"]),
-    ("teach", &["taught"]),
-    ("catch", &["caught"]),
-    ("fight", &["fought"]),
-    ("seek", &["sought"]),
-    ("sell", &["sold"]),
-    ("shoot", &["shot"]),
-    ("sleep", &["slept"]),
-    ("wake", &["woke", "woken", "waking"]),
-    ("win", &["won", "winning"]),
-    ("throw", &["threw", "thrown"]),
-    ("bear", &["bore", "borne", "born"]),
-    ("beat", &["beaten", "beating"]),
-    ("bend", &["bent"]),
-    ("bind", &["bound"]),
-    ("bite", &["bit", "bitten", "biting"]),
-    ("blow", &["blew", "blown"]),
-    ("burn", &["burnt"]),
-    ("deal", &["dealt"]),
-    ("dig", &["dug", "digging"]),
-    ("dream", &["dreamt"]),
-    ("feed", &["fed"]),
-    ("hide", &["hid", "hidden", "hiding"]),
-    ("lay", &["laid"]),
-    ("lend", &["lent"]),
-    ("light", &["lit"]),
-    ("ride", &["rode", "ridden", "riding"]),
-    ("ring", &["rang", "rung"]),
-    ("shake", &["shook", "shaken", "shaking"]),
-    ("shine", &["shone"]),
-    ("sink", &["sank", "sunk"]),
-    ("slide", &["slid"]),
-    ("steal", &["stole", "stolen"]),
-    ("stick", &["stuck"]),
-    ("strike", &["struck"]),
-    ("swear", &["swore", "sworn"]),
-    ("sweep", &["swept"]),
-    ("tear", &["tore", "torn"]),
-    ("man", &["men"]),
-    ("woman", &["women"]),
-    ("child", &["children"]),
-    ("foot", &["feet"]),
-    ("tooth", &["teeth"]),
-    ("goose", &["geese"]),
-    ("mouse", &["mice"]),
-    ("louse", &["lice"]),
-    ("person", &["people"]),
-    ("ox", &["oxen"]),
-    ("life", &["lives"]),
-    ("wife", &["wives"]),
-    ("knife", &["knives"]),
-    ("leaf", &["leaves"]),
-    ("half", &["halves"]),
-    ("shelf", &["shelves"]),
-    ("wolf", &["wolves"]),
-    ("calf", &["calves"]),
-    ("loaf", &["loaves"]),
-    ("thief", &["thieves"]),
-    ("self", &["selves"]),
-    ("analysis", &["analyses"]),
-    ("crisis", &["crises"]),
-    ("thesis", &["theses"]),
-    ("datum", &["data"]),
-    ("criterion", &["criteria"]),
-    ("phenomenon", &["phenomena"]),
-    ("index", &["indices"]),
-    ("axis", &["axes"]),
-];
+/// **The reverse table, derived from [`IRREGULAR`]** (audit rounds 1–4, 2026-10-26): one row per base, its surfaces in
+/// the order the forward table names them. One source of truth, so a pair added above is a form generated below, and
+/// there is no second table to forget.
+fn irregular_forms() -> &'static [(&'static str, Vec<&'static str>)] {
+    static FORMS: std::sync::OnceLock<Vec<(&'static str, Vec<&'static str>)>> = std::sync::OnceLock::new();
+    FORMS.get_or_init(|| {
+        let mut rows: Vec<(&'static str, Vec<&'static str>)> = Vec::new();
+        for &(surface, base) in IRREGULAR {
+            if surface == base {
+                continue;
+            }
+            match rows.iter_mut().find(|(known, _)| *known == base) {
+                Some((_, listed)) => listed.push(surface),
+                None => rows.push((base, vec![surface])),
+            }
+        }
+        rows
+    })
+}
 
 /// The written form, lowercased, first; then the base forms it may come from and their inflections.
 pub fn forms(word: &str) -> Vec<String> {
@@ -406,9 +287,9 @@ pub fn forms(word: &str) -> Vec<String> {
         for inflection in inflections(base) {
             push(&mut out, &mut seen, inflection);
         }
-        for (known, irregular) in IRREGULAR_FORMS {
-            if known == base {
-                for form in *irregular {
+        for (known, irregular) in irregular_forms() {
+            if *known == base {
+                for form in irregular {
                     push(&mut out, &mut seen, (*form).to_string());
                 }
             }
@@ -644,20 +525,20 @@ fn is_cvc(word: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{IRREGULAR, IRREGULAR_FORMS};
+    use super::{IRREGULAR, irregular_forms};
 
     /// **The reverse table never lags its forward one** (audit round 1, 2026-10-26): every irregular surface maps back
-    /// to a base, so a base listed in `IRREGULAR_FORMS` must list that surface among its forms — `axes` was missing.
+    /// to a base, so every base must list that surface among its forms — `axes` was missing.
     #[test]
     fn every_irregular_reverse_is_listed() {
         for (surface, base) in IRREGULAR {
             if surface == base {
                 continue;
             }
-            // **A base with no row is a failure, not a skip** (audit round 2): the table is the base-to-surface half of
+            // **A base with no row is a failure, not a skip** (audit round 2): the reverse table is derived from
             // `IRREGULAR`, and a quietly absent base is how `axes` went missing.
-            let listed = IRREGULAR_FORMS.iter().find(|(known, _)| known == base).map(|(_, listed)| *listed);
-            assert!(listed.is_some(), "{base} has no IRREGULAR_FORMS row");
+            let listed = irregular_forms().iter().find(|(known, _)| *known == *base).map(|(_, listed)| listed);
+            assert!(listed.is_some(), "{base} has no row");
             assert!(listed.is_none_or(|listed| listed.contains(surface)), "{base} lists no {surface}");
             // **The behavior is the contract**: every irregular surface reaches its base through `forms`, whether or
             // not a reverse row lists it.
