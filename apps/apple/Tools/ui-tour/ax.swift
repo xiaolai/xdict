@@ -132,6 +132,17 @@ func find(_ root: AXUIElement, _ matches: Set<String>, depth: Int = 0) -> AXUIEl
     return nil
 }
 
+/// **The window the routes drive.** It used to be the one holding the `scope.menu` button, the search field's AppKit
+/// magnifier; SwiftUI's `.searchable` replaced that menu (owner, 2026-10-24), so the identifier is gone and every route
+/// that sized the window failed "no main window" (2026-10-26). The window names itself `main-AppWindow-…`; the old marks
+/// stay as fallbacks so an older bundle still drives.
+func mainWindow(_ app: AXUIElement) -> AXUIElement? {
+    let all = windows(app)
+    if let named = all.first(where: { (string($0, kAXIdentifierAttribute) ?? "").hasPrefix("main") }) { return named }
+    if let scoped = all.first(where: { find($0, ["scope.menu"]) != nil }) { return scoped }
+    return all.first
+}
+
 func windows(_ app: AXUIElement) -> [AXUIElement] {
     (attribute(app, kAXWindowsAttribute) as? [AXUIElement]) ?? []
 }
@@ -305,7 +316,8 @@ case "reset":
     // Every window but the main one closed (the main window's search field holds the `scope.menu` button), by its own
     // close button.
     var closed = 0
-    for window in windows(app) where find(window, ["scope.menu"]) == nil {
+    let main = mainWindow(app)
+    for window in windows(app) where main.map({ CFEqual($0 as CFTypeRef, window as CFTypeRef) }) != true {
         if let button = attribute(window, kAXCloseButtonAttribute) {
             if AXUIElementPerformAction(button as! AXUIElement, kAXPressAction as CFString) == .success { closed += 1 }
         }
@@ -317,7 +329,7 @@ case "size":
     guard arguments.count == 5, let width = Double(arguments[3]), let height = Double(arguments[4]) else {
         fail("size <pid> <width> <height>", code: 2)
     }
-    guard let main = windows(app).first(where: { find($0, ["scope.menu"]) != nil }) else { fail("no main window") }
+    guard let main = mainWindow(app) else { fail("no main window") }
     var size = CGSize(width: width, height: height)
     guard let value = AXValueCreate(.cgSize, &size) else { fail("the requested size is invalid") }
     let result = AXUIElementSetAttributeValue(main, kAXSizeAttribute as CFString, value)
