@@ -774,6 +774,11 @@ public final class EntryViewController: NSViewController, EntryPaneHost {
         performFind(findBar.field.stringValue)
     }
 
+    func isPrimary(_ pane: EntryPane) -> Bool {
+        if page != nil { return pane === shownPane }
+        return pane === self.pane
+    }
+
     func documentFinished(_ pane: EntryPane) {
         if let page, page.panes.contains(where: { $0 === pane }) {
             page.finished(pane)

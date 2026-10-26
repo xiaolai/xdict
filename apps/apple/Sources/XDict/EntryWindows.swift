@@ -100,8 +100,10 @@ final class EntryEventLog {
         case .documentRequested(let reference):
             requested = reference
             done = false
-        case .documentFinished:
-            done = true
+        case .documentFinished(_, let primary):
+            // **A page's other panes finish too** (audit round 4, 2026-10-26): only the primary document's finish is the
+            // entry's.
+            if primary { done = true }
         default:
             break
         }

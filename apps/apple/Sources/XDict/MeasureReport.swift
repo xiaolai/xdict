@@ -97,7 +97,7 @@ final class MeasureRun {
         switch event {
         case .documentRequested:
             pending?.requested = true
-        case .documentFinished where sample.requested:
+        case .documentFinished(_, let primary) where sample.requested && primary:
             pending = nil
             let spent = overhead
             Task { await self.finish(sample.key, sample.query, overhead: spent) }

@@ -237,6 +237,7 @@ struct ConfinementTests {
             func selectSense(_ click: EntrySenseClick, from pane: EntryPane) {}
             func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView? { nil }
             func documentFinished(_ pane: EntryPane) {}
+            func isPrimary(_ pane: EntryPane) -> Bool { true }
             func displayValues(_ options: EntryDisplayOptions, for pane: EntryPane) -> [EntryDisplayValue] { [] }
             func displayApplied(_ pane: EntryPane) {}
         }

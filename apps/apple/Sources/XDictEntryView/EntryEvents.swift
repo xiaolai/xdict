@@ -11,8 +11,9 @@ public enum EntryEvent: Sendable, Equatable {
     case refusedToRender(EntryRefusal)
     case documentRequested(EntryReference)
     case documentFailed(EntryReference, String)
-    /// The main document finished loading (`didFinish`).
-    case documentFinished(URL)
+    /// A document finished loading (`didFinish`), and whether it is the one the presentation is about: a page of several
+    /// dictionaries finishes pane by pane, and only the primary one answers "the entry is there" (audit round 4).
+    case documentFinished(URL, primary: Bool)
     /// A request answered, and the open handle of the dictionary it was answered from.
     case served(handle: String, url: String, status: Int, mime: String, bytes: Int)
     case refusedRequest(handle: String, url: String, reason: String)

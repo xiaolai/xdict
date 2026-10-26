@@ -15,6 +15,9 @@ protocol EntryPaneHost: AnyObject {
     /// A sense the reader clicked (plan-explain-sense WI-5): its ordinal, and this frame's entry for the window to
     /// name it in the dictionary it was clicked in.
     func selectSense(_ click: EntrySenseClick, from pane: EntryPane)
+    /// Whether this pane draws the entry the presentation is about: a page's panes finish one by one, and the other
+    /// panes' finishes are not the entry's (audit round 4, 2026-10-26).
+    func isPrimary(_ pane: EntryPane) -> Bool
     /// A new window, asked for only when the confinement allows one (the lab's control for that layer, never the app).
     func newWindow(_ configuration: WKWebViewConfiguration, for action: WKNavigationAction) -> WKWebView?
     func documentFinished(_ pane: EntryPane)
@@ -468,7 +471,7 @@ final class EntryPane: NSObject, WKNavigationDelegate, WKUIDelegate, WKScriptMes
         Task { @MainActor in
             // Landed before the document is reported finished, so whoever waits for it finds it where it belongs.
             await land(arrival)
-            host?.record(.documentFinished(url))
+            host?.record(.documentFinished(url, primary: host?.isPrimary(self) ?? true))
             host?.documentFinished(self)
         }
     }

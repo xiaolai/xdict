@@ -135,9 +135,10 @@ final class LookupWindowRun: LookupStage {
             return ["prepared": false, "reason": "The synthetic reading could not be recorded."]
         }
         if operation == "uiDemo.review" {
-            guard await XDictApp.study.saveNote(entry: shown.result.entry,
-                                                text: "Remember the word in its sentence: I brought an apple for lunch.",
-                                                name: source.name) != nil else {
+            guard case .saved = await XDictApp.study.saveNote(
+                entry: shown.result.entry,
+                text: "Remember the word in its sentence: I brought an apple for lunch.",
+                name: source.name) else {
                 return ["prepared": false, "reason": "The synthetic review note could not be saved."]
             }
         }
@@ -157,8 +158,10 @@ final class LookupWindowRun: LookupStage {
         case .documentRequested(let reference):
             requested = reference
             finished = false
-        case .documentFinished:
-            finished = true
+        case .documentFinished(_, let primary):
+            // **Another pane's finish is not the entry's** (audit round 4, 2026-10-26): on a page of several dictionaries
+            // the first pane to finish satisfied `landed` before the entry the presentation is about had.
+            if primary { finished = true }
         case .linkRouted(let url, let action):
             routed.append("\(action) \(url)")
         case .navigation(let url, let verdict, _, _):
@@ -344,25 +347,12 @@ final class LookupWindowRun: LookupStage {
             return JSON.stringify({frame: !!document.getElementById('xdict-frame-column'), own: own,
               font: s ? s.fontFamily : '', margin: s ? s.marginTop : '', text: b ? b.textContent.slice(0, 40) : ''});
             """#
-        func read(until wanted: @escaping ([String: Any]) -> Bool) async -> [String: Any] {
-            var last: [String: Any] = [:]
-            let deadline = ContinuousClock.now + .seconds(8)
-            while ContinuousClock.now < deadline {
-                if let text = await InstrumentPage.evaluate(state.entry.webView, look) as? String,
-                   let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
-                    last = parsed
-                    if wanted(parsed) { return parsed }
-                }
-                try? await Task.sleep(for: .milliseconds(50))
-            }
-            return last
-        }
         let showsApple = { (page: [String: Any]) in (page["text"] as? String)?.contains("apple") == true }
-        let styled = await read { showsApple($0) && $0["frame"] as? Bool == true }
+        let styled = await read(state.entry.webView, look) { showsApple($0) && $0["frame"] as? Bool == true }
         preferences.setOriginalStyle(true, for: key)
-        let original = await read { showsApple($0) && $0["frame"] as? Bool == false && $0["own"] as? Bool == true }
+        let original = await read(state.entry.webView, look) { showsApple($0) && $0["frame"] as? Bool == false && $0["own"] as? Bool == true }
         preferences.setOriginalStyle(false, for: key)
-        let back = await read { showsApple($0) && $0["frame"] as? Bool == true }
+        let back = await read(state.entry.webView, look) { showsApple($0) && $0["frame"] as? Bool == true }
         let differs = styled["font"] as? String != original["font"] as? String
             || styled["margin"] as? String != original["margin"] as? String
         findings.check(name, styled["frame"] as? Bool == true && styled["own"] as? Bool == false
@@ -400,19 +390,6 @@ final class LookupWindowRun: LookupStage {
               hue: r.getAttribute('data-xdict-hue') || '',
               text: document.body ? document.body.textContent.slice(0, 40) : ''});
             """#
-        func read(until wanted: @escaping ([String: Any]) -> Bool) async -> [String: Any] {
-            var last: [String: Any] = [:]
-            let deadline = ContinuousClock.now + .seconds(8)
-            while ContinuousClock.now < deadline {
-                if let text = await InstrumentPage.evaluate(state.entry.webView, look) as? String,
-                   let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
-                    last = parsed
-                    if wanted(parsed) { return parsed }
-                }
-                try? await Task.sleep(for: .milliseconds(50))
-            }
-            return last
-        }
         func shows(_ accent: EntryReadingFrame.Accent) -> ([String: Any]) -> Bool {
             { page in
                 let value = page["accent"] as? String ?? ""
@@ -420,11 +397,11 @@ final class LookupWindowRun: LookupStage {
                     && [accent.values.light, accent.values.dark].map { $0.lowercased() }.contains(value)
             }
         }
-        let first = await read(until: shows(.teal))
+        let first = await read(state.entry.webView, look, until: shows(.teal))
         var pages = [("teal", first, shows(.teal)(first))]
         for accent in [EntryReadingFrame.Accent.red, .indigo, .teal] {
             preferences.setAccent(accent)
-            let page = await read(until: shows(accent))
+            let page = await read(state.entry.webView, look, until: shows(accent))
             pages.append((accent.rawValue, page, shows(accent)(page)))
         }
         findings.check(name, pages.allSatisfy(\.2),
@@ -547,9 +524,35 @@ final class LookupWindowRun: LookupStage {
         String(localized: SearchSentences.result(headword: hit.headword, how: hit.how, record: record, dictionary: dictionary))
     }
 
-    private func write(_ object: [String: Any], to url: URL) {
-        guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return }
-        try? data.write(to: url, options: .atomic)
+    /// **One read of the page's JSON until `wanted` accepts it** (audit round 4, 2026-10-26): two checks had this loop
+    /// line for line, each with its own script.
+    private func read(_ webView: WKWebView?, _ script: String,
+                      until wanted: @escaping ([String: Any]) -> Bool) async -> [String: Any] {
+        var last: [String: Any] = [:]
+        let deadline = ContinuousClock.now + .seconds(8)
+        while ContinuousClock.now < deadline {
+            if let text = await InstrumentPage.evaluate(webView, script) as? String,
+               let parsed = try? JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any] {
+                last = parsed
+                if wanted(parsed) { return parsed }
+            }
+            try? await Task.sleep(for: .milliseconds(50))
+        }
+        return last
+    }
+
+    /// Writes one of the instrument's JSON files. **A write that fails is reported, not dropped** (audit round 4): the
+    /// driver outside reads these files, and a missing one used to look like the app's timeout.
+    @discardableResult
+    private func write(_ object: [String: Any], to url: URL) -> Bool {
+        do {
+            let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+            try data.write(to: url, options: .atomic)
+            return true
+        } catch {
+            note("write failed: \(url.lastPathComponent): \(error)")
+            return false
+        }
     }
 
     // MARK: - LookupStage
