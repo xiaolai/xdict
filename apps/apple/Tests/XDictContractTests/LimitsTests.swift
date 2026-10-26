@@ -28,7 +28,12 @@ struct LimitsTests {
                                                         operation: "op")),
                               Fixtures.index(.studyNoteAt(entry: Fixtures.entryRef, text: "t", name: "Tiny",
                                                           stamp: Fixtures.studyStamp, operation: "op")),
-                              Fixtures.index(.definitionHash(dict: Fixtures.dict, entry: Fixtures.entryRef))])
+                              Fixtures.index(.definitionHash(dict: Fixtures.dict, entry: Fixtures.entryRef)),
+                              // **`studyReanchor` renders entries like an entry read** (audit rounds 1–4, 2026-10-26), so it
+                              // holds a bulk credit rather than none.
+                              Fixtures.index(.studyReanchor(oldEdition: Fixtures.entryRef.edition,
+                                                            newEdition: Fixtures.entryRef.edition,
+                                                            stamp: Fixtures.studyStamp, operationPrefix: "move"))])
     }
 
     /// Only an answer that carries a payload has a ceiling: an entry's is the view's, a resource's by its type.
@@ -191,7 +196,10 @@ struct LimitsTests {
                              key: "hold", occurrence: 0)
         let huge = EntryText(entry: entry, text: String(repeating: "x", count: 5 << 20), spans: [], complete: true,
                              omittedBytes: 0, cutAt: 0, spansDropped: 0)
-        let data = try Response(id: 7, outcome: .answer(.entryText(huge))).boundedEncoded()
+        // **The payload goes with the answer the ceiling replaced** (audit round 4, 2026-10-26): a refusal carrying one
+        // is itself refused by `Response.read`.
+        let (data, payload) = try Response(id: 7, outcome: .answer(.entryText(huge))).bounded(payload: Data("bytes".utf8))
+        #expect(payload == nil, "the refusal kept a payload")
         #expect(Limits.envelopeRefusal(data) == nil, "the substitute is itself within the ceiling")
         let response = try Wire.decode(Response.self, from: data)
         guard case .failure(.refused(.envelopeTooLarge(bytes: _, limit: _))) = response.outcome else {

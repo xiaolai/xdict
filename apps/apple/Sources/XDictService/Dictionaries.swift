@@ -18,8 +18,20 @@ final class Dictionaries: Sendable {
 
     private struct State {
         var filesOf: [DictId: [UUID]] = [:]
+        /// **The open dictionary of each edition** (audit rounds 1–4, 2026-10-26): a request naming an edition
+        /// (`studyNoteAt`, `studyReanchor`) reads that dictionary's files, and admission must know which it is.
+        var editions: [Edition: DictId] = [:]
         var tokens: [UUID: FileToken] = [:]
+        /// When each token was last observed, and the counter that orders them: the ledger is capped by recency.
+        var observed: [UUID: UInt64] = [:]
+        var nextObservation: UInt64 = 0
     }
+
+    /// **The most tokens the ledger keeps** (audit rounds 1–4, 2026-10-26): every file the reader ever imported left a
+    /// token for the process's life. The files of open dictionaries are always kept, and the most recently observed of
+    /// the rest up to this many. Evicting one fails a read closed — the core refuses a source it cannot vouch for —
+    /// never open.
+    static let tokenCeiling = 4096
 
     private let core: Result<Core, CoreError>
     private let state = Mutex(State())
@@ -45,10 +57,39 @@ final class Dictionaries: Sendable {
         state.withLock { $0.filesOf }
     }
 
+    /// What admission reads beside them: the open dictionary of each edition.
+    func editions() -> [Edition: DictId] {
+        state.withLock { $0.editions }
+    }
+
     /// An admitted request's tokens, merged so an older observation never replaces a newer one (Codex objection 3).
     func observe(_ tokens: [FileToken]) {
-        state.withLock { $0.tokens = TokenLedger.merging(tokens, into: $0.tokens) }
+        state.withLock { state in
+            state.tokens = TokenLedger.merging(tokens, into: state.tokens)
+            for token in tokens {
+                state.nextObservation += 1
+                state.observed[token.file] = state.nextObservation
+            }
+            Self.prune(&state)
+        }
     }
+
+    /// Drops the oldest tokens of files no open dictionary holds until the ledger is within its ceiling.
+    private static func prune(_ state: inout State) {
+        guard state.tokens.count > tokenCeiling else { return }
+        let open = Set(state.filesOf.values.joined())
+        let stale = state.tokens.keys.filter { !open.contains($0) }
+            .sorted { (state.observed[$0] ?? 0) < (state.observed[$1] ?? 0) }
+        var excess = state.tokens.count - tokenCeiling
+        for file in stale where excess > 0 {
+            state.tokens.removeValue(forKey: file)
+            state.observed.removeValue(forKey: file)
+            excess -= 1
+        }
+    }
+
+    /// For the tests: how many tokens the ledger holds.
+    var tokenCount: Int { state.withLock { $0.tokens.count } }
 
     func token(of file: UUID) -> FileToken.State? {
         state.withLock { $0.tokens[file]?.state }
@@ -74,13 +115,19 @@ final class Dictionaries: Sendable {
                 return (.answer(.imported(XDictContract.Imported(imported))), nil)
             case .openPackage(let spec):
                 let opened = XDictContract.Opened(try core.open(package: try package(spec, files)))
-                if case .ready(let dict, _, _) = opened {
-                    state.withLock { $0.filesOf[dict] = spec.files.map(\.id) }
+                if case .ready(let dict, let edition, _) = opened {
+                    state.withLock {
+                        $0.filesOf[dict] = spec.files.map(\.id)
+                        $0.editions[edition] = dict
+                    }
                 }
                 return (.answer(.opened(opened)), nil)
             case .close(let dict):
                 try core.close(dict: dict.rawValue)
-                state.withLock { _ = $0.filesOf.removeValue(forKey: dict) }
+                state.withLock {
+                    _ = $0.filesOf.removeValue(forKey: dict)
+                    $0.editions = $0.editions.filter { $0.value != dict }
+                }
                 return (.answer(.closed), nil)
             case .lookup(let query, let dicts, let options):
                 let page = try core.lookup(query: query, dicts: dicts.map(\.rawValue), options: XDictCore.LookupOptions(options))

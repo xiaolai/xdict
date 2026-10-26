@@ -99,7 +99,7 @@ public struct Request: Codable, Hashable, Sendable {
     ///   `filesOf` is not refused here: the core answers `staleHandle` for it;
     /// - each handle **a regular file opened read-only** (objection 7) and **the very file its token names**, by device
     ///   and inode (objection 1): otherwise an import would hash one file and register it under another's identity.
-    public func refusal(handles: [HandleFacts], filesOf: [DictId: [UUID]]) -> Refusal? {
+    public func refusal(handles: [HandleFacts], filesOf: [DictId: [UUID]], editions: [Edition: DictId] = [:]) -> Refusal? {
         let spec = operation.packageSpec
         if let spec {
             if handles.isEmpty { return .missingHandle }
@@ -128,7 +128,9 @@ public struct Request: Codable, Hashable, Sendable {
         for token in tokens {
             if byFile.updateValue(token, forKey: token.file) != nil { return .duplicateToken(file: token.file) }
         }
-        for file in operation.filesRead(filesOf: filesOf) where byFile[file] == nil { return .missingToken(file: file) }
+        for file in operation.filesRead(filesOf: filesOf, editions: editions) where byFile[file] == nil {
+            return .missingToken(file: file)
+        }
         for (file, facts) in zip(spec?.files ?? [], handles) {
             guard facts.isRegularReadOnly else { return .notARegularReadOnlyFile(file: file.id) }
             guard case .present(let atPath) = byFile[file.id]?.state, let held = facts.identity,
@@ -143,7 +145,7 @@ public struct Request: Codable, Hashable, Sendable {
     /// (that version's operations may be unknown here); then the whole request; then `refusal(handles:filesOf:)`.
     /// Whatever is wrong is answered at once, never thrown, never a crash.
     public static func receive(_ envelope: Data, handles: [HandleFacts], filesOf: [DictId: [UUID]],
-                               serviceContract: UInt32 = Contract.version) -> Admission {
+                               editions: [Edition: DictId] = [:], serviceContract: UInt32 = Contract.version) -> Admission {
         if let refusal = Limits.envelopeRefusal(envelope) {
             return .answered(Response(contract: serviceContract, id: nil, outcome: .failure(.refused(refusal))))
         }
@@ -165,7 +167,7 @@ public struct Request: Codable, Hashable, Sendable {
             return .answered(Response(contract: serviceContract, id: header.id,
                                       outcome: .failure(.undecodable(detail: "\(error)"))))
         }
-        if let refusal = request.refusal(handles: handles, filesOf: filesOf) {
+        if let refusal = request.refusal(handles: handles, filesOf: filesOf, editions: editions) {
             return .answered(Response(contract: serviceContract, id: request.id, outcome: .failure(.refused(refusal))))
         }
         return .admitted(request)
@@ -348,19 +350,30 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// lookup for the calls that search an index or open a package; none for the rest.
     public var creditClass: CreditClass? {
         switch self {
-        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash: .bulk
+        case .entry, .resource, .entryText, .studyNote, .studyNoteAt, .definitionHash, .studyReanchor: .bulk
         case .openPackage, .lookup, .suggest, .words, .link, .examples, .phrases: .lookup
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
-             .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary, .studyReanchor,
+             .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
         }
     }
 
-    /// Every file this operation may read: its package's, or those of each dictionary it names, as `filesOf` records
-    /// them. `close` reads nothing.
-    func filesRead(filesOf: [DictId: [UUID]]) -> [UUID] {
+    /// **The editions this operation reads through, when it names an edition rather than a handle** (audit rounds 1–4,
+    /// 2026-10-26): `studyNoteAt` resolves its entry's edition and `studyReanchor` the edition it moves to, and both read
+    /// entries — admission has to know which dictionary's files that is.
+    public var editionsRead: [Edition] {
         switch self {
+        case .studyNoteAt(let entry, _, _, _, _): [entry.edition]
+        case .studyReanchor(_, let newEdition, _, _): [newEdition]
+        default: []
+        }
+    }
+
+    /// Every file this operation may read: its package's, or those of each dictionary it names, as `filesOf` records
+    /// them, and the files of the dictionaries its editions name. `close` reads nothing.
+    func filesRead(filesOf: [DictId: [UUID]], editions: [Edition: DictId] = [:]) -> [UUID] {
+        let direct: [UUID] = switch self {
         case .importPackage(let spec), .openPackage(let spec): spec.files.map(\.id)
         case .entry(let dict, _, _), .link(let dict, _, _, _), .resource(let dict, _, _), .health(let dict),
              .readingStyle(let dict), .displayOptions(let dict), .entryText(let dict, _, _),
@@ -371,11 +384,13 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .phrases(_, _, let dicts):
             dicts.flatMap { filesOf[$0] ?? [] }
         case .words(let dict, _, _): filesOf[dict] ?? []
+        // **These read through an edition, not a handle** (`editionsRead` adds those files), or read nothing at all.
         case .versions, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .convertApple, .cancelConversion,
              .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
+             .studyNoteAt, .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
              .ledgerRemove, .ledgerRestore: []
         }
+        return direct + editionsRead.flatMap { edition in editions[edition].map { filesOf[$0] ?? [] } ?? [] }
     }
 
     var answerKind: AnswerKind {
@@ -455,13 +470,15 @@ public struct Response: Codable, Hashable, Sendable {
         try Wire.encode(self)
     }
 
-    /// **The reply, held to the envelope ceiling on the way out as the client holds it on the way in** (verification
-    /// finding, 2026-10-20): a field the input can grow — an entry's key is echoed whole — must not make a reply the
-    /// receiver refuses. Over the ceiling, the reply becomes a typed `envelopeTooLarge` refusal, which is small.
-    public func boundedEncoded() throws -> Data {
+    /// **The reply as it is sent: envelope and payload, held to the envelope ceiling on the way out as the client holds
+    /// it on the way in** (verification finding, 2026-10-20): a field the input can grow — an entry's key is echoed
+    /// whole — must not make a reply the receiver refuses. Over the ceiling the reply becomes a typed `envelopeTooLarge`
+    /// refusal, **and the payload the answer carried goes with the answer** (audit round 4, 2026-10-26): `Response.read`
+    /// refuses a failure with a payload, so keeping it would have made the refusal itself undeliverable.
+    public func bounded(payload: Data?) throws -> (envelope: Data, payload: Data?) {
         let data = try encoded()
-        guard let refusal = Limits.envelopeRefusal(data) else { return data }
-        return try Response(contract: contract, id: id, outcome: .failure(.refused(refusal))).encoded()
+        guard let refusal = Limits.envelopeRefusal(data) else { return (data, payload) }
+        return (try Response(contract: contract, id: id, outcome: .failure(.refused(refusal))).encoded(), nil)
     }
 
     /// **The client's reading of a reply to `request`**: its size first (`Limits.maxEnvelopeBytes`), then the header

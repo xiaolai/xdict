@@ -100,7 +100,8 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         guard context.idle.begin() else { return }
         let facts = files.map { HandleInspection.facts(of: $0.fileDescriptor) }
         let request: Request
-        switch Request.receive(envelope, handles: facts, filesOf: context.dictionaries.filesOf()) {
+        switch Request.receive(envelope, handles: facts, filesOf: context.dictionaries.filesOf(),
+                               editions: context.dictionaries.editions()) {
         case .answered(let response):
             context.log.notice("refused a request before decoding it whole: \(String(describing: response.outcome), privacy: .public)")
             return answer(response, payload: nil, credit: nil, reply: reply)
@@ -180,19 +181,26 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
             }
         }
         // While it waits its turn it still reports, at no progress, so the client's silence deadline does not end it.
-        let heartbeat = Heartbeat(every: context.conversionHeartbeat, queue: context.background) {
-            _ = progress.progress(done: 0, total: ProgressScale.total)
+        // **A cancel while it waits ends the wait** (audit rounds 1–4, 2026-10-26): the progress answer is `false` once
+        // `cancelConversion` (or the client's going) names it, and ignoring that left the conversion queued for ever,
+        // behind another's, reporting at zero every few seconds.
+        let ticket = Mutex<UInt64?>(nil)
+        let heartbeat = Heartbeat(every: context.conversionHeartbeat, queue: context.background) { [self] in
+            if progress.progress(done: 0, total: ProgressScale.total) { return true }
+            if let waiting = ticket.withLock({ $0 }) { context.conversions.withdraw(waiting) }
+            return false
         }
-        context.conversions.enter(connection: number, run: { [context] in
+        let entered = context.conversions.enter(connection: number, run: { [context] in
             heartbeat.stop()
             context.background.async(execute: job)
         }, dropped: { [self] in
             heartbeat.stop()
             imports.withLock { _ = $0.removeValue(forKey: request.id) }
             AppleImports.discard(staging: staging, in: store)
-            answer(Response(id: request.id, outcome: .failure(.core(.cancelled(detail: "its connection ended before it ran")))),
+            answer(Response(id: request.id, outcome: .failure(.core(.cancelled(detail: "cancelled before it ran")))),
                    payload: nil, credit: nil, reply: reply)
         })
+        ticket.withLock { $0 = entered }
     }
 
     /// An import's, a health check's or a conversion's progress, reported to the client as events and answering
@@ -215,8 +223,11 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
     private func answer(_ response: Response, payload: Data?, credit: Credit?, reply: @Sendable (Data, Data?) -> Void) {
         if let credit { credits.withLock { $0.release(credit) } }
         let envelope: Data
+        var payload = payload
         do {
-            envelope = try response.boundedEncoded()
+            // **The ceiling and the payload travel together** (audit round 4, 2026-10-26): a reply replaced by a refusal
+            // carries no payload, which `Response.read` would otherwise refuse as a failure with one.
+            (envelope, payload) = try response.bounded(payload: payload)
         } catch {
             context.log.fault("a response could not be encoded: \(String(describing: error), privacy: .public)")
             envelope = Data()
@@ -239,14 +250,15 @@ final class Heartbeat: @unchecked Sendable {
     private let timer: any DispatchSourceTimer
     private let stopped = Atomic<Bool>(false)
 
-    init(every interval: Duration, queue: DispatchQueue, beat: @escaping @Sendable () -> Void) {
+    /// `beat` answers whether to go on: `false` stops the heartbeat, as a cancel does.
+    init(every interval: Duration, queue: DispatchQueue, beat: @escaping @Sendable () -> Bool) {
         let (seconds, attoseconds) = interval.components
         let nanoseconds = max(1, Int(seconds) * 1_000_000_000 + Int(attoseconds / 1_000_000_000))
         timer = DispatchSource.makeTimerSource(queue: queue)
         timer.schedule(deadline: .now() + .nanoseconds(nanoseconds), repeating: .nanoseconds(nanoseconds))
         timer.setEventHandler { [weak self] in
             guard let self, !self.stopped.load(ordering: .relaxed) else { return }
-            beat()
+            if !beat() { self.stop() }
         }
         timer.resume()
     }
@@ -264,6 +276,9 @@ final class Heartbeat: @unchecked Sendable {
 /// An import's progress callback for the core. Answers `false` from the report after `cancel`.
 final class ImportProgress: XDictCore.Progress {
     private let stopped = Atomic<Bool>(false)
+    /// **The last value reported, so progress never goes backwards** (audit round 4, 2026-10-26): a waiting conversion's
+    /// heartbeat reports zero, and one that landed after the work's own report made the client's bar jump back.
+    private let latest = Atomic<UInt64>(0)
     private let report: @Sendable (UInt64, UInt64) -> Void
 
     init(report: @escaping @Sendable (UInt64, UInt64) -> Void) {
@@ -271,7 +286,10 @@ final class ImportProgress: XDictCore.Progress {
     }
 
     func progress(done: UInt64, total: UInt64) -> Bool {
-        report(done, total)
+        let previous = latest.exchange(done, ordering: .relaxed)
+        if done >= previous {
+            report(done, total)
+        }
         return !stopped.load(ordering: .relaxed)
     }
 

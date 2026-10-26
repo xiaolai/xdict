@@ -18,6 +18,28 @@ struct AdmissionTests {
         (0..<count).map { _ in HandleFacts(identity: Fixtures.identity, isRegularReadOnly: true) }
     }
 
+    /// **A request that reads an edition's dictionary must carry that dictionary's files** (audit rounds 1–4,
+    /// 2026-10-26): `studyNoteAt` and `studyReanchor` name an edition, not a handle, and both read entry bodies. Without
+    /// the edition resolved, the request names no files at all — the hole this closes; resolved, its dictionary's files
+    /// are required like any other.
+    @Test func anEditionNamedReadNeedsThatDictionarysFiles() {
+        let edition = Fixtures.entryRef.edition
+        let operation = ServiceOperation.studyNoteAt(entry: Fixtures.entryRef, text: "my own words", name: "Tiny",
+                                                     stamp: Fixtures.studyStamp, operation: "op")
+        let request = Fixtures.request(operation)
+        #expect(request.refusal(handles: [], filesOf: Fixtures.filesOf, editions: [:]) == nil,
+                "an unresolved edition reads nothing, by name")
+        let first = Fixtures.filesOf[Fixtures.dict]?.first ?? UUID()
+        let lacking = Request(id: 7, tokens: Fixtures.tokens.filter { $0.file != first }, operation: operation)
+        #expect(lacking.refusal(handles: [], filesOf: Fixtures.filesOf, editions: [edition: Fixtures.dict])
+                == .missingToken(file: first))
+        #expect(request.refusal(handles: [], filesOf: Fixtures.filesOf, editions: [edition: Fixtures.dict]) == nil,
+                "the whole dictionary's tokens did not admit it")
+        // **Reanchor renders entries like an entry read does**, so it holds a bulk credit rather than none.
+        #expect(ServiceOperation.studyReanchor(oldEdition: edition, newEdition: edition, stamp: Fixtures.studyStamp,
+                                               operationPrefix: "move").creditClass == .bulk)
+    }
+
     @Test func aWellFormedRequestIsAdmitted() {
         for operation in Fixtures.operations {
             #expect(Self.refusal(Fixtures.request(operation)) == nil, "\(operation)")

@@ -22,6 +22,7 @@ import XDictContract
 /// The memory bound is spike 2's measured worst: four 63 MiB bulk calls, 1.75 GB.
 final class WorkGate: Sendable {
     private struct Waiting {
+        let ticket: UInt64
         let connection: UInt64
         let run: @Sendable () -> Void
         let dropped: @Sendable () -> Void
@@ -30,6 +31,7 @@ final class WorkGate: Sendable {
     private struct State {
         var running = 0
         var waiting: [Waiting] = []
+        var nextTicket: UInt64 = 0
     }
 
     let ceiling: Int
@@ -48,17 +50,34 @@ final class WorkGate: Sendable {
     }
 
     /// Runs `run` now if the ceiling allows, else when a running call leaves, in arrival order. `run` must call
-    /// `leave()` once when its core call has returned. `dropped` is called instead of `run` if `connection` ends first.
-    func enter(connection: UInt64, run: @escaping @Sendable () -> Void, dropped: @escaping @Sendable () -> Void) {
-        let now = state.withLock { state -> Bool in
+    /// `leave()` once when its core call has returned. `dropped` is called instead of `run` if `connection` ends first,
+    /// or if the caller withdraws the ticket while it waits.
+    @discardableResult
+    func enter(connection: UInt64, run: @escaping @Sendable () -> Void, dropped: @escaping @Sendable () -> Void) -> UInt64 {
+        let (now, ticket) = state.withLock { state -> (Bool, UInt64) in
+            state.nextTicket += 1
+            let ticket = state.nextTicket
             guard state.running < ceiling else {
-                state.waiting.append(Waiting(connection: connection, run: run, dropped: dropped))
-                return false
+                state.waiting.append(Waiting(ticket: ticket, connection: connection, run: run, dropped: dropped))
+                return (false, ticket)
             }
             state.running += 1
-            return true
+            return (true, ticket)
         }
         if now { run() }
+        return ticket
+    }
+
+    /// **Withdraws one waiting call** (audit rounds 1–4, 2026-10-26): work cancelled before its turn never runs, and its
+    /// `dropped` answers the request now. False when it is not waiting — already running, or gone.
+    @discardableResult
+    func withdraw(_ ticket: UInt64) -> Bool {
+        let gone = state.withLock { state -> Waiting? in
+            guard let index = state.waiting.firstIndex(where: { $0.ticket == ticket }) else { return nil }
+            return state.waiting.remove(at: index)
+        }
+        gone?.dropped()
+        return gone != nil
     }
 
     /// A running call has finished: the next waiting one, if any, takes its place.

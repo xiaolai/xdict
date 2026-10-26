@@ -53,3 +53,20 @@ struct WorkGateTests {
         #expect(gate.load == (0, 0))
     }
 }
+
+/// **A waiting call can be withdrawn** (audit rounds 1–4, 2026-10-26): a conversion cancelled before its turn must never
+/// run, and its request is answered by `dropped` at once rather than when the work ahead of it ends.
+extension WorkGateTests {
+    @Test func aWaitingCallCanBeWithdrawn() {
+        let gate = WorkGate(ceiling: 1), log = WorkGateTests.Log()
+        let running = gate.enter(connection: 1, run: { log.add("run a") }, dropped: { log.add("dropped a") })
+        let waiting = gate.enter(connection: 1, run: { log.add("run b") }, dropped: { log.add("dropped b") })
+        #expect(gate.withdraw(waiting), "the waiting call was not found")
+        #expect(log.all == ["run a", "dropped b"])
+        #expect(!gate.withdraw(waiting), "a withdrawn ticket is gone")
+        #expect(!gate.withdraw(running), "a running call is not waiting")
+        gate.leave()
+        #expect(log.all == ["run a", "dropped b"], "the withdrawn call ran or was dropped twice")
+        #expect(gate.load == (0, 0))
+    }
+}
