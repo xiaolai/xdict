@@ -21,26 +21,28 @@ public enum MeaningSourceStatus: Equatable, Sendable {
 /// so none of the reader's own configuration, MCP servers, hooks or instructions is inherited — and their sign-in is the
 /// CLI's own, made in that home.
 public enum MeaningProviders {
-    public static func make(_ settings: MeaningSettings) throws(AIProviderError) -> any AIProvider {
+    /// **The source for a question's own shape** (contract 6): a translation's answer has fields a meaning answer does
+    /// not, so the schema and the guided type are chosen from the mode, never patched afterwards.
+    public static func make(_ settings: MeaningSettings, mode: AIMode) throws(AIProviderError) -> any AIProvider {
         switch settings.source {
         case .none:
             throw .notInstalled
         case .appleOnDevice:
-            return AppleProvider.make()
+            return AppleProvider.make(mode: mode)
         case .http:
             guard let endpoint = settings.endpoint else { throw .unreachable }
             return try HTTPProvider(configuration: httpConfiguration(settings, endpoint: endpoint))
         case .claudeCLI:
-            return claude()
+            return claude(mode: mode)
         case .codexCLI:
             return try codex()
         }
     }
 
     /// **Claude Code in XDict's own configuration**: its sign-in is made in `folder("claude")`, never in the reader's.
-    static func claude() -> ClaudeCLIProvider {
+    static func claude(mode: AIMode = .grounded) -> ClaudeCLIProvider {
         ClaudeCLIProvider(configuration: .init(configDirectory: folder("claude"), workingDirectory: folder("work"),
-                                              model: nil, answerSchema: AIAnswerSchema.claude))
+                                              model: nil, answerSchema: AIAnswerSchema.claude(for: mode)))
     }
 
     /// **Codex in the app's own home**: the provider makes and checks that home before its probe reads the sign-in in

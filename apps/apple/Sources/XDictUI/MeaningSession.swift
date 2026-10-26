@@ -26,14 +26,18 @@ public struct MeaningSettings: Sendable, Equatable {
     public var sendEntryText: Bool
     /// The language the explanation is written in, as a BCP 47 tag.
     public var language: String
+    /// **The language a translation is written into** (contract 6; plan-context-tools WI-8), as a BCP 47 tag. Its own
+    /// choice, defaulting to the explanation's language: a reader may read meanings in one language and want sentences
+    /// in another.
+    public var translationLanguage: String
     /// The reader's edited templates, by question kind; a kind absent here uses the shipped default for `language`
-    /// (ADR-0021 d.13). One template per kind: a grounded edit carries `{entry}`, a sentence-only one may not, and the
-    /// chosen-sense one carries `{entry}` and `{sense}` (contract 3).
+    /// (ADR-0021 d.13). One template per kind: a grounded edit carries `{entry}`, a sentence-only one may not, the
+    /// chosen-sense one carries `{entry}` and `{sense}` (contract 3), and the two contract-6 kinds carry neither.
     public var templates: [AIMode: String]
 
     public init(source: AIProviderKind? = nil, endpoint: URL? = nil, profile: String = MeaningProfiles.custom,
                 model: String = "", key: String? = nil, usesKey: Bool = false, sendEntryText: Bool = false,
-                language: String = "en", templates: [AIMode: String] = [:]) {
+                language: String = "en", translationLanguage: String = "en", templates: [AIMode: String] = [:]) {
         self.source = source
         self.endpoint = endpoint
         self.profile = profile
@@ -42,6 +46,7 @@ public struct MeaningSettings: Sendable, Equatable {
         self.usesKey = usesKey
         self.sendEntryText = sendEntryText
         self.language = language
+        self.translationLanguage = translationLanguage
         self.templates = templates
     }
 
@@ -99,6 +104,27 @@ public enum MeaningBudget {
     public static let entryTextBytes: UInt64 = 256 << 10
 }
 
+/// **What the pane's one ask button asks** (contract 6; plan-context-tools D10): the word's meaning here, the sentence
+/// in another language, or what the sentence's grammar is doing. One control, three questions, one set of consent and
+/// cancellation rules.
+public enum MeaningAskMode: String, Sendable, Equatable, CaseIterable {
+    case meaning
+    case translation
+    case grammar
+
+    /// **The reader's choice is remembered across windows** (plan-context-tools WI-8): one key, one rule, so the pane
+    /// opens on the question the reader last asked.
+    public static let defaultsKey = "meaning.askMode"
+
+    public static func stored(in defaults: UserDefaults = .standard) -> MeaningAskMode {
+        defaults.string(forKey: defaultsKey).flatMap(MeaningAskMode.init(rawValue:)) ?? .meaning
+    }
+
+    public func store(in defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.defaultsKey)
+    }
+}
+
 /// **The sentence a request is about, as the request holds it** (HIG audit 2026-10-23, UI09): the captured term, its
 /// sentence, the term's range and which ends the capture cut — copied from the hand-off when the question is composed,
 /// so the pane shows the context of this request, never a newer capture's.
@@ -151,10 +177,13 @@ public struct MeaningSent: Sendable, Equatable {
     public let questionContext: MeaningContext?
     /// **The entry the request sent**, so the pane's evidence reveals the right frame (UI11); nil when no entry went.
     public let target: MeaningTarget?
+    /// **The language the answer was asked in** (contract 6): the translation's target in `translate` mode, the
+    /// explanation's language otherwise. Frozen with the request, so a Settings change cannot relabel an old answer.
+    public let language: String?
 
     public init(text: String, mode: AIMode, source: AIProviderKind?, complete: Bool, cutAt: UInt64,
                 sense: AISense? = nil, dictionaryName: String? = nil, questionContext: MeaningContext? = nil,
-                target: MeaningTarget? = nil, model: String? = nil) {
+                target: MeaningTarget? = nil, model: String? = nil, language: String? = nil) {
         self.text = text
         self.mode = mode
         self.source = source
@@ -165,6 +194,7 @@ public struct MeaningSent: Sendable, Equatable {
         self.dictionaryName = dictionaryName
         self.questionContext = questionContext
         self.target = target
+        self.language = language
     }
 }
 
@@ -261,6 +291,9 @@ public final class MeaningSession {
     }
 
     public private(set) var state: State = .idle
+    /// **The question the pane's one ask button asks** (contract 6; plan-context-tools D10): meaning here by default;
+    /// the reader may switch it to translation or grammar. Set through `choose(_:)`, which drops the previous answer.
+    public private(set) var chosenMode: MeaningAskMode = .meaning
     /// What the reader chose, read at each ask: a change in Settings applies to the next one.
     public var settings: MeaningSettings = .off
     /// **Where the reader's choices really live** (WI-6): Settings ▸ AI's store, read at each ask so a change applies to
@@ -314,7 +347,7 @@ public final class MeaningSession {
 
     @ObservationIgnored private let fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>
     @ObservationIgnored private let presented: @MainActor () -> (DictId, EntryRef)?
-    @ObservationIgnored private let makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider
+    @ObservationIgnored private let makeProvider: @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider
     @ObservationIgnored private var running: Task<Void, Never>?
     /// **The operation `running` is executing**: a cleared chosen sense must be able to invalidate a preview or ask still
     /// being composed (audit finding, 2026-10-25).
@@ -336,7 +369,7 @@ public final class MeaningSession {
     /// - `makeProvider` builds the source `settings` names (a fake in the tests).
     public init(fetchEntryText: @escaping @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
                 presented: @escaping @MainActor () -> (DictId, EntryRef)?,
-                makeProvider: @escaping @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider) {
+                makeProvider: @escaping @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider) {
         self.fetchEntryText = fetchEntryText
         self.presented = presented
         self.makeProvider = makeProvider
@@ -624,10 +657,28 @@ public final class MeaningSession {
         if state == .asking { state = .cancelled }
     }
 
-    /// The reader asked ("Meaning Here"): the model chooses the sense. The chosen-sense ask is `explain()`.
+    /// **The reader asked** ("Meaning Here", "Translate" or "Grammar", per the pane's mode): one button, the chosen
+    /// question. Meaning here lets the model choose the sense; the chosen-sense ask is `explain()`.
     public func ask() {
         let chosen = settingsProvider?() ?? settings
-        ask(operation: Operation(mode: chosen.sendEntryText ? .grounded : .sentenceOnly, selection: nil, target: nil))
+        ask(operation: operation(for: chosen, selection: nil, honouring: chosenMode))
+    }
+
+    /// **The pane's mode changed**: the previous answer belonged to another question, so it goes (D10). The sentence
+    /// stays — switching modes is not the presentation's end. Choosing the mode already chosen changes nothing.
+    public func choose(_ mode: MeaningAskMode) {
+        guard mode != chosenMode else { return }
+        chosenMode = mode
+        abandon()
+        dropEvidence()
+        state = .idle
+    }
+
+    /// **The answer is dropped, the sentence kept**: used when the question changed under it. Nothing was sent.
+    public func discardAnswer() {
+        abandon()
+        dropEvidence()
+        state = .idle
     }
 
     /// **The reader chose which dictionary answers this sentence** (owner, 2026-10-26): the same in-context question,
@@ -708,13 +759,21 @@ public final class MeaningSession {
         let target: MeaningTarget?
     }
 
-    /// The operation a fresh ask would run from the reader's choices: the chosen sense only under the switch that lets
-    /// the entry leave, since the chosen-sense question always sends it.
-    private func operation(for chosen: MeaningSettings, selection: MeaningSelection?) -> Operation {
-        if let selection, chosen.sendEntryText {
-            return Operation(mode: .explainSense, selection: selection, target: nil)
+    /// The operation a fresh ask would run from the reader's choices: the pane's mode decides the question; in meaning
+    /// mode the chosen sense goes only under the switch that lets the entry leave, since that question always sends it.
+    private func operation(for chosen: MeaningSettings, selection: MeaningSelection?,
+                           honouring mode: MeaningAskMode = .meaning) -> Operation {
+        switch mode {
+        case .translation:
+            return Operation(mode: .translate, selection: nil, target: nil)
+        case .grammar:
+            return Operation(mode: .explainGrammar, selection: nil, target: nil)
+        case .meaning:
+            if let selection, chosen.sendEntryText {
+                return Operation(mode: .explainSense, selection: selection, target: nil)
+            }
+            return Operation(mode: chosen.sendEntryText ? .grounded : .sentenceOnly, selection: nil, target: nil)
         }
-        return Operation(mode: chosen.sendEntryText ? .grounded : .sentenceOnly, selection: nil, target: nil)
     }
 
     /// One operation: compose, fetch the entry under the switch, ask the one source, validate. A preview's Send takes
@@ -803,7 +862,8 @@ public final class MeaningSession {
         let current = settingsProvider?() ?? settings
         // **The same operation, not only the same settings**: a new selection makes another request, while a
         // sentence-only preview ignores the selection and is still the one shown.
-        guard current == previewSettings, self.operation(for: current, selection: selection) == operation else {
+        guard current == previewSettings,
+              self.operation(for: current, selection: selection, honouring: chosenMode) == operation else {
             // The prompt, the switch or the chosen sense changed after the preview: sending would differ from what was
             // shown.
             dropEvidence()
@@ -842,6 +902,10 @@ public final class MeaningSession {
         switch operation.mode {
         case .sentenceOnly:
             return .resolved(nil)
+        case .translate, .explainGrammar:
+            // **Contract 6's operations carry no entry**: the sentence is the whole question, so there is nothing to
+            // wait for and nothing to fetch.
+            return .resolved(nil)
         case .explainSense:
             guard let selection = operation.selection else { return .refused(.noSense) }
             // **The frame's own entry** (plan-explain-sense WI-5): on the All page this is the dictionary whose frame
@@ -877,7 +941,7 @@ public final class MeaningSession {
         // **A refused preview is still the newest attempt** (audit rounds 2 and 3, 2026-10-25): its operation is recorded
         // before the source guard, so a preview refused for lack of a source leaves its own operation for Try Again once
         // the reader chooses one — never the last answer's.
-        let operation = operation(for: chosen, selection: selection)
+        let operation = operation(for: chosen, selection: selection, honouring: chosenMode)
         lastOperation = operation
         guard chosen.source != nil else {
             state = .unavailable(.noSource)
@@ -938,11 +1002,12 @@ public final class MeaningSession {
         }
     }
 
-    /// Whether the reader's switch still stands for this question's mode: the mode is the switch, so a change in either
-    /// direction makes the composed question the wrong one. The switch is on exactly when the mode sends an entry —
-    /// `grounded` and `explainSense` both do (contract 3), only `sentenceOnly` does not.
+    /// Whether the reader's switch still stands for this question's mode: for a mode that sends the entry the mode is
+    /// the switch, so a change in either direction makes the composed question the wrong one; **a mode that carries no
+    /// entry has nothing for the switch to govern** (contract 6 §2), so turning it either way never stops a translation
+    /// or a grammar question.
     private nonisolated static func consentHolds(_ settings: MeaningSettings, mode: AIMode) -> Bool {
-        settings.sendEntryText == (mode != .sentenceOnly)
+        mode.carriesEntry ? settings.sendEntryText : true
     }
 
     /// **Cancels everything an earlier action started and makes it unable to report**: the task, a deferred ask still
@@ -997,7 +1062,7 @@ public final class MeaningSession {
         }
         var entry: AIEntryText?
         var sense: AISense?
-        if mode != .sentenceOnly {
+        if mode.carriesEntry {
             guard let target else { return Composed(failure: .unavailable(.noEntry), sent: nil, entry: nil) }
             let fetched = await fetchEntryText(target.0, target.1, MeaningBudget.entryTextBytes)
             guard !Task.isCancelled else { return Composed(failure: .cancelled, sent: nil, entry: nil) }
@@ -1026,8 +1091,10 @@ public final class MeaningSession {
             }
         }
         let range = handoff.range.map { AITermRange.range(start: $0.location, length: $0.length) } ?? .notFound
+        // **A translation's `language` is its target** (contract 6 §2), not the explanation's language.
+        let answerLanguage = mode == .translate ? settings.translationLanguage : settings.language
         let question = AIQuestion(term: handoff.term, termRange: range, sentence: handoff.sentence, entry: entry,
-                                  sense: sense, language: settings.language, mode: mode, phrase: handoff.phrase)
+                                  sense: sense, language: answerLanguage, mode: mode, phrase: handoff.phrase)
         let template = settings.template(for: mode) ?? ""
         let composed: String
         do {
@@ -1039,13 +1106,14 @@ public final class MeaningSession {
                         sent: MeaningSent(text: composed, mode: mode, source: settings.source,
                                           complete: entry?.complete ?? true, cutAt: entry?.cutAt ?? 0,
                                           sense: sense,
-                                          dictionaryName: mode == .sentenceOnly ? nil : dictionaryName,
+                                          dictionaryName: mode.carriesEntry ? dictionaryName : nil,
                                           questionContext: MeaningContext(handoff),
-                                          target: mode == .sentenceOnly ? nil : target.map {
+                                          target: mode.carriesEntry ? target.map {
                                               MeaningTarget(dictionary: $0.0, entry: $0.1)
-                                          },
+                                          } : nil,
                                           model: settings.source == .http && !settings.model.isEmpty
-                                              ? settings.model : nil),
+                                              ? settings.model : nil,
+                                          language: answerLanguage),
                         entry: entry)
     }
 
@@ -1065,13 +1133,13 @@ public final class MeaningSession {
     /// validation. One path means the consent rule cannot be fixed in one caller and left broken in the other.
     private nonisolated static func send(
         sent: MeaningSent, entry: AIEntryText?, settings: MeaningSettings,
-        makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
+        makeProvider: @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
         recheck: @Sendable () async -> MeaningSettings
     ) async -> Performed {
         guard let source = settings.source else { return Performed(state: .unavailable(.noSource), sent: sent) }
         let provider: any AIProvider
         do {
-            provider = try makeProvider(settings)
+            provider = try makeProvider(settings, sent.mode)
         } catch {
             return Performed(state: .unavailable(.provider(error)), sent: sent)
         }
@@ -1135,7 +1203,7 @@ public final class MeaningSession {
         handoff: MeaningHandoff, mode: AIMode, target: (DictId, EntryRef)?, selection: MeaningSelection?,
         dictionaryName: String?, settings: MeaningSettings,
         fetchEntryText: @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
-        makeProvider: @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
+        makeProvider: @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
         recheck: @Sendable () async -> MeaningSettings
     ) async -> Performed {
         guard settings.source != nil else { return Performed(state: .unavailable(.noSource), sent: nil) }

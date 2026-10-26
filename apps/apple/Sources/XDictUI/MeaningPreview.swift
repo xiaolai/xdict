@@ -19,7 +19,7 @@ public enum MeaningPreview {
         let sense = AISense(id: 1, start: UInt64("hold\n  ".utf8.count), len: UInt64(Self.senseText.utf8.count),
                             text: Self.senseText, label: "1", section: nil, whole: true)
         return AIQuestion(term: Self.term, termRange: .range(start: 5, length: 4), sentence: Self.sentence,
-                          entry: mode == .sentenceOnly ? nil : sample,
+                          entry: mode.carriesEntry ? sample : nil,
                           sense: mode == .explainSense ? sense : nil, language: language, mode: mode)
     }
 

@@ -114,6 +114,16 @@ public final class SearchWindowState {
         // to the failure that armed it, and the reader asking anything else ends it. The last line of `init`, because it
         // is the first that may capture `self`.
         meaning.onAskBegins = { [weak self] in self?.failedPhraseTap = nil }
+        // **The question the reader last asked comes back with the next window** (plan-context-tools WI-8): read from the
+        // app's own preferences, never from the Settings store, so a window that never asks touches no Keychain.
+        meaning.choose(MeaningAskMode.stored())
+    }
+
+    /// **The reader chose another question** (contract 6; plan-context-tools WI-8): the pane switches and the choice is
+    /// remembered for the next window. The previous answer goes; the sentence stays.
+    public func chooseMeaningMode(_ mode: MeaningAskMode) {
+        mode.store()
+        meaning.choose(mode)
     }
 
     /// **The All page's dictionaries and the one being read** (HIG audit UI24): Go ▸ Dictionaries on This Page lists
@@ -228,17 +238,17 @@ public final class SearchWindowState {
         // and the adopted lookup's identity keeps a queued presentation of the previous lookup from binding it.
         meaning.hold(handoff, asking: asking, expecting: expecting, adopted: adopted)
         failedPhraseTap = nil
+        phraseKeeper.reset()
         // **The phrase row follows the captured sentence** (contract 15; plan-phrase-recognition WI-8): the capture is
         // the reader's tap, so the question is asked here and nowhere else. A capture that carried no term range is not
         // asked — the core needs the term's place in the sentence — and the row stays hidden.
-        if handoff.phrase != nil {
-            // A phrase ask is already about the phrase: detecting one under its own span would offer itself.
-            phrases.clear()
-        } else if let range = handoff.range {
-            phrases.update(sentence: handoff.sentence,
-                           term: PhraseTerm(location: UInt64(range.location), length: UInt64(range.length)),
-                           handles: phraseHandles)
-        } else {
+        // **The reader's switch stops the request itself** (owner Q2, 2026-10-26; plan-context-tools D3): with the row
+        // turned off the sentence does not reach the dictionary service for matching, so nothing is asked and nothing
+        // is hidden after the fact. One rule, testable without a window.
+        switch Self.phraseQuestion(shown: phrasesShown, phrase: handoff.phrase, range: handoff.range) {
+        case .asked(let term):
+            phrases.update(sentence: handoff.sentence, term: term, handles: phraseHandles)
+        case .cleared:
             phrases.clear()
         }
     }
@@ -246,6 +256,29 @@ public final class SearchWindowState {
     /// Every enabled dictionary that answers now, in the reader's order: what the phrase question asks.
     public var phraseHandles: [DictId] {
         library.searchSources.filter(\.enabled).compactMap(\.handle)
+    }
+
+    /// **Whether a capture asks for phrases at all** (owner Q2, 2026-10-26; plan-context-tools D3): the switch off means
+    /// the sentence never reaches the dictionary service; a phrase ask is already about its own phrase, so detecting one
+    /// under its span would offer itself; and a capture with no term range cannot be asked.
+    public enum PhraseQuestion: Equatable, Sendable {
+        case asked(PhraseTerm)
+        case cleared
+    }
+
+    public static func phraseQuestion(shown: Bool, phrase: String?, range: NSRange?) -> PhraseQuestion {
+        guard shown, phrase == nil, let range else { return .cleared }
+        return .asked(PhraseTerm(location: UInt64(range.location), length: UInt64(range.length)))
+    }
+
+    /// **Settings ▸ Reading & Speech's “Show phrases while reading”** (owner Q2, 2026-10-26; plan-context-tools D3),
+    /// stored beside the reading style's own choices. On unless the reader turned it off: the row is the reminder, and
+    /// off means the sentence is never sent to the dictionary service for matching.
+    public static let phrasesShownKey = "reading.show-phrases"
+
+    /// Whether this capture should ask for phrases at all.
+    public var phrasesShown: Bool {
+        UserDefaults.standard.object(forKey: Self.phrasesShownKey) as? Bool ?? true
     }
 
     /// **The phrase tap whose lookup could not finish** (audit round 4, 2026-10-26): the pane's Try Again repeats an ask,
@@ -267,6 +300,27 @@ public final class SearchWindowState {
     /// word that found it. A template (`take something into account`) is a lookup key like any link's.
     public func openPhrase(_ phrase: String) {
         model.submit(phrase)
+    }
+
+    /// **The keep's mechanism** (plan-context-tools WI-3, WI-4): one lookup, one note, one state per attempt. Its own
+    /// type so the calls it makes are testable without a window (`PhraseKeepTests`).
+    @ObservationIgnored public lazy var phraseKeeper = PhraseKeeper(backend: backend) { [weak self] target, text, replacing in
+        guard let self else { return StudyModel.NoteSave.failed }
+        return await self.saveNote(for: target, text: text, replacing: replacing)
+    }
+
+    /// **The phrase kept as a card** (plan-context-tools WI-3; ADR-0034 d.1): a card is a note in the ledger, so the keep
+    /// writes one — the dictionary's spelling as its text, the phrase's own entry as its target, and never the sentence.
+    /// The entry is found by the same lookup the row's tap makes, so the card points at an entry the reader could open;
+    /// a phrase whose lookup finds none is a stated failure, not a silent no-op.
+    ///
+    /// `replacing` is the reader's yes after `needsReplacement`; without it an existing note is never overwritten.
+    public func keepPhrase(_ candidate: PhraseRow.Candidate, replacing: Bool = false) async {
+        guard source(for: candidate.dict) != nil else {
+            phraseKeeper.fail()
+            return
+        }
+        await phraseKeeper.keep(candidate, replacing: replacing)
     }
 
     /// **The reader asks about the phrase** (AI contract 5; plan-phrase-recognition WI-9): the question's term becomes
@@ -462,6 +516,7 @@ public final class SearchWindowState {
         meaning.clear()
         phrases.clear()
         failedPhraseTap = nil
+        phraseKeeper.reset()
     }
 
     /// A link in the shown entry: looked up in link mode in that entry's dictionary (on the All page, the dictionary

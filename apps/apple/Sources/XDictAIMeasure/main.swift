@@ -12,7 +12,10 @@ import XDictCore
 ///   XDictAIMeasure --corpus <dir> [--out <json>] [--keys 200] [--apple] [--asks 3]
 ///
 /// The entry budget and the question ceiling are the app's own (`MeaningBudget.entryTextBytes`, `AIComposer.questionCeilingUTF8`).
-enum HarnessError: Error { case duplicateAsk(String) }
+enum HarnessError: Error {
+    case duplicateAsk(String)
+    case malformed(String)
+}
 
 enum Harness {
     /// The app's entry budget for one ask (`MeaningBudget.entryTextBytes`).
@@ -85,6 +88,31 @@ enum Harness {
         } catch {
             precondition(error == .templateTooLong, "refused as the wrong reason: \(error)")
         }
+
+        // **Contract 6's two questions** (plan-context-tools WI-6, WI-9): a translation marks nothing and ends with its
+        // own contract; a grammar question marks its term and ends with its own; a translation answer validates.
+        let translateQuestion = AIQuestion(term: "hold", termRange: .range(start: 5, length: 4),
+                                           sentence: "They hold that view.", entry: nil, language: "zh-Hans",
+                                           mode: .translate)
+        let translation = try AIComposer.compose(
+            template: AITemplates.defaultTemplate(language: "en", mode: .translate) ?? "",
+            question: translateQuestion)
+        precondition(!translation.contains("«"), "a translation marks nothing")
+        precondition(translation.hasSuffix(AIComposer.translationResponseContract),
+                     "a translation ends with its own response contract")
+        let grammarQuestion = AIQuestion(term: "hold", termRange: .range(start: 5, length: 4),
+                                         sentence: "They hold that view.", entry: nil, language: "en",
+                                         mode: .explainGrammar)
+        let grammar = try AIComposer.compose(
+            template: AITemplates.defaultTemplate(language: "en", mode: .explainGrammar) ?? "",
+            question: grammarQuestion)
+        precondition(grammar.contains("«hold»"), "a grammar question marks its term")
+        precondition(grammar.hasSuffix(AIComposer.grammarResponseContract),
+                     "a grammar question ends with its own response contract")
+        let translated = try AIAnswerValidator.validate(
+            json: Data(#"{"outcome":"translated","translation":"他们持那种看法。","explanation":""}"#.utf8),
+            mode: .translate, entry: nil)
+        precondition(translated.translation == "他们持那种看法。", "a translation answer validates")
         print("self-test ok")
     }
 
@@ -258,6 +286,28 @@ enum Harness {
         print("validated \(passed) of \(rows.count); wrote \(out.path)")
     }
 
+    /// **The provider a run measures**, built once for the corpus run and the sentence run (plan-context-tools WI-2): one
+    /// factory, so the two harnesses cannot point at different sources under the same flag.
+    static func provider(source: Source?, work: URL, claudeHome: URL?, codexHome: URL?,
+                         mode: AIMode = .grounded) throws -> (any AIProvider)? {
+        switch source {
+        case .apple?:
+            return AppleProvider.make(mode: mode)
+        case .claude?:
+            return ClaudeCLIProvider(configuration: .init(
+                executable: nil, configDirectory: claudeHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.claude"),
+                workingDirectory: work, model: nil, timeout: .seconds(240),
+                searchPath: ProcessInfo.processInfo.environment["PATH"],
+                answerSchema: AIAnswerSchema.claude(for: mode)))
+        case .codex?:
+            return try CodexCLIProvider(configuration: .init(
+                executable: nil, codexHome: codexHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.codex"),
+                workingDirectory: work, model: nil, timeout: .seconds(300)))
+        case nil:
+            return nil
+        }
+    }
+
     static func run(corpus: URL, out: URL, keyLimit: Int, source: Source?, asks: Int, claudeHome: URL?,
                     codexHome: URL?, only: String?, emit: URL?) async throws {
         let model = SystemLanguageModel.default
@@ -271,22 +321,7 @@ enum Harness {
         let work = FileManager.default.temporaryDirectory.appending(path: "xdict-ai-measure-work-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: work) }
-        var provider: (any AIProvider)?
-        switch source {
-        case .apple?:
-            provider = AppleProvider.make()
-        case .claude?:
-            provider = ClaudeCLIProvider(configuration: .init(
-                executable: nil, configDirectory: claudeHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.claude"),
-                workingDirectory: work, model: nil, timeout: .seconds(240),
-                searchPath: ProcessInfo.processInfo.environment["PATH"], answerSchema: AIAnswerSchema.claude))
-        case .codex?:
-            provider = try CodexCLIProvider(configuration: .init(
-                executable: nil, codexHome: codexHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.codex"),
-                workingDirectory: work, model: nil, timeout: .seconds(300)))
-        case nil:
-            provider = nil
-        }
+        let provider = try Self.provider(source: source, work: work, claudeHome: claudeHome, codexHome: codexHome)
 
         // The corpus is either flat or one folder per dictionary (the 24 are); both layouts are read.
         var files: [URL] = []
@@ -487,23 +522,36 @@ do {
                              source: Harness.value("--source-name", arguments) ?? "cli")
         exit(0)
     }
-    guard let corpus = Harness.value("--corpus", arguments) else {
-        print("usage: XDictAIMeasure --self-test | --corpus <dir> [--out <json>] [--keys 120] [--asks 1] "
-              + "[--apple | --claude [--claude-home <dir>] | --codex [--codex-home <dir>]] [--only <name>]")
-        exit(1)
-    }
     let named = ["--apple": Harness.Source.apple, "--claude": .claude, "--codex": .codex]
         .filter { arguments.contains($0.key) }
     precondition(named.count <= 1, "name at most one source: --apple, --claude or --codex")
     let source = named.first?.value
+    let claudeHome = Harness.value("--claude-home", arguments).map { URL(fileURLWithPath: $0) }
+    let codexHome = Harness.value("--codex-home", arguments).map { URL(fileURLWithPath: $0) }
+    // **The sentence set** (plan-context-tools WI-2): the contract-6 questions over written sentences, with the tag
+    // experiment and a blind answer set for the owner's reading.
+    if let sentences = Harness.value("--sentences", arguments) {
+        try await SentenceHarness.run(
+            sentences: URL(fileURLWithPath: sentences),
+            out: URL(fileURLWithPath: Harness.value("--out", arguments) ?? "sentences"),
+            source: source, translateTo: Harness.value("--translate-to", arguments) ?? "zh-Hans",
+            answerLanguage: Harness.value("--answer-language", arguments) ?? "en",
+            claudeHome: claudeHome, codexHome: codexHome)
+        exit(0)
+    }
+    guard let corpus = Harness.value("--corpus", arguments) else {
+        print("usage: XDictAIMeasure --self-test | --corpus <dir> [--out <json>] [--keys 120] [--asks 1] "
+              + "[--apple | --claude [--claude-home <dir>] | --codex [--codex-home <dir>]] [--only <name>]\n"
+              + "       XDictAIMeasure --sentences <file.jsonl> --out <dir> [--translate-to <tag>] "
+              + "[--answer-language <tag>] [source flags as above]")
+        exit(1)
+    }
     let out = URL(fileURLWithPath: Harness.value("--out", arguments) ?? "ai-measure.json")
     guard let keys = Int(Harness.value("--keys", arguments) ?? "120"), (0...10_000).contains(keys),
           let asks = Int(Harness.value("--asks", arguments) ?? "1"), (0...100).contains(asks) else {
         FileHandle.standardError.write(Data("ai-measure: --keys is 0…10000 and --asks is 0…100\n".utf8))
         exit(1)
     }
-    let claudeHome = Harness.value("--claude-home", arguments).map { URL(fileURLWithPath: $0) }
-    let codexHome = Harness.value("--codex-home", arguments).map { URL(fileURLWithPath: $0) }
     let emit = Harness.value("--emit-asks", arguments).map { URL(fileURLWithPath: $0) }
     try await Harness.run(corpus: URL(fileURLWithPath: corpus), out: out, keyLimit: keys, source: source,
                           asks: asks, claudeHome: claudeHome, codexHome: codexHome,

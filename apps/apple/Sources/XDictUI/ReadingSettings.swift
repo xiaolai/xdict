@@ -7,6 +7,9 @@ import XDictEntryView
 public struct ReadingSettings: View {
     @AppStorage(EntryPreferences.accentKey) private var accent: EntryReadingFrame.Accent = .teal
     @AppStorage(EntryPreferences.comfortableWidthKey) private var comfortableWidth = false
+    /// **Whether the phrase row is asked for at all** (owner Q2, 2026-10-26; plan-context-tools D3; same key the window
+    /// reads). Off, the captured sentence never reaches the dictionary service for matching.
+    @AppStorage(SearchWindowState.phrasesShownKey) private var showPhrases = true
 
     public init() {}
 
@@ -18,6 +21,12 @@ public struct ReadingSettings: View {
             }
             .accessibilityIdentifier("reading.comfortable-width")
             .settingsAnchor(.readingWidth)
+            Toggle(isOn: $showPhrases) {
+                Text("Show phrases while reading")
+                Text("Notice when the sentence you capture holds a phrase your dictionaries know, and keep it as a card. Off, the sentence is not sent to XDict’s dictionary service for matching.")
+            }
+            .accessibilityIdentifier("reading.show-phrases")
+            .settingsAnchor(.readingPhrases)
             Picker(selection: $accent) {
                 // Each choice shows its colour: the swatch is the content (UI review S-03).
                 ForEach(EntryReadingFrame.Accent.allCases, id: \.self) { accent in

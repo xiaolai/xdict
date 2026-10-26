@@ -240,11 +240,27 @@ struct EntryDetail: View {
         .background { FindKeys(state: state) }
     }
 
-    /// The meaning row's controls, in reading order: the primary ask, its preview, then the chosen sense's.
+    /// The meaning row's controls, in reading order: the question the one ask button asks, the ask itself, its preview,
+    /// then the chosen sense's.
     @ViewBuilder private var chips: some View {
-        MeaningAskButton(enabled: true) {
+        // **One control, three questions** (contract 6; plan-context-tools D10): the mode the ask button asks in. A
+        // switch drops the previous mode's answer and keeps the sentence.
+        Picker("Question", selection: Binding(get: { state.meaning.chosenMode },
+                                              set: { state.chooseMeaningMode($0) })) {
+            ForEach(MeaningAskMode.allCases, id: \.self) { mode in
+                Text(mode.label).tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .labelsHidden()
+        .controlSize(.small)  // placement: meaning-chip
+        .accessibilityIdentifier("meaning.mode")
+        MeaningAskButton(enabled: true, mode: state.meaning.chosenMode) {
             openMeaning()
             state.meaning.ask()
+        }
+        if state.meaning.chosenMode == .translation {
+            translationTarget
         }
         Button("Preview the Request…") {  // placement: meaning-chip
             openMeaning()
@@ -268,6 +284,25 @@ struct EntryDetail: View {
                 .buttonStyle(.borderless)
                 .accessibilityIdentifier("meaning.clear-sense")
         }
+    }
+
+    /// **The language a translation is written into** (contract 6; plan-context-tools WI-8): the reader's choice,
+    /// remembered by Settings ▸ AI's store. Shown only while the pane's mode is translation.
+    private var translationTarget: some View {
+        let current = (state.meaning.settingsProvider?() ?? state.meaning.settings).translationLanguage
+        return Menu {  // placement: meaning-chip
+            ForEach(MeaningSentences.translationLanguages, id: \.self) { tag in
+                Button(MeaningSentences.languageName(tag)) {
+                    MeaningPreferences.shared.setTranslationLanguage(tag)
+                }
+            }
+        } label: {
+            Text("Into \(MeaningSentences.languageName(current))")
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .help("The language the sentence is translated into.")
+        .accessibilityIdentifier("meaning.translate.target")
     }
 
     @ViewBuilder private var placeholder: some View {

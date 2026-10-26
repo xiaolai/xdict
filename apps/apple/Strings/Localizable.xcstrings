@@ -470,40 +470,6 @@
         }
       }
     },
-    "%lld more found.": {
-      "localizations": {
-        "en": {
-          "variations": {
-            "plural": {
-              "one": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld more found."
-                }
-              },
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "%lld more found."
-                }
-              }
-            }
-          }
-        },
-        "zh-Hans": {
-          "variations": {
-            "plural": {
-              "other": {
-                "stringUnit": {
-                  "state": "translated",
-                  "value": "另有 %lld 条未显示"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "%lld more in folded sections": {
       "localizations": {
         "en": {
@@ -1247,6 +1213,40 @@
                 "stringUnit": {
                   "state": "translated",
                   "value": "%llu 处行高改为相对值"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "%llu more found.": {
+      "localizations": {
+        "en": {
+          "variations": {
+            "plural": {
+              "one": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%llu more found."
+                }
+              },
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "%llu more found."
+                }
+              }
+            }
+          }
+        },
+        "zh-Hans": {
+          "variations": {
+            "plural": {
+              "other": {
+                "stringUnit": {
+                  "state": "translated",
+                  "value": "另有 %llu 条未显示"
                 }
               }
             }
@@ -2655,6 +2655,38 @@
         }
       }
     },
+    "Ask the source you chose to explain this sentence's grammar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask the source you chose to explain this sentence's grammar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让所选来源解释这句话的语法。"
+          }
+        }
+      }
+    },
+    "Ask the source you chose to translate this sentence into your language.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask the source you chose to translate this sentence into your language."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "让所选来源把这句话翻译成你的语言。"
+          }
+        }
+      }
+    },
     "Ask the source you chose what this word means in this sentence.": {
       "localizations": {
         "en": {
@@ -3078,6 +3110,22 @@
         }
       }
     },
+    "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截取一个词，然后点旁边的「语法」。XDict 会让你选择的来源解释这句话的语法。"
+          }
+        }
+      }
+    },
     "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence.": {
       "localizations": {
         "en": {
@@ -3090,6 +3138,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "取词后点它旁边的“此处释义”。XDict 会向你所选的来源询问这个词在那个句子里的意思。"
+          }
+        }
+      }
+    },
+    "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截取一个词，然后点旁边的「翻译」。XDict 会让你选择的来源把这句话翻译成你的语言。"
           }
         }
       }
@@ -4940,6 +5004,22 @@
         }
       }
     },
+    "Explaining the grammar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explaining the grammar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解释语法"
+          }
+        }
+      }
+    },
     "Exported to %@.": {
       "localizations": {
         "en": {
@@ -5401,6 +5481,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "已评分。"
+          }
+        }
+      }
+    },
+    "Grammar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grammar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语法"
           }
         }
       }
@@ -6099,6 +6195,22 @@
         }
       }
     },
+    "Into %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Into %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "译为 %@"
+          }
+        }
+      }
+    },
     "It is looked up as soon as it is ready.": {
       "localizations": {
         "en": {
@@ -6224,6 +6336,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "保留这台 Mac 上的阅读记录"
+          }
+        }
+      }
+    },
+    "Keep as a Card": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep as a Card"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存为卡片"
+          }
+        }
+      }
+    },
+    "Keep this phrase as a card.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep this phrase as a card."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把这个词组保存为卡片。"
+          }
+        }
+      }
+    },
+    "Kept": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kept"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存"
           }
         }
       }
@@ -6866,6 +7026,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "忽略重音或标记后匹配"
+          }
+        }
+      }
+    },
+    "Meaning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meaning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "释义"
           }
         }
       }
@@ -7947,6 +8123,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "还没有记录。你查询的单词会连同句子保存在这里。"
+          }
+        }
+      }
+    },
+    "Notice when the sentence you capture holds a phrase your dictionaries know, and keep it as a card. Off, the sentence is not sent to XDict’s dictionary service for matching.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notice when the sentence you capture holds a phrase your dictionaries know, and keep it as a card. Off, the sentence is not sent to XDict’s dictionary service for matching."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读时，发现你截取的句子里含有词典收录的词组，并可以把它保存为卡片。关闭后，句子不会发送给 XDict 的词典服务做匹配。"
           }
         }
       }
@@ -9075,6 +9267,22 @@
         }
       }
     },
+    "Question": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Question"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "问题"
+          }
+        }
+      }
+    },
     "Question kind": {
       "localizations": {
         "en": {
@@ -9475,18 +9683,34 @@
         }
       }
     },
-    "Replace the note on this entry?": {
+    "Replace Note": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Replace Note"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "替换此词条的笔记？"
+            "value": "替换笔记"
           }
-        },
+        }
+      }
+    },
+    "Replace the note on this entry?": {
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Replace the note on this entry?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换此词条的笔记？"
           }
         }
       }
@@ -9782,32 +10006,32 @@
     },
     "Save as Note": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保存为笔记"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Save as Note"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存为笔记"
           }
         }
       }
     },
     "Saved as a note.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已保存为笔记。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Saved as a note."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存为笔记。"
           }
         }
       }
@@ -9846,16 +10070,16 @@
     },
     "Saving…": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在保存…"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Saving…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在保存…"
           }
         }
       }
@@ -10504,6 +10728,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "只显示部分语言"
+          }
+        }
+      }
+    },
+    "Show phrases while reading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show phrases while reading"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读时显示词组"
           }
         }
       }
@@ -11760,7 +12000,7 @@
         }
       }
     },
-    "The first of %lld": {
+    "The first of %llu": {
       "localizations": {
         "en": {
           "variations": {
@@ -11768,13 +12008,13 @@
               "one": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "The first of %lld"
+                  "value": "The first of %llu"
                 }
               },
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "The first of %lld"
+                  "value": "The first of %llu"
                 }
               }
             }
@@ -11786,7 +12026,7 @@
               "other": {
                 "stringUnit": {
                   "state": "translated",
-                  "value": "共 %lld 条，仅显示第一条"
+                  "value": "共 %llu 条，仅显示第一条"
                 }
               }
             }
@@ -11854,6 +12094,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "用于显示或隐藏释义面板的按键。"
+          }
+        }
+      }
+    },
+    "The language the sentence is translated into.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The language the sentence is translated into."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "句子翻译成的语言。"
           }
         }
       }
@@ -12002,22 +12258,6 @@
         }
       }
     },
-    "The note could not be read, so nothing was saved.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The note could not be read, so nothing was saved."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法读取笔记，因此未保存任何内容。"
-          }
-        }
-      }
-    },
     "The note could not be restored.": {
       "localizations": {
         "en": {
@@ -12110,6 +12350,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "提示词需要 {term} 和 {sentence}；{language} 可选，此处不使用 {entry} 和 {sense}。缺少或未知的占位符会在发送前被拒绝。XDict 会追加回复格式，该格式不可编辑。"
+          }
+        }
+      }
+    },
+    "The prompt needs {term} and {sentence}; {language} is optional, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The prompt needs {term} and {sentence}; {language} is optional, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示词需要 {term} 和 {sentence}；{language} 可选；这里不用 {entry} 和 {sense}。缺少或未知的占位符会在发送前被拒绝。XDict 会附加回答格式，格式不可编辑。"
+          }
+        }
+      }
+    },
+    "The prompt needs {term} and {sentence}; {language} names the language to translate into and is optional here, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The prompt needs {term} and {sentence}; {language} names the language to translate into and is optional here, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提示词需要 {term} 和 {sentence}；{language} 指翻译成的语言，在这里可选；这里不用 {entry} 和 {sense}。缺少或未知的占位符会在发送前被拒绝。XDict 会附加回答格式，格式不可编辑。"
           }
         }
       }
@@ -12761,6 +13033,22 @@
         }
       }
     },
+    "The system has no grammatical reading for this language; the explanation above is the model's alone.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system has no grammatical reading for this language; the explanation above is the model's alone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统没有这种语言的语法解读；上面只是模型的说明。"
+          }
+        }
+      }
+    },
     "The system would not register this shortcut (error %@).": {
       "localizations": {
         "en": {
@@ -12789,6 +13077,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "跟随系统"
+          }
+        }
+      }
+    },
+    "The system's reading": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system's reading"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统的解读"
+          }
+        }
+      }
+    },
+    "The system's reading — %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system's reading — %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统的解读 — %@"
           }
         }
       }
@@ -13309,16 +13629,16 @@
     },
     "This is not an address, so requests still use the last saved one.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这不是一个地址，请求仍使用上次保存的地址。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "This is not an address, so requests still use the last saved one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这不是一个地址，请求仍使用上次保存的地址。"
           }
         }
       }
@@ -13355,6 +13675,22 @@
         }
       }
     },
+    "This phrase already has a note. Replacing it keeps the phrase and overwrites the note's text.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This phrase already has a note. Replacing it keeps the phrase and overwrites the note's text."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个词组已有笔记。替换会保留词组，并覆盖笔记的文字。"
+          }
+        }
+      }
+    },
     "This prompt may not use {entry} while the entry is not sent.": {
       "localizations": {
         "en": {
@@ -13367,6 +13703,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "不发送词条时，提示词不得使用 {entry}。"
+          }
+        }
+      }
+    },
+    "This prompt may not use {entry}: this question sends no entry.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This prompt may not use {entry}: this question sends no entry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个提示词不能用 {entry}：这个问题不发送释义。"
           }
         }
       }
@@ -13703,6 +14055,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "触控板"
+          }
+        }
+      }
+    },
+    "Translate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翻译"
+          }
+        }
+      }
+    },
+    "Translated": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translated"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已翻译"
+          }
+        }
+      }
+    },
+    "Translating the sentence": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translating the sentence"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翻译句子"
           }
         }
       }
@@ -14822,16 +15222,16 @@
     },
     "an AI source": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "某个 AI 来源"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "an AI source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "某个 AI 来源"
           }
         }
       }

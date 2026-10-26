@@ -790,3 +790,60 @@ fn a_merge_after_an_erase_brings_the_other_devices_events_back() {
     a.merge(&untouched.log_bytes().unwrap()).unwrap();
     assert_eq!(a.history(at, 0).days[0].cards.len(), 1);
 }
+
+// **A kept phrase is a note** (plan-context-tools WI-5; ADR-0034 d.1): these three tests hold the record's promises to the
+// ledger's own rules — a note survives the reading bound, another device's note returns after an erase as its readings do,
+// and a keep writes the phrase, never the sentence.
+
+#[test]
+fn a_kept_phrase_survives_compaction_past_the_reading_bound() {
+    let at = 1_790_640_000.0;
+    let mut ledger = ledger();
+    let mut kept = note("take something into account", at, 0);
+    kept.target.entry_key = "take something into account".into();
+    assert_eq!(ledger.save_note(kept, "note-1"), Ok(RecordOutcome::Recorded));
+    ledger.record(reading("hold", "They hold that view.", at, "en"), "read-1", &[]).unwrap();
+
+    // Fifteen days on, the reading is past MAX_DAYS and leaves the log; the note is not a reading and stays.
+    let later = at + 15.0 * 86_400.0;
+    let report = ledger.compact(later, 0).unwrap();
+    assert!(report.removed >= 1, "the old reading is compacted away");
+    assert!(ledger.notes().iter().any(|held| held.target.entry_key == "take something into account"),
+            "the kept phrase survives compaction");
+    assert!(ledger.cards().iter().any(|card| card.target.entry_key == "take something into account"),
+            "and it is still a card, because a card is its note");
+}
+
+#[test]
+fn a_kept_phrase_from_another_device_returns_after_an_erase() {
+    let at = 1_790_640_000.0;
+    let mut a = ledger();
+    let mut kept = note("take something into account", at, 0);
+    kept.target.entry_key = "take something into account".into();
+    a.save_note(kept, "note-1").unwrap();
+    let untouched = peer(&a);
+
+    a.erase("erase", at + 60.0, "test").unwrap();
+    assert!(a.notes().is_empty(), "the erase rewrote this device's log");
+
+    // ADR-0024: erasure is this device's; another device's notes are its own and a sync brings them, exactly as the
+    // readings the neighbouring test follows.
+    a.merge(&untouched.log_bytes().unwrap()).unwrap();
+    assert!(a.notes().iter().any(|held| held.target.entry_key == "take something into account"),
+            "the peer's kept phrase came back with its log");
+}
+
+#[test]
+fn a_keep_writes_the_phrase_and_never_the_sentence() {
+    let at = 1_790_640_000.0;
+    let mut ledger = ledger();
+    let mut kept = note("take something into account", at, 0);
+    kept.target.entry_key = "take something into account".into();
+    ledger.save_note(kept, "note-1").unwrap();
+
+    // No reading was written, so a sentence in the export could only have come from the keep.
+    let text = serde_json::to_string(&ledger.export()).unwrap();
+    assert!(text.contains("take something into account"));
+    assert!(!text.contains("\"sentence\""), "a keep writes no reading and no sentence: {text}");
+    assert_eq!(ledger.notes()[0].text, "take something into account");
+}

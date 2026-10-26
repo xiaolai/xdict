@@ -28,3 +28,40 @@ struct AppleAnswer {
     @Guide(description: "One sentence without a line break.")
     let explanation: String
 }
+
+/// **The translation's own answer, as a guided type** (contract 6, §5b): the sentence in the asked language, and a reason
+/// only when the model refused. Its own type because guided generation constrains the fields it is given, and a
+/// translation has no `quotes` at all.
+@Generable
+enum AppleTranslationOutcome: String, CaseIterable {
+    case translated
+    case refused
+    case guardrail
+}
+
+@Generable
+struct AppleTranslationAnswer {
+    @Guide(description: "One of the translation's outcomes: translated, refused, guardrail.")
+    let outcome: AppleTranslationOutcome
+    @Guide(description: "The sentence translated into the reader's language: one paragraph, no line break, no notes and no alternatives. Empty when the outcome is refused or guardrail.")
+    let translation: String
+    @Guide(description: "Empty when the outcome is translated; otherwise one sentence without a line break saying why.")
+    let explanation: String
+}
+
+/// **The grammar's own answer, as a guided type** (contract 6, §5c): one paragraph about the sentence's structure.
+@Generable
+enum AppleGrammarOutcome: String, CaseIterable {
+    case explained
+    case insufficientContext
+    case refused
+    case guardrail
+}
+
+@Generable
+struct AppleGrammarAnswer {
+    @Guide(description: "One of the grammar's outcomes: explained, insufficientContext, refused, guardrail.")
+    let outcome: AppleGrammarOutcome
+    @Guide(description: "How the sentence's grammar works — its clauses, what each phrase does, and the part the reader was looking at — in one paragraph without a line break.")
+    let explanation: String
+}

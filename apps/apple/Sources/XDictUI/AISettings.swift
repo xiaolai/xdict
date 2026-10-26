@@ -658,6 +658,8 @@ public struct AISettings: View {
             Text("Grounded in the entry").tag(AIMode.grounded)
             Text("From the sentence alone").tag(AIMode.sentenceOnly)
             Text("Explaining a chosen sense").tag(AIMode.explainSense)
+            Text("Translating the sentence").tag(AIMode.translate)
+            Text("Explaining the grammar").tag(AIMode.explainGrammar)
         } label: {
             Text("Question kind")
             Text("Each kind has its own prompt.")
@@ -718,15 +720,19 @@ public struct AISettings: View {
             LocalizedStringResource("The prompt needs {term} and {sentence}; {language} is optional, and {entry} and {sense} are not used here. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
         case .explainSense:
             LocalizedStringResource("The prompt needs {term}, {sentence}, {entry} and {sense}; {language} is optional. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        case .translate:
+            LocalizedStringResource("The prompt needs {term} and {sentence}; {language} names the language to translate into and is optional here, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
+        case .explainGrammar:
+            LocalizedStringResource("The prompt needs {term} and {sentence}; {language} is optional, and {entry} and {sense} are not used. A missing or unknown placeholder is refused before anything is sent. XDict appends the response format, which cannot be edited.")
         }
     }
 
     private func promptPreview(model: AISettingsModel) -> some View {
         DisclosureGroup {
             previewText(model: model)
-            Text(model.promptKind == .sentenceOnly
-                 ? LocalizedStringResource("This is a sample: only the sentence you capture is sent.")
-                 : LocalizedStringResource("This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on."))
+            Text(model.promptKind.carriesEntry
+                 ? LocalizedStringResource("This is a sample: the sentence you capture and the entry you see are sent instead, when the entry-text switch is on.")
+                 : LocalizedStringResource("This is a sample: only the sentence you capture is sent."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } label: {
@@ -739,8 +745,7 @@ public struct AISettings: View {
         DisclosureGroup {
             // **The chosen-sense kind has its own contract** (contract 3, §6a): showing the other one would describe an
             // answer this ask never accepts.
-            Text(verbatim: model.promptKind == .explainSense ? AIComposer.explainResponseContract
-                                                             : AIComposer.responseContract)
+            Text(verbatim: AIComposer.responseContract(for: model.promptKind))
                 .font(.caption.monospaced())
                 .textSelection(.enabled)
         } label: {

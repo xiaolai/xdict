@@ -80,7 +80,7 @@ public struct MeaningAnswerPane: View {
         // **The answer's own entry supplies the sense list** (plan-companion WI-8): one fetch per edition-qualified
         // entry, made only while a request with an entry is shown.
         .task(id: state.meaning.sent) {
-            if let target = state.meaning.sent?.target, state.meaning.sent?.mode != .sentenceOnly {
+            if let sent = state.meaning.sent, sent.mode.carriesEntry, let target = sent.target {
                 state.meaning.loadSenses(for: target)
             }
         }
@@ -122,13 +122,17 @@ public struct MeaningAnswerPane: View {
     @ViewBuilder private var phraseOffer: some View {
         if case let .found(candidate, total, _, _, _) = state.phrases.row, state.meaning.held?.phrase == nil {
             VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                Button {  // placement: inspector-row
-                    Task { await state.askAboutPhrase(candidate) }
-                } label: {
-                    Text("Ask about “\(candidate.phrase)”")
+                HStack(spacing: Tokens.Space.sm) {
+                    Button {  // placement: inspector-row
+                        Task { await state.askAboutPhrase(candidate) }
+                    } label: {
+                        Text("Ask about “\(candidate.phrase)”")
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityIdentifier("meaning.phrase")
+                    // **The same keep the row offers** (plan-context-tools WI-4): one action, two surfaces, one state.
+                    PhraseKeepControl(state: state, candidate: candidate, identifier: "meaning.phrase")
                 }
-                .buttonStyle(.borderless)
-                .accessibilityIdentifier("meaning.phrase")
                 if total > 1 {
                     Text("The first of \(total)")
                         .font(.caption)
@@ -144,7 +148,7 @@ public struct MeaningAnswerPane: View {
             ContentUnavailableView {
                 Label("No Answer Yet", systemImage: "sparkles")
             } description: {
-                Text("Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence.")
+                Text(idleDescription)
             }
         case .asking:
             asking
@@ -156,6 +160,19 @@ public struct MeaningAnswerPane: View {
                                                            selection: state.meaning.selection) {
                 answer(presentation)
             }
+        }
+    }
+
+    /// **What the pane asks in the mode the reader chose** (contract 6; plan-context-tools D10): the idle copy names the
+    /// button that is actually there, not the one the pane's first mode has.
+    private var idleDescription: LocalizedStringKey {
+        switch state.meaning.chosenMode {
+        case .meaning:
+            "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence."
+        case .translation:
+            "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language."
+        case .grammar:
+            "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar."
         }
     }
 
@@ -172,8 +189,14 @@ public struct MeaningAnswerPane: View {
             if let context = sent.questionContext {
                 MeaningContextView(context: context, speak: { state.pronounceTerm(context.term, for: sent.target) })
             }
-            Text(MeaningSentences.previewEntry(included: sent.mode != .sentenceOnly))
+            Text(MeaningSentences.previewEntry(included: sent.mode.carriesEntry))
                 .foregroundStyle(.secondary)
+            if sent.mode == .translate, let language = sent.language {
+                Text("Into \(MeaningSentences.languageName(language))")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("meaning.translate.into")
+            }
             senseList(previewing: true)
             if let sense = sent.sense {
                 chosenSense(sense, dictionary: sent.dictionaryName)
@@ -223,6 +246,9 @@ public struct MeaningAnswerPane: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             answerHeader(presentation)
             explanation(presentation)
+            // **The system's reading, beside the model's** (contract 6; plan-context-tools WI-10; ADR-0034 d.6): shown in
+            // the grammar mode only, drawn from `NLTagger`, and never part of the question that was sent.
+            systemReading()
             answerSense(presentation)
             // **The source row is shown for a grounded answer even with no quote** (owner, 2026-10-26): the dictionary a
             // does-not-fit verdict came from is the one the reader may want to change.
@@ -256,7 +282,24 @@ public struct MeaningAnswerPane: View {
                 if let grounding = MeaningSentences.grounding(presentation.grounding) {
                     Text(grounding).font(.caption).foregroundStyle(.secondary)
                 }
+                // **A translation names its target** (contract 6): the language was asked for, so the pane says which one
+                // was asked for even after a Settings change.
+                if let sent = state.meaning.sent, sent.mode == .translate, let language = sent.language {
+                    Text("Into \(MeaningSentences.languageName(language))")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("meaning.translate.into")
+                }
             }
+        }
+    }
+
+    /// **The grammar mode's evidence** (plan-context-tools WI-10): the system's tokens and tags, drawn only for a grammar
+    /// answer and only for a language the coverage measurement covers; the sentence is the one the request was about.
+    @ViewBuilder private func systemReading() -> some View {
+        if let sent = state.meaning.sent, sent.mode == .explainGrammar,
+           case .answer = state.meaning.state, let context = sent.questionContext {
+            SystemReadingView(sentence: context.sentence)
         }
     }
 
@@ -898,20 +941,46 @@ struct PromptText: View {
     }
 }
 
-/// **"Meaning here" on the presented term** (ADR-0021 d.1): a tap, never automatic. The popover expands into the window
-/// it hands the sentence to; the main window opens the answer pane in place.
+/// **The pane's one ask button on the presented term** (ADR-0021 d.1; contract 6): a tap, never automatic, and the
+/// label says which question the chosen mode asks. The popover expands into the window it hands the sentence to; the
+/// main window opens the answer pane in place.
 struct MeaningAskButton: View {
     let enabled: Bool
+    var mode: MeaningAskMode = .meaning
     let action: () -> Void
 
     var body: some View {
         Button {  // placement: meaning-chip
             action()
         } label: {
-            Label("Meaning Here", systemImage: "sparkles")
+            switch mode {
+            case .meaning: Label("Meaning Here", systemImage: "sparkles")
+            case .translation: Label("Translate", systemImage: "character.bubble")
+            case .grammar: Label("Grammar", systemImage: "text.magnifyingglass")
+            }
         }
         .disabled(!enabled)
-        .help("Ask the source you chose what this word means in this sentence.")
+        .help(mode.help)
         .accessibilityIdentifier("meaning.ask")
+    }
+}
+
+extension MeaningAskMode {
+    /// The button's one line of help: what the tap sends and what comes back.
+    var help: LocalizedStringKey {
+        switch self {
+        case .meaning: "Ask the source you chose what this word means in this sentence."
+        case .translation: "Ask the source you chose to translate this sentence into your language."
+        case .grammar: "Ask the source you chose to explain this sentence's grammar."
+        }
+    }
+
+    /// The segmented control's short label (`meaning.mode`).
+    var label: LocalizedStringKey {
+        switch self {
+        case .meaning: "Meaning"
+        case .translation: "Translate"
+        case .grammar: "Grammar"
+        }
     }
 }

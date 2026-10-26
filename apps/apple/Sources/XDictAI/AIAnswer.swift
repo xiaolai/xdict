@@ -15,17 +15,23 @@ public enum AIOutcome: String, Sendable, Equatable, CaseIterable {
     case explained
     /// **The chosen-sense mode**: the sense the reader named does not fit — never a silent switch.
     case doesNotFit
+    /// **The translation mode**: the sentence stands in the asked language (contract 6 §5b).
+    case translated
 }
 
 public struct AIAnswer: Sendable, Equatable {
     public let outcome: AIOutcome
     public let quotes: [String]
     public let explanation: String
+    /// **The translation mode's own text** (contract 6 §5b): set exactly when the mode is `translate`, and nil in
+    /// every other mode, whose answer has no `translation` field at all.
+    public let translation: String?
 
-    public init(outcome: AIOutcome, quotes: [String], explanation: String) {
+    public init(outcome: AIOutcome, quotes: [String], explanation: String, translation: String? = nil) {
         self.outcome = outcome
         self.quotes = quotes
         self.explanation = explanation
+        self.translation = translation
     }
 }
 
@@ -43,6 +49,8 @@ public enum AIAnswerError: Error, Equatable, Sendable {
     case quoteEmpty
     /// The chosen sense was not sent whole, so neither verdict may be given (`CONTRACT.md` §5, ADR-0029 d.7).
     case partialTarget
+    /// **The translation mode's text is not one paragraph in the asked language's shape** (contract 6 §5b).
+    case translation
 
     public var code: String {
         switch self {
@@ -56,6 +64,7 @@ public enum AIAnswerError: Error, Equatable, Sendable {
         case .ungrounded: "answer.ungrounded"
         case .quoteEmpty: "answer.quote.empty"
         case .partialTarget: "answer.partialTarget"
+        case .translation: "answer.translation"
         }
     }
 }
@@ -67,6 +76,11 @@ public enum AIAnswerValidator {
     public static let quoteCeilingUTF8 = 800
     /// An explanation outside 1…this many UTF-8 bytes is refused.
     public static let explanationCeilingUTF8 = 600
+    /// **A translation's own bound** (contract 6 §5b): one paragraph, 1…this many UTF-8 bytes.
+    public static let translationCeilingUTF8 = 2_000
+    /// **The grammar mode's explanation bound** (contract 6 §5c): a paragraph about structure fits where the meaning
+    /// modes' one sentence does not.
+    public static let grammarCeilingUTF8 = 1_200
 
     /// **The quote must be a byte substring of the text that was sent** (`CONTRACT.md` §5): Swift's `String.contains`
     /// compares canonically, so an NFD quote would pass against an NFC entry; the check is on UTF-8 bytes, as the
@@ -89,6 +103,13 @@ public enum AIAnswerValidator {
     public static func validate(json: Data, mode: AIMode, entry: AIEntryText?, sense: AISense? = nil)
         throws(AIAnswerError) -> AIAnswer {
         guard let object = (try? JSONSerialization.jsonObject(with: json)) as? [String: Any] else { throw .shape }
+        // **Contract 6's two operations answer in their own shapes** (§5b, §5c): neither quotes anything, so neither
+        // can be validated by the meaning modes' rules.
+        switch mode {
+        case .translate: return try translationAnswer(object)
+        case .explainGrammar: return try grammarAnswer(object)
+        case .grounded, .sentenceOnly, .explainSense: break
+        }
         let keys = Set(object.keys)
         guard keys == ["outcome", "quotes", "explanation"] else { throw .shape }
         guard let outcomeText = object["outcome"] as? String, let outcome = AIOutcome(rawValue: outcomeText) else {
@@ -106,9 +127,10 @@ public enum AIAnswerValidator {
         case .sentenceOnly:
             // A quoted answer cannot be grounded without an entry; it is shown as ungrounded, never as grounded.
             guard quotes.isEmpty else { throw .ungrounded }
-            guard outcome != .explained, outcome != .doesNotFit else { throw .outcome }
+            guard outcome != .explained, outcome != .doesNotFit, outcome != .translated else { throw .outcome }
         case .grounded:
-            guard outcome != .explanationOnly, outcome != .explained, outcome != .doesNotFit else { throw .outcome }
+            guard outcome != .explanationOnly, outcome != .explained, outcome != .doesNotFit,
+                  outcome != .translated else { throw .outcome }
             guard let entry else { throw .shape }
             for quote in quotes {
                 guard quote.utf8.count <= quoteCeilingUTF8 else { throw .quoteTooLong }
@@ -126,6 +148,10 @@ public enum AIAnswerValidator {
             }
             // **No verdict from a partial target**: the missing part of the sense may decide it.
             guard sense.whole || (outcome != .explained && outcome != .doesNotFit) else { throw .partialTarget }
+        case .translate, .explainGrammar:
+            // **Contract 6's answers were validated above** and returned; reaching this line with one of their modes is a
+            // harness fault, and it fails as a shape refusal rather than being read by another mode's rules.
+            throw .shape
         }
 
         switch outcome {
@@ -138,11 +164,46 @@ public enum AIAnswerValidator {
         if mode == .grounded, let entry, !entry.complete, outcome == .noMatchingSense {
             throw .noMatchingSenseOnPartial
         }
-        guard !explanation.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) }) else {
-            throw .explanation
-        }
-        let bytes = explanation.utf8.count
-        guard bytes >= 1, bytes <= explanationCeilingUTF8 else { throw .explanation }
+        guard oneLine(explanation, ceiling: explanationCeilingUTF8) else { throw .explanation }
         return AIAnswer(outcome: outcome, quotes: quotes, explanation: explanation)
+    }
+
+    /// **A translation answer, checked mechanically** (contract 6 §5b): exactly three fields; the translation is one
+    /// paragraph in the asked language, and only a refusal or a guardrail explains itself.
+    private static func translationAnswer(_ object: [String: Any]) throws(AIAnswerError) -> AIAnswer {
+        guard Set(object.keys) == ["outcome", "translation", "explanation"] else { throw .shape }
+        guard let text = object["outcome"] as? String, let outcome = AIOutcome(rawValue: text) else { throw .outcome }
+        guard let translation = object["translation"] as? String,
+              let explanation = object["explanation"] as? String else { throw .shape }
+        switch outcome {
+        case .translated:
+            guard oneLine(translation, ceiling: translationCeilingUTF8) else { throw .translation }
+            guard explanation.isEmpty else { throw .explanation }
+        case .refused, .guardrail:
+            guard translation.isEmpty else { throw .translation }
+            guard oneLine(explanation, ceiling: explanationCeilingUTF8) else { throw .explanation }
+        default:
+            throw .outcome
+        }
+        return AIAnswer(outcome: outcome, quotes: [], explanation: explanation, translation: translation)
+    }
+
+    /// **A grammar answer, checked mechanically** (contract 6 §5c): exactly two fields, and the explanation is one
+    /// paragraph in every outcome — a refusal says why in the same field the analysis uses.
+    private static func grammarAnswer(_ object: [String: Any]) throws(AIAnswerError) -> AIAnswer {
+        guard Set(object.keys) == ["outcome", "explanation"] else { throw .shape }
+        guard let text = object["outcome"] as? String, let outcome = AIOutcome(rawValue: text) else { throw .outcome }
+        guard [.explained, .insufficientContext, .refused, .guardrail].contains(outcome) else { throw .outcome }
+        guard let explanation = object["explanation"] as? String else { throw .shape }
+        guard oneLine(explanation, ceiling: grammarCeilingUTF8) else { throw .explanation }
+        return AIAnswer(outcome: outcome, quotes: [], explanation: explanation)
+    }
+
+    /// **One paragraph, within its bound**: no line break of any kind (U+2028 and U+2029 draw a line too), and
+    /// 1…`ceiling` UTF-8 bytes.
+    static func oneLine(_ text: String, ceiling: Int) -> Bool {
+        guard !text.unicodeScalars.contains(where: { CharacterSet.newlines.contains($0) }) else { return false }
+        let bytes = text.utf8.count
+        return bytes >= 1 && bytes <= ceiling
     }
 }

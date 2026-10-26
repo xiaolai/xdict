@@ -138,12 +138,15 @@ public enum MeaningPresenter {
         case .answer(let answer, let mode):
             return MeaningPresentation(
                 facts: facts,
-                // The chosen-sense question sends the entry, so its answer is grounded like the model's own choice.
-                grounding: mode == .sentenceOnly ? .ungrounded : .grounded,
+                // The chosen-sense question sends the entry, so its answer is grounded like the model's own choice;
+                // contract 6's two operations carry none, and say so in the same words a sentence-only ask does.
+                grounding: mode.carriesEntry ? .grounded : .ungrounded,
                 outcome: MeaningSentences.outcome(answer.outcome),
-                coverage: mode != .sentenceOnly && sent?.complete == false ? MeaningSentences.partialEntry : nil,
+                coverage: mode.carriesEntry && sent?.complete == false ? MeaningSentences.partialEntry : nil,
                 quotes: answer.quotes,
-                explanation: answer.explanation,
+                // **A translation's answer is its translation** (contract 6 §5b): the same field the pane's Copy and
+                // Save as Note read, so one rule formats every mode's answer.
+                explanation: mode == .translate ? (answer.translation ?? "") : answer.explanation,
                 problem: nil,
                 code: nil,
                 selectionMoved: moved(sent: sent, mode: mode, selection: selection))
@@ -195,7 +198,8 @@ public enum MeaningPresenter {
     /// the entry does not hold, a question over its ceiling — has no setting to change, and a button would loop.
     static func recovery(for error: AIComposeError) -> MeaningRecovery? {
         switch error {
-        case .unknownPlaceholder, .missingPlaceholder, .entryInSentenceOnly, .senseOutsideExplainSense, .templateTooLong:
+        case .unknownPlaceholder, .missingPlaceholder, .entryInSentenceOnly, .entryWithoutEntry,
+             .senseOutsideExplainSense, .templateTooLong:
             .openAISettings
         case .questionTooLong, .entryRequired, .senseRequired, .senseTextMismatch:
             nil

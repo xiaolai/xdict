@@ -15,7 +15,7 @@ import XDictUI
     static func session() -> MeaningSession {
         let session = MeaningSession(fetchEntryText: { _, _, _ in .failure(.wire(.interrupted)) },
                                      presented: { nil },
-                                     makeProvider: { (_: MeaningSettings) throws(AIProviderError) -> any AIProvider in
+                                     makeProvider: { (_: MeaningSettings, _: AIMode) throws(AIProviderError) -> any AIProvider in
                                          throw .notInstalled })
         session.hold(handoff())
         return session

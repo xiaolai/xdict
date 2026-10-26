@@ -30,6 +30,22 @@ public enum AITemplates {
             {sentence}
 
             """
+        case ("en", .translate):
+            """
+            Translate this sentence into the language tagged {language}, as one paragraph. The reader was looking at the word {term}.
+
+            Sentence:
+            {sentence}
+
+            """
+        case ("en", .explainGrammar):
+            """
+            Explain the grammar of this sentence: its clauses, what each part is doing, and how the word {term} works here. Write prose for a reader learning the language, not a tree.
+
+            Sentence:
+            {sentence}
+
+            """
         case ("en", .explainSense):
             """
             The reader is reading one sense of the word {term}. Explain that sense as it is used in the sentence.
@@ -66,6 +82,22 @@ public enum AITemplates {
         case ("zh-Hans", .sentenceOnly):
             """
             单词「{term}」在这个句子里是什么意思？
+
+            句子：
+            {sentence}
+
+            """
+        case ("zh-Hans", .translate):
+            """
+            请把这句话翻译成语言标签为 {language} 的语言，译成一整段。读者正在看的词是「{term}」。
+
+            句子：
+            {sentence}
+
+            """
+        case ("zh-Hans", .explainGrammar):
+            """
+            请解释这句话的语法：有哪些分句、每部分起什么作用，以及「{term}」在这里怎么用。用面向语言学习者的文字说明，不要画树。
 
             句子：
             {sentence}

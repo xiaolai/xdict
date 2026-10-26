@@ -10,7 +10,7 @@ public enum SettingsSearch {
     /// One searchable row, and the place `SettingsRoute.reveal(_:)` takes the reader to.
     public enum Anchor: String, CaseIterable, Hashable, Sendable {
         case dictionaryList, dictionaryImport
-        case readingWidth, readingAccent, speechVoice
+        case readingWidth, readingAccent, readingPhrases, speechVoice
         case history, reviewReminders, syncFolder
         case startup, interfaceLanguage, lookupShortcut, hover, popupAppearance, meaningPaneGap
         case aiSource, aiEntryText, aiLanguage, aiPrompt
@@ -44,6 +44,7 @@ public enum SettingsSearch {
         .dictionaryImport: ["导入", "添加", "文件", "苹果"],
         .readingAccent: ["颜色", "外观"],
         .readingWidth: ["阅读", "宽度", "行长"],
+        .readingPhrases: ["词组", "短语", "卡片", "阅读"],
         .speechVoice: ["语音", "朗读", "发音", "声音", "录音"],
         .history: ["历史", "隐私", "阅读记录"],
         .reviewReminders: ["复习", "提醒", "通知", "学习"],
@@ -70,6 +71,8 @@ public enum SettingsSearch {
              keywords: ["reading", "color", "colour", "appearance"]),
         Item(.readingAndSpeech, .readingWidth, "Comfortable reading width",
              keywords: ["reading", "width", "measure", "line", "length", "comfortable"]),
+        Item(.readingAndSpeech, .readingPhrases, "Show phrases while reading",
+             keywords: ["phrases", "phrase", "reading", "cards", "keep", "study", "privacy", "disable", "hide"]),
         Item(.readingAndSpeech, .speechVoice, "Voice",
              keywords: ["speech", "speak", "pronunciation", "accent", "recordings", "audio", "read", "aloud"]),
         Item(.learning, .history, "Reading History",

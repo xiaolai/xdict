@@ -128,51 +128,60 @@ public struct LookupPanelView: View {
             phraseLine(Text("Phrases are not available for these dictionaries."))
                 .accessibilityIdentifier("panel.phrase.unavailable")
         case let .found(candidate, total, _, building, omitted):
-            Button {  // placement: P41
-                state.openPhrase(candidate.phrase)
-            } label: {
-                VStack(alignment: .leading, spacing: PanelLook.footerGap) {
-                    sentenceText(candidate)
-                        .font(Tokens.TextRole.caption.font)
-                        .foregroundStyle(Tokens.Colour.secondaryLabel.color)
-                        .lineLimit(2)
-                    // **One line, so the fit's reservation is the row's height** (audit round 4, 2026-10-26): a phrase or
-                    // a label that wrapped would draw past the space the panel was fitted with.
-                    HStack(spacing: PanelLook.footerGap) {
-                        Text(verbatim: candidate.phrase)
-                            .font(Tokens.TextRole.panelDictionaryName.font)
-                            .foregroundStyle(Tokens.Colour.label.color)
-                        separationText(candidate)
+            HStack(alignment: .bottom, spacing: PanelLook.footerGap) {
+                Button {  // placement: P41
+                    state.openPhrase(candidate.phrase)
+                } label: {
+                    VStack(alignment: .leading, spacing: PanelLook.footerGap) {
+                        sentenceText(candidate)
                             .font(Tokens.TextRole.caption.font)
                             .foregroundStyle(Tokens.Colour.secondaryLabel.color)
-                        // **What the answer left out, and what is still being read** (audit rounds 1–4, 2026-10-26): the
-                        // contract asks the shell to say how many matches the cap left out, and a dictionary still being
-                        // read is not a complete answer.
-                        if omitted > 0 {
-                            Text("\(omitted) more found.")
+                            .lineLimit(2)
+                        // **One line, so the fit's reservation is the row's height** (audit round 4, 2026-10-26): a phrase
+                        // or a label that wrapped would draw past the space the panel was fitted with.
+                        HStack(spacing: PanelLook.footerGap) {
+                            Text(verbatim: candidate.phrase)
+                                .font(Tokens.TextRole.panelDictionaryName.font)
+                                .foregroundStyle(Tokens.Colour.label.color)
+                            separationText(candidate)
                                 .font(Tokens.TextRole.caption.font)
                                 .foregroundStyle(Tokens.Colour.secondaryLabel.color)
-                        } else if total > 1 {
-                            Text("The first of \(total)")
+                            // **What the answer left out, and what is still being read** (audit rounds 1–4, 2026-10-26):
+                            // the contract asks the shell to say how many matches the cap left out, and a dictionary
+                            // still being read is not a complete answer.
+                            if omitted > 0 {
+                                Text("\(omitted) more found.")
+                                    .font(Tokens.TextRole.caption.font)
+                                    .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                            } else if total > 1 {
+                                Text("The first of \(total)")
+                                    .font(Tokens.TextRole.caption.font)
+                                    .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                            }
+                        }
+                        if building > 0 {
+                            Text("Still reading \(building) dictionaries.")
                                 .font(Tokens.TextRole.caption.font)
                                 .foregroundStyle(Tokens.Colour.secondaryLabel.color)
                         }
                     }
-                    if building > 0 {
-                        Text("Still reading \(building) dictionaries.")
-                            .font(Tokens.TextRole.caption.font)
-                            .foregroundStyle(Tokens.Colour.secondaryLabel.color)
-                    }
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-                .padding(.leading, PanelLook.leading)
-                .padding(.trailing, PanelLook.trailing)
-                .padding(.bottom, PanelLook.footerGap)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("panel.phrase")
+                // **Keep the phrase as a card** (plan-context-tools WI-3, WI-4): one action that writes a study note on
+                // the phrase's own entry. A plain control of its own, not part of the row's tap and not hover-only, so
+                // VoiceOver and the keyboard reach it.
+                PhraseKeepControl(state: state, candidate: candidate, identifier: "panel.phrase")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("panel.phrase")
+            .padding(.leading, PanelLook.leading)
+            .padding(.trailing, PanelLook.trailing)
+            .padding(.bottom, PanelLook.footerGap)
+            .contextMenu {
+                Button("Keep as a Card") { Task { await state.keepPhrase(candidate) } }  // placement: P41
+            }
         }
     }
 
@@ -303,6 +312,45 @@ private struct FooterRow: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+    }
+}
+
+/// **The keep's own states, shared by the row and the pane** (plan-context-tools WI-3, WI-4): idle, working, kept, asking
+/// before replacing the reader's note, or failed — never a silent no-op, and never a second identical send while one
+/// runs. `identifier` prefixes each state's accessibility identifier, so the two surfaces stay distinguishable.
+struct PhraseKeepControl: View {
+    let state: SearchWindowState
+    let candidate: PhraseRow.Candidate
+    let identifier: String
+
+    var body: some View {
+        switch state.phraseKeeper.state {
+        case .idle:
+            Button("Keep") { Task { await state.keepPhrase(candidate) } }  // placement: P41
+                .buttonStyle(.borderless)
+                .font(Tokens.TextRole.caption.font)
+                .help("Keep this phrase as a card.")
+                .accessibilityIdentifier("\(identifier).keep")
+        case .keeping:
+            ProgressView().controlSize(.small)  // placement: spinner
+                .accessibilityIdentifier("\(identifier).keeping")
+        case .kept:
+            Label { Text("Kept") } icon: { Image(systemName: "checkmark.circle") }
+                .font(Tokens.TextRole.caption.font)
+                .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+                .accessibilityIdentifier("\(identifier).kept")
+        case .needsReplacement:
+            Button("Replace Note") { Task { await state.keepPhrase(candidate, replacing: true) } }  // placement: P41
+                .buttonStyle(.borderless)
+                .font(Tokens.TextRole.caption.font)
+                .help("This phrase already has a note. Replacing it keeps the phrase and overwrites the note's text.")
+                .accessibilityIdentifier("\(identifier).replace")
+        case .failed:
+            Button("Try Again") { Task { await state.keepPhrase(candidate) } }  // placement: P41
+                .buttonStyle(.borderless)
+                .font(Tokens.TextRole.caption.font)
+                .accessibilityIdentifier("\(identifier).keep-failed")
         }
     }
 }

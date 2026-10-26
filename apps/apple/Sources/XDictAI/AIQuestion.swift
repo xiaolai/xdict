@@ -42,6 +42,27 @@ public enum AIMode: String, Sendable, Equatable, CaseIterable {
     /// **The reader names the sense, and the model explains that sense** (ADR-0029): the whole entry is sent, the
     /// chosen sense is carried as a value, and the answer says whether it fits. Never a sentence-only fallback.
     case explainSense
+    /// **The sentence translated into the language the reader asked for** (contract 6; plan-context-tools WI-6): no
+    /// entry goes, and the question's `language` is the translation's target, not the explanation's language.
+    case translate
+    /// **What the sentence's grammar is doing** (contract 6; plan-context-tools WI-9): the sentence and its term, never
+    /// the entry — grammar is the sentence's own, and nothing of the dictionary leaves.
+    case explainGrammar
+
+    /// **Whether this mode sends the entry**: the disclosure switch governs exactly these modes. A mode that carries
+    /// no entry is neither gated nor enabled by a switch about entry text (contract 6 §2).
+    public var carriesEntry: Bool {
+        switch self {
+        case .grounded, .explainSense: true
+        case .sentenceOnly, .translate, .explainGrammar: false
+        }
+    }
+
+    /// **Whether the composer marks the term in the sentence** (contract 6 §3): every mode but translation. A
+    /// translation must not inherit `«»` — those bytes are the explanation's device, not the reader's text.
+    public var marksTerm: Bool {
+        self != .translate
+    }
 }
 
 /// **The sense the reader is reading** (ADR-0029 d.2): the core's ordinal and canonical range in `entry.text`, the

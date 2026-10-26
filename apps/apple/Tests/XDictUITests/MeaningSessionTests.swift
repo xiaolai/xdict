@@ -63,7 +63,7 @@ final class Counter: @unchecked Sendable {
         let session = MeaningSession(
             fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
             presented: { drawn ? (Self.dict, Self.entry) : nil },
-            makeProvider: { _ in provider })
+            makeProvider: { _, _ in provider })
         session.settings = settings
         session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.", range: NSRange(location: 5, length: 4),
                                     origin: MeaningOrigin(request: 7, generation: 2)))
@@ -77,7 +77,7 @@ final class Counter: @unchecked Sendable {
         settings: MeaningSettings = MeaningSettings(source: .http, model: "m", sendEntryText: true),
         fetch: @escaping @Sendable (DictId, EntryRef, UInt64) async -> Result<EntryText, ClientFailure>,
         presented: @escaping @MainActor () -> (DictId, EntryRef)?,
-        makeProvider: @escaping @Sendable (MeaningSettings) throws(AIProviderError) -> any AIProvider,
+        makeProvider: @escaping @Sendable (MeaningSettings, AIMode) throws(AIProviderError) -> any AIProvider,
         drawn: Bool = true
     ) -> MeaningSession {
         let session = MeaningSession(fetchEntryText: fetch, presented: presented, makeProvider: makeProvider)
@@ -267,7 +267,7 @@ final class Counter: @unchecked Sendable {
         let entryText = Self.entryText
         let session = Self.session(fetch: { _, _, _ in .success(entryText) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in provider })
+                                   makeProvider: { _, _ in provider })
         session.ask()
         #expect(session.state == .asking)
         // **The call is in flight and held** (audit round 3): no delay can let it finish before the cancellation.
@@ -405,7 +405,7 @@ final class Counter: @unchecked Sendable {
         let session = MeaningSession(
             fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
             presented: { shown.value },
-            makeProvider: { _ in provider })
+            makeProvider: { _, _ in provider })
         session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
         return (session, shown, fetcher, provider,
                 MeaningSession.Subject(dictionary: UUID(), key: "ada", occurrence: 0),
@@ -529,7 +529,7 @@ final class Counter: @unchecked Sendable {
         let session = MeaningSession(
             fetchEntryText: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
             presented: { (Self.dict, Self.entry) },
-            makeProvider: { _ in provider })
+            makeProvider: { _, _ in provider })
         session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
         session.hold(MeaningHandoff(term: "hold", sentence: "They hold that view.",
                                     range: NSRange(location: 5, length: 4),
@@ -586,9 +586,9 @@ final class Counter: @unchecked Sendable {
         let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
         let entryText = Self.entryText
         let first = Self.session(fetch: { _, _, _ in .success(entryText) },
-                                 presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                                 presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
         let second = Self.session(fetch: { _, _, _ in .success(entryText) },
-                                  presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                                  presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
         first.ask()
         #expect(await Self.waitUntil { await provider.questions.count == 1 }, "the first ask never reached the source")
         second.ask()
@@ -604,9 +604,9 @@ final class Counter: @unchecked Sendable {
         let provider = StubbornProvider(answers: [.success(Self.matched)], release: release)
         let entryText = Self.entryText
         let first = Self.session(fetch: { _, _, _ in .success(entryText) },
-                                 presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                                 presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
         let second = Self.session(fetch: { _, _, _ in .success(entryText) },
-                                  presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                                  presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
         first.ask()
         #expect(await Self.waitUntil { await provider.questions.isEmpty == false },
                 "the provider never got the question")
@@ -632,7 +632,7 @@ final class Counter: @unchecked Sendable {
         let fetcher = EchoFetcher()
         let provider = StubProvider(answers: [.success(Self.matched)])
         let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
-                                   presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                                   presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
         let otherDictionary = DictId(rawValue: "feedface00000002")
         let otherEntry = EntryRef(edition: Self.edition, key: "resource", occurrence: 0)
         // A sense chosen on the entry the page showed belongs to that entry, not to the chosen one.
@@ -666,7 +666,7 @@ final class Counter: @unchecked Sendable {
     /// A session whose fetch the test gates, so the switch can be turned off while the entry is being read.
     static func gatedSession(_ fetcher: GatedFetcher, _ provider: StubProvider) -> MeaningSession {
         Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
-                     presented: { (Self.dict, Self.entry) }, makeProvider: { _ in provider })
+                     presented: { (Self.dict, Self.entry) }, makeProvider: { _, _ in provider })
     }
 
     @Test func aSwitchTurnedOffWhileTheEntryIsReadSendsNothing() async {
@@ -814,7 +814,7 @@ final class Counter: @unchecked Sendable {
         let senseEntryText = Self.senseEntryText
         let session = Self.session(fetch: { _, _, _ in .success(senseEntryText) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in provider })
+                                   makeProvider: { _, _ in provider })
         session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 2, dictionaryName: "Test"))
         session.explain()
         #expect(await Self.waitUntil { await provider.questions.count == 1 })
@@ -881,7 +881,7 @@ final class Counter: @unchecked Sendable {
         let entryText = Self.entryText
         let session = Self.session(fetch: { _, _, _ in .success(entryText) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in provider })
+                                   makeProvider: { _, _ in provider })
         session.ask()
         #expect(await Self.waitUntil { await provider.questions.count == 1 }, "the ask never reached the source")
         let before = session.settled
@@ -913,7 +913,7 @@ final class Counter: @unchecked Sendable {
         let provider = StubProvider(answers: [.success(Self.explained)])
         let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in provider })
+                                   makeProvider: { _, _ in provider })
         session.select(MeaningSelection(dictionary: Self.dict, entry: Self.entry, sense: 2, dictionaryName: "Test"))
         session.preview()
         #expect(await Self.waitUntil { await fetcher.calls == 1 }, "the preview never read the entry")
@@ -969,7 +969,7 @@ final class Counter: @unchecked Sendable {
         let matched = Self.matched
         let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in StubProvider(answers: [.success(matched)]) })
+                                   makeProvider: { _, _ in StubProvider(answers: [.success(matched)]) })
         session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: Self.entry))
         #expect(await Self.waitUntil { await fetcher.started == [Self.entry] }, "the first fetch never started")
         session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: other))
@@ -989,7 +989,7 @@ final class Counter: @unchecked Sendable {
         let matched = Self.matched
         let session = Self.session(fetch: { dict, entry, budget in await fetcher.fetch(dict, entry, budget) },
                                    presented: { (Self.dict, Self.entry) },
-                                   makeProvider: { _ in StubProvider(answers: [.success(matched)]) })
+                                   makeProvider: { _, _ in StubProvider(answers: [.success(matched)]) })
         let entry = Self.entry
         session.loadSenses(for: MeaningTarget(dictionary: Self.dict, entry: entry))
         #expect(await Self.waitUntil { await fetcher.started == [entry] }, "the fetch never started")

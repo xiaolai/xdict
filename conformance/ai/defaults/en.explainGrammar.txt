@@ -1,0 +1,4 @@
+Explain the grammar of this sentence: its clauses, what each part is doing, and how the word {term} works here. Write prose for a reader learning the language, not a tree.
+
+Sentence:
+{sentence}

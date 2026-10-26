@@ -1,0 +1,21 @@
+{"id": "en-imperative", "language": "en", "sentence": "Please hold the door while I find the key.", "term": "hold", "range": {"start": 7, "length": 4}}
+{"id": "en-phrasal", "language": "en", "sentence": "She took the delay into account before answering.", "term": "account", "range": {"start": 24, "length": 7}}
+{"id": "en-past-perfect", "language": "en", "sentence": "They had been waiting for hours when the train finally came.", "term": "waiting", "range": {"start": 14, "length": 7}}
+{"id": "en-passive", "language": "en", "sentence": "The letter was written by a clerk who had never met her.", "term": "written", "range": {"start": 15, "length": 7}}
+{"id": "en-conditional", "language": "en", "sentence": "If it rains tomorrow, we will stay inside and read.", "term": "rains", "range": {"start": 6, "length": 5}}
+{"id": "en-question", "language": "en", "sentence": "Where did you put the keys I gave you yesterday?", "term": "put", "range": {"start": 14, "length": 3}}
+{"id": "en-modal-perfect", "language": "en", "sentence": "You should have told me before the meeting began.", "term": "told", "range": {"start": 16, "length": 4}}
+{"id": "en-relative", "language": "en", "sentence": "The book that I borrowed from the library is overdue.", "term": "borrowed", "range": {"start": 16, "length": 8}}
+{"id": "en-ambiguous", "language": "en", "sentence": "I saw her duck under the table.", "term": "duck", "range": {"start": 10, "length": 4}}
+{"id": "en-name", "language": "en", "sentence": "Alice met Bob in Paris last June.", "term": "Paris", "range": {"start": 17, "length": 5}}
+{"id": "en-nonascii", "language": "en", "sentence": "The café’s naïve menu features a façade of crème brûlée.", "term": "naïve", "range": {"start": 11, "length": 5}}
+{"id": "en-long", "language": "en", "sentence": "Although the committee had reviewed the proposal twice, it postponed the decision until the chair, who was travelling, could be present.", "term": "postponed", "range": {"start": 59, "length": 9}}
+{"id": "zh-imperative", "language": "zh-Hans", "sentence": "请把门扶着，我去找钥匙。", "term": "扶", "range": {"start": 3, "length": 1}}
+{"id": "zh-phrase", "language": "zh-Hans", "sentence": "他把延迟考虑了进去，然后才回答。", "term": "考虑", "range": {"start": 4, "length": 2}}
+{"id": "zh-conditional", "language": "zh-Hans", "sentence": "如果明天下雨，我们就待在家里看书。", "term": "下雨", "range": {"start": 4, "length": 2}}
+{"id": "zh-relative", "language": "zh-Hans", "sentence": "这本书是我从图书馆借的，现在过期了。", "term": "借", "range": {"start": 9, "length": 1}}
+{"id": "zh-clause", "language": "zh-Hans", "sentence": "她还没来得及说完，电话就断了。", "term": "说完", "range": {"start": 6, "length": 2}}
+{"id": "zh-hant", "language": "zh-Hant", "sentence": "請把門扶著，我去找鑰匙。", "term": "扶", "range": {"start": 3, "length": 1}}
+{"id": "mixed", "language": "en", "sentence": "他在 email 里 wrote that the deal was off.", "term": "wrote", "range": {"start": 11, "length": 5}}
+{"id": "clipped", "language": "en", "sentence": "…and that is why the committee decided to postpone the", "term": "postpone", "range": {"start": 42, "length": 8}}
+{"id": "ocr", "language": "en", "sentence": "The resu1t was c1ear: the mach1ne had fa11ed.", "term": "resu1t", "range": {"start": 4, "length": 6}}

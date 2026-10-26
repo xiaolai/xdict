@@ -419,3 +419,34 @@ func meaningDefaultTemplate(language: String, mode: AIMode) throws -> String {
     try #require(AITemplates.effective(language: language, mode: mode, stored: nil),
                  "no shipped template for \(language)/\(mode.rawValue)")
 }
+
+/// **The translation's target language** (contract 6; plan-context-tools WI-8): its own choice, defaulting to the
+/// explanation's language, and remembered across instances like every other Settings ▸ AI value.
+@MainActor
+struct TranslationLanguageTests {
+    @Test func aFreshInstallTranslatesIntoTheExplanationLanguage() throws {
+        let fixture = try TestDefaults()
+        let preferences = MeaningPreferences(defaults: fixture.database, keys: MemoryKeyStore())
+        #expect(preferences.settings.translationLanguage == preferences.settings.language)
+    }
+
+    @Test func theChosenQuestionIsRememberedAndDefaultsToMeaning() throws {
+        let fixture = try TestDefaults()
+        #expect(MeaningAskMode.stored(in: fixture.database) == .meaning)
+        MeaningAskMode.grammar.store(in: fixture.database)
+        #expect(MeaningAskMode.stored(in: fixture.database) == .grammar)
+        MeaningAskMode.translation.store(in: fixture.database)
+        #expect(MeaningAskMode.stored(in: fixture.database) == .translation)
+    }
+
+    @Test func theTargetLanguageSurvivesANewInstanceAndKeepsTheExplanationsLanguage() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        first.setTranslationLanguage("zh-Hans")
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        #expect(second.settings.translationLanguage == "zh-Hans")
+        // The explanation's own language is a separate choice and did not move with it.
+        #expect(second.settings.language == "en")
+    }
+}

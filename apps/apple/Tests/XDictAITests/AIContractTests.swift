@@ -12,9 +12,10 @@ struct AIContractTests {
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
         .deletingLastPathComponent().deletingLastPathComponent()
     static let vectors = root.appending(path: "conformance/ai/vectors.jsonl")
-    /// The contract major this runner implements (`CONTRACT.md` §9). Contract 5 adds the phrase ask's `phrase` field
-    /// and its vectors (§2, §8), so the fixtures' major moved with it.
-    static let contractMajor = 5
+    /// The contract major this runner implements (`CONTRACT.md` §9). Contract 6 adds the `translate` and
+    /// `explainGrammar` modes, their answers and their fixed response contracts (§2, §5b, §5c, §6b, §6c), so the
+    /// fixtures' major moved with them.
+    static let contractMajor = 6
 
     /// A fixture the harness could not use — never an expected refusal.
     struct Harness: Error, CustomStringConvertible { let description: String }
@@ -211,6 +212,12 @@ struct AIContractTests {
             guard same(validated.explanation, wantedExplanation) else {
                 return "\(id): explanation \(validated.explanation), wanted \(wantedExplanation)"
             }
+            // **The translation is part of the record** (contract 6 §5b): a dropped or altered translation used to be
+            // unobservable here, the same gap quotes had before audit round 4.
+            let wantedTranslation = expect["translation"] as? String ?? (answer["translation"] as? String ?? "")
+            guard same(validated.translation ?? "", wantedTranslation) else {
+                return "\(id): translation \(validated.translation ?? "nil"), wanted \(wantedTranslation)"
+            }
             return nil
         } catch {
             guard expect["status"] as? String == "invalid" else {
@@ -393,13 +400,15 @@ struct AIContractTests {
     /// **A fixture the harness cannot use is a harness failure** (§8): malformed JSON, an unknown operation, a duplicate
     /// id, an unsupported grammar or major.
     @Test func aFixtureTheHarnessCannotUseIsAHarnessFailure() {
-        let good = #"{"format":1,"contract":5,"id":"a","op":"mark","input":{"sentence":"hold","range":{"start":"not-found","length":"4"}},"expect":{"status":"ok","text":"hold"}}"#
+        let good = #"{"format":1,"contract":6,"id":"a","op":"mark","input":{"sentence":"hold","range":{"start":"not-found","length":"4"}},"expect":{"status":"ok","text":"hold"}}"#
         func run(_ text: String) throws {
             _ = try Self.suite(Data(text.utf8))
         }
         #expect(throws: Harness.self) { try run(good + "\n" + good + "\n") }
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""format":1"#, with: #""format":2"#)) }
-        #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""contract":5"#, with: #""contract":6"#)) }
+        #expect(throws: Harness.self) {
+            try run(good.replacingOccurrences(of: #""contract":6"#, with: #""contract":7"#))
+        }
         #expect(throws: Harness.self) { try run(good.replacingOccurrences(of: #""op":"mark""#, with: #""op":"frob""#)) }
         #expect(throws: Harness.self) { try run(#"{"#) }
         #expect(throws: Never.self) { try run(good) }
@@ -464,18 +473,25 @@ struct AIContractTests {
     /// schema and Apple's guided enum carry the two chosen-sense verdicts, and the validator (the vectors above) keeps
     /// them out of the old modes.
     @Test func theProvidersCanGenerateEveryOutcomeTheContractNames() throws {
+        // **Every shape's own enum, decoded** (audit round 2, 2026-10-25; contract 6): a quoted outcome elsewhere in a
+        // schema proved nothing about the field the model fills, and since contract 6 one schema serves one shape.
         let outcomes = Set(AIOutcome.allCases.map(\.rawValue))
-        // **The schema's own outcome enum, decoded** (audit round 2, 2026-10-25): a quoted outcome elsewhere in the schema
-        // proved nothing about the field the model fills.
-        let schema = try #require(try JSONSerialization.jsonObject(with: Data(AIAnswerSchema.claude.utf8))
-                                    as? [String: Any], "the Claude schema is not an object")
-        let properties = try #require(schema["properties"] as? [String: Any], "the schema has no properties")
-        let outcome = try #require(properties["outcome"] as? [String: Any], "the schema has no outcome property")
-        let values = try #require(outcome["enum"] as? [String], "the outcome has no enum")
-        #expect(Set(values) == outcomes, "the Claude schema's outcome enum and the contract disagree")
+        func enumValues(in schemaText: String) throws -> Set<String> {
+            let schema = try #require(try JSONSerialization.jsonObject(with: Data(schemaText.utf8))
+                                        as? [String: Any], "a Claude schema is not an object")
+            let properties = try #require(schema["properties"] as? [String: Any], "the schema has no properties")
+            let outcome = try #require(properties["outcome"] as? [String: Any], "the schema has no outcome property")
+            return Set(try #require(outcome["enum"] as? [String], "the outcome has no enum"))
+        }
+        let claude = try enumValues(in: AIAnswerSchema.claude)
+            .union(enumValues(in: AIAnswerSchema.translation))
+            .union(enumValues(in: AIAnswerSchema.grammar))
+        #expect(claude == outcomes, "the Claude schemas' outcome enums and the contract disagree")
         #if canImport(FoundationModels)
-        #expect(Set(AppleAnswerOutcome.allCases.map(\.rawValue)) == outcomes,
-                "the guided enum and the contract disagree")
+        let apple = Set(AppleAnswerOutcome.allCases.map(\.rawValue))
+            .union(AppleTranslationOutcome.allCases.map(\.rawValue))
+            .union(AppleGrammarOutcome.allCases.map(\.rawValue))
+        #expect(apple == outcomes, "the guided enums and the contract disagree")
         #endif
     }
 

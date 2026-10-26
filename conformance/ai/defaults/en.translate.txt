@@ -1,0 +1,4 @@
+Translate this sentence into the language tagged {language}, as one paragraph. The reader was looking at the word {term}.
+
+Sentence:
+{sentence}

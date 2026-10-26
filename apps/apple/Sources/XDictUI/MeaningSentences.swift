@@ -51,6 +51,7 @@ public enum MeaningSentences {
         case .guardrail: LocalizedStringResource("The model's guardrails declined")
         case .explained: LocalizedStringResource("Explained")
         case .doesNotFit: LocalizedStringResource("Does not fit")
+        case .translated: LocalizedStringResource("Translated")
         }
     }
 
@@ -62,6 +63,17 @@ public enum MeaningSentences {
         case .grounded: LocalizedStringResource("Uses this dictionary entry")
         case .ungrounded: LocalizedStringResource("Uses only the sentence")
         }
+    }
+
+    /// **The languages the pane's translation menu offers** (contract 6; plan-context-tools WI-8): the ones a reader of
+    /// these dictionaries is most likely to want, in the order a menu reads best. The list is the menu's, not the
+    /// contract's: a language outside it is still reached by editing the template in Settings ▸ AI.
+    public static let translationLanguages = ["en", "zh-Hans", "zh-Hant", "ja", "ko", "fr", "de", "es", "pt", "it",
+                                              "ru", "ar"]
+
+    /// A tag's name in the reader's language, as the system localizes it; the tag itself when the system has no name.
+    public static func languageName(_ tag: String) -> String {
+        Locale.current.localizedString(forIdentifier: tag) ?? tag
     }
 
     /// **The pane's task title** (UI17), stable in every state: the feature, not the provider.
@@ -263,6 +275,8 @@ public enum MeaningSentences {
             LocalizedStringResource("The prompt must include {\(name)}.")
         case .entryInSentenceOnly:
             LocalizedStringResource("This prompt may not use {entry} while the entry is not sent.")
+        case .entryWithoutEntry:
+            LocalizedStringResource("This prompt may not use {entry}: this question sends no entry.")
         case .templateTooLong:
             LocalizedStringResource("The prompt is too long.")
         case .entryRequired:

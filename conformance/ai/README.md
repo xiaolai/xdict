@@ -8,7 +8,7 @@ implementation — never through a core binding.
 
 | File | What it is |
 |---|---|
-| `CONTRACT.md` | the normative text, `ai-contract: 4` |
+| `CONTRACT.md` | the normative text, `ai-contract: 6` |
 | `vectors.jsonl` | `mark`, `compose` and `validate` cases, grammar `format: 1` |
 | `defaults/<language>.<mode>.txt` | the shipped default templates, one per language and mode |
 | a shell's runner | not here: macOS keeps its runner in its own test tree (`apps/apple/Tests/XDictAITests/AIContractTests.swift`) |
@@ -21,11 +21,12 @@ implementation — never through a core binding.
    including the answer-language line (§4b) and the fixed response contract appended after one blank line (§6), byte for
    byte. An invalid case compares the
    stable code (`template.unknownPlaceholder`, `template.missingPlaceholder`, `template.entryInSentenceOnly`,
-   `template.tooLong`).
-3. **`validate`** — the answer rules (§5): feed the answer object, the entry (`text`, `complete`) and the mode; compare
-   the validated outcome, or the stable code (`answer.shape`, `answer.outcome`, `answer.quote.notFound`,
-   `answer.quote.count`, `answer.quote.tooLong`, `answer.explanation`, `answer.noMatchingSenseOnPartial`,
-   `answer.ungrounded`).
+   `template.entryWithoutEntry`, `template.senseOutsideExplainSense`, `template.tooLong`). Contract 6's `translate` and
+   `explainGrammar` cases compose their own fixed suffix (§6b, §6c) and mark nothing or the term respectively (§3).
+3. **`validate`** — the answer rules (§5, §5b, §5c): feed the answer object, the entry (`text`, `complete`) and the mode;
+   compare the validated outcome and, where the case states one, the translation, or the stable code (`answer.shape`,
+   `answer.outcome`, `answer.quote.notFound`, `answer.quote.count`, `answer.quote.tooLong`, `answer.explanation`,
+   `answer.translation`, `answer.noMatchingSenseOnPartial`, `answer.ungrounded`).
 
 A case that cannot be decoded is a **harness failure**, never an expected refusal. The runner prints the executed case
 ids, the count and the suite revision (`shasum -a 256 vectors.jsonl`).

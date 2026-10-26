@@ -29,6 +29,7 @@ public final class MeaningPreferences {
         static let model = "meaning.model"
         static let sendEntryText = "meaning.sendEntryText"
         static let language = "meaning.language"
+        static let translationLanguage = "meaning.translationLanguage"
         static let httpCloud = "meaning.http.cloud"
 
         static func template(_ language: String, _ mode: AIMode) -> String {
@@ -76,6 +77,7 @@ public final class MeaningPreferences {
             key: keys.key(),
             sendEntryText: defaults.bool(forKey: Key.sendEntryText),
             language: language,
+            translationLanguage: defaults.string(forKey: Key.translationLanguage) ?? language,
             templates: Self.storedTemplates(defaults, language: language))
         settings.usesKey = settings.source == .http && httpCloud
     }
@@ -164,6 +166,12 @@ public final class MeaningPreferences {
     /// The one switch that lets the entry's text leave XDict (ADR-0021 d.9).
     public func setSendEntryText(_ on: Bool) {
         change { $0.sendEntryText = on }
+    }
+
+    /// **The language a translation is written into** (contract 6; plan-context-tools WI-8): its own choice, so a
+    /// reader may read meanings in one language and want sentences in another.
+    public func setTranslationLanguage(_ language: String) {
+        change { $0.translationLanguage = language }
     }
 
     /// A change this class makes itself, persisted at once.
@@ -261,6 +269,7 @@ public final class MeaningPreferences {
         storeSelectedRow()
         defaults.set(settings.sendEntryText, forKey: Key.sendEntryText)
         defaults.set(settings.language, forKey: Key.language)
+        defaults.set(settings.translationLanguage, forKey: Key.translationLanguage)
         defaults.set(httpCloud, forKey: Key.httpCloud)
         // The session's templates are this language's edits; the other language's stay stored for when it is chosen.
         refreshTemplates()

@@ -30,7 +30,7 @@ import XDictUI
         // One `send`, shared by the composed ask and the preview's frozen Send: one provider and one call in the whole
         // file, so neither path can try a second source (audit finding, 2026-10-23 — the two paths used to duplicate
         // this, and a fix in one could miss the other).
-        #expect(text.components(separatedBy: "makeProvider(settings)").count - 1 == 1, "one provider for every ask")
+        #expect(text.components(separatedBy: "makeProvider(settings,").count - 1 == 1, "one provider for every ask")
         #expect(text.components(separatedBy: "provider.answer(to:").count - 1 == 1, "one call for every ask")
         #expect(!text.contains("fallback"), "no fallback chain")
     }

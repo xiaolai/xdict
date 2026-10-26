@@ -51,7 +51,7 @@ struct ModuleBoundaryTests {
         "XDictAI": ["Foundation", "FoundationModels", "SaySoAI", "SaySoAICLI", "SaySoAIApple"],
         // The vectors, read and hashed: the digest is the suite revision (`CryptoKit`); `CodexAuth` for the state enum
         // the Codex tests inject.
-        "XDictAITests": ["CodexAuth", "CryptoKit", "Foundation", "SaySoAICLI", "Testing"],
+        "XDictAITests": ["CodexAuth", "CryptoKit", "Foundation", "NaturalLanguage", "SaySoAICLI", "Testing"],
         // The design tokens: lengths as CGFloat, text roles and colours for both AppKit and SwiftUI call sites.
         "XDictTokens": ["AppKit", "SwiftUI"],
         // `CryptoKit`: the source's digest, compared with the one the generated file carries.
@@ -65,7 +65,9 @@ struct ModuleBoundaryTests {
         // review reminder, which the shell delivers through the system's own notification centre (plan §5.4);
         // `Combine` the AI pane's re-check when the app returns to the front (2026-10-25: a notification publisher is
         // SwiftUI's `onReceive` input, and the pane's live status would otherwise stay stale after System Settings).
-        "XDictUI": ["AppKit", "Combine", "Foundation", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
+        // `NaturalLanguage`: the grammar answer's system reading (ADR-0034 d.6, plan-context-tools WI-10) — the tags the
+        // reader's own computer gives, shown beside the model's prose, never sent.
+        "XDictUI": ["AppKit", "Combine", "Foundation", "NaturalLanguage", "Observation", "Security", "ServiceManagement", "SwiftUI", "UniformTypeIdentifiers", "UserNotifications", "os"],
         // The main window's model: the search the window observes, plain Swift (WI-6).
         "XDictSearch": ["Foundation", "Observation"],
         // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028): the system's index and nothing else; the words'
@@ -112,8 +114,9 @@ struct ModuleBoundaryTests {
         // The development lab: the entry view's windows, and a drop target for the reader-driven drag tests.
         "XDictEntryLab": ["AppKit", "Foundation", "UniformTypeIdentifiers", "WebKit"],
         // The AI prompt harness (plan-ai-meaning WI-0): `FoundationModels` counts the on-device model's tokens and asks
-        // it; Foundation writes the report. A leaf, never in the bundle, printing sizes and timings only.
-        "XDictAIMeasure": ["Foundation", "FoundationModels"],
+        // it; Foundation writes the report. A leaf, never in the bundle, printing sizes and timings only. `NaturalLanguage`
+        // is the sentence run's tag experiment (plan-context-tools WI-2).
+        "XDictAIMeasure": ["Foundation", "FoundationModels", "NaturalLanguage"],
         // The capture lab (plan-capture WI-4): hover's reader at one point, its report as JSON. Nothing that draws.
         // `ApplicationServices`: `--access` asks `AXIsProcessTrusted`, the API that never prompts (plan-capture WI-5).
         "XDictCaptureLab": ["ApplicationServices", "CoreGraphics", "Foundation"],

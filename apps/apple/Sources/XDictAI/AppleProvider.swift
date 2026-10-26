@@ -15,16 +15,36 @@ public enum AppleProvider {
         AppleSource.availability(running: AppleSource.running, framework: AppleOnDeviceProvider<AppleAnswer>.availability())
     }
 
-    /// The provider the app runs: one fresh session per ask, guided into `AppleAnswer`.
-    public static func make() -> any AIProvider {
-        AppleOnDeviceProvider<AppleAnswer>(configuration: .init(encode: { json($0) }))
+    /// The provider the app runs: one fresh session per ask, guided into the answer type the question's own shape needs
+    /// (contract 6): a translation and a grammar answer have fields a meaning answer does not, and guided generation
+    /// constrains exactly what it is given.
+    public static func make(mode: AIMode = .grounded) -> any AIProvider {
+        switch mode {
+        case .translate:
+            return AppleOnDeviceProvider<AppleTranslationAnswer>(configuration: .init(encode: { json($0) }))
+        case .explainGrammar:
+            return AppleOnDeviceProvider<AppleGrammarAnswer>(configuration: .init(encode: { json($0) }))
+        case .grounded, .sentenceOnly, .explainSense:
+            return AppleOnDeviceProvider<AppleAnswer>(configuration: .init(encode: { json($0) }))
+        }
     }
 
     /// The generated answer as the contract's JSON: the one shape every provider returns to the validator. An
     /// unencodable answer is the empty string, which the validator refuses as a bad shape — never a fabricated answer.
     static func json(_ answer: AppleAnswer) -> String {
-        let object: [String: Any] = ["outcome": answer.outcome.rawValue, "quotes": answer.quotes,
-                                     "explanation": answer.explanation]
+        encode(["outcome": answer.outcome.rawValue, "quotes": answer.quotes, "explanation": answer.explanation])
+    }
+
+    static func json(_ answer: AppleTranslationAnswer) -> String {
+        encode(["outcome": answer.outcome.rawValue, "translation": answer.translation,
+                "explanation": answer.explanation])
+    }
+
+    static func json(_ answer: AppleGrammarAnswer) -> String {
+        encode(["outcome": answer.outcome.rawValue, "explanation": answer.explanation])
+    }
+
+    private static func encode(_ object: [String: Any]) -> String {
         guard let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]) else { return "" }
         return String(decoding: data, as: UTF8.self)
     }
