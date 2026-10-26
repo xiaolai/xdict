@@ -61,6 +61,8 @@ public actor ServiceClient {
         var retried = false
         /// Dictionaries this call waits on being opened again.
         var awaiting: Set<DictId> = []
+        /// The service handles this call was sent with: a `staleHandle` is retried on a replacement already made.
+        var sentHandles: [DictId: DictId] = [:]
 
         init(number: UInt64, operation: ServiceOperation, caller: Caller?, generation: UInt64, package: DictionaryPackage?,
              progress: (@Sendable (UInt64, UInt64) -> Void)?) {
@@ -131,6 +133,9 @@ public actor ServiceClient {
     private var callersID: [DictId: DictId] = [:]
     /// Calls waiting on each dictionary being opened again.
     private var reopening: [DictId: [Call]] = [:]
+    /// **The open dictionary of each edition** (audit rounds 1–4, 2026-10-26): a request that names an edition
+    /// (`studyNoteAt`, `studyReanchor`) reads that dictionary's files, and the client must send their tokens.
+    private var editions: [Edition: DictId] = [:]
 
     public init(connect: @escaping Connect = XPCServiceConnection.embedded, options: Options = .contract,
                 observer: FileObserver = FileObserver(), watch: (@Sendable (ClientEvent) -> Void)? = nil) {
@@ -168,7 +173,35 @@ public actor ServiceClient {
                 entry.call.promise.fulfil(.failure(.superseded))
             }
         }
+        // **A call waiting on a reopen is neither queued nor in flight** (audit rounds 1–4, 2026-10-26): without this
+        // sweep its promise stayed pending until the reopen ended, and a reopen that never ended kept it for good.
+        for call in waitingOnReopen(where: { superseded($0) }) {
+            call.promise.fulfil(.failure(.superseded))
+            forget(call)
+        }
         pump()
+    }
+
+    /// Every call waiting on any dictionary being opened again that `matches` accepts, once each however many
+    /// dictionaries it waits on.
+    private func waitingOnReopen(where matches: (Call) -> Bool) -> [Call] {
+        var seen: Set<UInt64> = []
+        return reopening.values.flatMap { $0 }.filter { matches($0) && seen.insert($0.number).inserted }
+    }
+
+    /// Removes `call` from every reopen it waits on: an answered call is one no reopen should send again.
+    private func forget(_ call: Call) {
+        call.awaiting.removeAll()
+        for dict in Array(reopening.keys) {
+            guard let waiting = reopening[dict] else { continue }
+            let kept = waiting.filter { $0 !== call }
+            reopening[dict] = kept.isEmpty ? nil : kept
+        }
+    }
+
+    /// The call `ticket` names, waiting on a dictionary being opened again.
+    private func waitingOnReopen(_ ticket: CallTicket) -> Call? {
+        waitingOnReopen(where: { $0.number == ticket.number }).first
     }
 
     /// Opens a package, sending its files' handles. A `ready` answer's `DictId` stays the caller's for this client's life
@@ -260,6 +293,13 @@ public actor ServiceClient {
             call.promise.fulfil(.failure(.wire(.core(.cancelled(detail: "cancelled before it was sent")))))
             return .success(.stopping)
         }
+        // **A check waiting on a reopen is running nowhere and stoppable here** (audit rounds 1–4): it answered
+        // `notRunning`, which read as "stops by itself" for a call the reader had asked to stop.
+        if let call = waitingOnReopen(ticket) {
+            call.promise.fulfil(.failure(.wire(.core(.cancelled(detail: "cancelled while its dictionary was opened again")))))
+            forget(call)
+            return .success(.stopping)
+        }
         for link in links.values {
             guard let id = link.inFlight.first(where: { $0.value.call.number == ticket.number })?.key else { continue }
             let cancel = makeCall(.cancel(request: id), caller: nil, package: nil, progress: nil)
@@ -306,6 +346,7 @@ public actor ServiceClient {
 
     /// Closes a dictionary opened through `open`. After a restart there is nothing left to close in the service.
     public func close(_ dict: DictId) async -> ClientOutcome {
+        editions = editions.filter { $0.value != dict }
         guard let registered = registry.removeValue(forKey: dict) else { return await call(.close(dict: dict)) }
         callersID[registered.current] = nil
         let call = makeCall(.close(dict: registered.current), caller: nil, package: nil, progress: nil)
@@ -413,10 +454,19 @@ public actor ServiceClient {
             }
             files = opened
         } else {
+            call.sentHandles = call.operation.namedDicts.reduce(into: [:]) { used, dict in
+                used[dict] = registry[dict]?.current ?? dict
+            }
             operation = call.operation.renamingDicts { registry[$0]?.current ?? $0 }
-            tokens = operation.namedDicts.flatMap { dict in
+            // The dictionaries the request names travel by service handle; `callersID` maps each back to the caller's.
+            var sent = operation.namedDicts.flatMap { dict in
                 callersID[dict].flatMap { registry[$0] }?.package.files.map(observer.token) ?? []
             }
+            // **The files of the dictionaries an edition names are sent too** (audit rounds 1–4, 2026-10-26): admission
+            // refuses a request that reads a file it was not given, and `studyNoteAt`/`studyReanchor` read by edition.
+            sent += call.operation.editionsRead.compactMap { editions[$0] }
+                .flatMap { registry[$0]?.package.files.map(observer.token) ?? [] }
+            tokens = sent
             files = nil
         }
         nextRequest += 1
@@ -492,22 +542,35 @@ public actor ServiceClient {
             let named = call.operation.namedDicts.filter { registry[$0] != nil }
             if !named.isEmpty {
                 call.retried = true
-                return reopen(named, then: call)
+                // **A dictionary another call already opened again is retried on its replacement** (audit round 4,
+                // 2026-10-26): opening it a second time would replace the handle those calls are already using.
+                let stale = named.filter { call.sentHandles[$0] == registry[$0]?.current }
+                if stale.isEmpty {
+                    queue.append(call)
+                    return pump()
+                }
+                return reopen(stale, then: call)
             }
         }
-        if let target = call.reopens { return reopened(target, outcome) }
+        if let target = call.reopens {
+            // **The opener's own promise is settled too** (audit rounds 1–4): left pending, a timed-out reopen kept its
+            // slot for ever and its late reply could run the recovery a second time.
+            call.promise.fulfil(outcome)
+            return reopened(target, outcome)
+        }
         if call.unchecked == nil, let package = call.package, case .success(let delivered) = outcome,
-           case .opened(.ready(let dict, _, _)) = delivered.answer {
+           case .opened(.ready(let dict, let edition, _)) = delivered.answer {
             registry[dict] = Registered(package: package, current: dict)
             callersID[dict] = dict
+            editions[edition] = dict
         }
         call.promise.fulfil(outcome.map { Delivered(answer: $0.answer.renamingDicts { callersID[$0] ?? $0 }, payload: $0.payload) })
     }
 
     /// An outcome with no reply to read: a transport failure, a deadline, a refusal made here.
     private func finish(_ call: Call, _ outcome: ClientOutcome) {
-        if let target = call.reopens { return reopened(target, outcome) }
         call.promise.fulfil(outcome)
+        if let target = call.reopens { return reopened(target, outcome) }
     }
 
     /// Opens `dicts` again, each once however many calls wait on it, then sends `call` again.
@@ -532,12 +595,22 @@ public actor ServiceClient {
         switch outcome {
         case .success(let delivered):
             switch delivered.answer {
-            case .opened(.ready(let now, _, _)) where registry[dict] != nil:
-                if let before = registry[dict]?.current { callersID[before] = nil }
-                registry[dict]?.current = now
-                callersID[now] = dict
-                watch?(.reopened(dict: dict, as: now))
-                failure = nil
+            case .opened(.ready(let now, let edition, _)):
+                editions[edition] = dict
+                if registry[dict] == nil {
+                    // **The dictionary was closed while it was opened again** (audit rounds 1–4, 2026-10-26): the service
+                    // holds a handle nobody wants, and it is closed rather than leaked with its dictionary's resources.
+                    let close = makeCall(.close(dict: now), caller: nil, package: nil, progress: nil)
+                    close.unchecked = (nil, [])
+                    enqueue(close)
+                    failure = .wire(.core(.staleHandle(detail: "the dictionary was closed while it was being opened again")))
+                } else {
+                    if let before = registry[dict]?.current { callersID[before] = nil }
+                    registry[dict]?.current = now
+                    callersID[now] = dict
+                    watch?(.reopened(dict: dict, as: now))
+                    failure = nil
+                }
             case .opened(.needsImport(let reason)):
                 failure = .reopenNeedsImport(dict: dict, reason: reason)
             default:
@@ -557,11 +630,16 @@ public actor ServiceClient {
     }
 
     private func expired(request id: UInt64, link number: Int) {
-        guard let link = links[number], let entry = link.inFlight[id], !entry.call.isResolved else { return }
+        guard let link = links[number], let entry = link.inFlight[id] else { return }
         let deadline = entry.deadline ?? .zero
         // The call stays in flight on the link: its credit is counted until its reply or the connection's end.
-        finish(entry.call, .failure(.wire(.timedOut(deadline: deadline))))
-        watch?(.timedOut(call: entry.call.number, request: id, link: number))
+        // **A superseded call's promise is resolved but its credit is still spent** (audit rounds 1–4, 2026-10-26): it
+        // was answered `.superseded` at once, and returning here let a hundred silent supersessions hold every lookup
+        // credit for ever. The deadline still ends this connection.
+        if !entry.call.isResolved {
+            finish(entry.call, .failure(.wire(.timedOut(deadline: deadline))))
+            watch?(.timedOut(call: entry.call.number, request: id, link: number))
+        }
         if entry.request.operation.reportsProgress {
             send(makeCall(.cancel(request: id), caller: nil, package: nil, progress: nil), on: link)
         } else if Deadlines.abandonsConnectionOnExpiry(entry.request.operation) {

@@ -34,6 +34,134 @@ struct ServiceClientRecoveryTests {
         #expect(await log.wait { $0 == .invalidated(link: 1) }, "the abandoned connection was never ended")
     }
 
+    /// **A superseded call's credit is still the service's** (audit rounds 1–4, 2026-10-26): its promise is answered at
+    /// once, but its request is in flight; its deadline must still end the connection, or silent superseded calls hold
+    /// the credits for good and the calls behind them never go.
+    @Test func aSupersededCallsDeadlineStillEndsItsConnection() async {
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .lookup where Fixture.query(request) == "one": .silent
+            case .lookup: .reply(Fixture.page([]), to: request)
+            default: .reply(Fixture.versions, to: request)
+            }
+        }
+        let log = EventLog()
+        let caller = Caller("superseded.credit")
+        let client = ServiceClient(connect: service.connect, options: Fixture.options(), watch: log.record)
+        _ = await client.versions()
+        let first = await client.submit(Fixture.lookup("one"), as: caller)
+        let second = await client.submit(Fixture.lookup("two"), as: caller, supersedingEarlier: true)
+        #expect(await first.outcome(within: .seconds(2)) == .failure(.superseded))
+        #expect(await second.outcome(within: .seconds(2)) == .success(Delivered(answer: Fixture.page([]), payload: nil)))
+        #expect(await log.wait { $0 == .abandoned(link: 1) }, "the superseded call's deadline never ended its connection")
+    }
+
+    /// **Superseding reaches a call waiting on a reopen** (audit rounds 1–4, 2026-10-26): such a call is neither queued
+    /// nor in flight, and without the sweep its promise stayed pending until a reopen deadline five seconds away.
+    @Test func supersedingAnswersACallWaitingOnAReopen() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return count == 1
+                    ? .reply(.opened(.ready(dict: first, edition: Fixture.edition, info: Fixture.info)), to: request)
+                    : .silent
+            case .lookup:
+                return .failure(.core(.staleHandle(detail: "restarted")), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options(warm: .seconds(5), cold: .seconds(5)))
+        _ = await client.open(package)
+        let caller = Caller("reopen.supersede")
+        let ticket = await client.submit(Fixture.lookup("apple", in: [first]), as: caller)
+        #expect(await eventuallyOffMain(2) {
+            service.sent.filter { if case .openPackage = $0.request.operation { true } else { false } }.count == 2
+        }, "the reopen was never asked for")
+        await client.supersede(caller)
+        #expect(await ticket.outcome(within: .seconds(2)) == .failure(.superseded))
+    }
+
+    /// **A dictionary closed while it was opened again leaves no handle behind** (audit rounds 1–4, 2026-10-26): the
+    /// service's new handle is closed rather than leaked with its dictionary's resources.
+    @Test func closingDuringAReopenClosesTheHandleTheServiceOpened() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                let ready = Response(id: request.id,
+                                     outcome: .answer(.opened(.ready(dict: count == 1 ? first : second,
+                                                                     edition: Fixture.edition, info: Fixture.info))))
+                return count == 1 ? .respond(ready, payload: nil) : .later(.milliseconds(150), ready, payload: nil)
+            case .lookup:
+                return .failure(.core(.staleHandle(detail: "restarted")), to: request)
+            case .close:
+                return .reply(.closed, to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options(warm: .seconds(3), cold: .seconds(3)))
+        _ = await client.open(package)
+        let ticket = await client.submit(Fixture.lookup("apple", in: [first]))
+        #expect(await eventuallyOffMain(2) { opens.current == 2 }, "the reopen was never asked for")
+        _ = await client.close(first)
+        #expect(await eventuallyOffMain(2) {
+            service.sent.contains { $0.request.operation == .close(dict: second) }
+        }, "the reopened handle was never closed")
+        if case .failure(.wire(.core(.staleHandle))) = await ticket.outcome(within: .seconds(3)) {
+        } else {
+            Issue.record("the waiting call was not answered staleHandle")
+        }
+    }
+
+    /// **A late stale answer is retried on a handle another call already opened** (audit round 4, 2026-10-26): opening
+    /// the dictionary again would replace the handle the second call's requests are already using.
+    @Test func aLateStaleAnswerUsesTheHandleAlreadyOpened() async throws {
+        let (package, directory) = try Fixture.package()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let first = DictId(rawValue: "first"), second = DictId(rawValue: "second")
+        let opens = Slot<Int>()
+        let service = FakeTransport { request, _ in
+            switch request.operation {
+            case .openPackage:
+                let count = (opens.current ?? 0) + 1
+                opens.set(count)
+                return .reply(.opened(.ready(dict: count == 1 ? first : second, edition: Fixture.edition, info: Fixture.info)),
+                              to: request)
+            case .lookup(_, let dicts, _) where dicts == [second]:
+                return .reply(Fixture.page([]), to: request)
+            case .lookup where Fixture.query(request) == "late":
+                // The second call's stale answer arrives after the reopen has finished.
+                return .later(.milliseconds(150),
+                              Response(id: request.id, outcome: .failure(.core(.staleHandle(detail: "late")))), payload: nil)
+            case .lookup:
+                return .failure(.core(.staleHandle(detail: "early")), to: request)
+            default:
+                return .reply(Fixture.versions, to: request)
+            }
+        }
+        let client = ServiceClient(connect: service.connect, options: Fixture.options(warm: .seconds(3), cold: .seconds(3)))
+        _ = await client.open(package)
+        let early = await client.submit(Fixture.lookup("early", in: [first]))
+        let late = await client.submit(Fixture.lookup("late", in: [first]))
+        #expect(await early.outcome(within: .seconds(3)) == .success(Delivered(answer: Fixture.page([]), payload: nil)))
+        #expect(await late.outcome(within: .seconds(3)) == .success(Delivered(answer: Fixture.page([]), payload: nil)),
+                "the late stale answer was not retried on the handle already opened")
+        #expect(opens.current == 2, "the dictionary was opened again for a handle already replaced")
+    }
+
     /// **A service that dies fails the calls in flight `interrupted`**, and the next call starts it again on the same
     /// connection.
     @Test func aServiceThatDiesFailsTheCallsInFlightAndTheNextOneWorks() async {
