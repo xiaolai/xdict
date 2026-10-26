@@ -245,6 +245,11 @@ export class XDict {
   /** The wrapper of each glue loaded. */
   private static readonly loaded = new WeakMap<Glue, XDict>();
 
+  /** Whether a trap has left this instance unusable: its cleanup skips the module, its calls throw. */
+  get isPoisoned(): boolean {
+    return this.poisoned;
+  }
+
   versions(): Versions {
     return this.guard(() => JSON.parse(this.glue.versions()));
   }
@@ -291,6 +296,13 @@ export class XDict {
 
   /** @internal */
   release(registered: Map<ByteSource, number>): void {
+    // **After a trap the instance is abandoned, never called again** (audit rounds 1 and 4, 2026-10-26): a release is a
+    // call into the trapped module, and a second trap would replace the error that poisoned it with a meaningless one.
+    // The registrations go with the instance.
+    if (this.poisoned) {
+      registered.clear();
+      return;
+    }
     for (const id of registered.values()) this.glue.releaseSource(id);
   }
 
@@ -331,6 +343,9 @@ export class XDictCore {
 
   /** Releases this core now rather than when JavaScript collects it, with the index storage it holds. */
   free(): void {
+    // **A poisoned instance is not destroyed either** (audit rounds 1 and 4): `free` runs the core's destructor in WASM,
+    // which traps after a trap; the instance is left to be discarded, and the error that poisoned it stands.
+    if (this.x.isPoisoned) return;
     this.inner.free();
   }
 

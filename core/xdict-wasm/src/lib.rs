@@ -256,10 +256,19 @@ fn gone() -> CoreError {
 impl core::ByteSource for Source {
     fn size(&self) -> u64 {
         let Some(handle) = self.handle() else { return 0 };
-        handle.size().unwrap_or_else(|e| {
-            self.fail("size", &e);
-            0.0
-        }) as u64
+        match handle.size() {
+            // **A size that is no byte length is a failure, not a truncation** (audit rounds 1–4, 2026-10-26): `as u64`
+            // silently turned a negative or fractional value into 0 or a floor, and the core reads what it is told.
+            Ok(size) if size.is_finite() && size >= 0.0 && size <= u64::MAX as f64 => size as u64,
+            Ok(size) => {
+                self.failed(format!("size() gave {size}, which is no byte length"));
+                0
+            }
+            Err(e) => {
+                self.fail("size", &e);
+                0
+            }
+        }
     }
     fn read_at(&self, offset: u64, len: u32) -> Result<Vec<u8>, CoreError> {
         if let Some(why) = FAILED.with(|failed| failed.borrow().get(&self.0).cloned()) {
