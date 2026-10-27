@@ -77,7 +77,7 @@ pub struct Collocations {
 /// and a comma list is split. A collocate with no frame before it is dropped and counted with the frames outside the
 /// vocabulary, since it belongs to a group this extractor could not name.
 pub fn extract(html: &str) -> Collocations {
-    let headword = spans(html, "ocd_hw").first().map(|(_, text)| (*text).to_string()).unwrap_or_default();
+    let headword = spans(html, "ocd_hw").first().map(|(_, text)| text.clone()).unwrap_or_default();
     let frames = spans(html, "ocd_ps");
     let mut pairs = Vec::new();
     let mut dropped = 0u32;
@@ -88,7 +88,18 @@ pub fn extract(html: &str) -> Collocations {
             if word.is_empty() {
                 continue;
             }
+            // **A partner that only repeats the headword is no collocation**: in a PREPOSITION group the dictionary
+            // links the headword and the preposition stands outside the marked span, so `college | PREPOSITION |
+            // college` is what this extractor can see. An audit of 118 pairs found it three times; it is dropped and
+            // counted with the unnamed frames rather than shown as a collocation.
+            let repeats = word.trim().eq_ignore_ascii_case(&headword) || {
+                let squash = |text: &str| -> String {
+                    text.to_uppercase().chars().filter(|c| c.is_alphanumeric()).collect()
+                };
+                !headword.is_empty() && squash(word) == squash(&headword)
+            };
             match frame {
+                Some(_) if repeats => dropped += 1,
                 Some(frame) => pairs.push((frame, word.to_string())),
                 None => dropped += 1,
             }
@@ -114,8 +125,12 @@ fn frame(label: &str, headword: &str) -> Option<Frame> {
     Frame::of(&squashed)
 }
 
-/// Every marked span of one class, in document order: its byte offset and its text.
-fn spans<'a>(html: &'a str, class: &str) -> Vec<(usize, &'a str)> {
+/// Every marked span of one class, in document order: its byte offset and its **whole** text, nested markup included.
+///
+/// **The text runs to the matching close**, not to the first `<`: a collocate the dictionary emphasises —
+/// `<span class="ocd_co">a <b>sin</b></span>` — otherwise came out as `a`, which an audit of 118 pairs found once in
+/// the whole dictionary and could not tell from a real one-word collocate.
+fn spans<'a>(html: &'a str, class: &str) -> Vec<(usize, String)> {
     let needle = format!("class=\"{class}\"");
     let mut out = Vec::new();
     let mut from = 0;
@@ -123,9 +138,25 @@ fn spans<'a>(html: &'a str, class: &str) -> Vec<(usize, &'a str)> {
         let at = from + at;
         let Some(open) = html[at..].find('>') else { break };
         let body = at + open + 1;
-        let Some(end) = html[body..].find('<') else { break };
-        out.push((at, html[body..body + end].trim()));
-        from = body + end;
+        // Walk the element: every opening tag deepens it, every closing tag shallows it, text is kept.
+        let mut depth = 1usize;
+        let mut cursor = body;
+        let mut text = String::new();
+        while depth > 0 {
+            let Some(next) = html[cursor..].find('<') else { break };
+            text.push_str(&html[cursor..cursor + next]);
+            let tag_at = cursor + next;
+            let Some(tag_end) = html[tag_at..].find('>') else { break };
+            let tag = &html[tag_at..tag_at + tag_end + 1];
+            if tag.starts_with("</") {
+                depth -= 1;
+            } else if !tag.ends_with("/>") {
+                depth += 1;
+            }
+            cursor = tag_at + tag_end + 1;
+        }
+        out.push((at, text.trim().to_string()));
+        from = cursor.max(body);
     }
     out
 }
@@ -175,6 +206,19 @@ mod tests {
 <span class="ocd_m2"><span class="ocd_ps">ELECTRIC-SHOCK + NOUN</span></span>
 <span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">treatment</span></span></span></span>"#;
         assert_eq!(extract(html).pairs, vec![(Frame::HeadwordPlusNoun, "treatment".to_string())]);
+    }
+
+    /// **A collocate with markup inside it keeps its whole text**: the audit of 118 pairs found `a` where the
+    /// dictionary wrote `a sin`, a truncation no reader could tell from a real one-word collocate.
+    #[test]
+    fn a_collocate_with_markup_inside_keeps_its_whole_text() {
+        let html = r#"<span class="ocd_hw">sin</span>
+<span class="ocd_m2"><span class="ocd_ps">PHRASES</span></span>
+<span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">a <b>sin</b></span>, <span class="ocd_co">the <i>sin</i> of</span></span></span></span>"#;
+        assert_eq!(
+            extract(html).pairs,
+            vec![(Frame::Phrases, "a sin".to_string()), (Frame::Phrases, "the sin of".to_string())]
+        );
     }
 
     /// **A frame the vocabulary does not hold is dropped and counted**, never squeezed into a neighbour: a wrong frame

@@ -77,6 +77,11 @@ impl Store {
         }
     }
 
+    /// Every collocation, in file order: the audit's sample walks this.
+    pub fn all(&self) -> &[Collocation] {
+        &self.pairs
+    }
+
     /// The collocates of `lemma`, in the dictionary's own order: what the Explore panel's Collocations tab lists.
     pub fn collocates(&self, lemma: &str) -> Vec<&Collocation> {
         self.pairs.iter().filter(|pair| pair.lemma == lemma).collect()

@@ -57,6 +57,14 @@ fn main() {
                 began.elapsed().as_secs_f64(),
                 store.encode().map(|b| b.len()).unwrap_or(0)
             );
+            // **The audit's sample**: 120 evenly spaced pairs, one to a line, for a person to read.
+            if std::env::args().nth(3).as_deref() == Some("audit") {
+                let all = store.all();
+                let step = (all.len() / 120).max(1);
+                for pair in all.iter().step_by(step).take(120) {
+                    println!("{} | {:?} | {}", pair.lemma, pair.frame, pair.partner);
+                }
+            }
             for lemma in ["decision", "blood vessel", "attempt"] {
                 let found = store.collocates(lemma);
                 if !found.is_empty() {
