@@ -295,7 +295,12 @@ struct MainWindow: View {
             state = made
             XDictApp.windowMade?(made)
             MainWindows.made(made)
-            Task { made.service = await XDictApp.handshake() }
+            // **The place may be waiting for the service** (owner, 2026-10-26): a window the expansion made adopts its
+            // place before this handshake answers, and an entry cannot be drawn through a service that is not there.
+            Task {
+                made.service = await XDictApp.handshake()
+                made.placeCanBeDrawn()
+            }
         }
         // **A Spotlight result opens its word here** (ADR-0028 decision 4): the item's identifier carries the word, and
         // the window looks it up exactly as the reader typing it would.

@@ -2,6 +2,7 @@ import Foundation
 import Testing
 import XDictAI
 import XDictContract
+import XDictSearch
 @testable import XDictUI
 
 /// **The pane's two pure selections** (plan-companion WI-7, WI-12; Codex refutation, 2026-10-25): which language a term is
@@ -219,8 +220,9 @@ struct CompanionSourceTests {
         // an action disconnected from the state, fails here.
         // **The control is inside the guard's own braces** (audit round 4, 2026-10-25): two independent substrings let a
         // control moved outside the guard pass.
-        let body = try #require(Self.bracedBody(after: "if let target = state.meaning.sent?.target, state.noteSaver != nil,",
-                                                in: source))
+        // **Every answer can become a card** (owner, 2026-10-26): the target is the request's own entry, or the entry
+        // the reader has open; the control still goes through the wired state's writer.
+        let body = try #require(Self.bracedBody(after: "else if let target = state.noteTarget", in: source))
         #expect(body.contains("saveNoteControl(presentation, target: target)"))
         // **The button and its action together** (audit round 4, 2026-10-25): the label alone passed with the action
         // removed.
@@ -262,5 +264,34 @@ struct CompanionSourceTests {
         let source = try Self.code("Sources/XDictUI/AISettings.swift")
         #expect(source.contains("ai.language.caption"))
         #expect(source.contains("Quotes stay in the dictionary’s own language"))
+    }
+}
+
+/// **An All page is drawn when its answers arrive, no matter that none has been drawn before** (owner, 2026-10-27: a
+/// captured word filled the search field and the reading column stayed empty until Return was pressed): the redraw used
+/// to require `pageFrames != nil`, which only a page already drawn has — so the first answers of an adopted place were
+/// refused by the guard meant to keep a page off a single entry. The decision is a rule of its own, held here.
+@MainActor
+struct PageDrawTests {
+    private let entry = ResultID(dictionary: UUID(),
+                                 entry: EntryRef(edition: Edition(rawValue: "mdx-sha256-v1:00"), key: "continuing",
+                                                 occurrence: 0))
+    private let other = UUID()
+
+    @Test func anAllPageWithAnswersIsDue() {
+        #expect(SearchWindowState.pageIsDue(scope: .all, mode: .reader, results: [entry]))
+    }
+
+    @Test func anAllPageWithNoAnswerYetIsNotDue() {
+        #expect(!SearchWindowState.pageIsDue(scope: .all, mode: .reader, results: []))
+        #expect(!SearchWindowState.pageIsDue(scope: .all, mode: .reader, results: nil))
+    }
+
+    @Test func oneDictionaryIsItsOwnEntryNotAPage() {
+        #expect(!SearchWindowState.pageIsDue(scope: .one(other), mode: .reader, results: [entry]))
+    }
+
+    @Test func aLinkIsItsOwnEntryNotAPage() {
+        #expect(!SearchWindowState.pageIsDue(scope: .all, mode: .link, results: [entry]))
     }
 }

@@ -516,6 +516,15 @@ public final class SearchWindowState {
         return await noteSaver(target.entry, text, source(for: target.dictionary)?.name ?? "", replacing)
     }
 
+    /// **The window can draw its place now** (owner, 2026-10-26: the captured word sat in the search field and the page
+    /// stayed empty): a window the expansion makes adopts its place before it has a service — or a library — so the
+    /// entry's dictionary had no handle and `present` drew nothing, and nothing asked again when either arrived. The
+    /// shown entry is drawn again whenever the window becomes able to draw it.
+    public func placeCanBeDrawn() {
+        guard let shown = model.shown else { return }
+        Task { await present(shown) }
+    }
+
     /// **A scope change can change which presentation is due** (audit round 4, 2026-10-25): the same shown entry is one
     /// frame or an All page depending on the scope, and the model may keep it while the lookup changes.
     public func scopeChanged() {
@@ -717,6 +726,14 @@ public final class SearchWindowState {
         }
     }
 
+    /// **Whether this window's reading column is an All page now** (owner, 2026-10-27): the answer decides both the
+    /// drawing and its redrawing, so it cannot depend on a page having been drawn before — a place adopted while its
+    /// dictionary is still searching has no page yet, and its first answers are exactly when it must be drawn.
+    public static func pageIsDue(scope: SearchScope, mode: MatchMode, results: [ResultID]?) -> Bool {
+        guard AllPage.applies(scope: scope, mode: mode), let results else { return false }
+        return !results.isEmpty
+    }
+
     private func presentPage(_ shown: SearchModel.Shown) async {
         guard let results = pageResults, model.source(shown.result.dictionary) != nil else {
             onPresented?(shown, false)
@@ -733,17 +750,22 @@ public final class SearchWindowState {
     /// **A presentation the window has left by the time the task runs draws nothing** (audit round 1, 2026-10-25): a
     /// navigation, a placeholder that closed the entry, or another page makes these results obsolete.
     public func pageResultsChanged() {
-        guard let results = pageResults, entry.pageFrames != nil else { return }
+        // **The page is drawn when the answers arrive, frames or not** (owner, 2026-10-27: after a capture the word filled
+        // the search field and the reading column stayed empty until Return was pressed): an adopted place presents while
+        // its dictionary is still searching, so the page was asked to show nothing, `pageFrames` stayed nil — and every
+        // later answer was refused by the `pageFrames != nil` guard that was meant to keep a page off a single entry.
+        // What decides is the presentation: an All page in this window, drawn again as each dictionary answers.
+        guard let lookup = model.lookup, Self.pageIsDue(scope: lookup.scope, mode: lookup.mode, results: pageResults),
+              let results = pageResults else { return }
         let shown = model.shown
-        let lookup = model.lookup
         let primary = shown?.result.dictionary
         Task { @MainActor in
             // The lookup is its own identity: `begin()` can start another while the same entry is still shown.
-            guard let shown, model.shown == shown, model.lookup == lookup, entry.pageFrames != nil else { return }
+            guard let shown, model.shown == shown, model.lookup == lookup else { return }
             // **A page that grows keeps the reader's place** (audit round 4, 2026-10-26): landing at the top cleared the
             // offset a restored page was waiting to scroll to.
             let offset = await entry.scrollOffset()
-            guard model.shown == shown, model.lookup == lookup, entry.pageFrames != nil else { return }
+            guard model.shown == shown, model.lookup == lookup else { return }
             await entry.showPage(pageItems(results), primary: primary, landing: offset.map(EntryLanding.offset) ?? .top)
         }
     }
