@@ -11,6 +11,8 @@
 use std::sync::Arc;
 
 use xdict_core as core;
+use xdict_core::explore::{ExploreAnswer, ExploreReason, ExploreRow, ExploreState};
+use xdict_core::words::WordMode;
 use xdict_core::{
     BaseSource, BlockReason, Card, CardConflict, CardState, Config, ConflictCandidate, CoreError, Coverage,
     CoverageEntry, Day, DayLabel, DictInfo, DisplayOption, DisplayOptions, Entry, EntryRef, EntryText, EraseReport,
@@ -809,6 +811,62 @@ pub fn protocol_version() -> u32 {
     core::PROTOCOL
 }
 
+/// What to look for: the words a reader can explore by.
+#[uniffi::remote(Enum)]
+pub enum WordMode {
+    /// Headwords whose spelling ends with the query's.
+    EndsWith,
+    /// Headwords within `max_distance` (1 to 3) edits.
+    Fuzzy { max_distance: u8 },
+    /// Headwords sharing the query's rime (pack data only).
+    Rhyme,
+    /// Members of every paradigm the query belongs to (pack data only).
+    Inflections,
+    /// The query's derivational family (pack data only).
+    Derivations,
+    /// Headwords sharing a historical ancestor within `max_depth` (pack data only).
+    Roots { max_depth: u8 },
+}
+
+/// **Word exploration across the boundary** (plan-word-exploration WI-4): a row is the word, the dictionary and entry
+/// it opens, and a *label* — never a sentence, since the core holds no text in any language.
+#[uniffi::remote(Record)]
+pub struct ExploreRow {
+    pub word: String,
+    pub dict: String,
+    pub entry: EntryRef,
+    pub reason: ExploreReason,
+}
+
+/// Why a row is in the answer.
+#[uniffi::remote(Enum)]
+pub enum ExploreReason {
+    Exact,
+    EndsWith,
+    Spelling { distance: u8 },
+    Rhyme,
+    Inflection,
+    Derivation,
+    SharedOrigin,
+}
+
+/// Whether the dictionaries could be searched at all: absence of data is never absence of relatives.
+#[uniffi::remote(Enum)]
+pub enum ExploreState {
+    Answered,
+    NoData,
+    Unknown,
+}
+
+/// One page of an exploration.
+#[uniffi::remote(Record)]
+pub struct ExploreAnswer {
+    pub state: ExploreState,
+    pub rows: Vec<ExploreRow>,
+    pub next: Option<u32>,
+    pub exhausted: bool,
+}
+
 /// `xdict_core::Core`, one per process.
 #[derive(uniffi::Object)]
 pub struct Core(core::Core);
@@ -847,6 +905,19 @@ impl Core {
     /// Spotlight is macOS's, so `xdict-wasm`, the Web binding, does not carry it.
     pub fn words(&self, dict: String, from: u64, limit: u32) -> Result<Words, CoreError> {
         self.0.words(dict, from, limit)
+    }
+
+    /// **One page of word exploration** (plan-word-exploration WI-4): a miss, a rhyme, a family or a root, answered
+    /// with the reader's own dictionaries' words — every row names the entry it opens.
+    pub fn explore(
+        &self,
+        dicts: Vec<String>,
+        mode: WordMode,
+        text: String,
+        offset: u32,
+        limit: u32,
+    ) -> Result<ExploreAnswer, CoreError> {
+        self.0.explore(dicts, mode, text, offset, limit)
     }
 
     /// **The reverse-example query** (ADR-0031, plan-reverse-examples WI-4): the pairs whose Chinese carries the
