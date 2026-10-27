@@ -73,6 +73,44 @@ struct PlaceHandoverTests {
         #expect(window.lookup?.query == "other")
     }
 
+    /// **The panel waits for its first answer before it hands a place over** (owner, 2026-10-26: "从 popup 点击 AI
+    /// button … 主窗口里却没有转到该词条"): a reader who presses the panel's Meaning Here a beat after the capture used
+    /// to hand over a bare query — the window then looked the word up again in every dictionary and drew nothing until
+    /// its own first answer, blank or on the previous word. The place handed over is the entry the panel shows.
+    @Test func thePanelWaitsForItsFirstAnswerBeforeHandingAPlaceOver() async throws {
+        let backend = FakeSearchBackend { query, dict, _ in
+            let name = String(dict.rawValue.dropFirst("handle-".count))
+            return .success(Fixture.page([Fixture.hit(name, query)]))
+        }
+        await backend.hold(Fixture.handle("A"))
+        let panel = SearchModelTests.model(backend, Sources([Fixture.source(1, "A")]))
+        panel.submit("apple")
+        await panel.idle()
+        #expect(panel.selection == nil, "the button was pressed before any dictionary answered")
+        let waiting = Task { await panel.currentPlace() }
+        for _ in 0..<1_000 where panel.selection == nil { await Task.yield() }
+        #expect(!waiting.isCancelled, "the place is still being waited for")
+        await backend.release(Fixture.handle("A"))
+        let place = try #require(await waiting.value as Visit?)
+        #expect(place.query == "apple")
+        #expect(place.result?.entry.key == "apple", "the place is the panel's entry, not a bare query")
+    }
+
+    /// **A dictionary that never answers does not hold the panel open for good**: the wait is bounded, and the place
+    /// handed over is the bare query, which the window looks up itself.
+    @Test func thePanelStopsWaitingForAnAnswerThatDoesNotCome() async throws {
+        let backend = FakeSearchBackend { query, dict, _ in
+            let name = String(dict.rawValue.dropFirst("handle-".count))
+            return .success(Fixture.page([Fixture.hit(name, query)]))
+        }
+        await backend.hold(Fixture.handle("A"))
+        let panel = SearchModelTests.model(backend, Sources([Fixture.source(1, "A")]),
+                                           options: SearchModel.Options(placeWait: .milliseconds(30)))
+        panel.submit("apple")
+        await panel.idle()
+        #expect(await panel.currentPlace() == nil, "no entry answered in time, so the caller hands the bare query over")
+    }
+
     /// A panel with nothing shown has no place to hand over.
     @Test func noPlaceBeforeALookup() async {
         let panel = SearchModelTests.model(SearchModelTests.apples(), Sources([Fixture.source(1, "A")]))

@@ -39,8 +39,14 @@ public final class SearchModel {
         public var suggestionDelay: Duration = .milliseconds(120)
         /// Spelling guesses checked against the library for "Did you mean?".
         public var guessLimit = 5
+        /// **How long a hand-off waits for the panel's first answer** (2026-10-26): the panel's Meaning Here pressed a
+        /// beat after the capture hands over the entry it is about to show, not a bare query; a dictionary that never
+        /// answers must not hold the panel open, so the wait is bounded and the query alone then travels.
+        public var placeWait: Duration = .seconds(2)
 
         public init() {}
+
+        public init(placeWait: Duration) { self.placeWait = placeWait }
     }
 
     /// The lookup the sections answer.
@@ -105,6 +111,8 @@ public final class SearchModel {
 
     /// Reads the entry pane's scroll offset, for the place being left.
     @ObservationIgnored public var scrollReader: (@MainActor () async -> Double?)?
+    /// A hand-off waiting for its first answer: resumed by the choice that lands, or by its own bound.
+    @ObservationIgnored private var selectionWaiters: [UUID: CheckedContinuation<Void, Never>] = [:]
     /// Each dictionary's answer, as it is stored: for the instruments' timing.
     @ObservationIgnored public var onAnswered: (@MainActor (UUID, Lookup) -> Void)?
 
@@ -471,9 +479,35 @@ public final class SearchModel {
     /// when it expands (plan-macos-v1 WI-8, I5). Nil before anything is shown.
     public func currentPlace() async -> Visit? {
         await idle()
+        // **The entry the panel is about to show travels with the place** (owner, 2026-10-26): a capture's lookup answers
+        // a beat after the panel appears, and a reader pressing Meaning Here at that moment handed over a bare query, so
+        // the window looked the word up again in every dictionary and drew nothing until its own first answer — blank,
+        // or the word it was showing before. Wait for the first answer, bounded, then hand over what the panel shows.
+        if trail.current?.result == nil, selection == nil { await waitForSelection(within: options.placeWait) }
         guard trail.current?.result != nil else { return nil }
         await leaveCurrent()
         return trail.current
+    }
+
+    /// Waits until a result is chosen, or the bound passes: whichever comes first. The waiter is resumed by `choose`.
+    private func waitForSelection(within bound: Duration) async {
+        guard trail.current?.result == nil else { return }
+        let id = UUID()
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            selectionWaiters[id] = continuation
+            // Holds the model until the bound passes, so the waiter is always resumed: a hand-off that waits for ever is
+            // a panel that never closes.
+            Task { @MainActor [self] in
+                try? await Task.sleep(for: bound)
+                selectionChosen(id)
+            }
+        }
+    }
+
+    /// Resumes one waiter once; a waiter already resumed by a choice is not resumed again by the bound.
+    private func selectionChosen(_ id: UUID) {
+        guard let continuation = selectionWaiters.removeValue(forKey: id) else { return }
+        continuation.resume()
     }
 
     /// **A place handed over from another window** (I5): a new place in this window's trail, its query, scope, entry and
@@ -614,7 +648,9 @@ public final class SearchModel {
         case .success(let page):
             asked[id] = .answered(handle, Results(hits: page.hits, total: page.total, generation: page.generation))
         case .failure(let failure):
-            guard let why = LookupFailure(failure) else { return }
+            guard let why = LookupFailure(failure) else {
+                return
+            }
             asked[id] = .failed(handle, why)
         }
         onAnswered?(id, lookup)
@@ -658,6 +694,7 @@ public final class SearchModel {
 
     private func choose(_ id: ResultID, landing: Landing) {
         selection = id
+        for waiter in Array(selectionWaiters.keys) { selectionChosen(waiter) }
         trail.updateCurrent {
             $0.result = id
             $0.scroll = 0
