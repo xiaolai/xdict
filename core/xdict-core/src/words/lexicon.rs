@@ -18,8 +18,10 @@ use super::types::{EtymonRelation, FamilyKind, LexiconSource, PhoneSystem, WordE
 
 /// The `schema` a pack's header names.
 pub const WORD_PACK_SCHEMA: &str = "xdict-word-pack";
-/// The pack version this loader reads; another is [`WordError::UnsupportedVersion`].
-pub const WORD_PACK_VERSION: u32 = 1;
+/// The pack version this loader reads; another is [`WordError::UnsupportedVersion`]. **2 adds `sense`** — the
+/// word net's synset relations the synonym and antonym modes read — and a 1 pack is refused naming both versions
+/// rather than read without them.
+pub const WORD_PACK_VERSION: u32 = 2;
 
 /// A pack's first line, with `"type": "header"`.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -138,6 +140,30 @@ record! {
         pub source: String,
     }
 
+    /// **Two words a word net ties through one synset** (schema 2): the relation the synonym and antonym modes read.
+    /// Both words are spelled as the pack spells them; the synset is the source's own id, kept so two relations can be
+    /// told apart when a word has several senses.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct SenseRecord {
+        pub word: String,
+        pub other: String,
+        pub relation: SenseRelation,
+        /// The source's synset id.
+        pub synset: String,
+        /// The part of speech the source ties the synset to, when it says.
+        pub pos: Option<String>,
+        pub source: String,
+    }
+
+    /// **How two words are related in a synset**: OEWN's own four, and no others.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    pub enum SenseRelation {
+        Synonym,
+        Antonym,
+        Hypernym,
+        Hyponym,
+    }
+
     /// The loader's bounds. Past any of them the load fails with [`WordError::TooLarge`], never truncates. Build one
     /// with `..LexiconLimits::default()` so a bound added later keeps its default.
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -180,6 +206,7 @@ pub enum LexiconRecord {
     Derivation(DerivationRecord),
     Origin(OriginRecord),
     Etymon(EtymonRecord),
+    Sense(SenseRecord),
 }
 
 /// A loaded, validated, immutable lexical pack.
@@ -413,6 +440,7 @@ const DERIVATION_KEYS: &[&str] =
 const STEM_KEYS: &[&str] = &["basePhonemes", "baseStart", "baseEnd", "derivedPhonemes", "derivedStart", "derivedEnd"];
 const ORIGIN_KEYS: &[&str] = &["type", "id", "language", "form", "word"];
 const ETYMON_KEYS: &[&str] = &["type", "child", "parent", "relation", "uncertain", "source"];
+const SENSE_KEYS: &[&str] = &["type", "word", "other", "relation", "synset", "pos", "source"];
 
 const SYSTEMS: &[(&str, PhoneSystem)] = &[("arpabet", PhoneSystem::Arpabet), ("ipa", PhoneSystem::Ipa)];
 const KINDS: &[(&str, FamilyKind)] = &[
@@ -421,6 +449,12 @@ const KINDS: &[(&str, FamilyKind)] = &[
     ("conversion", FamilyKind::Conversion),
     ("compound", FamilyKind::Compound),
     ("other", FamilyKind::Other),
+];
+const SENSE_RELATIONS: &[(&str, SenseRelation)] = &[
+    ("synonym", SenseRelation::Synonym),
+    ("antonym", SenseRelation::Antonym),
+    ("hypernym", SenseRelation::Hypernym),
+    ("hyponym", SenseRelation::Hyponym),
 ];
 const RELATIONS: &[(&str, EtymonRelation)] = &[
     ("inherited", EtymonRelation::Inherited),
@@ -604,6 +638,17 @@ fn record_from(value: Value) -> Result<LexiconRecord, Fault> {
                 source: string(&mut map, "source")?,
             })
         }
+        "sense" => {
+            let mut map = object(map, "a sense relation", SENSE_KEYS)?;
+            LexiconRecord::Sense(SenseRecord {
+                word: string(&mut map, "word")?,
+                other: string(&mut map, "other")?,
+                relation: choice(&mut map, "relation", SENSE_RELATIONS)?,
+                synset: string(&mut map, "synset")?,
+                pos: optional_string(&mut map, "pos")?,
+                source: string(&mut map, "source")?,
+            })
+        }
         "header" => return Err(corrupt("a second header")),
         other => return Err(corrupt(format!("no record type {} in this schema", clip(other)))),
     })
@@ -719,6 +764,13 @@ impl<'l> Checker<'l> {
                 self.text("child", &e.child)?;
                 self.text("parent", &e.parent)?;
                 self.source(&e.source)
+            }
+            LexiconRecord::Sense(s) => {
+                self.text("word", &s.word)?;
+                self.text("other", &s.other)?;
+                self.text("synset", &s.synset)?;
+                self.optional_text("pos", s.pos.as_deref())?;
+                self.source(&s.source)
             }
         }
     }
@@ -889,14 +941,45 @@ fn vowel_range(side: &str, start: u32, end: u32, phonemes: &[String]) -> Result<
 
 #[cfg(test)]
 mod tests {
+    #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::indexing_slicing)]
+
     use super::*;
 
     fn pack(record: &str) -> Result<WordLexicon, WordError> {
         let sha = "0".repeat(64);
         let header = format!(
-            r#"{{"type":"header","schema":"xdict-word-pack","version":1,"language":"en","sources":[{{"id":"oewn","name":"Synthetic oewn","url":"https://example.invalid/oewn","version":"test-1","sha256":"{sha}","licence":"CC0-1.0","attribution":"Written by the xdict-core unit tests"}}]}}"#
+            r#"{{"type":"header","schema":"xdict-word-pack","version":{WORD_PACK_VERSION},"language":"en","sources":[{{"id":"oewn","name":"Synthetic oewn","url":"https://example.invalid/oewn","version":"test-1","sha256":"{sha}","licence":"CC0-1.0","attribution":"Written by the xdict-core unit tests"}}]}}"#
         );
         WordLexicon::from_jsonl(format!("{header}\n{record}\n").as_bytes())
+    }
+
+    /// **Schema 2 carries a synset relation**, and a pack that says version 1 is refused naming both versions — the
+    /// loader reads one shape, and reading an older pack as if it had sense records would be guesswork.
+    #[test]
+    fn a_sense_relation_loads_and_a_version_1_pack_is_refused() {
+        let loaded = pack(r#"{"type":"sense","word":"good","other":"fine","relation":"synonym","synset":"oewn-good-n","pos":"noun","source":"oewn"}"#)
+            .expect("a schema 2 pack loads");
+        let senses: Vec<_> = loaded
+            .records()
+            .iter()
+            .filter_map(|r| if let LexiconRecord::Sense(s) = r { Some(s) } else { None })
+            .collect();
+        assert_eq!(senses.len(), 1);
+        assert_eq!(senses[0].relation, SenseRelation::Synonym);
+        assert_eq!((senses[0].word.as_str(), senses[0].other.as_str()), ("good", "fine"));
+
+        let sha = "0".repeat(64);
+        let old = format!(
+            r#"{{"type":"header","schema":"xdict-word-pack","version":1,"language":"en","sources":[{{"id":"oewn","name":"Synthetic oewn","url":"https://example.invalid/oewn","version":"test-1","sha256":"{sha}","licence":"CC0-1.0","attribution":"x"}}]}}"#
+        );
+        // A pack's last line carries its newline: without it the pack is refused as truncated before any version is read.
+        let old = format!("{old}\n");
+        match WordLexicon::from_jsonl(old.as_bytes()) {
+            Err(WordError::UnsupportedVersion { found, supported, .. }) => {
+                assert_eq!((found, supported), (1, WORD_PACK_VERSION));
+            }
+            other => panic!("a version 1 pack was not refused: {other:?}"),
+        }
     }
 
     fn source(url: &str) -> LexiconSource {

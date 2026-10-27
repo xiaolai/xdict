@@ -163,6 +163,8 @@ record! {
         pub derivations: u64,
         pub origins: u64,
         pub etymons: u64,
+        /// Synset relations the pack holds (schema 2).
+        pub senses: u64,
         /// The lexical pack's sources, attribution kept; empty without a pack.
         pub sources: Vec<LexiconSource>,
     }

@@ -130,7 +130,7 @@ fn frame(label: &str, headword: &str) -> Option<Frame> {
 /// **The text runs to the matching close**, not to the first `<`: a collocate the dictionary emphasises —
 /// `<span class="ocd_co">a <b>sin</b></span>` — otherwise came out as `a`, which an audit of 118 pairs found once in
 /// the whole dictionary and could not tell from a real one-word collocate.
-fn spans<'a>(html: &'a str, class: &str) -> Vec<(usize, String)> {
+fn spans(html: &str, class: &str) -> Vec<(usize, String)> {
     let needle = format!("class=\"{class}\"");
     let mut out = Vec::new();
     let mut from = 0;

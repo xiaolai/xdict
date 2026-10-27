@@ -43,7 +43,7 @@ pub use explorer::{
 };
 pub use lexicon::{
     DerivationRecord, EtymonRecord, FormRecord, LexiconHeader, LexiconLimits, LexiconRecord, OriginRecord,
-    PronunciationRecord, StemAlignment, WORD_PACK_SCHEMA, WORD_PACK_VERSION, WordLexicon,
+    PronunciationRecord, SenseRecord, SenseRelation, StemAlignment, WORD_PACK_SCHEMA, WORD_PACK_VERSION, WordLexicon,
 };
 pub use types::{
     EtymonRelation, FamilyKind, FamilyStep, FormRole, LexiconSource, MAX_FAMILY_STEPS, MAX_FUZZY_DISTANCE,

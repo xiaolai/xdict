@@ -503,6 +503,9 @@ impl Lexical {
             let i = u32::try_from(index)
                 .map_err(|_| too_large(WordLimit::Records, "more records than an index addresses"))?;
             match record {
+                // **A synset relation is read by the synonym and antonym modes**, whose own step this is; until they
+                // exist it is validated and counted and indexes nothing.
+                LexiconRecord::Sense(_) => {}
                 LexiconRecord::Pronunciation(p) => {
                     let word = normalize(&p.word);
                     let known = lex.pronunciations.get(&word).map_or(0, |s| s.records.len());
@@ -1580,6 +1583,7 @@ fn count(catalog: &Catalog, lexicon: Option<&WordLexicon>) -> WordStats {
         derivations: 0,
         origins: 0,
         etymons: 0,
+        senses: 0,
         sources: lexicon.map_or_else(Vec::new, |l| l.header().sources.clone()),
     };
     for record in lexicon.map(WordLexicon::records).unwrap_or_default() {
@@ -1589,6 +1593,7 @@ fn count(catalog: &Catalog, lexicon: Option<&WordLexicon>) -> WordStats {
             LexiconRecord::Derivation(_) => &mut stats.derivations,
             LexiconRecord::Origin(_) => &mut stats.origins,
             LexiconRecord::Etymon(_) => &mut stats.etymons,
+            LexiconRecord::Sense(_) => &mut stats.senses,
         };
         *counter += 1;
     }
