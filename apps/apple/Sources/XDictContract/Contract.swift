@@ -60,7 +60,7 @@ public enum Contract {
     /// 15 (2026-10-25): the operations `phrases` and `phrasesBuild` and their answers, the phrase covering a captured
     /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7); `PhraseAnswer.total`
     /// counts the matches before the cap, so a capped list says what it left out.
-    public static let version: UInt32 = 16
+    public static let version: UInt32 = 17
 }
 
 // MARK: - The request
@@ -205,6 +205,9 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// root, answered with the reader's own dictionaries' words. Every row names the dictionary and the entry it opens;
     /// the evidence behind a row is a later call.
     case explore(dicts: [DictId], mode: ExploreMode, text: String, offset: UInt32, limit: UInt32)
+    /// **The collocations of a word** (contract 17): what each dictionary's own collocation sections say, built into a
+    /// per-edition store the first time it is asked for.
+    case collocates(query: String, dicts: [DictId], limit: UInt32)
     /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese contains `query`, from the
     /// dictionaries with a store, in their order. One without a store is answered in `notReady`, never as an error.
     case examples(query: String, dicts: [DictId], limit: UInt32)
@@ -317,7 +320,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
         }
     }
 
@@ -330,7 +333,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
         }
     }
 
@@ -359,7 +362,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
              .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
+             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: nil
         }
     }
 
@@ -385,7 +388,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .definitionHash(let dict, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _),
-             .phrases(_, _, let dicts), .explore(let dicts, _, _, _, _):
+             .phrases(_, _, let dicts), .explore(let dicts, _, _, _, _), .collocates(_, let dicts, _):
             dicts.flatMap { filesOf[$0] ?? [] }
         case .words(let dict, _, _): filesOf[dict] ?? []
         // **These read through an edition, not a handle** (`editionsRead` adds those files), or read nothing at all.
@@ -401,6 +404,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         switch self {
         case .versions: .versions
         case .explore: .explored
+        case .collocates: .collocations
         case .importPackage: .imported
         case .cancel, .cancelConversion: .cancellation
         case .openPackage: .opened
@@ -448,7 +452,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .examples, .phrases, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: false
+             .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates: false
         }
     }
 }
@@ -569,6 +573,8 @@ public enum Answer: Codable, Hashable, Sendable {
     case words(Words)
     /// One page of word exploration (contract 16).
     case explored(ExploreAnswer)
+    /// The collocations those dictionaries write for the word (contract 17).
+    case collocations([Collocation])
     /// The entry's reference, policy and lossy count; **its HTML is the payload**, as UTF-8.
     case entry(Entry)
     case link(Link)
@@ -628,7 +634,7 @@ public enum Answer: Codable, Hashable, Sendable {
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
              .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored: false
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations: false
         }
     }
 
@@ -645,6 +651,7 @@ public enum Answer: Codable, Hashable, Sendable {
         switch self {
         case .versions: .versions
         case .explored: .explored
+        case .collocations: .collocations
         case .imported: .imported
         case .cancellation: .cancellation
         case .opened: .opened
@@ -698,7 +705,7 @@ enum AnswerKind: String, Sendable {
     case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, phrases, phrasesBuilt, ledgerRecord,
          ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
-    case exported, erased, conflicts, synced, explored
+    case exported, erased, conflicts, synced, explored, collocations
 }
 
 // MARK: - Events

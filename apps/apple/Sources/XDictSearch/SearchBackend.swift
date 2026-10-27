@@ -71,6 +71,15 @@ extension ClientOutcome {
         }
     }
 
+    var collocations: Result<[Collocation], ClientFailure> {
+        flatMap { delivered in
+            guard case .collocations(let pairs) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not collocations")))
+            }
+            return .success(pairs)
+        }
+    }
+
     var phraseAnswer: Result<PhraseAnswer, ClientFailure> {
         flatMap { delivered in
             guard case .phrases(let answer) = delivered.answer else {

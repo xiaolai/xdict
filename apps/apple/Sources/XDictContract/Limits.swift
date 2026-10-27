@@ -69,7 +69,7 @@ public enum Limits {
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .examples, .examplesBuilt,
              .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored: return nil
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations: return nil
         }
     }
 
@@ -183,9 +183,10 @@ public enum Deadlines {
         // One record block read, inflated and rewritten: a 62 MB entry replied in 154 ms on the E2E Mac, 2–4× that on
         // the loaded build Mac (spike 2); the rest is room for a slow disk and one bulk call ahead in the service.
         // `entryText` is that render plus a pass over its text: the same budget, the projection is linear in the body.
-        // **The first exploration builds the catalog**: 3.2 s for the reader's 24 dictionaries (1.37 M headwords) and
-        // 0.8 s to attach a pack; later pages read an index. Thirty seconds is an order of magnitude over the build.
-        case .explore: .seconds(30)
+        // **The first of either builds something**: exploration's catalog takes 3.2 s for the reader's 24
+        // dictionaries (1.37 M headwords), a collocation store one pass over that edition's records. Both sit under the
+        // house ceiling for a short call; later pages read what the first built.
+        case .explore, .collocates: .seconds(15)
         case .entry, .entryText: .seconds(10)
         // Up to 64 MiB read from the file: 164–270 ms on the E2E Mac, 785 ms on the loaded build Mac (spike 2), and 6.4 s
         // from a 10 MB/s disk; with one bulk call ahead, 15 s.

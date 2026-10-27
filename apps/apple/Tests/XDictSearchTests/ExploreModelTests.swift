@@ -47,16 +47,24 @@ struct ExploreModelTests {
         #expect(asked == [.rhyme], "a tab asks for its own mode: \(asked)")
     }
 
-    /// **A tab nothing answers asks nothing**: collocations come from the dictionaries' collocation sections (WI-6),
-    /// and a list that cannot exist is not requested.
-    @Test func aTabWithoutADataSourceAsksNothingAndClearsThePage() async {
-        let backend = await Self.backend { _ in Self.page(.answered) }
+    /// **Collocations ask their own call** (WI-6): the tab names no exploration mode, and its rows are the partners the
+    /// dictionaries write, each under the frame it was filed in.
+    @Test func theCollocationsTabAsksTheCollocationCall() async {
+        let backend = await Self.backend { _ in
+            .success(Delivered(answer: .collocations([
+                Collocation(lemma: "decision", frame: .verbPlusHeadword, partner: "make", dict: Self.dict,
+                            entry: EntryRef(edition: Edition(rawValue: "e1"), key: "decision", occurrence: 0)),
+            ]), payload: nil))
+        }
         let model = ExploreModel(backend: backend, window: "test")
-        model.show(.rhymes, word: "nation", dicts: [Self.dict])
-        for _ in 0..<200 where await backend.queued.isEmpty { await Task.yield() }
-        model.show(.collocations, word: "nation", dicts: [Self.dict])
-        #expect(model.page.rows.isEmpty && !model.page.loading)
-        #expect(await backend.queued.count == 1, "only the first tab asked")
+        model.show(.collocations, word: "decision", dicts: [Self.dict])
+        #expect(await Self.eventually { model.page.rows.count == 1 })
+        #expect(model.page.rows.first?.word == "make")
+        #expect(model.page.rows.first?.reason == .collocation(.verbPlusHeadword))
+        let asked = await backend.queued.contains {
+            if case .collocates = $0.operation { true } else { false }
+        }
+        #expect(asked, "the tab asks the collocation call")
     }
 
     /// **A page that could not look says which state it is in**, and a cut one says so — the shell draws them, the

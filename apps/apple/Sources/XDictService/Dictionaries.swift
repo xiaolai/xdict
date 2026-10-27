@@ -137,6 +137,10 @@ final class Dictionaries: Sendable {
             case .words(let dict, let from, let limit):
                 return (.answer(.words(XDictContract.Words(try core.words(dict: dict.rawValue, from: from, limit: limit)))),
                         nil)
+            // Plan-word-exploration WI-6: the collocations the reader's own dictionaries write.
+            case .collocates(let query, let dicts, let limit):
+                let pairs = try core.collocates(query: query, dicts: dicts.map(\.rawValue), limit: limit)
+                return (.answer(.collocations(pairs.map(XDictContract.Collocation.init))), nil)
             // Plan-word-exploration WI-4: one page of exploration, its rows naming the entries they open.
             case .explore(let dicts, let mode, let text, let offset, let limit):
                 let answer = try core.explore(dicts: dicts.map(\.rawValue), mode: XDictCore.WordMode(mode), text: text,

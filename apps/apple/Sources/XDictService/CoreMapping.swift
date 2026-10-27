@@ -168,6 +168,33 @@ extension XDictContract.Hit {
     }
 }
 
+extension XDictContract.CollocationFrame {
+    init(_ frame: XDictCore.Frame) {
+        switch frame {
+        case .adjective: self = .adjective
+        case .adverb: self = .adverb
+        case .noun: self = .noun
+        case .verb: self = .verb
+        case .verbs: self = .verbs
+        case .preposition: self = .preposition
+        case .phrases: self = .phrases
+        case .adjectivePlusHeadword: self = .adjectivePlusHeadword
+        case .verbPlusHeadword: self = .verbPlusHeadword
+        case .headwordPlusVerb: self = .headwordPlusVerb
+        case .headwordPlusNoun: self = .headwordPlusNoun
+        case .nounPlusHeadword: self = .nounPlusHeadword
+        case .phraseOfHeadword: self = .phraseOfHeadword
+        }
+    }
+}
+
+extension XDictContract.Collocation {
+    init(_ pair: XDictCore.Collocation) {
+        self.init(lemma: pair.lemma, frame: XDictContract.CollocationFrame(pair.frame), partner: pair.partner,
+                  dict: DictId(rawValue: pair.dict), entry: XDictContract.EntryRef(pair.entry))
+    }
+}
+
 extension XDictCore.WordMode {
     /// **What a page asks for**, as the core's own mode: the two are the same question asked across the binding.
     init(_ mode: XDictContract.ExploreMode) {

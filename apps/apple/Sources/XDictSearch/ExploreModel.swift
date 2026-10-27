@@ -20,6 +20,9 @@ public final class ExploreModel {
 
         public var id: String { rawValue }
 
+        /// Whether this tab asks the collocation call rather than an exploration mode.
+        public var asksCollocations: Bool { self == .collocations }
+
         /// The core's mode for this tab, or nil for one nothing answers yet.
         public var mode: ExploreMode? {
             switch self {
@@ -63,6 +66,10 @@ public final class ExploreModel {
     public func show(_ tab: Tab, word: String, dicts: [DictId]) {
         self.tab = tab
         self.word = word
+        if tab.asksCollocations {
+            loadCollocations(word: word, dicts: dicts)
+            return
+        }
         guard let mode = tab.mode else {
             generation += 1
             page = Page()
@@ -74,6 +81,38 @@ public final class ExploreModel {
     /// Asks again for the tab on screen — after the dictionaries changed, or on a retry.
     public func reload(dicts: [DictId]) {
         show(tab, word: word, dicts: dicts)
+    }
+
+    /// **The collocations the reader's own dictionaries write** (WI-6): a row per partner, the frame as its label, and
+    /// the entry the dictionary said it in.
+    private func loadCollocations(word: String, dicts: [DictId]) {
+        generation += 1
+        let mine = generation
+        guard !dicts.isEmpty else {
+            page = Page()
+            return
+        }
+        page = Page(loading: true)
+        let backend = self.backend
+        let caller = self.caller
+        let limit = self.limit
+        Task { [weak self] in
+            let pending = await backend.queue([.collocates(query: word, dicts: dicts, limit: limit)], as: caller,
+                                              superseding: true)
+            let outcome = await pending.first?.outcome()
+            guard let self, mine == self.generation else { return }
+            switch outcome?.collocations {
+            case .success(let pairs):
+                let rows = pairs.map {
+                    ExploreRow(word: $0.partner, dict: $0.dict, entry: $0.entry, reason: .collocation($0.frame))
+                }
+                self.page = Page(rows: rows)
+            case .failure(let failure):
+                self.page = Page(failure: String(describing: failure))
+            case .none:
+                self.page = Page()
+            }
+        }
     }
 
     private func load(mode: ExploreMode, word: String, dicts: [DictId]) {

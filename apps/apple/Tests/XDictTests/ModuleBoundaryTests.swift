@@ -72,7 +72,7 @@ struct ModuleBoundaryTests {
         "XDictSearch": ["Foundation", "Observation"],
         // **Core Spotlight's index** (plan-setup-v2 WI-6; ADR-0028): the system's index and nothing else; the words'
         // own source (the service) is the app's to hand in, so this target knows no client, no library and no AppKit.
-        "XDictSpotlight": ["CoreSpotlight", "Foundation", "Observation"],
+        "XDictSpotlight": ["CoreSpotlight", "Foundation", "Observation", "os"],
         // The system's index is the fake's to stand in for, so the tests need CoreSpotlight's own types and nothing of
         // the app's.
         "XDictSpotlightTests": ["CoreSpotlight", "Foundation", "Testing"],

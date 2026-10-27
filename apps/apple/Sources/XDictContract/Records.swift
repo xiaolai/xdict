@@ -187,6 +187,31 @@ public enum HitProblem: Codable, Hashable, Sendable {
 
 /// **A page of one dictionary's words**, for Core Spotlight: the core's `Words`, with the edition it belongs to so a
 /// page from another edition is not continued. No body travels beside it.
+/// **A collocation's frame** (contract 17, plan-word-exploration WI-6): the closed vocabulary the extractor holds, with
+/// the headword written `HW`.
+public enum CollocationFrame: String, Codable, Hashable, Sendable {
+    case adjective, adverb, noun, verb, verbs, preposition, phrases
+    case adjectivePlusHeadword, verbPlusHeadword, headwordPlusVerb, headwordPlusNoun, nounPlusHeadword
+    case phraseOfHeadword
+}
+
+/// One collocation a dictionary writes: the headword it is filed under, its frame, the partner, and the entry.
+public struct Collocation: Codable, Hashable, Sendable {
+    public let lemma: String
+    public let frame: CollocationFrame
+    public let partner: String
+    public let dict: DictId
+    public let entry: EntryRef
+
+    public init(lemma: String, frame: CollocationFrame, partner: String, dict: DictId, entry: EntryRef) {
+        self.lemma = lemma
+        self.frame = frame
+        self.partner = partner
+        self.dict = dict
+        self.entry = entry
+    }
+}
+
 // MARK: - Word exploration (contract 16, plan-word-exploration WI-4)
 
 /// **What to look for** — the core's `WordMode`, mirrored here so the app never links the core.
@@ -207,6 +232,8 @@ public enum ExploreMode: Codable, Hashable, Sendable {
 
 /// **Why a row is in the answer** — a label, never a sentence: the shell writes the words, in the reader's language.
 public enum ExploreReason: Codable, Hashable, Sendable {
+    /// A collocation, with the frame the dictionary filed it under.
+    case collocation(CollocationFrame)
     case exact
     case endsWith
     case spelling(distance: UInt8)
