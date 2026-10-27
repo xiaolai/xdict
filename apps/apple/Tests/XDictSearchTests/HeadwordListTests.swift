@@ -27,7 +27,7 @@ struct HeadwordListTests {
         return backend
     }
 
-    static func model(_ backend: FakeSearchBackend, guesser: (any SpellingGuesser)? = nil) async -> SearchModel {
+    static func model(_ backend: FakeSearchBackend) async -> SearchModel {
         await backend.setSuggest { prefix, dicts in
             var out: [String] = []
             for dict in dicts {
@@ -41,7 +41,7 @@ struct HeadwordListTests {
         var options = SearchModel.Options()
         options.suggestionDelay = .milliseconds(20)
         let sources = Sources([Fixture.source(1, "A"), Fixture.source(2, "B")])
-        return SearchModel(backend: backend, window: "test", options: options, guesser: guesser) { sources.list }
+        return SearchModel(backend: backend, window: "test", options: options) { sources.list }
     }
 
     static func type(_ model: SearchModel, _ text: String) {
@@ -110,10 +110,15 @@ struct HeadwordListTests {
         #expect(model.selectedHeadword == "apple")
     }
 
-    /// **P13**: nothing under the text and nothing beginning with it: the spelling guesses the library has, under "Did
-    /// you mean?", the first one shown; a guess the library lacks is not offered.
+    /// **P13**: nothing under the text and nothing beginning with it: the nearest spellings the dictionaries hold, under
+    /// "Did you mean?", the first one shown. The service answers them with the keys themselves — the core's
+    /// `nearest`, which only ever returns keys a dictionary has — so nothing is checked twice (2026-10-27).
     @Test func aMisspellingOffersTheGuessesTheLibraryHas() async {
-        let model = await Self.model(Self.backend(), guesser: FixedGuesser(["accommodate", "accumulate"]))
+        let backend = Self.backend()
+        let model = await Self.model(backend)
+        // **The answer is keys of the dictionaries themselves** (the core's `nearest`), so a candidate the library
+        // lacks cannot be offered: the filter that used to run here is the core's now.
+        await backend.setSuggest { _, _ in ["accommodate"] }
         model.submit("accomodate")
         #expect(await eventually { model.listing?.settled == true })
         #expect(model.listing?.headwords == ["accommodate"])
@@ -124,7 +129,7 @@ struct HeadwordListTests {
 
     /// **P12**: no match, no completion, no guess: an empty list, nothing shown, no count.
     @Test func nothingFoundIsAnEmptySettledList() async {
-        let model = await Self.model(Self.backend(), guesser: FixedGuesser(["zzz"]))
+        let model = await Self.model(Self.backend())
         model.submit("qqqq")
         #expect(await eventually { model.listing?.settled == true })
         #expect(model.listing?.headwords == [])
@@ -175,16 +180,6 @@ struct HeadwordListTests {
     }
 }
 
-/// Spelling guesses the test names.
-struct FixedGuesser: SpellingGuesser {
-    let words: [String]
-
-    init(_ words: [String]) {
-        self.words = words
-    }
-
-    func guesses(for word: String) -> [String] { words }
-}
 
 /// Whether an observed property changed.
 final class Changed: @unchecked Sendable {

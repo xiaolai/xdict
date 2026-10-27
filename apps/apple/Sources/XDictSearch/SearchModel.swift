@@ -121,13 +121,14 @@ public final class SearchModel {
     @ObservationIgnored private let options: Options
     @ObservationIgnored private let searchCaller: Caller
     @ObservationIgnored private let suggestCaller: Caller
-    @ObservationIgnored private let guessCaller: Caller
-    @ObservationIgnored private let guesser: (any SpellingGuesser)?
     @ObservationIgnored private var serial = 0
     @ObservationIgnored private var shownSerial = 0
     @ObservationIgnored private var listSerial = 0
     /// The keys for the listed text, once suggested.
     @ObservationIgnored private var listedKeys: [String]?
+    /// **What merely looks like the typed word** (P13): the core's nearest spellings that do not begin with it, shown as
+    /// "Did you mean?" rather than as completions.
+    @ObservationIgnored private var guessed: [String] = []
     /// The current place was made by typing and not yet confirmed: more typing replaces it.
     @ObservationIgnored private var provisional = false
     /// The landing of a result the model will choose itself, once due; nil when the reader has chosen, or nothing is due.
@@ -138,14 +139,12 @@ public final class SearchModel {
 
     /// `window` names this window's callers, so two windows never supersede each other's lookups.
     public init(backend: any SearchBackend, window: String, options: Options = Options(),
-                guesser: (any SpellingGuesser)? = nil, sources: @escaping @MainActor () -> [SearchSource]) {
+                sources: @escaping @MainActor () -> [SearchSource]) {
         self.backend = backend
         self.sources = sources
         self.options = options
-        self.guesser = guesser
         searchCaller = Caller("search.\(window)")
         suggestCaller = Caller("suggest.\(window)")
-        guessCaller = Caller("guess.\(window)")
         known = sources()
     }
 
@@ -294,8 +293,13 @@ public final class SearchModel {
                 }
             }
             guard let self, self.listSerial == mine else { return }
+            // **Completions and guesses are told apart here** (owner, 2026-10-27: fuzzy is one behaviour, and it is the
+            // core's): a key that begins with what was typed completes it; one that does not is what the reader may
+            // have meant, and is shown under "Did you mean?" — never merged into the list as if it were a match.
+            let folded = typed.lowercased()
             self.suggestions = keys
-            self.listedKeys = keys
+            self.listedKeys = keys.filter { $0.lowercased().hasPrefix(folded) }
+            self.guessed = keys.filter { !$0.lowercased().hasPrefix(folded) }
             self.reconcile()
         }
     }
@@ -312,9 +316,16 @@ public final class SearchModel {
             }
         }
         let words = Listing.merged(own, keys)
-        if words.isEmpty, let guesser {
-            listedKeys = nil
-            guess(listing.typed, from: guesser)
+        if words.isEmpty, !guessed.isEmpty {
+            // **The reader's own dictionaries answer "Did you mean?"** (P13): the core's nearest spellings are keys of
+            // those dictionaries, so a candidate is never a word the library cannot open, and no lookup is spent
+            // checking one.
+            listing.headwords = Array(guessed.prefix(options.guessLimit)).filter { $0 != listing.typed }
+            listing.isGuess = !listing.headwords.isEmpty
+            listing.settled = true
+            self.listing = listing
+            settleFound(listing)
+            showFirstMatchIfNeeded()
             return
         }
         listing.headwords = words
@@ -322,35 +333,6 @@ public final class SearchModel {
         self.listing = listing
         settleFound(listing)
         showFirstMatchIfNeeded()
-    }
-
-    /// The spelling guesses some dictionary in scope has a match for, in the guesser's order (P13).
-    private func guess(_ typed: String, from guesser: any SpellingGuesser) {
-        let words = Array(guesser.guesses(for: typed).filter { $0 != typed }.prefix(options.guessLimit))
-        let dicts = inScope(scope).compactMap(\.handle)
-        let mine = listSerial
-        let pairs = words.flatMap { word in dicts.map { (word, $0) } }
-        let operations = pairs.map { word, handle in
-            ServiceOperation.lookup(query: word, dicts: [handle],
-                                    options: LookupOptions(limit: 1, offset: 0, mode: .reader, generation: nil))
-        }
-        let (backend, caller) = (backend, guessCaller)
-        Task { [weak self] in
-            var found: Set<String> = []
-            if !operations.isEmpty {
-                let pending = await backend.queue(operations, as: caller, superseding: true)
-                for ((word, _), call) in zip(pairs, pending) {
-                    if case .success(let page) = await call.outcome().page, !page.hits.isEmpty { found.insert(word) }
-                }
-            }
-            guard let self, self.listSerial == mine, var listing = self.listing else { return }
-            listing.headwords = words.filter(found.contains)
-            listing.isGuess = !listing.headwords.isEmpty
-            listing.settled = true
-            self.listing = listing
-            self.settleFound(listing)
-            self.showFirstMatchIfNeeded()
-        }
     }
 
     /// The typed word has no entry of its own but the list has rows: the first row is shown in the typed place (P10:

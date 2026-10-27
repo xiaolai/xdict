@@ -77,7 +77,7 @@ public final class SearchWindowState {
         self.library = library
         self.backend = backend
         self.entry = entry
-        let model = SearchModel(backend: backend, window: window, guesser: SystemSpellingGuesser()) { [library] in
+        let model = SearchModel(backend: backend, window: window) { [library] in
             library.searchSources
         }
         self.model = model
