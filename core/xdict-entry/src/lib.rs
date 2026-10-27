@@ -3,6 +3,7 @@
 //! (`xdict-lookup`), not here.
 
 mod calibrate;
+pub mod collocations;
 mod colour;
 mod controls;
 mod entities;
