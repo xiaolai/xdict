@@ -109,16 +109,17 @@ struct MeaningPaneWindow: NSViewRepresentable {
             changed?(place)
         }
 
+        /// **The pane's window is kept and hidden, never destroyed** (owner, 2026-10-27): a new `NSWindow` per capture
+        /// made the system index a new window tab each time — measured in macOS's own Keyphrase journals, where XDict's
+        /// windows accounted for thousands of entries and a day of UI work wrote 11.9 GB of them. The pane is one window
+        /// for the main window's life; closing takes it off screen, opening brings it back.
         private func closePane() {
             guard let controller else { return }
-            controller.animateOut { [weak self] in
-                if self?.controller === controller { self?.controller = nil }
-            }
+            controller.animateOut {}
         }
 
-        /// The pane window's own close button: the reader closed the answer.
+        /// The pane window's own close button: the reader closed the answer. The window is kept, hidden.
         private func readerClosed() {
-            controller = nil
             presented = .hidden
             changed?(.hidden)
             state?.panes.meaningClosed(by: .window, current: .window)
