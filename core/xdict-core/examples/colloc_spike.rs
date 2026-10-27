@@ -30,22 +30,73 @@ fn open(path: &Path) -> File {
     File::open(path).unwrap()
 }
 
-/// Every `class="ocd_pos"` span's text, in order.
-fn chips(html: &str, class: &str) -> Vec<String> {
+/// Every marked span of one class, in document order: its byte offset and its text.
+fn spans<'a>(html: &'a str, class: &str) -> Vec<(usize, &'a str)> {
+    let needle = format!("class=\"{class}\"");
     let mut out = Vec::new();
-    let mut rest = html;
-    while let Some(at) = rest.find(class) {
-        rest = &rest[at + class.len()..];
-        let Some(open) = rest.find('>') else { break };
-        let after = &rest[open + 1..];
-        let Some(end) = after.find('<') else { break };
-        let text = after[..end].trim();
-        if !text.is_empty() {
-            out.push(text.to_string());
-        }
-        rest = &after[end..];
+    let mut from = 0;
+    while let Some(at) = html[from..].find(&needle) {
+        let at = from + at;
+        let Some(open) = html[at..].find('>') else { break };
+        let body = at + open + 1;
+        let Some(end) = html[body..].find('<') else { break };
+        out.push((at, html[body..body + end].trim()));
+        from = body + end;
     }
     out
+}
+
+/// **The closed frame vocabulary**: the headword's own name in capitals becomes `HW`, so `VERB + BLOOD VESSEL` and
+/// `VERB + TRUSTEE` are one frame; anything else keeps its words, and a frame outside this list is reported rather than
+/// quietly widened.
+fn frame(label: &str, headword: &str) -> Option<String> {
+    // **The same word, spelled the same way**: the label and the headword are compared with case, hyphens and spaces
+    // taken out (`ELECTRIC-SHOCK` is `electric shock`), and a leading `…` stands for the headword itself.
+    let squash = |text: &str| -> String {
+        text.to_uppercase().chars().filter(|c| c.is_alphanumeric() || *c == '+').collect()
+    };
+    let head = squash(headword);
+    let mut normalized: String = squash(label);
+    if !head.is_empty() {
+        normalized = normalized.replace(&head, "HW");
+    }
+    let spaced = |frame: &str| -> String {
+        frame.split('+').map(str::trim).collect::<Vec<_>>().join(" + ")
+    };
+    if let Some(rest) = normalized.strip_prefix("…") {
+        normalized = format!("… + {}", spaced(rest).trim_start_matches(" + ").to_string());
+        normalized = normalized.replace("… + HW", "… OF HW");
+    }
+    let normalized = spaced(&normalized).replace("…  OF HW", "… OF HW");
+    let known = [
+        "ADJECTIVE", "ADVERB", "NOUN", "VERB", "VERBS", "PREPOSITION", "PHRASES", "VERB + HW", "HW + VERB",
+        "HW + NOUN", "NOUN + HW", "ADJECTIVE + HW", "… OF HW",
+    ];
+    known.contains(&normalized.as_str()).then_some(normalized)
+}
+
+/// One entry's collocations: the frame each collocate stands under, comma lists split.
+fn pairs(html: &str) -> (String, Vec<(String, String)>) {
+    let headword = spans(html, "ocd_hw").first().map(|(_, t)| t.to_string()).unwrap_or_default();
+    let frames = spans(html, "ocd_ps");
+    let collocates = spans(html, "ocd_co");
+    let mut out = Vec::new();
+    for (at, text) in &collocates {
+        let frame = match frames.iter().rev().find(|(f, _)| f < at) {
+            Some((_, label)) => match frame(label, &headword) {
+                Some(known) => known,
+                None => format!("?{label}"),
+            },
+            None => "?none".to_string(),
+        };
+        for word in text.split(',') {
+            let word = word.trim();
+            if !word.is_empty() {
+                out.push((frame.clone(), word.to_string()));
+            }
+        }
+    }
+    (headword, out)
 }
 
 fn main() {
@@ -73,27 +124,26 @@ fn main() {
         let mut with_chips = 0usize;
         let mut sampled = 0usize;
         let mut shown = 0usize;
+        let mut shown_pairs = 0usize;
         for i in (0..total).step_by(step).take(per_file) {
             let record = match file.record(i) {
                 Ok(record) => record,
                 Err(_) => continue,
             };
             let html = String::from_utf8_lossy(&record.data);
-            let found = chips(&html, "ocd_ps");
+            let (headword, found) = pairs(&html);
             sampled += 1;
             if !found.is_empty() {
                 with_chips += 1;
-                for chip in &found {
-                    *frames.entry(chip.clone()).or_default() += 1;
+            }
+            for (label, word) in &found {
+                *frames.entry(label.clone()).or_default() += 1;
+                if shown_pairs < 8 {
+                    shown_pairs += 1;
+                    println!("pair: {headword} | {label} | {word}");
                 }
             }
-            if shown < 1 && found.len() > 1 {
-                shown += 1;
-                println!("--- {} #{} frames: {:?}", name, i, found);
-                let start = 0;
-                let end = (start + 1200).min(html.len());
-                println!("{}", html[start..end].replace('\n', " "));
-            }
+            let _ = &mut shown;
         }
         println!("=== {name}: {total} records, {sampled} sampled, {with_chips} with ocd_ps frames");
         let mut by_count: Vec<_> = frames.into_iter().collect();
