@@ -3609,6 +3609,22 @@
         }
       }
     },
+    "Close Window": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭窗口"
+          }
+        }
+      }
+    },
     "Code": {
       "localizations": {
         "en": {
@@ -6308,22 +6324,6 @@
         }
       }
     },
-    "Keep XDict in the menu bar": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Keep XDict in the menu bar"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "让 XDict 留在菜单栏"
-          }
-        }
-      }
-    },
     "Keep a reading history on this Mac": {
       "localizations": {
         "en": {
@@ -8203,6 +8203,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "关闭"
+          }
+        }
+      }
+    },
+    "Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭时，XDict 只驻留在菜单栏：窗口关掉也继续运行，快捷键、系统服务与悬停取词照常工作。要退出，请用菜单栏图标里的「退出」。"
           }
         }
       }
@@ -10728,6 +10744,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示结果"
+          }
+        }
+      }
+    },
+    "Show XDict in the Dock": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show XDict in the Dock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在程序坞中显示 XDict"
           }
         }
       }
@@ -14633,22 +14665,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "词典标注了间隔"
-          }
-        }
-      }
-    },
-    "With every window closed, the shortcut, the Service and hover keep working.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "With every window closed, the shortcut, the Service and hover keep working."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭所有窗口后，快捷键、系统服务和悬停查词仍可使用。"
           }
         }
       }

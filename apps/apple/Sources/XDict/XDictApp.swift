@@ -120,6 +120,15 @@ struct XDictApp: App {
             }
             AcknowledgmentsCommand()
             FileAndHelpCommands()
+            // **⌘Q closes the window, and Quit lives in the menu-bar icon's menu alone** (owner, 2026-10-27: "the only way
+            // to quit xdict is by tray icon menu"): the app menu's Quit goes with its termination command, and the key
+            // every reader reaches for closes the window in front instead.
+            CommandGroup(replacing: .appTermination) {  // placement: P31
+                Button { MainActor.assumeIsolated { NSApp.keyWindow?.performClose(nil) } } label: {
+                    Text("Close Window")
+                }
+                .keyboardShortcut("q")
+            }
         }
 
         // Every third-party notice (WI-10), from the app menu beside About; not in the Window menu (A-06).
@@ -368,6 +377,9 @@ enum LibraryLaunch {
 /// Starts lookup from anywhere once the app has finished launching: the shortcut, the Service, the panel.
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        // **The reader's Dock choice, before the first window draws** (owner, 2026-10-27): off means an accessory app — no
+        // Dock icon, the menu bar's icon instead — and a regular app only when the reader asked for one.
+        DockVisibility(defaults: .standard).apply()
         // Main windows take tabs, as Apple's Dictionary's do (parity P32, P37): File ▸ New Tab and the Window menu's
         // tab items.
         NSWindow.allowsAutomaticWindowTabbing = true
@@ -406,10 +418,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// **The reader's Settings ▸ General switch**: on (the default), XDict stays in the menu bar with every window closed;
-    /// off, it quits with its last window. The menu-bar item is inserted either way (`MenuBarResidence`).
+    /// **Closing a window never quits** (owner, 2026-10-27: "cmd+w, or cmd+q, only close xdict window, keep it running in
+    /// background, only showing tray icon, the only way to quit xdict is by tray icon menu"): the last window closing
+    /// leaves XDict in the menu bar, whatever the reader chose about the Dock icon, and the menu-bar icon's Quit is the
+    /// one way out.
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        MenuBarResidence(defaults: .standard).terminatesAfterLastWindowClosed
+        false
     }
 }
 

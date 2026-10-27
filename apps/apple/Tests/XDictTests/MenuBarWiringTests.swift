@@ -2,9 +2,9 @@ import Foundation
 import Testing
 import XDictTestSupport
 
-/// **The menu-bar item is the app's own, and the menu-bar switch reaches the app** (Settings ▸ General, `MenuBarResidence`;
+/// **The menu-bar item is the app's own, and closing a window never quits** (Settings ▸ General, `DockVisibility`;
 /// plan-history-and-learning §4). Read off the code, since the app target cannot run under a test: the delegate answers
-/// `applicationShouldTerminateAfterLastWindowClosed` from the reader's choice; an `NSStatusItem` is installed with a click
+/// `applicationShouldTerminateAfterLastWindowClosed` with `false`, whatever the Dock choice; an `NSStatusItem` is installed with a click
 /// that routes a primary press to the history and a secondary one to the menu (XiaolaiDict's measured design); and no
 /// `MenuBarExtra` is used at all — measured, SwiftUI drives its button privately and a right click cannot reach it, and an
 /// `isInserted:` binding rebuilt the main menu forever on macOS 27 and hung the launch (`ui-fix`, 2026-10-17).
@@ -21,14 +21,14 @@ struct MenuBarWiringTests {
     @Test func eachMistakeIsNamed() {
         let wired = """
             func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-                MenuBarResidence(defaults: .standard).terminatesAfterLastWindowClosed
+                false
             }
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             if StatusItemClick.isSecondary(NSApp.currentEvent) { showMenu() }
             """
         #expect(Self.problems([("App.swift", wired)]) == [])
         #expect(Self.problems([("App.swift", "let item = NSStatusBar.system.statusItem(withLength: 0)\n")])
-                == ["no delegate answer from MenuBarResidence",
+                == ["the delegate does not refuse a quit on the last window",
                     "no click routing: a right click cannot reach the menu"])
         let inserted = wired + "\nMenuBarExtra(isInserted: $shown) { menu } label: { label }\n"
         #expect(Self.problems([("App.swift", inserted)]) == ["App.swift:6: MenuBarExtra (it cannot route a right click)"])
@@ -47,7 +47,7 @@ struct MenuBarWiringTests {
         var routes = false
         for (name, text) in files {
             let code = SourceScan.codeOnly(text)
-            if code.contains(/applicationShouldTerminateAfterLastWindowClosed[^{]*\{\s*MenuBarResidence\([^)]*\)\.terminatesAfterLastWindowClosed\s*\}/) {
+            if code.contains(/applicationShouldTerminateAfterLastWindowClosed[^{]*\{\s*false\s*\}/) {
                 answered = true
             }
             if code.contains("StatusItemClick.isSecondary") { routes = true }
@@ -56,7 +56,7 @@ struct MenuBarWiringTests {
                 found.append("\(name):\(index + 1): MenuBarExtra (it cannot route a right click)")
             }
         }
-        if !answered { found.insert("no delegate answer from MenuBarResidence", at: 0) }
+        if !answered { found.insert("the delegate does not refuse a quit on the last window", at: 0) }
         if !routes { found.append("no click routing: a right click cannot reach the menu") }
         return found
     }

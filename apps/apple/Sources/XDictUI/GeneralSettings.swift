@@ -13,8 +13,9 @@ public struct GeneralSettings: View {
     @State private var language: InterfaceLanguage
     @AppStorage(PanelAppearance.shadeKey) private var shade: PanelAppearance.Shade = .system
     @AppStorage(PanelAppearance.solidityKey) private var solidity = 0.0
-    /// The app delegate reads the same key of the same suite (`MenuBarResidence`); on for a reader who never chose.
-    @AppStorage(MenuBarResidence.key) private var keepsRunning = true
+    /// **The reader's Dock icon choice** (owner, 2026-10-27), off for a reader who never chose: the app delegate reads the
+    /// same key at launch, and this row applies a change at once (`DockVisibility`).
+    @AppStorage(DockVisibility.key) private var showsInDock = false
     /// The answer pane's own options (owner, 2026-10-24): its gap from the window, its width, its opening time and the
     /// keys that toggle it.
     @AppStorage(MeaningPanePreferences.gapKey) private var paneGap = MeaningPanePreferences.defaultGap
@@ -57,11 +58,12 @@ public struct GeneralSettings: View {
                         Text("Allow XDict in Login Items")
                     }
                 }
-                Toggle(isOn: $keepsRunning) {
-                    Text("Keep XDict in the menu bar")
-                    Text("With every window closed, the shortcut, the Service and hover keep working.")
+                Toggle(isOn: $showsInDock) {
+                    Text("Show XDict in the Dock")
+                    Text("Off, XDict lives in the menu bar only: its windows close and it keeps running, the shortcut, the Service and hover with it. Quit it from its menu-bar icon.")
                 }
-                .accessibilityIdentifier("keep-in-menu-bar")
+                .accessibilityIdentifier("show-in-dock")
+                .onChange(of: showsInDock) { DockVisibility(defaults: defaults).apply() }
                 if let failure = login.failure {
                     // XDict's own sentence; the system's reason (already in the reader's language) beneath it.
                     VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
