@@ -30,6 +30,8 @@ public final class SearchWindowState {
     /// now (plan-capture WI-4 rule 3): a stale document finishing in the gap before a newer lookup's entry request
     /// acknowledged the newer term `shown`.
     @ObservationIgnored private var presentedEntry = PresentedEntry()
+    /// **The newest All-page draw** (audit 2026-10-27): an answer whose scroll read completes out of order draws nothing.
+    @ObservationIgnored private var pageDraw = 0
     /// **Which phrase ask this window is on** (audit round 1, 2026-10-26): a newer tap supersedes an older one still
     /// waiting for its lookup, so the older never adopts or asks.
     @ObservationIgnored private var phraseAskSerial = 0
@@ -765,17 +767,22 @@ public final class SearchWindowState {
         // its dictionary is still searching, so the page was asked to show nothing, `pageFrames` stayed nil — and every
         // later answer was refused by the `pageFrames != nil` guard that was meant to keep a page off a single entry.
         // What decides is the presentation: an All page in this window, drawn again as each dictionary answers.
-        guard let lookup = model.lookup, Self.pageIsDue(scope: lookup.scope, mode: lookup.mode, results: pageResults),
-              let results = pageResults else { return }
+        guard let lookup = model.lookup, Self.pageIsDue(scope: lookup.scope, mode: lookup.mode, results: pageResults)
+        else { return }
+        // **The newest answer draws the page** (audit 2026-10-27): the offset read below suspends, and two answers of one
+        // lookup can complete out of order — an older snapshot finishing last would remove a frame the newer one added.
+        pageDraw += 1
+        let mine = pageDraw
         let shown = model.shown
         let primary = shown?.result.dictionary
         Task { @MainActor in
             // The lookup is its own identity: `begin()` can start another while the same entry is still shown.
-            guard let shown, model.shown == shown, model.lookup == lookup else { return }
+            guard let shown, model.shown == shown, model.lookup == lookup, mine == pageDraw else { return }
             // **A page that grows keeps the reader's place** (audit round 4, 2026-10-26): landing at the top cleared the
             // offset a restored page was waiting to scroll to.
             let offset = await entry.scrollOffset()
-            guard model.shown == shown, model.lookup == lookup else { return }
+            guard model.shown == shown, model.lookup == lookup, mine == pageDraw,
+                  let results = pageResults else { return }
             await entry.showPage(pageItems(results), primary: primary, landing: offset.map(EntryLanding.offset) ?? .top)
         }
     }
