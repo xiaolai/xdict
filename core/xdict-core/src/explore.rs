@@ -12,6 +12,8 @@ use crate::types::EntryRef;
 use crate::words::{WordHit, WordPage, WordReason, WordStatus};
 
 /// Why a row is in the answer.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExploreReason {
     /// The same spelling, normalized.
@@ -31,6 +33,8 @@ pub enum ExploreReason {
 }
 
 /// One row of the list: the word, the entry it opens, and why it is there.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExploreRow {
     /// The catalog's own spelling.
@@ -43,6 +47,8 @@ pub struct ExploreRow {
 }
 
 /// Whether the dictionaries could be searched at all — absence of data is never reported as absence of relatives.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase", rename_all_fields = "camelCase", tag = "type"))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExploreState {
     /// Searched: the rows are the answer, possibly none.
@@ -54,6 +60,8 @@ pub enum ExploreState {
 }
 
 /// One page of an exploration.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExploreAnswer {
     pub state: ExploreState,
@@ -67,6 +75,12 @@ pub struct ExploreAnswer {
 }
 
 impl ExploreAnswer {
+    /// **An answer no dictionary had to be read for**: a mode that needs the word data, with none attached. The
+    /// catalog is not built for it — that costs seconds and an answer of `NoData` is certain before it starts.
+    pub(crate) fn no_data() -> Self {
+        Self { state: ExploreState::NoData, rows: Vec::new(), next: None, exhausted: false }
+    }
+
     /// One page of a word page, as the shell reads it.
     pub(crate) fn of(page: WordPage) -> Self {
         let state = match page.status {

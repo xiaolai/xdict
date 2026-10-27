@@ -84,7 +84,9 @@
       "query": "run",
       "limit": 1,
       "offset": 1,
-      "generation": { "of": 0 },
+      "generation": {
+        "of": 0
+      },
       "page": {
         "total": 3,
         "problems": [],
@@ -235,7 +237,9 @@
       "mode": "link",
       "limit": 1,
       "offset": 1,
-      "generation": { "of": 0 },
+      "generation": {
+        "of": 0
+      },
       "error": {
         "type": "staleHandle"
       }
@@ -244,7 +248,9 @@
       "query": "colour",
       "limit": 1,
       "offset": 1,
-      "generation": { "of": 0 },
+      "generation": {
+        "of": 0
+      },
       "error": {
         "type": "staleHandle"
       }
@@ -471,7 +477,12 @@
         "kind": "brokenRedirects",
         "count": 1,
         "name": null,
-        "examples": [{ "key": "lost", "text": "lost -> @@@LINK=nowhere" }]
+        "examples": [
+          {
+            "key": "lost",
+            "text": "lost -> @@@LINK=nowhere"
+          }
+        ]
       }
     ]
   },
@@ -580,21 +591,36 @@
     "comment": "The errors no other step provokes, so every CoreError variant crosses every binding (ADR-0007 refutation 10).",
     "unsupported": {
       "file": "tiny-v4.mdx",
-      "error": { "type": "unsupported", "feature": { "type": "formatVersion", "version": "4.0" } }
+      "error": {
+        "type": "unsupported",
+        "feature": {
+          "type": "formatVersion",
+          "version": "4.0"
+        }
+      }
     },
     "malformed": {
       "file": "tiny-badheader.mdx",
-      "error": { "type": "malformed" }
+      "error": {
+        "type": "malformed"
+      }
     },
     "notFound": {
       "file": "tiny-absent.mdx",
-      "error": { "type": "notFound", "what": "file" }
+      "error": {
+        "type": "notFound",
+        "what": "file"
+      }
     },
     "cancelled": {
-      "error": { "type": "cancelled" }
+      "error": {
+        "type": "cancelled"
+      }
     },
     "sourceChanged": {
-      "error": { "type": "sourceChanged" }
+      "error": {
+        "type": "sourceChanged"
+      }
     }
   },
   "lineages": {
@@ -607,7 +633,9 @@
     "import": {
       "edition": "mdx-sha256-v1:1becd952115598419309d09580a47b6806a0b3ce47a20e167d6ed9f2ad43ba74",
       "lineage": "rebuilt",
-      "info": { "title": "Tiny, rebuilt" }
+      "info": {
+        "title": "Tiny, rebuilt"
+      }
     },
     "before": "rebuilt",
     "join": "tiny",
@@ -617,11 +645,29 @@
     "afterSplit": "rebuilt",
     "splitToNew": "1e2d3c4b-5a69-4788-97a6-b5c4d3e2f100",
     "splitToNewAgain": "1e2d3c4b-5a69-4788-97a6-b5c4d3e2f100",
-    "joinUnknownEdition": { "error": { "type": "notFound", "what": "edition" } },
+    "joinUnknownEdition": {
+      "error": {
+        "type": "notFound",
+        "what": "edition"
+      }
+    },
     "lineageOfUnknownEdition": null,
-    "joinUnknownLineage": { "error": { "type": "notFound", "what": "lineage" } },
-    "splitNotALineage": { "error": { "type": "malformed" } },
-    "splitIntoAnother": { "error": { "type": "malformed" } }
+    "joinUnknownLineage": {
+      "error": {
+        "type": "notFound",
+        "what": "lineage"
+      }
+    },
+    "splitNotALineage": {
+      "error": {
+        "type": "malformed"
+      }
+    },
+    "splitIntoAnother": {
+      "error": {
+        "type": "malformed"
+      }
+    }
   },
   "lifecycle": {
     "afterClose": {
@@ -640,5 +686,28 @@
         "type": "internal"
       }
     }
-  }
+  },
+  "explore": [
+    {
+      "mode": "endsWith",
+      "text": "un",
+      "offset": 0,
+      "limit": 10,
+      "state": "answered",
+      "words": [
+        "Run",
+        "run"
+      ],
+      "cut": false
+    },
+    {
+      "mode": "rhyme",
+      "text": "run",
+      "offset": 0,
+      "limit": 10,
+      "state": "noData",
+      "words": [],
+      "cut": false
+    }
+  ]
 }

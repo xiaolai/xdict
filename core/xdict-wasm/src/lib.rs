@@ -493,6 +493,13 @@ impl Core {
         watched_reply(|| self.0.suggest(prefix.into(), dicts, limit))
     }
 
+    /// **One page of word exploration** (plan-word-exploration WI-4): a page of rows, each naming the entry it opens.
+    pub fn explore(&self, dicts: &str, mode: &str, text: &str, offset: u32, limit: u32) -> Reply {
+        let dicts = from_json(dicts)?;
+        let mode = from_json(mode)?;
+        watched_reply(|| self.0.explore(dicts, mode, text.into(), offset, limit))
+    }
+
     pub fn entry(&self, dict: &str, entry: &str, view: &str) -> Reply {
         let (entry, view) = (from_json(entry)?, from_json(view)?);
         watched_reply(|| self.0.entry(dict.into(), entry, view))

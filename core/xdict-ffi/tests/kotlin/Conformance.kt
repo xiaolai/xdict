@@ -224,6 +224,21 @@ fun main(args: Array<String>) {
         generations.add((got as? Map<*, *>)?.get("generation") as UInt?)
         check("lookups[$n]", errorOr(c, "page"), got)
     }
+    (x["explore"] as? List<*>)?.forEachIndexed { n, raw ->
+        val c = obj(raw)
+        val mode = if (c["mode"] == "endsWith") WordMode.EndsWith else WordMode.Rhyme
+        val answer = core.explore(listOf(dict), mode, c["text"] as String, uint(c["offset"])!!, uint(c["limit"])!!)
+        // **By name, not by case**: the binding's enum spelling is the generator's business, and this check is about
+        // what the answer says, not how Kotlin spells it.
+        val state = when (answer.state.name.lowercase().replace("_", "")) {
+            "answered" -> "answered"
+            "nodata" -> "noData"
+            else -> "unknown"
+        }
+        check("explore[$n].state", c["state"], state)
+        check("explore[$n].words", c["words"], answer.rows.map { it.word }.sorted())
+        check("explore[$n].cut", c["cut"], answer.exhausted)
+    }
     list(x["suggestions"]).forEachIndexed { n, c ->
         check("suggestions[$n]", errorOr(c, "keys"), outcome { core.suggest(c["prefix"] as String, listOf(dict), uint(c["limit"])!!) })
     }

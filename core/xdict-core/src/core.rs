@@ -544,6 +544,11 @@ impl Core {
         limit: u32,
     ) -> Result<crate::explore::ExploreAnswer, CoreError> {
         guard(|| {
+            // **A mode the pack answers, with no pack attached, is answered at once**: building the catalog first
+            // costs seconds and changes nothing, since no catalog makes a rhyme out of nothing.
+            if needs_pack(mode) {
+                return Ok(crate::explore::ExploreAnswer::no_data());
+            }
             let explorer = self.explorer_for(&dicts)?;
             let page = explorer.search(crate::words::WordQuery { text, mode, limit, offset }).map_err(explore_error)?;
             Ok(crate::explore::ExploreAnswer::of(page))
@@ -2465,6 +2470,13 @@ fn catalog_too_large(detail: String) -> CoreError {
 
 /// The explorer's constructor errors in the core's terms, each kind kept: its limits are the catalog's, its damage
 /// the file's. Building a catalog asks no query, so an `InvalidQuery` here breaks an invariant and is `Internal`.
+/// Whether a mode reads the word data: rhymes, inflections, families and roots come from the pack, never from a
+/// dictionary's own keys.
+fn needs_pack(mode: crate::words::WordMode) -> bool {
+    use crate::words::WordMode;
+    matches!(mode, WordMode::Rhyme | WordMode::Inflections | WordMode::Derivations | WordMode::Roots { .. })
+}
+
 /// A query the explorer refused: the shell's request, not the catalog's, so it is answered as one.
 fn explore_error(error: crate::words::WordError) -> CoreError {
     use crate::words::WordError as W;

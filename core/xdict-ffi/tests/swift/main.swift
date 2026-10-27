@@ -318,6 +318,22 @@ for (i, c) in (x["lookups"] as! [[String: Any]]).enumerated() {
     generations.append((got as? [String: Any])?["generation"] as? UInt32)
     check("lookups[\(i)]", c["error"].map { ["error": $0] } ?? c["page"], got)
 }
+// Plan-word-exploration WI-4: **one exploration page, as the binding answers it**. The words are compared sorted, so
+// the check does not stand on the catalog's own order; the state crosses as its own name.
+for (i, c) in ((x["explore"] as? [[String: Any]]) ?? []).enumerated() {
+    let mode: WordMode = (c["mode"] as! String) == "endsWith" ? .endsWith : .rhyme
+    let answer = try core.explore(dicts: [dict], mode: mode, text: c["text"] as! String,
+                                  offset: int(c["offset"]) ?? 0, limit: int(c["limit"]) ?? 10)
+    let state: String = switch answer.state {
+    case .answered: "answered"
+    case .noData: "noData"
+    case .unknown: "unknown"
+    }
+    check("explore[\(i)].state", c["state"], state)
+    check("explore[\(i)].words", c["words"], answer.rows.map(\.word).sorted())
+    check("explore[\(i)].cut", c["cut"], answer.exhausted)
+}
+
 for (i, c) in (x["suggestions"] as! [[String: Any]]).enumerated() {
     check("suggestions[\(i)]", c["error"].map { ["error": $0] } ?? c["keys"], outcome { try core.suggest(prefix: c["prefix"] as! String, dicts: [dict], limit: int(c["limit"])!) })
 }

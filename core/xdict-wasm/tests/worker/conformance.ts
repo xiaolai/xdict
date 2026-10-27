@@ -122,6 +122,13 @@ x.lookups.forEach((c: any, i: number) => {
   check(`lookups[${i}]`, c.error ? { error: c.error } : c.page, got);
 });
 x.suggestions.forEach((c: any, i: number) => check(`suggestions[${i}]`, c.error ? { error: c.error } : c.keys, outcome(() => core.suggest(c.prefix, [dict], c.limit))));
+(x.explore ?? []).forEach((c: any, i: number) => {
+  const answer: any = outcome(() => core.explore([dict], { type: c.mode }, c.text, c.offset, c.limit));
+  const state = answer?.state?.type ?? answer?.state;
+  check(`explore[${i}].state`, c.state, state);
+  check(`explore[${i}].words`, c.words, (answer?.rows ?? []).map((r: any) => r.word).sort());
+  check(`explore[${i}].cut`, c.cut, answer?.exhausted);
+});
 x.entries.forEach((c: any, i: number) => {
   const ref = { edition: c.edition ?? imported.edition, key: c.entry.key, occurrence: c.entry.occurrence };
   const got = outcome(() => core.entry(dict, ref, view(c.maxBodyBytes))) as any;

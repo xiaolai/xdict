@@ -181,6 +181,7 @@ interface GlueCore {
   close(dict: string): string;
   lookup(query: string, dicts: string, options: string): string;
   suggest(prefix: string, dicts: string, limit: number): string;
+  explore(dicts: string, mode: string, text: string, offset: number, limit: number): string;
   entry(dict: string, entry: string, view: string): string;
   entry_text(dict: string, entry: string, view: string): string;
   ledger_record(reading: string, operation: string, targetLanguages: string): string;
@@ -373,6 +374,11 @@ export class XDictCore {
 
   suggest(prefix: string, dicts: string[], limit: number): string[] {
     return this.call(() => this.inner.suggest(prefix, JSON.stringify(dicts), limit));
+  }
+
+  /** **One page of word exploration** (plan-word-exploration WI-4): rows, each naming the entry it opens. */
+  explore(dicts: string[], mode: unknown, text: string, offset: number, limit: number): any {
+    return this.call(() => this.inner.explore(JSON.stringify(dicts), JSON.stringify(mode), text, offset, limit));
   }
 
   entry(dict: string, entry: EntryRef, view: View): Entry {
