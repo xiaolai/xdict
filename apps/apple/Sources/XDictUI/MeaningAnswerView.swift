@@ -14,6 +14,10 @@ public struct MeaningAnswerPane: View {
     /// The sheet shows the pane's title and source above the answer; the pane window does not (owner, 2026-10-24:
     /// its own top area is redundant — ⌘I toggles it).
     let showsHeader: Bool
+    /// **The sheet draws the question's tabs itself** (audit 2026-10-27): the pane window's questions are its toolbar's
+    /// item group, which a sheet has no toolbar for — with "ask when the pane opens" off, a captured sentence would have
+    /// had no way to be asked there.
+    var tabs = false
     @State private var promptShown = false
     @State private var detailsShown = false
     /// The visible column's width, measured (UI04); nil until the first measurement.
@@ -46,9 +50,10 @@ public struct MeaningAnswerPane: View {
         case failed
     }
 
-    public init(state: SearchWindowState, showsHeader: Bool = true) {
+    public init(state: SearchWindowState, showsHeader: Bool = true, tabs: Bool = false) {
         self.state = state
         self.showsHeader = showsHeader
+        self.tabs = tabs
     }
 
     public var body: some View {
@@ -120,6 +125,33 @@ public struct MeaningAnswerPane: View {
         state.meaning.settingsProvider?() ?? state.meaning.settings
     }
 
+/// **The question's tabs where there is no toolbar to hold them** (audit 2026-10-27): the sheet's copy of the control.
+/// The pane window's own is the toolbar's `NSToolbarItemGroup` (owner, 2026-10-26); this one is drawn only by the sheet.
+struct QuestionTabs: View {
+    let mode: MeaningAskMode
+    let choose: (MeaningAskMode) -> Void
+
+    var body: some View {
+        ControlGroup {
+            ForEach(MeaningAskMode.allCases, id: \.self) { each in
+                Button { choose(each) } label: {  // placement: inspector-row
+                    Image(systemName: each.symbol)
+                        .foregroundStyle(each == mode ? Tokens.Colour.accent.color : Tokens.Colour.label.color)
+                }
+                .help(each.help)
+                .accessibilityLabel(Text(each.label))
+                .accessibilityAddTraits(each == mode ? [.isSelected] : [])
+                .accessibilityIdentifier("meaning.mode.\(each.rawValue)")
+            }
+        } label: {
+            Label("Question", systemImage: "sparkles")
+        }
+        .controlGroupStyle(.navigation)  // placement: inspector-row
+        .controlSize(.large)  // placement: inspector-row
+        .fixedSize()
+    }
+}
+
 /// **One section of the answer pane** (owner, 2026-10-26, learned from `../sonovo`'s inspector): a small uppercase
 /// heading over its content, in the system's tertiary label, so the pane reads as question, sentence, answer.
 struct PaneSection<Content: View>: View {
@@ -149,8 +181,11 @@ struct PaneSection<Content: View>: View {
             Text(MeaningSentences.title)
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            if let source = MeaningSentences.source(state.meaning.sent?.source ?? settings.source, model: settings.model, endpoint: settings.endpoint) {
-                Text(source).font(.caption).foregroundStyle(.secondary)
+            // **A shown request is named by its own facts**; with none, by what Settings say now (audit 2026-10-27).
+            let named = state.meaning.sent.map { MeaningSentences.frozenSource($0) }
+                ?? MeaningSentences.source(settings.source, model: settings.model, host: settings.endpoint?.host())
+            if let name = named {
+                Text(name).font(.caption).foregroundStyle(.secondary)
             }
         }
         .accessibilityIdentifier("meaning.title")
@@ -164,6 +199,9 @@ struct PaneSection<Content: View>: View {
     /// were re-layout the reader had not asked for, and its glyphs were drawn smaller than the toolbar pair it imitates.
     @ViewBuilder private var questionControls: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.s) {
+            if tabs {
+                QuestionTabs(mode: state.meaning.chosenMode) { state.chooseMeaningMode($0) }
+            }
             if state.meaning.hasSenseSelection {
                 HStack(spacing: Tokens.Space.s) {
                     Button("Explain This Sense") { state.meaning.explain() }  // placement: inspector-row
@@ -276,7 +314,7 @@ struct PaneSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             Text("Review before sending")
                 .font(.subheadline.weight(.semibold))
-            if let source = MeaningSentences.source(sent.source, model: settings.model, endpoint: settings.endpoint) {
+            if let source = MeaningSentences.frozenSource(sent) {
                 Text("To “\(source)”")
             }
             Text(MeaningSentences.previewEntry(included: sent.mode.carriesEntry))
@@ -314,7 +352,11 @@ struct PaneSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             HStack(spacing: Tokens.Space.s) {
                 ProgressView().controlSize(.small)  // placement: spinner
-                if let source = MeaningSentences.source(state.meaning.askingSource ?? settings.source, model: settings.model, endpoint: settings.endpoint) {
+                // **The request in flight is named by what it was composed for** (verification 2026-10-27), not by
+                // Settings as they are a moment later.
+                let askingName = MeaningSentences.source(state.meaning.askingSource ?? settings.source,
+                                                         model: state.meaning.askingModel, host: state.meaning.askingHost)
+                if let source = askingName {
                     Text("Asking “\(source)”…")
                 } else {
                     Text("Asking…")
@@ -688,7 +730,7 @@ struct PaneSection<Content: View>: View {
         var parts: [String] = []
         // **The source is the model's name when one was named** (owner, 2026-10-27): the model is already in it then, so
         // the second part is added only for a source that carries its own name (Claude, Apple Intelligence).
-        if let source = MeaningSentences.source(sent.source, model: settings.model, endpoint: settings.endpoint) {
+        if let source = MeaningSentences.frozenSource(sent) {
             parts.append(source)
         }
         if let model = sent.model, !model.isEmpty, !parts.contains(model) { parts.append(model) }

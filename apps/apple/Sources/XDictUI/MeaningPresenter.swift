@@ -27,7 +27,8 @@ public struct MeaningRequestFacts: Equatable, Sendable {
     /// The request's own source when it has one: switching sources in Settings must not relabel an old answer. **The
     /// entry's and the sense's cuts are two facts** (contract 3, §4a): a whole entry can hold a partial sense.
     public init(sent: MeaningSent?, settings: MeaningSettings) {
-        source = MeaningSentences.source(sent?.source ?? settings.source, model: settings.model, endpoint: settings.endpoint)
+        source = sent.map { MeaningSentences.frozenSource($0) }
+            ?? MeaningSentences.source(settings.source, model: settings.model, host: settings.endpoint?.host())
         chosenSense = sent?.sense
         dictionaryName = sent?.dictionaryName
         senseCoverage = sent?.sense?.whole == false ? MeaningSentences.partialSense : nil

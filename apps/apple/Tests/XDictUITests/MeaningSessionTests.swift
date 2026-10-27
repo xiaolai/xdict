@@ -1311,3 +1311,43 @@ actor StubProvider: AIProvider {
         return try answers[index].get()
     }
 }
+
+/// **A question asked before the entry drew still previews, and still names its own tab** (audit 2026-10-27): the deferred
+/// paths used to call the ask directly, so "show the request before asking" was silently skipped for a capture's own
+/// question, and the popover's Meaning Here could sit under a remembered translation tab.
+@MainActor
+struct MeaningDeferredQuestionTests {
+    /// A preview owed to a draw is composed at it, and sends nothing.
+    @Test func aPreviewOwedToADrawIsComposedAtTheDraw() async {
+        let window = MeaningSessionTests.movingWindow()
+        window.session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true,
+                                                  previewBeforeSending: true)
+        window.session.hold(MeaningHandoff(term: "ada", sentence: "Ada ran the engine.",
+                                           range: NSRange(location: 0, length: 3),
+                                           origin: MeaningOrigin(request: 21, generation: 7)),
+                            expecting: window.expected)
+        window.session.choose(.meaning)
+        #expect(window.session.state == .asking, "a preview that cannot be composed yet waits, and says so")
+        #expect(await window.fetcher.calls.isEmpty, "nothing is composed against an entry not yet drawn")
+        window.shown.value = (MeaningSessionTests.dict, window.ada)
+        window.session.drawn(window.expected, target: (MeaningSessionTests.dict, window.ada))
+        #expect(await MeaningSessionTests.waitUntil {
+            if case .preview = window.session.state { true } else { false }
+        }, "the owed preview is composed once its entry draws")
+        #expect(await window.provider.questions.isEmpty, "a preview sends nothing")
+    }
+
+    /// The popover's Meaning Here is the meaning question, so the tabs follow it even with another mode remembered.
+    @Test func anExplicitMeaningAskMovesTheTabs() async {
+        let window = MeaningSessionTests.movingWindow()
+        window.session.settings = MeaningSettings(source: .http, model: "m", sendEntryText: true)
+        window.session.choose(.translation)
+        window.session.hold(MeaningHandoff(term: "ada", sentence: "Ada ran the engine.",
+                                           range: NSRange(location: 0, length: 3),
+                                           origin: MeaningOrigin(request: 22, generation: 8)),
+                            asking: true, expecting: window.expected)
+        window.shown.value = (MeaningSessionTests.dict, window.ada)
+        window.session.drawn(window.expected, target: (MeaningSessionTests.dict, window.ada))
+        #expect(window.session.chosenMode == .meaning, "the popover's Meaning Here moves the tabs to Meaning")
+    }
+}

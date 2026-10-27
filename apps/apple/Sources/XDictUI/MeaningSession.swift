@@ -172,6 +172,9 @@ public struct MeaningSent: Sendable, Equatable {
     /// Settings ▸ AI afterwards, and the pane must not relabel an old answer. Nil for a source that names no model (the
     /// CLI sources pass their own defaults) and for an HTTP source with an empty field.
     public let model: String?
+    /// **The endpoint's host the request went to**, frozen at compose time for the same reason as `model`: a reader who
+    /// changes the address afterwards must not relabel an answer already shown, nor its saved note (audit 2026-10-27).
+    public let endpointHost: String?
     /// False when the entry's budget cut it (`entry_text`'s `complete`); always true in `sentenceOnly` mode.
     public let complete: Bool
     public let cutAt: UInt64
@@ -192,11 +195,13 @@ public struct MeaningSent: Sendable, Equatable {
 
     public init(text: String, mode: AIMode, source: AIProviderKind?, complete: Bool, cutAt: UInt64,
                 sense: AISense? = nil, dictionaryName: String? = nil, questionContext: MeaningContext? = nil,
-                target: MeaningTarget? = nil, model: String? = nil, language: String? = nil) {
+                target: MeaningTarget? = nil, model: String? = nil, endpointHost: String? = nil,
+                language: String? = nil) {
         self.text = text
         self.mode = mode
         self.source = source
         self.model = model
+        self.endpointHost = endpointHost
         self.complete = complete
         self.cutAt = cutAt
         self.sense = sense
@@ -332,6 +337,9 @@ public final class MeaningSession {
     public private(set) var handoffToken = 0
     /// The settings a preview was composed with: Send refuses if they have changed, so what is sent is what was shown.
     @ObservationIgnored private var previewSettings: MeaningSettings?
+    /// A preview owed to a draw that has not come: its own flags, cleared with the sentence (`clear`) and at the draw.
+    @ObservationIgnored private var previewWhenDrawn = false
+    @ObservationIgnored private var previewWhenDrawnOperation: Operation?
     /// A hand-off's ask waits for the entry its sentence belongs to (audit finding, 2026-10-20): asking at the hand-off
     /// used the window's previous entry, or none in a new window.
     @ObservationIgnored private var askWhenDrawn = false
@@ -486,7 +494,7 @@ public final class MeaningSession {
 
     /// Whether a tap's ask is still waiting for the entry to draw: the window answers a lookup that settles with nothing
     /// drawn through `noEntry()`, rather than dropping the ask. (Verification finding, 2026-10-20.)
-    public var isWaitingToAsk: Bool { askWhenDrawn }
+    public var isWaitingToAsk: Bool { askWhenDrawn || previewWhenDrawn }
 
     public var isAsking: Bool { state == .asking }
 
@@ -505,6 +513,8 @@ public final class MeaningSession {
         dropEvidence()
         selection = nil
         lastOperation = nil
+        previewWhenDrawn = false
+        previewWhenDrawnOperation = nil
         askWhenDrawn = asking
         lookupWithoutEntry = false
         clearSenses()
@@ -592,16 +602,34 @@ public final class MeaningSession {
             askWhenDrawnExpected = nil
             self.subject = subject
             boundTarget = target
-            // The operation is the one the tap chose, not the switch read again at the draw.
-            let operation = askWhenDrawnOperation
+            // **The popover's Meaning Here** (audit rd 1, contract 6): the button promised the meaning question, so the
+            // destination window's remembered mode must not turn it into a translation or a grammar ask — and the tabs
+            // follow the question actually asked (audit 2026-10-27), or a meaning answer would sit under a remembered
+            // translation tab.
+            var operation = askWhenDrawnOperation
             askWhenDrawnOperation = nil
-            if let operation {
-                ask(operation: operation)
-            } else {
-                // **The popover's Meaning Here** (audit rd 1, contract 6): the button promised the meaning question, so
-                // the destination window's remembered mode must not turn it into a translation or a grammar ask.
+            if operation == nil {
                 let chosen = settingsProvider?() ?? settings
-                ask(operation: self.operation(for: chosen, selection: nil, honouring: .meaning))
+                operation = self.operation(for: chosen, selection: nil, honouring: .meaning)
+                adopt(.meaning)
+            }
+            if let operation { start(operation) }
+            return
+        }
+        if previewWhenDrawn {
+            // **A preview owed to this draw** (audit 2026-10-27): the same binding as an ask's, then the composition.
+            previewWhenDrawn = false
+            awaitsAdoptedPlace = false
+            askWhenDrawnExpected = nil
+            self.subject = subject
+            boundTarget = target
+            let owed = previewWhenDrawnOperation
+            previewWhenDrawnOperation = nil
+            if let owed {
+                composePreview(owed)
+            } else {
+                composePreview(self.operation(for: settingsProvider?() ?? settings, selection: selection,
+                                              honouring: chosenMode))
             }
             return
         }
@@ -638,11 +666,17 @@ public final class MeaningSession {
     /// **A new ask has begun** (audit round 4, 2026-10-26): the window's retry of a failed phrase lookup belongs to the
     /// failure that armed it, and the reader asking something else ends it.
     @ObservationIgnored public var onAskBegins: (@MainActor () -> Void)?
+    /// **The model and host the request in flight was composed for** (verification 2026-10-27): the "Asking …" line names
+    /// them as they were at the ask, not as Settings say while it runs.
+    public private(set) var askingModel: String?
+    public private(set) var askingHost: String?
 
     /// **The presentation ended**: the sentence goes, and so does the ask in flight and its answer.
     public func clear() {
         abandon()
         kept.removeAll()
+        previewWhenDrawn = false
+        previewWhenDrawnOperation = nil
         held = nil
         subject = nil
         boundTarget = nil
@@ -697,13 +731,20 @@ public final class MeaningSession {
         case .asking, .idle:
             break
         default:
-            kept[chosenMode] = Kept(state: state, sent: sent, operation: lastOperation)
+            kept[chosenMode] = Kept(state: state, sent: sent, operation: lastOperation,
+                                    previewSettings: previewSettings, previewEntry: previewEntry,
+                                    previewOperation: previewOperation)
         }
         chosenMode = mode
         if let answer = kept[mode] {
             state = answer.state
             sent = answer.sent
             lastOperation = answer.operation
+            // **A kept preview stays sendable** (audit 2026-10-27): its composed bytes, settings and entry come back with
+            // it, or Send would silently return and the pane would show a request it cannot send.
+            previewSettings = answer.previewSettings
+            previewEntry = answer.previewEntry
+            previewOperation = answer.previewOperation
             return
         }
         dropEvidence()
@@ -711,15 +752,30 @@ public final class MeaningSession {
         startQuestion()
     }
 
+    /// **The tabs follow a question asked by name** (audit 2026-10-27): the popover's Meaning Here is the meaning question,
+    /// so the pane shows it under that tab; a kept answer of another question goes with the switch.
+    private func adopt(_ mode: MeaningAskMode) {
+        guard chosenMode != mode else { return }
+        kept.removeAll()
+        chosenMode = mode
+    }
+
     /// One tap's question: the composed request when the reader asked to see it first, else the ask itself. Nothing is
     /// asked with no sentence in hand.
     private func startQuestion() {
         guard held != nil else { return }
         let chosen = settingsProvider?() ?? settings
-        if chosen.previewBeforeSending {
-            preview()
+        start(operation(for: chosen, selection: selection, honouring: chosenMode))
+    }
+
+    /// **One question begins, preview or send** (audit 2026-10-27): a deferred tap — the popover's Meaning Here waiting for
+    /// its entry, or a tab pressed before the entry drew — goes through the reader's "show the request before asking"
+    /// exactly as a first tap does, instead of calling `ask(operation:)` and leaving without the review step.
+    private func start(_ operation: Operation) {
+        if (settingsProvider?() ?? settings).previewBeforeSending {
+            composePreview(operation)
         } else {
-            ask()
+            ask(operation: operation)
         }
     }
 
@@ -728,6 +784,9 @@ public final class MeaningSession {
         let state: State
         let sent: MeaningSent?
         let operation: Operation?
+        let previewSettings: MeaningSettings?
+        let previewEntry: AIEntryText?
+        let previewOperation: Operation?
     }
 
     /// **What each question has shown for this sentence** (owner, 2026-10-26): cleared with the sentence, because an
@@ -873,6 +932,8 @@ public final class MeaningSession {
             askWhenDrawn = true
             askWhenDrawnOperation = operation
             askingSource = chosen.source
+            askingModel = chosen.source == .http && !chosen.model.isEmpty ? chosen.model : nil
+            askingHost = chosen.source == .http ? chosen.endpoint?.host() : nil
             askingTarget = operation.target
             state = .asking
             return
@@ -884,6 +945,8 @@ public final class MeaningSession {
         let mine = generation
         state = .asking
         askingSource = chosen.source
+        askingModel = chosen.source == .http && !chosen.model.isEmpty ? chosen.model : nil
+        askingHost = chosen.source == .http ? chosen.endpoint?.host() : nil
         askingTarget = target.map { MeaningTarget(dictionary: $0.0, entry: $0.1) }
         runningOperation = operation
         let fetchEntryText = self.fetchEntryText
@@ -908,6 +971,8 @@ public final class MeaningSession {
         running = nil
         runningOperation = nil
         askingSource = nil
+        askingModel = nil
+        askingHost = nil
         askingTarget = nil
         state = outcome.state
         sent = outcome.sent
@@ -937,6 +1002,10 @@ public final class MeaningSession {
         sent = previewed
         state = .asking
         askingSource = current.source
+        // **The previewed request's own name** (verification 2026-10-27): a Send shows the model and host it was composed
+        // for, exactly as the answer will keep them.
+        askingModel = previewed.model
+        askingHost = previewed.endpointHost
         askingTarget = previewed.target
         lastOperation = operation
         runningOperation = operation
@@ -990,6 +1059,13 @@ public final class MeaningSession {
     /// template, the sentence, the entry, its cut if there is one, and the chosen sense when one is selected — and no
     /// provider is built or called. The pane offers Send from here.
     public func preview() {
+        let chosen = settingsProvider?() ?? settings
+        composePreview(operation(for: chosen, selection: selection, honouring: chosenMode))
+    }
+
+    /// **The composition a tap shows before sending** (ADR-0021 d.13), for a question already decided: the same bytes an
+    /// ask would send, and no provider built or called.
+    private func composePreview(_ operation: Operation) {
         abandon()
         // **A preview is a newer question** (audit rd 2): a phrase tap still waiting for its lookup belongs to the
         // question the preview superseded, and its late page must not replace this preview.
@@ -1004,7 +1080,6 @@ public final class MeaningSession {
         // **A refused preview is still the newest attempt** (audit rounds 2 and 3, 2026-10-25): its operation is recorded
         // before the source guard, so a preview refused for lack of a source leaves its own operation for Try Again once
         // the reader chooses one — never the last answer's.
-        let operation = operation(for: chosen, selection: selection, honouring: chosenMode)
         lastOperation = operation
         guard chosen.source != nil else {
             state = .unavailable(.noSource)
@@ -1015,10 +1090,12 @@ public final class MeaningSession {
         case .resolved(let resolved):
             target = resolved
         case .waitsForDraw:
-            // A preview before the sentence's own entry draws would show another entry: nothing to preview yet. This is
-            // not "the lookup settled with nothing" (audit round 3): the draw may still come, and an ask that follows
-            // waits for it rather than being refused forever.
-            state = .unavailable(.noEntry)
+            // **A preview waits for the sentence's own entry** (audit 2026-10-27): composing one before the adopted entry
+            // draws would show another entry, and refusing here made a capture's automatic preview fail for good while
+            // the entry was still on its way. It is composed at the draw, like an ask that waits.
+            previewWhenDrawn = true
+            previewWhenDrawnOperation = operation
+            state = .asking
             return
         case .refused(let reason):
             state = .unavailable(reason)
@@ -1083,9 +1160,15 @@ public final class MeaningSession {
         running = nil
         runningOperation = nil
         askingSource = nil
+        askingModel = nil
+        askingHost = nil
         askingTarget = nil
         askWhenDrawn = false
         askWhenDrawnOperation = nil
+        // **Cancel ends a preview owed to a draw too** (verification 2026-10-27): left standing, the next draw would
+        // compose a request the reader had already dismissed.
+        previewWhenDrawn = false
+        previewWhenDrawnOperation = nil
         // **The expected subject outlives a cancellation**: it protects the sentence's binding, not the ask (audit
         // finding of 2026-10-20); only the draw that binds it or a new hold clears it.
     }
@@ -1176,6 +1259,7 @@ public final class MeaningSession {
                                           } : nil,
                                           model: settings.source == .http && !settings.model.isEmpty
                                               ? settings.model : nil,
+                                          endpointHost: settings.source == .http ? settings.endpoint?.host() : nil,
                                           language: answerLanguage),
                         entry: entry)
     }

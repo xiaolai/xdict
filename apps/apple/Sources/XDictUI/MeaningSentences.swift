@@ -9,13 +9,21 @@ public enum MeaningSentences {
     /// **The source's name as the reader knows it** (owner, 2026-10-27: "«An OpenAI-compatible endpoint» is stupid
     /// wording — use the model name, or the provider's name"): the model they chose for an endpoint, that endpoint's host
     /// when no model is named, and the products' own names for the rest.
-    public static func source(_ kind: AIProviderKind?, model: String? = nil, endpoint: URL? = nil) -> String? {
+    /// **The name a shown request keeps** (audit 2026-10-27): its own source, model and host as they were at compose
+    /// time, so changing Settings never relabels an answer already given or the note saved from it.
+    public static func frozenSource(_ sent: MeaningSent) -> String? {
+        if sent.source == .http, let model = sent.model, !model.isEmpty { return model }
+        if sent.source == .http, let host = sent.endpointHost, !host.isEmpty { return host }
+        return source(sent.source)
+    }
+
+    public static func source(_ kind: AIProviderKind?, model: String? = nil, host: String? = nil) -> String? {
         switch kind {
         case .none: return nil
         case .appleOnDevice: return String(localized: "Apple Intelligence")
         case .http:
             if let named = model?.trimmingCharacters(in: .whitespacesAndNewlines), !named.isEmpty { return named }
-            if let host = endpoint?.host(), !host.isEmpty { return host }
+            if let host, !host.isEmpty { return host }
             return String(localized: "An OpenAI-compatible server")
         case .claudeCLI: return String(localized: "Claude")
         case .codexCLI: return String(localized: "Codex")

@@ -45,6 +45,22 @@ public struct SearchWindow: View {
             .onDisappear { state.clearMeaning() }
     }
 
+    /// **The pane in a sheet** (a screen with no room beside the window): its own question tabs, because a sheet has no
+    /// toolbar to hold the pane window's (audit 2026-10-27), and Done closes it.
+    private var paneSheet: some View {
+        let done = {
+            state.panes.meaningClosed(by: .sheet, current: .sheet)
+            state.panes.examplesClosed()
+        }
+        return VStack(spacing: 0) {
+            MeaningAnswerPane(state: state, showsHeader: true, tabs: true)
+            Divider()
+            SheetFooter([FooterAction(.primary, title: Text("Done"), perform: done)], closeOnEscape: done)
+                .padding(Tokens.Space.m)
+        }
+        .frame(width: Tokens.Window.meaningPaneIdeal, height: Tokens.Window.meaningSheetHeight)
+    }
+
     private var pane: some View {
         // The answer opens outside the existing reading area; a screen with no room uses the sheet.
         let listed = state.model.listing != nil
@@ -67,19 +83,7 @@ public struct SearchWindow: View {
         // **The answer in a sheet** where the pane does not fit beside the entry and the list the reader shows: the
         // pane's own scrolling body over Done (R3), Escape closing it too. Modal, so the window's search is back after
         // Done.
-        .sheet(isPresented: paneShown(in: .sheet, now: shown)) {
-            let done = {
-                state.panes.meaningClosed(by: .sheet, current: .sheet)
-                state.panes.examplesClosed()
-            }
-            VStack(spacing: 0) {
-                MeaningAnswerPane(state: state)
-                Divider()
-                SheetFooter([FooterAction(.primary, title: Text("Done"), perform: done)], closeOnEscape: done)
-                    .padding(Tokens.Space.m)
-            }
-            .frame(width: Tokens.Window.meaningPaneIdeal, height: Tokens.Window.meaningSheetHeight)
-        }
+        .sheet(isPresented: paneShown(in: .sheet, now: shown)) { paneSheet }
         .toolbar { toolbar }
         // Narrow, the title gives way so the search field stays (P8: Apple's slides under the field). Keyed on the content
         // column, not the window: a search's sidebar widened a 400 pt window to 583 pt, past the threshold, and brought
