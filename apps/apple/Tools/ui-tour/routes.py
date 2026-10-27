@@ -186,7 +186,7 @@ ROUTES = [
      "own lookup among them", look_up("apple") + [SEARCH, ("menu", 1, "Services|服务")]),
     ("menubar.extra", "full", "Right-click XDict's menu-bar item (a left click opens the reading history)", "Look Up "
      "Selection (⌃⌥D), Open XDict, Review, Dictionaries…, Pause Hover, Settings…, Quit XDict — and no History item: the "
-     "icon's own click is the history", [("extraMenu",), ("key", "escape")]),
+     "icon's own click is the history", [("extraMenu",), ("after", "key", "escape")]),
     ("review.window", "full", "Right-click XDict's menu-bar item ▸ Review (plan-history-and-learning §5)", "The review "
      "window: 'Review' and 'Nothing due' over an empty ledger, and it closes like any window",
      [("extraMenu",), ("press", "Review"), ("wait", 1.5)]),

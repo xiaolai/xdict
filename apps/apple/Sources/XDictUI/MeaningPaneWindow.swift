@@ -140,7 +140,6 @@ final class PaneWindow: NSWindow {
 @MainActor
 final class PaneController: NSWindowController, NSWindowDelegate {
     private let onClose: () -> Void
-    private var closingProgrammatically = false
     /// An opening animation is running: later layout passes must not set the frame and cancel it.
     private var opening = false
     /// The pane's view, held at its final size while the window grows (owner, 2026-10-24: the text must not move with
@@ -263,14 +262,7 @@ final class PaneController: NSWindowController, NSWindowDelegate {
         completion()
     }
 
-    func closeProgrammatically() {
-        closingProgrammatically = true
-        close()
-        closingProgrammatically = false
-    }
-
     func windowWillClose(_ notification: Notification) {
-        guard !closingProgrammatically else { return }
         onClose()
     }
 }
