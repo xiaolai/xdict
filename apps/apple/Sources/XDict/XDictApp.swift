@@ -80,6 +80,11 @@ struct XDictApp: App {
     }()
     /// **Review reminders** (plan §5.4): the reader's switch, the system's permission and the one pending notification.
     @MainActor static let reminders = ReviewReminders(preferences: LearningPreferences.shared)
+    /// **The app's one sync pass** (audit 2026-10-27): startup and Settings ▸ Learning run through it, so its running guard
+    /// holds across both and the pane shows what the startup pass found.
+    @MainActor static let sync = SyncPass { folder in
+        await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder))
+    }
     /// The drawer's one window: shown from the menu bar, refreshed each time it opens. A card's note is written into
     /// the same ledger, and Review opens the review window.
     @MainActor static let historyDrawer = HistoryDrawerController(model: history, study: study,
@@ -166,9 +171,7 @@ struct XDictApp: App {
         case .learning:
             // The library's declared search languages: the values the recording filter and the drawer offer (ADR-0023).
             LearningSettings(declared: { library.declaredSearchLanguages }, study: study, reminders: reminders,
-                             performSync: { folder in
-                                 await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder))
-                             })
+                             sync: XDictApp.sync)
         case .general:
             GeneralSettings(login: loginItem, defaults: .standard, domain: XDictIdentity.app,
                             registrar: LookupAnywhere.shared.registrar, hover: LookupAnywhere.shared.hover)
@@ -399,13 +402,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             XDictApp.library.didJoin = { old, new in
                 Task { await XDictApp.study.reanchor(from: old, to: new) }
             }
-            // **A sync folder set once syncs by itself** (plan §2.6): the logs meet before the reader looks.
-            if let bookmark = LearningPreferences.shared.syncFolder, let folder = SyncFolder.open(bookmark) {
-                Task {
-                    defer { folder.stop() }
-                    _ = await ReviewSync.run(study: XDictApp.study, folder: URL(filePath: folder.path))
-                }
-            }
+            // **A sync folder set once syncs by itself** (plan §2.6): the logs meet before the reader looks. It runs
+            // through the app's one `SyncPass` (audit 2026-10-27), so a Settings ▸ Learning "Sync Now" during startup
+            // cannot start a second pass over the same inbox, and what the startup pass found — a success's time, or a
+            // folder that no longer opens — reaches the pane instead of being dropped.
+            Task { await XDictApp.sync.run(LearningPreferences.shared.syncFolder) }
             // **The app's own menu bar item** (XiaolaiDict's port): a click shows the reading history on the display it was
             // clicked on, a right or control click opens the menu, and the item highlights while the drawer is open.
             XDictApp.historyDrawer.statusItemFrame = { XDictApp.menuBar.screenFrame }

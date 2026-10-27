@@ -11,23 +11,22 @@ import XDictTokens
 public struct LearningSettings: View {
     @State private var preferences = LearningPreferences.shared
     @State private var status: String?
-    /// The sync pass the pane shows (UI40); nil without a sync to perform.
-    @State private var pass: SyncPass?
+    /// The sync pass the pane shows (UI40): the app's own, shared with its startup pass (audit 2026-10-27).
+    private let pass: SyncPass?
     @State private var confirmingDisconnect = false
     private let declared: @MainActor () -> [String]
     private let study: StudyModel?
     private let reminders: ReviewReminders?
-    private let performSync: (@MainActor (String) async -> SyncReport?)?
+
 
     /// `declared` is the library's search-side languages, read when the pane draws: the library may still be loading.
     /// `study` exports and erases; `reminders` delivers the review's reminder. Both nil leave their section out.
     public init(declared: @escaping @MainActor () -> [String], study: StudyModel? = nil,
-                reminders: ReviewReminders? = nil, performSync: (@MainActor (String) async -> SyncReport?)? = nil) {
+                reminders: ReviewReminders? = nil, sync: SyncPass? = nil) {
         self.declared = declared
         self.study = study
         self.reminders = reminders
-        self.performSync = performSync
-        _pass = State(initialValue: performSync.map { SyncPass(perform: $0) })
+        pass = sync
     }
 
     /// **What the history keeps, and where** (UI39): on this Mac by default; with a sync folder, also in that folder.
