@@ -132,7 +132,7 @@ struct QuestionTabs: View {
     let choose: (MeaningAskMode) -> Void
 
     var body: some View {
-        ControlGroup {
+        ControlGroup {  // placement: inspector-row
             ForEach(MeaningAskMode.allCases, id: \.self) { each in
                 Button { choose(each) } label: {  // placement: inspector-row
                     Image(systemName: each.symbol)
