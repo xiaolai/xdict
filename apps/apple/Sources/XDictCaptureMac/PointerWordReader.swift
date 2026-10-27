@@ -234,10 +234,11 @@ public enum PointerWordReader {
     public static let descentDepthLimit = 24
     public static let descentChildLimit = 128
 
-    /// **No extent at all**: a frame a pixel or less in either direction — the measured shape of a wrapper's frame
-    /// (Chrome's web area answers `1200 x 1` for a whole page, 2026-10-26).
-    private static func isDegenerate(_ frame: CGRect) -> Bool {
-        frame.width <= 1 || frame.height <= 1
+    /// **A frame too thin to hold a hit**: a wrapper's shape, narrower or shallower than the pointer's own tolerance —
+    /// Chrome's web area answers `1200 x 1` for a whole page (measured 2026-10-26). No literal: the read's tolerance,
+    /// which every dialect already weighs words against, is what decides that no point of it can be a place.
+    private static func isSliver(_ frame: CGRect, _ tolerance: HitTolerance?) -> Bool {
+        frame.width <= (tolerance?.horizontal ?? 0) || frame.height <= (tolerance?.vertical ?? 0)
     }
 
     /// **From an app's own hit-test answer down to the element under the point**: at each level, the smallest child whose
@@ -245,7 +246,8 @@ public enum PointerWordReader {
     /// Measured on System Settings (2026-10-19): this reached the element the system-wide hit test names at all twelve
     /// points tried. Every element asked belongs to the app asked, never to this process.
     static func descend(
-        from start: AXUIElement, to point: CGPoint, with ax: some AccessibilityReading
+        from start: AXUIElement, to point: CGPoint, tolerance: HitTolerance? = nil,
+        with ax: some AccessibilityReading
     ) throws(CaptureError) -> AXUIElement {
         var current = start
         for _ in 0..<descentDepthLimit {
@@ -259,7 +261,7 @@ public enum PointerWordReader {
             }
             if let smallest {
                 current = smallest.element
-            } else if children.count == 1, let lone = try ax.frame(children[0]), isDegenerate(lone) {
+            } else if children.count == 1, let lone = try ax.frame(children[0]), isSliver(lone, tolerance) {
                 // **A lone child whose frame is a sliver is a wrapper, not a place** (owner's report, 2026-10-26):
                 // Chrome's web area names one `AXGroup` a pixel tall for the whole page, no child frame holds the
                 // pointer, and the descent stopped there — the page's own text, whose boxes are exact, was never read.
@@ -408,7 +410,7 @@ public enum PointerWordReader {
         guard case .miss(.noText(_, let role)) = first, let role, containerRoles.contains(role) else { return .read(first) }
         let inner: AXUIElement?
         do throws(CaptureError) {
-            inner = try self.inner(of: target.element, at: point, with: ax)
+            inner = try self.inner(of: target.element, at: point, tolerance: tolerance, with: ax)
         } catch {
             return .read(error == .cancelled ? .cancelled : .miss(.failed(error, app: target.appName)))
         }
@@ -437,12 +439,12 @@ public enum PointerWordReader {
     /// smaller, from its window — a toolbar's hit test where the window's title element, beside the toolbar's items, is
     /// under the point. Nil where neither reaches another element; a failed request ends the read, as in any dialect.
     static func inner(
-        of container: AXUIElement, at point: CGPoint, with ax: some AccessibilityReading
+        of container: AXUIElement, at point: CGPoint, tolerance: HitTolerance, with ax: some AccessibilityReading
     ) throws(CaptureError) -> AXUIElement? {
-        let below = try descend(from: container, to: point, with: ax)
+        let below = try descend(from: container, to: point, tolerance: tolerance, with: ax)
         if below != container { return below }
         guard let window = try ax.element(container, kAXWindowAttribute), window != container else { return nil }
-        let throughWindow = try descend(from: window, to: point, with: ax)
+        let throughWindow = try descend(from: window, to: point, tolerance: tolerance, with: ax)
         return throughWindow == window || throughWindow == container ? nil : throughWindow
     }
 

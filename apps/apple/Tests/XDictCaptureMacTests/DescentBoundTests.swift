@@ -1,6 +1,7 @@
 import ApplicationServices
 import Foundation
 import Testing
+import XDictCapture
 @testable import XDictCaptureMac
 
 /// **The descent from an app's own hit test is bounded by its own limits, in requests and in time** (verifier,
