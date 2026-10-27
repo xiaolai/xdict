@@ -234,6 +234,12 @@ public enum PointerWordReader {
     public static let descentDepthLimit = 24
     public static let descentChildLimit = 128
 
+    /// **No extent at all**: a frame a pixel or less in either direction — the measured shape of a wrapper's frame
+    /// (Chrome's web area answers `1200 x 1` for a whole page, 2026-10-26).
+    private static func isDegenerate(_ frame: CGRect) -> Bool {
+        frame.width <= 1 || frame.height <= 1
+    }
+
     /// **From an app's own hit-test answer down to the element under the point**: at each level, the smallest child whose
     /// frame holds the point — a table's column spans every row, so the row (then its cell, then its text) is taken.
     /// Measured on System Settings (2026-10-19): this reached the element the system-wide hit test names at all twelve
@@ -251,14 +257,15 @@ public enum PointerWordReader {
                 let area = frame.width * frame.height
                 if smallest.map({ area < $0.area }) ?? true { smallest = (child, area) }
             }
-            // **A container with one child is a wrapper whose frame is not the page's geometry** (owner's report,
-            // 2026-10-26): Chrome's web area names one `AXGroup` a pixel tall for the whole page, no child frame holds
-            // the pointer, and the descent stopped there — the page's own text, whose boxes are exact, was never read.
-            // The word still has to pass the tolerance at the end of the read, so a wrong turn here costs requests,
-            // never a wrong word.
             if let smallest {
                 current = smallest.element
-            } else if children.count == 1 {
+            } else if children.count == 1, let lone = try ax.frame(children[0]), isDegenerate(lone) {
+                // **A lone child whose frame is a sliver is a wrapper, not a place** (owner's report, 2026-10-26):
+                // Chrome's web area names one `AXGroup` a pixel tall for the whole page, no child frame holds the
+                // pointer, and the descent stopped there — the page's own text, whose boxes are exact, was never read.
+                // Only a frame with no extent is descended through: a real lone child elsewhere (a toolbar's one
+                // button, whose text the window supplies beside it) is a place of its own, and descending into it
+                // would read the wrong thing.
                 current = children[0]
             } else {
                 break
