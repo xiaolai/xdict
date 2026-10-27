@@ -147,6 +147,44 @@ struct SpotlightIndexerTests {
     }
 }
 
+/// **A call whose answer never comes is a failure** (2026-10-27): Core Spotlight performed this app's deletion on
+/// 2026-10-27 and never called it back, so the app owed the same deletion at every launch and sent it again. These
+/// hold the bound that turns that silence into a thrown error.
+struct SpotlightDeadlineTests {
+    @Test func anAnswerComesBack() async throws {
+        try await SpotlightDeadline.bounded(.seconds(5)) { done in done(nil) }
+    }
+
+    @Test func aRefusalComesBackAsItself() async {
+        await #expect(throws: (any Error).self) {
+            try await SpotlightDeadline.bounded(.seconds(5)) { done in
+                done(NSError(domain: "corespotlight", code: 1))
+            }
+        }
+    }
+
+    @Test func aMissedAnswerIsThrown() async throws {
+        let clock = ContinuousClock()
+        let began = clock.now
+        await #expect(throws: SpotlightNoAnswer.self) {
+            try await SpotlightDeadline.bounded(.milliseconds(40)) { _ in /* the index never calls back */ }
+        }
+        // The deadline decides, not luck: the await ends near it rather than at the generous default.
+        #expect(began.duration(to: clock.now) < .seconds(2), "the bounded wait ended at its deadline")
+    }
+
+    /// An answer that arrives after the deadline is **dropped**, not resumed into a continuation already resumed —
+    /// which traps. Reaching the end of this test without a crash is the assertion.
+    @Test func aLateAnswerIsDropped() async throws {
+        await #expect(throws: SpotlightNoAnswer.self) {
+            try await SpotlightDeadline.bounded(.milliseconds(30)) { done in
+                DispatchQueue.global().asyncAfter(deadline: .now() + 0.15) { done(nil) }
+            }
+        }
+        try await Task.sleep(for: .milliseconds(250))
+    }
+}
+
 @MainActor
 struct SpotlightSettingsTests {
     /// **The suite this test writes to**, held until the test's own instance goes (audit findings, 2026-10-25: a

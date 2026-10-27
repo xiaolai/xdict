@@ -42,7 +42,8 @@ final class SpotlightLibrary {
     /// edition it holds, is written — nothing else is touched, so a launch over an unchanged library costs no Spotlight
     /// work at all; off means every XDict domain comes out. A run is not cancellable by a second switch — the settings
     /// value is the order, and the next run is what follows it — so a failure is reported rather than left as a silent
-    /// half-index.
+    /// half-index. **The off-run places its deletion and returns** (2026-10-27): Core Spotlight receives that call and
+    /// does not answer it on macOS 27, so waiting would owe it again at every launch — `SystemSpotlightIndex.deleteAll`.
     func apply(_ on: Bool) async -> Outcome {
         guard on else {
             do {

@@ -30,6 +30,11 @@ struct XDictApp: App {
     /// overtaken by an on-run's deletions or the other way round (audit-fix 2026-10-22).
     @MainActor private static var spotlightRun: Task<Void, Never>? = nil
 
+    /// **What a Spotlight run came to, in words** (2026-10-27): the switch's own record is one boolean, so a run that
+    /// failed — or one whose answer never came back — left no trace anywhere, and `cleanupPending` was the only
+    /// symptom. `log show --predicate 'process == "XDict"' | grep spotlight` is now what says why.
+    @MainActor static let spotlightLog = Logger(subsystem: XDictIdentity.app, category: "spotlight")
+
     /// Applies the switch's value, one run at a time.
     @MainActor static func applySpotlight(_ on: Bool) {
         // **Switching off cancels the queued reconciliation too** (audit round 4, 2026-10-25): an on-run must not follow a
@@ -43,6 +48,14 @@ struct XDictApp: App {
         spotlightRun = Task { @MainActor in
             _ = await previous?.value   // the older run finishes (or gives up) before this one begins
             let outcome = await spotlight.apply(on)
+            switch outcome {
+            case .indexed(let dictionaries, let words):
+                spotlightLog.notice("indexed \(dictionaries) dictionaries, \(words) words")
+            case .deleted(let dictionaries):
+                spotlightLog.notice("deleted every XDict domain (\(dictionaries) dictionaries)")
+            case .failed(let why):
+                spotlightLog.error("run (on: \(on, privacy: .public)) failed: \(why, privacy: .public)")
+            }
             spotlightSettings.record(failed: outcome.isFailure)
         }
     }
