@@ -6,14 +6,19 @@ import XDictClient
 /// kinds, the view layer words them). Every sentence is in `Strings/Localizable.xcstrings`, in English and Simplified
 /// Chinese.
 public enum MeaningSentences {
-    /// **The source's name**, as the reader chose it; nil when none is chosen.
-    public static func source(_ kind: AIProviderKind?) -> LocalizedStringResource? {
+    /// **The source's name as the reader knows it** (owner, 2026-10-27: "«An OpenAI-compatible endpoint» is stupid
+    /// wording — use the model name, or the provider's name"): the model they chose for an endpoint, that endpoint's host
+    /// when no model is named, and the products' own names for the rest.
+    public static func source(_ kind: AIProviderKind?, model: String? = nil, endpoint: URL? = nil) -> String? {
         switch kind {
-        case .none: nil
-        case .appleOnDevice: LocalizedStringResource("Apple Intelligence")
-        case .http: LocalizedStringResource("An OpenAI-compatible endpoint")
-        case .claudeCLI: LocalizedStringResource("Claude")
-        case .codexCLI: LocalizedStringResource("Codex")
+        case .none: return nil
+        case .appleOnDevice: return String(localized: "Apple Intelligence")
+        case .http:
+            if let named = model?.trimmingCharacters(in: .whitespacesAndNewlines), !named.isEmpty { return named }
+            if let host = endpoint?.host(), !host.isEmpty { return host }
+            return String(localized: "An OpenAI-compatible server")
+        case .claudeCLI: return String(localized: "Claude")
+        case .codexCLI: return String(localized: "Codex")
         }
     }
 

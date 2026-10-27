@@ -2367,18 +2367,18 @@
         }
       }
     },
-    "An OpenAI-compatible endpoint": {
+    "An OpenAI-compatible server": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "An OpenAI-compatible endpoint"
+            "value": "An OpenAI-compatible server"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "兼容 OpenAI 的端点"
+            "value": "OpenAI 兼容的服务器"
           }
         }
       }

@@ -30,7 +30,7 @@ struct MeaningPresenterTests {
     @Test func aGroundedAnswerCarriesItsSourceSenseAndQuote() throws {
         let shown = MeaningPresenter.present(Self.answer(.matched, ["to keep"]), settings: Self.settings, sent: Self.sent())
         let presentation = try #require(shown)
-        #expect(try Self.text(presentation.source ?? "none") == "Claude")
+        #expect(presentation.source == "Claude")
         #expect(presentation.grounding == .grounded)
         #expect(try Self.text(presentation.outcome ?? "none") == "Chose a sense from the entry")
         #expect(presentation.quotes == ["to keep"])
@@ -166,7 +166,7 @@ struct MeaningPresenterTests {
         #expect(lines[0] == "It means that here.")
         #expect(lines[1] == "“to keep”")
         // The whole provenance is the catalog's sentence, with this source, model and day.
-        let source = try Self.text(try #require(MeaningSentences.source(.claudeCLI)))
+        let source = try #require(MeaningSentences.source(.claudeCLI))
         let provenance = MeaningSentences.noteProvenance(source: source, model: "a-model", day: "2026-10-25")
         #expect(lines[2] == (try Self.text(provenance)))
     }

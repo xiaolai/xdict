@@ -14,7 +14,7 @@ public enum MeaningRecovery: Equatable, Sendable {
 /// dictionary it was clicked in, its cut, the sentence, and the evidence's source and target — one mapping from the
 /// frozen `MeaningSent`, read by every presentation.
 public struct MeaningRequestFacts: Equatable, Sendable {
-    public let source: LocalizedStringResource?
+    public let source: String?
     public let chosenSense: AISense?
     public let dictionaryName: String?
     public let senseCoverage: LocalizedStringResource?
@@ -27,7 +27,7 @@ public struct MeaningRequestFacts: Equatable, Sendable {
     /// The request's own source when it has one: switching sources in Settings must not relabel an old answer. **The
     /// entry's and the sense's cuts are two facts** (contract 3, §4a): a whole entry can hold a partial sense.
     public init(sent: MeaningSent?, settings: MeaningSettings) {
-        source = MeaningSentences.source(sent?.source ?? settings.source)
+        source = MeaningSentences.source(sent?.source ?? settings.source, model: settings.model, endpoint: settings.endpoint)
         chosenSense = sent?.sense
         dictionaryName = sent?.dictionaryName
         senseCoverage = sent?.sense?.whole == false ? MeaningSentences.partialSense : nil
@@ -38,7 +38,7 @@ public struct MeaningRequestFacts: Equatable, Sendable {
     }
 
     /// A value a test or a caller builds by hand.
-    public init(source: LocalizedStringResource? = nil, chosenSense: AISense? = nil, dictionaryName: String? = nil,
+    public init(source: String? = nil, chosenSense: AISense? = nil, dictionaryName: String? = nil,
                 senseCoverage: LocalizedStringResource? = nil, questionContext: MeaningContext? = nil,
                 evidenceSource: String? = nil, evidenceTarget: MeaningTarget? = nil, model: String? = nil) {
         self.source = source
@@ -82,7 +82,7 @@ public struct MeaningPresentation: Equatable, Sendable {
 
     /// The request's facts, read through the presentation: the source's name, the sense the reader chose, the dictionary
     /// it was clicked in, its cut, the sentence, and the evidence's source and target.
-    public var source: LocalizedStringResource? { facts.source }
+    public var source: String? { facts.source }
     public var chosenSense: AISense? { facts.chosenSense }
     public var dictionaryName: String? { facts.dictionaryName }
     public var senseCoverage: LocalizedStringResource? { facts.senseCoverage }
@@ -177,8 +177,8 @@ public enum MeaningPresenter {
         calendar.timeZone = TimeZone(secondsFromGMT: 0) ?? TimeZone.current
         let parts = calendar.dateComponents([.year, .month, .day], from: date)
         let day = String(format: "%04d-%02d-%02d", parts.year ?? 0, parts.month ?? 0, parts.day ?? 0)
-        let source = presentation.facts.source ?? MeaningSentences.anAISource
-        let provenance = translate(MeaningSentences.noteProvenance(source: translate(source),
+        let source = presentation.facts.source ?? String(localized: MeaningSentences.anAISource)
+        let provenance = translate(MeaningSentences.noteProvenance(source: source,
                                                                    model: presentation.facts.model, day: day))
         return ([presentation.noteBody] + [provenance]).filter { !$0.isEmpty }.joined(separator: "\n")
     }

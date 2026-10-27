@@ -289,11 +289,8 @@ struct PaneSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             Text("Review before sending")
                 .font(.subheadline.weight(.semibold))
-            if let source = MeaningSentences.source(sent.source) {
+            if let source = MeaningSentences.source(sent.source, model: settings.model, endpoint: settings.endpoint) {
                 Text("To “\(source)”")
-            }
-            if let context = sent.questionContext {
-                MeaningContextView(context: context, speak: { state.pronounceTerm(context.term, for: sent.target) })
             }
             Text(MeaningSentences.previewEntry(included: sent.mode.carriesEntry))
                 .foregroundStyle(.secondary)
@@ -330,18 +327,11 @@ struct PaneSection<Content: View>: View {
         VStack(alignment: .leading, spacing: Tokens.Space.m) {
             HStack(spacing: Tokens.Space.s) {
                 ProgressView().controlSize(.small)  // placement: spinner
-                if let source = MeaningSentences.source(state.meaning.askingSource ?? settings.source) {
+                if let source = MeaningSentences.source(state.meaning.askingSource ?? settings.source, model: settings.model, endpoint: settings.endpoint) {
                     Text("Asking “\(source)”…")
                 } else {
                     Text("Asking…")
                 }
-            }
-            if let context = state.meaning.held.map(MeaningContext.init) {
-                // **The running request's own entry**, not the shown one (audit round 3): `sent` is nil until an ask
-                // completes, so the frozen asking target names the dictionary whose language the term is spoken in.
-                MeaningContextView(context: context, speak: {
-                    state.pronounceTerm(context.term, for: state.meaning.askingTarget ?? state.meaning.sent?.target)
-                })
             }
             Button("Cancel") { state.meaning.cancel() }  // placement: inspector-row
                 .accessibilityIdentifier("meaning.cancel")
@@ -702,8 +692,12 @@ struct PaneSection<Content: View>: View {
     /// The source the request went to and, when it named one, the model it asked for.
     private func answeredBy(_ sent: MeaningSent) -> some View {
         var parts: [String] = []
-        if let source = MeaningSentences.source(sent.source) { parts.append(String(localized: source)) }
-        if let model = sent.model, !model.isEmpty { parts.append(model) }
+        // **The source is the model's name when one was named** (owner, 2026-10-27): the model is already in it then, so
+        // the second part is added only for a source that carries its own name (Claude, Apple Intelligence).
+        if let source = MeaningSentences.source(sent.source, model: settings.model, endpoint: settings.endpoint) {
+            parts.append(source)
+        }
+        if let model = sent.model, !model.isEmpty, !parts.contains(model) { parts.append(model) }
         return Text(verbatim: parts.joined(separator: " · "))
             .font(.caption)
             .foregroundStyle(.secondary)
