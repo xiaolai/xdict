@@ -309,7 +309,7 @@ enum Harness {
                 searchPath: ProcessInfo.processInfo.environment["PATH"],
                 answerSchema: AIAnswerSchema.claude(for: mode)))
         case .codex?:
-            return try CodexCLIProvider(configuration: .init(
+            return CodexCLIProvider(configuration: .init(
                 executable: nil, codexHome: codexHome ?? URL(fileURLWithPath: NSHomeDirectory() + "/.codex"),
                 workingDirectory: work, model: nil, timeout: .seconds(300)))
         case nil:

@@ -35,7 +35,7 @@ public enum MeaningProviders {
         case .claudeCLI:
             return claude(mode: mode)
         case .codexCLI:
-            return try codex()
+            return codex()
         }
     }
 
@@ -48,9 +48,9 @@ public enum MeaningProviders {
     /// **Codex in the app's own home**: the provider makes and checks that home before its probe reads the sign-in in
     /// it (sayso 0.5.1's order); XDict only names the folders. The pre-creation this used to do was a workaround for
     /// that order, and it swallowed a failed creation with `try?`.
-    static func codex() throws(AIProviderError) -> CodexCLIProvider {
-        try CodexCLIProvider(configuration: .init(codexHome: folder("codex"), workingDirectory: folder("work"),
-                                                  model: nil))
+    static func codex() -> CodexCLIProvider {
+        // **The initializer no longer throws** (sayso 0.5.2/0.5.3): the provider makes its home and checks the sign-in.
+        CodexCLIProvider(configuration: .init(codexHome: folder("codex"), workingDirectory: folder("work"), model: nil))
     }
 
     /// **Whether a source can answer, without asking a model** (Settings ▸ AI's live status): local checks only — the
@@ -100,10 +100,20 @@ public enum MeaningProviders {
 
     /// **The HTTP configuration for these settings**: the address, the model, the one stored key when this row sends
     /// one, and the chosen service's auth and token-field preference from sayso's profile table.
+    /// **One answer's token budget** (owner, 2026-10-27; sayso 0.5.3's `answerTokens`): a reasoning model spends part of
+    /// it before it writes a word, and sayso's default 1,024 was measured cutting `deepseek-flash` off mid-answer on
+    /// longer sentences — `finish_reason: "length"`, refused as "the answer was cut off". A budget costs nothing until it
+    /// is used, so this is set well above what the answer itself needs (2,000 characters at most).
+    ///
+    /// **The next limit behind it is sayso's own clock, not this number**: `HTTPProvider.resourceTimeout` is 90 s for the
+    /// whole request, so a budget past roughly eight thousand tokens turns a cut-off answer into a timeout on any endpoint
+    /// slower than ~90 tokens a second. Raising this again is only worth it together with a longer timeout.
+    static let answerTokens = 8_192
+
     static func httpConfiguration(_ settings: MeaningSettings, endpoint: URL) -> HTTPProvider.Configuration {
         let profile = MeaningProfiles.selected(settings)
         return .init(endpoint: endpoint, model: settings.model, apiKey: apiKey(settings),
-                     auth: profile.auth, tokenField: profile.tokenField)
+                     auth: profile.auth, tokenField: profile.tokenField, answerTokens: answerTokens)
     }
 
     /// XDict's own folder for a source's configuration or working directory.

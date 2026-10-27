@@ -6,8 +6,10 @@ import Testing
 /// sayso's mapped framework answer, the provider is built through one public factory, and the generated answer
 /// serialises to the contract's one shape. The provider's own behaviour is sayso's test; what is XDict's is the binding.
 struct AppleProviderTests {
+    /// **The answer is one the build knows** (sayso dropped `isKnownCase` in 0.5.2/0.5.3): `.unknown` is the case for a
+    /// reason this build cannot name, and XDict's floor must never see it on a Mac that reaches this front door.
     @Test func availabilityIsOneKnownCase() {
-        #expect(AppleProvider.availability().isKnownCase)
+        #expect(AppleProvider.availability() != .unknown)
     }
 
     /// **A system older than the build's source is named with both versions** (ADR-0026), and the framework is not asked

@@ -509,7 +509,7 @@ public final class AISettingsModel {
             if let runLogin {
                 try await runLogin(append)
             } else {
-                let codex = try MeaningProviders.codex()
+                let codex = MeaningProviders.codex()
                 _ = try await codex.login { line in Self.deliver(line, to: append) }
             }
             // **A finished login speaks only while Codex is still the source** (audit finding, 2026-10-25): the reader
