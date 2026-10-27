@@ -269,19 +269,6 @@ struct PaneSection<Content: View>: View {
         }
     }
 
-    /// **What the pane asks in the mode the reader chose** (contract 6; plan-context-tools D10): the idle copy names the
-    /// button that is actually there, not the one the pane's first mode has.
-    private var idleDescription: LocalizedStringKey {
-        switch state.meaning.chosenMode {
-        case .meaning:
-            "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence."
-        case .translation:
-            "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language."
-        case .grammar:
-            "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar."
-        }
-    }
-
     /// **What the ask will send, before it is sent** (ADR-0021 d.13; UI14): who receives it, the sentence, whether the
     /// entry goes, and a cut in the future tense (UI19); the exact bytes behind a disclosure, copyable. Send composes
     /// nothing new (the same bytes) and asks; Cancel sends nothing.
@@ -360,9 +347,6 @@ struct PaneSection<Content: View>: View {
 
     /// The sentence, a typed problem, a moved selection and the outcome word: what frames the answer.
     @ViewBuilder private func answerHeader(_ presentation: MeaningPresentation) -> some View {
-        if let context = presentation.questionContext {
-            MeaningContextView(context: context, speak: { state.pronounceTerm(context.term, for: state.meaning.sent?.target) })
-        }
         if let problem = presentation.problem {
             problemView(problem, presentation: presentation)
         }
@@ -491,8 +475,18 @@ struct PaneSection<Content: View>: View {
     /// identical prompt to the same model for a different sample, which is a lottery, not a tool.
     /// **Save as Note** sits here when the shell wired a study model and the answer is about an entry (plan-companion WI-9).
     @ViewBuilder private func answerActions(_ presentation: MeaningPresentation) -> some View {
-        if let target = state.meaning.sent?.target, state.noteSaver != nil, !presentation.explanation.isEmpty {
+        if state.noteSaver == nil || presentation.explanation.isEmpty {
+            EmptyView()
+        } else if let target = state.noteTarget {
+            // **Every answer can become a card** (owner, 2026-10-26): the note goes on the entry the request named, or —
+            // for a translation or a grammar answer, which name none — on the entry the reader has open.
             saveNoteControl(presentation, target: target)
+        } else {
+            // **No entry, no card, and the reason said**: a disabled control would leave the reader guessing.
+            Text("Open an entry to save this as a note.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("meaning.note.needs-entry")
         }
     }
 
@@ -1090,6 +1084,23 @@ extension MeaningAskMode {
         case .meaning: "Meaning"
         case .translation: "Translate"
         case .grammar: "Grammar"
+        }
+    }
+
+    /// The same two as text, for AppKit's segmented control, which takes `String`.
+    var labelText: String {
+        switch self {
+        case .meaning: String(localized: "Meaning")
+        case .translation: String(localized: "Translate")
+        case .grammar: String(localized: "Grammar")
+        }
+    }
+
+    var helpText: String {
+        switch self {
+        case .meaning: String(localized: "Ask the source you chose what this word means in this sentence.")
+        case .translation: String(localized: "Ask the source you chose to translate this sentence into your language.")
+        case .grammar: String(localized: "Ask the source you chose to explain this sentence's grammar.")
         }
     }
 }

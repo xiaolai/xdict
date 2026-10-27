@@ -115,7 +115,8 @@ public struct AISettings: View {
             case .local: Text("A local endpoint")
             case .cloud: Text("A cloud endpoint")
             case .apple, .codex, .claude:
-                if let name = MeaningSentences.source(choice.kind) { Text(name) }
+                if let name = MeaningSentences.source(choice.kind, model: model.preferences.settings.model,
+                                                      endpoint: model.preferences.settings.endpoint) { Text(name) }
             }
             if let kind = choice.kind {
                 Text(choice.cloud ? MeaningSentences.cloudCaveat : MeaningSentences.caveat(kind))

@@ -21,8 +21,8 @@ struct MeaningContextModesTests {
                 settings: MeaningSettings(source: .http, model: "m", sendEntryText: switchOn,
                                           translationLanguage: "zh-Hans"),
                 provider: provider)
+            // **The tab is the ask** (owner, 2026-10-26): choosing the question sends it.
             session.choose(.translation)
-            session.ask()
             #expect(await MeaningSessionTests.waitUntil { session.state != .asking })
             guard case .answer(let answer, let mode) = session.state else {
                 Issue.record("no answer with the switch \(switchOn ? "on" : "off"): \(session.state)")
@@ -46,7 +46,6 @@ struct MeaningContextModesTests {
         let (session, _, _) = MeaningSessionTests.session(
             settings: MeaningSettings(source: .http, model: "m", sendEntryText: false), provider: provider)
         session.choose(.grammar)
-        session.ask()
         #expect(await MeaningSessionTests.waitUntil { session.state != .asking })
         guard case .answer(let answer, let mode) = session.state else {
             Issue.record("no answer: \(session.state)")
@@ -63,49 +62,65 @@ struct MeaningContextModesTests {
         #expect(!question.contains("part-of-speech") && !question.contains("lemma"))
     }
 
-    @Test func askingTheSameQuestionTwiceSendsTwoRequests() async {
-        // **No cache** (plan-context-tools D7): the second tap is a second operation, so a stale or leaked answer can
-        // never be served and nothing rests on disk.
+    @Test func askingTheSameQuestionAgainSendsAgain() async {
+        // **No cache** (plan-context-tools D7): another ask is another operation, so a stale answer can never be served
+        // and nothing rests on disk. Choosing the question it already answered shows that answer instead.
         let provider = StubProvider(answers: [.success(Self.translation)])
         let (session, _, _) = MeaningSessionTests.session(provider: provider)
         session.choose(.translation)
-        for attempt in 1...2 {
-            let before = session.settled
-            session.ask()
-            #expect(await MeaningSessionTests.waitUntil { session.settled > before }, "ask \(attempt) never finished")
-            guard case .answer = session.state else {
-                Issue.record("ask \(attempt) produced no answer: \(session.state)")
-                return
-            }
-        }
-        #expect(await provider.questions.count == 2, "the second tap is a second request, never a cached answer")
-    }
-
-    @Test func changingTheModeDropsTheAnswerAndKeepsTheSentence() async {
-        let provider = StubProvider(answers: [.success(MeaningSessionTests.matched)])
-        let (session, _, _) = MeaningSessionTests.session(provider: provider)
-        session.ask()
         #expect(await MeaningSessionTests.waitUntil { session.state != .asking })
+        let before = session.settled
+        session.ask()
+        #expect(await MeaningSessionTests.waitUntil { session.settled > before }, "the second ask never finished")
         guard case .answer = session.state else {
-            Issue.record("no answer to drop: \(session.state)")
+            Issue.record("the second ask produced no answer: \(session.state)")
             return
         }
+        #expect(await provider.questions.count == 2, "a second ask is a second request")
+        // The tab, though, shows what it already has: no third request.
         session.choose(.translation)
-        #expect(session.state == .idle, "another mode's answer is not shown for this question")
-        #expect(session.held != nil, "the sentence stays: switching modes is not the presentation's end")
-        #expect(session.chosenMode == .translation)
-        // The same mode again changes nothing at all.
-        session.choose(.translation)
-        #expect(session.chosenMode == .translation)
+        #expect(await provider.questions.count == 2, "the chosen tab answers from its own result")
     }
 
-    @Test func aPreviewOfATranslationShowsAndSendsTheTranslationsOwnBytes() async {
-        let provider = StubProvider(answers: [.success(Self.translation)])
+    @Test func eachQuestionKeepsItsAnswerAndSwitchingBackSendsNothing() async {
+        let provider = StubProvider(answers: [.success(MeaningSessionTests.matched), .success(Self.translation)])
         let (session, _, _) = MeaningSessionTests.session(provider: provider)
+        session.choose(.meaning)
+        #expect(await MeaningSessionTests.waitUntil { session.state != .asking })
+        guard case .answer(_, let firstMode) = session.state else {
+            Issue.record("no meaning answer: \(session.state)")
+            return
+        }
+        #expect(firstMode != .translate)
+        // Another question asks for itself…
         session.choose(.translation)
+        #expect(await MeaningSessionTests.waitUntil { session.state != .asking })
+        guard case .answer(_, let secondMode) = session.state else {
+            Issue.record("no translation: \(session.state)")
+            return
+        }
+        #expect(secondMode == .translate)
+        // …and coming back shows the first answer again, untouched and unsent.
+        let asked = await provider.questions.count
+        session.choose(.meaning)
+        guard case .answer(_, let backMode) = session.state else {
+            Issue.record("the meaning answer did not come back: \(session.state)")
+            return
+        }
+        #expect(backMode != .translate, "the answer of the question chosen before is the one shown")
+        #expect(await provider.questions.count == asked, "switching back sends nothing")
+        #expect(session.held != nil, "the sentence stays throughout")
+    }
+
+    @Test func withThePreferenceOnAChoosenQuestionPreviewsInsteadOfSending() async {
+        let provider = StubProvider(answers: [.success(Self.translation)])
+        let (session, _, _) = MeaningSessionTests.session(
+            settings: MeaningSettings(source: .http, model: "m", sendEntryText: true, previewBeforeSending: true),
+            provider: provider)
         let before = session.settled
-        session.preview()
+        session.choose(.translation)
         #expect(await MeaningSessionTests.waitUntil { session.settled > before }, "the preview never composed")
+        #expect(await provider.questions.isEmpty, "a preview sends nothing")
         guard case .preview(let sent) = session.state else {
             Issue.record("no preview: \(session.state)")
             return

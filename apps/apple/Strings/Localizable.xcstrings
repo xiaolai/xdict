@@ -8335,6 +8335,22 @@
         }
       }
     },
+    "On, choosing a question shows exactly what will be sent, with Send and Cancel, the first time a sentence is asked. Off, the question is asked when you choose it.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On, choosing a question shows exactly what will be sent, with Send and Cancel, the first time a sentence is asked. Off, the question is asked when you choose it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开后，第一次就一句话提问时，会先显示将要发送的确切内容，并给出「发送」与「取消」。关闭时，选中问题即提问。"
+          }
+        }
+      }
+    },
     "On. Turn off Look Up & data detectors in Trackpad; Force Click is in the same pane.": {
       "localizations": {
         "en": {
@@ -9052,7 +9068,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这些词典暂时无法查找短语。"
+            "value": "这些词典无法提供短语。"
           }
         }
       }
@@ -9183,22 +9199,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "连按两次"
-          }
-        }
-      }
-    },
-    "Preview the Request…": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Preview the Request…"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "预览请求…"
           }
         }
       }
@@ -9550,7 +9550,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正在从词典中查找短语…"
+            "value": "正在你的词典中查找短语…"
           }
         }
       }
@@ -10888,6 +10888,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示上一个结果"
+          }
+        }
+      }
+    },
+    "Show the request before asking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show the request before asking"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提问前先显示请求"
           }
         }
       }
