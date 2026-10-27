@@ -114,6 +114,8 @@ public final class AISettingsModel {
     }
 
     public var language: String { preferences.settings.language }
+    /// The language a translation is written into: the preview of a translate template asks for this one (audit 2026-10-27).
+    public var translationLanguage: String { preferences.settings.translationLanguage }
 
     /// The service the endpoint is: the stored profile when it belongs to the chosen row, Custom otherwise.
     public var profile: AIProviderProfile { MeaningProviders.profile(preferences.settings) }

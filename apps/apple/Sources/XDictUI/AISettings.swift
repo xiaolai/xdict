@@ -116,7 +116,7 @@ public struct AISettings: View {
             case .cloud: Text("A cloud endpoint")
             case .apple, .codex, .claude:
                 if let name = MeaningSentences.source(choice.kind, model: model.preferences.settings.model,
-                                                      endpoint: model.preferences.settings.endpoint) { Text(name) }
+                                                      host: model.preferences.settings.endpoint?.host()) { Text(name) }
             }
             if let kind = choice.kind {
                 Text(choice.cloud ? MeaningSentences.cloudCaveat : MeaningSentences.caveat(kind))
@@ -781,7 +781,10 @@ public struct AISettings: View {
     }
 
     @ViewBuilder private func previewText(model: AISettingsModel) -> some View {
-        switch MeaningPreview.compose(template: model.draft, language: model.language, mode: model.promptKind) {
+        // **A translation's preview asks for the language the request will** (audit 2026-10-27): the sample question is
+        // composed with the target language for a translate template, never the explanation's.
+        let language = model.promptKind == .translate ? model.translationLanguage : model.language
+        switch MeaningPreview.compose(template: model.draft, language: language, mode: model.promptKind) {
         case .success(let text):
             Text(verbatim: text)
                 .font(.caption.monospaced())
