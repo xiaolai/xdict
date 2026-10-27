@@ -16,6 +16,29 @@ public final class SearchWindowState {
     public let model: SearchModel
     public let library: Library
     public let entry: EntryViewController
+    /// **The word Explore asks about**: the entry on screen, else what is typed.
+    var exploreWord: String {
+        if let word = model.selectedHeadword, !word.isEmpty { return word }
+        return model.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// The handles of the dictionaries in scope, in the reader's order — what an exploration reads.
+    var exploreDicts: [DictId] {
+        switch model.scope {
+        case .all: model.known.filter(\.enabled).compactMap(\.handle)
+        case .one(let id): model.known.filter { $0.id == id }.compactMap(\.handle)
+        }
+    }
+
+    /// **A row opens the entry it names**: its own dictionary selected first when the reader still has it, then the
+    /// word looked up exactly as a typed one is.
+    func openExplored(_ row: ExploreRow) {
+        if let source = model.known.first(where: { $0.handle == row.dict }), source.enabled {
+            model.setScope(.one(source.id))
+        }
+        model.submit(row.word)
+    }
+
     /// The entry's sounds and the system voice (WI-7): what the window's notice shows.
     public let pronunciation: Pronunciation
     /// What the dictionary service answered at launch: shown when it did not.
@@ -71,6 +94,9 @@ public final class SearchWindowState {
     /// `window` names the window's callers in the service client, so two windows never supersede each other. `speech`
     /// is where its sound leaves the app, `speechPreferences` the reader's accent: the system's and the reader's own,
     /// unless an instrument passes a silent output and a defaults suite of its own.
+    /// **Explore** (plan-word-exploration WI-3): the panel's model, one per window.
+    public let explore: ExploreModel
+
     public init(library: Library, backend: any SearchBackend, entry: EntryViewController, window: String,
                 speech: any PronunciationOutput = SystemOutput(),
                 speechPreferences: SpeechPreferences = SpeechPreferences()) {
@@ -82,6 +108,7 @@ public final class SearchWindowState {
         }
         self.model = model
         examples = ExamplesModel(backend: backend, window: window)
+        explore = ExploreModel(backend: backend, window: window)
         phrases = PhrasesModel(backend: backend, window: window)
         meaning = MeaningSession(
             fetchEntryText: { [backend] dict, entry, budget in

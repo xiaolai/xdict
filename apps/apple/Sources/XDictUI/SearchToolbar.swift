@@ -1,4 +1,6 @@
 import SwiftUI
+import XDictContract
+import XDictSearch
 
 /// **The main window's toolbar** (P3): Back/Forward | speaker (P48) | title | space | search. **The search is SwiftUI's
 /// `.searchable`** (owner, 2026-10-24), a toolbar item the system places at the trailing end. **The text-size pair left
@@ -11,6 +13,12 @@ struct SearchToolbar: ToolbarContent {
     let back: @MainActor () -> Void
     let forward: @MainActor () -> Void
     let pronounce: @MainActor () -> Void
+    /// **Explore, beside the speaker**: the word on screen, its rhymes, family, roots and forms (WI-3). A test that
+    /// measures the toolbar's layout leaves it out.
+    var explore: ExploreModel?
+    var exploreWord: @MainActor () -> String = { "" }
+    var exploreDicts: @MainActor () -> [DictId] = { [] }
+    var exploreOpen: @MainActor (ExploreRow) -> Void = { _ in }
 
     var body: some ToolbarContent {  // placement: P3
         ToolbarItem(placement: .navigation) {
@@ -37,5 +45,11 @@ struct SearchToolbar: ToolbarContent {
                 .accessibilityIdentifier("toolbar.pronounce")
         }
         .visibilityPriority(.high)
+        if let explore {
+            ToolbarItem(placement: .navigation) {
+                ExploreButton(model: explore, word: exploreWord, dicts: exploreDicts, open: exploreOpen)
+            }
+            .visibilityPriority(.low)
+        }
     }
 }

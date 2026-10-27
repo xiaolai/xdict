@@ -8,7 +8,7 @@ import SwiftUI
 /// token a value is; `Tools/tokens.py check` finds what bypasses them.
 public enum Tokens {
     /// SHA-256 of the tokens.toml this file was made from: `TokensFreshnessTests` holds it to the file.
-    public static let sourceDigest = "e920fe0cc62239fb7200836f92689aeea97bb3974f80b35b73f7b810f7539fb2"
+    public static let sourceDigest = "f4200f2627402c7b522e3e81a7dc31a5b94b5eb6170ef6a736f991d7874842c1"
 
     /// The spacing scale: stack spacing and padding between things that belong together.
     public enum Space {
@@ -254,6 +254,10 @@ public enum Tokens {
         public static let mainIdealHeight: CGFloat = 700
         /// How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll.
         public static let scrollEdgeTolerance: CGFloat = 1
+        /// The Explore panel's list: eight rows of the sidebar's own height, under the tabs and the word.
+        public static let exploreListHeight: CGFloat = 320
+        /// The Explore panel: five one-word tabs on one row, then a row of a word and its reason without wrapping.
+        public static let explorePopoverWidth: CGFloat = 480
     }
 
     /// Corner radii.

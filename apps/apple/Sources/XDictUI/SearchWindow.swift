@@ -163,9 +163,12 @@ public struct SearchWindow: View {
     /// open pane carries the same toggle at its own top-left. The search field is SwiftUI's `.searchable`, placed by the
     /// system.
     @ToolbarContentBuilder private var toolbar: some ToolbarContent {
+        let window = state
         SearchToolbar(canGoBack: state.model.canGoBack, canGoForward: state.model.canGoForward,
                       canPronounce: state.canPronounce, back: { state.model.back() },
-                      forward: { state.model.forward() }, pronounce: { state.pronounceSelectionOrShown() })
+                      forward: { state.model.forward() }, pronounce: { state.pronounceSelectionOrShown() },
+                      explore: window.explore, exploreWord: { window.exploreWord }, exploreDicts: { window.exploreDicts },
+                      exploreOpen: { window.openExplored($0) })
     }
 
     /// The pane's width now, clamped: Settings may hold any number, geometry takes only these.
