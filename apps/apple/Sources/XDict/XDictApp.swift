@@ -294,9 +294,12 @@ struct MainWindow: View {
             made.showDictionaries = { SettingsRoute.shared.show($0) }
             // A ⌘-clicked word opens in a new tab of this window, looked up as typed and Return (P47).
             made.openInNewTab = { [openWindow] word in
-                NewTabLookups.shared.hand(word)
-                NewTab.open(make: { openWindow(id: XDictApp.mainWindow) },
-                            failed: { NewTabLookups.shared.failed(word) })
+                // **The word is handed inside the queue** (verification 2026-10-27): NewTab serialises window creation, so
+                // a word handed before the queue would be overwritten by the next request before its window existed.
+                NewTab.open(make: {
+                    NewTabLookups.shared.hand(word)
+                    openWindow(id: XDictApp.mainWindow)
+                }, failed: { NewTabLookups.shared.failed(word) })
             }
             if let word = NewTabLookups.shared.take() {
                 Task {
@@ -608,12 +611,19 @@ struct FileAndHelpCommands: Commands {
 /// A new main window, put in the front main window's tab group once SwiftUI has made it.
 @MainActor
 enum NewTab {
+    /// **One request at a time** (audit 2026-10-27): two requests taken together snapshotted the same existing windows, so
+    /// both could claim the first window either of them made — the second left untabbed, or tabbed into the wrong host.
+    /// Each waits for the one before it to have claimed its own window.
+    @ObservationIgnored private static var pending: Task<Void, Never>?
+
     /// `failed` runs when no new main window appeared within `NewTabLookups.bound`.
-    static func open(make: () -> Void, failed: @escaping @MainActor () -> Void = {}) {
-        let host = NSApp.keyWindow.flatMap { isMain($0) ? $0 : nil }
-        let before = Set(NSApp.windows.map(ObjectIdentifier.init))
-        make()
-        Task { @MainActor in
+    static func open(make: @escaping () -> Void, failed: @escaping @MainActor () -> Void = {}) {
+        let previous = pending
+        pending = Task { @MainActor in
+            await previous?.value
+            let host = NSApp.keyWindow.flatMap { isMain($0) ? $0 : nil }
+            let before = Set(NSApp.windows.map(ObjectIdentifier.init))
+            make()
             for _ in 0..<80 {
                 if let made = NSApp.windows.first(where: { !before.contains(ObjectIdentifier($0)) && isMain($0) }) {
                     if let host, host !== made { host.addTabbedWindow(made, ordered: .above) }
