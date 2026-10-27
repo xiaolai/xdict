@@ -9,7 +9,9 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use xdict_entry::collocations::{Collocations, Frame, extract};
+use xdict_entry::collocations::{Collocations, extract};
+/// **The frame vocabulary is the entry crate's**: extraction and storage must not drift into two lists.
+pub use xdict_entry::collocations::Frame;
 use xdict_mdx::File;
 
 use crate::CoreError;
@@ -27,6 +29,8 @@ pub struct Collocation {
     pub frame: Frame,
     /// The collocate, as the dictionary spells it.
     pub partner: String,
+    /// The dictionary that said so.
+    pub dict: String,
     /// The entry it was read from.
     pub entry: EntryRef,
 }
@@ -42,7 +46,7 @@ pub struct Store {
 impl Store {
     /// **Reads one dictionary's entries**: every record whose headword group the extractor understands contributes its
     /// collocates; the rest contribute nothing and are not counted as errors.
-    pub fn build(file: &File, edition: &str) -> Result<Self, CoreError> {
+    pub fn build(file: &File, dict: &str, edition: &str) -> Result<Self, CoreError> {
         {
             let mut pairs = Vec::new();
             let mut dropped = 0u32;
@@ -60,7 +64,13 @@ impl Store {
                 }
                 let entry = EntryRef { edition: edition.into(), key, occurrence };
                 for (frame, partner) in found {
-                    pairs.push(Collocation { lemma: headword.clone(), frame, partner, entry: entry.clone() });
+                    pairs.push(Collocation {
+                        lemma: headword.clone(),
+                        frame,
+                        partner,
+                        dict: dict.into(),
+                        entry: entry.clone(),
+                    });
                 }
             }
             Ok(Self { pairs, dropped })
@@ -161,7 +171,7 @@ mod tests {
     #[test]
     fn a_store_holds_the_pairs_and_the_entry_that_said_so() {
         let file = dictionary();
-        let store = Store::build(&file, "e1").unwrap();
+        let store = Store::build(&file, "handle-1", "e1").unwrap();
         assert_eq!(store.len(), 3);
         let found = store.collocates("blood vessel");
         assert_eq!(found.len(), 3);
@@ -178,7 +188,7 @@ mod tests {
     /// than read under rules it was not built with.
     #[test]
     fn the_store_encodes_with_its_version() {
-        let store = Store::build(&dictionary(), "e1").unwrap();
+        let store = Store::build(&dictionary(), "handle-1", "e1").unwrap();
         let bytes = store.encode().unwrap();
         let text = String::from_utf8(bytes).unwrap();
         assert!(text.starts_with(&format!("colloc\t{COLLOCATION_VERSION}\t3\t0\n")), "{text}");

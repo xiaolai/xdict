@@ -36,6 +36,37 @@ fn main() {
         eprintln!("usage: colloc_spike <corpus dir> [entries per file]");
         std::process::exit(2);
     };
+    // **`store`: build the real store for each file**, the way the service does, and print what it holds.
+    let mode = std::env::args().nth(2).unwrap_or_default();
+    if mode == "store" {
+        let mut files = Vec::new();
+        mdx_files(Path::new(&root), &mut files);
+        for path in &files {
+            let name = path.file_name().unwrap_or_default().to_string_lossy().to_lowercase();
+            if !name.contains("collocations") {
+                continue;
+            }
+            let file = File::open(path).unwrap();
+            let began = std::time::Instant::now();
+            let store = xdict_core::collocations::Store::build(&file, "handle-1", "edition").unwrap();
+            println!(
+                "{}: {} pairs, {} dropped, built in {:.2} s, {} bytes",
+                path.file_name().unwrap().to_string_lossy(),
+                store.len(),
+                store.dropped(),
+                began.elapsed().as_secs_f64(),
+                store.encode().map(|b| b.len()).unwrap_or(0)
+            );
+            for lemma in ["decision", "blood vessel", "attempt"] {
+                let found = store.collocates(lemma);
+                if !found.is_empty() {
+                    println!("  {lemma}: {} collocates, first three: {:?}", found.len(),
+                             found.iter().take(3).map(|c| format!("{:?} {}", c.frame, c.partner)).collect::<Vec<_>>());
+                }
+            }
+        }
+        return;
+    }
     let per_file: usize = std::env::args().nth(2).and_then(|n| n.parse().ok()).unwrap_or(20);
     let mut files = Vec::new();
     mdx_files(Path::new(&root), &mut files);

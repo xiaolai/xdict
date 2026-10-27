@@ -90,6 +90,9 @@ pub struct Core {
     /// dictionary in scope (3.2 s for the reader's 24, 1.37 M headwords), so the last scope's explorer is held until a
     /// dictionary is opened, closed or replaced — `explorer_for` keys it by the scope's handles and each edition.
     explore: Mutex<Option<CachedExplorer>>,
+    /// **Each edition's collocation store, kept** (plan-word-exploration WI-6): built from the dictionary's own
+    /// records the first time a word is asked about it, keyed by handle and edition so a replaced file rebuilds.
+    colloc: Mutex<HashMap<String, Arc<crate::collocations::Store>>>,
 }
 
 /// One scope's explorer, and the key that says which scope and which editions it was built from.
@@ -228,6 +231,7 @@ impl Core {
                 ledger_path,
                 ledger: Mutex::new(None),
                 explore: Mutex::new(None),
+                colloc: Mutex::new(HashMap::new()),
             })
         })
     }
@@ -530,6 +534,49 @@ impl Core {
         progress: &dyn Progress,
     ) -> Result<crate::words::WordExplorer, CoreError> {
         guard(|| self.word_explorer_within(&dicts, progress, CatalogLimits::DEFAULT))
+    }
+
+    /// **The collocations of a word, from the reader's own dictionaries** (plan-word-exploration WI-6): each
+    /// dictionary's store is built on first use and kept until its edition changes; a dictionary with no collocation
+    /// markup answers nothing and is not an error. At most `limit` rows, in the dictionaries' order.
+    pub fn collocates(
+        &self,
+        query: String,
+        dicts: Vec<String>,
+        limit: u32,
+    ) -> Result<Vec<crate::collocations::Collocation>, CoreError> {
+        guard(|| {
+            let mut out = Vec::new();
+            for dict in &dicts {
+                if out.len() >= limit as usize {
+                    break;
+                }
+                let store = self.collocation_store(dict)?;
+                for pair in store.collocates(&query) {
+                    if out.len() >= limit as usize {
+                        break;
+                    }
+                    out.push(pair.clone());
+                }
+            }
+            Ok(out)
+        })
+    }
+
+    /// One edition's store, built once and kept: the key is the handle and its edition, so a file opened, closed or
+    /// replaced is read again and nothing else is.
+    fn collocation_store(&self, dict: &str) -> Result<Arc<crate::collocations::Store>, CoreError> {
+        let handle = self.parse_handle(dict)?;
+        let opened = self.dict(dict)?;
+        let key = format!("{handle}:{}", opened.edition);
+        if let Some(held) = self.colloc.lock().ok().and_then(|held| held.get(&key).cloned()) {
+            return Ok(held);
+        }
+        let store = Arc::new(crate::collocations::Store::build(&opened.mdx, dict, &opened.edition)?);
+        if let Ok(mut held) = self.colloc.lock() {
+            held.insert(key, Arc::clone(&store));
+        }
+        Ok(store)
     }
 
     /// **One page of word exploration** (plan-word-exploration WI-4; the owner's shape, 2026-10-27): a miss, a rhyme,

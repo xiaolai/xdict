@@ -11,6 +11,7 @@
 use std::sync::Arc;
 
 use xdict_core as core;
+use xdict_core::collocations::{Collocation, Frame};
 use xdict_core::explore::{ExploreAnswer, ExploreReason, ExploreRow, ExploreState};
 use xdict_core::words::WordMode;
 use xdict_core::{
@@ -811,6 +812,34 @@ pub fn protocol_version() -> u32 {
     core::PROTOCOL
 }
 
+/// **A collocation's frame** (plan-word-exploration WI-6): the closed vocabulary, with the headword written `HW`.
+#[uniffi::remote(Enum)]
+pub enum Frame {
+    Adjective,
+    Adverb,
+    Noun,
+    Verb,
+    Verbs,
+    Preposition,
+    Phrases,
+    AdjectivePlusHeadword,
+    VerbPlusHeadword,
+    HeadwordPlusVerb,
+    HeadwordPlusNoun,
+    NounPlusHeadword,
+    PhraseOfHeadword,
+}
+
+/// One collocation a dictionary writes.
+#[uniffi::remote(Record)]
+pub struct Collocation {
+    pub lemma: String,
+    pub frame: Frame,
+    pub partner: String,
+    pub dict: String,
+    pub entry: EntryRef,
+}
+
 /// What to look for: the words a reader can explore by.
 #[uniffi::remote(Enum)]
 pub enum WordMode {
@@ -905,6 +934,11 @@ impl Core {
     /// Spotlight is macOS's, so `xdict-wasm`, the Web binding, does not carry it.
     pub fn words(&self, dict: String, from: u64, limit: u32) -> Result<Words, CoreError> {
         self.0.words(dict, from, limit)
+    }
+
+    /// **The collocations of a word** (plan-word-exploration WI-6), from the reader's own dictionaries.
+    pub fn collocates(&self, query: String, dicts: Vec<String>, limit: u32) -> Result<Vec<Collocation>, CoreError> {
+        self.0.collocates(query, dicts, limit)
     }
 
     /// **One page of word exploration** (plan-word-exploration WI-4): a miss, a rhyme, a family or a root, answered
