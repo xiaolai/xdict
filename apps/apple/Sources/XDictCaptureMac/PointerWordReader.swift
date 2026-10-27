@@ -251,8 +251,18 @@ public enum PointerWordReader {
                 let area = frame.width * frame.height
                 if smallest.map({ area < $0.area }) ?? true { smallest = (child, area) }
             }
-            guard let smallest else { break }
-            current = smallest.element
+            // **A container with one child is a wrapper whose frame is not the page's geometry** (owner's report,
+            // 2026-10-26): Chrome's web area names one `AXGroup` a pixel tall for the whole page, no child frame holds
+            // the pointer, and the descent stopped there — the page's own text, whose boxes are exact, was never read.
+            // The word still has to pass the tolerance at the end of the read, so a wrong turn here costs requests,
+            // never a wrong word.
+            if let smallest {
+                current = smallest.element
+            } else if children.count == 1 {
+                current = children[0]
+            } else {
+                break
+            }
         }
         return current
     }
@@ -408,9 +418,12 @@ public enum PointerWordReader {
     /// Roles that hold controls rather than text: a hit on one is descended (`inner`). Measured on macOS 27.0.1: a hit
     /// test that named `AXToolbar` or `AXMenuBar` with a titled child under the point; a SwiftUI window answering its
     /// hosting group.
+    /// **`AXWebArea` is here because Chrome answers it for a page** (owner's report, 2026-10-26: the pointer was over
+    /// "militia" and the panel looked up "war"): the web area answers no text at a point, and without the descent every
+    /// hover in a browser fell through to the pixels, which named a word the pointer was not on.
     static let containerRoles: Set<String> = [
         "AXWindow", "AXToolbar", "AXMenuBar", "AXMenu", "AXGroup", "AXSplitGroup", "AXScrollArea", "AXTabGroup",
-        "AXList", "AXOutline", "AXTable", "AXRow", "AXCell", "AXLayoutArea", "AXSheet", "AXRadioGroup",
+        "AXList", "AXOutline", "AXTable", "AXRow", "AXCell", "AXLayoutArea", "AXSheet", "AXRadioGroup", "AXWebArea",
     ]
 
     /// The element under `point` inside `container`: descended from it (`descend`), and where that reaches nothing
@@ -622,6 +635,11 @@ public enum PointerWordReader {
         let words = TextSegmenter.wordRanges(in: text)
         guard words.count <= maximumScannedWords else { return nil }
         var best: (offset: Int, distance: CGFloat, box: CGRect, word: String)?
+        // **How many words each box was answered for** (owner's report, 2026-10-26: the pointer was over "militia" and
+        // the panel looked up "war"): Chromium answers one box for a paragraph or a run of it, and every word inside it
+        // then sits at distance zero, so the smallest distance picked the first word of the paragraph — a wrong word
+        // said with full confidence. A box that covers several words says nothing about which one holds the pointer.
+        var boxes: [CGRect: Int] = [:]
         for word in words {
             let location = text.utf16.distance(from: text.startIndex, to: word.lowerBound)
             let length = text.utf16.distance(from: word.lowerBound, to: word.upperBound)
@@ -630,13 +648,19 @@ public enum PointerWordReader {
                   !box.isEmpty,
                   let distance = tolerance.distance(from: point, to: box)
             else { continue }
+            boxes[box, default: 0] += 1
             // Follow the pointer inside the word, so CJK re-segmentation lands on the right character.
             let within = CaptureGeometry.characterIndex(at: point.x, across: box.minX...box.maxX, count: length)
             if best.map({ distance < $0.distance }) ?? true {
                 best = (location + within, distance, box, String(text[word]))
             }
         }
-        guard let best, let found = TextSegmenter.word(in: text, utf16Offset: best.offset) else { return nil }
+        guard let best else { return nil }
+        // **A box several words share is no box for this question**: the element's own position is asked instead, and
+        // where it cannot answer, this dialect answers nothing — the pixels know which word the pointer is over, and a
+        // wrong word is worse than a read that took the long way.
+        if (boxes[best.box] ?? 0) > 1 { return try textRange(element, at: point, tolerance, limits, ax) }
+        guard let found = TextSegmenter.word(in: text, utf16Offset: best.offset) else { return nil }
         // The scanned word's own box: exact where the delivered token is that word, containing where re-segmentation
         // took a part of it.
         let quality: WordBounds.Quality = found.word == best.word ? .exact : .containing

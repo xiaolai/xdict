@@ -80,6 +80,92 @@ final class Glyphs: AccessibilityReading {
     }
 }
 
+/// **Chromium answering one box for a whole paragraph says nothing about which word holds the pointer** (owner's
+/// report, 2026-10-26: the pointer was over "militia" and the panel looked up "war"). The scan trusts a box only where
+/// it tells words apart; when every word of the value shares one box, the element's own position answers, and where it
+/// cannot, the read misses and the pixels answer — never the first word of the paragraph.
+final class FlatBoxes: AccessibilityReading {
+    let text: String
+    init(_ text: String) { self.text = text }
+
+    func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
+        switch name {
+        case kAXValueAttribute: text as CFString
+        case kAXRoleAttribute: "AXStaticText" as CFString
+        default: nil
+        }
+    }
+
+    func parameterized(_ element: AXUIElement, _ name: String, _ argument: CFTypeRef) throws(CaptureError) -> CFTypeRef? {
+        guard name == kAXBoundsForRangeParameterizedAttribute else { return nil }
+        var box = CGRect(x: 100, y: 200, width: 300, height: 20)
+        return AXValueCreate(.cgRect, &box)
+    }
+}
+
+/// **Chrome's page as its Accessibility tree answers it** (owner's report, 2026-10-26: the pointer was over "militia"
+/// and the panel looked up "war"): the hit test names the web area, which answers no text at a point; its one child is
+/// a group whose frame is a one-pixel strip of the page, holding no pointer; under it the page's static text, whose
+/// per-word boxes are exact. Nothing was descended into, so the pixels answered with a word the pointer was not on.
+final class ChromePage: AccessibilityReading {
+    static let sentence = "war or militia advanced"
+    private let area = AXUIElementCreateApplication(pid_t(4_700_001))
+    private let strip = AXUIElementCreateApplication(pid_t(4_700_002))
+    private let text = AXUIElementCreateApplication(pid_t(4_700_003))
+    var webArea: AXUIElement { area }
+
+    private func pid(_ e: AXUIElement) -> pid_t {
+        var value: pid_t = 0
+        AXUIElementGetPid(e, &value)
+        return value
+    }
+
+    func attribute(_ element: AXUIElement, _ name: String, ofApplication: Bool) throws(CaptureError) -> CFTypeRef? {
+        switch pid(element) {
+        case 4_700_001:
+            switch name {
+            case kAXRoleAttribute: return "AXWebArea" as CFString
+            case kAXChildrenAttribute: return [strip] as CFArray
+            default: return nil
+            }
+        case 4_700_002:
+            switch name {
+            case kAXRoleAttribute: return "AXGroup" as CFString
+            case kAXChildrenAttribute: return [text] as CFArray
+            case kAXPositionAttribute:
+                var origin = CGPoint(x: 91, y: 118)
+                return AXValueCreate(.cgPoint, &origin)
+            case kAXSizeAttribute:
+                var size = CGSize(width: 1_200, height: 1)
+                return AXValueCreate(.cgSize, &size)
+            default: return nil
+            }
+        case 4_700_003:
+            switch name {
+            case kAXRoleAttribute: return "AXStaticText" as CFString
+            case kAXValueAttribute: return Self.sentence as CFString
+            case kAXPositionAttribute:
+                var origin = CGPoint(x: 100, y: 200)
+                return AXValueCreate(.cgPoint, &origin)
+            case kAXSizeAttribute:
+                var size = CGSize(width: 10 * CGFloat(Self.sentence.utf16.count), height: 20)
+                return AXValueCreate(.cgSize, &size)
+            default: return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    func parameterized(_ element: AXUIElement, _ name: String, _ argument: CFTypeRef) throws(CaptureError) -> CFTypeRef? {
+        guard pid(element) == 4_700_003, name == kAXBoundsForRangeParameterizedAttribute else { return nil }
+        var range = CFRange()
+        AXValueGetValue(unsafeDowncast(argument, to: AXValue.self), .cfRange, &range)
+        var box = CGRect(x: 100 + 10 * CGFloat(range.location), y: 200, width: 10 * CGFloat(range.length), height: 20)
+        return AXValueCreate(.cgRect, &box)
+    }
+}
+
 /// **A hover hands the panel the word's box where the dialect has one** (moved by name from XiaolaiDict's
 /// `ScreenWordBoundsTests`): the text-range dialect asks for the token's own range, the bounds scan keeps the box it
 /// already asked for. A box the app answers empty is no box.
@@ -105,6 +191,27 @@ struct PointerWordBoundsTests {
         element: AXUIElementCreateApplication(pid_t(4_100_000)), appName: "Glyphs", bundleID: "glyphs")
     /// Over "cat" in "The cat sat." — characters 4…6, x 140…170.
     private let point = CGPoint(x: 155, y: 210)
+
+    /// The paragraph's box is every word's box: the pointer over the fourth word must not be answered with the first.
+    /// The pointer over the fourth word of the page's line reads that word, through the web area's lying wrapper.
+    @Test func theWebAreasPageIsReadThroughItsWrapper() {
+        let page = ChromePage()
+        let webTarget = PointerWordReader.Target(element: page.webArea, appName: "Chrome", bundleID: "com.google.Chrome")
+        // "militia" spans UTF-16 7…13, x 170…240 in the line at y 200…220.
+        let outcome = PointerWordReader.readUnlessRefused(
+            at: CGPoint(x: 175, y: 210), in: webTarget, tolerance: Measured.hit, labels: Measured.label,
+            limits: .shipped, refuses: { _ in false }, with: page)
+        guard case .read(.hit(let hit)) = outcome else { Issue.record("got \(outcome)"); return }
+        #expect(hit.word.word == "militia")
+    }
+
+    @Test func oneBoxForEveryWordIsNotAWord() {
+        let flat = FlatBoxes("war or militia advanced")
+        let outcome = PointerWordReader.read(at: CGPoint(x: 320, y: 210), in: target, tolerance: Measured.hit, with: flat)
+        if case .hit(let hit) = outcome {
+            Issue.record("a shared box answered \(hit.word.word) as if it were under the pointer")
+        }
+    }
 
     private func hit(_ ax: some AccessibilityReading) -> PointerWordReader.Hit? {
         guard case .hit(let hit) = PointerWordReader.read(at: point, in: target, tolerance: Measured.hit, with: ax) else {
