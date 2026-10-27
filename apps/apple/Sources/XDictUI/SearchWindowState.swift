@@ -750,7 +750,8 @@ public final class SearchWindowState {
         }
         presented = shown.result.dictionary
         let landing: EntryLanding = if case .offset(let y) = shown.landing { .offset(y) } else { .top }
-        let done = await entry.showPage(pageItems(results), primary: shown.result.dictionary, landing: landing)
+        let items = pageItems(results)
+        let done = await entry.showPage(items, primary: shown.result.dictionary, landing: landing)
         if done { presentedEntry.asked(serial: shown.serial, lookup: shown.lookup) }
         onPresented?(shown, done)
     }
@@ -788,6 +789,15 @@ public final class SearchWindowState {
         return EntryPlaceholder.of(noDictionaries: library.entries.isEmpty && library.unreadable == nil,
                                    query: model.lookup?.query, selection: model.selection,
                                    searching: model.isSearching, unsearched: unsearched, pending: pending)
+    }
+
+    /// **Where an answer is saved** (owner, 2026-10-26): the entry the request itself was composed from when it had
+    /// one, else the entry the reader has open — a translation and a grammar answer carry no entry, and the dictionary
+    /// on screen is what the reader was reading. Nil with nothing open: the pane then says why there is no card.
+    public var noteTarget: MeaningTarget? {
+        if let target = meaning.sent?.target { return target }
+        guard hasEntry, let shown = Self.drawnEntry(model) else { return nil }
+        return MeaningTarget(dictionary: shown.0, entry: shown.1)
     }
 
     /// Whether an entry, or the All page, is shown: what the menus' entry commands (Print…, Find…, Expand All…) are

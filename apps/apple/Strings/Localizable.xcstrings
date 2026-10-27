@@ -3142,54 +3142,6 @@
         }
       }
     },
-    "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Capture a word and choose Grammar beside it. XDict asks the source you chose to explain the sentence's grammar."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "截取一个词，然后点旁边的「语法」。XDict 会让你选择的来源解释这句话的语法。"
-          }
-        }
-      }
-    },
-    "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Capture a word and choose Meaning Here beside it. XDict asks the source you chose what the word means in that sentence."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取词后点它旁边的“此处释义”。XDict 会向你所选的来源询问这个词在那个句子里的意思。"
-          }
-        }
-      }
-    },
-    "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language.": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Capture a word and choose Translate beside it. XDict asks the source you chose to translate the sentence into your language."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "截取一个词，然后点旁边的「翻译」。XDict 会让你选择的来源把这句话翻译成你的语言。"
-          }
-        }
-      }
-    },
     "Check Again": {
       "localizations": {
         "en": {
@@ -3397,6 +3349,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "选择自有存储空间中的文件夹（例如 iCloud 云盘），通过它向其他设备同步阅读记录、笔记和评分。"
+          }
+        }
+      }
+    },
+    "Choose a question above.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a question above."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在上面选一个问题。"
           }
         }
       }
@@ -6163,6 +6131,22 @@
         }
       }
     },
+    "In This Sentence": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In This Sentence"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这句话"
+          }
+        }
+      }
+    },
     "In this sentence": {
       "localizations": {
         "en": {
@@ -6882,6 +6866,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "查询指针下的词"
+          }
+        }
+      }
+    },
+    "Looking this up…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking this up…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在查找…"
+          }
+        }
+      }
+    },
+    "Looking up “%@”…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looking up “%@”…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在查找“%@”…"
           }
         }
       }
@@ -7993,6 +8009,22 @@
         }
       }
     },
+    "Nothing captured yet. Hover over a word, or press ⌃⌥D, and its sentence appears here.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing captured yet. Hover over a word, or press ⌃⌥D, and its sentence appears here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有截取内容。把指针停在词上，或按 ⌃⌥D，它的句子就会出现在这里。"
+          }
+        }
+      }
+    },
     "Nothing due": {
       "localizations": {
         "en": {
@@ -8683,6 +8715,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "登录时打开 XDict"
+          }
+        }
+      }
+    },
+    "Open an entry to save this as a note.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open an entry to save this as a note."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开一条释义，才能把这个答案存成笔记。"
           }
         }
       }
