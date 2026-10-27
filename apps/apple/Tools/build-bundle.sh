@@ -400,6 +400,16 @@ assemble() {
     tree=$(Tools/source-tree.sh) || fail "could not read the source tree"
     [ -s "$CORE_VERSIONS" ] && [ -d Generated/xdictFFI.xcframework ] \
         || fail "Generated/ is missing or incomplete: run Tools/build-core.sh (make does)"
+    # **Generated/ must be newer than every core source** (2026-10-27): a local build links the core library this file
+    # records, so a stale one compiles, passes its Swift tests and ships the *old* core — an app built that way had no
+    # "Did you mean?" though the Rust change was in the tree. A remote build makes its own, so only a local one checks.
+    if [ -z "${XDICT_REMOTE_PRODUCTS:-}" ]; then
+        local stale root
+        root=$(cd ../.. && pwd)
+        stale=$(find "$root/core" \( -name '*.rs' -o -name 'Cargo.toml' -o -name 'Cargo.lock' \) \
+                      -newer "$CORE_VERSIONS" -print -quit)
+        [ -z "$stale" ] || fail "Generated/ is older than ${stale#"$root"/}: run Tools/build-core.sh (make does)"
+    fi
     [ -s "$CATALOG" ] || fail "missing string catalog: $CATALOG"
     local products icon_car
     if [ -n "${XDICT_REMOTE_PRODUCTS:-}" ]; then
