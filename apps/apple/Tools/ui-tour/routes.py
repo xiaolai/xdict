@@ -252,17 +252,23 @@ ROUTES = [
     # The preview before any send (ADR-0021 d.13): a source chosen so composition may run, then the request shown,
     # composed with the entry on screen and the disclosure switch off (a sentence-only prompt).
     ("main.meaningPreview", "full", "⌘, ▸ AI ▸ A local endpoint, ⌘W, ⌘⌥D over a word, Open in XDict, Preview the Request…",
-     "The answer pane showing the composed request — the shipped sentence-only template, the marked sentence, the "
+     "The answer pane showing the composed request, because Settings ▸ AI asks to see it first — the shipped sentence-only template, the marked sentence, the "
      "response contract appended — with Send and Cancel, and nothing sent",
      [SETTINGS, ("wait", 1), ("click", "AI"), ("wait", 1), ("click", "ai.source.local"), ("wait", 0.8),
-      ("key", "cmd+w"), ("wait", 1)] + look_up("apple")
+      ("press", "ai.preview-before-sending"), ("wait", 0.5), ("key", "cmd+w"), ("wait", 1)] + look_up("apple")
      + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"), ("wait", 1.5),
-        ("press", "meaning.preview"), ("wait", 1.5)]),
+        ("press", "Meaning"), ("wait", 1.5)]),
+    ("main.meaningFromPanelEarly", "full", "⌘⌥D over a word then Meaning Here before the panel settles",
+     "The main window on the panel's word with the answer pane beside it holding the sentence",
+     look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 0.5), ("press", "panel.meaning"), ("wait", 3)]),
+    ("main.meaningFromPanel", "full", "⌘⌥D over a word, the panel's Meaning Here button",
+     "The main window on the panel's word with the answer pane beside it holding the sentence",
+     look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.meaning"), ("wait", 2)]),
     ("main.meaning", "full", "⌘⌥D over a word, Open in XDict, then Meaning Here",
      "The answer pane as an inspector at the window's trailing edge, saying no source is chosen and where to choose "
      "one (Settings ▸ AI); the entry keeps its column",
      look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"), ("wait", 1.5),
-                         ("press", "meaning.ask"), ("wait", 1.5)]),
+                         ("press", "Meaning"), ("wait", 1.5)]),
     ("panel.noDictionaries", "empty", "⌃⌥D over an empty library, a word selected", "The panel's 'No Dictionaries'",
      [("type", "apple"), ("key", "cmd+a"), ("key", "ctrl+opt+d"), ("wait", 2)]),
     # Settings. Three panes (ADR-0012 d.1): Dictionaries, Reading & Speech, General. The Dictionaries pane is the only

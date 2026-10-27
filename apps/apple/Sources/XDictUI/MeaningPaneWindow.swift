@@ -146,19 +146,34 @@ final class PaneController: NSWindowController, NSWindowDelegate {
     /// The pane's view, held at its final size while the window grows (owner, 2026-10-24: the text must not move with
     /// the reveal). The window only reveals it; the content itself is still.
     private let hostView: NSHostingView<PaneContent>
+    /// The question group's toolbar, kept for the window's life.
+    private let toolbar: PaneToolbar
 
     init(state: SearchWindowState, onClose: @escaping () -> Void) {
         self.onClose = onClose
-        // **Borderless, like type-review's `KeyboardDrawer`** (owner, 2026-10-24: "learn from ../type-review-macOS"):
-        // no titlebar at all, and its rule of a shut size of one point, ordered in shut and then grown.
+        // **A titlebar-less window with a real toolbar** (owner, 2026-10-26: the pane's question buttons must be the
+        // main window's nav pair itself, not a control imitating it): full-size content under an invisible titlebar, and
+        // the traffic lights hidden by hand — SwiftUI has no API for that, and no control outside a toolbar can be the
+        // toolbar item's 36 pt with its scaled glyph (measured: a ControlGroup is 28, AppKit's large segmented control 24).
         let window = PaneWindow(contentRect: NSRect(x: 0, y: 0, width: Tokens.Window.meaningPaneIdeal, height: Tokens.Window.paneInitialHeight),
-                                styleMask: [.borderless, .resizable],
+                                styleMask: [.titled, .resizable, .fullSizeContentView],
                                 backing: .buffered, defer: true)
-        // **The window's shape is its content's** (type-review's `KeyboardDrawer`, measured there): a transparent
-        // borderless window's shadow follows the alpha of what it draws, so the pane's rounded, opaque surface carries
-        // the rounded corners and the shadow together. The shape is cached: `invalidateShadow` after every change.
-        window.isOpaque = false
-        window.backgroundColor = .clear
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            window.standardWindowButton(button)?.isHidden = true
+        }
+        let toolbar = NSToolbar(identifier: "ai.xdict.app.meaningPane")
+        let modes = PaneToolbar(state: state)
+        toolbar.delegate = modes
+        toolbar.displayMode = .iconOnly
+        toolbar.allowsUserCustomization = false
+        window.toolbar = toolbar
+        window.toolbarStyle = .unified
+        self.toolbar = modes
+        // **The window's own surface, corners and shadow** (owner, 2026-10-26, after the toolbar's buttons drew over
+        // nothing at the pane's top edge): a titled window carries its toolbar band, its rounded corners and its shadow
+        // itself, so the pane's surface reaches under the toolbar. The content no longer paints a shape of its own.
         window.collectionBehavior = [.transient, .ignoresCycle]
         // **A hosting view that follows the window by autoresizing**: a content view controller's Auto Layout
         // re-imposes its fitting width every frame and cancels the drawer animation.
@@ -260,16 +275,52 @@ final class PaneController: NSWindowController, NSWindowDelegate {
     }
 }
 
+/// **The pane's one toolbar item: the question group, drawn by the toolbar itself** (owner, 2026-10-26): an
+/// `NSToolbarItemGroup` in selection mode, which is the system's own segmented group inside a toolbar — the same
+/// drawing the main window's Back/Forward pair gets, sized by the toolbar. A hosted SwiftUI view was measured at 28 pt
+/// inside the same item; the group is the toolbar's own.
+@MainActor
+final class PaneToolbar: NSObject, NSToolbarDelegate {
+    static let modes = NSToolbarItem.Identifier("meaning.modes")
+    private let state: SearchWindowState
+
+    init(state: SearchWindowState) { self.state = state }
+
+    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [Self.modes] }
+    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] { [Self.modes] }
+
+    func toolbar(_ toolbar: NSToolbar, itemForItemIdentifier identifier: NSToolbarItem.Identifier,
+                 willBeInsertedIntoToolbar flag: Bool) -> NSToolbarItem? {
+        guard identifier == Self.modes else { return nil }
+        let modes = MeaningAskMode.allCases
+        let images = modes.compactMap { NSImage(systemSymbolName: $0.symbol, accessibilityDescription: $0.labelText) }
+        let group = NSToolbarItemGroup(itemIdentifier: identifier, images: images, selectionMode: .selectOne,
+                                       labels: modes.map(\.labelText), target: self,
+                                       action: #selector(chosen(_:)))
+        group.label = String(localized: "Question")
+        group.paletteLabel = String(localized: "Question")
+        group.selectedIndex = modes.firstIndex(of: state.meaning.chosenMode) ?? 0
+        for (index, each) in modes.enumerated() {
+            group.subitems[index].toolTip = each.helpText
+        }
+        return group
+    }
+
+    /// The reader pressed a segment: the question it stands for is asked.
+    @objc private func chosen(_ sender: NSToolbarItemGroup) {
+        let modes = MeaningAskMode.allCases
+        let index = sender.selectedIndex
+        guard index >= 0, index < modes.count else { return }
+        state.chooseMeaningMode(modes[index])
+    }
+}
+
 /// The pane's content: the answer alone, no title-and-source header; ⌘I toggles the pane.
 private struct PaneContent: View {
     let state: SearchWindowState
 
     var body: some View {
         MeaningAnswerPane(state: state, showsHeader: false)
-            // **The pane's own surface** (owner, 2026-10-24): rounded like the reader's windows, opaque so the
-            // transparent window's shadow follows this shape, and nothing else above the answer.
-            .background(Color(nsColor: .windowBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: Tokens.Window.drawerCornerRadius, style: .continuous))
             // **⌘I works while the pane has the keyboard too**: the menu command reads this window's focused value.
             .focusedSceneValue(\.searchWindow, state)
     }

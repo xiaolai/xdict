@@ -66,7 +66,25 @@ public struct MeaningAnswerPane: View {
                 }
                 if state.panes.meaningShown || !state.panes.examplesShown {
                     if showsHeader { header }
-                    phraseOffer
+                    // **Question, sentence, answer — read top to bottom** (owner, 2026-10-26, after ../sonovo's
+                    // inspector): each part of the pane has its own small heading, so the controls, the sentence they are
+                    // about and the answer are not one unbroken column.
+                    // **No heading over the question** (owner, 2026-10-26): the group is self-evident, and a title above
+                    // it left the pane's top an empty band.
+                    if state.meaning.canAsk {
+                        questionControls
+                    }
+                    if let context = state.meaning.held.map(MeaningContext.init) {
+                        PaneSection("In This Sentence") {
+                            VStack(alignment: .leading, spacing: Tokens.Space.s) {
+                                MeaningContextView(context: context, speak: {
+                                    state.pronounceTerm(context.term,
+                                                        for: state.meaning.askingTarget ?? state.meaning.sent?.target)
+                                })
+                                phraseOffer
+                            }
+                        }
+                    }
                     content
                 }
             }
@@ -102,44 +120,126 @@ public struct MeaningAnswerPane: View {
         state.meaning.settingsProvider?() ?? state.meaning.settings
     }
 
-    /// **The pane's purpose before any answer** (UI17): the task's title; the source is secondary.
+/// **One section of the answer pane** (owner, 2026-10-26, learned from `../sonovo`'s inspector): a small uppercase
+/// heading over its content, in the system's tertiary label, so the pane reads as question, sentence, answer.
+struct PaneSection<Content: View>: View {
+    let title: LocalizedStringKey
+    @ViewBuilder let content: Content
+
+    init(_ title: LocalizedStringKey, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s) {
+            Text(title)
+                .font(Tokens.TextRole.caption.font.weight(.semibold))
+                .textCase(.uppercase)
+                .foregroundStyle(Tokens.Colour.tertiaryLabel.color)
+                .accessibilityAddTraits(.isHeader)
+            content
+        }
+    }
+}
+
+/// **The pane's purpose before any answer** (UI17): the task's title; the source is secondary.
     private var header: some View {
         VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
             Text(MeaningSentences.title)
                 .font(.headline)
                 .accessibilityAddTraits(.isHeader)
-            if let source = MeaningSentences.source(state.meaning.sent?.source ?? settings.source) {
+            if let source = MeaningSentences.source(state.meaning.sent?.source ?? settings.source, model: settings.model, endpoint: settings.endpoint) {
                 Text(source).font(.caption).foregroundStyle(.secondary)
             }
         }
         .accessibilityIdentifier("meaning.title")
     }
 
-    /// **The phrase the captured sentence holds, offered as the question** (AI contract 5; plan-phrase-recognition
-    /// WI-9): showing it changes neither the term nor the target, and sends nothing — the reader's tap asks, with the
-    /// phrase's own entry as the target and the sentence's own words as the term. A phrase ask already made is not
-    /// offered again.
-    @ViewBuilder private var phraseOffer: some View {
-        if case let .found(candidate, total, _, _, _) = state.phrases.row, state.meaning.held?.phrase == nil {
-            VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
-                HStack(spacing: Tokens.Space.sm) {
-                    Button {  // placement: inspector-row
-                        Task { await state.askAboutPhrase(candidate) }
-                    } label: {
-                        Text("Ask about “\(candidate.phrase)”")
-                    }
-                    .buttonStyle(.borderless)
-                    .accessibilityIdentifier("meaning.phrase")
-                    // **The same keep the row offers** (plan-context-tools WI-4): one action, two surfaces, one state.
-                    PhraseKeepControl(state: state, candidate: candidate, identifier: "meaning.phrase")
+    /// **The question and its controls in the pane** (contract 6; owner, 2026-10-26): the group is the action — a tab
+    /// asks for its question, or shows the answer it already has — and the only other controls the chosen sense's. The
+    /// identifiers are the ones the tour and the E2E read.
+    /// **The group sits where the pane's column starts, in the toolbar's own size** (owner, 2026-10-26: "remove tab
+    /// groups' realignment … why these icons are smaller than mainwindow's navigate icons"): the spacers that centred it
+    /// were re-layout the reader had not asked for, and its glyphs were drawn smaller than the toolbar pair it imitates.
+    @ViewBuilder private var questionControls: some View {
+        VStack(alignment: .leading, spacing: Tokens.Space.s) {
+            if state.meaning.hasSenseSelection {
+                HStack(spacing: Tokens.Space.s) {
+                    Button("Explain This Sense") { state.meaning.explain() }  // placement: inspector-row
+                        .buttonStyle(.borderless)
+                        .disabled(!state.meaning.senseExplainAllowed)
+                        .help(state.meaning.senseExplainAllowed
+                              ? String(localized: "Ask what the sense you chose means in this sentence.")
+                              : String(localized: MeaningSentences.explainNeedsEntryText))
+                        .accessibilityIdentifier("meaning.explain")
+                    Button("Clear Choice") { state.clearSense() }  // placement: inspector-row
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("meaning.clear-sense")
                 }
-                if total > 1 {
-                    Text("The first of \(total)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                if !state.meaning.senseExplainAllowed {
+                    // **The reason, visible, with the way to change it** (UI16; ADR-0021 d.4): the pane says what the
+                    // disabled control needs, and its button opens Settings.
+                    ActionRow(.strip) {
+                        Text(MeaningSentences.explainNeedsEntryText)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } actions: {
+                        Button("AI Settings…") { SettingsRoute.shared.showPane(.ai) }
+                            .accessibilityIdentifier("meaning.explain.settings")
+                    }
+                    .accessibilityElement(children: .contain)
+                    .accessibilityIdentifier("meaning.explain.reason")
                 }
             }
         }
+    }
+
+    /// **The phrase the captured sentence holds, in the first step and every state of the search** (AI contract 5;
+    /// plan-phrase-recognition WI-9; owner, 2026-10-27: "在第一步，sense in current context 里，就应该直接显示短语检测，并且，
+    /// 还得有把某个短语放入卡片的功能"): the detection is drawn beside the sentence it was made for, not only when it finds
+    /// something — a reader can see that the dictionaries were asked and what came back. With a phrase found, one tap
+    /// asks about it and the same control as the popover's row writes it to a card. A phrase ask already made is not
+    /// offered again.
+    @ViewBuilder private var phraseOffer: some View {
+        switch state.phrases.row {
+        case .hidden:
+            EmptyView()
+        case .building:
+            phraseLine("Reading your dictionaries for phrases…", identifier: "meaning.phrase.building")
+        case .unavailable:
+            phraseLine("Phrases are not available for these dictionaries.", identifier: "meaning.phrase.unavailable")
+        case let .found(candidate, total, _, _, _):
+            if state.meaning.held?.phrase == nil {
+                VStack(alignment: .leading, spacing: Tokens.Space.xxs) {
+                    HStack(spacing: Tokens.Space.sm) {
+                        Button {  // placement: inspector-row
+                            Task { await state.askAboutPhrase(candidate) }
+                        } label: {
+                            Text("Ask about “\(candidate.phrase)”")
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityIdentifier("meaning.phrase")
+                        // **The same keep the row offers** (plan-context-tools WI-4): one action, two surfaces, one state.
+                        PhraseKeepControl(state: state, candidate: candidate, identifier: "meaning.phrase")
+                    }
+                    if total > 1 {
+                        Text("The first of \(total)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+
+    /// One line of the phrase detection that is not a candidate: what was read, and what it found.
+    private func phraseLine(_ text: LocalizedStringKey, identifier: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(Tokens.Colour.secondaryLabel.color)
+            .accessibilityIdentifier(identifier)
     }
 
     @ViewBuilder private var content: some View {
@@ -148,7 +248,13 @@ public struct MeaningAnswerPane: View {
             ContentUnavailableView {
                 Label("No Answer Yet", systemImage: "sparkles")
             } description: {
-                Text(idleDescription)
+                // **What to do next depends on what is held** (owner, 2026-10-26): with no capture the pane says how to
+                // make one; with a sentence in hand and no question asked, it points at the question above.
+                if state.meaning.held == nil {
+                    Text("Nothing captured yet. Hover over a word, or press ⌃⌥D, and its sentence appears here.")
+                } else {
+                    Text("Choose a question above.")
+                }
             }
         case .asking:
             asking
@@ -966,6 +1072,15 @@ struct MeaningAskButton: View {
 }
 
 extension MeaningAskMode {
+    /// The glyph the pane's question group draws (owner, 2026-10-26): the same three the ask button uses.
+    var symbol: String {
+        switch self {
+        case .meaning: "sparkles"
+        case .translation: "character.bubble"
+        case .grammar: "text.magnifyingglass"
+        }
+    }
+
     /// The button's one line of help: what the tap sends and what comes back.
     var help: LocalizedStringKey {
         switch self {
