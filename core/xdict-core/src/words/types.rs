@@ -232,6 +232,8 @@ record! {
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum WordData {
         Pronunciation,
+        /// Synset relations (schema 2).
+        Senses,
         Forms,
         Derivations,
         Origins,
@@ -286,7 +288,9 @@ record! {
 }
 
 message! {
-    /// What to look for.
+    use super::lexicon::SenseRelation;
+
+/// What to look for.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
     pub enum WordMode {
         /// Headwords whose normalized spelling ends with the query's: spelling only, never a rhyme or a root.
@@ -301,6 +305,10 @@ message! {
         Derivations,
         /// Headwords sharing a historical ancestor within `max_depth` (1 to [`MAX_ROOT_DEPTH`]) edges (pack data only).
         Roots { max_depth: u8 },
+        /// Headwords a synset of the query's calls synonyms (pack data only, schema 2).
+        Synonyms,
+        /// Headwords a synset of the query's calls antonyms (pack data only, schema 2).
+        Antonyms,
     }
 
     /// Whether the answer could be looked for at all. Absence of data is never reported as absence of relatives.
@@ -339,6 +347,8 @@ message! {
         /// means the ancestor is that word's own node: an empty `query_path` makes the hit a descendant of the query
         /// (`banker` from `bank`), an empty `hit_path` makes the hit the query's own ancestor.
         SharedOrigin { ancestor: OriginNode, query_path: Vec<OriginStep>, hit_path: Vec<OriginStep> },
+        /// A synset the source files both words under, the query first.
+        Sense { relation: SenseRelation, synset: String },
     }
 
     /// A word's place in a paradigm.

@@ -308,6 +308,53 @@ fn a_search_past_its_budget_says_so_and_claims_no_total() {
 
 // ---- rhyme ------------------------------------------------------------------------------------------------------
 
+fn sense(word: &str, other: &str, relation: &str, synset: &str) -> Value {
+    json!({
+        "type": "sense",
+        "word": word,
+        "other": other,
+        "relation": relation,
+        "synset": synset,
+        "pos": "adjective",
+        "source": "wikt",
+    })
+}
+
+/// **Synonyms and antonyms come from the pack's synsets, and only for words the dictionaries hold**: a relation to a
+/// word no dictionary has is not a result (ADR-0032 d.1), and a pack without them says so instead of answering none.
+#[test]
+fn a_synset_gives_synonyms_and_antonyms_of_the_words_the_dictionaries_hold() {
+    let words = catalog(&["good", "fine", "bad", "elsewhere"]);
+    let pack = load(&[
+        sense("good", "fine", "synonym", "oewn-good-a"),
+        sense("good", "bad", "antonym", "oewn-good-a"),
+        sense("good", "unlisted", "synonym", "oewn-good-a"),
+    ]);
+    let explorer = WordExplorer::new(words, Some(pack.clone())).unwrap();
+    let ask = |mode| explorer.search(WordQuery { text: "good".into(), mode, limit: 10, offset: 0 }).unwrap();
+
+    let synonyms = ask(WordMode::Synonyms);
+    assert_eq!(synonyms.status, WordStatus::Answered);
+    assert_eq!(synonyms.hits.iter().map(|h| h.headword.as_str()).collect::<Vec<_>>(), ["fine"]);
+    let antonyms = ask(WordMode::Antonyms);
+    assert_eq!(antonyms.hits.iter().map(|h| h.headword.as_str()).collect::<Vec<_>>(), ["bad"]);
+
+    // The word itself is not in the pack: nothing is claimed about it.
+    assert_eq!(
+        explorer
+            .search(WordQuery { text: "elsewhere".into(), mode: WordMode::Synonyms, limit: 10, offset: 0 })
+            .unwrap()
+            .status,
+        WordStatus::QueryUnknown { data: WordData::Senses }
+    );
+    // Without a pack, the mode says which data it would need.
+    let bare = WordExplorer::new(catalog(&["good"]), None).unwrap();
+    assert_eq!(
+        bare.search(WordQuery { text: "good".into(), mode: WordMode::Antonyms, limit: 10, offset: 0 }).unwrap().status,
+        WordStatus::NoData { data: WordData::Senses }
+    );
+}
+
 fn rhyme_pack() -> Arc<WordLexicon> {
     load(&[
         pron("nation", None, "N EY1 SH AH0 N"),

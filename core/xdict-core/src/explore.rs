@@ -9,7 +9,7 @@
 //! query the dictionaries have nothing under, but it never offers a word that no dictionary holds (ADR-0032 d.1).
 
 use crate::types::EntryRef;
-use crate::words::{WordHit, WordPage, WordReason, WordStatus};
+use crate::words::{SenseRelation, WordHit, WordPage, WordReason, WordStatus};
 
 /// Why a row is in the answer.
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -30,6 +30,10 @@ pub enum ExploreReason {
     Derivation,
     /// The same historical ancestor.
     SharedOrigin,
+    /// A synset files them as synonyms (`words::SenseRelation::Synonym`).
+    Synonym,
+    /// A synset files them as antonyms.
+    Antonym,
 }
 
 /// One row of the list: the word, the entry it opens, and why it is there.
@@ -109,6 +113,10 @@ impl ExploreAnswer {
             WordReason::Inflection { .. } => ExploreReason::Inflection,
             WordReason::Derivation { .. } => ExploreReason::Derivation,
             WordReason::SharedOrigin { .. } => ExploreReason::SharedOrigin,
+            WordReason::Sense { relation, .. } => match relation {
+                SenseRelation::Synonym | SenseRelation::Hypernym | SenseRelation::Hyponym => ExploreReason::Synonym,
+                SenseRelation::Antonym => ExploreReason::Antonym,
+            },
         })
     }
 }

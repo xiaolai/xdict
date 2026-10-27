@@ -30,6 +30,7 @@ use std::mem::size_of;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
 
+use super::lexicon::SenseRelation;
 use super::lexicon::{
     DerivationRecord, EtymonRecord, FormRecord, LexiconRecord, OriginRecord, PronunciationRecord, StemAlignment,
     WordLexicon,
@@ -151,6 +152,8 @@ impl WordExplorer {
                 WordMode::Inflections => inner.inflections(&query, &text),
                 WordMode::Derivations => inner.derivations(&query, &text),
                 WordMode::Roots { max_depth } => inner.roots(&query, &text, max_depth),
+                WordMode::Synonyms => inner.senses(&query, &text, SenseRelation::Synonym),
+                WordMode::Antonyms => inner.senses(&query, &text, SenseRelation::Antonym),
             })
         })
     }
@@ -475,6 +478,8 @@ struct Lexical {
     nodes: HashMap<String, u32>,
     /// Normalized modern word → its etymology nodes (one per homograph etymology).
     word_nodes: HashMap<String, Vec<u32>>,
+    /// Normalized word → its synset relations: (relation, the other word normalized, the source's synset id).
+    senses: HashMap<String, Vec<(SenseRelation, String, String)>>,
     /// Node id → the edges up to its parents. An `affix` edge is in neither direction: a shared affix is no root.
     parents: HashMap<String, Vec<u32>>,
     children: HashMap<String, Vec<u32>>,
@@ -496,6 +501,7 @@ impl Lexical {
             origins: false,
             nodes: HashMap::new(),
             word_nodes: HashMap::new(),
+            senses: HashMap::new(),
             parents: HashMap::new(),
             children: HashMap::new(),
         };
@@ -503,9 +509,13 @@ impl Lexical {
             let i = u32::try_from(index)
                 .map_err(|_| too_large(WordLimit::Records, "more records than an index addresses"))?;
             match record {
-                // **A synset relation is read by the synonym and antonym modes**, whose own step this is; until they
-                // exist it is validated and counted and indexes nothing.
-                LexiconRecord::Sense(_) => {}
+                LexiconRecord::Sense(s) => {
+                    lex.senses.entry(normalize(&s.word)).or_default().push((
+                        s.relation,
+                        normalize(&s.other),
+                        s.synset.clone(),
+                    ));
+                }
                 LexiconRecord::Pronunciation(p) => {
                     let word = normalize(&p.word);
                     let known = lex.pronunciations.get(&word).map_or(0, |s| s.records.len());
@@ -843,6 +853,7 @@ fn footprint(reason: &WordReason) -> u64 {
         WordReason::SharedOrigin { ancestor, query_path, hit_path } => {
             heap_node(ancestor) + heap_origin_steps(query_path) + heap_origin_steps(hit_path)
         }
+        WordReason::Sense { synset, .. } => heap_str(synset),
     };
     // **Four slots, the first allocation a `Vec<WordReason>` makes on push**: two did not cover the capacity the
     // allocator actually hands out (audit, 2026-10-24).
@@ -1044,6 +1055,34 @@ impl Inner {
             next,
             exhausted: cut,
         }
+    }
+
+    /// **Words a synset of the query's ties to it** (schema 2): a synonym or an antonym, and only where the reader's
+    /// own dictionaries hold that word — a relation to a word no dictionary has is not a result (ADR-0032 d.1).
+    fn senses(&self, query: &WordQuery, text: &str, want: SenseRelation) -> WordPage {
+        let none =
+            |status| WordPage { mode: query.mode, status, hits: Vec::new(), total: None, next: None, exhausted: None };
+        let Some(lex) = &self.lexical else {
+            return none(WordStatus::NoData { data: WordData::Senses });
+        };
+        let Some(senses) = lex.senses.get(text) else {
+            return none(WordStatus::QueryUnknown { data: WordData::Senses });
+        };
+        let mut found = Vec::new();
+        for (relation, other, synset) in senses {
+            if *relation != want {
+                continue;
+            }
+            for head in self.catalog.join(other) {
+                found.push(Found {
+                    order: 0,
+                    rank: self.catalog.rank(head),
+                    head,
+                    reasons: vec![WordReason::Sense { relation: *relation, synset: synset.clone() }],
+                });
+            }
+        }
+        self.finish(query, found, None, 0, false, |f| f.reasons)
     }
 
     fn ends_with(&self, query: &WordQuery, text: &str) -> WordPage {
