@@ -661,6 +661,18 @@ public struct AISettings: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityIdentifier("ai.language.caption")
+            // **Where a translation is written into** (owner, 2026-10-26: the pane's own "Into …" menu was redundant,
+            // and the reader's target belongs with the other answer settings): one choice, the pane has none of its own.
+            Picker(selection: Binding(get: { model.preferences.settings.translationLanguage },
+                                      set: { model.preferences.setTranslationLanguage($0) })) {
+                ForEach(MeaningSentences.translationLanguages, id: \.self) { tag in
+                    Text(MeaningSentences.languageName(tag)).tag(tag)
+                }
+            } label: {
+                Text("Translate into")
+            }
+            .accessibilityIdentifier("ai.translation-language")
+            .settingsAnchor(.aiTranslationLanguage)
         }
     }
 

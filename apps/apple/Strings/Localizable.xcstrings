@@ -6211,22 +6211,6 @@
         }
       }
     },
-    "Into %@": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Into %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "译为 %@"
-          }
-        }
-      }
-    },
     "It is looked up as soon as it is ready.": {
       "localizations": {
         "en": {
@@ -14151,6 +14135,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "翻译"
+          }
+        }
+      }
+    },
+    "Translate into": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Translate into"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "翻译为"
           }
         }
       }
