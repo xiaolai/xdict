@@ -16,11 +16,15 @@ final class SpotlightLibrary {
     private let library: Library
     private let client: ServiceClient
     private let indexer: SpotlightIndexer
+    private let ledger: SpotlightLedger
 
-    init(library: Library, client: ServiceClient, indexer: SpotlightIndexer = SpotlightIndexer(index: SystemSpotlightIndex())) {
+    init(library: Library, client: ServiceClient,
+         indexer: SpotlightIndexer = SpotlightIndexer(index: SystemSpotlightIndex()),
+         ledger: SpotlightLedger = SpotlightLedger()) {
         self.library = library
         self.client = client
         self.indexer = indexer
+        self.ledger = ledger
     }
 
     /// What one run came to, in words the reader can be told.
@@ -34,54 +38,61 @@ final class SpotlightLibrary {
         public var isFailure: Bool { if case .failed = self { true } else { false } }
     }
 
-    /// **The switch, obeyed**: on means every answering dictionary's words go in, off means every XDict domain comes
-    /// out. A run is not cancellable by a second switch — the settings value is the order, and the next run is what
-    /// follows it — so a failure is reported rather than left as a silent half-index.
+    /// **The switch, obeyed** (owner, 2026-10-27): on means every dictionary the index does not already hold, at the
+    /// edition it holds, is written — nothing else is touched, so a launch over an unchanged library costs no Spotlight
+    /// work at all; off means every XDict domain comes out. A run is not cancellable by a second switch — the settings
+    /// value is the order, and the next run is what follows it — so a failure is reported rather than left as a silent
+    /// half-index.
     func apply(_ on: Bool) async -> Outcome {
         guard on else {
             do {
-                // **Everything this app indexed, in one call.** The index is XDict's own, so this also takes what a
-                // dictionary that has since been removed or disabled left behind (audit-fix 2026-10-22).
+                // **Everything this app indexed, in one call**, and the record of it goes with it.
                 try await indexer.deleteAll()
+                ledger.clear()
                 return .deleted(dictionaries: 0)
             } catch {
                 return .failed(String(describing: error))
             }
         }
-        // **A rebuild, not an upsert** (audit-fix 2026-10-22): delete everything first, so a dictionary the reader
-        // removed or disabled, and a word a new edition no longer has, do not stay searchable.
-        do {
-            try await indexer.deleteAll()
-        } catch {
-            return .failed(String(describing: error))
-        }
-        var words = 0
-        var indexed = 0
+        // **What the library has now**: only an enabled dictionary with an edition and an open handle can be indexed.
+        var libraryNow: [SpotlightPlan.Update] = []
         var skipped = 0
+        var handles: [String: DictId] = [:]
         for entry in library.entries where entry.enabled {
-            // A dictionary still importing, or one the service could not open, is **not** silently left out: the run says
-            // so, and the next launch or toggle tries again.
+            guard let edition = entry.edition?.rawValue else { continue }
             guard let dict = library.handle(entry.id) else {
                 skipped += 1
                 continue
             }
-            do {
+            let domain = entry.id.uuidString
+            libraryNow.append(SpotlightPlan.Update(domain: domain, edition: edition))
+            handles[domain] = dict
+        }
+        let plan = SpotlightPlan.make(library: libraryNow, indexed: ledger.indexed)
+        var words = 0
+        var indexed = 0
+        do {
+            if !plan.removing.isEmpty {
+                try await indexer.delete(domains: plan.removing)
+                ledger.forget(domains: plan.removing)
+            }
+            for update in plan.updating {
+                guard let dict = handles[update.domain] else { continue }
+                // **A changed edition replaces its own domain**: the old edition's words never outlive it.
+                try await indexer.delete(domains: [update.domain])
                 let client = self.client
-                // **The domain is the library's own id for the dictionary**, not the service's handle: a handle carries
-                // the process's nonce, so it changes at every launch and would orphan the last run's items (audit-fix
-                // 2026-10-22).
-                let domain = entry.id.uuidString
                 let edition = EditionBox()
-                let run = try await indexer.index(domain: domain) { @Sendable from in
+                let run = try await indexer.index(domain: update.domain) { @Sendable from in
                     try await Self.nextPage(client: client, dict: dict, from: from, edition: edition)
                 }
+                ledger.record(domain: update.domain, edition: update.edition)
                 words += run.stored
                 indexed += 1
-            } catch is CancellationError {
-                return .failed("cancelled")
-            } catch {
-                return .failed(String(describing: error))
             }
+        } catch is CancellationError {
+            return .failed("cancelled")
+        } catch {
+            return .failed(String(describing: error))
         }
         guard skipped == 0 else { return .failed("\(skipped) dictionaries were not ready") }
         return .indexed(dictionaries: indexed, words: words)
