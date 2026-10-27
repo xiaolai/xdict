@@ -14,6 +14,10 @@ import XDictCore
 /// The entry budget and the question ceiling are the app's own (`MeaningBudget.entryTextBytes`, `AIComposer.questionCeilingUTF8`).
 enum HarnessError: Error {
     case duplicateAsk(String)
+    case duplicateAnswer(String)
+    case unknownAnswer(String)
+    case incomplete(asked: Int, answered: Int)
+    case unreadable(String)
     case malformed(String)
 }
 
@@ -267,8 +271,13 @@ enum Harness {
                 throw HarnessError.duplicateAsk(ask.id)
             }
         }
+        // **An answer file is reconciled, not sampled** (audit 2026-10-27): a duplicated or unknown id, or an ask left
+        // unanswered, is reported here — a mismatched file used to pass with a success count over whatever matched.
         var rows: [[String: Any]] = []
+        var answered: Set<String> = []
         for answer in answers.answers {
+            guard byID[answer.id] != nil else { throw HarnessError.unknownAnswer(answer.id) }
+            guard answered.insert(answer.id).inserted else { throw HarnessError.duplicateAnswer(answer.id) }
             guard let ask = byID[answer.id] else { continue }
             let entry = ask.entry.map {
                 AIEntryText(text: $0, complete: ask.complete ?? true, cutAt: ask.cutAt ?? 0,
@@ -292,7 +301,11 @@ enum Harness {
                                               options: [.prettyPrinted, .sortedKeys])
         try data.write(to: out)
         let passed = rows.filter { $0["validated"] as? Bool == true }.count
-        print("validated \(passed) of \(rows.count); wrote \(out.path)")
+        let missing = byID.keys.filter { !answered.contains($0) }
+        print("validated \(passed) of \(rows.count); asked \(byID.count); wrote \(out.path)")
+        guard missing.isEmpty else {
+            throw HarnessError.incomplete(asked: byID.count, answered: answered.count)
+        }
     }
 
     /// **The provider a run measures**, built once for the corpus run and the sentence run (plan-context-tools WI-2): one
@@ -333,13 +346,26 @@ enum Harness {
         let provider = try Self.provider(source: source, work: work, claudeHome: claudeHome, codexHome: codexHome)
 
         // The corpus is either flat or one folder per dictionary (the 24 are); both layouts are read.
+        // **A corpus that cannot be read is a failure, not an empty success** (audit 2026-10-27): the listing threw
+        // nothing before, so a missing directory measured zero dictionaries and exited 0.
+        let items: [URL]
+        do {
+            items = try FileManager.default.contentsOfDirectory(at: corpus, includingPropertiesForKeys: [.isDirectoryKey])
+        } catch {
+            throw HarnessError.unreadable("the corpus at \(corpus.path): \(error.localizedDescription)")
+        }
         var files: [URL] = []
-        for item in (try? FileManager.default.contentsOfDirectory(at: corpus, includingPropertiesForKeys: [.isDirectoryKey]))
-            ?? [] {
-            let isDirectory = (try? item.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+        for item in items {
+            let isDirectory = try item.resourceValues(forKeys: [.isDirectoryKey]).isDirectory ?? false
             if isDirectory {
-                let inside = (try? FileManager.default.contentsOfDirectory(at: item, includingPropertiesForKeys: nil)) ?? []
-                files += inside.filter { $0.pathExtension.lowercased() == "mdx" }
+                do {
+                    let inside = try FileManager.default.contentsOfDirectory(at: item, includingPropertiesForKeys: nil)
+                    files += inside.filter { $0.pathExtension.lowercased() == "mdx" }
+                } catch {
+                    // **A folder that cannot be listed says so, by name** (audit 2026-10-27): its dictionaries used to
+                    // vanish from the measurement without a word.
+                    throw HarnessError.unreadable("the dictionary folder \(item.lastPathComponent): \(error.localizedDescription)")
+                }
             } else if item.pathExtension.lowercased() == "mdx" {
                 files.append(item)
             }
@@ -385,19 +411,27 @@ enum Harness {
                 if keys.count >= keyLimit { break }
             }
             var samples: [Sample] = []
+            // **A skipped sample is counted, never silent** (verification 2026-10-27): a corpus whose entries fail used to
+            // report a clean run over the few that did not.
+            var skipped: [String: Int] = [:]
+            func skip(_ stage: String) { skipped[stage, default: 0] += 1 }
             for key in keys.sorted().prefix(keyLimit) {
                 guard let page = try? core.lookup(query: key, dicts: [dict],
                                                   options: LookupOptions(limit: 1, offset: 0, mode: .reader,
-                                                                         generation: nil)),
-                      let hit = page.hits.first,
-                      let text = try? core.entryText(dict: hit.dict, entry: hit.entry,
+                                                                         generation: nil)) else {
+                    skip("lookup"); continue
+                }
+                guard let hit = page.hits.first else { skip("no hit"); continue }
+                guard let text = try? core.entryText(dict: hit.dict, entry: hit.entry,
                                                      view: TextView(baseUrl: "", maxBodyBytes: bodyBudget,
-                                                                    maxTextBytes: entryBudget)) else { continue }
+                                                                    maxTextBytes: entryBudget)) else {
+                    skip("entry text"); continue
+                }
                 let fromEntry = entrySentence(text.text, key: key)
                 let question = question(text: text.text, complete: text.complete, cutAt: text.cutAt, edition: edition,
                                         key: key, occurrence: hit.entry.occurrence,
                                         sentence: fromEntry?.sentence, range: fromEntry?.range)
-                guard let composed = try? composed(question) else { continue }
+                guard let composed = try? composed(question) else { skip("compose"); continue }
                 var tokens: Int?
                 if appleAvailable {
                     tokens = try? await model.tokenCount(for: composed)
@@ -408,7 +442,10 @@ enum Harness {
                                       sentenceSource: fromEntry == nil ? "synthetic" : "entry"))
             }
             guard !samples.isEmpty else {
-                print("skip \(file.lastPathComponent): no entry text")
+                // **A dictionary with nothing to measure says what it skipped** (verification 2026-10-27): the stage counts
+                // used to vanish with the dictionary, so "no entry text" could be a compose failure wearing its name.
+                let detail = skipped.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", ")
+                print("skip \(file.lastPathComponent): no sample — \(detail.isEmpty ? "no keys sampled" : "skipped: " + detail)")
                 try? core.close(dict: dict)
                 continue
             }
@@ -487,6 +524,11 @@ enum Harness {
                 asks: timings))
             print("\(file.lastPathComponent): \(samples.count) entries, text \(byText.first ?? 0)…\(byText.last ?? 0) B, "
                   + "question \(byComposed.first ?? 0)…\(byComposed.last ?? 0) B, largest \(largest.complete ? "whole" : "cut at \(largest.cutAt)")")
+            if !skipped.isEmpty {
+                // **What the run left out, by stage** (verification 2026-10-27): a count a reader can act on.
+                let detail = skipped.sorted { $0.key < $1.key }.map { "\($0.value) \($0.key)" }.joined(separator: ", ")
+                print("  skipped: \(detail)")
+            }
         }
 
         if let emit {
