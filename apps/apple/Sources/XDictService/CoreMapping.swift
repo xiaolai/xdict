@@ -168,6 +168,58 @@ extension XDictContract.Hit {
     }
 }
 
+extension XDictCore.WordMode {
+    /// **What a page asks for**, as the core's own mode: the two are the same question asked across the binding.
+    init(_ mode: XDictContract.ExploreMode) {
+        switch mode {
+        case .endsWith: self = .endsWith
+        case .fuzzy(let maxDistance): self = .fuzzy(maxDistance: maxDistance)
+        case .rhyme: self = .rhyme
+        case .inflections: self = .inflections
+        case .derivations: self = .derivations
+        case .roots(let maxDepth): self = .roots(maxDepth: maxDepth)
+        }
+    }
+}
+
+extension XDictContract.ExploreReason {
+    init(_ reason: XDictCore.ExploreReason) {
+        switch reason {
+        case .exact: self = .exact
+        case .endsWith: self = .endsWith
+        case .spelling(let distance): self = .spelling(distance: distance)
+        case .rhyme: self = .rhyme
+        case .inflection: self = .inflection
+        case .derivation: self = .derivation
+        case .sharedOrigin: self = .sharedOrigin
+        }
+    }
+}
+
+extension XDictContract.ExploreState {
+    init(_ state: XDictCore.ExploreState) {
+        switch state {
+        case .answered: self = .answered
+        case .noData: self = .noData
+        case .unknown: self = .unknown
+        }
+    }
+}
+
+extension XDictContract.ExploreRow {
+    init(_ row: XDictCore.ExploreRow) {
+        self.init(word: row.word, dict: DictId(rawValue: row.dict), entry: XDictContract.EntryRef(row.entry),
+                  reason: XDictContract.ExploreReason(row.reason))
+    }
+}
+
+extension XDictContract.ExploreAnswer {
+    init(_ answer: XDictCore.ExploreAnswer) {
+        self.init(state: XDictContract.ExploreState(answer.state), rows: answer.rows.map(XDictContract.ExploreRow.init),
+                  next: answer.next, exhausted: answer.exhausted)
+    }
+}
+
 extension XDictContract.Words {
     init(_ words: XDictCore.Words) {
         self.init(edition: XDictContract.Edition(rawValue: words.edition), words: words.words, total: words.total,

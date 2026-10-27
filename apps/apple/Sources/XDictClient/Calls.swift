@@ -114,7 +114,7 @@ extension ServiceOperation {
              .examplesBuild(let dict), .phrasesBuild(let dict), .words(let dict, _, _),
              .studyNote(let dict, _, _, _, _, _), .definitionHash(let dict, _): [dict]
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _),
-             .phrases(_, _, let dicts): dicts
+             .phrases(_, _, let dicts), .explore(let dicts, _, _, _, _): dicts
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
@@ -129,6 +129,8 @@ extension ServiceOperation {
         case .entry(let dict, let entry, let render): .entry(dict: rename(dict), entry: entry, render: render)
         case .link(let dict, let url, let origin, let render): .link(dict: rename(dict), url: url, origin: origin, render: render)
         case .resource(let dict, let path, let render): .resource(dict: rename(dict), path: path, render: render)
+        case .explore(let dicts, let mode, let text, let offset, let limit):
+            .explore(dicts: dicts.map(rename), mode: mode, text: text, offset: offset, limit: limit)
         case .health(let dict): .health(dict: rename(dict))
         case .readingStyle(let dict): .readingStyle(dict: rename(dict))
         case .displayOptions(let dict): .displayOptions(dict: rename(dict))

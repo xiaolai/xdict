@@ -62,6 +62,15 @@ extension ClientOutcome {
         }
     }
 
+    var explored: Result<ExploreAnswer, ClientFailure> {
+        flatMap { delivered in
+            guard case .explored(let answer) = delivered.answer else {
+                return .failure(.wire(.undecodable(detail: "not an exploration")))
+            }
+            return .success(answer)
+        }
+    }
+
     var phraseAnswer: Result<PhraseAnswer, ClientFailure> {
         flatMap { delivered in
             guard case .phrases(let answer) = delivered.answer else {

@@ -133,7 +133,7 @@ enum Fixtures {
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 42
+    static let operationCases = 43
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -178,6 +178,7 @@ enum Fixtures {
         case .examplesBuild: 39
         case .phrases: 40
         case .phrasesBuild: 41
+        case .explore: 42
         }
     }
 
@@ -307,7 +308,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 34
+    static let answerCases = 35
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -344,6 +345,7 @@ enum Fixtures {
         case .examplesBuilt: 31
         case .phrases: 32
         case .phrasesBuilt: 33
+        case .explored: 34
         }
     }
 

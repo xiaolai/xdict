@@ -187,6 +187,78 @@ public enum HitProblem: Codable, Hashable, Sendable {
 
 /// **A page of one dictionary's words**, for Core Spotlight: the core's `Words`, with the edition it belongs to so a
 /// page from another edition is not continued. No body travels beside it.
+// MARK: - Word exploration (contract 16, plan-word-exploration WI-4)
+
+/// **What to look for** — the core's `WordMode`, mirrored here so the app never links the core.
+public enum ExploreMode: Codable, Hashable, Sendable {
+    /// Headwords whose spelling ends with the query's.
+    case endsWith
+    /// Headwords within `maxDistance` (1 to 3) edits.
+    case fuzzy(maxDistance: UInt8)
+    /// Headwords sharing the query's rime (needs the word data).
+    case rhyme
+    /// Members of every paradigm the query belongs to (needs the word data).
+    case inflections
+    /// The query's derivational family (needs the word data).
+    case derivations
+    /// Headwords sharing a historical ancestor within `maxDepth` (needs the word data).
+    case roots(maxDepth: UInt8)
+}
+
+/// **Why a row is in the answer** — a label, never a sentence: the shell writes the words, in the reader's language.
+public enum ExploreReason: Codable, Hashable, Sendable {
+    case exact
+    case endsWith
+    case spelling(distance: UInt8)
+    case rhyme
+    case inflection
+    case derivation
+    case sharedOrigin
+}
+
+/// **Whether the dictionaries could be searched at all**: absence of data is never reported as absence of relatives.
+public enum ExploreState: Codable, Hashable, Sendable {
+    /// Searched: the rows are the answer, possibly none.
+    case answered
+    /// No word data is installed, or it holds none of this kind.
+    case noData
+    /// The data holds the kind, but nothing for this query.
+    case unknown
+}
+
+/// One row: the word, the dictionary and entry it opens, and why it is there.
+public struct ExploreRow: Codable, Hashable, Sendable {
+    public let word: String
+    public let dict: DictId
+    public let entry: EntryRef
+    public let reason: ExploreReason
+
+    public init(word: String, dict: DictId, entry: EntryRef, reason: ExploreReason) {
+        self.word = word
+        self.dict = dict
+        self.entry = entry
+        self.reason = reason
+    }
+}
+
+/// **One page of an exploration**: rows a list draws, and nothing of the evidence behind them — a pronunciation, a
+/// family's steps and an etymology path are asked for the row the reader opens.
+public struct ExploreAnswer: Codable, Hashable, Sendable {
+    public let state: ExploreState
+    public let rows: [ExploreRow]
+    /// The next page's offset, when the answer holds more rows than this page reached.
+    public let next: UInt32?
+    /// The answer was cut short by a work budget: what is here is not all there is.
+    public let exhausted: Bool
+
+    public init(state: ExploreState, rows: [ExploreRow], next: UInt32?, exhausted: Bool) {
+        self.state = state
+        self.rows = rows
+        self.next = next
+        self.exhausted = exhausted
+    }
+}
+
 public struct Words: Codable, Hashable, Sendable {
     public let edition: Edition
     public let words: [String]

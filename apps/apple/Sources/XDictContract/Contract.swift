@@ -60,7 +60,7 @@ public enum Contract {
     /// 15 (2026-10-25): the operations `phrases` and `phrasesBuild` and their answers, the phrase covering a captured
     /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7); `PhraseAnswer.total`
     /// counts the matches before the cap, so a capped list says what it left out.
-    public static let version: UInt32 = 15
+    public static let version: UInt32 = 16
 }
 
 // MARK: - The request
@@ -201,6 +201,10 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// **A page of one dictionary's words** (plan-setup-v2 WI-6, ADR-0028): the public keys from key position
     /// `from`, for Core Spotlight. No body is read; the words come from the edition's index.
     case words(dict: DictId, from: UInt64, limit: UInt32)
+    /// **One page of word exploration** (contract 16, plan-word-exploration WI-4): a miss, a rhyme, a family or a
+    /// root, answered with the reader's own dictionaries' words. Every row names the dictionary and the entry it opens;
+    /// the evidence behind a row is a later call.
+    case explore(dicts: [DictId], mode: ExploreMode, text: String, offset: UInt32, limit: UInt32)
     /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese contains `query`, from the
     /// dictionaries with a store, in their order. One without a store is answered in `notReady`, never as an error.
     case examples(query: String, dicts: [DictId], limit: UInt32)
@@ -313,7 +317,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
         }
     }
 
@@ -326,7 +330,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .entryText, .examples, .examplesBuild, .phrases, .phrasesBuild,
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
-             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
+             .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
         }
     }
 
@@ -355,7 +359,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .versions, .importPackage, .cancel, .close, .joinLineage, .splitLineage, .lineageOf, .health,
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
              .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
-             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore: nil
+             .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: nil
         }
     }
 
@@ -381,7 +385,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .definitionHash(let dict, _):
             filesOf[dict] ?? []
         case .lookup(_, let dicts, _), .suggest(_, let dicts, _), .examples(_, let dicts, _),
-             .phrases(_, _, let dicts):
+             .phrases(_, _, let dicts), .explore(let dicts, _, _, _, _):
             dicts.flatMap { filesOf[$0] ?? [] }
         case .words(let dict, _, _): filesOf[dict] ?? []
         // **These read through an edition, not a handle** (`editionsRead` adds those files), or read nothing at all.
@@ -396,6 +400,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     var answerKind: AnswerKind {
         switch self {
         case .versions: .versions
+        case .explore: .explored
         case .importPackage: .imported
         case .cancel, .cancelConversion: .cancellation
         case .openPackage: .opened
@@ -443,7 +448,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .examples, .phrases, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync, .ledgerRemove, .ledgerRestore: false
+             .ledgerSync, .ledgerRemove, .ledgerRestore, .explore: false
         }
     }
 }
@@ -562,6 +567,8 @@ public enum Answer: Codable, Hashable, Sendable {
     case suggestions([String])
     /// A page of one dictionary's words (contract 13).
     case words(Words)
+    /// One page of word exploration (contract 16).
+    case explored(ExploreAnswer)
     /// The entry's reference, policy and lossy count; **its HTML is the payload**, as UTF-8.
     case entry(Entry)
     case link(Link)
@@ -621,7 +628,7 @@ public enum Answer: Codable, Hashable, Sendable {
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
              .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced: false
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored: false
         }
     }
 
@@ -637,6 +644,7 @@ public enum Answer: Codable, Hashable, Sendable {
     var kind: AnswerKind {
         switch self {
         case .versions: .versions
+        case .explored: .explored
         case .imported: .imported
         case .cancellation: .cancellation
         case .opened: .opened
@@ -690,7 +698,7 @@ enum AnswerKind: String, Sendable {
     case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, phrases, phrasesBuilt, ledgerRecord,
          ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
-    case exported, erased, conflicts, synced
+    case exported, erased, conflicts, synced, explored
 }
 
 // MARK: - Events

@@ -137,6 +137,11 @@ final class Dictionaries: Sendable {
             case .words(let dict, let from, let limit):
                 return (.answer(.words(XDictContract.Words(try core.words(dict: dict.rawValue, from: from, limit: limit)))),
                         nil)
+            // Plan-word-exploration WI-4: one page of exploration, its rows naming the entries they open.
+            case .explore(let dicts, let mode, let text, let offset, let limit):
+                let answer = try core.explore(dicts: dicts.map(\.rawValue), mode: XDictCore.WordMode(mode), text: text,
+                                              offset: offset, limit: limit)
+                return (.answer(.explored(XDictContract.ExploreAnswer(answer))), nil)
             // ADR-0031: the reverse-example query, and the per-edition store built in the background.
             case .examples(let query, let dicts, let limit):
                 let examples = try core.examples(query: query, dicts: dicts.map(\.rawValue), limit: limit)
