@@ -27,6 +27,8 @@ public enum PhraseRow: Equatable, Sendable {
         }
     }
 
+    /// Nothing to say: not asked (no sentence, the switch off, a capture with no term range), or asked and nothing found
+    /// — owner, 2026-10-27: "没有就不用提示了".
     case hidden
     case building
     case unavailable

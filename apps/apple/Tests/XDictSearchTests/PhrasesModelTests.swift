@@ -56,7 +56,7 @@ struct PhraseRowTests {
     @Test func every_state_maps_to_its_own_row() {
         #expect(PhraseRow(nil) == .hidden)
         #expect(PhraseRow(PhrasesFixture.answer(.notAsked)) == .hidden)
-        #expect(PhraseRow(PhrasesFixture.answer(.none)) == .hidden)
+        #expect(PhraseRow(PhrasesFixture.answer(.none)) == .hidden, "asked and nothing found says nothing")
         #expect(PhraseRow(PhrasesFixture.answer(.building)) == .building)
         #expect(PhraseRow(PhrasesFixture.answer(.unavailable)) == .unavailable)
         #expect(PhraseRow(PhrasesFixture.answer(.found)) == .hidden, "a found answer with no match has nothing to show")
