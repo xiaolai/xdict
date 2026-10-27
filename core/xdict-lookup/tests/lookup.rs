@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use xdict_lookup::{How, Mode, Policy, Problem, matches, resolve, suggest};
+use xdict_lookup::{How, Mode, Policy, Problem, matches, nearest, resolve, suggest};
 use xdict_mdx::{Budget, File, Kind};
 use xdict_mdx_writer::{self as writer, Entry, Spec};
 
@@ -13,6 +13,50 @@ fn file(entries: &[(&str, &str)]) -> File {
     let bytes = writer::write(&Spec::mdx(), &entries).unwrap();
     let index = File::build_index(&bytes, Some(Kind::Mdx), [1; 32], &Policy).unwrap();
     File::with_index(Box::new(bytes), Some(Kind::Mdx), Box::new(index), [1; 32], Arc::new(Policy)).unwrap().unwrap()
+}
+
+/// **What a miss is answered with** (owner, 2026-10-27): the nearest spellings, nearest first, each once — the keys
+/// a reader may have meant instead of "no word".
+#[test]
+fn a_misspelling_is_answered_with_the_nearest_spellings() {
+    let f = file(&[("receive", "get"), ("recite", "say aloud"), ("relieve", "ease"), ("deceive", "trick")]);
+    let mut out = Vec::new();
+    nearest(&f, "recieve", 2, 3, &mut out).unwrap();
+    assert_eq!(out.first().map(String::as_str), Some("receive"), "nearest first: {out:?}");
+    assert!(out.len() <= 3, "the limit holds: {out:?}");
+    assert_eq!(out.iter().filter(|k| *k == "receive").count(), 1, "each spelling once");
+}
+
+/// **A wrong first letter still finds its word**: the first letter's band holds nothing, so the scan falls back to
+/// the whole file rather than answering nothing.
+#[test]
+fn a_band_with_no_candidate_falls_back_to_the_whole_file() {
+    let f = file(&[("the", "article"), ("other", "different")]);
+    let mut out = Vec::new();
+    nearest(&f, "hte", 2, 5, &mut out).unwrap();
+    assert_eq!(out.first().map(String::as_str), Some("the"), "band 'h' is empty, the fallback finds it: {out:?}");
+}
+
+/// A word already held is not offered twice, and a distance of zero still answers (the call is the miss's, not the
+/// exact lookup's).
+#[test]
+fn held_keys_are_not_offered_again_and_the_limit_is_the_whole_answer() {
+    let f = file(&[("colour", "hue"), ("colours", "hues")]);
+    let mut out = vec!["colour".to_string()];
+    nearest(&f, "colours", 1, 2, &mut out).unwrap();
+    assert_eq!(out, ["colour", "colours"], "the held key is kept, its neighbour added once");
+    let mut full = Vec::new();
+    nearest(&f, "colour", 1, 0, &mut full).unwrap();
+    assert!(full.is_empty(), "a limit of zero asks for nothing");
+}
+
+/// Nothing within the distance is no answer, not a wrong one.
+#[test]
+fn nothing_near_is_nothing() {
+    let f = file(&[("zebra", "an animal")]);
+    let mut out = Vec::new();
+    nearest(&f, "quartz", 2, 5, &mut out).unwrap();
+    assert!(out.is_empty(), "{out:?}");
 }
 
 fn keys(file: &File, query: &str, mode: Mode) -> Vec<(String, How)> {

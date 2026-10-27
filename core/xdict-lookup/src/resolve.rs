@@ -6,6 +6,9 @@ use std::collections::{HashMap, HashSet, VecDeque};
 
 use xdict_mdx::{Budget, Error, File, Kept};
 
+use crate::distance::osa;
+use crate::policy::unmark;
+
 /// Which matching a lookup uses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
@@ -413,6 +416,65 @@ pub fn occurrences(file: &File, keys: &[usize]) -> Result<HashMap<usize, u32>, E
         }
     }
     Ok(out)
+}
+
+/// **The public keys nearest a spelling the reader typed** (owner, 2026-10-27: fuzzy is not a mode, it is what a miss
+/// does), added to `out` until it holds `limit`: restricted Damerau–Levenshtein over the file's tier-2 form, nearest
+/// first and then in the file's own order, each spelling once.
+///
+/// **The first letter's band first**: every key that begins with the query's first character is compared, and a full
+/// scan runs only when that band held nothing — measured on the 24-dictionary corpus at 34 ms against 439 ms for the
+/// full scan (`examples/nearest_bench.rs`). Length is filtered before anything is folded, and an ASCII key is lowered
+/// without normalisation.
+pub fn nearest(file: &File, query: &str, max_distance: u8, limit: usize, out: &mut Vec<String>) -> Result<(), Error> {
+    if max_distance == 0 || out.len() >= limit {
+        return Ok(());
+    }
+    let wanted = unmark(query).to_lowercase();
+    let wanted: Vec<char> = wanted.chars().collect();
+    if wanted.is_empty() {
+        return Ok(());
+    }
+    let max = usize::from(max_distance);
+    let mut found: Vec<(usize, usize)> = Vec::new();
+    let consider = |i: usize, found: &mut Vec<(usize, usize)>| -> Result<(), Error> {
+        if !file.is_public(i)? {
+            return Ok(());
+        }
+        let key = file.key(i)?;
+        if key.chars().count().abs_diff(wanted.len()) > max {
+            return Ok(());
+        }
+        let folded = if key.is_ascii() { key.to_ascii_lowercase() } else { unmark(&key).to_lowercase() };
+        let chars: Vec<char> = folded.chars().collect();
+        if let Some(distance) = osa(&wanted, &chars, max) {
+            found.push((distance, i));
+        }
+        Ok(())
+    };
+    if let Some(first) = query.chars().next() {
+        file.prefixed(&first.to_string(), |i| {
+            consider(i, &mut found)?;
+            Ok(true)
+        })?;
+    }
+    if found.is_empty() {
+        for i in 0..file.len() {
+            consider(i, &mut found)?;
+        }
+    }
+    found.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    let mut given: HashSet<String> = out.iter().cloned().collect();
+    for (_, i) in found {
+        if out.len() >= limit {
+            break;
+        }
+        let key = file.key(i)?.into_owned();
+        if given.insert(key.clone()) {
+            out.push(key);
+        }
+    }
+    Ok(())
 }
 
 /// Public keys beginning with `prefix` under the file's folding, in folded order, each spelling once, added to

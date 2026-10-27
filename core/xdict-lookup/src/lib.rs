@@ -12,10 +12,13 @@
 //! Both are derived once per edition and kept in its index ([`Policy`]); an index built under another
 //! [`NORMALIZATION`] is rebuilt.
 
+mod distance;
 mod policy;
 mod resolve;
 
+pub use distance::osa;
 pub use policy::{NORMALIZATION, Policy, internal, unmark};
 pub use resolve::{
-    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, STEPS, matches, occurrences, redirect_targets, resolve, suggest,
+    FAN_OUT, HOPS, Hit, How, Mode, Problem, Resolved, STEPS, matches, nearest, occurrences, redirect_targets, resolve,
+    suggest,
 };

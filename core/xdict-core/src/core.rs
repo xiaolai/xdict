@@ -49,6 +49,10 @@ pub const NORMALIZATION: u32 = xdict_lookup::NORMALIZATION;
 pub const MAX_PAGE: u32 = 1_000;
 /// The most suggestions one call returns: a page's worth, so a search field cannot ask the core to walk every key.
 pub const MAX_SUGGEST: u32 = MAX_PAGE;
+
+/// **How far a spelling may be from what a reader typed and still be offered** (owner, 2026-10-27: a miss is answered
+/// with what was meant). Two edits covers a doubled letter, a transposition and a wrong vowel; three starts guessing.
+pub const NEAREST_DISTANCE: u8 = 2;
 /// The scheme version an edition is written with (ADR-0002 decision 1).
 pub use xdict_identity::EDITION_SCHEME;
 
@@ -739,6 +743,17 @@ impl Core {
                 // before and after its own read.
                 dict.mdx_source.unchanged()?;
                 xdict_lookup::suggest(&dict.mdx, &prefix, limit as usize, &mut out)?;
+            }
+            // **A prefix that matches nothing is answered with what the reader may have meant** (owner, 2026-10-27):
+            // fuzzy is not a mode a reader picks, it is what a miss does. Only then — a prefix with an answer costs
+            // nothing more, and the nearest scan is charged once per miss (34 ms over the 24-dictionary corpus,
+            // `xdict-lookup/examples/nearest_bench.rs`).
+            if out.is_empty() {
+                for id in &dicts {
+                    let dict = self.dict(id)?;
+                    dict.mdx_source.unchanged()?;
+                    xdict_lookup::nearest(&dict.mdx, &prefix, NEAREST_DISTANCE, limit as usize, &mut out)?;
+                }
             }
             Ok(out)
         })
