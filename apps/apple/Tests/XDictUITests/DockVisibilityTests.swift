@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-import SaySoAI
+import XDictAI
 @testable import XDictUI
 
 /// **XDict has no Dock icon unless the reader asks for one, and its windows never quit it** (owner, 2026-10-27): off for
