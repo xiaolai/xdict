@@ -60,7 +60,7 @@ public enum Contract {
     /// 15 (2026-10-25): the operations `phrases` and `phrasesBuild` and their answers, the phrase covering a captured
     /// term and the per-edition inventory's background build (plan-phrase-recognition WI-7); `PhraseAnswer.total`
     /// counts the matches before the cap, so a capped list says what it left out.
-    public static let version: UInt32 = 17
+    public static let version: UInt32 = 18
 }
 
 // MARK: - The request

@@ -2503,6 +2503,22 @@
         }
       }
     },
+    "Antonyms": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Antonyms"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反义词"
+          }
+        }
+      }
+    },
     "Apple Intelligence": {
       "localizations": {
         "en": {
@@ -3715,16 +3731,16 @@
     },
     "Collocations": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "搭配"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Collocations"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搭配"
           }
         }
       }
@@ -4133,16 +4149,16 @@
     },
     "Cut short by the work budget: there may be more.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已被工作量上限截断，可能还有更多。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Cut short by the work budget: there may be more."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已被工作量上限截断，可能还有更多。"
           }
         }
       }
@@ -5110,16 +5126,16 @@
     },
     "Explore": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "探索"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Explore"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "探索"
           }
         }
       }
@@ -5158,16 +5174,16 @@
     },
     "Family": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "词族"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Family"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词族"
           }
         }
       }
@@ -5415,16 +5431,16 @@
     },
     "Forms": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "变形"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Forms"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "变形"
           }
         }
       }
@@ -6349,16 +6365,16 @@
     },
     "Into %@": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "译为 %@"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Into %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "译为 %@"
           }
         }
       }
@@ -7024,16 +7040,16 @@
     },
     "Looking…": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正在查找…"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Looking…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在查找…"
           }
         }
       }
@@ -8233,16 +8249,16 @@
     },
     "Nothing in this mode for “%@”.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个模式下没有“%@”。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Nothing in this mode for “%@”."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个模式下没有“%@”。"
           }
         }
       }
@@ -10206,48 +10222,48 @@
     },
     "Rhymes": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "押韵"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Rhymes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "押韵"
           }
         }
       }
     },
     "Rhymes, word families, roots and forms of this word": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个词的押韵、词族、词根和变形"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Rhymes, word families, roots and forms of this word"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个词的押韵、词族、词根和变形"
           }
         }
       }
     },
     "Roots": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "词根"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "Roots"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词根"
           }
         }
       }
@@ -11512,6 +11528,22 @@
         }
       }
     },
+    "Synonyms": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Synonyms"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同义词"
+          }
+        }
+      }
+    },
     "Tap %@ twice with the pointer resting on a word. Change the key in General.": {
       "localizations": {
         "en": {
@@ -11994,16 +12026,16 @@
     },
     "The dictionaries could not be searched: %@": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "词典无法检索：%@"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The dictionaries could not be searched: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词典无法检索：%@"
           }
         }
       }
@@ -13443,16 +13475,16 @@
     },
     "The word data has nothing for “%@”.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "词数据里没有“%@”。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "The word data has nothing for “%@”."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "词数据里没有“%@”。"
           }
         }
       }
@@ -14021,16 +14053,16 @@
     },
     "This needs the word data, which is not installed yet.": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这需要词数据，目前尚未安装。"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "This needs the word data, which is not installed yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这需要词数据，目前尚未安装。"
           }
         }
       }
@@ -15582,48 +15614,48 @@
     },
     "adjective": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "形容词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "adjective"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "形容词"
           }
         }
       }
     },
     "adjective + this word": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "形容词 + 本词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "adjective + this word"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "形容词 + 本词"
           }
         }
       }
     },
     "adverb": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "副词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "adverb"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "副词"
           }
         }
       }
@@ -15646,16 +15678,16 @@
     },
     "ends with it": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "以它结尾"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "ends with it"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以它结尾"
           }
         }
       }
@@ -15726,48 +15758,64 @@
     },
     "noun": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "名词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "noun"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名词"
           }
         }
       }
     },
     "noun + this word": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "名词 + 本词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "noun + this word"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名词 + 本词"
           }
         }
       }
     },
     "one letter away": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "one letter away"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "一个字母之差"
           }
-        },
+        }
+      }
+    },
+    "opposite meaning": {
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "one letter away"
+            "value": "opposite meaning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反义"
           }
         }
       }
@@ -15790,32 +15838,32 @@
     },
     "phrase": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "短语"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "phrase"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "短语"
           }
         }
       }
     },
     "preposition": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "介词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "preposition"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "介词"
           }
         }
       }
@@ -15838,64 +15886,80 @@
     },
     "same family": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "same family"
+          }
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "同一词族"
           }
-        },
+        }
+      }
+    },
+    "same meaning": {
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "same family"
+            "value": "same meaning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同义"
           }
         }
       }
     },
     "same paradigm": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同一词形变化"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "same paradigm"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一词形变化"
           }
         }
       }
     },
     "same rime": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同一韵脚"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "same rime"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一韵脚"
           }
         }
       }
     },
     "same root": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同一词根"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "same root"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一词根"
           }
         }
       }
@@ -15918,112 +15982,112 @@
     },
     "the word itself": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "这个词本身"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "the word itself"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个词本身"
           }
         }
       }
     },
     "this word + noun": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本词 + 名词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "this word + noun"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本词 + 名词"
           }
         }
       }
     },
     "this word + verb": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本词 + 动词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "this word + verb"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本词 + 动词"
           }
         }
       }
     },
     "this word’s own phrase": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本词自身的短语"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "this word’s own phrase"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本词自身的短语"
           }
         }
       }
     },
     "verb": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "动词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "verb"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动词"
           }
         }
       }
     },
     "verb + this word": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "动词 + 本词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "verb + this word"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动词 + 本词"
           }
         }
       }
     },
     "verbs": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "动词"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "verbs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动词"
           }
         }
       }

@@ -138,7 +138,7 @@ mainIdealWidth = { value = 1000, why = "The main window's opening width: the rea
 mainIdealHeight = { value = 700, why = "The main window's opening height: a full entry paragraph above the synonyms." }
 scrollEdgeTolerance = { value = 1, why = "How close to its document's edge a frame's scroll position counts as the edge: a sub-point difference is rounding, not content left to scroll." }
 exploreListHeight = { value = 320, why = "The Explore panel's list: eight rows of the sidebar's own height, under the tabs and the word." }
-explorePopoverWidth = { value = 480, why = "The Explore panel: five one-word tabs on one row, then a row of a word and its reason without wrapping." }
+explorePopoverWidth = { value = 640, why = "The Explore panel: seven one-word tabs on one row — the widest, Collocations, at about 85 pt — then a row of a word and its reason without wrapping." }
 
 [motion]
 drawerOpenResponse = { value = 0.34, why = "XiaolaiDict's drawer spring, kept: it arrives with a little give." }

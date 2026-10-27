@@ -12,6 +12,8 @@ enum ExploreSentences {
         case .family: "Family"
         case .roots: "Roots"
         case .forms: "Forms"
+        case .synonyms: "Synonyms"
+        case .antonyms: "Antonyms"
         case .collocations: "Collocations"
         }
     }
@@ -27,6 +29,8 @@ enum ExploreSentences {
         case .derivation: "same family"
         case .sharedOrigin: "same root"
         case .collocation(let frame): frameText(frame)
+        case .synonym: "same meaning"
+        case .antonym: "opposite meaning"
         }
     }
 

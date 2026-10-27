@@ -228,6 +228,10 @@ public enum ExploreMode: Codable, Hashable, Sendable {
     case derivations
     /// Headwords sharing a historical ancestor within `maxDepth` (needs the word data).
     case roots(maxDepth: UInt8)
+    /// Headwords the word data's synsets call this word's synonyms.
+    case synonyms
+    /// Headwords the word data's synsets call its antonyms.
+    case antonyms
 }
 
 /// **Why a row is in the answer** — a label, never a sentence: the shell writes the words, in the reader's language.
@@ -241,6 +245,8 @@ public enum ExploreReason: Codable, Hashable, Sendable {
     case inflection
     case derivation
     case sharedOrigin
+    case synonym
+    case antonym
 }
 
 /// **Whether the dictionaries could be searched at all**: absence of data is never reported as absence of relatives.

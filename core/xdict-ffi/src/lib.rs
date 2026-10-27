@@ -855,6 +855,10 @@ pub enum WordMode {
     Derivations,
     /// Headwords sharing a historical ancestor within `max_depth` (pack data only).
     Roots { max_depth: u8 },
+    /// Headwords the pack's synsets call this word's synonyms.
+    Synonyms,
+    /// Headwords the pack's synsets call its antonyms.
+    Antonyms,
 }
 
 /// **Word exploration across the boundary** (plan-word-exploration WI-4): a row is the word, the dictionary and entry
@@ -877,6 +881,8 @@ pub enum ExploreReason {
     Inflection,
     Derivation,
     SharedOrigin,
+    Synonym,
+    Antonym,
 }
 
 /// Whether the dictionaries could be searched at all: absence of data is never absence of relatives.

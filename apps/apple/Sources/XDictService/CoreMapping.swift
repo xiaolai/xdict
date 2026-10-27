@@ -205,6 +205,8 @@ extension XDictCore.WordMode {
         case .inflections: self = .inflections
         case .derivations: self = .derivations
         case .roots(let maxDepth): self = .roots(maxDepth: maxDepth)
+        case .synonyms: self = .synonyms
+        case .antonyms: self = .antonyms
         }
     }
 }
@@ -219,6 +221,8 @@ extension XDictContract.ExploreReason {
         case .inflection: self = .inflection
         case .derivation: self = .derivation
         case .sharedOrigin: self = .sharedOrigin
+        case .synonym: self = .synonym
+        case .antonym: self = .antonym
         }
     }
 }

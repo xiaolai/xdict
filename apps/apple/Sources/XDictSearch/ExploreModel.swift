@@ -16,7 +16,7 @@ public final class ExploreModel {
     /// The questions the panel offers. **Rhymes, families, roots and forms need the word data; collocations need the
     /// per-edition store** (WI-6), which is not built yet and says so.
     public enum Tab: String, CaseIterable, Identifiable, Sendable {
-        case rhymes, family, roots, forms, collocations
+        case rhymes, family, roots, forms, synonyms, antonyms, collocations
 
         public var id: String { rawValue }
 
@@ -31,6 +31,8 @@ public final class ExploreModel {
             // Twelve edges: the depth the core measured on the reader's dictionaries (`heart` → `cordial`).
             case .roots: .roots(maxDepth: 12)
             case .forms: .inflections
+            case .synonyms: .synonyms
+            case .antonyms: .antonyms
             case .collocations: nil
             }
         }
