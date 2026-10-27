@@ -30,6 +30,8 @@ public final class MeaningPreferences {
         static let sendEntryText = "meaning.sendEntryText"
         static let language = "meaning.language"
         static let translationLanguage = "meaning.translationLanguage"
+        static let previewBeforeSending = "meaning.previewBeforeSending"
+        static let askOnOpen = "meaning.askOnOpen"
         static let httpCloud = "meaning.http.cloud"
 
         static func template(_ language: String, _ mode: AIMode) -> String {
@@ -78,6 +80,8 @@ public final class MeaningPreferences {
             sendEntryText: defaults.bool(forKey: Key.sendEntryText),
             language: language,
             translationLanguage: defaults.string(forKey: Key.translationLanguage) ?? language,
+            previewBeforeSending: defaults.bool(forKey: Key.previewBeforeSending),
+            askOnOpen: defaults.object(forKey: Key.askOnOpen) as? Bool ?? true,
             templates: Self.storedTemplates(defaults, language: language))
         settings.usesKey = settings.source == .http && httpCloud
     }
@@ -172,6 +176,18 @@ public final class MeaningPreferences {
     /// reader may read meanings in one language and want sentences in another.
     public func setTranslationLanguage(_ language: String) {
         change { $0.translationLanguage = language }
+    }
+
+    /// **Show the request before the first question of a sentence leaves** (owner, 2026-10-26): a reader's own gate on
+    /// the sentence leaving, off by default.
+    public func setPreviewBeforeSending(_ on: Bool) {
+        change { $0.previewBeforeSending = on }
+    }
+
+    /// **Ask when the answer pane opens** (owner, 2026-10-26): on by default; off, a capture brings the pane up and the
+    /// reader chooses the question.
+    public func setAskOnOpen(_ on: Bool) {
+        change { $0.askOnOpen = on }
     }
 
     /// A change this class makes itself, persisted at once.
@@ -270,6 +286,8 @@ public final class MeaningPreferences {
         defaults.set(settings.sendEntryText, forKey: Key.sendEntryText)
         defaults.set(settings.language, forKey: Key.language)
         defaults.set(settings.translationLanguage, forKey: Key.translationLanguage)
+        defaults.set(settings.previewBeforeSending, forKey: Key.previewBeforeSending)
+        defaults.set(settings.askOnOpen, forKey: Key.askOnOpen)
         defaults.set(httpCloud, forKey: Key.httpCloud)
         // The session's templates are this language's edits; the other language's stay stored for when it is chosen.
         refreshTemplates()

@@ -590,6 +590,18 @@ public struct AISettings: View {
                 Text("Off, only the sentence around the word is sent — to every source, one on this Mac included.")
             }
             .accessibilityIdentifier("ai.send-entry")
+            Toggle(isOn: Binding(get: { model.preferences.settings.previewBeforeSending },
+                                 set: { model.preferences.setPreviewBeforeSending($0) })) {
+                Text("Show the request before asking")
+                Text("On, choosing a question shows exactly what will be sent, with Send and Cancel, the first time a sentence is asked. Off, the question is asked when you choose it.")
+            }
+            .accessibilityIdentifier("ai.preview-before-sending")
+            Toggle(isOn: Binding(get: { model.preferences.settings.askOnOpen },
+                                 set: { model.preferences.setAskOnOpen($0) })) {
+                Text("Ask when the answer pane opens")
+                Text("A captured sentence opens the pane and asks the question you last chose. Off, the pane opens and you choose the question.")
+            }
+            .accessibilityIdentifier("ai.ask-on-open")
         } header: {
             Text("What leaves XDict")
         }

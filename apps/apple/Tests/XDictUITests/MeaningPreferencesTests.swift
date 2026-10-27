@@ -35,6 +35,19 @@ struct MeaningPreferencesTests {
         #expect(second.settings.sendEntryText)
     }
 
+    /// **The pane asks when it opens, unless the reader says otherwise** (owner, 2026-10-26): default on, and the
+    /// reader's off is remembered across a new instance.
+    @Test func thePaneAsksWhenItOpensUntilTheReaderSaysOtherwise() throws {
+        let fixture = try TestDefaults()
+        let database = fixture.database
+        let first = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        #expect(first.settings.askOnOpen, "a fresh install asks for the capture it was opened by")
+        first.setAskOnOpen(false)
+        #expect(!first.settings.askOnOpen)
+        let second = MeaningPreferences(defaults: database, keys: MemoryKeyStore())
+        #expect(!second.settings.askOnOpen, "the reader's off is remembered")
+    }
+
     @Test func anEditedTemplateSurvivesAndResetRestoresTheDefault() throws {
         let fixture = try TestDefaults()
         let database = fixture.database

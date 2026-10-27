@@ -1678,6 +1678,22 @@
         }
       }
     },
+    "A captured sentence opens the pane and asks the question you last chose. Off, the pane opens and you choose the question.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A captured sentence opens the pane and asks the question you last chose. Off, the pane opens and you choose the question."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截取的句子打开答题面板，并自动提出你上次选择的问题。关闭后，面板打开时由你选择问题。"
+          }
+        }
+      }
+    },
     "A card is due for review.": {
       "localizations": {
         "en": {
@@ -2715,6 +2731,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "询问你选的义项在这句话里是什么意思。"
+          }
+        }
+      }
+    },
+    "Ask when the answer pane opens": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ask when the answer pane opens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "答题面板打开时自动提问"
           }
         }
       }

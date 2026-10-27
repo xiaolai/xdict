@@ -250,6 +250,15 @@ public final class SearchWindowState {
         // window's previous entry, or failed in a new window; the expected subject keeps a stale draw from starting it,
         // and the adopted lookup's identity keeps a queued presentation of the previous lookup from binding it.
         meaning.hold(handoff, asking: asking, expecting: expecting, adopted: adopted)
+        // **A capture opens the answer pane** (owner, 2026-10-26): the pane owns the question and its controls, so a
+        // sentence that arrives with the pane closed would leave the reader no visible next step. The reader may close
+        // it again; the next capture opens it again.
+        panes.meaningAsked()
+        // **The capture that opens the pane asks** (owner, 2026-10-26): the reader hovered and expanded, which is the tap;
+        // Settings ▸ AI can turn it off. An ask already owed by the popover's AI button is not asked twice.
+        if !asking, (meaning.settingsProvider?() ?? meaning.settings).askOnOpen {
+            meaning.choose(meaning.chosenMode)
+        }
         failedPhraseTap = nil
         phraseKeeper.reset()
         // **The phrase row follows the captured sentence** (contract 15; plan-phrase-recognition WI-8): the capture is

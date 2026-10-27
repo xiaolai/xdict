@@ -26,6 +26,12 @@ public struct MeaningSettings: Sendable, Equatable {
     public var sendEntryText: Bool
     /// The language the explanation is written in, as a BCP 47 tag.
     public var language: String
+    /// **Ask the reader before the first question of a sentence leaves** (owner, 2026-10-26): off, the tab's tap asks
+    /// and the answer appears; on, the same tap shows the composed request with Send and Cancel.
+    public var previewBeforeSending: Bool
+    /// **The pane asks for its sentence as soon as it opens** (owner, 2026-10-26): a capture that brings the pane up is
+    /// the reader's act, so the question it was captured for is asked without a second tap. Off, the reader chooses.
+    public var askOnOpen: Bool
     /// **The language a translation is written into** (contract 6; plan-context-tools WI-8), as a BCP 47 tag. Its own
     /// choice, defaulting to the explanation's language: a reader may read meanings in one language and want sentences
     /// in another.
@@ -37,7 +43,8 @@ public struct MeaningSettings: Sendable, Equatable {
 
     public init(source: AIProviderKind? = nil, endpoint: URL? = nil, profile: String = MeaningProfiles.custom,
                 model: String = "", key: String? = nil, usesKey: Bool = false, sendEntryText: Bool = false,
-                language: String = "en", translationLanguage: String = "en", templates: [AIMode: String] = [:]) {
+                language: String = "en", translationLanguage: String = "en", previewBeforeSending: Bool = false,
+                askOnOpen: Bool = true, templates: [AIMode: String] = [:]) {
         self.source = source
         self.endpoint = endpoint
         self.profile = profile
@@ -47,6 +54,8 @@ public struct MeaningSettings: Sendable, Equatable {
         self.sendEntryText = sendEntryText
         self.language = language
         self.translationLanguage = translationLanguage
+        self.previewBeforeSending = previewBeforeSending
+        self.askOnOpen = askOnOpen
         self.templates = templates
     }
 
@@ -492,6 +501,7 @@ public final class MeaningSession {
         awaitsAdoptedPlace = adopted
         adoptionSerial = nil
         handoffToken += 1
+        kept.removeAll()
         dropEvidence()
         selection = nil
         lastOperation = nil
@@ -632,6 +642,7 @@ public final class MeaningSession {
     /// **The presentation ended**: the sentence goes, and so does the ask in flight and its answer.
     public func clear() {
         abandon()
+        kept.removeAll()
         held = nil
         subject = nil
         boundTarget = nil
@@ -670,15 +681,58 @@ public final class MeaningSession {
         ask(operation: operation(for: chosen, selection: nil, honouring: chosenMode))
     }
 
-    /// **The pane's mode changed**: the previous answer belonged to another question, so it goes (D10). The sentence
-    /// stays — switching modes is not the presentation's end. Choosing the mode already chosen changes nothing.
+    /// **The tab is the question** (owner, 2026-10-26): choosing it asks for that question — unless its answer is
+    /// already here, in which case it is shown again and nothing is sent. A sentence keeps one answer per question while
+    /// it is held. With Settings ▸ AI's "Show the request before asking" on, the same tap shows the composed request with
+    /// Send and Cancel instead. Pressing the chosen tab again retries a failure and leaves an answer alone.
     public func choose(_ mode: MeaningAskMode) {
-        guard mode != chosenMode else { return }
-        chosenMode = mode
+        if mode == chosenMode {
+            if state == .asking { return }
+            if case .answer = state { return }
+            startQuestion()
+            return
+        }
         abandon()
+        switch state {
+        case .asking, .idle:
+            break
+        default:
+            kept[chosenMode] = Kept(state: state, sent: sent, operation: lastOperation)
+        }
+        chosenMode = mode
+        if let answer = kept[mode] {
+            state = answer.state
+            sent = answer.sent
+            lastOperation = answer.operation
+            return
+        }
         dropEvidence()
         state = .idle
+        startQuestion()
     }
+
+    /// One tap's question: the composed request when the reader asked to see it first, else the ask itself. Nothing is
+    /// asked with no sentence in hand.
+    private func startQuestion() {
+        guard held != nil else { return }
+        let chosen = settingsProvider?() ?? settings
+        if chosen.previewBeforeSending {
+            preview()
+        } else {
+            ask()
+        }
+    }
+
+    /// One question's finished result, kept while the reader looks at another.
+    private struct Kept {
+        let state: State
+        let sent: MeaningSent?
+        let operation: Operation?
+    }
+
+    /// **What each question has shown for this sentence** (owner, 2026-10-26): cleared with the sentence, because an
+    /// answer is about the sentence it was asked on.
+    @ObservationIgnored private var kept: [MeaningAskMode: Kept] = [:]
 
     /// **The answer is dropped, the sentence kept**: used when the question changed under it. Nothing was sent.
     public func discardAnswer() {
