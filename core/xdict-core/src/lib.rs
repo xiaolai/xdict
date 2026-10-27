@@ -5,6 +5,7 @@
 //! running. Only [`Core::import`] reads a whole file; [`Core::open`] never hashes or indexes. Every call
 //! returns a typed [`CoreError`], and a panic inside one comes back as [`CoreError::Internal`].
 
+pub mod collocations;
 mod core;
 mod error;
 mod examples;
