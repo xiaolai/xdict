@@ -86,6 +86,16 @@ pub struct Core {
     ledger_path: Option<PathBuf>,
     /// Opened on first use; one writer for the process (ADR-0024).
     ledger: Mutex<Option<Ledger>>,
+    /// **The word catalog of one scope, kept** (plan-word-exploration WI-4): building it reads every key of every
+    /// dictionary in scope (3.2 s for the reader's 24, 1.37 M headwords), so the last scope's explorer is held until a
+    /// dictionary is opened, closed or replaced — `explorer_for` keys it by the scope's handles and each edition.
+    explore: Mutex<Option<CachedExplorer>>,
+}
+
+/// One scope's explorer, and the key that says which scope and which editions it was built from.
+struct CachedExplorer {
+    key: String,
+    explorer: Arc<crate::words::WordExplorer>,
 }
 
 struct State {
@@ -217,6 +227,7 @@ impl Core {
                 registry,
                 ledger_path,
                 ledger: Mutex::new(None),
+                explore: Mutex::new(None),
             })
         })
     }
@@ -519,6 +530,50 @@ impl Core {
         progress: &dyn Progress,
     ) -> Result<crate::words::WordExplorer, CoreError> {
         guard(|| self.word_explorer_within(&dicts, progress, CatalogLimits::DEFAULT))
+    }
+
+    /// **One page of word exploration** (plan-word-exploration WI-4; the owner's shape, 2026-10-27): a miss, a rhyme,
+    /// a family or a root, answered with the reader's own dictionaries' words — every row names the dictionary and the
+    /// entry it opens, and the evidence behind a row is asked for separately.
+    pub fn explore(
+        &self,
+        dicts: Vec<String>,
+        mode: crate::words::WordMode,
+        text: String,
+        offset: u32,
+        limit: u32,
+    ) -> Result<crate::explore::ExploreAnswer, CoreError> {
+        guard(|| {
+            let explorer = self.explorer_for(&dicts)?;
+            let page = explorer.search(crate::words::WordQuery { text, mode, limit, offset }).map_err(explore_error)?;
+            Ok(crate::explore::ExploreAnswer::of(page))
+        })
+    }
+
+    /// **The explorer for a scope, built once and kept**: the key is the scope's canonical handles and each edition, so
+    /// a dictionary opened, closed, replaced or re-imported builds it again and nothing else does.
+    fn explorer_for(&self, dicts: &[String]) -> Result<Arc<crate::words::WordExplorer>, CoreError> {
+        let mut key = String::new();
+        for dict in dicts {
+            let handle = self.parse_handle(dict)?;
+            key.push_str(&handle.to_string());
+            key.push(':');
+            key.push_str(&self.dict(dict)?.edition);
+            key.push(';');
+        }
+        if let Ok(held) = self.explore.lock()
+            && let Some(cached) = held.as_ref()
+            && cached.key == key
+        {
+            return Ok(Arc::clone(&cached.explorer));
+        }
+        // **Built outside the lock**: the build reads every key of every dictionary and takes seconds; a second call
+        // meanwhile builds its own rather than waiting on this one, and the last to finish is what is kept.
+        let explorer = Arc::new(self.word_explorer_within(dicts, &NoProgress, CatalogLimits::DEFAULT)?);
+        if let Ok(mut held) = self.explore.lock() {
+            *held = Some(CachedExplorer { key, explorer: Arc::clone(&explorer) });
+        }
+        Ok(explorer)
     }
 
     /// [`Self::word_explorer`], holding no more than `limits` allows.
@@ -2410,6 +2465,17 @@ fn catalog_too_large(detail: String) -> CoreError {
 
 /// The explorer's constructor errors in the core's terms, each kind kept: its limits are the catalog's, its damage
 /// the file's. Building a catalog asks no query, so an `InvalidQuery` here breaks an invariant and is `Internal`.
+/// A query the explorer refused: the shell's request, not the catalog's, so it is answered as one.
+fn explore_error(error: crate::words::WordError) -> CoreError {
+    use crate::words::WordError as W;
+    match error {
+        W::InvalidQuery { problem, detail } => {
+            CoreError::Malformed { detail: format!("the word query ({problem:?}): {detail}") }
+        }
+        other => word_error(other),
+    }
+}
+
 fn word_error(error: crate::words::WordError) -> CoreError {
     use crate::words::WordError as W;
     match error {

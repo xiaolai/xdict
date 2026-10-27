@@ -8,6 +8,7 @@
 mod core;
 mod error;
 mod examples;
+pub mod explore;
 mod health;
 pub mod phrases;
 mod source;

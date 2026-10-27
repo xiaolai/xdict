@@ -16,6 +16,7 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use xdict_core::explore::ExploreState;
 use xdict_core::words::{MAX_WORD_PAGE, WordExplorer, WordMode, WordQuery, WordSource};
 use xdict_core::{
     ByteSource, Config, Core, CoreError, EntryRef, FileIdentity, Location, LookupOptions, MatchMode, NoProgress,
@@ -173,6 +174,45 @@ fn within<T: Send + 'static>(call: impl FnOnce() -> T + Send + 'static) -> T {
         let _ = tx.send(call());
     });
     rx.recv_timeout(Duration::from_secs(60)).expect("the call did not return: a lock held across a callback?")
+}
+
+// ---- across the boundary (plan-word-exploration WI-4) -----------------------------------------------------------
+
+/// **The shell's way in**: `Core::explore` answers a page of rows — the word, the dictionary and the entry it opens, a
+/// label — and every row opens a real entry.
+#[test]
+fn the_core_answers_an_exploration_and_names_the_entry_it_opens() {
+    let f = fixture();
+    let dicts = vec![f.d1.clone(), f.d2.clone()];
+    let answer = f.core.explore(dicts.clone(), WordMode::EndsWith, "a".into(), 0, 10).unwrap();
+    assert_eq!(answer.state, ExploreState::Answered);
+    assert!(!answer.rows.is_empty(), "a spelling ends with a");
+    for row in &answer.rows {
+        assert!(row.word.to_lowercase().ends_with('a'), "{}", row.word);
+        let opened = f.core.entry(row.dict.clone(), row.entry.clone(), view()).unwrap();
+        assert!(!opened.html.is_empty(), "{} opens nothing", row.word);
+    }
+    // The same scope answers the same page: one row per headword, its first source.
+    let again = f.core.explore(dicts, WordMode::EndsWith, "a".into(), 0, 10).unwrap();
+    assert_eq!(again.rows, answer.rows);
+}
+
+/// **Absence of data is never absence of relatives**: without the pack, a mode that needs it says which data is
+/// missing rather than answering "none".
+#[test]
+fn an_exploration_without_the_pack_says_which_data_is_missing() {
+    let f = fixture();
+    let answer = f.core.explore(vec![f.d1.clone()], WordMode::Rhyme, "alpha".into(), 0, 10).unwrap();
+    assert_eq!(answer.state, ExploreState::NoData);
+    assert!(answer.rows.is_empty(), "nothing is claimed without data");
+}
+
+/// A query the explorer refuses is the shell's request, answered as one — not a damaged dictionary.
+#[test]
+fn a_refused_query_is_the_shells_request_not_damage() {
+    let f = fixture();
+    let refused = f.core.explore(vec![f.d1.clone()], WordMode::Fuzzy { max_distance: 9 }, "alpha".into(), 0, 10);
+    assert!(matches!(refused, Err(CoreError::Malformed { .. })), "{refused:?}");
 }
 
 // ---- the catalog ------------------------------------------------------------------------------------------------
