@@ -118,7 +118,7 @@ extension ServiceOperation {
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack: []
+             .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: []
         }
     }
 
@@ -151,7 +151,7 @@ extension ServiceOperation {
         case .versions, .importPackage, .cancel, .openPackage, .joinLineage, .splitLineage, .lineageOf, .convertApple,
              .cancelConversion, .ledgerRecord, .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts, .reviewResolve,
-             .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack: self
+             .ledgerSync, .ledgerRemove, .ledgerRestore, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: self
         }
     }
 }

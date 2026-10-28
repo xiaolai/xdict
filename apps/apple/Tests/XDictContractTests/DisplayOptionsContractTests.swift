@@ -11,7 +11,7 @@ struct DisplayOptionsContractTests {
     /// antonym modes, 17 `explore` and `collocates`, 16 `explore`; 15 raised `phrases`, 14 `examples`, 13 `words`
     /// (ADR-0031, ADR-0028, ADR-0029).
     @Test func theContractIsVersion19() {
-        #expect(Contract.version == 19, "19 adds `wordPack`, `setWordPack` and `clearWordPack` (plan-word-exploration WI-5)")
+        #expect(Contract.version == 20, "20 adds `buildWordPack` and `wordPackBuilt` (plan-local-word-pack WI-5)")
     }
 
     @Test func askingForDisplayOptionsIsAShortCallOnTheNamedDictionary() {

@@ -133,12 +133,14 @@ enum Fixtures {
         .wordPack,
         .setWordPack(path: "/container/WordPack/xdict-words-en.jsonl"),
         .clearWordPack,
+        .buildWordPack(sources: "/container/WordPack/sources", manifest: "/container/WordPack/sources.json",
+                       output: "/container/WordPack/xdict-words-en.jsonl"),
     ]
 
     /// A staging folder's name, as the app mints it (ADR-0011 decision 4).
     static let staging = UUID(uuidString: "6B1F3C2A-9E4D-4F0B-8A51-0C7D2E9F1A3B") ?? UUID()
 
-    static let operationCases = 47
+    static let operationCases = 48
     static func index(_ operation: ServiceOperation) -> Int {
         switch operation {
         case .versions: 0
@@ -188,6 +190,7 @@ enum Fixtures {
         case .wordPack: 44
         case .setWordPack: 45
         case .clearWordPack: 46
+        case .buildWordPack: 47
         }
     }
 
@@ -283,6 +286,7 @@ enum Fixtures {
         ]),
         .wordPacked(WordPackState(pack: wordPack)),
         .wordPacked(WordPackState(pack: nil)),
+        .wordPackBuilt(WordPackState(pack: wordPack)),
     ]
 
     /// The word pack as Settings shows it (contract 19): four sources, the version this core reads, and its record count.
@@ -333,7 +337,7 @@ enum Fixtures {
         changes: StyleChanges(important: 3, page: 2, family: 9, size: 40, lineHeight: 4, colour: 17, weight: 5, space: 8,
                               dropped: 11))
 
-    static let answerCases = 37
+    static let answerCases = 38
     static func index(_ answer: Answer) -> Int {
         switch answer {
         case .versions: 0
@@ -373,6 +377,7 @@ enum Fixtures {
         case .explored: 34
         case .collocations: 35
         case .wordPacked: 36
+        case .wordPackBuilt: 37
         }
     }
 

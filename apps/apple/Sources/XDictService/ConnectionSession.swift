@@ -142,7 +142,7 @@ final class ConnectionSession: NSObject, DictionaryServiceXPC, @unchecked Sendab
         }
         guard let creditClass = operation.creditClass else {
             switch operation {
-            case .health, .readingStyle, .examplesBuild, .phrasesBuild: return context.background.async(execute: job)
+            case .health, .readingStyle, .examplesBuild, .phrasesBuild, .buildWordPack: return context.background.async(execute: job)
             default: return context.queue.async(execute: job)
             }
         }

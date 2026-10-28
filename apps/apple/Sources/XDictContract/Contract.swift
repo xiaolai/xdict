@@ -63,7 +63,10 @@ public enum Contract {
     /// 19 (2026-10-28): the operations `wordPack`, `setWordPack` and `clearWordPack` and the answer `wordPacked`, which
     /// install, report and remove the word pack the exploration modes read (plan-word-exploration WI-5). A refused
     /// file answers `unsupported` or `corrupt` with the loader's sentence, and the pack already installed stays.
-    public static let version: UInt32 = 19
+    /// 20 (2026-10-28): the operation `buildWordPack` and the answer `wordPackBuilt`: the service builds the pack on
+    /// the reader's Mac from the sources the app downloaded into the container, then installs it (plan-local-word-pack
+    /// WI-5). It reports progress as bytes parsed of all, has no deadline, and stops by `cancel`, writing nothing.
+    public static let version: UInt32 = 20
 }
 
 // MARK: - The request
@@ -220,6 +223,12 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     case setWordPack(path: String)
     /// **Removes the installed pack**: the exploration modes that read it answer `noData` again.
     case clearWordPack
+    /// **Builds the word pack from the sources the app downloaded** (contract 20, plan-local-word-pack WI-5): the
+    /// pinned files in `sources`, the manifest that pins them, and the path to write the pack to, which the service
+    /// then installs. The network is the app's (ADR-0003), so no URL travels here. Like `examplesBuild` it reports
+    /// progress, has no deadline and stops by `cancel`; a source that is not there, one that fails its pinned SHA-256
+    /// and one that does not parse — the sentence naming the file and its line — keep the builder's own sentence.
+    case buildWordPack(sources: String, manifest: String, output: String)
     /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese contains `query`, from the
     /// dictionaries with a store, in their order. One without a store is answered in `notReady`, never as an error.
     case examples(query: String, dicts: [DictId], limit: UInt32)
@@ -333,7 +342,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
-             .clearWordPack: nil
+             .clearWordPack, .buildWordPack: nil
         }
     }
 
@@ -347,7 +356,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .ledgerRecord, .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo,
              .reviewSummary, .definitionHash, .studyReanchor, .studyNoteAt, .exportData, .eraseData, .studyConflicts,
              .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore, .explore, .collocates, .wordPack, .setWordPack,
-             .clearWordPack: nil
+             .clearWordPack, .buildWordPack: nil
         }
     }
 
@@ -377,7 +386,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .readingStyle, .convertApple, .cancelConversion, .displayOptions, .examplesBuild, .phrasesBuild, .ledgerRecord,
              .ledgerHistory, .studyNotes, .reviewQueue, .reviewGrade, .reviewUndo, .reviewSummary,
              .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync, .ledgerRemove, .ledgerRestore,
-             .explore, .collocates, .wordPack, .setWordPack, .clearWordPack: nil
+             .explore, .collocates, .wordPack, .setWordPack, .clearWordPack, .buildWordPack: nil
         }
     }
 
@@ -412,7 +421,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
              .studyNoteAt, .studyReanchor, .exportData, .eraseData, .studyConflicts, .reviewResolve, .ledgerSync,
              .ledgerRemove, .ledgerRestore,
              // The pack is read from the container by the service, not through one of the app's file handles.
-             .wordPack, .setWordPack, .clearWordPack: []
+             .wordPack, .setWordPack, .clearWordPack, .buildWordPack: []
         }
         return direct + editionsRead.flatMap { edition in editions[edition].map { filesOf[$0] ?? [] } ?? [] }
     }
@@ -423,6 +432,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
         case .explore: .explored
         case .collocates: .collocations
         case .wordPack, .setWordPack, .clearWordPack: .wordPacked
+        case .buildWordPack: .wordPackBuilt
         case .importPackage: .imported
         case .cancel, .cancelConversion: .cancellation
         case .openPackage: .opened
@@ -464,7 +474,7 @@ public enum ServiceOperation: Codable, Hashable, Sendable {
     /// deadline (`Deadlines.importSilence`), and stopped by `cancel`.
     public var reportsProgress: Bool {
         switch self {
-        case .importPackage, .health, .convertApple, .examplesBuild, .phrasesBuild: true
+        case .importPackage, .health, .convertApple, .examplesBuild, .phrasesBuild, .buildWordPack: true
         case .versions, .cancel, .openPackage, .close, .lookup, .suggest, .words, .entry, .link, .resource,
              .joinLineage, .splitLineage, .lineageOf, .readingStyle, .cancelConversion, .displayOptions, .entryText,
              .examples, .phrases, .ledgerRecord,
@@ -595,6 +605,7 @@ public enum Answer: Codable, Hashable, Sendable {
     case collocations([Collocation])
     /// The word pack installed after a call, or none (contract 19).
     case wordPacked(WordPackState)
+    case wordPackBuilt(WordPackState)
     /// The entry's reference, policy and lossy count; **its HTML is the payload**, as UTF-8.
     case entry(Entry)
     case link(Link)
@@ -654,7 +665,8 @@ public enum Answer: Codable, Hashable, Sendable {
              .resource(.missing), .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText,
              .examples, .examplesBuilt, .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked: false
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked,
+             .wordPackBuilt: false
         }
     }
 
@@ -673,6 +685,7 @@ public enum Answer: Codable, Hashable, Sendable {
         case .explored: .explored
         case .collocations: .collocations
         case .wordPacked: .wordPacked
+        case .wordPackBuilt: .wordPackBuilt
         case .imported: .imported
         case .cancellation: .cancellation
         case .opened: .opened
@@ -726,7 +739,7 @@ enum AnswerKind: String, Sendable {
     case readingStyle, converted, displayOptions, entryText, examples, examplesBuilt, phrases, phrasesBuilt, ledgerRecord,
          ledgerHistory
     case studyNote, studyNotes, reviewQueue, reviewOutcome, reviewSummary, definitionHash, reanchored
-    case exported, erased, conflicts, synced, explored, collocations, wordPacked
+    case exported, erased, conflicts, synced, explored, collocations, wordPacked, wordPackBuilt
 }
 
 // MARK: - Events

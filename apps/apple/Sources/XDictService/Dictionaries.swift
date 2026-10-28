@@ -157,6 +157,10 @@ final class Dictionaries: Sendable {
             case .clearWordPack:
                 _ = core.detachWordPack()
                 return (.answer(.wordPacked(XDictContract.WordPackState(pack: nil))), nil)
+            case .buildWordPack(let sources, let manifest, let output):
+                let built = try core.buildWordPack(sources: sources, manifest: manifest, output: output,
+                                                   progress: progress)
+                return (.answer(.wordPackBuilt(XDictContract.WordPackState(pack: XDictContract.WordPackInfo(built)))), nil)
             // ADR-0031: the reverse-example query, and the per-edition store built in the background.
             case .examples(let query, let dicts, let limit):
                 let examples = try core.examples(query: query, dicts: dicts.map(\.rawValue), limit: limit)

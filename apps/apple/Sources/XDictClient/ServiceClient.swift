@@ -253,6 +253,17 @@ public actor ServiceClient {
         return CallTicket(number: call.number, promise: call.promise)
     }
 
+    /// **Builds the word pack from the sources the app downloaded** (plan-local-word-pack WI-5, contract 20); `progress`
+    /// hears bytes parsed of all. Like an import it has no deadline, ends after `importSilence` without a report, and
+    /// stops by `cancelImport`.
+    public func submitBuildWordPack(sources: String, manifest: String, output: String,
+                                    progress: (@Sendable (UInt64, UInt64) -> Void)? = nil) -> CallTicket {
+        let call = makeCall(.buildWordPack(sources: sources, manifest: manifest, output: output),
+                            caller: nil, package: nil, progress: progress)
+        enqueue(call)
+        return CallTicket(number: call.number, promise: call.promise)
+    }
+
     /// **The reverse-example query** (ADR-0031 d.4, d.9): the pairs whose Chinese carries `query`, from `dicts`, at
     /// most `limit`. A dictionary without a store comes back in `notReady`, never as a failure.
     public func examples(_ query: String, dicts: [DictId], limit: UInt32) async -> Result<Examples, ClientFailure> {

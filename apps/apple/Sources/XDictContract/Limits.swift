@@ -69,7 +69,8 @@ public enum Limits {
              .lineage, .health, .readingStyle, .converted, .displayOptions, .entryText, .examples, .examplesBuilt,
              .phrases, .phrasesBuilt, .ledgerRecord,
              .ledgerHistory, .studyNote, .studyNotes, .reviewQueue, .reviewOutcome, .reviewSummary, .definitionHash,
-             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked:
+             .reanchored, .exported, .erased, .conflicts, .synced, .explored, .collocations, .wordPacked,
+             .wordPackBuilt:
             return nil
         }
     }
@@ -225,7 +226,7 @@ public enum Deadlines {
         // this device's log fsyncs it, as `ledgerRecord` does.
         case .ledgerSync: .seconds(15)
         // Bounded by silence between progress events, not by a deadline (`importSilence`).
-        case .importPackage, .health, .convertApple, .examplesBuild, .phrasesBuild: nil
+        case .importPackage, .health, .convertApple, .examplesBuild, .phrasesBuild, .buildWordPack: nil
         }
     }
 }
