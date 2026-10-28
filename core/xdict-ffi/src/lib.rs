@@ -977,6 +977,24 @@ impl Core {
         self.0.attach_word_pack(path)
     }
 
+    /// **Builds the word pack from the sources the app downloaded** (plan-local-word-pack WI-5, contract 20): the
+    /// pinned files in `sources`, the manifest that pins them, and the path to write the pack to, which is then
+    /// installed. `progress` hears the bytes of each source parsed and answers `false` to cancel, in which case
+    /// nothing is written. The Web has no files, so `xdict-wasm` does not carry this.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn build_word_pack(
+        &self,
+        sources: String,
+        manifest: String,
+        output: String,
+        progress: Option<Arc<dyn Progress>>,
+    ) -> Result<WordPackInfo, CoreError> {
+        match progress {
+            Some(progress) => self.0.build_word_pack(sources, manifest, output, &Watcher(progress)),
+            None => self.0.build_word_pack(sources, manifest, output, &core::NoProgress),
+        }
+    }
+
     /// The word pack held now, or none: what Settings says when it opens.
     pub fn word_pack(&self) -> Option<WordPackInfo> {
         self.0.word_pack()

@@ -617,7 +617,9 @@ impl Core {
             // **The kind is the file's own**: a pack that is not there is `NotFound` and one the service may not read is
             // `PermissionDenied`; both used to arrive as an anonymous `Other` across the boundary.
             let file = std::fs::File::open(&path).map_err(|error| match CoreError::io(&error) {
-                CoreError::Io { kind, detail } => CoreError::Io { kind, detail: format!("the word pack {path}: {detail}") },
+                CoreError::Io { kind, detail } => {
+                    CoreError::Io { kind, detail: format!("the word pack {path}: {detail}") }
+                }
                 other => other,
             })?;
             let lexicon =
@@ -637,6 +639,90 @@ impl Core {
                 *held = None;
             }
             Ok(info)
+        })
+    }
+
+    /// **Builds the word pack from the sources the app downloaded** (plan-local-word-pack WI-5, contract 20): the
+    /// pinned files sit in `sources`, the manifest that pins them is `manifest`, and the pack is written to `output`
+    /// and then attached as [`Core::attach_word_pack`] attaches one. They are downloaded by the shell, which is the
+    /// only side that speaks the network (ADR-0003); this side never sees a URL.
+    ///
+    /// `progress` hears the bytes of each source parsed and the whole to parse, and answers `false` to cancel, in
+    /// which case **nothing is written**. A source that is not there, one that fails its pinned SHA-256, one that
+    /// does not parse — the sentence names the file and its line — and the pack's own bound refusals each keep their
+    /// own sentence, which Settings shows as it is.
+    #[cfg(not(target_family = "wasm"))]
+    pub fn build_word_pack(
+        &self,
+        sources: String,
+        manifest: String,
+        output: String,
+        progress: &dyn Progress,
+    ) -> Result<crate::words::WordPackInfo, CoreError> {
+        guard(|| {
+            let entries = xdict_pack::manifest::read_manifest(std::path::Path::new(&manifest)).map_err(pack_error)?;
+            let total: u64 = entries.iter().filter(|entry| !entry.is_kaikki()).map(|entry| entry.bytes).sum();
+            let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let done = Arc::new(std::sync::atomic::AtomicU64::new(0));
+            let options =
+                xdict_pack::BuildOptions::new(&sources, &output, &manifest).with_cancel(Arc::clone(&cancelled));
+            // **A heartbeat, not only a report per file**: the 143 MB source parses for minutes with nothing to say,
+            // and the client's silence bound would call a working build dead. Every two seconds the same progress
+            // answer goes out — which is also the only moment a cancel can be noticed inside one source's parse.
+            let stopped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+            let beat = (Arc::clone(&cancelled), Arc::clone(&done), Arc::clone(&stopped));
+            std::thread::scope(|scope| {
+                // **Stopped by the build finishing, not only by a cancel**: a successful build never raises the cancel
+                // flag, and a loop waiting only for that keeps `scope` — and the caller — waiting forever. Found
+                // 2026-10-28, by the service tests hanging instead of failing.
+                let heartbeat = {
+                    let (cancelled, done, stopped) = beat;
+                    scope.spawn(move || {
+                        while !stopped.load(Ordering::Relaxed) && !cancelled.load(Ordering::Relaxed) {
+                            std::thread::sleep(std::time::Duration::from_millis(2_000));
+                            if stopped.load(Ordering::Relaxed) || cancelled.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            if !progress.progress(done.load(Ordering::Relaxed), total) {
+                                cancelled.store(true, Ordering::SeqCst);
+                                break;
+                            }
+                        }
+                    })
+                };
+                let mut parsing: u64 = 0;
+                let result = xdict_pack::build(&options, &mut |event| {
+                    let stop = |flag: &std::sync::atomic::AtomicBool| {
+                        flag.store(true, Ordering::SeqCst);
+                        xdict_pack::Control::Cancel
+                    };
+                    match event {
+                        // **A source is credited when it has been parsed, not when it starts**: work not yet done is
+                        // not progress, and the heartbeat is what keeps the silence bound fed meanwhile.
+                        xdict_pack::Event::SourceStarted { bytes, .. } => {
+                            parsing = bytes;
+                            if !progress.progress(done.load(Ordering::Relaxed), total) {
+                                return stop(&cancelled);
+                            }
+                            xdict_pack::Control::Continue
+                        }
+                        xdict_pack::Event::SourceFinished { .. } => {
+                            let now = done.fetch_add(parsing, Ordering::Relaxed) + parsing;
+                            if !progress.progress(now, total) {
+                                return stop(&cancelled);
+                            }
+                            xdict_pack::Control::Continue
+                        }
+                        xdict_pack::Event::Writing => xdict_pack::Control::Continue,
+                    }
+                });
+                stopped.store(true, Ordering::SeqCst);
+                let _ = heartbeat.join();
+                result
+            })
+            .map_err(pack_error)?;
+            // The pack it wrote is the pack it installs: a build that reached here wrote all three files.
+            self.attach_word_pack(output)
         })
     }
 
@@ -2676,6 +2762,21 @@ fn word_pack_error(error: crate::words::WordError) -> CoreError {
     }
 }
 
+/// **A refused pack build keeps the sentence the builder wrote** (plan-local-word-pack WI-5): the source and its line
+/// travel in it, and Settings shows it as it is. A raw file that is not there is the file's own `NotFound`; one that
+/// fails its pinned hash, does not parse or breaks a loader bound is damage, the bound keeping its own kind.
+#[cfg(not(target_family = "wasm"))]
+fn pack_error(error: xdict_pack::PackError) -> CoreError {
+    use xdict_pack::PackErrorKind as K;
+    let detail = format!("the word data: {error}");
+    match error.kind() {
+        K::Missing => CoreError::Io { kind: crate::error::IoKind::NotFound, detail },
+        K::Bound => CoreError::TooLarge { limit: crate::error::Limit::File, detail },
+        K::Cancelled => CoreError::Cancelled { detail },
+        K::Malformed | K::Version | K::Content | K::Licence | K::Pending | K::Hash => CoreError::Malformed { detail },
+    }
+}
+
 fn info(file: &File) -> DictInfo {
     let header = file.header();
     let format_version = match header.version {
@@ -4149,6 +4250,50 @@ mod tests {
         assert!(core.detach_word_pack());
         assert_eq!(core.word_pack(), None);
         assert_eq!(synonyms(&core), ExploreState::NoData, "removed, and answered as before");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// **A pack built here is the pack the library API builds** (plan-local-word-pack WI-5, contract 20): one tiny
+    /// source pinned by its own hash goes through the core, is installed, and says what it holds; a progress that
+    /// answers `false` stops the build and **writes nothing**.
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    fn a_word_pack_is_built_from_sources_and_a_cancel_writes_nothing() {
+        struct Refuse;
+        impl crate::Progress for Refuse {
+            fn progress(&self, done: u64, _total: u64) -> bool {
+                done == 0
+            }
+        }
+        let dir = std::env::temp_dir().join(format!("xdict-word-pack-build-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let raw = dir.join("raw");
+        std::fs::create_dir_all(&raw).unwrap();
+        let source = raw.join("cmudict.dict");
+        std::fs::write(&source, ";;; a comment\nhello HH AH0 L OW1\n").unwrap();
+        let (sha, size) = xdict_pack::manifest::sha256_file(&source).unwrap();
+        let manifest = dir.join("sources.json");
+        std::fs::write(
+            &manifest,
+            format!(
+                r#"{{"format":"xdict-word-lexicon-sources","version":2,"sources":[{{"id":"cmu","provider":"cmudict","name":"The CMU Pronouncing Dictionary","url":"https://example.invalid/cmudict.dict","version":"test-1","sha256":"{sha}","file":"cmudict.dict","bytes":{size},"licence":"BSD-2-Clause","attribution":"The xdict-core unit tests","notice":"Copyright"}}]}}"#
+            ),
+        )
+        .unwrap();
+        let path = |p: &std::path::Path| p.to_string_lossy().into_owned();
+
+        let core = Core::new(Config { client_protocol: PROTOCOL, entropy: vec![1; 16], ..Config::default() }).unwrap();
+        let output = dir.join("pack").join("xdict-words-en.jsonl");
+        let info = core.build_word_pack(path(&raw), path(&manifest), path(&output), &NoProgress).unwrap();
+        assert_eq!((info.version, info.records, info.sources.clone()), (2, 1, vec!["cmu".to_string()]));
+        assert_eq!(core.word_pack(), Some(info), "the build installs what it wrote");
+        let written = std::fs::read_to_string(&output).unwrap();
+        assert!(written.contains(r#""word":"hello""#), "{written}");
+
+        let refused = dir.join("cancelled").join("xdict-words-en.jsonl");
+        let error = core.build_word_pack(path(&raw), path(&manifest), path(&refused), &Refuse).unwrap_err();
+        assert!(matches!(error, CoreError::Cancelled { .. }), "{error:?}");
+        assert!(!refused.exists(), "a cancelled build writes nothing");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

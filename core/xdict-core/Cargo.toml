@@ -27,6 +27,7 @@ unicode-normalization.workspace = true
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 xdict-mmap = { path = "../xdict-mmap" }
+xdict-pack = { path = "../xdict-pack" }
 
 # The file index and change time Rust's stable `std` does not expose: one Win32 call, behind safe functions.
 [target.'cfg(windows)'.dependencies]
