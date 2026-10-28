@@ -258,9 +258,10 @@ ROUTES = [
       ("press", "ai.preview-before-sending"), ("wait", 0.5), ("key", "cmd+w"), ("wait", 1)] + look_up("apple")
      + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.expand"), ("wait", 1.5),
         ("press", "Meaning"), ("wait", 1.5)]),
-    ("main.meaningFromPanelEarly", "full", "⌘⌥D over a word then Meaning Here before the panel settles",
-     "The main window on the panel's word with the answer pane beside it holding the sentence",
-     look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 0.5), ("press", "panel.meaning"), ("wait", 3)]),
+    # **`main.meaningFromPanelEarly` is gone** (2026-10-28): it pressed the panel's Meaning Here 0.5 s in instead of
+    # 2 s, so its picture was `main.meaningFromPanel`'s byte for byte — the suite's own rule is that waits are not a
+    # difference, and a route whose only difference is one can never be a second screen. The early press is a
+    # behaviour, not a picture: `XDictUITests`' panel tests hold it.
     ("main.meaningFromPanel", "full", "⌘⌥D over a word, the panel's Meaning Here button",
      "The main window on the panel's word with the answer pane beside it holding the sentence",
      look_up("apple") + [SEARCH, ("key", "ctrl+opt+d"), ("wait", 2), ("press", "panel.meaning"), ("wait", 2)]),

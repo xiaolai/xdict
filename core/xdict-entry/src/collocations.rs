@@ -125,9 +125,8 @@ fn frame(label: &str, headword: &str) -> Option<Frame> {
 }
 
 /// **The elements HTML never closes**: a walk that counts one as nesting runs past its element's own close tag.
-const VOID_ELEMENTS: [&str; 14] = [
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr",
-];
+const VOID_ELEMENTS: [&str; 14] =
+    ["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
 
 /// Whether one tag is a void element, by its name in either case.
 fn is_void(tag: &str) -> bool {
@@ -240,10 +239,7 @@ mod tests {
     fn a_void_element_does_not_deepen_a_span() {
         let html = r#"<span class="ocd_hw">run</span><span class="ocd_m2"><span class="ocd_ps">ADVERB</span></span><span class="ocd_m3s"><span class="ocd_m3"><span class="ocd_cc"><span class="ocd_co">fast<br>and hard</span>, <span class="ocd_co">slowly</span></span></span></span>"#;
         let Collocations { pairs, .. } = extract(html);
-        assert_eq!(
-            pairs.iter().map(|(_, partner)| partner.as_str()).collect::<Vec<_>>(),
-            ["fastand hard", "slowly"]
-        );
+        assert_eq!(pairs.iter().map(|(_, partner)| partner.as_str()).collect::<Vec<_>>(), ["fastand hard", "slowly"]);
     }
 
     /// **`… OF <headword>` is the headword's own phrase** (audit, 2026-10-28): the ellipsis was squashed away before it

@@ -69,7 +69,9 @@ impl Store {
                 if read > MAX_COLLOCATION_BYTES {
                     return Err(CoreError::TooLarge {
                         limit: crate::error::Limit::File,
-                        detail: format!("{dict} reads past {MAX_COLLOCATION_BYTES} bytes of entries for its collocations"),
+                        detail: format!(
+                            "{dict} reads past {MAX_COLLOCATION_BYTES} bytes of entries for its collocations"
+                        ),
                     });
                 }
                 let html = String::from_utf8_lossy(&record.data);

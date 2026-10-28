@@ -80,7 +80,7 @@ The morphology builder uses a conservative spelling model. Exclusions can be leg
 such as `possible → possibility` or `conclude → conclusion`; they are not all source defects. Other providers may
 still supply those pairs. The outside-Git build report counts these exclusions and retains bounded samples.
 
-See [tools/WORD_LEXICON.md](tools/WORD_LEXICON.md) for pack construction and source obligations. Packs contain words,
+See [WORD_LEXICON.md](../xdict-pack/WORD_LEXICON.md) for pack construction and source obligations. Packs contain words,
 forms, POS, pronunciations and relations only, with pinned source versions/hashes and attribution. Downloaded data
 and generated packs stay outside Git. Their resource licences and full notices travel separately from the ISC code.
 Loading is bounded and atomic: invalid packs return typed errors and are never partially accepted. No runtime
