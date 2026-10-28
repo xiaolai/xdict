@@ -123,7 +123,16 @@ public final class WordDataModel {
             state = .trouble(.removeFailed)
             return
         }
-        if let file { try? FileManager.default.removeItem(at: file) }
+        // **A file that would not go is said, not swallowed** (audit, 2026-10-28): the pack is detached, but the file
+        // is what the next launch attaches, so reporting `absent` over a surviving file would make Remove a lie.
+        if let file {
+            do {
+                try FileManager.default.removeItem(at: file)
+            } catch {
+                state = .trouble(.removeFailed)
+                return
+            }
+        }
         state = .absent
     }
 
